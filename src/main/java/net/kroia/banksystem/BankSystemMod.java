@@ -15,15 +15,15 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
 
 // The value here should match an entry in the META-INF/mods.toml file
-@Mod(BankSystem.MODID)
-public class BankSystem
+@Mod(BankSystemMod.MODID)
+public class BankSystemMod
 {
     // Define mod id in a common place for everything to reference
     public static final String MODID = "banksystem";
     // Directly reference a slf4j logger
-    private static final Logger LOGGER = LogUtils.getLogger();
+    public static final Logger LOGGER = LogUtils.getLogger();
 
-    public BankSystem()
+    public BankSystemMod()
     {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 

@@ -1,6 +1,10 @@
 package net.kroia.banksystem.banking;
 
 import com.mojang.datafixers.util.Pair;
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.banking.bank.MoneyBank;
+import net.kroia.banksystem.networking.packets.server_sender.SyncBankDataPacket;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -84,6 +88,6 @@ public class ClientBankManager {
 
     private static void msgBankDataNotReceived()
     {
-        StockMarketMod.LOGGER.warn("Bank data packet not received yet");
+        BankSystemMod.LOGGER.warn("Bank data packet not received yet");
     }
 }

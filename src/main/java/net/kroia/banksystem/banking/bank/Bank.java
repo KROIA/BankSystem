@@ -1,8 +1,8 @@
 package net.kroia.banksystem.banking.bank;
 
 import net.kroia.banksystem.banking.BankUser;
+import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
-import net.kroia.modutilities.ClientInteraction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -85,17 +85,17 @@ public class Bank implements ServerSaveable {
         notifyUser("Balance set to " + balance + ".");
     }
 
-    public UUID getOwnerUUID() {
-        return owner.getOwnerUUID();
+    public UUID getPlayerUUID() {
+        return owner.getPlayerUUID();
     }
-    public ServerPlayer getOwner()
+    public ServerPlayer getUser()
     {
-        return owner.getOwner();
+        return owner.getPlayer();
     }
 
-    public String getOwnerName()
+    public String getPlayerName()
     {
-        return owner.getOwnerName();
+        return owner.getPlayerName();
     }
 
 
@@ -262,20 +262,20 @@ public class Bank implements ServerSaveable {
     protected void notifyUser_transfer(long amount, Bank other) {
         if(amount == 0)
             return;
-        notifyUser("Transferred " + amount + " → user: "+ other.getOwnerName());
+        notifyUser("Transferred " + amount + " → user: "+ other.getPlayerName());
     }
 
     protected void warnUser(String msg) {
-        ClientInteraction.printToClientConsole(getOwnerUUID(), "[Bank "+notificationItemName+" WARNING]: "+msg);
+        PlayerUtilities.printToClientConsole(getPlayerUUID(), "[Bank "+notificationItemName+" WARNING]: "+msg);
     }
 
     protected void notifyUser(String msg) {
-        ClientInteraction.printToClientConsole(getOwnerUUID(), "[Bank "+notificationItemName+"]: "+msg);
+        PlayerUtilities.printToClientConsole(getPlayerUUID(), "[Bank "+notificationItemName+"]: "+msg);
     }
 
     public String toString()
     {
-        return "Owner: "+getOwnerName()+" "+toStringNoOwner();
+        return "Owner: "+getPlayerName()+" "+toStringNoOwner();
     }
 
     public String getNotificationItemName() {
@@ -290,14 +290,6 @@ public class Bank implements ServerSaveable {
     }
 
     private void updateNotificationItemName() {
-        if(ModSettings.Bank.NOTIFICATION_USE_SHORT_ITEM_ID)
-        {
-            // minecraft:diamond -> diamond
-            notificationItemName = itemID.substring(itemID.lastIndexOf(':')+1);
-        }
-        else
-        {
-            notificationItemName = itemID;
-        }
+        notificationItemName = itemID.substring(itemID.lastIndexOf(':')+1);
     }
 }

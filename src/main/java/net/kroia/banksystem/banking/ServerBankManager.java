@@ -1,6 +1,6 @@
 package net.kroia.banksystem.banking;
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.modutilities.ClientInteraction;
+import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -23,7 +23,7 @@ public class ServerBankManager implements ServerSaveable {
             user.createItemBank(itemID, 0);
         if(createMoneyBank)
             user.createMoneyBank(startMoney);
-        ClientInteraction.printToClientConsole(userUUID, "A bank account has been created for you.\n" +
+        PlayerUtilities.printToClientConsole(userUUID, "A bank account has been created for you.\n" +
                 "You can access your account using the Bank Terminal block\nor the /bank command.");
         userMap.put(userUUID, user);
         return user;
@@ -33,9 +33,26 @@ public class ServerBankManager implements ServerSaveable {
     {
         return userMap.get(userUUID);
     }
+    public static BankUser getUser(String userName)
+    {
+        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
+            if(entry.getValue().getPlayerName().equals(userName))
+                return entry.getValue();
+        }
+        return null;
+    }
     public static void clear()
     {
         userMap.clear();
+    }
+
+    public static HashMap<UUID, String> getPlayerNameMap()
+    {
+        HashMap<UUID, String> map = new HashMap<>();
+        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
+            map.put(entry.getKey(), entry.getValue().getPlayerName());
+        }
+        return map;
     }
 
     public static Bank getMoneyBank(UUID userUUID)
@@ -45,6 +62,30 @@ public class ServerBankManager implements ServerSaveable {
             return null;
         return user.getMoneyBank();
     }
+    public static Bank getMoneyBank(String userName)
+    {
+        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
+            if(entry.getValue().getPlayerName().equals(userName))
+                return entry.getValue().getMoneyBank();
+        }
+        return null;
+    }
+    public static Bank getBank(UUID userUUID, String itemID)
+    {
+        BankUser user = userMap.get(userUUID);
+        if(user == null)
+            return null;
+        return user.getBank(itemID);
+    }
+    public static Bank getMoneyBank(String userName, String itemID)
+    {
+        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
+            if(entry.getValue().getPlayerName().equals(userName))
+                return entry.getValue().getBank(itemID);
+        }
+        return null;
+    }
+
 
     public static long getMoneyCirculation()
     {
@@ -92,7 +133,7 @@ public class ServerBankManager implements ServerSaveable {
                 success = false;
                 continue;
             }
-            userMap.put(user.getOwnerUUID(), user);
+            userMap.put(user.getPlayerUUID(), user);
         }
         return success;
     }

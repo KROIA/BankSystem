@@ -3,7 +3,7 @@ package net.kroia.banksystem.banking;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.ItemBank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
-import net.kroia.modutilities.ClientInteraction;
+import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -127,17 +127,17 @@ public class BankUser implements ServerSaveable {
         return loadSuccess;
     }
 
-    public UUID getOwnerUUID() {
+    public UUID getPlayerUUID() {
         return userUUID;
     }
-    public ServerPlayer getOwner()
+    public ServerPlayer getPlayer()
     {
-        return ClientInteraction.getOnlinePlayer(userUUID);
+        return PlayerUtilities.getOnlinePlayer(userUUID);
     }
 
-    public String getOwnerName()
+    public String getPlayerName()
     {
-        ServerPlayer player = getOwner();
+        ServerPlayer player = getPlayer();
         if(player != null) {
             userName = player.getName().getString();
         }
@@ -148,7 +148,7 @@ public class BankUser implements ServerSaveable {
 
     public String toString()
     {
-        String owner = getOwnerName();
+        String owner = getPlayerName();
         StringBuilder content = new StringBuilder("Bank of: " + owner + "\n");
         ArrayList<String> itemNames = new ArrayList<>();
         ArrayList<String> itemBalances = new ArrayList<>();
