@@ -118,9 +118,6 @@ repositories {
 
     // If you have mod jar dependencies in ./libs, you can declare them as a repository like so.
     // See https://docs.gradle.org/current/userguide/declaring_repositories.html#sub:flat_dir_resolver
-    // flatDir {
-    //     dir 'libs'
-    // }
     mavenCentral()
     maven {
         url = uri("https://jitpack.io")
@@ -152,7 +149,8 @@ dependencies {
 
     dependencies {
         //implementation fg.deobf("com.github.kroia:stockmarket:mc_${minecraft_version}-SNAPSHOT")
-        implementation fg.deobf("com.github.kroia:MC_ModUtilities:mc_${minecraft_version}-SNAPSHOT")
+        //implementation fg.deobf("com.github.kroia:MC_ModUtilities:mc_${minecraft_version}-SNAPSHOT")
+        implementation project(':external:utilities')
     }
 }
 

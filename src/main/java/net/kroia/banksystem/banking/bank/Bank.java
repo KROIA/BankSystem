@@ -266,22 +266,16 @@ public class Bank implements ServerSaveable {
     }
 
     protected void warnUser(String msg) {
-        ClientInteraction.printToClientConsole(getOwner(), "[Bank "+notificationItemName+" WARNING]: "+msg);
+        ClientInteraction.printToClientConsole(getOwnerUUID(), "[Bank "+notificationItemName+" WARNING]: "+msg);
     }
 
     protected void notifyUser(String msg) {
-        ClientInteraction.printToClientConsole(getOwner(), "[Bank "+notificationItemName+"]: "+msg);
+        ClientInteraction.printToClientConsole(getOwnerUUID(), "[Bank "+notificationItemName+"]: "+msg);
     }
 
     public String toString()
     {
-        String owner = getOwnerUUID().toString();
-        ServerPlayer player = getOwner();
-        if(player != null)
-            owner = player.getName().getString();
-        else
-            owner = ServerPlayerList.getPlayerName(getOwnerUUID());
-        return "Owner: "+owner+" "+toStringNoOwner();
+        return "Owner: "+getOwnerName()+" "+toStringNoOwner();
     }
 
     public String getNotificationItemName() {

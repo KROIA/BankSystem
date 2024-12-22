@@ -1,11 +1,7 @@
 package net.kroia.banksystem.banking;
-
-import net.kroia.stockmarket.ModSettings;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.banking.BankUser;
-import net.kroia.stockmarket.banking.bank.Bank;
-import net.kroia.stockmarket.util.ServerPlayerList;
-import net.kroia.stockmarket.util.ServerSaveable;
+import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.modutilities.ClientInteraction;
+import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
@@ -17,35 +13,17 @@ import java.util.UUID;
 public class ServerBankManager implements ServerSaveable {
 
     private static Map<UUID, BankUser> userMap = new HashMap<>();
-    private static BankUser botUser;
-    public static BankUser createBotUser()
-    {
-        if(botUser != null || !ModSettings.MarketBot.ENABLED)
-            return botUser;
-        UUID botUUID = UUID.nameUUIDFromBytes(ModSettings.MarketBot.USER_NAME.getBytes());
-        ServerPlayerList.addPlayer(botUUID, ModSettings.MarketBot.USER_NAME);
-        botUser = new BankUser(botUUID);
-        botUser.createMoneyBank(ModSettings.MarketBot.STARTING_BALANCE);
-        userMap.put(botUser.getOwnerUUID(), botUser);
-        return botUser;
-    }
-
-    public static BankUser getBotUser()
-    {
-        return botUser;
-    }
-
-    public static BankUser createUser(UUID userUUID, ArrayList<String> itemIDs, boolean createMoneyBank, long startMoney)
+    public static BankUser createUser(UUID userUUID, String userName, ArrayList<String> itemIDs, boolean createMoneyBank, long startMoney)
     {
         BankUser user = userMap.get(userUUID);
         if(user != null)
             return user;
-        user = new BankUser(userUUID);
+        user = new BankUser(userUUID, userName);
         for(String itemID : itemIDs)
             user.createItemBank(itemID, 0);
         if(createMoneyBank)
             user.createMoneyBank(startMoney);
-        StockMarketMod.printToClientConsole(userUUID, "A bank account has been created for you.\n" +
+        ClientInteraction.printToClientConsole(userUUID, "A bank account has been created for you.\n" +
                 "You can access your account using the Bank Terminal block\nor the /bank command.");
         userMap.put(userUUID, user);
         return user;
@@ -58,7 +36,6 @@ public class ServerBankManager implements ServerSaveable {
     public static void clear()
     {
         userMap.clear();
-        botUser = null;
     }
 
     public static Bank getMoneyBank(UUID userUUID)
@@ -86,8 +63,6 @@ public class ServerBankManager implements ServerSaveable {
     }
     @Override
     public boolean save(CompoundTag tag) {
-        if(botUser != null)
-            tag.putUUID("botUUID", botUser.getOwnerUUID());
         ListTag bankElements = new ListTag();
         for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
             CompoundTag bankTag = new CompoundTag();
@@ -106,11 +81,6 @@ public class ServerBankManager implements ServerSaveable {
     @Override
     public boolean load(CompoundTag tag) {
         boolean success = true;
-        UUID botUUID = null;
-        if(tag.contains("botUUID") && ModSettings.MarketBot.ENABLED)
-        {
-            botUUID = tag.getUUID("botUUID");
-        }
 
         ListTag bankElements = tag.getList("users", 10);
         userMap.clear();
@@ -123,14 +93,6 @@ public class ServerBankManager implements ServerSaveable {
                 continue;
             }
             userMap.put(user.getOwnerUUID(), user);
-            if(botUUID != null) {
-                if (user.getOwnerUUID().compareTo(botUUID) == 0) {
-                    if (botUser != null)
-                        ServerPlayerList.removePlayer(botUser.getOwnerUUID());
-                    botUser = user;
-                    ServerPlayerList.addPlayer(botUUID, ModSettings.MarketBot.USER_NAME);
-                }
-            }
         }
         return success;
     }

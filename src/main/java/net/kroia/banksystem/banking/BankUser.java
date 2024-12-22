@@ -3,6 +3,7 @@ package net.kroia.banksystem.banking;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.ItemBank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
+import net.kroia.modutilities.ClientInteraction;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -15,10 +16,16 @@ import java.util.UUID;
 
 public class BankUser implements ServerSaveable {
     private UUID userUUID;
+    private String userName;
     private final HashMap<String, Bank> bankMap = new HashMap<>();
 
-    public BankUser(UUID userUUID) {
+    public BankUser(ServerPlayer player)
+    {
+        this(player.getUUID(), player.getName().getString());
+    }
+    public BankUser(UUID userUUID, String userName) {
         this.userUUID = userUUID;
+        this.userName = userName;
     }
 
     private BankUser()
@@ -88,6 +95,8 @@ public class BankUser implements ServerSaveable {
     @Override
     public boolean save(CompoundTag tag) {
         tag.putUUID("userUUID", userUUID);
+        tag.putString("userName", userName);
+
 
         ListTag bankElements = new ListTag();
         for (Map.Entry<String, Bank> entry : bankMap.entrySet()) {
@@ -103,6 +112,7 @@ public class BankUser implements ServerSaveable {
     public boolean load(CompoundTag tag) {
         boolean loadSuccess = true;
         userUUID = tag.getUUID("userUUID");
+        userName = tag.getString("userName");
 
         ListTag bankElements = tag.getList("bankMap", 10);
         bankMap.clear();
@@ -122,22 +132,23 @@ public class BankUser implements ServerSaveable {
     }
     public ServerPlayer getOwner()
     {
-        return ServerPlayerList.getPlayer(userUUID);
+        return ClientInteraction.getOnlinePlayer(userUUID);
     }
 
     public String getOwnerName()
     {
-        return ServerPlayerList.getPlayerName(userUUID);
+        ServerPlayer player = getOwner();
+        if(player != null) {
+            userName = player.getName().getString();
+        }
+        if(userName == null)
+            return "UnknownUserName";
+        return userName;
     }
 
     public String toString()
     {
-        String owner = getOwnerUUID().toString();
-        ServerPlayer player = getOwner();
-        if(player != null)
-            owner = player.getName().getString();
-        else
-            owner = ServerPlayerList.getPlayerName(getOwnerUUID());
+        String owner = getOwnerName();
         StringBuilder content = new StringBuilder("Bank of: " + owner + "\n");
         ArrayList<String> itemNames = new ArrayList<>();
         ArrayList<String> itemBalances = new ArrayList<>();
