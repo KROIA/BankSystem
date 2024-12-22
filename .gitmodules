@@ -1,4 +1,0 @@
-[submodule "external/utilities"]
-	path = external/utilities
-	url = https://github.com/KROIA/MC_ModUtilities
-	branch = mc_1.20.1
