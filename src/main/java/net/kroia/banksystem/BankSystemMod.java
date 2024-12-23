@@ -80,22 +80,10 @@ public class BankSystemMod
             LOGGER.info("HELLO FROM CLIENT SETUP");
             LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
 
+            // Try to access a utility method from my sublodule
+            // This will crash because of:
+            // java.lang.NoClassDefFoundError: net/kroia/modutilities/ItemUtilities
             ItemStack stone = ItemUtilities.createItemStackFromId("minecraft:stone");
-
-            if (ModList.get().isLoaded("stockmarket"))
-            {
-                System.out.println("stockmarket is loaded");
-
-                /*
-                if(TestAPI.getTestInterface() != null)
-                    TestAPI.getTestInterface().test();
-                else
-                    System.out.println("TestInterface is null");*/
-            }
-            else
-            {
-                System.out.println("stockmarket is not loaded");
-            }
         }
     }
 }
