@@ -7,8 +7,11 @@ import net.kroia.banksystem.entity.ModEntities;
 import net.kroia.banksystem.item.ModCreativeModTabs;
 import net.kroia.banksystem.item.ModItems;
 import net.kroia.banksystem.menu.ModMenus;
+import net.kroia.banksystem.screen.custom.BankTerminalScreen;
+import net.kroia.banksystem.networking.ModMessages;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
@@ -58,7 +61,7 @@ public class BankSystemMod
 
     private void commonSetup(final FMLCommonSetupEvent event)
     {
-
+        ModMessages.register();
     }
 
     // You can use SubscribeEvent and let the Event Bus discover methods to call
@@ -80,10 +83,8 @@ public class BankSystemMod
             LOGGER.info("HELLO FROM CLIENT SETUP");
             LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
 
-            // Try to access a utility method from my sublodule
-            // This will crash because of:
-            // java.lang.NoClassDefFoundError: net/kroia/modutilities/ItemUtilities
-            ItemStack stone = ItemUtilities.createItemStackFromId("minecraft:stone");
+            MenuScreens.register(ModMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
+
         }
     }
 }

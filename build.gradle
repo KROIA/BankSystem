@@ -119,10 +119,10 @@ repositories {
     // If you have mod jar dependencies in ./libs, you can declare them as a repository like so.
     // See https://docs.gradle.org/current/userguide/declaring_repositories.html#sub:flat_dir_resolver
     // Adding my submodule as flatDir
-    mavenCentral()
-    flatDir {
-        dir 'external\\utilities\\build\\libs'
-    }
+    //mavenCentral()
+    //flatDir {
+    //    dir 'external\\utilities\\build\\libs'
+    //}
 }
 
 dependencies {
@@ -153,7 +153,7 @@ dependencies {
     //implementation project(':utilities')
 
     // Adding the utilities JAR as a dependency
-    implementation fg.deobf("net.kroia:modutilities:1.0.0")
+    //implementation fg.deobf("net.kroia:modutilities:1.0.0")
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -247,4 +247,12 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs += file('external/utilities/src/main/java')
+        }
+    }
 }
