@@ -148,14 +148,12 @@ dependencies {
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
     // http://www.gradle.org/docs/current/userguide/dependency_management.html
 
-    dependencies {
-        //implementation fg.deobf("com.github.kroia:stockmarket:mc_${minecraft_version}-SNAPSHOT")
-        //implementation fg.deobf("com.github.kroia:MC_ModUtilities:mc_${minecraft_version}-SNAPSHOT")
-        //implementation project(':utilities')
+    //implementation fg.deobf("com.github.kroia:stockmarket:mc_${minecraft_version}-SNAPSHOT")
+    //implementation fg.deobf("com.github.kroia:MC_ModUtilities:mc_${minecraft_version}-SNAPSHOT")
+    //implementation project(':utilities')
 
-        // Adding the utilities JAR as a dependency
-        implementation "net.kroia:modutilities:1.0.0"
-    }
+    // Adding the utilities JAR as a dependency
+    implementation fg.deobf("net.kroia:modutilities:1.0.0")
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
