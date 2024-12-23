@@ -15,5 +15,5 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.7.0'
 }
 
-include ':external:utilities'
-project(':external:utilities').projectDir = file('external/utilities')
+//include ':utilities'
+//project(':utilities').projectDir = file('external/utilities')

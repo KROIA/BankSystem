@@ -118,9 +118,13 @@ repositories {
 
     // If you have mod jar dependencies in ./libs, you can declare them as a repository like so.
     // See https://docs.gradle.org/current/userguide/declaring_repositories.html#sub:flat_dir_resolver
-    mavenCentral()
+    /*mavenCentral()
     maven {
         url = uri("https://jitpack.io")
+    }*/
+    mavenCentral()
+    flatDir {
+        dir 'external\\utilities\\build\\libs'
     }
 }
 
@@ -150,7 +154,8 @@ dependencies {
     dependencies {
         //implementation fg.deobf("com.github.kroia:stockmarket:mc_${minecraft_version}-SNAPSHOT")
         //implementation fg.deobf("com.github.kroia:MC_ModUtilities:mc_${minecraft_version}-SNAPSHOT")
-        implementation project(':external:utilities')
+        //implementation project(':utilities')
+        implementation "net.kroia:modutilities:1.0.0"
     }
 }
 
@@ -173,6 +178,8 @@ tasks.named('processResources', ProcessResources).configure {
     }
 }
 
+
+/*
 // Example for how to get properties into the manifest for reading at runtime.
 tasks.named('jar', Jar).configure {
     manifest {
@@ -189,8 +196,38 @@ tasks.named('jar', Jar).configure {
 
     // This is the preferred method to reobfuscate your jar file
     finalizedBy 'reobfJar'
-    from project(':external:utilities').sourceSets.main.output
 }
+*/
+
+tasks.named('jar', Jar).configure {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+
+    //from(project(':utilities').sourceSets.main.output) {
+    //    include '**/*'
+    //}
+
+    // Add the compiled classes from the utilities JAR
+    //from(zipTree('external/utilities/build/libs/modutilities-1.0.0.jar')) {
+    //    include '**/*'
+    //}
+
+    manifest {
+        attributes([
+                'Specification-Title'     : mod_id,
+                'Specification-Vendor'    : mod_authors,
+                'Specification-Version'   : '1', // We are version 1 of ourselves
+                'Implementation-Title'    : project.name,
+                'Implementation-Version'  : project.jar.archiveVersion,
+                'Implementation-Vendor'   : mod_authors,
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+
+    finalizedBy 'reobfJar'
+}
+
+
 
 // However if you are in a multi-project build, dev time needs unobfed jar files, so you can delay the obfuscation until publishing by doing:
 // tasks.named('publish').configure {

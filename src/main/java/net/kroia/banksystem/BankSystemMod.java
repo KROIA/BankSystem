@@ -7,7 +7,9 @@ import net.kroia.banksystem.entity.ModEntities;
 import net.kroia.banksystem.item.ModCreativeModTabs;
 import net.kroia.banksystem.item.ModItems;
 import net.kroia.banksystem.menu.ModMenus;
+import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -78,6 +80,7 @@ public class BankSystemMod
             LOGGER.info("HELLO FROM CLIENT SETUP");
             LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
 
+            ItemStack stone = ItemUtilities.createItemStackFromId("minecraft:stone");
 
             if (ModList.get().isLoaded("stockmarket"))
             {
