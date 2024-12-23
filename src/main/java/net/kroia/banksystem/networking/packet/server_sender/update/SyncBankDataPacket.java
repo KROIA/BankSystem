@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.packets.server_sender;
+package net.kroia.banksystem.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ClientBankManager;

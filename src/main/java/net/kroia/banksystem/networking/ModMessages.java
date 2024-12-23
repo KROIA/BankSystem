@@ -2,7 +2,9 @@ package net.kroia.banksystem.networking;
 
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.networking.packets.server_sender.SyncBankDataPacket;
+import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
+import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
+import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkDirection;
@@ -28,11 +30,24 @@ public class ModMessages {
 
         INSTANCE = net;
 
+        net.messageBuilder(RequestBankDataPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(RequestBankDataPacket::new)
+                .encoder(RequestBankDataPacket::toBytes)
+                .consumerMainThread(RequestBankDataPacket::handle)
+                .add();
+
+        net.messageBuilder(UpdateBankTerminalBlockEntityPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(UpdateBankTerminalBlockEntityPacket::new)
+                .encoder(UpdateBankTerminalBlockEntityPacket::toBytes)
+                .consumerMainThread(UpdateBankTerminalBlockEntityPacket::handle)
+                .add();
+
         net.messageBuilder(SyncBankDataPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
                 .decoder(SyncBankDataPacket::new)
                 .encoder(SyncBankDataPacket::toBytes)
                 .consumerMainThread(SyncBankDataPacket::handle)
                 .add();
+
 
     }
 

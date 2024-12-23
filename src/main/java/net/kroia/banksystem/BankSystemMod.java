@@ -1,9 +1,16 @@
 package net.kroia.banksystem;
 
 import com.mojang.logging.LogUtils;
+import net.kroia.banksystem.block.ModBlocks;
+import net.kroia.banksystem.command.ModCommands;
+import net.kroia.banksystem.entity.ModEntities;
+import net.kroia.banksystem.item.ModCreativeModTabs;
+import net.kroia.banksystem.item.ModItems;
+import net.kroia.banksystem.menu.ModMenus;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -27,12 +34,25 @@ public class BankSystemMod
     {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
+        ModCreativeModTabs.register(modEventBus);
+        ModItems.register(modEventBus);
+        ModBlocks.register(modEventBus);
+        ModEntities.register(modEventBus);
+        ModMenus.register(modEventBus);
+
         // Register the commonSetup method for modloading
         modEventBus.addListener(this::commonSetup);
 
         // Register ourselves for server and other game events we are interested in
         MinecraftForge.EVENT_BUS.register(this);
+
+        MinecraftForge.EVENT_BUS.addListener(BankSystemMod::onRegisterCommands);
     }
+
+    public static void onRegisterCommands(RegisterCommandsEvent event) {
+        ModCommands.register(event.getDispatcher());
+    }
+
 
     private void commonSetup(final FMLCommonSetupEvent event)
     {

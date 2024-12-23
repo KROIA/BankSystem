@@ -16,3 +16,4 @@ plugins {
 }
 
 include ':external:utilities'
+project(':external:utilities').projectDir = file('external/utilities')

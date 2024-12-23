@@ -3,7 +3,7 @@ package net.kroia.banksystem.banking;
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.MoneyBank;
-import net.kroia.banksystem.networking.packets.server_sender.SyncBankDataPacket;
+import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 
 import java.util.ArrayList;
 import java.util.HashMap;

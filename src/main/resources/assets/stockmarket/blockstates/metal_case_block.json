@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "banksystem:block/metal_case_block" }
+  }
+}
