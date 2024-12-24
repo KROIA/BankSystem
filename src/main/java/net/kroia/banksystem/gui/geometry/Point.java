@@ -1,4 +1,4 @@
-package net.kroia.banksystem.util.geometry;
+package net.kroia.banksystem.gui.geometry;
 
 public class Point {
     public int x;

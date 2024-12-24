@@ -1,21 +1,27 @@
 package net.kroia.banksystem.gui;
 
 import net.kroia.banksystem.gui.elements.GuiElement;
+import net.kroia.banksystem.gui.geometry.Point;
+import net.kroia.banksystem.gui.geometry.Rectangle;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 
 public class Gui {
 
-    private GuiGraphics graphics;
-    private int mousePosX, mousePosY;
-    private float partialTick;
+    protected GuiGraphics graphics;
+    protected Screen parent;
+    protected int mousePosX, mousePosY;
+    protected float partialTick;
 
     private ArrayList<GuiElement> elements = new ArrayList<>();
 
-    public Gui()
+    public Gui(Screen parent)
     {
-
+        this.parent = parent;
     }
 
 
@@ -34,6 +40,10 @@ public class Gui {
     public float getPartialTick()
     {
         return this.partialTick;
+    }
+    public Font getFont()
+    {
+        return parent.getMinecraft().font;
     }
 
     public void addElement(GuiElement element)
@@ -67,6 +77,13 @@ public class Gui {
         for(GuiElement element : elements)
         {
             element.render();
+        }
+    }
+    public void renderGizmos()
+    {
+        for(GuiElement element : elements)
+        {
+            element.renderGizmos();
         }
     }
 
@@ -107,4 +124,21 @@ public class Gui {
         }
         return false;
     }
+
+
+
+    // Drawing primitives
+    public void drawText(String text, int x, int y, int color)
+    {
+        graphics.drawString(getFont(), text, x, y, color);
+    }
+    public void drawRect(int x,int y, int width, int height, int color)
+    {
+        graphics.fill(x,y,width+x,height+y,color);
+    }
+    public void drawTooltip(Component tooltip, int x, int y)
+    {
+        graphics.renderTooltip(getFont(), tooltip, x,y);
+    }
+
 }

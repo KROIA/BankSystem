@@ -3,11 +3,13 @@ package net.kroia.banksystem.screen.custom;
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.ClientBankManager;
+import net.kroia.banksystem.gui.Gui;
+import net.kroia.banksystem.gui.elements.Label;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.banksystem.util.geometry.Rectangle;
+import net.kroia.banksystem.gui.geometry.Rectangle;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -144,8 +146,14 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     private Rectangle itemListViewRect;
     private Rectangle receiveWindowBackgroundRect;
 
+    private Gui customGui;
+
     public BankTerminalScreen(BankTerminalContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
         super(pMenu, pPlayerInventory, pTitle);
+        customGui = new Gui(this);
+        Label textLabel = new Label("Test");
+        textLabel.setBounds(20,20,100,50);
+        customGui.addElement(textLabel);
 
         this.imageWidth = 176;
         this.imageHeight = 166;
@@ -186,18 +194,25 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
     @Override
     protected void renderBg(GuiGraphics pGuiGraphics, float pPartialTick, int pMouseX, int pMouseY) {
-       // renderTransparentBackground(pGuiGraphics);
+        //super.renderBackground(pGuiGraphics);
         super.renderBackground(pGuiGraphics);
+        //customGui.renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
         pGuiGraphics.blit(TEXTURE, this.leftPos+BankTerminalContainerMenu.POS_X, this.topPos+BankTerminalContainerMenu.POS_Y, 0, 0, this.imageWidth, this.imageHeight);
 
 
         pGuiGraphics.fill(receiveWindowBackgroundRect.x, receiveWindowBackgroundRect.y,
                 receiveWindowBackgroundRect.x + receiveWindowBackgroundRect.width, receiveWindowBackgroundRect.y + receiveWindowBackgroundRect.height, 0x7F000000);
+
     }
 
     @Override
     public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) {
+        //super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
+
+
         super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
+        //customGui.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
+        //customGui.renderGizmos();
 
         // Draw money string
         long money = ClientBankManager.getBalance();
@@ -327,13 +342,8 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        /*if (button == 0 && !mouseClickToggle) { // Left mouse button
-            mouseClickToggle = true;
-            for (BankElement button1 : bankElements) {
-                if(button1.checkClick((int)mouseX, (int)mouseY))
-                    return true;
-            }
-        }*/
+        //return customGui.mouseClicked(mouseX, mouseY, button);
+
         if (button == 0) {
             if(mouseX >= itemListViewRect.x && mouseX <= itemListViewRect.x + itemListViewRect.width && mouseY >= itemListViewRect.y && mouseY <= itemListViewRect.y + itemListViewRect.height)
             {
@@ -366,6 +376,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         // Handle scrolling
+        //return customGui.mouseScrolled(mouseX, mouseY, delta);
         if (this.isMouseOver(mouseX, mouseY)) {
             if (delta > 0 && scrollOffset > 0) {
                 scrollOffset--; // Scroll up
@@ -388,6 +399,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
+        //return customGui.charTyped(codePoint, modifiers);
         for(BankElement view : bankElements)
         {
             if(view.amountBox.isFocused())

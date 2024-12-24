@@ -1,4 +1,4 @@
-package net.kroia.banksystem.util.geometry;
+package net.kroia.banksystem.gui.geometry;
 
 import net.minecraft.client.gui.GuiGraphics;
 
