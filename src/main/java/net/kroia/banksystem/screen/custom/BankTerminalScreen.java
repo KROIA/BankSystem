@@ -4,7 +4,9 @@ import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.gui.Gui;
-import net.kroia.banksystem.gui.elements.Label;
+import net.kroia.banksystem.gui.elements.*;
+import net.kroia.banksystem.gui.elements.base.GuiElement;
+import net.kroia.banksystem.gui.elements.base.ListView;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
@@ -13,7 +15,7 @@ import net.kroia.banksystem.gui.geometry.Rectangle;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
+//import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
@@ -42,7 +44,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
         public final String itemID;
 
         public EditBox amountBox;
-        public Button receiveItemsFromMarketButton;
+        public net.minecraft.client.gui.components.Button receiveItemsFromMarketButton;
 
         BankTerminalScreen parent;
 
@@ -61,7 +63,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
             this.amountBox.setMaxLength(10); // Max length of input
             this.amountBox.setFilter(input -> input.matches("\\d*")); // Allow only digits
 
-            receiveItemsFromMarketButton = Button.builder(RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT, this::onReceiveItemsFromMarket)
+            receiveItemsFromMarketButton = net.minecraft.client.gui.components.Button.builder(RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT, this::onReceiveItemsFromMarket)
                     .bounds(x+width-textEditWidth-100, y, 100, HEIGHT).build();
 
 
@@ -116,7 +118,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
                 this.targetAmount = 0;
             }
         }
-        private void onReceiveItemsFromMarket(Button pButton) {
+        private void onReceiveItemsFromMarket(net.minecraft.client.gui.components.Button pButton) {
             //StockMarketMod.LOGGER.info("Sending item: "+itemID + " amount: "+getTargetAmount());
             HashMap<String, Long> itemTransferToMarketAmounts = new HashMap<>();
             itemTransferToMarketAmounts.put(itemID, getTargetAmount());
@@ -151,9 +153,29 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     public BankTerminalScreen(BankTerminalContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
         super(pMenu, pPlayerInventory, pTitle);
         customGui = new Gui(this);
-        Label textLabel = new Label("Test");
-        textLabel.setBounds(20,20,100,50);
-        customGui.addElement(textLabel);
+        ListView vListView = new VerticalListView(20,20,100,200);
+        ListView hListView = new HorizontalListView(0,0,100,100);
+        TextBox textBox = new TextBox(130,20,100);
+        Frame frame = new Frame(20,20,300,200);
+
+        for(int i=0; i<20; ++i)
+        {
+            Button button = new Button(20,20,50,20,"Test "+i);
+            vListView.addChild(button);
+            hListView.addChild(new Button(20,20,20,50,"Test "+i));
+        }
+
+        vListView.relayout(3,3, GuiElement.LayoutDirection.VERTICAL, false);
+        hListView.relayout(3,3, GuiElement.LayoutDirection.HORIZONTAL, false);
+        frame.addChild(vListView);
+        frame.addChild(hListView);
+        frame.addChild(textBox);
+        frame.relayout(3,3, GuiElement.LayoutDirection.HORIZONTAL, true);
+
+        //textLabel.setLayoutType(GuiElement.LayoutType.LEFT);
+        //textLabel.setBounds(20,20,100,50);
+        customGui.addElement(frame);
+        //customGui.addElement(hListView);
 
         this.imageWidth = 176;
         this.imageHeight = 166;
@@ -171,7 +193,8 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     @Override
     public void init() {
         super.init();
-        sendItemsToMarketButtonRect = new Rectangle(this.width/2,10,this.imageWidth,20);
+        customGui.init();
+        /*sendItemsToMarketButtonRect = new Rectangle(this.width/2,10,this.imageWidth,20);
 
         int padding = 5;
         receiveWindowBackgroundRect = new Rectangle(5,5,200,this.height-2*padding);
@@ -182,13 +205,13 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
 
 
-        addRenderableWidget(Button.builder(SEND_ITEMS_TO_BANK_BUTTON_TEXT, this::onTransmittItemsToMarket)
+        addRenderableWidget(net.minecraft.client.gui.components.Button.builder(SEND_ITEMS_TO_BANK_BUTTON_TEXT, this::onTransmittItemsToMarket)
                 .bounds(sendItemsToMarketButtonRect.x, sendItemsToMarketButtonRect.y, sendItemsToMarketButtonRect.width, sendItemsToMarketButtonRect.height).build());
         addRenderableWidget(Button.builder(RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT, this::onReceiveItemsFromMarket)
                 .bounds(receiveItemsFromMarketButtonRect.x, receiveItemsFromMarketButtonRect.y, receiveItemsFromMarketButtonRect.width, receiveItemsFromMarketButtonRect.height).build());
 
 
-        buildItemButtons();
+        buildItemButtons();*/
 
     }
 
@@ -196,13 +219,13 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     protected void renderBg(GuiGraphics pGuiGraphics, float pPartialTick, int pMouseX, int pMouseY) {
         //super.renderBackground(pGuiGraphics);
         super.renderBackground(pGuiGraphics);
-        //customGui.renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
-        pGuiGraphics.blit(TEXTURE, this.leftPos+BankTerminalContainerMenu.POS_X, this.topPos+BankTerminalContainerMenu.POS_Y, 0, 0, this.imageWidth, this.imageHeight);
+        customGui.renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
+        /*pGuiGraphics.blit(TEXTURE, this.leftPos+BankTerminalContainerMenu.POS_X, this.topPos+BankTerminalContainerMenu.POS_Y, 0, 0, this.imageWidth, this.imageHeight);
 
 
         pGuiGraphics.fill(receiveWindowBackgroundRect.x, receiveWindowBackgroundRect.y,
                 receiveWindowBackgroundRect.x + receiveWindowBackgroundRect.width, receiveWindowBackgroundRect.y + receiveWindowBackgroundRect.height, 0x7F000000);
-
+*/
     }
 
     @Override
@@ -211,16 +234,16 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
 
         super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
-        //customGui.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
-        //customGui.renderGizmos();
-
+        customGui.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
+        customGui.renderGizmos();
+/*
         // Draw money string
         long money = ClientBankManager.getBalance();
         //pGuiGraphics.fill(balanceLabelRect.x, balanceLabelRect.y, balanceLabelRect.x + balanceLabelRect.width, balanceLabelRect.y + balanceLabelRect.height, 0x7F000000);
         pGuiGraphics.drawString(font, "Balance: $" + money, balanceLabelRect.x, balanceLabelRect.y, 0xFFFFFF);
 
         drawItemScrolList(pGuiGraphics);
-        renderTooltip(pGuiGraphics, pMouseX, pMouseY);
+        renderTooltip(pGuiGraphics, pMouseX, pMouseY);*/
     }
 
     // Method to handle the tick event
@@ -229,7 +252,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
         if (event.phase == TickEvent.Phase.END) {
             if (Minecraft.getInstance().screen instanceof BankTerminalScreen screen) {
                 // This will only run when the screen is an instance of BankTerminalScreen
-                screen.handleTick();
+                //screen.handleTick();
             }
             //handleTick();
         }
@@ -342,8 +365,8 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        //return customGui.mouseClicked(mouseX, mouseY, button);
-
+        return customGui.mouseClicked(mouseX, mouseY, button);
+/*
         if (button == 0) {
             if(mouseX >= itemListViewRect.x && mouseX <= itemListViewRect.x + itemListViewRect.width && mouseY >= itemListViewRect.y && mouseY <= itemListViewRect.y + itemListViewRect.height)
             {
@@ -361,23 +384,24 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
                 }
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(mouseX, mouseY, button);*/
     }
 
-    /*@Override
+    @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if(button == 0)
-        {
-            mouseClickToggle = false;
-        }
-        return super.mouseReleased(mouseX, mouseY, button);
-    }*/
+        return customGui.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        return customGui.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         // Handle scrolling
-        //return customGui.mouseScrolled(mouseX, mouseY, delta);
-        if (this.isMouseOver(mouseX, mouseY)) {
+        return customGui.mouseScrolled(mouseX, mouseY, delta);
+        /*if (this.isMouseOver(mouseX, mouseY)) {
             if (delta > 0 && scrollOffset > 0) {
                 scrollOffset--; // Scroll up
             } else if (delta < 0 && scrollOffset < bankElements.size() - visibleCount) {
@@ -385,22 +409,29 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
             }
             return true;
         }
-        return false;
+        return false;*/
     }
 
-  /*  @Override
+    @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (this.priceBox.isFocused()) {
+        boolean ret = customGui.keyPressed(keyCode, scanCode, modifiers);
+        if(ret)
+            return true;
+        if(customGui.getFocusedElement() == null)
+            return super.keyPressed(keyCode, scanCode, modifiers);
+        return true;
+        /*if (this.priceBox.isFocused()) {
             return this.priceBox.keyPressed(keyCode, scanCode, modifiers)
                     || this.priceBox.canConsumeInput();
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
-    }*/
+        return super.keyPressed(keyCode, scanCode, modifiers);*/
+    }
 
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
-        //return customGui.charTyped(codePoint, modifiers);
-        for(BankElement view : bankElements)
+        boolean ret = customGui.charTyped(codePoint, modifiers);
+        return ret;
+        /*for(BankElement view : bankElements)
         {
             if(view.amountBox.isFocused())
             {
@@ -415,7 +446,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
                 return false;
             }
         }
-        return super.charTyped(codePoint, modifiers);
+        return super.charTyped(codePoint, modifiers);*/
     }
 
 

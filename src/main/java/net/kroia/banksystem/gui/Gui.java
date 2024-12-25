@@ -1,12 +1,15 @@
 package net.kroia.banksystem.gui;
 
-import net.kroia.banksystem.gui.elements.GuiElement;
-import net.kroia.banksystem.gui.geometry.Point;
+import net.kroia.banksystem.gui.elements.base.GuiElement;
 import net.kroia.banksystem.gui.geometry.Rectangle;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 
@@ -17,11 +20,20 @@ public class Gui {
     protected int mousePosX, mousePosY;
     protected float partialTick;
 
+    protected GuiElement focusedElement = null;
+
     private ArrayList<GuiElement> elements = new ArrayList<>();
 
     public Gui(Screen parent)
     {
         this.parent = parent;
+    }
+    public void init()
+    {
+        for(GuiElement element : elements)
+        {
+            element.init();
+        }
     }
 
 
@@ -43,7 +55,17 @@ public class Gui {
     }
     public Font getFont()
     {
-        return parent.getMinecraft().font;
+        return Minecraft.getInstance().font;
+    }
+    public Screen getScreen()
+    {
+        return parent;
+    }
+    public boolean isInitialized()
+    {
+        if(parent == null)
+            return false;
+        return parent.getMinecraft() != null;
     }
 
     public void addElement(GuiElement element)
@@ -56,6 +78,20 @@ public class Gui {
         element.setRoot(null);
         elements.remove(element);
     }
+    public void setFocusedElement(GuiElement element)
+    {
+        if(element == this.focusedElement)
+            return;
+        if(this.focusedElement != null)
+            this.focusedElement.focusLost();
+        this.focusedElement = element;
+        if(this.focusedElement != null)
+            this.focusedElement.focusGained();
+    }
+    public GuiElement getFocusedElement()
+    {
+        return this.focusedElement;
+    }
 
     public void renderBackground(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick)
     {
@@ -65,7 +101,7 @@ public class Gui {
         this.partialTick = pPartialTick;
         for(GuiElement element : elements)
         {
-            element.renderBackground();
+            element.renderBackgroundInternal();
         }
     }
     public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick)
@@ -76,14 +112,14 @@ public class Gui {
         this.partialTick = pPartialTick;
         for(GuiElement element : elements)
         {
-            element.render();
+            element.renderInternal();
         }
     }
     public void renderGizmos()
     {
         for(GuiElement element : elements)
         {
-            element.renderGizmos();
+            element.renderGizmosInternal();
         }
     }
 
@@ -93,11 +129,30 @@ public class Gui {
         this.mousePosY = (int)mouseY;
         for(GuiElement element : elements)
         {
-            if(element.isOver(mousePosX, mousePosY))
-            {
-                if(element.mouseClicked(button))
-                    return true;
-            }
+            if(element.mouseClickedInternal(button))
+                return true;
+        }
+        return false;
+    }
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY)
+    {
+        this.mousePosX = (int)mouseX;
+        this.mousePosY = (int)mouseY;
+        for(GuiElement element : elements)
+        {
+            if(element.mouseDraggedInternal(button, deltaX, deltaY))
+                return true;
+        }
+        return false;
+    }
+    public boolean mouseReleased(double mouseX, double mouseY, int button)
+    {
+        this.mousePosX = (int)mouseX;
+        this.mousePosY = (int)mouseY;
+        for(GuiElement element : elements)
+        {
+            if(element.mouseReleasedInternal(button))
+                return true;
         }
         return false;
     }
@@ -107,11 +162,17 @@ public class Gui {
         this.mousePosY = (int)mouseY;
         for(GuiElement element : elements)
         {
-            if(element.isOver(mousePosX, mousePosY))
-            {
-                if(element.mouseScrolled(delta))
-                    return true;
-            }
+            if(element.mouseScrolledInternal(delta))
+                return true;
+        }
+        return false;
+    }
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers)
+    {
+        for(GuiElement element : elements)
+        {
+            if(element.keyPressedInternal(keyCode, scanCode, modifiers))
+                return true;
         }
         return false;
     }
@@ -119,7 +180,7 @@ public class Gui {
     {
         for(GuiElement element : elements)
         {
-            if(element.charTyped(codePoint, modifiers))
+            if(element.charTypedInternal(codePoint, modifiers))
                 return true;
         }
         return false;
@@ -136,9 +197,55 @@ public class Gui {
     {
         graphics.fill(x,y,width+x,height+y,color);
     }
+
+    public void drawGradient(int x, int y, int width, int height, int color1, int color2)
+    {
+        graphics.fillGradient(x,y,width+x,height+y,color1,color2);
+    }
+    public void drawOutline(int x, int y, int width, int height, int color)
+    {
+        graphics.renderOutline(x,y,width,height,color);
+    }
     public void drawTooltip(Component tooltip, int x, int y)
     {
         graphics.renderTooltip(getFont(), tooltip, x,y);
+    }
+    public void drawItem(ItemStack item, int x, int y, int seed)
+    {
+        graphics.renderItem(item, x, y, seed);
+    }
+    public double getGuiScale()
+    {
+        return Minecraft.getInstance().getWindow().getGuiScale();
+    }
+    public void enableScissor(Rectangle rect)
+    {
+        //int guiScale = (int)getGuiScale();
+        int x1 = rect.x;
+        int y1 = rect.y;
+        int x2 = (rect.x+rect.width);
+        int y2 = (rect.y+rect.height);
+
+        graphics.enableScissor(x1,y1,x2,y2);
+    }
+    public void disableScissor()
+    {
+        graphics.disableScissor();
+    }
+
+    public void playLocalSound(SoundEvent sound, float volume, float pitch)
+    {
+        Minecraft minecraft = Minecraft.getInstance();
+        minecraft.level.playLocalSound(
+                minecraft.player.getX(),            // X coordinate
+                minecraft.player.getY(),            // Y coordinate
+                minecraft.player.getZ(),            // Z coordinate
+                sound,        // Sound to play
+                SoundSource.PLAYERS,                // Sound category
+                volume,                               // Volume
+                pitch,                               // Pitch
+                false                                // Delay
+        );
     }
 
 }

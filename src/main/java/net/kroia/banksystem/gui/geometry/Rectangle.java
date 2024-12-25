@@ -18,10 +18,16 @@ public class Rectangle {
         graphics.fill(x, y, x + width, y + height, color);
     }
 
-    public boolean isMouseOver(double mouseX, double mouseY) {
-        return mouseX >= x &&
-                mouseX < x + width &&
-                mouseY >= y &&
-                mouseY < y + height;
+    public boolean contains(double posX, double posY) {
+        return posX >= x &&
+                posX < x + width &&
+                posY >= y &&
+                posY < y + height;
+    }
+    public boolean intersects(Rectangle other) {
+        return x < other.x + other.width &&
+                x + width > other.x &&
+                y < other.y + other.height &&
+                y + height > other.y;
     }
 }
