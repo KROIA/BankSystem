@@ -29,6 +29,7 @@ public abstract class GuiElement {
     public static int DEFAULT_BACKGROUND_COLOR = 0xAA888888;
     public static int DEFAULT_FOCUSED_BACKGROUND_COLOR = 0xAA666666;
     public static int DEFAULT_HOVER_BACKGROUND_COLOR = 0xFFAAAAAA;
+    public static int DEFAULT_OUTLINE_COLOR = 0xFF333333;
 
     private Gui root;
     private GuiElement parent = null;
@@ -40,6 +41,10 @@ public abstract class GuiElement {
     private boolean isEnabled = true;
     private int gizmoColor = 0x55FF0000;
     private int backgroundColor = DEFAULT_BACKGROUND_COLOR;
+    private int outlineColor = DEFAULT_OUTLINE_COLOR;
+    protected boolean enableBackground = true;
+    protected boolean enableOutline = true;
+    protected int outlineThickness = 1;
 
     public GuiElement() {
         this(0, 0, 0, 0);
@@ -128,8 +133,32 @@ public abstract class GuiElement {
     {
         return backgroundColor;
     }
+    public void setOutlineColor(int outlineColor) {
+        this.outlineColor = outlineColor;
+    }
+    public int getOutlineColor() {
+        return outlineColor;
+    }
+    public void setEnableBackground(boolean enableBackground) {
+        this.enableBackground = enableBackground;
+    }
+    public boolean isBackgroundEnabled() {
+        return enableBackground;
+    }
+    public void setEnableOutline(boolean enableOutline) {
+        this.enableOutline = enableOutline;
+    }
+    public boolean isOutlineEnabled() {
+        return enableOutline;
+    }
 
-    protected abstract void renderBackground();
+    protected void renderBackground()
+    {
+        if(enableBackground)
+            renderBackgroundColor();
+        if(enableOutline)
+            renderOutline();
+    }
     protected abstract void render();
     protected void renderGizmos()
     {
@@ -139,6 +168,10 @@ public abstract class GuiElement {
     protected void renderBackgroundColor()
     {
         drawRect(0,0,getWidth(), getHeight(),backgroundColor);
+    }
+    protected void renderOutline()
+    {
+        drawFrame(0,0,getWidth(),getHeight(), outlineColor,outlineThickness);
     }
 
     public void renderBackgroundInternal()
@@ -212,10 +245,10 @@ public abstract class GuiElement {
     protected abstract void layoutChanged();
     public void layoutChangedInternal()
     {
-        if(root == null)
-            return;
-        if(!root.isInitialized())
-            return;
+        //if(root == null)
+        //    return;
+        //if(!root.isInitialized())
+        //    return;
         layoutChanged();
         for (GuiElement child : childs) {
             child.layoutChangedInternal();
@@ -225,7 +258,8 @@ public abstract class GuiElement {
             updateTransform(0,0);
         }
         else {
-            updateTransform(parent.globalPositon.x, parent.globalPositon.y);
+            if(parent != null)
+                updateTransform(parent.globalPositon.x, parent.globalPositon.y);
         }
     }
     private void updateTransform(int parentX, int parentY)
@@ -247,6 +281,8 @@ public abstract class GuiElement {
 
     }
     public boolean isOver(int globalPosX, int globalPosY) {
+        if(parent != null && !parent.isOver(globalPosX, globalPosY))
+            return false;
         return (globalPosX - globalPositon.x) >= 0 && (globalPosX - globalPositon.x) < bounds.width &&
                (globalPosY - globalPositon.y) >= 0 && (globalPosY - globalPositon.y) < bounds.height;
     }
@@ -277,29 +313,34 @@ public abstract class GuiElement {
     protected boolean charTyped(char codePoint, int modifiers) {
         return false;
     }
-    public boolean mouseClickedInternal(int button)
+    public boolean mouseClickedInternal(int button, boolean isOverParent)
     {
+        isOverParent &= isMouseOver();
+        boolean consumed = false;
         for(GuiElement child : childs)
         {
-            if(child.mouseClickedInternal(button))
-                return true;
+            if(child.mouseClickedInternal(button, isOverParent && !consumed)) {
+                consumed = true;
+            }
         }
         mouseClicked(button);
-        if(isOver(root.getMousePosX(), root.getMousePosY()))
+        if(isOverParent && !consumed)
             return mouseClickedOverElement(button);
-        return false;
+        return consumed;
     }
-    public boolean mouseReleasedInternal(int button)
+    public boolean mouseReleasedInternal(int button, boolean isOverParent)
     {
+        isOverParent &= isMouseOver();
+        boolean consumed = false;
         for(GuiElement child : childs)
         {
-            if(child.mouseReleasedInternal(button))
-                return true;
+            if(child.mouseReleasedInternal(button, isOverParent && !consumed))
+                consumed = true;
         }
         mouseReleased(button);
-        if(isOver(root.getMousePosX(), root.getMousePosY()))
+        if(isOverParent && !consumed)
             return mouseReleasedOverElement(button);
-        return false;
+        return consumed;
     }
     public boolean mouseDraggedInternal(int button, double deltaX, double deltaY)
     {
@@ -310,17 +351,19 @@ public abstract class GuiElement {
         }
         return mouseDragged(button, deltaX, deltaY);
     }
-    public boolean mouseScrolledInternal(double delta)
+    public boolean mouseScrolledInternal(double delta, boolean isOverParent)
     {
+        isOverParent &= isMouseOver();
+        boolean consumed = false;
         for(GuiElement child : childs)
         {
-            if(child.mouseScrolledInternal(delta))
-                return true;
+            if(child.mouseScrolledInternal(delta, isOverParent && !consumed))
+                consumed = true;
         }
         mouseScrolled(delta);
-        if(isOver(root.getMousePosX(), root.getMousePosY()))
+        if(isOverParent && !consumed)
             return mouseScrolledOverElement(delta);
-        return false;
+        return consumed;
     }
     public boolean keyPressedInternal(int keyCode, int scanCode, int modifiers)
     {
@@ -352,7 +395,7 @@ public abstract class GuiElement {
     }
     public Font getFont()
     {
-        return root.getFont();
+        return Gui.getFont();
     }
     public int getMouseX() {
         return root.getMousePosX()-globalPositon.x;
@@ -482,47 +525,55 @@ public abstract class GuiElement {
 
     public void relayout(int padding, int spacing, LayoutDirection direction)
     {
-        relayout(padding, spacing, direction, false);
+        relayout(padding, spacing, direction, false, false);
     }
     public void relayout(int padding, int spacing, LayoutDirection direction, boolean stretch)
+    {
+        relayout(padding, spacing, direction, stretch, stretch);
+    }
+    public void relayout(int padding, int spacing, LayoutDirection direction, boolean stretchX, boolean stretchY)
     {
         switch (direction)
         {
             case HORIZONTAL:
-                relayoutHorizontal(padding, spacing, stretch);
+                relayoutHorizontal(padding, spacing, stretchX, stretchY);
                 break;
             case VERTICAL:
-                relayoutVertical(padding, spacing,stretch);
+                relayoutVertical(padding, spacing,stretchX, stretchY);
                 break;
         }
     }
-    private void relayoutHorizontal(int padding, int spacing, boolean stretch)
+    private void relayoutHorizontal(int padding, int spacing, boolean stretchX, boolean stretchY)
     {
         if(childs.isEmpty())
             return;
         int x = padding;
-        int width = (getWidth()-(padding*2))/childs.size();
+        int width = (getWidth()-padding*2+spacing)/childs.size() - spacing;
         for (GuiElement child : childs) {
             child.setX(x);
             child.setY(padding);
-            if(stretch) {
+            if(stretchX) {
                 child.setWidth(width);
+            }
+            if(stretchY) {
                 child.setHeight(getHeight()-2*padding);
             }
             x += child.getWidth() + spacing;
         }
     }
-    private void relayoutVertical(int padding, int spacing, boolean stretch)
+    private void relayoutVertical(int padding, int spacing, boolean stretchX, boolean stretchY)
     {
         if(childs.isEmpty())
             return;
         int y = padding;
-        int height = (getHeight()-(padding*2))/childs.size();
+        int height = (getHeight()-padding*2+spacing)/childs.size()-spacing;
         for (GuiElement child : childs) {
             child.setX(padding);
             child.setY(y);
-            if(stretch) {
+            if(stretchX) {
                 child.setWidth(getWidth()-2*padding);
+            }
+            if(stretchY) {
                 child.setHeight(height);
             }
             y += child.getHeight() + spacing;
@@ -615,12 +666,12 @@ public abstract class GuiElement {
     }
     public double getGuiScale()
     {
-        return root.getGuiScale();
+        return Gui.getGuiScale();
     }
 
     public void playLocalSound(SoundEvent sound, float volume, float pitch)
     {
-        root.playLocalSound(sound, volume, pitch);
+        Gui.playLocalSound(sound, volume, pitch);
     }
     public void playLocalSound(SoundEvent sound, float volume)
     {

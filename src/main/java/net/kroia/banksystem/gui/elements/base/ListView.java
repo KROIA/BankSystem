@@ -72,13 +72,13 @@ public abstract class ListView extends GuiElement{
 
     protected int scrolSpeed = 5;
     protected int scrollBarThickness = 5;
-
-    private int backgroundColor = 0xAA888888;
-
     protected final Button scrollBarButton;
     protected final ScrollContainer scrollContainer;
+    protected int spacing = 0;
+    protected int padding = 0;
 
     protected int scrollBarDragStartMouse = 0;
+    protected int scrollBarBackgroundColor = 0xff444444;
     public ListView(int x, int y, int width, int height) {
         super(x, y, width, height);
         scrollBarButton = new Button(0,0,0,0,"");
@@ -98,24 +98,23 @@ public abstract class ListView extends GuiElement{
     {
         return this.scrolSpeed;
     }
+    public void setScrollBarBackgroundColor(int color)
+    {
+        this.scrollBarBackgroundColor = color;
+    }
+    public int getScrollBarBackgroundColor()
+    {
+        return this.scrollBarBackgroundColor;
+    }
 
     protected abstract int getContentDimension2();
     protected abstract void setScrollBarBounds(Button scrollBarButton);
-    @Override
-    protected void renderBackground() {
-        renderBackgroundColor();
-    }
 
     @Override
     protected void render() {
-        if(allObjectSize == 0)
-            return;
-        setScrollBarBounds(scrollBarButton);
+        if(allObjectSize != 0)
+            setScrollBarBounds(scrollBarButton);
     }
-
-
-    @Override
-    protected abstract void layoutChanged();
 
     @Override
     public void addChild(GuiElement el)
@@ -143,6 +142,7 @@ public abstract class ListView extends GuiElement{
         return scrollContainer.getChilds();
     }
 
+    protected abstract void childsChanged();
 
     @Override
     public boolean mouseScrolledOverElement(double delta)
@@ -158,14 +158,11 @@ public abstract class ListView extends GuiElement{
     }
 
     @Override
-    public void relayout(int padding, int spacing, LayoutDirection direction)
+    public void relayout(int padding, int spacing, LayoutDirection direction, boolean stretchX, boolean stretchY)
     {
-        scrollContainer.relayout(padding, spacing, direction, false);
-    }
-    @Override
-    public void relayout(int padding, int spacing, LayoutDirection direction, boolean stretch)
-    {
-        scrollContainer.relayout(padding, spacing, direction, stretch);
+        this.padding = padding;
+        this.spacing = spacing;
+        scrollContainer.relayout(padding, spacing, direction, stretchX, stretchY);
     }
 
 

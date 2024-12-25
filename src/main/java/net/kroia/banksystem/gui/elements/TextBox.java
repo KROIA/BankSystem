@@ -9,12 +9,14 @@ public class TextBox extends GuiElement {
     String text = "";
 
     boolean allowNumbers = true;
+    boolean allowDecimal = true;
     boolean allowLetters = true;
-    boolean allowSpecialChars = true;
-
     private final Label textLabel;
     private int maxChars = 20;
-    private int cursorColor = 0xFF111111;
+    private int cursorColor = 0xFF222222;
+    private int backgroundColor = DEFAULT_BACKGROUND_COLOR;
+    private int hoverBackgroundColor = DEFAULT_HOVER_BACKGROUND_COLOR;
+    private int focusedBackgroundColor = DEFAULT_FOCUSED_BACKGROUND_COLOR;
     private int currentCursorPos = 0;
     private int cursorBlinkCounter = 0;
     private boolean cursorVisible = false;
@@ -29,23 +31,21 @@ public class TextBox extends GuiElement {
         addChild(textLabel);
     }
 
-    public void setAllowNumbers(boolean allowNumbers) {
+    public void setAllowNumbers(boolean allowNumbers, boolean allowDecimal) {
         this.allowNumbers = allowNumbers;
+        this.allowDecimal = allowDecimal;
     }
-    public boolean isAllowNumbers() {
+    public boolean isAllowingNumbers() {
         return allowNumbers;
+    }
+    public boolean isAllowingDecimal() {
+        return allowDecimal;
     }
     public void setAllowLetters(boolean allowLetters) {
         this.allowLetters = allowLetters;
     }
-    public boolean isAllowLetters() {
+    public boolean isAllowingLetters() {
         return allowLetters;
-    }
-    public void setAllowSpecialChars(boolean allowSpecialChars) {
-        this.allowSpecialChars = allowSpecialChars;
-    }
-    public boolean isAllowSpecialChars() {
-        return allowSpecialChars;
     }
     public void setCursorColor(int cursorColor) {
         this.cursorColor = cursorColor;
@@ -53,15 +53,75 @@ public class TextBox extends GuiElement {
     public int getCursorColor() {
         return cursorColor;
     }
+    @Override
+    public void setBackgroundColor(int backgroundColor) {
+        this.backgroundColor = backgroundColor;
+    }
+    @Override
+    public int getBackgroundColor() {
+        return this.backgroundColor;
+    }
+    public void setHoverBackgroundColor(int hoverBackgroundColor) {
+        this.hoverBackgroundColor = hoverBackgroundColor;
+    }
+    public int getHoverBackgroundColor() {
+        return hoverBackgroundColor;
+    }
+    public void setFocusedBackgroundColor(int focusedBackgroundColor) {
+        this.focusedBackgroundColor = focusedBackgroundColor;
+    }
+    public int getFocusedBackgroundColor() {
+        return focusedBackgroundColor;
+    }
+
     public String getText() {
         return text;
     }
-
-    @Override
-    protected void renderBackground() {
-        renderBackgroundColor();
+    public double getDouble() {
+        try {
+            return Double.parseDouble(text);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+    public int getInt() {
+        try {
+            return Integer.parseInt(text);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
+    public void setText(String text) {
+        this.text = text;
+        setAllowLetters(true);
+        setAllowNumbers(true, true);
+        currentCursorPos = text.length();
+        updateTextLabel();
+    }
+    public void setText(double value) {
+        setAllowLetters(false);
+        setAllowNumbers(true, true);
+        setText(String.valueOf(value));
+    }
+    public void setText(int value) {
+        setAllowLetters(false);
+        setAllowNumbers(true, false);
+        setText(String.valueOf(value));
+    }
+    public void setMaxChars(int maxChars) {
+        this.maxChars = maxChars;
+    }
+    public int getMaxChars() {
+        return maxChars;
+    }
+
+    @Override
+    protected void renderBackground()
+    {
+        super.setBackgroundColor(isFocused()?focusedBackgroundColor:(isMouseOver()?hoverBackgroundColor:backgroundColor));
+        super.renderBackground();
+    }
     @Override
     protected void render() {
 
@@ -80,17 +140,12 @@ public class TextBox extends GuiElement {
                 drawRect(cursorX, 2,3, 1, cursorColor);
                 drawRect(cursorX, getHeight()-4,3, 1, cursorColor);
             }
-            return;
-        }
-        if(isMouseOver())
-        {
-            drawRect(0, 0, getWidth(), getHeight(), GuiElement.DEFAULT_HOVER_BACKGROUND_COLOR);
         }
     }
 
     @Override
     protected void layoutChanged() {
-
+        textLabel.setBounds(0, 0, getWidth(), getHeight());
     }
 
     @Override
@@ -115,11 +170,9 @@ public class TextBox extends GuiElement {
 
     @Override
     public void focusGained() {
-        setBackgroundColor(DEFAULT_FOCUSED_BACKGROUND_COLOR);
     }
     @Override
     public void focusLost() {
-        setBackgroundColor(DEFAULT_BACKGROUND_COLOR);
         cursorVisible = false;
     }
 
@@ -308,9 +361,7 @@ public class TextBox extends GuiElement {
         if(!isFocused())
             return false;
 
-        if(     allowNumbers && !Character.isDigit(codePoint) ||
-                allowLetters && !Character.isLetter(codePoint) ||
-                allowSpecialChars && !Character.isLetterOrDigit(codePoint))
+        if(canConsume(codePoint))
         {
             if(text.length() >= maxChars)
                 return false;
@@ -325,5 +376,13 @@ public class TextBox extends GuiElement {
     private void updateTextLabel()
     {
         textLabel.setText(text);
+    }
+    private boolean canConsume(char codePoint)
+    {
+        boolean number = Character.isDigit(codePoint) ||
+                (allowDecimal && codePoint == '.' && text.indexOf('.')==-1) ||
+                (allowDecimal && codePoint == '-' && currentCursorPos == 0 && text.indexOf('-')==-1);
+        boolean letter = Character.isLetter(codePoint);
+        return (number && allowNumbers) || (letter && allowLetters);
     }
 }

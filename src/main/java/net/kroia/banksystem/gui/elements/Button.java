@@ -79,6 +79,8 @@ public class Button extends GuiElement {
         else if(isMouseOver())
             color = colorHover;
         drawRect(0,0,getWidth(), getHeight(),color);
+        if(enableOutline)
+            renderOutline();
     }
 
     @Override

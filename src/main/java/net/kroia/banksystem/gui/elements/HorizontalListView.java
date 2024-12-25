@@ -11,6 +11,15 @@ public class HorizontalListView extends ListView {
 
 
     @Override
+    protected void renderBackground() {
+        if(enableBackground)
+            renderBackgroundColor();
+        drawRect(0, getHeight()-scrollBarThickness, getWidth(), scrollBarThickness, scrollBarBackgroundColor);
+        if(enableOutline)
+            renderOutline();
+    }
+
+    @Override
     protected int getContentDimension2()
     {
         return getWidth();
@@ -19,33 +28,36 @@ public class HorizontalListView extends ListView {
     @Override
     public void addChild(GuiElement el)
     {
-        allObjectSize += el.getWidth();
         super.addChild(el);
+
     }
     @Override
     public void removeChild(GuiElement el)
     {
-        allObjectSize -= el.getWidth();
         super.removeChild(el);
     }
     @Override
     protected void updateElementPositions()
     {
-        int x = 0;
+        int x = padding;
         for(GuiElement child : getChilds())
         {
             child.setX(x - scrollOffset);
-            x += child.getWidth();
+            x += child.getWidth()+spacing;
         }
     }
 
     @Override
     protected void layoutChanged() {
-        scrollContainer.setBounds(0, 0, getWidth(), getHeight()-scrollBarThickness);
-        allObjectSize = 0;
+        scrollContainer.setBounds(1, 1, getWidth()-2, getHeight()-scrollBarThickness-2);
+        childsChanged();
+    }
+    protected void childsChanged()
+    {
+        allObjectSize = padding*2;
         for(GuiElement child : getChilds())
         {
-            allObjectSize += child.getWidth();
+            allObjectSize += child.getWidth()+spacing;
         }
     }
 
@@ -53,8 +65,8 @@ public class HorizontalListView extends ListView {
     protected void setScrollBarBounds(Button scrollBarButton)
     {
         // Render scrollbar
-        int scrollbarWidth = (int) ((float)getWidth() / (float) allObjectSize * (float)getWidth());
-        int scrollbarX = (int) ((float)scrollOffset / (float) allObjectSize * (float)getWidth());
+        int scrollbarWidth = (int) ((float)(getWidth()) / (float) allObjectSize * (float)getWidth())-outlineThickness;
+        int scrollbarX = (int) ((float)scrollOffset / (float) allObjectSize * (float)getWidth())+outlineThickness;
         scrollBarButton.setBounds(scrollbarX, getHeight() - scrollBarThickness, scrollbarWidth, scrollBarThickness);
     }
 

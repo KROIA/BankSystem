@@ -53,7 +53,7 @@ public class Gui {
     {
         return this.partialTick;
     }
-    public Font getFont()
+    public static Font getFont()
     {
         return Minecraft.getInstance().font;
     }
@@ -129,7 +129,7 @@ public class Gui {
         this.mousePosY = (int)mouseY;
         for(GuiElement element : elements)
         {
-            if(element.mouseClickedInternal(button))
+            if(element.mouseClickedInternal(button, true))
                 return true;
         }
         return false;
@@ -151,7 +151,7 @@ public class Gui {
         this.mousePosY = (int)mouseY;
         for(GuiElement element : elements)
         {
-            if(element.mouseReleasedInternal(button))
+            if(element.mouseReleasedInternal(button,true))
                 return true;
         }
         return false;
@@ -162,7 +162,7 @@ public class Gui {
         this.mousePosY = (int)mouseY;
         for(GuiElement element : elements)
         {
-            if(element.mouseScrolledInternal(delta))
+            if(element.mouseScrolledInternal(delta,true))
                 return true;
         }
         return false;
@@ -214,7 +214,7 @@ public class Gui {
     {
         graphics.renderItem(item, x, y, seed);
     }
-    public double getGuiScale()
+    public static double getGuiScale()
     {
         return Minecraft.getInstance().getWindow().getGuiScale();
     }
@@ -233,7 +233,7 @@ public class Gui {
         graphics.disableScissor();
     }
 
-    public void playLocalSound(SoundEvent sound, float volume, float pitch)
+    public static void playLocalSound(SoundEvent sound, float volume, float pitch)
     {
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.level.playLocalSound(

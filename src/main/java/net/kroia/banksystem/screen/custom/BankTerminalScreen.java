@@ -149,6 +149,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     private Rectangle receiveWindowBackgroundRect;
 
     private Gui customGui;
+    boolean enableGizmos = false;
 
     public BankTerminalScreen(BankTerminalContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
         super(pMenu, pPlayerInventory, pTitle);
@@ -165,12 +166,13 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
             hListView.addChild(new Button(20,20,20,50,"Test "+i));
         }
 
-        vListView.relayout(3,3, GuiElement.LayoutDirection.VERTICAL, false);
-        hListView.relayout(3,3, GuiElement.LayoutDirection.HORIZONTAL, false);
+
         frame.addChild(vListView);
         frame.addChild(hListView);
         frame.addChild(textBox);
         frame.relayout(3,3, GuiElement.LayoutDirection.HORIZONTAL, true);
+        vListView.relayout(3,3, GuiElement.LayoutDirection.VERTICAL, true,false);
+        hListView.relayout(3,3, GuiElement.LayoutDirection.HORIZONTAL, false,true);
 
         //textLabel.setLayoutType(GuiElement.LayoutType.LEFT);
         //textLabel.setBounds(20,20,100,50);
@@ -235,7 +237,8 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
         super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
         customGui.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
-        customGui.renderGizmos();
+        if(enableGizmos)
+            customGui.renderGizmos();
 /*
         // Draw money string
         long money = ClientBankManager.getBalance();

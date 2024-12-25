@@ -9,7 +9,14 @@ public class VerticalListView extends ListView {
         scrollContainer.setBounds(0, 0, width - scrollBarThickness, height);
     }
 
-
+    @Override
+    protected void renderBackground() {
+        if(enableBackground)
+            renderBackgroundColor();
+        drawRect(getWidth()-scrollBarThickness, 0, scrollBarThickness, getHeight(), scrollBarBackgroundColor);
+        if(enableOutline)
+            renderOutline();
+    }
     @Override
     protected int getContentDimension2()
     {
@@ -17,19 +24,23 @@ public class VerticalListView extends ListView {
     }
     @Override
     protected void layoutChanged() {
-        scrollContainer.setBounds(0, 0, getWidth() - scrollBarThickness, getHeight());
-        allObjectSize = 0;
+        scrollContainer.setBounds(1, 1, getWidth() - scrollBarThickness-2, getHeight()-2);
+        childsChanged();
+    }
+    protected void childsChanged()
+    {
+        allObjectSize = padding*2;
         for(GuiElement child : getChilds())
         {
-            allObjectSize += child.getHeight();
+            allObjectSize += child.getHeight()+spacing;
         }
     }
     @Override
     protected void setScrollBarBounds(Button scrollBarButton)
     {
         // Render scrollbar
-        int scrollbarHeight = (int) ((float)getHeight() / (float) allObjectSize * (float)getHeight());
-        int scrollbarY = (int) ((float)scrollOffset / (float) allObjectSize * (float)getHeight());
+        int scrollbarHeight = (int) ((float)(getHeight()) / (float) allObjectSize * (float)getHeight())-outlineThickness;
+        int scrollbarY = (int) ((float)scrollOffset / (float) allObjectSize * (float)getHeight())+outlineThickness;
         scrollBarButton.setBounds(getWidth() - scrollBarThickness, scrollbarY, scrollBarThickness, scrollbarHeight);
     }
 
@@ -48,11 +59,11 @@ public class VerticalListView extends ListView {
     @Override
     protected void updateElementPositions()
     {
-        int y = 0;
+        int y = padding;
         for(GuiElement child : getChilds())
         {
             child.setY(y - scrollOffset);
-            y += child.getHeight();
+            y += child.getHeight()+spacing;
         }
     }
 
