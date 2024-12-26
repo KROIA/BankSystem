@@ -129,7 +129,7 @@ public class TextBox extends GuiElement {
         if(isFocused())
         {
             cursorBlinkCounter++;
-            if(cursorBlinkCounter > 20)
+            if(cursorBlinkCounter > 40)
             {
                 cursorBlinkCounter = 0;
                 cursorVisible = !cursorVisible;
@@ -382,7 +382,7 @@ public class TextBox extends GuiElement {
         boolean number = Character.isDigit(codePoint) ||
                 (allowDecimal && codePoint == '.' && text.indexOf('.')==-1) ||
                 (allowDecimal && codePoint == '-' && currentCursorPos == 0 && text.indexOf('-')==-1);
-        boolean letter = Character.isLetter(codePoint);
+        boolean letter = !Character.isDigit(codePoint);
         return (number && allowNumbers) || (letter && allowLetters);
     }
 }

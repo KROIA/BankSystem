@@ -83,7 +83,7 @@ public class BankSystemMod
             LOGGER.info("HELLO FROM CLIENT SETUP");
             LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
 
-            MenuScreens.register(ModMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
+            //MenuScreens.register(ModMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
 
         }
     }

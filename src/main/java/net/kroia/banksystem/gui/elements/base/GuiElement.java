@@ -624,22 +624,48 @@ public abstract class GuiElement {
     {
         drawOutline(rect.x,rect.y, rect.width, rect.height, color);
     }
-    public void drawItem(ItemStack item, int x, int y)
-    {
-        root.drawItem(item, x+globalPositon.x, y+globalPositon.y, 0);
-    }
-    public void drawItem(ItemStack item, Point pos)
-    {
-        root.drawItem(item, pos.x+globalPositon.x, pos.y+globalPositon.y, 0);
-    }
     public void drawItem(ItemStack item, int x, int y, int seed)
     {
         root.drawItem(item, x+globalPositon.x, y+globalPositon.y, seed);
     }
+    public void drawItem(ItemStack item, int x, int y)
+    {
+        drawItem(item, x, y, 0);
+    }
+    public void drawItem(ItemStack item, Point pos)
+    {
+        drawItem(item, pos.x, pos.y, 0);
+    }
     public void drawItem(ItemStack item, Point pos, int seed)
     {
-        root.drawItem(item, pos.x+globalPositon.x, pos.y+globalPositon.y, seed);
+        drawItem(item, pos.x, pos.y, seed);
     }
+    public void drawItemWithDecoration(ItemStack item, int x, int y, int seed)
+    {
+        root.drawItemWithDecoration(item, x+globalPositon.x, y+globalPositon.y, seed);
+    }
+    public void drawItemWithDecoration(ItemStack item, int x, int y)
+    {
+        drawItemWithDecoration(item, x, y, 0);
+    }
+    public void drawItemWithDecoration(ItemStack item, Point pos)
+    {
+        drawItemWithDecoration(item, pos.x, pos.y, 0);
+    }
+
+    public void drawItemWithDecoration(ItemStack item, Point pos, int seed)
+    {
+        drawItemWithDecoration(item, pos.x, pos.y, seed);
+    }
+    public void drawItemWithDecoration(ItemStack item, int x, int y, int z, int seed)
+    {
+        root.drawItemWithDecoration(item, x+globalPositon.x, y+globalPositon.y, z, seed);
+    }
+    public void drawItemWithDecoration(ItemStack item, Point pos, int z, int seed)
+    {
+        drawItemWithDecoration(item, pos.x, pos.y, z, seed);
+    }
+
 
     public void drawTooltip(Component tooltip, int x, int y)
     {

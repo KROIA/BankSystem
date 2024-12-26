@@ -93,23 +93,26 @@ public class Gui {
         return this.focusedElement;
     }
 
-    public void renderBackground(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick)
+    public void setMousePos(int x, int y)
+    {
+        this.mousePosX = x;
+        this.mousePosY = y;
+    }
+    public void setPartialTick(float partialTick)
+    {
+        this.partialTick = partialTick;
+    }
+    public void renderBackground(GuiGraphics pGuiGraphics)
     {
         this.graphics = pGuiGraphics;
-        this.mousePosX = pMouseX;
-        this.mousePosY = pMouseY;
-        this.partialTick = pPartialTick;
         for(GuiElement element : elements)
         {
             element.renderBackgroundInternal();
         }
     }
-    public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick)
+    public void render(GuiGraphics pGuiGraphics)
     {
         this.graphics = pGuiGraphics;
-        this.mousePosX = pMouseX;
-        this.mousePosY = pMouseY;
-        this.partialTick = pPartialTick;
         for(GuiElement element : elements)
         {
             element.renderInternal();
@@ -213,6 +216,37 @@ public class Gui {
     public void drawItem(ItemStack item, int x, int y, int seed)
     {
         graphics.renderItem(item, x, y, seed);
+    }
+    public void drawItemWithDecoration(ItemStack item, int x, int y, int seed)
+    {
+        graphics.renderItem(item, x, y, seed);
+        int count = item.getCount();
+        if(count > 1)
+        {
+            // Render item count
+            String s = String.valueOf(count);
+            graphics.pose().pushPose();
+            graphics.pose().translate(0.0D, 0.0D, (double)(200));
+            drawText(s, x + 19 - 2 - getFont().width(s), y + 6 + 3, 16777215);
+            graphics.pose().popPose();
+        }
+    }
+    public void drawItemWithDecoration(ItemStack item, int x, int y, int z, int seed)
+    {
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0D, 0.0D, (double)(z));
+        graphics.renderItem(item, x, y, seed);
+        int count = item.getCount();
+        if(count > 1)
+        {
+            // Render item count
+            String s = String.valueOf(count);
+            graphics.pose().pushPose();
+            graphics.pose().translate(0.0D, 0.0D, (double)(200));
+            drawText(s, x + 19 - 2 - getFont().width(s), y + 6 + 3, 16777215);
+            graphics.pose().popPose();
+        }
+        graphics.pose().popPose();
     }
     public static double getGuiScale()
     {

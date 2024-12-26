@@ -1,9 +1,14 @@
 package net.kroia.banksystem.block.custom;
 
+import ca.weblite.objc.Client;
+import net.kroia.banksystem.ClientHooks;
 import net.kroia.banksystem.entity.ModEntities;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
+import net.kroia.banksystem.screen.custom.BankTerminalScreen;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.MenuProvider;
@@ -17,6 +22,8 @@ import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.items.ItemStackHandler;
 import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.Nullable;
@@ -58,7 +65,13 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
         if (!(be instanceof BankTerminalBlockEntity blockEntity))
             return;
 
-        if (level.isClientSide())
+        if(level.isClientSide())
+        {
+            ClientHooks.openBankTerminalBlockScreen(be, pos, player.getInventory());
+            return;
+        }
+
+       /* if (level.isClientSide())
             return;
 
         // open screen
@@ -68,7 +81,7 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
             // Open the menu
             SyncBankDataPacket.sendPacket(sPlayer);
             NetworkHooks.openScreen(sPlayer, menuProvider, pos);
-        }
+        }*/
     }
 
     @Override

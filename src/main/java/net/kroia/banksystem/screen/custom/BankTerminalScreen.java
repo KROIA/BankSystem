@@ -17,6 +17,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 //import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -29,7 +30,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 //@Mod.EventBusSubscriber(modid = StockMarketMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
-public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalContainerMenu> {
+public class BankTerminalScreen extends Screen//AbstractContainerScreen<BankTerminalContainerMenu>
+{
     private class BankElement
     {
         private static final Component RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT = Component.translatable("gui." + BankSystemMod.MODID + ".bank_terminal_screen.bank_element.receive_items_from_market_button");
@@ -151,25 +153,34 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     private Gui customGui;
     boolean enableGizmos = false;
 
+    BankTerminalContainerMenu menu;
+
     public BankTerminalScreen(BankTerminalContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
-        super(pMenu, pPlayerInventory, pTitle);
+        //super(pMenu, pPlayerInventory, pTitle);
+        super(pTitle);
+        menu = pMenu;
         customGui = new Gui(this);
         ListView vListView = new VerticalListView(20,20,100,200);
         ListView hListView = new HorizontalListView(0,0,100,100);
         TextBox textBox = new TextBox(130,20,100);
-        Frame frame = new Frame(20,20,300,200);
+        Frame frame = new Frame(20,20,400,200);
+        InventoryView inventoryView = new InventoryView(0,0,pPlayerInventory);
 
         for(int i=0; i<20; ++i)
         {
             Button button = new Button(20,20,50,20,"Test "+i);
             vListView.addChild(button);
             hListView.addChild(new Button(20,20,20,50,"Test "+i));
+            if(i== 5)
+            {
+                vListView.addChild(textBox);
+            }
         }
 
 
         frame.addChild(vListView);
         frame.addChild(hListView);
-        frame.addChild(textBox);
+        frame.addChild(inventoryView);
         frame.relayout(3,3, GuiElement.LayoutDirection.HORIZONTAL, true);
         vListView.relayout(3,3, GuiElement.LayoutDirection.VERTICAL, true,false);
         hListView.relayout(3,3, GuiElement.LayoutDirection.HORIZONTAL, false,true);
@@ -179,13 +190,13 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
         customGui.addElement(frame);
         //customGui.addElement(hListView);
 
-        this.imageWidth = 176;
+        /*this.imageWidth = 176;
         this.imageHeight = 166;
 
         super.titleLabelX += BankTerminalContainerMenu.POS_X;
         super.titleLabelY += BankTerminalContainerMenu.POS_Y;
         super.inventoryLabelX += BankTerminalContainerMenu.POS_X;
-        super.inventoryLabelY += BankTerminalContainerMenu.POS_Y;
+        super.inventoryLabelY += BankTerminalContainerMenu.POS_Y;*/
 
         // Subscribe to eventbus
         //MinecraftForge.EVENT_BUS.register(this);
@@ -218,10 +229,16 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     }
 
     @Override
-    protected void renderBg(GuiGraphics pGuiGraphics, float pPartialTick, int pMouseX, int pMouseY) {
+    public boolean isPauseScreen() {
+        return false;
+    }
+
+    @Override
+    //protected void renderBg(GuiGraphics pGuiGraphics, float pPartialTick, int pMouseX, int pMouseY) {
+    public void renderBackground(GuiGraphics pGuiGraphics) {
         //super.renderBackground(pGuiGraphics);
         super.renderBackground(pGuiGraphics);
-        customGui.renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
+
         /*pGuiGraphics.blit(TEXTURE, this.leftPos+BankTerminalContainerMenu.POS_X, this.topPos+BankTerminalContainerMenu.POS_Y, 0, 0, this.imageWidth, this.imageHeight);
 
 
@@ -236,7 +253,10 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
 
         super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
-        customGui.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
+        customGui.setMousePos(pMouseX, pMouseY);
+        customGui.setPartialTick(pPartialTick);
+        customGui.renderBackground(pGuiGraphics);
+        customGui.render(pGuiGraphics);
         if(enableGizmos)
             customGui.renderGizmos();
 /*
