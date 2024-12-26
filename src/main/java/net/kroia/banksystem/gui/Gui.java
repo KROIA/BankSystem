@@ -7,6 +7,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.ItemStack;
@@ -247,6 +248,16 @@ public class Gui {
             graphics.pose().popPose();
         }
         graphics.pose().popPose();
+    }
+    public void drawTexture(GuiTexture texture, int x, int y)
+    {
+        graphics.blit(texture.getResourceLocation(), x, y, texture.getUVOffsetX(), texture.getUVOffsetY(), texture.getWidth(), texture.getHeight());
+    }
+
+    public static ResourceLocation createResourceLocation(String modID, String path)
+    {
+        return new ResourceLocation(modID, path);
+        //return ResourceLocation.fromNamespaceAndPath(modID, path);
     }
     public static double getGuiScale()
     {

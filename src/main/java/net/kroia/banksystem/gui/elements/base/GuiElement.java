@@ -1,6 +1,7 @@
 package net.kroia.banksystem.gui.elements.base;
 
 import net.kroia.banksystem.gui.Gui;
+import net.kroia.banksystem.gui.GuiTexture;
 import net.kroia.banksystem.gui.geometry.Point;
 import net.kroia.banksystem.gui.geometry.Rectangle;
 import net.minecraft.client.gui.Font;
@@ -664,6 +665,15 @@ public abstract class GuiElement {
     public void drawItemWithDecoration(ItemStack item, Point pos, int z, int seed)
     {
         drawItemWithDecoration(item, pos.x, pos.y, z, seed);
+    }
+
+    public void drawTexture(GuiTexture texture, int x, int y)
+    {
+        root.drawTexture(texture, x+globalPositon.x, y+globalPositon.y);
+    }
+    public void drawTexture(GuiTexture texture, Point pos)
+    {
+        drawTexture(texture, pos.x, pos.y);
     }
 
 

@@ -4,6 +4,7 @@ import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.gui.Gui;
+import net.kroia.banksystem.gui.GuiTexture;
 import net.kroia.banksystem.gui.elements.*;
 import net.kroia.banksystem.gui.elements.base.GuiElement;
 import net.kroia.banksystem.gui.elements.base.ListView;
@@ -163,8 +164,9 @@ public class BankTerminalScreen extends Screen//AbstractContainerScreen<BankTerm
         ListView vListView = new VerticalListView(20,20,100,200);
         ListView hListView = new HorizontalListView(0,0,100,100);
         TextBox textBox = new TextBox(130,20,100);
-        Frame frame = new Frame(20,20,400,200);
-        InventoryView inventoryView = new InventoryView(0,0,pPlayerInventory);
+        Frame frame = new Frame(20,20,200,200);
+
+        InventoryView inventoryView = new InventoryView(230,0,pPlayerInventory,BankSystemMod.MODID, "textures/gui/inventory_hp.png", 176, 166);
 
         for(int i=0; i<20; ++i)
         {
@@ -180,7 +182,7 @@ public class BankTerminalScreen extends Screen//AbstractContainerScreen<BankTerm
 
         frame.addChild(vListView);
         frame.addChild(hListView);
-        frame.addChild(inventoryView);
+        //frame.addChild(inventoryView);
         frame.relayout(3,3, GuiElement.LayoutDirection.HORIZONTAL, true);
         vListView.relayout(3,3, GuiElement.LayoutDirection.VERTICAL, true,false);
         hListView.relayout(3,3, GuiElement.LayoutDirection.HORIZONTAL, false,true);
@@ -188,6 +190,7 @@ public class BankTerminalScreen extends Screen//AbstractContainerScreen<BankTerm
         //textLabel.setLayoutType(GuiElement.LayoutType.LEFT);
         //textLabel.setBounds(20,20,100,50);
         customGui.addElement(frame);
+        customGui.addElement(inventoryView);
         //customGui.addElement(hListView);
 
         /*this.imageWidth = 176;
