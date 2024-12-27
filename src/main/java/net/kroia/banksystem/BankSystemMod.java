@@ -1,27 +1,22 @@
 package net.kroia.banksystem;
 
 import com.mojang.logging.LogUtils;
-import mezz.jei.api.*;
-import mezz.jei.api.helpers.IJeiHelpers;
 import net.kroia.banksystem.block.ModBlocks;
 import net.kroia.banksystem.command.ModCommands;
 import net.kroia.banksystem.entity.ModEntities;
-import net.kroia.banksystem.item.ModCreativeModTabs;
+import net.kroia.banksystem.item.BankSystemCreativeModTab;
 import net.kroia.banksystem.item.ModItems;
 import net.kroia.banksystem.menu.ModMenus;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
 import net.kroia.banksystem.networking.ModMessages;
-import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.MenuScreens;
-import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -42,7 +37,7 @@ public class BankSystemMod
     {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
-        ModCreativeModTabs.register(modEventBus);
+        BankSystemCreativeModTab.register(modEventBus);
         ModItems.register(modEventBus);
         ModBlocks.register(modEventBus);
         ModEntities.register(modEventBus);

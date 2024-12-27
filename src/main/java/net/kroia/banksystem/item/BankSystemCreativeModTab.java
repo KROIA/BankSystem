@@ -5,15 +5,21 @@ import net.kroia.banksystem.block.ModBlocks;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.RegistryObject;
 
-public class ModCreativeModTabs {
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Supplier;
+
+public class BankSystemCreativeModTab {
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS =
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, BankSystemMod.MODID);
 
+    private static final List<Supplier<Item>> dynamicItems = new ArrayList<>();
     public static final RegistryObject<CreativeModeTab> STOCK_MARKET_TAB = CREATIVE_MODE_TABS.register("banking_tab",
             () -> CreativeModeTab.builder().title(Component.translatable("Banking System"))
                     .displayItems((pParameters, pOutput) -> {
@@ -39,6 +45,11 @@ public class ModCreativeModTabs {
                         pOutput.accept(ModItems.MONEY500.get());
                         pOutput.accept(ModItems.MONEY1000.get());
 
+                        // Add dynamic items
+                        for (Supplier<Item> dynamicItem : dynamicItems) {
+                            pOutput.accept(dynamicItem.get());
+                        }
+
                     })
                     .icon(() -> new ItemStack(ModBlocks.BANK_TERMINAL_BLOCK.get()))
                     .build());
@@ -46,5 +57,15 @@ public class ModCreativeModTabs {
 
     public static void register(IEventBus eventBus) {
         CREATIVE_MODE_TABS.register(eventBus);
+    }
+
+    // Method to add a dynamic item
+    public static void addDynamicItem(Supplier<Item> itemSupplier) {
+        dynamicItems.add(itemSupplier);
+    }
+
+    // Method to remove a dynamic item
+    public static void removeDynamicItem(Supplier<Item> itemSupplier) {
+        dynamicItems.remove(itemSupplier);
     }
 }
