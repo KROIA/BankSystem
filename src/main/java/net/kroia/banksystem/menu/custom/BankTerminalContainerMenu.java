@@ -19,7 +19,7 @@ public class BankTerminalContainerMenu extends AbstractContainerMenu {
     private final BankTerminalBlockEntity blockEntity;
     private final ContainerLevelAccess levelAccess;
 
-    public static final int POS_X = 18*5;
+    public static final int POS_X = 0;
     public static final int POS_Y = 0;
 
     // Client Constructor

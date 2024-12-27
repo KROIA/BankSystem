@@ -65,13 +65,13 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
         if (!(be instanceof BankTerminalBlockEntity blockEntity))
             return;
 
-        if(level.isClientSide())
+        /*if(level.isClientSide())
         {
             ClientHooks.openBankTerminalBlockScreen(be, pos, player.getInventory());
             return;
-        }
+        }*/
 
-       /* if (level.isClientSide())
+        if (level.isClientSide())
             return;
 
         // open screen
@@ -81,7 +81,7 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
             // Open the menu
             SyncBankDataPacket.sendPacket(sPlayer);
             NetworkHooks.openScreen(sPlayer, menuProvider, pos);
-        }*/
+        }
     }
 
     @Override

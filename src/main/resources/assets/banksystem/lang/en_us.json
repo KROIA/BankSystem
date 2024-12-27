@@ -8,7 +8,7 @@
   "item.banksystem.circuit_board": "Circuit Board",
   "item.banksystem.software": "Empty Software",
   "item.banksystem.banking_software": "Banking Software",
-  "container.banksystem.bank_terminal_block_entity": "Bank Terminal",
   "gui.banksystem.bank_terminal_screen.send_items_to_bank_button": "Send items to bank",
-  "gui.banksystem.bank_terminal_screen.receive_items_from_bank_button": "Receive items from bank"
+  "gui.banksystem.bank_terminal_screen.receive_items_from_bank_button": "Receive items from bank",
+  "gui.banksystem.bank_terminal_screen.inventory_name": "Bank Terminal Inventory"
 }

@@ -3,23 +3,18 @@ package net.kroia.banksystem.screen.custom;
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.ClientBankManager;
-import net.kroia.banksystem.gui.Gui;
-import net.kroia.banksystem.gui.GuiTexture;
-import net.kroia.banksystem.gui.elements.*;
-import net.kroia.banksystem.gui.elements.base.GuiElement;
-import net.kroia.banksystem.gui.elements.base.ListView;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.banksystem.gui.geometry.Rectangle;
 import net.kroia.modutilities.ItemUtilities;
+import net.kroia.modutilities.gui.Gui;
+import net.kroia.modutilities.gui.GuiContainerScreen;
+import net.kroia.modutilities.gui.GuiTexture;
+import net.kroia.modutilities.gui.elements.*;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-//import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
@@ -30,70 +25,68 @@ import net.minecraftforge.event.TickEvent;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-//@Mod.EventBusSubscriber(modid = StockMarketMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
-public class BankTerminalScreen extends Screen//AbstractContainerScreen<BankTerminalContainerMenu>
+public class BankTerminalScreen extends /*Screen*/GuiContainerScreen<BankTerminalContainerMenu>
 {
-    private class BankElement
+    private class BankElement extends GuiElement
     {
-        private static final Component RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT = Component.translatable("gui." + BankSystemMod.MODID + ".bank_terminal_screen.bank_element.receive_items_from_market_button");
-
-        public static final int HEIGHT = 18;
+        public static final int HEIGHT = 20;
         public static final int textEditWidth = 100;
-        private int x;
-        private int y;
-        private int width;
         private long targetAmount = 0;
         public ItemStack stack;
         public final String itemID;
 
-        public EditBox amountBox;
-        public net.minecraft.client.gui.components.Button receiveItemsFromMarketButton;
+        private final TextBox amountBox;
+        private final Label balanceLabel;
+       // private final Button receiveItemsFromMarketButton;
 
         BankTerminalScreen parent;
 
-        public BankElement(BankTerminalScreen parent, int x, int y, int width, ItemStack stack, String itemID)
-        {
+        public BankElement(BankTerminalScreen parent, ItemStack stack, String itemID) {
+            super(0, 0, 100, HEIGHT);
             this.parent = parent;
-            this.x = x;
-            this.y = y;
-            this.width = width;
             this.stack = stack;
             this.itemID = itemID;
 
             int boxPadding = 2;
 
-            this.amountBox = new EditBox(Minecraft.getInstance().font, x+width-textEditWidth + boxPadding, y+boxPadding, textEditWidth-2*boxPadding, HEIGHT-2*boxPadding, Component.nullToEmpty(""));
-            this.amountBox.setMaxLength(10); // Max length of input
-            this.amountBox.setFilter(input -> input.matches("\\d*")); // Allow only digits
+            balanceLabel = new Label("");
 
-            receiveItemsFromMarketButton = net.minecraft.client.gui.components.Button.builder(RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT, this::onReceiveItemsFromMarket)
-                    .bounds(x+width-textEditWidth-100, y, 100, HEIGHT).build();
+            this.amountBox = new TextBox(0,0,0);
+            this.amountBox.setMaxChars(10); // Max length of input
+            this.amountBox.setAllowLetters(false); // Allow only digits
 
+            //receiveItemsFromMarketButton = new Button(x+width-textEditWidth-100, y, 100, HEIGHT, RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT.getString());
+            //receiveItemsFromMarketButton.setOnFallingEdge(this::onReceiveItemsFromMarket);
 
+            addChild(balanceLabel);
+            addChild(amountBox);
+            amountBox.onTextChanged(this::saveAmount);
+            amountBox.setText("0");
+            //addChild(receiveItemsFromMarketButton);
         }
 
-        public void render(GuiGraphics graphics)
-        {
+        @Override
+        protected void render() {
             int amount = stack.getCount();
             if(amount == 0)
                 stack.setCount(1);
-            graphics.renderItem(stack, x+1, y+1);
+            drawItem(stack, 1, (getHeight()-16)/2);
             if(amount == 0)
                 stack.setCount(0);
             String amountStr = "" + amount;
-            int fontHeight = Minecraft.getInstance().font.lineHeight;
-            graphics.drawString(Minecraft.getInstance().font, amountStr, x + HEIGHT+2, y + (HEIGHT - fontHeight)/2, 0xFFFFFF);
+            balanceLabel.setText(amountStr);
+        }
 
-            amountBox.render(graphics, 0, 0, 0);
-        }
-        public void setY(int y)
-        {
-            this.y = y;
-            amountBox.setY(y);
-        }
-        public int getY()
-        {
-            return y;
+        @Override
+        protected void layoutChanged() {
+            int width = getWidth()-17;
+            int height = getHeight();
+            int padding = 2;
+            int balanceLabelWidth = width/2;
+
+            balanceLabel.setBounds(padding+17, padding, balanceLabelWidth, height-padding*2);
+            amountBox.setBounds(balanceLabel.getRight(), padding, getWidth()-balanceLabel.getRight()-padding, height-padding*2);
+
         }
         public long getTargetAmount()
         {
@@ -103,36 +96,34 @@ public class BankTerminalScreen extends Screen//AbstractContainerScreen<BankTerm
         public void setTargetAmount(int amount)
         {
             this.targetAmount = amount;
-            amountBox.setValue(""+amount);
+            amountBox.setText(""+amount);
         }
         private void saveAmount() {
-            // Retrieve the value from the EditBox
-            String text = this.amountBox.getValue();
-
-            if (!text.isEmpty()) {
-                try {
-                    this.targetAmount = Long.parseLong(text);
-                } catch (NumberFormatException e) {
-                    // Handle invalid input (shouldn't happen due to input filter)
-                    this.targetAmount = 0;
-                }
-            } else {
-                // Handle empty input
-                this.targetAmount = 0;
+            targetAmount = this.amountBox.getInt();
+            if(targetAmount > stack.getCount()) {
+                targetAmount = stack.getCount();
+                amountBox.setText(""+targetAmount);
             }
+            else if(targetAmount < 0)
+            {
+                targetAmount = 0;
+                amountBox.setText(""+targetAmount);
+            }
+
         }
-        private void onReceiveItemsFromMarket(net.minecraft.client.gui.components.Button pButton) {
+        /*private void onReceiveItemsFromMarket() {
             //StockMarketMod.LOGGER.info("Sending item: "+itemID + " amount: "+getTargetAmount());
             HashMap<String, Long> itemTransferToMarketAmounts = new HashMap<>();
             itemTransferToMarketAmounts.put(itemID, getTargetAmount());
             UpdateBankTerminalBlockEntityPacket.sendPacketToServer(parent.menu.getBlockPos(), itemTransferToMarketAmounts, false);
             //RequestOrderPacket.generateRequest(itemID, getTargetAmount());
-        }
+        }*/
     }
-    private static final ResourceLocation TEXTURE = new ResourceLocation(BankSystemMod.MODID, "textures/gui/example_menu.png");
+    private static final ResourceLocation TEXTURE = new ResourceLocation(BankSystemMod.MODID, "textures/gui/inventory_hpc.png");
 
     private static final Component SEND_ITEMS_TO_BANK_BUTTON_TEXT = Component.translatable("gui." + BankSystemMod.MODID + ".bank_terminal_screen.send_items_to_bank_button");
     private static final Component RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT = Component.translatable("gui." + BankSystemMod.MODID + ".bank_terminal_screen.receive_items_from_bank_button");
+    private static final Component INVENTORY_NAME_TEXT = Component.translatable("gui." + BankSystemMod.MODID + ".bank_terminal_screen.inventory_name");
 
 
     private int lastTickCount = 0;
@@ -140,137 +131,55 @@ public class BankTerminalScreen extends Screen//AbstractContainerScreen<BankTerm
     //private boolean mouseClickToggle = false;
     private final ArrayList<BankElement> bankElements = new ArrayList<>();
 
-    private int scrollOffset = 0;
-    private int visibleCount;
-
-
-
-    private Rectangle receiveItemsFromMarketButtonRect;
-    private Rectangle sendItemsToMarketButtonRect;
-    private Rectangle balanceLabelRect;
-    private Rectangle itemListViewRect;
-    private Rectangle receiveWindowBackgroundRect;
-
-    private Gui customGui;
-    boolean enableGizmos = false;
-
     BankTerminalContainerMenu menu;
 
+    // Gui elements
+    private final Button sendItemsToBankButton;
+    private final Button receiveItemsFromBankButton;
+    private final VerticalListView itemListView;
+    private final ContainerView<BankTerminalContainerMenu> inventoryView;
+
     public BankTerminalScreen(BankTerminalContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
-        //super(pMenu, pPlayerInventory, pTitle);
-        super(pTitle);
+        super(pMenu, pPlayerInventory, pTitle);
+        //super(pTitle);
         menu = pMenu;
-        customGui = new Gui(this);
-        ListView vListView = new VerticalListView(20,20,100,200);
-        ListView hListView = new HorizontalListView(0,0,100,100);
-        TextBox textBox = new TextBox(130,20,100);
-        Frame frame = new Frame(20,20,200,200);
+        sendItemsToBankButton = new Button(SEND_ITEMS_TO_BANK_BUTTON_TEXT.getString());
+        sendItemsToBankButton.setOnFallingEdge(this::onTransmittItemsToMarket);
 
-        InventoryView inventoryView = new InventoryView(230,0,pPlayerInventory,BankSystemMod.MODID, "textures/gui/inventory_hp.png", 176, 166);
+        receiveItemsFromBankButton = new Button(RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT.getString());
+        receiveItemsFromBankButton.setOnFallingEdge(this::onReceiveItemsFromMarket);
 
-        for(int i=0; i<20; ++i)
-        {
-            Button button = new Button(20,20,50,20,"Test "+i);
-            vListView.addChild(button);
-            hListView.addChild(new Button(20,20,20,50,"Test "+i));
-            if(i== 5)
-            {
-                vListView.addChild(textBox);
-            }
-        }
+        itemListView = new VerticalListView(0, 0, 100, 100);
+        inventoryView = new ContainerView<>(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MODID, "textures/gui/inventory_hpc.png", 176, 166));
 
+        addElement(sendItemsToBankButton);
+        addElement(receiveItemsFromBankButton);
+        addElement(itemListView);
+        addElement(inventoryView);
 
-        frame.addChild(vListView);
-        frame.addChild(hListView);
-        //frame.addChild(inventoryView);
-        frame.relayout(3,3, GuiElement.LayoutDirection.HORIZONTAL, true);
-        vListView.relayout(3,3, GuiElement.LayoutDirection.VERTICAL, true,false);
-        hListView.relayout(3,3, GuiElement.LayoutDirection.HORIZONTAL, false,true);
-
-        //textLabel.setLayoutType(GuiElement.LayoutType.LEFT);
-        //textLabel.setBounds(20,20,100,50);
-        customGui.addElement(frame);
-        customGui.addElement(inventoryView);
-        //customGui.addElement(hListView);
-
-        /*this.imageWidth = 176;
-        this.imageHeight = 166;
-
-        super.titleLabelX += BankTerminalContainerMenu.POS_X;
-        super.titleLabelY += BankTerminalContainerMenu.POS_Y;
-        super.inventoryLabelX += BankTerminalContainerMenu.POS_X;
-        super.inventoryLabelY += BankTerminalContainerMenu.POS_Y;*/
-
-        // Subscribe to eventbus
-        //MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.addListener(this::onTick);
     }
 
     @Override
-    public void init() {
-        super.init();
-        customGui.init();
-        /*sendItemsToMarketButtonRect = new Rectangle(this.width/2,10,this.imageWidth,20);
+    protected void updateLayout(Gui gui) {
+        int width = this.width;
+        int height = this.height;
 
         int padding = 5;
-        receiveWindowBackgroundRect = new Rectangle(5,5,200,this.height-2*padding);
-        receiveItemsFromMarketButtonRect = new Rectangle(receiveWindowBackgroundRect.x+padding,receiveWindowBackgroundRect.y+padding,receiveWindowBackgroundRect.width-2*padding,20);
-        balanceLabelRect = new Rectangle(receiveWindowBackgroundRect.x+padding,receiveWindowBackgroundRect.y+40,receiveWindowBackgroundRect.width-2*padding,this.font.lineHeight);
-        itemListViewRect = new Rectangle(receiveWindowBackgroundRect.x+padding,receiveWindowBackgroundRect.y+60,receiveWindowBackgroundRect.width-2*padding,
-                receiveWindowBackgroundRect.height-60-padding);
+        int inventoryWidth = inventoryView.getWidth();
+        int inventoryHeight = inventoryView.getHeight();
+        inventoryView.setPosition(width - inventoryWidth - padding, (height - inventoryHeight) / 2);
 
+        sendItemsToBankButton.setBounds(inventoryView.getX(), padding, inventoryView.getWidth(), 20);
 
+        int itemListViewWidth = inventoryView.getX()-padding*2;
+        receiveItemsFromBankButton.setBounds(padding, padding, itemListViewWidth, 20);
+        itemListView.setBounds(padding, receiveItemsFromBankButton.getY() + receiveItemsFromBankButton.getHeight() + padding,
+                itemListViewWidth, height - padding - receiveItemsFromBankButton.getHeight() - padding*2);
 
-        addRenderableWidget(net.minecraft.client.gui.components.Button.builder(SEND_ITEMS_TO_BANK_BUTTON_TEXT, this::onTransmittItemsToMarket)
-                .bounds(sendItemsToMarketButtonRect.x, sendItemsToMarketButtonRect.y, sendItemsToMarketButtonRect.width, sendItemsToMarketButtonRect.height).build());
-        addRenderableWidget(Button.builder(RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT, this::onReceiveItemsFromMarket)
-                .bounds(receiveItemsFromMarketButtonRect.x, receiveItemsFromMarketButtonRect.y, receiveItemsFromMarketButtonRect.width, receiveItemsFromMarketButtonRect.height).build());
-
-
-        buildItemButtons();*/
-
+        itemListView.relayout(1,1, GuiElement.LayoutDirection.VERTICAL, true, false);
     }
 
-    @Override
-    public boolean isPauseScreen() {
-        return false;
-    }
-
-    @Override
-    //protected void renderBg(GuiGraphics pGuiGraphics, float pPartialTick, int pMouseX, int pMouseY) {
-    public void renderBackground(GuiGraphics pGuiGraphics) {
-        //super.renderBackground(pGuiGraphics);
-        super.renderBackground(pGuiGraphics);
-
-        /*pGuiGraphics.blit(TEXTURE, this.leftPos+BankTerminalContainerMenu.POS_X, this.topPos+BankTerminalContainerMenu.POS_Y, 0, 0, this.imageWidth, this.imageHeight);
-
-
-        pGuiGraphics.fill(receiveWindowBackgroundRect.x, receiveWindowBackgroundRect.y,
-                receiveWindowBackgroundRect.x + receiveWindowBackgroundRect.width, receiveWindowBackgroundRect.y + receiveWindowBackgroundRect.height, 0x7F000000);
-*/
-    }
-
-    @Override
-    public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) {
-        //super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
-
-
-        super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
-        customGui.setMousePos(pMouseX, pMouseY);
-        customGui.setPartialTick(pPartialTick);
-        customGui.renderBackground(pGuiGraphics);
-        customGui.render(pGuiGraphics);
-        if(enableGizmos)
-            customGui.renderGizmos();
-/*
-        // Draw money string
-        long money = ClientBankManager.getBalance();
-        //pGuiGraphics.fill(balanceLabelRect.x, balanceLabelRect.y, balanceLabelRect.x + balanceLabelRect.width, balanceLabelRect.y + balanceLabelRect.height, 0x7F000000);
-        pGuiGraphics.drawString(font, "Balance: $" + money, balanceLabelRect.x, balanceLabelRect.y, 0xFFFFFF);
-
-        drawItemScrolList(pGuiGraphics);
-        renderTooltip(pGuiGraphics, pMouseX, pMouseY);*/
-    }
 
     // Method to handle the tick event
    // @SubscribeEvent(priority = EventPriority.NORMAL)
@@ -278,7 +187,7 @@ public class BankTerminalScreen extends Screen//AbstractContainerScreen<BankTerm
         if (event.phase == TickEvent.Phase.END) {
             if (Minecraft.getInstance().screen instanceof BankTerminalScreen screen) {
                 // This will only run when the screen is an instance of BankTerminalScreen
-                //screen.handleTick();
+                screen.handleTick();
             }
             //handleTick();
         }
@@ -297,8 +206,8 @@ public class BankTerminalScreen extends Screen//AbstractContainerScreen<BankTerm
 
     private void buildItemButtons()
     {
-        int x = itemListViewRect.x;
-        int y = itemListViewRect.y;
+        int x = 0;
+        int y = 0;
         // Sort the bank accounts by itemID
         ArrayList<Pair<String, SyncBankDataPacket.BankData>> sortedBankAccounts = ClientBankManager.getSortedItemData();
 
@@ -308,16 +217,18 @@ public class BankTerminalScreen extends Screen//AbstractContainerScreen<BankTerm
         for (int i=0; i<sortedBankAccounts.size(); i++) {
             Pair<String,SyncBankDataPacket.BankData> pair = sortedBankAccounts.get(i);
             int amount = (int)pair.getSecond().getBalance();
-            BankElement button = getToggleButton(pair.getFirst());
-            if(button == null)
+            BankElement element = getBankElement(pair.getFirst());
+            if(element == null)
             {
                 ItemStack stack = ItemUtilities.createItemStackFromId(pair.getFirst(), amount);
-                button = new BankElement(this, x, y + i * BankElement.HEIGHT, itemListViewRect.width -8,stack, pair.getFirst());
-                bankElements.add(button);
+                element = new BankElement(this, stack, pair.getFirst());
+                bankElements.add(element);
+                itemListView.addChild(element);
+                itemListView.relayout(1,1, GuiElement.LayoutDirection.VERTICAL, true, false);
             }
             else
             {
-                button.stack.setCount(amount);
+                element.stack.setCount(amount);
             }
             if(needsResize)
                 availableItems.put(pair.getFirst(), pair.getFirst());
@@ -335,12 +246,14 @@ public class BankTerminalScreen extends Screen//AbstractContainerScreen<BankTerm
                     toRemove.add(bankElement);
             }
             bankElements.removeAll(toRemove);
+            for(BankElement element : toRemove)
+            {
+                itemListView.removeChild(element);
+            }
         }
-
-        visibleCount = itemListViewRect.height / BankElement.HEIGHT;
     }
 
-    private BankElement getToggleButton(String itemID)
+    private BankElement getBankElement(String itemID)
     {
         for (BankElement button : bankElements) {
             if(button.itemID.equals(itemID))
@@ -349,157 +262,32 @@ public class BankTerminalScreen extends Screen//AbstractContainerScreen<BankTerm
         return null;
     }
 
-    private void onTransmittItemsToMarket(Button pButton) {
+    private void onTransmittItemsToMarket() {
 
-        for(BankElement button : bankElements)
+        for(BankElement element : bankElements)
         {
-            //if(button.isToggled())
-            //{
-                button.saveAmount();
-                BankSystemMod.LOGGER.info("Sending item: "+button.itemID + " amount: "+button.getTargetAmount());
-                //RequestOrderPacket.generateRequest(button.itemID, button.getTargetAmount());
-            //}
+            element.saveAmount();
+            BankSystemMod.LOGGER.info("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
         }
 
         HashMap<String, Long> itemTransferToMarketAmounts = new HashMap<>();
         UpdateBankTerminalBlockEntityPacket.sendPacketToServer(this.menu.getBlockPos(), itemTransferToMarketAmounts, true);
     }
-    private void onReceiveItemsFromMarket(Button pButton) {
-        for(BankElement button : bankElements)
+    private void onReceiveItemsFromMarket() {
+        for(BankElement element : bankElements)
         {
-           // if(button.isToggled())
-           // {
-                button.saveAmount();
-                BankSystemMod.LOGGER.info("Sending item: "+button.itemID + " amount: "+button.getTargetAmount());
-                //RequestOrderPacket.generateRequest(button.itemID, button.getTargetAmount());
-           // }
+            element.saveAmount();
+            BankSystemMod.LOGGER.info("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
         }
         HashMap<String, Long> itemTransferToMarketAmounts = new HashMap<>();
         for(BankElement button : bankElements)
         {
-            //if(button.isToggled())
-            //{
-                long amount = button.getTargetAmount();
-                if(amount > 0)
-                {
-                    itemTransferToMarketAmounts.put(button.itemID, amount);
-                }
-            //}
+            long amount = button.getTargetAmount();
+            if(amount > 0)
+            {
+                itemTransferToMarketAmounts.put(button.itemID, amount);
+            }
         }
         UpdateBankTerminalBlockEntityPacket.sendPacketToServer(this.menu.getBlockPos(), itemTransferToMarketAmounts, false);
     }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        return customGui.mouseClicked(mouseX, mouseY, button);
-/*
-        if (button == 0) {
-            if(mouseX >= itemListViewRect.x && mouseX <= itemListViewRect.x + itemListViewRect.width && mouseY >= itemListViewRect.y && mouseY <= itemListViewRect.y + itemListViewRect.height)
-            {
-                int startIndex = Math.max(0, scrollOffset);
-                int endIndex = Math.min(bankElements.size(), startIndex + visibleCount);
-                for (int i = startIndex; i < endIndex; i++) {
-                    BankElement view = bankElements.get(i);
-                    EditBox amountBox = view.amountBox;
-                    if(amountBox.isMouseOver((int)mouseX, (int)mouseY))
-                    {
-                        //amountBox.setFocused(true);
-                        this.setFocused(amountBox);
-                        return true;
-                    }
-                }
-            }
-        }
-        return super.mouseClicked(mouseX, mouseY, button);*/
-    }
-
-    @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        return customGui.mouseReleased(mouseX, mouseY, button);
-    }
-
-    @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-        return customGui.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
-    }
-
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        // Handle scrolling
-        return customGui.mouseScrolled(mouseX, mouseY, delta);
-        /*if (this.isMouseOver(mouseX, mouseY)) {
-            if (delta > 0 && scrollOffset > 0) {
-                scrollOffset--; // Scroll up
-            } else if (delta < 0 && scrollOffset < bankElements.size() - visibleCount) {
-                scrollOffset++; // Scroll down
-            }
-            return true;
-        }
-        return false;*/
-    }
-
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        boolean ret = customGui.keyPressed(keyCode, scanCode, modifiers);
-        if(ret)
-            return true;
-        if(customGui.getFocusedElement() == null)
-            return super.keyPressed(keyCode, scanCode, modifiers);
-        return true;
-        /*if (this.priceBox.isFocused()) {
-            return this.priceBox.keyPressed(keyCode, scanCode, modifiers)
-                    || this.priceBox.canConsumeInput();
-        }
-        return super.keyPressed(keyCode, scanCode, modifiers);*/
-    }
-
-    @Override
-    public boolean charTyped(char codePoint, int modifiers) {
-        boolean ret = customGui.charTyped(codePoint, modifiers);
-        return ret;
-        /*for(BankElement view : bankElements)
-        {
-            if(view.amountBox.isFocused())
-            {
-                if(view.amountBox.charTyped(codePoint, modifiers))
-                {
-                    if(view.getTargetAmount() > view.stack.getCount())
-                    {
-                        view.setTargetAmount(view.stack.getCount());
-                    }
-                    return true;
-                }
-                return false;
-            }
-        }
-        return super.charTyped(codePoint, modifiers);*/
-    }
-
-
-
-    private void drawItemScrolList(GuiGraphics graphics)
-    {
-        // Render visible buttons
-        int startIndex = Math.max(0, scrollOffset);
-        int endIndex = Math.min(bankElements.size(), startIndex + visibleCount);
-
-        for (int i = startIndex; i < endIndex; i++) {
-            BankElement view = bankElements.get(i);
-            int buttonY = itemListViewRect.y + (i - scrollOffset) * BankElement.HEIGHT;
-            view.setY(buttonY); // Update button Y position
-            view.render(graphics);
-        }
-
-        // Render scrollbar
-        if (bankElements.size() > visibleCount) {
-            int scrollbarHeight = (int) ((float) visibleCount / bankElements.size() * itemListViewRect.height);
-            int scrollbarY = itemListViewRect.y + (int) ((float) scrollOffset / bankElements.size() * itemListViewRect.height);
-            graphics.fill(
-                    itemListViewRect.x + itemListViewRect.width - 6, scrollbarY,
-                    itemListViewRect.x + itemListViewRect.width, scrollbarY + scrollbarHeight,
-                    0xFFAAAAAA // Scrollbar color
-            );
-        }
-    }
-
 }
