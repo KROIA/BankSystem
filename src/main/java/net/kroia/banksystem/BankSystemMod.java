@@ -4,7 +4,7 @@ import com.mojang.logging.LogUtils;
 import net.kroia.banksystem.block.ModBlocks;
 import net.kroia.banksystem.command.ModCommands;
 import net.kroia.banksystem.entity.ModEntities;
-import net.kroia.banksystem.item.BankSystemCreativeModTab;
+import net.kroia.banksystem.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.item.ModItems;
 import net.kroia.banksystem.menu.ModMenus;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
@@ -37,7 +37,7 @@ public class BankSystemMod
     {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
-        BankSystemCreativeModTab.register(modEventBus);
+        BankSystemCreativeModeTab.register(modEventBus);
         ModItems.register(modEventBus);
         ModBlocks.register(modEventBus);
         ModEntities.register(modEventBus);
