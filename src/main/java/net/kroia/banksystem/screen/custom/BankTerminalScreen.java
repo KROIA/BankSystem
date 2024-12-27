@@ -209,7 +209,7 @@ public class BankTerminalScreen extends /*Screen*/GuiContainerScreen<BankTermina
         int x = 0;
         int y = 0;
         // Sort the bank accounts by itemID
-        ArrayList<Pair<String, SyncBankDataPacket.BankData>> sortedBankAccounts = ClientBankManager.getSortedItemData();
+        ArrayList<Pair<String, SyncBankDataPacket.BankData>> sortedBankAccounts = ClientBankManager.getSortedBankData();
 
         boolean needsResize = sortedBankAccounts.size() != bankElements.size();
         HashMap<String,String> availableItems = new HashMap<>();

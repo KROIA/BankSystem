@@ -1,0 +1,23 @@
+{
+  "block.banksystem.bank_terminal_block": "Bank Terminal Block",
+  "block.banksystem.metal_case_block": "Metall Ghüs Block",
+  "block.banksystem.terminal_block": "Terminal Block",
+  "item.banksystem.bank_terminal_block": "Bank Terminal Block",
+  "item.banksystem.metal_case_block": "Metall Ghüs Block",
+  "item.banksystem.display": "Display",
+  "item.banksystem.circuit_board": "Print Platinä",
+  "item.banksystem.software": "Leeri Software",
+  "item.banksystem.banking_software": "Bank Software",
+  "item.banksystem.money": "1 Fr.",
+  "item.banksystem.money5": "5 Fr.",
+  "item.banksystem.money10": "10 Fr.",
+  "item.banksystem.money20": "20 Fr.",
+  "item.banksystem.money50": "50 Fr.",
+  "item.banksystem.money100": "100 Fr.",
+  "item.banksystem.money200": "200 Fr.",
+  "item.banksystem.money500": "500 Fr.",
+  "item.banksystem.money1000": "1000 Fr.",
+  "gui.banksystem.bank_terminal_screen.send_items_to_bank_button": "Schigg Items zu de Bank",
+  "gui.banksystem.bank_terminal_screen.receive_items_from_bank_button": "Empfange Items vo de Bank",
+  "gui.banksystem.bank_terminal_screen.inventory_name": "Bank Terminal Inventar"
+}

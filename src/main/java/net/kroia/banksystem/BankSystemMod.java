@@ -1,6 +1,8 @@
 package net.kroia.banksystem;
 
 import com.mojang.logging.LogUtils;
+import mezz.jei.api.*;
+import mezz.jei.api.helpers.IJeiHelpers;
 import net.kroia.banksystem.block.ModBlocks;
 import net.kroia.banksystem.command.ModCommands;
 import net.kroia.banksystem.entity.ModEntities;
@@ -25,6 +27,7 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
+
 
 // The value here should match an entry in the META-INF/mods.toml file
 @Mod(BankSystemMod.MODID)
@@ -84,7 +87,6 @@ public class BankSystemMod
             LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
 
             MenuScreens.register(ModMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
-
         }
     }
 }

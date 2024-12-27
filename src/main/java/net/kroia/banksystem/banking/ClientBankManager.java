@@ -85,6 +85,19 @@ public class ClientBankManager {
         sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().getBalance(), a.getSecond().getBalance()));
         return sortedBankAccounts;
     }
+    public static ArrayList<Pair<String, SyncBankDataPacket.BankData>> getSortedBankData()
+    {
+        HashMap<String, SyncBankDataPacket.BankData> bankAccounts = bankDataPacket.getBankData();
+        // Sort the bank accounts by itemID
+        ArrayList<Pair<String,SyncBankDataPacket.BankData>> sortedBankAccounts = new ArrayList<>();
+        for (String itemID : bankAccounts.keySet()) {
+            sortedBankAccounts.add(new Pair<>(itemID, bankAccounts.get(itemID)));
+        }
+        //sortedBankAccounts.sort((a, b) -> a.getFirst().compareTo(b.getFirst()));
+        // Sort by balance
+        sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().getBalance(), a.getSecond().getBalance()));
+        return sortedBankAccounts;
+    }
 
     private static void msgBankDataNotReceived()
     {

@@ -28,6 +28,17 @@ public class ModCreativeModTabs {
 
                         pOutput.accept(ModItems.SOFTWARE.get());
                         pOutput.accept(ModItems.BANKING_SOFTWARE.get());
+
+                        pOutput.accept(ModItems.MONEY.get());
+                        pOutput.accept(ModItems.MONEY5.get());
+                        pOutput.accept(ModItems.MONEY10.get());
+                        pOutput.accept(ModItems.MONEY20.get());
+                        pOutput.accept(ModItems.MONEY50.get());
+                        pOutput.accept(ModItems.MONEY100.get());
+                        pOutput.accept(ModItems.MONEY200.get());
+                        pOutput.accept(ModItems.MONEY500.get());
+                        pOutput.accept(ModItems.MONEY1000.get());
+
                     })
                     .icon(() -> new ItemStack(ModBlocks.BANK_TERMINAL_BLOCK.get()))
                     .build());

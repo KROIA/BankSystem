@@ -54,6 +54,11 @@ public class BankUser implements ServerSaveable {
         Bank bank = getBank(itemID);
         if(bank != null)
             return bank;
+        if(!ServerBankManager.isItemIDAllowed(itemID))
+        {
+            PlayerUtilities.printToClientConsole(userUUID, "The item ID: " + itemID + " is not allowed for banking.");
+            return null;
+        }
         bank = new ItemBank(this, itemID,  startBalance);
         bankMap.put(itemID, bank);
         return bank;

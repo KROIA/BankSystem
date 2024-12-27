@@ -5,7 +5,9 @@ import net.kroia.banksystem.ModSettings;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.entity.ModEntities;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
@@ -87,14 +89,35 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 bank = ServerBankManager.createUser(playerID, userName, keys, true,0 );
             }
 
-            Bank bankAccount = bank.getBank(itemID);
+            String bankITemID = itemID;
+            if(isMoney(itemID))
+            {
+                bankITemID = MoneyBank.ITEM_ID;
+            }
+            Bank bankAccount = bank.getBank(bankITemID);
             if(bankAccount == null) {
                 // Create item bank account
-                bankAccount = bank.createItemBank(itemID, 0);
+                bankAccount = bank.createItemBank(bankITemID, 0);
+                if(bankAccount == null)
+                    return false;
             }
 
             setAmount(itemID, getAmount(itemID) + amount);
             return true;
+        }
+
+        boolean isMoney(String itemID)
+        {
+            // "money" -> "money"
+            // "money10" -> "money"
+            // "money20" -> "money"
+            // "money50" -> "money"
+            // "money100" -> "money"
+            // "money1000" -> "money"
+
+            boolean hasMoney = itemID.contains("money");
+            String modID = itemID.split(":")[0];
+            return hasMoney && modID.compareTo(BankSystemMod.MODID) == 0;
         }
 
         public void cancelTask(String itemID)
@@ -128,7 +151,12 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 long amount = transferItems.get(itemID);
                 if(amount == 0)
                     continue;
-                Bank bankAccount = bank.getBank(itemID);
+                String bankITemID = itemID;
+                boolean isMoney = isMoney(itemID);
+                if(isMoney)
+                    bankITemID = MoneyBank.ITEM_ID;
+
+                Bank bankAccount = bank.getBank(bankITemID);
                 if(bankAccount == null) {
                     cancelTask(itemID);
                     continue;
@@ -137,6 +165,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
                 if(amount < 0)
                 {
+                    // send to bank
                     amount = Math.min(-amount, amountToProcess);
                     if(amount <= 0) {
                         cancelTask(itemID);
@@ -145,7 +174,12 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     long removedAmount = inventory.removeItem(itemID, amount);
                     if(removedAmount > 0)
                     {
-                        bankAccount.deposit(removedAmount);
+                        long depositAmount = removedAmount;
+                        if(isMoney) {
+                            MoneyItem moneyItem = (MoneyItem) ItemUtilities.createItemStackFromId(itemID).getItem();
+                            depositAmount *= moneyItem.worth();
+                        }
+                        bankAccount.deposit(depositAmount);
                         setAmount(itemID, getAmount(itemID) + removedAmount);
                         return true;
                     }else {
@@ -155,6 +189,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
                 else
                 {
+                    // send to inventory
                     amount = Math.min(amount, amountToProcess);
                     amount = Math.min(amount, bankAccount.getBalance());
                     if(amount <= 0) {

@@ -10,11 +10,14 @@ import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.event.level.NoteBlockEvent;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -250,7 +253,7 @@ public class ModCommands {
 
 
                                                                             // Execute the command on the server_sender
-                                                                            return bank_create(player, username, itemID, balance);
+                                                                            return bank_create(player, username,  ItemUtilities.getNormalizedItemID(itemID), balance);
                                                                         })
                                                                 )
                                                 )
@@ -276,7 +279,7 @@ public class ModCommands {
 
 
                                                                             // Execute the command on the server_sender
-                                                                            return bank_setBalance(player, username, itemID, balance);
+                                                                            return bank_setBalance(player, username,  ItemUtilities.getNormalizedItemID(itemID), balance);
                                                                         })
                                                                 )
                                                 )
@@ -299,12 +302,27 @@ public class ModCommands {
 
 
                                                                     // Execute the command on the server_sender
-                                                                    return bank_delete(player, username, itemID);
+                                                                    return bank_delete(player, username, ItemUtilities.getNormalizedItemID(itemID));
                                                                 })
                                                 )
                                         )
                         )
+                        .then(Commands.literal("allowItem")
+                                .requires(source -> source.hasPermission(2))
+                                .then(Commands.argument("itemID", StringArgumentType.string())
+                                        .executes(context -> {
+                                            CommandSourceStack source = context.getSource();
+                                            ServerPlayer player = source.getPlayerOrException();
 
+                                            // Get arguments
+                                            String itemID = StringArgumentType.getString(context, "itemID");
+
+                                            ServerBankManager.allowItemID(ItemUtilities.getNormalizedItemID(itemID));
+                                            PlayerUtilities.printToClientConsole(player, "Allowed item ID: " + itemID+ " for banking.");
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                        )
 
         );
     }
@@ -323,15 +341,11 @@ public class ModCommands {
         Bank bank = ServerBankManager.getMoneyBank(username);
         if(bank == null)
         {
-            executor.sendSystemMessage(
-                    Component.literal("Bank not found for " + username)
-            );
+            PlayerUtilities.printToClientConsole(executor, "Bank not found for " + username);
             return Command.SINGLE_SUCCESS;
         }
         bank.deposit(amount);
-        executor.sendSystemMessage(
-                Component.literal("Added " + amount + " to " + username + "'s account!")
-        );
+        PlayerUtilities.printToClientConsole(executor, "Added " + amount + " to " + username + "'s account!");
         return Command.SINGLE_SUCCESS;
     }
     private static int executeSetMoney(ServerPlayer executor, String username, int amount) {
@@ -347,15 +361,11 @@ public class ModCommands {
         Bank bank = ServerBankManager.getMoneyBank(username);
         if(bank == null)
         {
-            executor.sendSystemMessage(
-                    Component.literal("Bank not found for " + username)
-            );
+            PlayerUtilities.printToClientConsole(executor, "Bank not found for " + username);
             return Command.SINGLE_SUCCESS;
         }
         bank.setBalance(amount);
-        executor.sendSystemMessage(
-                Component.literal("Set " + amount + " to " + username + "'s account!")
-        );
+        PlayerUtilities.printToClientConsole(executor, "Set " + amount + " to " + username + "'s account!");
         return Command.SINGLE_SUCCESS;
     }
     private static int executeRemoveMoney(ServerPlayer executor, String username, int amount) {
@@ -371,22 +381,16 @@ public class ModCommands {
         Bank bank = ServerBankManager.getMoneyBank(username);
         if(bank == null)
         {
-            executor.sendSystemMessage(
-                    Component.literal("Bank not found for " + username)
-            );
+            PlayerUtilities.printToClientConsole(executor, "Bank not found for " + username);
             return Command.SINGLE_SUCCESS;
         }
         if(bank.getBalance() >= amount) {
             bank.withdraw(amount);
 
-            executor.sendSystemMessage(
-                    Component.literal("Removed " + amount + " from " + username + "'s account!")
-            );
+            PlayerUtilities.printToClientConsole(executor, "Removed " + amount + " from " + username + "'s account!");
         }
         else {
-            executor.sendSystemMessage(
-                    Component.literal("Not enough money in " + username + "'s account!")
-            );
+            PlayerUtilities.printToClientConsole(executor, "Not enough money in " + username + "'s account!");
         }
         return Command.SINGLE_SUCCESS;
     }
@@ -427,14 +431,14 @@ public class ModCommands {
         }
         if(fromBank.transfer(amount, toBank))
         {
-            PlayerUtilities.printToClientConsole(fromUser, "Transfered " + amount + "$ from " + fromUser + " to " + toUser + "'s account!");
-            PlayerUtilities.printToClientConsole(toUser, "Received " + amount + "$ from " + fromUser + "'s account!");
+            PlayerUtilities.printToClientConsole(fromUser, "Transfered " + amount + MoneyItem.DISPLAY_NAME+" from " + fromUser + " to " + toUser + "'s account!");
+            PlayerUtilities.printToClientConsole(toUser, "Received " + amount + MoneyItem.DISPLAY_NAME+" from " + fromUser + "'s account!");
         }
         else {
             if (fromBank.getBalance() < amount)
-               PlayerUtilities.printToClientConsole(fromUser, "You don't have enough money to transfer " + amount + "$!");
+               PlayerUtilities.printToClientConsole(fromUser, "You don't have enough money to transfer " + amount + MoneyItem.DISPLAY_NAME+"!");
             else
-               PlayerUtilities.printToClientConsole(fromUser, "Failed to transfer " + amount + "$ to " + toUser + "'s account!");
+               PlayerUtilities.printToClientConsole(fromUser, "Failed to transfer " + amount + MoneyItem.DISPLAY_NAME+" to " + toUser + "'s account!");
         }
         return Command.SINGLE_SUCCESS;
     }
@@ -442,17 +446,17 @@ public class ModCommands {
     private static int showBalance(ServerPlayer player) {
         // Server-side logic for showing the balance
         long balance = ServerBankManager.getMoneyBank(player.getUUID()).getBalance(); // Example call
-        player.sendSystemMessage(Component.literal("Your balance: " + balance));
+        PlayerUtilities.printToClientConsole(player,"Your balance: " + balance);
         return Command.SINGLE_SUCCESS;
     }
 
     private static int bank_show(ServerPlayer player, String targetPlayer) {
         BankUser user = ServerBankManager.getUser(targetPlayer);
         if(user == null) {
-            player.sendSystemMessage(Component.literal("User not found: " + targetPlayer));
+            PlayerUtilities.printToClientConsole(player,"User not found: " + targetPlayer);
             return Command.SINGLE_SUCCESS;
         }
-        player.sendSystemMessage(Component.literal(user.toString()));
+        PlayerUtilities.printToClientConsole(player,user.toString());
         return Command.SINGLE_SUCCESS;
     }
 
@@ -462,30 +466,35 @@ public class ModCommands {
         boolean created = bank == null;
 
         bank = user.createItemBank(itemID, balance);
+        if(bank == null)
+        {
+            PlayerUtilities.printToClientConsole(player, "Cannot create bank for " + targetPlayer + " with itemID: " + itemID);
+            return Command.SINGLE_SUCCESS;
+        }
         if(created)
-            player.sendSystemMessage(Component.literal("Bank created for " + player.getName().getString()+"\n"+bank.toStringNoOwner()));
+            PlayerUtilities.printToClientConsole(player, "Bank created for " + player.getName().getString()+"\n"+bank.toStringNoOwner());
         else
-            player.sendSystemMessage(Component.literal("Bank already exists for " + player.getName().getString()+"\n"+bank.toStringNoOwner()));
+            PlayerUtilities.printToClientConsole(player,"Bank already exists for " + player.getName().getString()+"\n"+bank.toStringNoOwner());
         return Command.SINGLE_SUCCESS;
     }
     private static int bank_setBalance(ServerPlayer player,String targetPlayer, String itemID, long balance) {
         BankUser user = ServerBankManager.getUser(targetPlayer);
         Bank bank = user.getBank(itemID);
         if(bank == null) {
-            player.sendSystemMessage(Component.literal("Bank not found for " + player.getName().getString()+" ItemID: "+itemID));
+            PlayerUtilities.printToClientConsole(player,"Bank not found for " + player.getName().getString()+" ItemID: "+itemID);
             return Command.SINGLE_SUCCESS;
         }
         bank.setBalance(balance);
-        player.sendSystemMessage(Component.literal("Bank balance set for " + player.getName().getString()+"\n"+bank.toStringNoOwner()));
+        PlayerUtilities.printToClientConsole(player,"Bank balance set for " + player.getName().getString()+"\n"+bank.toStringNoOwner());
         return Command.SINGLE_SUCCESS;
     }
 
     private static int bank_delete(ServerPlayer player,String targetPlayer, String itemID) {
         BankUser user = ServerBankManager.getUser(targetPlayer);
         if(user.removeBank(itemID))
-            player.sendSystemMessage(Component.literal("Bank deleted for " + player.getName().getString()+" ItemID: "+itemID));
+            PlayerUtilities.printToClientConsole(player,"Bank deleted for " + player.getName().getString()+" ItemID: "+itemID);
         else {
-            player.sendSystemMessage(Component.literal("Bank not found for " + player.getName().getString()+" ItemID: "+itemID));
+            PlayerUtilities.printToClientConsole(player,"Bank not found for " + player.getName().getString()+" ItemID: "+itemID);
         }
         return Command.SINGLE_SUCCESS;
     }

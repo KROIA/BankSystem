@@ -13,6 +13,7 @@ import java.util.UUID;
 public class ServerBankManager implements ServerSaveable {
 
     private static Map<UUID, BankUser> userMap = new HashMap<>();
+    private static Map<String, Boolean> allowedItemIDs = new HashMap<>();
     public static BankUser createUser(UUID userUUID, String userName, ArrayList<String> itemIDs, boolean createMoneyBank, long startMoney)
     {
         BankUser user = userMap.get(userUUID);
@@ -96,6 +97,18 @@ public class ServerBankManager implements ServerSaveable {
         return total;
     }
 
+    public static boolean isItemIDAllowed(String itemID)
+    {
+        return allowedItemIDs.containsKey(itemID);
+    }
+    public static void allowItemID(String itemID)
+    {
+        allowedItemIDs.put(itemID, true);
+    }
+    public static void disallowItemID(String itemID)
+    {
+        allowedItemIDs.remove(itemID);
+    }
 
     public static boolean saveToTag(CompoundTag tag)
     {
@@ -111,6 +124,14 @@ public class ServerBankManager implements ServerSaveable {
             bankElements.add(bankTag);
         }
         tag.put("users", bankElements);
+
+        ListTag allowedItemIDsTag = new ListTag();
+        for (Map.Entry<String, Boolean> entry : allowedItemIDs.entrySet()) {
+            CompoundTag allowedItemTag = new CompoundTag();
+            allowedItemTag.putString("itemID", entry.getKey());
+            allowedItemIDsTag.add(allowedItemTag);
+        }
+        tag.put("allowedItemIDs", allowedItemIDsTag);
         return true;
     }
 
@@ -135,8 +156,17 @@ public class ServerBankManager implements ServerSaveable {
             }
             userMap.put(user.getPlayerUUID(), user);
         }
+
+        ListTag allowedItemIDsTag = tag.getList("allowedItemIDs", 10);
+        allowedItemIDs.clear();
+        for (int i = 0; i < allowedItemIDsTag.size(); i++) {
+            CompoundTag allowedItemTag = allowedItemIDsTag.getCompound(i);
+            String itemID = allowedItemTag.getString("itemID");
+            allowedItemIDs.put(itemID, true);
+        }
         return success;
     }
+
 
     /*public static void handlePacket(ServerPlayer sender, RequestBankDataPacket packet)
     {

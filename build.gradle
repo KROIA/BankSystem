@@ -119,11 +119,21 @@ repositories {
     // If you have mod jar dependencies in ./libs, you can declare them as a repository like so.
     // See https://docs.gradle.org/current/userguide/declaring_repositories.html#sub:flat_dir_resolver
     // Adding my submodule as flatDir
-    //mavenCentral()
+    mavenCentral()
+    maven {
+        // location of the maven that hosts JEI files since January 2023
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
+    }
     //flatDir {
     //    dir 'external\\utilities\\build\\libs'
     //}
+    //flatDir {
+    //    dir 'external\\mods'
+    //}
 }
+
+
 
 dependencies {
     // Specify the version of Minecraft to use.
@@ -137,7 +147,15 @@ dependencies {
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly fg.deobf("mezz.jei:jei-${mc_version}-common-api:${jei_version}")
     // compileOnly fg.deobf("mezz.jei:jei-${mc_version}-forge-api:${jei_version}")
-    // runtimeOnly fg.deobf("mezz.jei:jei-${mc_version}-forge:${jei_version}")
+    //runtimeOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:15.12.2.51")
+    //implementation fg.deobf("mezz.jei:jei-${minecraft_version}-forge-15.12.2.51")
+    // compile against the JEI API but do not include it at runtime
+
+    // compile against the JEI API but do not include it at runtime
+    compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
+    compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}")
+    // at runtime, use the full JEI jar for Forge
+    runtimeOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
 
     // Example mod dependency using a mod jar from ./libs with a flat dir repository
     // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
@@ -153,6 +171,7 @@ dependencies {
     //implementation project(':utilities')
 
     // Adding the utilities JAR as a dependency
+    //implementation fg.deobf("net.kroia:modutilities:1.0.0")
     //implementation fg.deobf("net.kroia:modutilities:1.0.0")
 }
 
