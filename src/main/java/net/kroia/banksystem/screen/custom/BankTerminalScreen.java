@@ -60,7 +60,7 @@ public class BankTerminalScreen extends /*Screen*/GuiContainerScreen<BankTermina
 
             addChild(balanceLabel);
             addChild(amountBox);
-            amountBox.onTextChanged(this::saveAmount);
+            amountBox.setOnTextChanged(this::saveAmount);
             amountBox.setText("0");
             //addChild(receiveItemsFromMarketButton);
         }
@@ -119,7 +119,7 @@ public class BankTerminalScreen extends /*Screen*/GuiContainerScreen<BankTermina
             //RequestOrderPacket.generateRequest(itemID, getTargetAmount());
         }*/
     }
-    private static final ResourceLocation TEXTURE = new ResourceLocation(BankSystemMod.MODID, "textures/gui/inventory_hpc.png");
+    //private static final ResourceLocation TEXTURE = new ResourceLocation(BankSystemMod.MODID, "textures/gui/inventory_hpc.png");
 
     private static final Component SEND_ITEMS_TO_BANK_BUTTON_TEXT = Component.translatable("gui." + BankSystemMod.MODID + ".bank_terminal_screen.send_items_to_bank_button");
     private static final Component RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT = Component.translatable("gui." + BankSystemMod.MODID + ".bank_terminal_screen.receive_items_from_bank_button");

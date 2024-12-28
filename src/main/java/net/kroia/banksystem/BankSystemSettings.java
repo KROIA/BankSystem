@@ -1,13 +1,13 @@
 package net.kroia.banksystem;
 
 
-import net.kroia.banksystem.item.ModItems;
+import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.modutilities.ItemUtilities;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public class ModSettings {
+public class BankSystemSettings {
     public static final class Player
     {
         public static final long STARTING_BALANCE = 0;
@@ -20,7 +20,7 @@ public class ModSettings {
         public static final Map<String, Boolean> ALLOWED_ITEM_IDS = new HashMap<>();
         static
         {
-            ALLOWED_ITEM_IDS.put(ItemUtilities.getItemID(ModItems.MONEY.get()), true);
+            ALLOWED_ITEM_IDS.put(ItemUtilities.getItemID(BankSystemItems.MONEY.get()), true);
             ALLOWED_ITEM_IDS.put("minecraft:iron_ingot", true);
             ALLOWED_ITEM_IDS.put("minecraft:gold_ingot", true);
             ALLOWED_ITEM_IDS.put("minecraft:diamond", true);

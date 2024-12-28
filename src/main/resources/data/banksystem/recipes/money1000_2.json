@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "S": {
+      "item": "banksystem:money200"
+    }
+  },
+  "pattern": [
+    "SS ",
+    "SSS"
+  ],
+  "result": {
+    "count": 1,
+    "item": "banksystem:money1000"
+  },
+  "show_notification": true
+}

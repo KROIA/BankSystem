@@ -1,6 +1,6 @@
 package net.kroia.banksystem.block.custom;
 
-import net.kroia.banksystem.block.ModBlocks;
+import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.item.custom.software.Software;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -50,7 +50,7 @@ public class TerminalBlock extends Block {
             if(programmedBlock == null)
             {
                 // Replace the block with the programmed block
-                level.setBlockAndUpdate(pos, ModBlocks.TERMINAL_BLOCK.get().defaultBlockState().setValue(FACING, state.getValue(FACING)));
+                level.setBlockAndUpdate(pos, BankSystemBlocks.TERMINAL_BLOCK.get().defaultBlockState().setValue(FACING, state.getValue(FACING)));
             }
             else
             {

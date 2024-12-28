@@ -1,12 +1,12 @@
 package net.kroia.banksystem.entity.custom;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.ModSettings;
+import net.kroia.banksystem.BankSystemSettings;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
-import net.kroia.banksystem.entity.ModEntities;
+import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
@@ -460,12 +460,12 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     private final HashMap<UUID, PlayerData> playerDataTable = new HashMap<>();
 
 
-    private int transferTickAmount = ModSettings.Bank.ITEM_TRANSFER_TICK_INTERVAL;
+    private int transferTickAmount = BankSystemSettings.Bank.ITEM_TRANSFER_TICK_INTERVAL;
     private int lastTickCounter = 0;
     private int tickCounter = 0;
 
     public BankTerminalBlockEntity(BlockPos pos, BlockState state) {
-        super(ModEntities.BANK_TERMINAL_BLOCK_ENTITY.get(), pos, state);
+        super(BankSystemEntities.BANK_TERMINAL_BLOCK_ENTITY.get(), pos, state);
     }
 
 

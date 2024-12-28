@@ -11,7 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import java.util.List;
 
 @mezz.jei.api.JeiPlugin
-public class JeiPlugin implements IModPlugin {
+public class BankSystemJeiPlugin implements IModPlugin {
 
     private static final ResourceLocation PLUGIN_UID = new ResourceLocation(BankSystemMod.MODID, "jei_plugin");
 

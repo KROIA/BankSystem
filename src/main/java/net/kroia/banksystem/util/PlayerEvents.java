@@ -1,6 +1,6 @@
 package net.kroia.banksystem.util;
 
-import net.kroia.banksystem.ModSettings;
+import net.kroia.banksystem.BankSystemSettings;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -17,7 +17,7 @@ public class PlayerEvents {
     public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
 
-            ServerBankManager.createUser(player.getUUID(),player.getName().getString(), new ArrayList<>(),true, ModSettings.Player.STARTING_BALANCE);
+            ServerBankManager.createUser(player.getUUID(),player.getName().getString(), new ArrayList<>(),true, BankSystemSettings.Player.STARTING_BALANCE);
 
         }
     }

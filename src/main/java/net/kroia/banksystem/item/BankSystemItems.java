@@ -10,7 +10,7 @@ import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
-public class ModItems {
+public class BankSystemItems {
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, BankSystemMod.MODID);
 
     public static final RegistryObject<Item> DISPLAY = ITEMS.register("display", () -> new Item(new Item.Properties()));

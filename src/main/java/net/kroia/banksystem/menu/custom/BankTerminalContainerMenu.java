@@ -1,8 +1,8 @@
 package net.kroia.banksystem.menu.custom;
 
-import net.kroia.banksystem.block.ModBlocks;
+import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
-import net.kroia.banksystem.menu.ModMenus;
+import net.kroia.banksystem.menu.BankSystemMenus;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
@@ -29,7 +29,7 @@ public class BankTerminalContainerMenu extends AbstractContainerMenu {
 
     // Server Constructor
     public BankTerminalContainerMenu(int containerId, Inventory playerInv, BlockEntity blockEntity) {
-        super(ModMenus.BANK_TERMINAL_CONTAINER_MENU.get(), containerId);
+        super(BankSystemMenus.BANK_TERMINAL_CONTAINER_MENU.get(), containerId);
         if(blockEntity instanceof BankTerminalBlockEntity be) {
             this.blockEntity = be;
         } else {
@@ -109,7 +109,7 @@ public class BankTerminalContainerMenu extends AbstractContainerMenu {
 
     @Override
     public boolean stillValid(Player pPlayer) {
-        return stillValid(this.levelAccess, pPlayer, ModBlocks.BANK_TERMINAL_BLOCK.get());
+        return stillValid(this.levelAccess, pPlayer, BankSystemBlocks.BANK_TERMINAL_BLOCK.get());
     }
 
     public BankTerminalBlockEntity getBlockEntity() {

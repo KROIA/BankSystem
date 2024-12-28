@@ -1,14 +1,13 @@
 package net.kroia.banksystem.banking.bank;
 
 import net.kroia.banksystem.banking.BankUser;
-import net.kroia.banksystem.item.ModItems;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.nbt.CompoundTag;
 
 public class MoneyBank extends Bank {
 
-    public static final String ITEM_ID = ItemUtilities.getItemID(ModItems.MONEY.get());
+    public static final String ITEM_ID = ItemUtilities.getItemID(BankSystemItems.MONEY.get());
 
 
     public MoneyBank(BankUser owner, long balance) {

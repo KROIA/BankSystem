@@ -1,12 +1,12 @@
 package net.kroia.banksystem;
 
 import com.mojang.logging.LogUtils;
-import net.kroia.banksystem.block.ModBlocks;
-import net.kroia.banksystem.command.ModCommands;
-import net.kroia.banksystem.entity.ModEntities;
+import net.kroia.banksystem.block.BankSystemBlocks;
+import net.kroia.banksystem.command.BankSystemCommands;
+import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.BankSystemCreativeModeTab;
-import net.kroia.banksystem.item.ModItems;
-import net.kroia.banksystem.menu.ModMenus;
+import net.kroia.banksystem.item.BankSystemItems;
+import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
 import net.kroia.banksystem.networking.ModMessages;
 import net.minecraft.client.Minecraft;
@@ -38,10 +38,10 @@ public class BankSystemMod
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
         BankSystemCreativeModeTab.register(modEventBus);
-        ModItems.register(modEventBus);
-        ModBlocks.register(modEventBus);
-        ModEntities.register(modEventBus);
-        ModMenus.register(modEventBus);
+        BankSystemItems.register(modEventBus);
+        BankSystemBlocks.register(modEventBus);
+        BankSystemEntities.register(modEventBus);
+        BankSystemMenus.register(modEventBus);
 
         // Register the commonSetup method for modloading
         modEventBus.addListener(this::commonSetup);
@@ -53,7 +53,7 @@ public class BankSystemMod
     }
 
     public static void onRegisterCommands(RegisterCommandsEvent event) {
-        ModCommands.register(event.getDispatcher());
+        BankSystemCommands.register(event.getDispatcher());
     }
 
 
@@ -81,7 +81,7 @@ public class BankSystemMod
             LOGGER.info("HELLO FROM CLIENT SETUP");
             LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
 
-            MenuScreens.register(ModMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
+            MenuScreens.register(BankSystemMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
         }
     }
 }

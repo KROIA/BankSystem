@@ -2,7 +2,6 @@ package net.kroia.banksystem.command;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -17,13 +16,11 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.event.level.NoteBlockEvent;
 
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 
-public class ModCommands {
+public class BankSystemCommands {
     // Method to register commands
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 
@@ -60,7 +57,7 @@ public class ModCommands {
                                             return executeAddMoney(player, username, amount);
                                         })) // Add to self
                                 .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    //builder.suggest("\""+ ModSettings.MarketBot.USER_NAME +"\"");
+                                                    //builder.suggest("\""+ BankSystemSettings.MarketBot.USER_NAME +"\"");
                                                     Map<UUID, String> uuidToNameMap = PlayerUtilities.getUUIDToNameMap();
                                                     for(String name : uuidToNameMap.values()) {
 
@@ -98,7 +95,7 @@ public class ModCommands {
                                             return executeSetMoney(player, username, amount);
                                         })) // Add to self
                                 .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    //builder.suggest("\""+ ModSettings.MarketBot.USER_NAME +"\"");
+                                                    //builder.suggest("\""+ BankSystemSettings.MarketBot.USER_NAME +"\"");
                                                     Map<UUID, String> uuidToNameMap = PlayerUtilities.getUUIDToNameMap();
                                                     for(String name : uuidToNameMap.values()) {
 
@@ -136,7 +133,7 @@ public class ModCommands {
                                             return executeRemoveMoney(player, username, amount);
                                         })) // Add to self
                                 .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    //builder.suggest("\""+ ModSettings.MarketBot.USER_NAME +"\"");
+                                                    //builder.suggest("\""+ BankSystemSettings.MarketBot.USER_NAME +"\"");
                                                     Map<UUID, String> uuidToNameMap = PlayerUtilities.getUUIDToNameMap();
                                                     for(String name : uuidToNameMap.values()) {
 
@@ -161,7 +158,7 @@ public class ModCommands {
                         )
                         .then(Commands.literal("send")
                                 .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    //builder.suggest("\""+ ModSettings.MarketBot.USER_NAME +"\"");
+                                                    //builder.suggest("\""+ BankSystemSettings.MarketBot.USER_NAME +"\"");
                                                     Map<UUID, String> uuidToNameMap = PlayerUtilities.getUUIDToNameMap();
                                                     for(String name : uuidToNameMap.values()) {
 
@@ -214,7 +211,7 @@ public class ModCommands {
                             return bank_show(player, player.getName().getString());
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
-                                            //builder.suggest("\""+ ModSettings.MarketBot.USER_NAME +"\"");
+                                            //builder.suggest("\""+ BankSystemSettings.MarketBot.USER_NAME +"\"");
                                             Map<UUID, String> uuidToNameMap = PlayerUtilities.getUUIDToNameMap();
                                             for(String name : uuidToNameMap.values()) {
 

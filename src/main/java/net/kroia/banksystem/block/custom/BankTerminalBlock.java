@@ -1,14 +1,9 @@
 package net.kroia.banksystem.block.custom;
 
-import ca.weblite.objc.Client;
-import net.kroia.banksystem.ClientHooks;
-import net.kroia.banksystem.entity.ModEntities;
+import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.banksystem.screen.custom.BankTerminalScreen;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.MenuProvider;
@@ -22,8 +17,6 @@ import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.items.ItemStackHandler;
 import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.Nullable;
@@ -43,7 +36,7 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
     @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        return ModEntities.BANK_TERMINAL_BLOCK_ENTITY.get().create(pos, state);
+        return BankSystemEntities.BANK_TERMINAL_BLOCK_ENTITY.get().create(pos, state);
     }
 
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean isMoving) {
@@ -67,7 +60,7 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
 
         /*if(level.isClientSide())
         {
-            ClientHooks.openBankTerminalBlockScreen(be, pos, player.getInventory());
+            BankSystemClientHooks.openBankTerminalBlockScreen(be, pos, player.getInventory());
             return;
         }*/
 
@@ -108,7 +101,7 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
     @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return type == ModEntities.BANK_TERMINAL_BLOCK_ENTITY.get() ? BankTerminalBlockEntity::tick : null;
+        return type == BankSystemEntities.BANK_TERMINAL_BLOCK_ENTITY.get() ? BankTerminalBlockEntity::tick : null;
     }
 
     /*
@@ -240,7 +233,7 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
             //Minecraft.getInstance().setScreen(new TradeScreen(((StockMarketBlockEntity) level.getBlockEntity(pos)).getChartData()));
             BlockEntity entity = level.getBlockEntity(pos);
             Inventory playerInventory = player.getInventory();
-            return ClientHooks.openBankTerminalBlockScreen(entity, pos, playerInventory);
+            return BankSystemClientHooks.openBankTerminalBlockScreen(entity, pos, playerInventory);
         }
         return InteractionResult.SUCCESS;  // Indicate the interaction was successful
     }*/

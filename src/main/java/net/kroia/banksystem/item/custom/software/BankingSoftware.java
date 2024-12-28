@@ -1,6 +1,6 @@
 package net.kroia.banksystem.item.custom.software;
 
-import net.kroia.banksystem.block.ModBlocks;
+import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.block.custom.TerminalBlock;
 
 public class BankingSoftware extends Software {
@@ -12,7 +12,7 @@ public class BankingSoftware extends Software {
     @Override
     public TerminalBlock getProgrammedBlock()
     {
-        return ModBlocks.BANK_TERMINAL_BLOCK.get();
+        return BankSystemBlocks.BANK_TERMINAL_BLOCK.get();
     }
 
 }
