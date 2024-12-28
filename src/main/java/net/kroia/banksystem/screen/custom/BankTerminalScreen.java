@@ -13,6 +13,7 @@ import net.kroia.modutilities.gui.GuiContainerScreen;
 import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -61,7 +62,7 @@ public class BankTerminalScreen extends /*Screen*/GuiContainerScreen<BankTermina
             addChild(balanceLabel);
             addChild(amountBox);
             amountBox.setOnTextChanged(this::saveAmount);
-            amountBox.setText("0");
+            amountBox.setText(0);
             //addChild(receiveItemsFromMarketButton);
         }
 
@@ -96,19 +97,18 @@ public class BankTerminalScreen extends /*Screen*/GuiContainerScreen<BankTermina
         public void setTargetAmount(int amount)
         {
             this.targetAmount = amount;
-            amountBox.setText(""+amount);
+            amountBox.setText(amount);
         }
         private void saveAmount() {
             targetAmount = this.amountBox.getInt();
             if(targetAmount > stack.getCount()) {
                 targetAmount = stack.getCount();
-                amountBox.setText(""+targetAmount);
             }
             else if(targetAmount < 0)
             {
                 targetAmount = 0;
-                amountBox.setText(""+targetAmount);
             }
+            amountBox.setText(targetAmount);
 
         }
         /*private void onReceiveItemsFromMarket() {
@@ -150,6 +150,7 @@ public class BankTerminalScreen extends /*Screen*/GuiContainerScreen<BankTermina
         receiveItemsFromBankButton.setOnFallingEdge(this::onReceiveItemsFromMarket);
 
         itemListView = new VerticalListView(0, 0, 100, 100);
+        itemListView.setLayout(new LayoutVertical(0,0,true, false));
         inventoryView = new ContainerView<>(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MODID, "textures/gui/inventory_hpc.png", 176, 166));
 
         addElement(sendItemsToBankButton);
@@ -177,7 +178,7 @@ public class BankTerminalScreen extends /*Screen*/GuiContainerScreen<BankTermina
         itemListView.setBounds(padding, receiveItemsFromBankButton.getY() + receiveItemsFromBankButton.getHeight() + padding,
                 itemListViewWidth, height - padding - receiveItemsFromBankButton.getHeight() - padding*2);
 
-        itemListView.relayout(1,1, GuiElement.LayoutDirection.VERTICAL, true, false);
+        //itemListView.relayout(1,1, GuiElement.LayoutDirection.VERTICAL, true, false);
     }
 
 
@@ -224,7 +225,7 @@ public class BankTerminalScreen extends /*Screen*/GuiContainerScreen<BankTermina
                 element = new BankElement(this, stack, pair.getFirst());
                 bankElements.add(element);
                 itemListView.addChild(element);
-                itemListView.relayout(1,1, GuiElement.LayoutDirection.VERTICAL, true, false);
+               // itemListView.relayout(1,1, GuiElement.LayoutDirection.VERTICAL, true, false);
             }
             else
             {

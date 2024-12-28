@@ -314,8 +314,11 @@ public class BankSystemCommands {
                                             // Get arguments
                                             String itemID = StringArgumentType.getString(context, "itemID");
 
-                                            ServerBankManager.allowItemID(ItemUtilities.getNormalizedItemID(itemID));
-                                            PlayerUtilities.printToClientConsole(player, "Allowed item ID: " + itemID+ " for banking.");
+
+                                            if(ServerBankManager.allowItemID(ItemUtilities.getNormalizedItemID(itemID)))
+                                                PlayerUtilities.printToClientConsole(player, "Allowed item ID: " + itemID+ " for banking.");
+                                            else
+                                                PlayerUtilities.printToClientConsole(player, "Failed to allow item ID: " + itemID+ " for banking.");
                                             return Command.SINGLE_SUCCESS;
                                         })
                                 )

@@ -1,4 +1,5 @@
 package net.kroia.banksystem.banking;
+import net.kroia.banksystem.BankSystemSettings;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
@@ -13,7 +14,7 @@ import java.util.UUID;
 public class ServerBankManager implements ServerSaveable {
 
     private static Map<UUID, BankUser> userMap = new HashMap<>();
-    private static Map<String, Boolean> allowedItemIDs = new HashMap<>();
+    private static Map<String, Boolean> allowedItemIDs = BankSystemSettings.Bank.ALLOWED_ITEM_IDS;
     public static BankUser createUser(UUID userUUID, String userName, ArrayList<String> itemIDs, boolean createMoneyBank, long startMoney)
     {
         BankUser user = userMap.get(userUUID);
@@ -101,9 +102,12 @@ public class ServerBankManager implements ServerSaveable {
     {
         return allowedItemIDs.containsKey(itemID);
     }
-    public static void allowItemID(String itemID)
+    public static boolean allowItemID(String itemID)
     {
+        if(itemID == null)
+            return false;
         allowedItemIDs.put(itemID, true);
+        return true;
     }
     public static void disallowItemID(String itemID)
     {
