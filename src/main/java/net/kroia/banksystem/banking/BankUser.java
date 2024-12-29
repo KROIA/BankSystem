@@ -70,6 +70,11 @@ public class BankUser implements ServerSaveable {
     }
     public boolean removeBank(String itemID)
     {
+        Bank bank = bankMap.get(itemID);
+        if(bank == null)
+            return bankMap.remove(itemID) != null;
+
+        PlayerUtilities.printToClientConsole(userUUID, "You have lost " + bank.getTotalBalance() + " " + itemID + " because the bank account was closed.");
         return bankMap.remove(itemID) != null;
     }
     public Bank getMoneyBank()

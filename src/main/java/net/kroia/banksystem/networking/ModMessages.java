@@ -2,9 +2,14 @@ package net.kroia.banksystem.networking;
 
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.networking.packet.client_sender.request.RequestAllowNewBankItemIDPacket;
+import net.kroia.banksystem.networking.packet.client_sender.request.RequestDisallowBankingItemIDPacket;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
+import net.kroia.banksystem.networking.packet.client_sender.request.RequestPotentialBankItemIDsPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
+import net.kroia.banksystem.networking.packet.server_sender.SyncOpenBankSystemSettingsGUIPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
+import net.kroia.banksystem.networking.packet.server_sender.update.SyncPotentialBankItemIDsPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkDirection;
@@ -46,6 +51,36 @@ public class ModMessages {
                 .decoder(SyncBankDataPacket::new)
                 .encoder(SyncBankDataPacket::toBytes)
                 .consumerMainThread(SyncBankDataPacket::handle)
+                .add();
+
+        net.messageBuilder(SyncOpenBankSystemSettingsGUIPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(SyncOpenBankSystemSettingsGUIPacket::new)
+                .encoder(SyncOpenBankSystemSettingsGUIPacket::toBytes)
+                .consumerMainThread(SyncOpenBankSystemSettingsGUIPacket::handle)
+                .add();
+
+        net.messageBuilder(RequestAllowNewBankItemIDPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(RequestAllowNewBankItemIDPacket::new)
+                .encoder(RequestAllowNewBankItemIDPacket::toBytes)
+                .consumerMainThread(RequestAllowNewBankItemIDPacket::handle)
+                .add();
+
+        net.messageBuilder(RequestDisallowBankingItemIDPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(RequestDisallowBankingItemIDPacket::new)
+                .encoder(RequestDisallowBankingItemIDPacket::toBytes)
+                .consumerMainThread(RequestDisallowBankingItemIDPacket::handle)
+                .add();
+
+        net.messageBuilder(RequestPotentialBankItemIDsPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(RequestPotentialBankItemIDsPacket::new)
+                .encoder(RequestPotentialBankItemIDsPacket::toBytes)
+                .consumerMainThread(RequestPotentialBankItemIDsPacket::handle)
+                .add();
+
+        net.messageBuilder(SyncPotentialBankItemIDsPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(SyncPotentialBankItemIDsPacket::new)
+                .encoder(SyncPotentialBankItemIDsPacket::toBytes)
+                .consumerMainThread(SyncPotentialBankItemIDsPacket::handle)
                 .add();
 
 

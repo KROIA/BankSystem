@@ -10,6 +10,8 @@ import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 public class SyncBankDataPacket extends NetworkPacket {
@@ -49,8 +51,9 @@ public class SyncBankDataPacket extends NetworkPacket {
     }
 
     HashMap<String, BankData> bankData;
+    ArrayList<String> allowedItemIDs;
 
-    public SyncBankDataPacket(BankUser user) {
+    public SyncBankDataPacket(BankUser user, ArrayList<String> allowedItemIDs) {
         super();
         bankData = new HashMap<>();
         HashMap<String, Bank> bankMap = user.getBankMap();
@@ -59,6 +62,7 @@ public class SyncBankDataPacket extends NetworkPacket {
             BankData data = new BankData(bank);
             bankData.put(data.itemID, data);
         }
+        this.allowedItemIDs = allowedItemIDs;
     }
     public SyncBankDataPacket(FriendlyByteBuf buf) {
         super(buf);
@@ -94,13 +98,16 @@ public class SyncBankDataPacket extends NetworkPacket {
     public HashMap<String, BankData> getBankData() {
         return bankData;
     }
+    public ArrayList<String> getAllowedItemIDs() {
+        return allowedItemIDs;
+    }
 
     public static void sendPacket(ServerPlayer player)
     {
         BankUser user = ServerBankManager.getUser(player.getUUID());
         if(user == null)
             return;
-        SyncBankDataPacket packet = new SyncBankDataPacket(user);
+        SyncBankDataPacket packet = new SyncBankDataPacket(user, ServerBankManager.getAllowedItemIDs());
         ModMessages.sendToPlayer(packet, player);
     }
 
@@ -110,6 +117,12 @@ public class SyncBankDataPacket extends NetworkPacket {
         bankData.forEach((itemID, data) -> {
             data.toBytes(buf);
         });
+
+        buf.writeInt(allowedItemIDs.size());
+        for(String itemID : allowedItemIDs)
+        {
+            buf.writeUtf(itemID);
+        }
     }
 
     @Override
@@ -120,6 +133,13 @@ public class SyncBankDataPacket extends NetworkPacket {
         {
             BankData data = new BankData(buf);
             bankData.put(data.getItemID(), data);
+        }
+
+        size = buf.readInt();
+        allowedItemIDs = new ArrayList<>();
+        for(int i = 0; i < size; i++)
+        {
+            allowedItemIDs.add(buf.readUtf());
         }
     }
 

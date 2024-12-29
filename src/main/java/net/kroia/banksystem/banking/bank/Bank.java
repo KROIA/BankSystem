@@ -13,8 +13,7 @@ public class Bank implements ServerSaveable {
     public enum BankType
     {
         MONEY,
-        ITEM,
-        ABSTRACT
+        ITEM
     }
 
     private final BankUser owner;
@@ -233,7 +232,8 @@ public class Bank implements ServerSaveable {
                 !tag.contains("balance") ||
                 !tag.contains("lockedBalance"))
             return false;
-        itemID = tag.getString("itemID");
+        itemID = MoneyBank.compatibilityMoneyItemIDConvert(tag.getString("itemID"));
+
         updateNotificationItemName();
         setBalanceInternal(tag.getLong("balance"));
         lockedBalance = tag.getLong("lockedBalance");

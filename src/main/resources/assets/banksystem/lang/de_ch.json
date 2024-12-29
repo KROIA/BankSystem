@@ -6,8 +6,8 @@
   "item.banksystem.metal_case_block": "Metall Ghüs Block",
   "item.banksystem.display": "Display",
   "item.banksystem.circuit_board": "Print Platinä",
-  "item.banksystem.software": "Leeri Software",
-  "item.banksystem.banking_software": "Bank Software",
+  "item.banksystem.software": "Leeri Programm",
+  "item.banksystem.banking_software": "Bank Programm",
   "item.banksystem.money": "1 Fr.",
   "item.banksystem.money5": "5 Fr.",
   "item.banksystem.money10": "10 Fr.",
@@ -19,5 +19,15 @@
   "item.banksystem.money1000": "1000 Fr.",
   "gui.banksystem.bank_terminal_screen.send_items_to_bank_button": "Schigg Items zu de Bank",
   "gui.banksystem.bank_terminal_screen.receive_items_from_bank_button": "Empfange Items vo de Bank",
-  "gui.banksystem.bank_terminal_screen.inventory_name": "Bank Terminal Inventar"
+  "gui.banksystem.bank_terminal_screen.inventory_name": "Bank Terminal Inventar",
+  "gui.banksystem.setting_screen.title": "Bank Istellige",
+  "gui.banksystem.setting_screen.close": "Schlüsse",
+  "gui.banksystem.setting_screen.new_banking_item": "Neus Bank Item hinzufüge",
+  "gui.banksystem.setting_screen.banking_items": "Bank Items",
+  "gui.banksystem.setting_screen.remove_banking_item": "Usgwählts Item entferne",
+  "gui.banksystem.setting_screen.ask_remove_title": "Item entferne",
+  "gui.banksystem.ask_popup.title": "Frage Popup",
+  "gui.banksystem.ask_popup.yes": "JA",
+  "gui.banksystem.ask_popup.no": "NEI",
+  "gui.banksystem.setting_screen.ask_remove_message": "Bisch dir sicher, dasst das item vo de Bank entferne wötsch?\nDas wird s Bankkonto für das Item vo allne Spieler entferne!\nDas cha nöd rückgängig gmacht werde!"
 }

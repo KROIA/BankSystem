@@ -273,5 +273,8 @@ sourceSets {
         java {
             srcDirs += file('external/utilities/src/main/java')
         }
+        resources {
+            srcDirs += file('external/utilities/src/main/resources')
+        }
     }
 }

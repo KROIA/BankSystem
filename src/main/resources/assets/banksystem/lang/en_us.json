@@ -19,5 +19,15 @@
   "item.banksystem.money1000": "1000 Dollar",
   "gui.banksystem.bank_terminal_screen.send_items_to_bank_button": "Send items to bank",
   "gui.banksystem.bank_terminal_screen.receive_items_from_bank_button": "Receive items from bank",
-  "gui.banksystem.bank_terminal_screen.inventory_name": "Bank Terminal Inventory"
+  "gui.banksystem.bank_terminal_screen.inventory_name": "Bank Terminal Inventory",
+  "gui.banksystem.setting_screen.title": "Bank Settings",
+  "gui.banksystem.setting_screen.close": "Close",
+  "gui.banksystem.setting_screen.new_banking_item": "Add new banking item",
+  "gui.banksystem.setting_screen.banking_items": "Banking items",
+  "gui.banksystem.setting_screen.remove_banking_item": "Remove selected item",
+  "gui.banksystem.setting_screen.ask_remove_title": "Remove item",
+  "gui.banksystem.ask_popup.title": "Ask Popup",
+  "gui.banksystem.ask_popup.yes": "YES",
+  "gui.banksystem.ask_popup.no": "NO",
+  "gui.banksystem.setting_screen.ask_remove_message": "Are you sure you want to remove this item from the bank?\nThis will remove the item from all players bank accounts!\nThis action cannot be undone!"
 }

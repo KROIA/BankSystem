@@ -9,7 +9,9 @@ import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
+import net.kroia.banksystem.banking.events.ServerBankCloseItemBankEvent;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.networking.packet.server_sender.SyncOpenBankSystemSettingsGUIPacket;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.minecraft.commands.CommandSourceStack;
@@ -17,6 +19,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -323,6 +326,20 @@ public class BankSystemCommands {
                                         })
                                 )
                         )
+                        .then(Commands.literal("settingsGUI")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    // Open screen for settings GUI
+                                    SyncOpenBankSystemSettingsGUIPacket.send(player);
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+
+                        )
+
 
         );
     }
@@ -489,10 +506,20 @@ public class BankSystemCommands {
         return Command.SINGLE_SUCCESS;
     }
 
-    private static int bank_delete(ServerPlayer player,String targetPlayer, String itemID) {
+    private static int bank_delete(ServerPlayer player,String targetPlayer, String itemID)
+    {
         BankUser user = ServerBankManager.getUser(targetPlayer);
-        if(user.removeBank(itemID))
-            PlayerUtilities.printToClientConsole(player,"Bank deleted for " + player.getName().getString()+" ItemID: "+itemID);
+
+        Bank bank = user.getBank(itemID);
+        if(bank == null) {
+            PlayerUtilities.printToClientConsole(player,"Bank not found for " + player.getName().getString()+" ItemID: "+itemID);
+            return Command.SINGLE_SUCCESS;
+        }
+
+        UUID playerUUID = user.getPlayerUUID();
+        if(ServerBankManager.closeBankAccount(playerUUID, itemID)) {
+            PlayerUtilities.printToClientConsole(player, "Bank deleted for " + player.getName().getString() + " ItemID: " + itemID);
+        }
         else {
             PlayerUtilities.printToClientConsole(player,"Bank not found for " + player.getName().getString()+" ItemID: "+itemID);
         }
