@@ -1,15 +1,15 @@
 modLoader = "javafml"
 loaderVersion = "[47,)"
 #issueTrackerURL = ""
-license = "Insert License Here"
+license = "MIT"
 
 [[mods]]
 modId = "banksystem"
 version = "${version}"
-displayName = "BankSystem"
-authors = "Me!"
+displayName = "Bank System"
+authors = "Alex Krieg"
 description = '''
-This is an example description! Tell everyone what your mod is about!
+Adds a banking system to the game that allows players to store and withdraw money or items.
 '''
 #logoFile = ""
 

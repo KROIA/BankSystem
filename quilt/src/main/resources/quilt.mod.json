@@ -8,7 +8,7 @@
       "name": "Bank System",
       "description": "Adds a banking system to the game that allows players to store and withdraw money or items.",
       "contributors": {
-        "Me!": "Author"
+        "Me!": "Alex Krieg"
       },
       "icon": "assets/banksystem/icon.png"
     },

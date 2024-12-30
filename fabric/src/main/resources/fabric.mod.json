@@ -2,16 +2,16 @@
   "schemaVersion": 1,
   "id": "banksystem",
   "version": "${version}",
-  "name": "BankSystem",
-  "description": "This is an example description! Tell everyone what your mod is about!",
+  "name": "Bank System",
+  "description": "Adds a banking system to the game that allows players to store and withdraw money or items.",
   "authors": [
-    "Me!"
+    "Alex Krieg"
   ],
   "contact": {
     "homepage": "https://fabricmc.net/",
     "sources": "https://github.com/FabricMC/fabric-example-mod"
   },
-  "license": "CC0-1.0",
+  "license": "MIT",
   "icon": "assets/banksystem/icon.png",
   "environment": "*",
   "entrypoints": {
