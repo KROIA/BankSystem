@@ -37,6 +37,7 @@ public class BankSystemEntities {
 
     public static <T extends BlockEntityType<?>> RegistrySupplier<T> registerBlockEntity(String name, Supplier<T> item)
     {
+        //BankSystemMod.LOGGER.info("Registering block entity: " + name);
         return BLOCK_ENTITIES.register(new ResourceLocation(BankSystemMod.MOD_ID, name), item);
     }
 }

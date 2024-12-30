@@ -5,6 +5,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
@@ -24,6 +25,7 @@ import java.util.UUID;
 public class BankSystemCommands {
     // Method to register commands
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        //BankSystemMod.LOGGER.info("Registering commands");
 
         // /money                               - Show balance
         // /money add <amount>                  - Add money to self

@@ -7,7 +7,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.fabric.client.UtilitiesPlatformFabric;
 import net.kroia.modutilities.UtilitiesPlatform;
 
 public final class BankSystemFabric implements ModInitializer {

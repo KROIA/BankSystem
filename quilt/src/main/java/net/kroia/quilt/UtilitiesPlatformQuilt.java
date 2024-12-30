@@ -1,4 +1,4 @@
-package net.kroia.fabric.client;
+package net.kroia.fabric;
 
 import net.kroia.modutilities.PlatformAbstraction;
 import net.kroia.modutilities.UtilitiesPlatform;
@@ -13,9 +13,11 @@ import org.intellij.lang.annotations.Identifier;
 
 import java.util.HashMap;
 
-public class UtilitiesPlatformFabric implements PlatformAbstraction {
+public class UtilitiesPlatformQuilt implements PlatformAbstraction {
 
     private static MinecraftServer minecraftServer;
+
+
     public static void setServer(MinecraftServer server) {
         minecraftServer = server;
     }
@@ -52,6 +54,6 @@ public class UtilitiesPlatformFabric implements PlatformAbstraction {
     @Override
     public UtilitiesPlatform.Type getPlatformType()
     {
-        return UtilitiesPlatform.Type.FABRIC;
+        return UtilitiesPlatform.Type.QUILT;
     }
 }

@@ -5,8 +5,8 @@
     "id": "banksystem",
     "version": "${version}",
     "metadata": {
-      "name": "BankSystem",
-      "description": "This is an example description! Tell everyone what your mod is about!",
+      "name": "Bank System",
+      "description": "Adds a banking system to the game that allows players to store and withdraw money or items.",
       "contributors": {
         "Me!": "Author"
       },
@@ -15,7 +15,7 @@
     "intermediate_mappings": "net.fabricmc:intermediary",
     "entrypoints": {
       "init": [
-        "net.kroia.quilt.ExampleModQuilt"
+        "net.kroia.quilt.BankSystemQuilt"
       ]
     },
     "depends": [

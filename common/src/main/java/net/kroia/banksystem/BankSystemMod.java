@@ -47,7 +47,7 @@ public final class BankSystemMod {
 
     public static void onServerSetup()
     {
-        BankSystemNetworking.setupServerReceiverPackets();
+        //BankSystemNetworking.setupServerReceiverPackets();
     }
 
     public static void loadDataFromFiles(MinecraftServer server)
