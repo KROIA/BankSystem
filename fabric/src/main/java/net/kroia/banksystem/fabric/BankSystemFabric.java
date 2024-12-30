@@ -1,4 +1,4 @@
-package net.kroia.fabric;
+package net.kroia.banksystem.fabric;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.ModInitializer;

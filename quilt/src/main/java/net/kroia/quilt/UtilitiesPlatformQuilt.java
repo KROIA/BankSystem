@@ -1,4 +1,4 @@
-package net.kroia.fabric;
+package net.kroia.quilt;
 
 import net.kroia.modutilities.PlatformAbstraction;
 import net.kroia.modutilities.UtilitiesPlatform;

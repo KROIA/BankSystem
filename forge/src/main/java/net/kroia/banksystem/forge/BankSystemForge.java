@@ -1,4 +1,4 @@
-package net.kroia.forge;
+package net.kroia.banksystem.forge;
 
 import dev.architectury.platform.forge.EventBuses;
 import net.kroia.modutilities.UtilitiesPlatform;

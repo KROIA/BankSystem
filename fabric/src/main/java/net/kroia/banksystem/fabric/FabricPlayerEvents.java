@@ -1,4 +1,4 @@
-package net.kroia.fabric;
+package net.kroia.banksystem.fabric;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.kroia.banksystem.util.PlayerEvents;

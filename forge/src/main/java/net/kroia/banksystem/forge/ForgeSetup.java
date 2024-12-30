@@ -1,4 +1,4 @@
-package net.kroia.forge;
+package net.kroia.banksystem.forge;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.minecraftforge.eventbus.api.SubscribeEvent;

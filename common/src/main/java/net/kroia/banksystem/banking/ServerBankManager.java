@@ -8,6 +8,7 @@ import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,6 +35,22 @@ public class ServerBankManager implements ServerSaveable {
         PlayerUtilities.printToClientConsole(userUUID, "A bank account has been created for you.\n" +
                 "You can access your account using the Bank Terminal block\nor the /bank command.");
         userMap.put(userUUID, user);
+        return user;
+    }
+    public static BankUser createUser(ServerPlayer player, ArrayList<String> itemIDs, boolean createMoneyBank, long startMoney)
+    {
+        String userName = player.getName().getString();
+        BankUser user = userMap.get(player.getUUID());
+        if(user != null)
+            return user;
+        user = new BankUser(player.getUUID(), userName);
+        for(String itemID : itemIDs)
+            user.createItemBank(itemID, 0);
+        if(createMoneyBank)
+            user.createMoneyBank(startMoney);
+        PlayerUtilities.printToClientConsole(player, "A bank account has been created for you.\n" +
+                "You can access your account using the Bank Terminal block\nor the /bank command.");
+        userMap.put(player.getUUID(), user);
         return user;
     }
 

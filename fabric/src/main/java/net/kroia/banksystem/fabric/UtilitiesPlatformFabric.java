@@ -1,4 +1,4 @@
-package net.kroia.fabric;
+package net.kroia.banksystem.fabric;
 
 import net.kroia.modutilities.PlatformAbstraction;
 import net.kroia.modutilities.UtilitiesPlatform;

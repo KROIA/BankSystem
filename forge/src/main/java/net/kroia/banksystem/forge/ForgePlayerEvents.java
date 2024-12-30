@@ -1,4 +1,4 @@
-package net.kroia.forge;
+package net.kroia.banksystem.forge;
 
 import net.kroia.banksystem.util.PlayerEvents;
 import net.minecraftforge.common.MinecraftForge;

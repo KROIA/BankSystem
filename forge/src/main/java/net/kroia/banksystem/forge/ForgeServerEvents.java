@@ -1,4 +1,4 @@
-package net.kroia.forge;
+package net.kroia.banksystem.forge;
 
 import net.kroia.banksystem.util.ServerEvents;
 import net.minecraftforge.event.level.LevelEvent;

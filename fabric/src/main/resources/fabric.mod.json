@@ -16,10 +16,10 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "net.kroia.fabric.BankSystemFabric"
+      "net.kroia.banksystem.fabric.BankSystemFabric"
     ],
     "client": [
-      "net.kroia.fabric.client.ExampleModFabricClient"
+      "net.kroia.banksystem.fabric.client.ExampleModFabricClient"
     ]
   },
   "mixins": [

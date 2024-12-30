@@ -1,4 +1,4 @@
-package net.kroia.fabric;
+package net.kroia.banksystem.fabric;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;

@@ -13,8 +13,7 @@ public class PlayerEvents {
 
     public static void onPlayerJoin(ServerPlayer player) {
         ServerBankManager.createUser(
-                player.getUUID(),
-                player.getName().getString(),
+                player,
                 new ArrayList<>(),
                 true,
                 BankSystemSettings.Player.STARTING_BALANCE

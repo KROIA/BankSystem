@@ -1,4 +1,4 @@
-package net.kroia.fabric.client;
+package net.kroia.banksystem.fabric.client;
 
 import net.fabricmc.api.ClientModInitializer;
 
