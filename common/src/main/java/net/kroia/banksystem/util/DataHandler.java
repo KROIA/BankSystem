@@ -6,7 +6,7 @@ import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.BankSystemSettings;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.nbt.CompoundTag;
@@ -175,7 +175,7 @@ public class DataHandler {
         }
         else {
             BankSystemMod.LOGGER.info("Failed to read data from file: " + fileName + " Creating default data...");
-            ServerBankManager.setPotientialBankItemIDs(ItemUtilities.getAllItemIDs(BankSystemSettings.Bank.POTENTIAL_ITEM_TAGS, BankSystemSettings.Bank.POTENTIAL_ITEM_CONTAINS_STR));
+            ServerBankManager.setPotientialBankItemIDs(ItemUtilities.getAllItemIDs(BankSystemModSettings.Bank.POTENTIAL_ITEM_TAGS, BankSystemModSettings.Bank.POTENTIAL_ITEM_CONTAINS_STR));
             return savePotentialItemIDs(fileName);
         }
     }

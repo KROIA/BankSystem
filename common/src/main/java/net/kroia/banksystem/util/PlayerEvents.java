@@ -1,7 +1,6 @@
 package net.kroia.banksystem.util;
 
-import dev.architectury.event.events.common.LifecycleEvent;
-import net.kroia.banksystem.BankSystemSettings;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -16,7 +15,7 @@ public class PlayerEvents {
                 player,
                 new ArrayList<>(),
                 true,
-                BankSystemSettings.Player.STARTING_BALANCE
+                BankSystemModSettings.Player.STARTING_BALANCE
         );
     }
 

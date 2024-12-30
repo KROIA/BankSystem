@@ -1,7 +1,6 @@
 package net.kroia.banksystem;
 
 
-import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.item.custom.money.MoneyItem5;
 import net.kroia.banksystem.item.custom.money.MoneyItem10;
@@ -11,13 +10,12 @@ import net.kroia.banksystem.item.custom.money.MoneyItem100;
 import net.kroia.banksystem.item.custom.money.MoneyItem200;
 import net.kroia.banksystem.item.custom.money.MoneyItem500;
 import net.kroia.banksystem.item.custom.money.MoneyItem1000;
-import net.kroia.modutilities.ItemUtilities;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-public class BankSystemSettings {
+public class BankSystemModSettings {
 
     public static void init()
     {

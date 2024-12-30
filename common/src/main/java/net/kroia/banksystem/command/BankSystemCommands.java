@@ -60,7 +60,7 @@ public class BankSystemCommands {
                                             return executeAddMoney(player, username, amount);
                                         })) // Add to self
                                 .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    //builder.suggest("\""+ BankSystemSettings.MarketBot.USER_NAME +"\"");
+                                                    //builder.suggest("\""+ BankSystemModSettings.MarketBot.USER_NAME +"\"");
                                                     Map<UUID, String> uuidToNameMap = PlayerUtilities.getUUIDToNameMap();
                                                     for(String name : uuidToNameMap.values()) {
 
@@ -98,7 +98,7 @@ public class BankSystemCommands {
                                             return executeSetMoney(player, username, amount);
                                         })) // Add to self
                                 .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    //builder.suggest("\""+ BankSystemSettings.MarketBot.USER_NAME +"\"");
+                                                    //builder.suggest("\""+ BankSystemModSettings.MarketBot.USER_NAME +"\"");
                                                     Map<UUID, String> uuidToNameMap = PlayerUtilities.getUUIDToNameMap();
                                                     for(String name : uuidToNameMap.values()) {
 
@@ -136,7 +136,7 @@ public class BankSystemCommands {
                                             return executeRemoveMoney(player, username, amount);
                                         })) // Add to self
                                 .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    //builder.suggest("\""+ BankSystemSettings.MarketBot.USER_NAME +"\"");
+                                                    //builder.suggest("\""+ BankSystemModSettings.MarketBot.USER_NAME +"\"");
                                                     Map<UUID, String> uuidToNameMap = PlayerUtilities.getUUIDToNameMap();
                                                     for(String name : uuidToNameMap.values()) {
 
@@ -161,7 +161,7 @@ public class BankSystemCommands {
                         )
                         .then(Commands.literal("send")
                                 .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    //builder.suggest("\""+ BankSystemSettings.MarketBot.USER_NAME +"\"");
+                                                    //builder.suggest("\""+ BankSystemModSettings.MarketBot.USER_NAME +"\"");
                                                     Map<UUID, String> uuidToNameMap = PlayerUtilities.getUUIDToNameMap();
                                                     for(String name : uuidToNameMap.values()) {
 
@@ -214,7 +214,7 @@ public class BankSystemCommands {
                             return bank_show(player, player.getName().getString());
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
-                                            //builder.suggest("\""+ BankSystemSettings.MarketBot.USER_NAME +"\"");
+                                            //builder.suggest("\""+ BankSystemModSettings.MarketBot.USER_NAME +"\"");
                                             Map<UUID, String> uuidToNameMap = PlayerUtilities.getUUIDToNameMap();
                                             for(String name : uuidToNameMap.values()) {
 

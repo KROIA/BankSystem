@@ -17,14 +17,14 @@ public final class BankSystemQuilt implements ModInitializer {
         UtilitiesPlatform.setPlatform(new UtilitiesPlatformQuilt());
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            System.out.println("[QuiltSetup] Common setup for server.");
+            BankSystemMod.LOGGER.info("[QuiltSetup] Common setup for server.");
             UtilitiesPlatformQuilt.setServer(server);
             BankSystemMod.onServerSetup();
         });
 
         if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
             ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
-                System.out.println("[QuiltSetup] Client setup.");
+                BankSystemMod.LOGGER.info("[QuiltSetup] Client setup.");
                 BankSystemMod.onClientSetup();
             });
         }

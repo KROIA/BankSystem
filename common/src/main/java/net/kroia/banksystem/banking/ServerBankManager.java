@@ -1,6 +1,6 @@
 package net.kroia.banksystem.banking;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.BankSystemSettings;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.events.ServerBankCloseItemBankEvent;
 import net.kroia.banksystem.banking.events.ServerBankEvent;
@@ -19,7 +19,7 @@ import java.util.function.Consumer;
 public class ServerBankManager implements ServerSaveable {
 
     private static Map<UUID, BankUser> userMap = new HashMap<>();
-    private static Map<String, Boolean> allowedItemIDs = BankSystemSettings.Bank.ALLOWED_ITEM_IDS;
+    private static Map<String, Boolean> allowedItemIDs = BankSystemModSettings.Bank.ALLOWED_ITEM_IDS;
     private static ArrayList<String> potentialBankItemIDs = new ArrayList<>();
     private static ArrayList<Consumer<ServerBankEvent>> eventListeners = new ArrayList<>();
     public static BankUser createUser(UUID userUUID, String userName, ArrayList<String> itemIDs, boolean createMoneyBank, long startMoney)
@@ -203,7 +203,7 @@ public class ServerBankManager implements ServerSaveable {
     {
         if(itemID == null)
             return false;
-        ArrayList<String> blackList = BankSystemSettings.Bank.POTENTIAL_ITEM_BLACKLIST;
+        ArrayList<String> blackList = BankSystemModSettings.Bank.POTENTIAL_ITEM_BLACKLIST;
         if(blackList.contains(itemID))
         {
             BankSystemMod.LOGGER.info("It is not allowed to add the itemID: " + itemID);
@@ -216,7 +216,7 @@ public class ServerBankManager implements ServerSaveable {
     {
         if(itemID == null)
             return;
-        ArrayList<String> notRemovable = BankSystemSettings.Bank.NOT_REMOVABLE_ITEM_IDS;
+        ArrayList<String> notRemovable = BankSystemModSettings.Bank.NOT_REMOVABLE_ITEM_IDS;
         if(notRemovable.contains(itemID))
         {
             BankSystemMod.LOGGER.info("It is not allowed to remove the itemID: " + itemID);
@@ -235,13 +235,13 @@ public class ServerBankManager implements ServerSaveable {
     {
         ServerBankManager.potentialBankItemIDs = potentialBankItemIDs;
 
-        ArrayList<String> blackList = BankSystemSettings.Bank.POTENTIAL_ITEM_BLACKLIST;
+        ArrayList<String> blackList = BankSystemModSettings.Bank.POTENTIAL_ITEM_BLACKLIST;
         for(String itemID : blackList)
         {
             potentialBankItemIDs.remove(itemID);
         }
 
-        ArrayList<String> notRemovable = BankSystemSettings.Bank.NOT_REMOVABLE_ITEM_IDS;
+        ArrayList<String> notRemovable = BankSystemModSettings.Bank.NOT_REMOVABLE_ITEM_IDS;
         for(String itemID : notRemovable)
         {
             if(!potentialBankItemIDs.contains(itemID))

@@ -31,30 +31,12 @@ public class BankSystemCreativeModeTab {
         TABS.register();
     }
 
-/*
-    // 1.19.4
-    public static final Supplier<RegistrarManager> MANAGER = Suppliers.memoize(() -> RegistrarManager.get(BankSystemMod.MOD_ID));
-    public static final Registrar<CreativeModeTab> TABS = MANAGER.get().get(Registries.CREATIVE_MODE_TAB);
-
-    // 1.19.3 or below
-    //public static final Supplier<Registries> REGISTRIES = Suppliers.memoize(() -> Registries.get(BankSystemMod.MOD_ID));
-    //public static final Registrar<CreativeModeTab> TABS = REGISTRIES.get().get(Registry.CREATIVE_MODE_TAB_KEY);
-
-
-    public static final Supplier<CreativeModeTab> BANK_SYSTEM_TAB = registerTab("banking_tab", () -> {
-        return CreativeTabRegistry.create(
-                Component.translatable(BankSystemMod.MOD_ID+".creative_mode_tab_name"), // Tab Name
-                () -> new ItemStack(BankSystemBlocks.BANK_TERMINAL_BLOCK.get()) // Icon
-        );
-    });*/
-
-
     public static final DeferredRegister<CreativeModeTab> TABS =
            DeferredRegister.create(BankSystemMod.MOD_ID, Registries.CREATIVE_MODE_TAB);
 
 
     public static final RegistrySupplier<CreativeModeTab> BANK_SYSTEM_TAB = TABS.register(
-            "test_tab", // Tab ID
+            "bank_system_tab", // Tab ID
             () -> {
                 return CreativeTabRegistry.create(
                     Component.translatable(BankSystemMod.MOD_ID+".creative_mode_tab_name"), // Tab Name
@@ -68,21 +50,4 @@ public class BankSystemCreativeModeTab {
     {
         return TABS.register(new ResourceLocation(BankSystemMod.MOD_ID, name), tab);
     }
-/*
-
-    public static void register(IEventBus eventBus) {
-        CREATIVE_MODE_TABS.register(eventBus);
-    }
-
-    // Method to add a dynamic item
-    public static void addDynamicItem(Supplier<ItemStack> itemSupplier) {
-        dynamicItems.add(itemSupplier);
-    }
-
-    // Method to add a dynamic block
-    public static void addDynamicBlock(Supplier<Block> blockSupplier) {
-        dynamicBlocks.add(blockSupplier);
-    }*/
-
-
 }

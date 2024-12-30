@@ -1,7 +1,7 @@
 package net.kroia.banksystem.entity.custom;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.BankSystemSettings;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
@@ -18,7 +18,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.MenuProvider;
@@ -584,7 +583,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     private final HashMap<UUID, PlayerData> playerDataTable = new HashMap<>();
 
 
-    private int transferTickAmount = BankSystemSettings.Bank.ITEM_TRANSFER_TICK_INTERVAL;
+    private int transferTickAmount = BankSystemModSettings.Bank.ITEM_TRANSFER_TICK_INTERVAL;
     private int lastTickCounter = 0;
     private int tickCounter = 0;
 

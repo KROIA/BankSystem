@@ -10,14 +10,14 @@ public class QuiltSetup implements ModInitializer, ClientModInitializer {
 
     @Override
     public void onInitialize() {
-        System.out.println("[QuiltSetup] Common setup for server.");
+        BankSystemMod.LOGGER.info("[QuiltSetup] Common setup for server.");
         BankSystemMod.onServerSetup();
     }
 
     @Override
     @Environment(EnvType.CLIENT)
     public void onInitializeClient() {
-        System.out.println("[QuiltSetup] Client setup.");
+        BankSystemMod.LOGGER.info("[QuiltSetup] Client setup.");
         BankSystemMod.onClientSetup();
     }
 }

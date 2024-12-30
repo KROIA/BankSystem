@@ -2,7 +2,6 @@ package net.kroia.banksystem;
 
 import com.mojang.logging.LogUtils;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
-import dev.architectury.platform.Platform;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.command.BankSystemCommands;
 import net.kroia.banksystem.entity.BankSystemEntities;
@@ -11,7 +10,6 @@ import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.DataHandler;
-import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
@@ -25,7 +23,7 @@ public final class BankSystemMod {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public static void init() {
-        BankSystemSettings.init();
+        BankSystemModSettings.init();
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
             BankSystemCommands.register(dispatcher);
         });

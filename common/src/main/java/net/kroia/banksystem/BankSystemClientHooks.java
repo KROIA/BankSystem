@@ -13,7 +13,7 @@ public class BankSystemClientHooks {
         Minecraft.getInstance().submit(() -> {
             Minecraft minecraft = Minecraft.getInstance();
             BankSystemSettingScreen screen = new BankSystemSettingScreen();
-            screen.init(minecraft, minecraft.getWindow().getGuiScaledWidth(), minecraft.getWindow().getGuiScaledHeight());
+            //screen.init(minecraft, minecraft.getWindow().getGuiScaledWidth(), minecraft.getWindow().getGuiScaledHeight());
             minecraft.setScreen(screen);
         });
         return InteractionResult.SUCCESS;
