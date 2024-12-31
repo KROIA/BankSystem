@@ -14,21 +14,24 @@ public class ForgeServerEvents {
     @SubscribeEvent
     public static void onServerStart(LevelEvent.Load event) {
         if (event.getLevel() instanceof ServerLevel serverLevel) {
-            ServerEvents.onServerStart(serverLevel.getServer());
+            if (serverLevel.dimension().equals(ServerLevel.OVERWORLD))
+                ServerEvents.onServerStart(serverLevel.getServer());
         }
     }
 
     @SubscribeEvent
     public static void onServerStop(LevelEvent.Unload event) {
         if (event.getLevel() instanceof ServerLevel serverLevel) {
-            ServerEvents.onServerStop(serverLevel.getServer());
+            if (serverLevel.dimension().equals(ServerLevel.OVERWORLD))
+                ServerEvents.onServerStop(serverLevel.getServer());
         }
     }
 
     @SubscribeEvent
     public static void onWorldSave(LevelEvent.Save event) {
         if (event.getLevel() instanceof ServerLevel serverLevel) {
-            ServerEvents.onWorldSave(serverLevel);
+            if (serverLevel.dimension().equals(ServerLevel.OVERWORLD))
+                ServerEvents.onWorldSave(serverLevel);
         }
     }
 }

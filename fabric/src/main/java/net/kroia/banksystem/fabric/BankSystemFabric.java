@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.PlayerEvents;
+import net.kroia.banksystem.util.ServerEvents;
 import net.kroia.modutilities.UtilitiesPlatform;
 
 public final class BankSystemFabric implements ModInitializer {
@@ -21,8 +22,7 @@ public final class BankSystemFabric implements ModInitializer {
         UtilitiesPlatform.setPlatform(new UtilitiesPlatformFabric());
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             BankSystemMod.LOGGER.info("[FabricSetup] Common setup for server.");
-            UtilitiesPlatformFabric.setServer(server);
-            BankSystemMod.onServerSetup();
+            ServerEvents.onServerStart(server);
         });
 
         if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {

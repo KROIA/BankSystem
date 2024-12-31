@@ -137,6 +137,10 @@ public class ServerBankManager implements ServerSaveable {
     {
         eventListeners.remove(listener);
     }
+    public static void removeAllEventListeners()
+    {
+        eventListeners.clear();
+    }
     public static void fireEvent(ServerBankEvent event)
     {
         for(Consumer<ServerBankEvent> listener : eventListeners)

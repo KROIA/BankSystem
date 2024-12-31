@@ -10,12 +10,14 @@ import net.minecraft.world.level.Level;
 public class ServerEvents {
 
     public static void onServerStart(MinecraftServer server) {
+        ServerBankManager.removeAllEventListeners();
+        ServerBankManager.clear();
         BankSystemMod.loadDataFromFiles(server);
     }
 
     public static void onServerStop(MinecraftServer server) {
         BankSystemMod.saveDataToFiles(server);
-        ServerBankManager.clear();
+
     }
 
     public static void onWorldSave(ServerLevel level) {
