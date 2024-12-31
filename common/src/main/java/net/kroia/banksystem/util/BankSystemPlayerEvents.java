@@ -7,7 +7,7 @@ import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
 
 
-public class PlayerEvents {
+public class BankSystemPlayerEvents {
 
 
     public static void onPlayerJoin(ServerPlayer player) {

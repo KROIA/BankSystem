@@ -1,14 +1,20 @@
 package net.kroia.banksystem.banking.bank;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
 public class Bank implements ServerSaveable {
+    private static final Component WARNING = Component.translatable("message."+BankSystemMod.MOD_ID+".bank.warning");
+    private static final Component INFO = Component.translatable("message."+BankSystemMod.MOD_ID+".bank.info");
 
     public enum BankType
     {
@@ -22,12 +28,10 @@ public class Bank implements ServerSaveable {
 
     String itemID;
 
-    String notificationItemName;
 
     public Bank(BankUser owner, String itemID, long balance) {
         this.owner = owner;
         this.itemID = itemID;
-        updateNotificationItemName();
         setBalanceInternal(balance);
         this.lockedBalance = 0;
     }
@@ -63,6 +67,10 @@ public class Bank implements ServerSaveable {
     public String getItemID() {
         return itemID;
     }
+    public String getItemName()
+    {
+        return ItemUtilities.getItemName(itemID);
+    }
 
     public void setBalance(long balance) {
         if(balance < 0)
@@ -70,10 +78,11 @@ public class Bank implements ServerSaveable {
         long newBalance = balance - this.lockedBalance;
         if(newBalance < 0)
         {
-            warnUser("Problem while trying to set balance to "+balance+
-                    ".\nLocked balance is "+lockedBalance+" and your current balance is "+this.balance+
-                    ".\nBalance will be set to 0 and locked balance to "+balance+
-                    ".\nBecause of that, some limit orders may be cancelled.");
+            warnUser(BankSystemTextMessages.getProblemWhileTryingSetBalanceMessage(getItemName(), this.balance, balance, lockedBalance, balance));
+            //warnUser("Problem while trying to set balance to "+balance+
+            //        ".\nLocked balance is "+lockedBalance+" and your current balance is "+this.balance+
+            //        ".\nBalance will be set to 0 and locked balance to "+balance+
+            //        ".\nBecause of that, some limit orders may be cancelled.");
 
             lockedBalance = balance;
             setBalanceInternal(0);
@@ -81,7 +90,8 @@ public class Bank implements ServerSaveable {
         }
 
         setBalanceInternal(newBalance);
-        notifyUser("Balance set to " + balance + ".");
+        notifyUser(BankSystemTextMessages.getSetBalanceMessage(getBalance(), getItemName(), owner.getPlayerName()));
+        //notifyUser("Balance set to " + balance + ".");
     }
 
     public UUID getPlayerUUID() {
@@ -125,9 +135,12 @@ public class Bank implements ServerSaveable {
         if (balance < amount || amount < 0) {
             return false;
         }
+        if(other == this)
+            return true;
         dbg_checkValueIsNegative(amount);
         addBalanceInternal(-amount);
         other.deposit(amount);
+
         notifyUser_transfer(amount, other);
         return true;
     }
@@ -234,7 +247,6 @@ public class Bank implements ServerSaveable {
             return false;
         itemID = MoneyBank.compatibilityMoneyItemIDConvert(tag.getString("itemID"));
 
-        updateNotificationItemName();
         setBalanceInternal(tag.getLong("balance"));
         lockedBalance = tag.getLong("lockedBalance");
         return balance >= 0 && lockedBalance >= 0 && !itemID.isEmpty();
@@ -262,15 +274,18 @@ public class Bank implements ServerSaveable {
     protected void notifyUser_transfer(long amount, Bank other) {
         if(amount == 0)
             return;
-        notifyUser("Transferred " + amount + " → user: "+ other.getPlayerName());
+
+        notifyUser(BankSystemTextMessages.getTransferedMessage(amount, getItemName(), other.getPlayerName()));
+        other.notifyUser(BankSystemTextMessages.getReceivedMessage(amount, getItemName(), owner.getPlayerName()));
+        //notifyUser("Transferred " + amount + " → user: "+ other.getPlayerName());
     }
 
     protected void warnUser(String msg) {
-        PlayerUtilities.printToClientConsole(getPlayerUUID(), "[Bank "+notificationItemName+" WARNING]: "+msg);
+        PlayerUtilities.printToClientConsole(getPlayerUUID(), WARNING.getString()+msg);
     }
 
     protected void notifyUser(String msg) {
-        PlayerUtilities.printToClientConsole(getPlayerUUID(), "[Bank "+notificationItemName+"]: "+msg);
+        PlayerUtilities.printToClientConsole(getPlayerUUID(), INFO.getString()+msg);
     }
 
     public String toString()
@@ -278,18 +293,14 @@ public class Bank implements ServerSaveable {
         return "Owner: "+getPlayerName()+" "+toStringNoOwner();
     }
 
-    public String getNotificationItemName() {
-        return notificationItemName;
-    }
     public String toStringNoOwner()
     {
-        StringBuilder content = new StringBuilder(notificationItemName +" Balance: "+(balance+lockedBalance));
+        //StringBuilder content = new StringBuilder(getItemName() +" Balance: "+(balance+lockedBalance));
+        StringBuilder content = new StringBuilder(getItemName() +BankSystemTextMessages.getBalanceMessage(balance+lockedBalance));
         if(lockedBalance > 0)
-            content.append(" (Free: ").append(balance).append(", Locked: ").append(lockedBalance).append(")");
+            content.append("("+BankSystemTextMessages.getBalanceDetailedMessage(balance, lockedBalance)+")");
+
         return content.toString();
     }
 
-    private void updateNotificationItemName() {
-        notificationItemName = itemID.substring(itemID.lastIndexOf(':')+1);
-    }
 }

@@ -4,6 +4,8 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.events.ServerBankCloseItemBankEvent;
 import net.kroia.banksystem.banking.events.ServerBankEvent;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
@@ -32,8 +34,8 @@ public class ServerBankManager implements ServerSaveable {
             user.createItemBank(itemID, 0);
         if(createMoneyBank)
             user.createMoneyBank(startMoney);
-        PlayerUtilities.printToClientConsole(userUUID, "A bank account has been created for you.\n" +
-                "You can access your account using the Bank Terminal block\nor the /bank command.");
+        PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getBankCreatedMessage(userName, MoneyItem.getName())+"\n"+
+                BankSystemTextMessages.getMoneyBankAccessHelpMessage());
         userMap.put(userUUID, user);
         return user;
     }
@@ -48,8 +50,8 @@ public class ServerBankManager implements ServerSaveable {
             user.createItemBank(itemID, 0);
         if(createMoneyBank)
             user.createMoneyBank(startMoney);
-        PlayerUtilities.printToClientConsole(player, "A bank account has been created for you.\n" +
-                "You can access your account using the Bank Terminal block\nor the /bank command.");
+        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankCreatedMessage(userName, MoneyItem.getName())+"\n"+
+                BankSystemTextMessages.getMoneyBankAccessHelpMessage());
         userMap.put(player.getUUID(), user);
         return user;
     }

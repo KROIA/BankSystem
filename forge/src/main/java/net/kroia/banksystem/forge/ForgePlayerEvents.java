@@ -1,7 +1,6 @@
 package net.kroia.banksystem.forge;
 
-import net.kroia.banksystem.util.PlayerEvents;
-import net.minecraftforge.common.MinecraftForge;
+import net.kroia.banksystem.util.BankSystemPlayerEvents;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraft.server.level.ServerPlayer;
@@ -12,14 +11,14 @@ public class ForgePlayerEvents {
     @SubscribeEvent
     public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            PlayerEvents.onPlayerJoin(player);
+            BankSystemPlayerEvents.onPlayerJoin(player);
         }
     }
 
     @SubscribeEvent
     public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            PlayerEvents.onPlayerLeave(player);
+            BankSystemPlayerEvents.onPlayerLeave(player);
         }
     }
 }

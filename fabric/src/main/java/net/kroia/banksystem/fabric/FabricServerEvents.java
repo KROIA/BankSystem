@@ -3,8 +3,7 @@ package net.kroia.banksystem.fabric;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.util.ServerEvents;
-import net.minecraft.server.MinecraftServer;
+import net.kroia.banksystem.util.BankSystemServerEvents;
 import net.minecraft.server.level.ServerLevel;
 
 public class FabricServerEvents {
@@ -16,7 +15,7 @@ public class FabricServerEvents {
             UtilitiesPlatformFabric.setServer(server);
             BankSystemMod.onServerSetup();
             //if(world.getLevel().dimension().equals(ServerLevel.OVERWORLD))
-            //    ServerEvents.onServerStart(server);
+            //    BankSystemServerEvents.onServerStart(server);
         });
 
         // Server stop (world unload)
@@ -24,13 +23,13 @@ public class FabricServerEvents {
             if(world.isClientSide())
                 return;
             if(world.getLevel().dimension().equals(ServerLevel.OVERWORLD))
-                ServerEvents.onServerStop(server);
+                BankSystemServerEvents.onServerStop(server);
         });
 
         // World save
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             for (ServerLevel level : server.getAllLevels()) {
-                ServerEvents.onWorldSave(level);
+                BankSystemServerEvents.onWorldSave(level);
             }
         });
     }

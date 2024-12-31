@@ -18,7 +18,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 
 
-public class DataHandler {
+public class BankSystemDataHandler {
     private static final String FOLDER_NAME = "Finance/BankSystem";
 
     private static final String BANK_DATA_FILE_NAME = "Bank_data.dat";

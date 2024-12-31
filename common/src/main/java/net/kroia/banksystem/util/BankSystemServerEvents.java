@@ -2,12 +2,10 @@ package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.ServerBankManager;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.Level;
 
-public class ServerEvents {
+public class BankSystemServerEvents {
 
     public static void onServerStart(MinecraftServer server) {
         ServerBankManager.removeAllEventListeners();

@@ -3,6 +3,7 @@ package net.kroia.banksystem.networking.packet.client_sender.request;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
+import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.networking.NetworkPacket;
@@ -48,22 +49,22 @@ public class RequestAllowNewBankItemIDPacket extends NetworkPacket {
         {
             if(ServerBankManager.isItemIDAllowed(normalized))
             {
-                PlayerUtilities.printToClientConsole(sender, "Item ID is already allowed: " + normalized + " for banking");
+                PlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemAlreadyAllowedMessage(normalized));
                 return;
             }
             if(ServerBankManager.allowItemID(normalized))
             {
-                PlayerUtilities.printToClientConsole(sender, "Item ID allowed: " + normalized + " for banking now");
+                PlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedMessage(normalized));
                 SyncBankDataPacket.sendPacket(sender);
             }
             else
             {
-                PlayerUtilities.printToClientConsole(sender, "Failed to allow item ID: " + normalized + " for banking");
+                PlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedFailedMessage(normalized));
             }
         }
         else
         {
-            PlayerUtilities.printToClientConsole(sender, "Invalid item ID: " + itemID);
+            PlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
         }
     }
 

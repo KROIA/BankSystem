@@ -3,6 +3,7 @@ package net.kroia.banksystem.banking;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.ItemBank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
+import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
@@ -56,7 +57,7 @@ public class BankUser implements ServerSaveable {
             return bank;
         if(!ServerBankManager.isItemIDAllowed(itemID))
         {
-            PlayerUtilities.printToClientConsole(userUUID, "The item ID: " + itemID + " is not allowed for banking.");
+            PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNowAllowedMessage(itemID));
             return null;
         }
         bank = new ItemBank(this, itemID,  startBalance);
@@ -74,7 +75,8 @@ public class BankUser implements ServerSaveable {
         if(bank == null)
             return bankMap.remove(itemID) != null;
 
-        PlayerUtilities.printToClientConsole(userUUID, "You have lost " + bank.getTotalBalance() + " " + itemID + " because the bank account was closed.");
+        PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getBankDeletedMessage(getPlayerName(), bank.getItemName())+"\n"+
+                BankSystemTextMessages.getBankBalanceLostMessage(bank.getTotalBalance(), bank.getItemName()));
         return bankMap.remove(itemID) != null;
     }
     public Bank getMoneyBank()
@@ -159,12 +161,12 @@ public class BankUser implements ServerSaveable {
     public String toString()
     {
         String owner = getPlayerName();
-        StringBuilder content = new StringBuilder("Bank of: " + owner + "\n");
+        StringBuilder content = new StringBuilder(BankSystemTextMessages.getBankOfMessage(owner) + "\n");
         ArrayList<String> itemNames = new ArrayList<>();
         ArrayList<String> itemBalances = new ArrayList<>();
 
         if(bankMap.containsKey(MoneyBank.ITEM_ID)) {
-            itemNames.add(bankMap.get(MoneyBank.ITEM_ID).getNotificationItemName());
+            itemNames.add(bankMap.get(MoneyBank.ITEM_ID).getItemName());
             itemBalances.add(String.valueOf(bankMap.get(MoneyBank.ITEM_ID).getBalance()));
         }
 
@@ -172,7 +174,7 @@ public class BankUser implements ServerSaveable {
         {
             if(bank.getItemID().equals(MoneyBank.ITEM_ID))
                 continue;
-            itemNames.add(bank.getNotificationItemName());
+            itemNames.add(bank.getItemName());
             itemBalances.add(String.valueOf(bank.getTotalBalance()));
         }
         int maxAmountLength = 0;

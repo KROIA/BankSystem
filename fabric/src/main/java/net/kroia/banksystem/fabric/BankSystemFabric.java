@@ -1,16 +1,13 @@
 package net.kroia.banksystem.fabric;
 
-import dev.architectury.event.events.common.TickEvent;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.ModInitializer;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.util.PlayerEvents;
-import net.kroia.banksystem.util.ServerEvents;
+import net.kroia.banksystem.util.BankSystemServerEvents;
 import net.kroia.modutilities.UtilitiesPlatform;
 
 public final class BankSystemFabric implements ModInitializer {
@@ -22,7 +19,7 @@ public final class BankSystemFabric implements ModInitializer {
         UtilitiesPlatform.setPlatform(new UtilitiesPlatformFabric());
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             BankSystemMod.LOGGER.info("[FabricSetup] Common setup for server.");
-            ServerEvents.onServerStart(server);
+            BankSystemServerEvents.onServerStart(server);
         });
 
         if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
