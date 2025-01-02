@@ -263,6 +263,12 @@ public class BankSystemTextMessages {
         return msg;
     }
 
+    private static final Component CURRENCY = Component.translatable("item."+BankSystemMod.MOD_ID+".currency");
+    public static String getCurrencyName()
+    {
+        return CURRENCY.getString();
+    }
+
 
 
 
@@ -274,7 +280,8 @@ public class BankSystemTextMessages {
     {
         if(!message.contains(variable))
         {
-            throw new IllegalArgumentException("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
+            BankSystemMod.LOGGER.error("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
+            //throw new IllegalArgumentException("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
         }
         // Replace first occurrence of variable
         int indexOccurrence = message.indexOf(variable);
