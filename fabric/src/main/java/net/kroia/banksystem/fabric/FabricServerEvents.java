@@ -12,7 +12,7 @@ public class FabricServerEvents {
         ServerWorldEvents.LOAD.register((server, world)-> {
             if(world.isClientSide())
                 return;
-            UtilitiesPlatformFabric.setServer(server);
+            //UtilitiesPlatformFabric.setServer(server);
             BankSystemMod.onServerSetup();
             //if(world.getLevel().dimension().equals(ServerLevel.OVERWORLD))
             //    BankSystemServerEvents.onServerStart(server);

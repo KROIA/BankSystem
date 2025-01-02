@@ -8,7 +8,6 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.BankSystemServerEvents;
-import net.kroia.modutilities.UtilitiesPlatform;
 
 public final class BankSystemFabric implements ModInitializer {
     @Override
@@ -16,7 +15,6 @@ public final class BankSystemFabric implements ModInitializer {
         // This code runs as soon as Minecraft is in a mod-load-ready state.
         // However, some things (like resources) may still be uninitialized.
         // Proceed with mild caution.
-        UtilitiesPlatform.setPlatform(new UtilitiesPlatformFabric());
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             BankSystemMod.LOGGER.info("[FabricSetup] Common setup for server.");
             BankSystemServerEvents.onServerStart(server);

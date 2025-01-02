@@ -1,7 +1,16 @@
 plugins {
     id 'com.github.johnrengelman.shadow'
 }
+repositories {
+    maven { url 'https://maven.quiltmc.org/repository/release/' }
+    flatDir {
+        dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/forge/build/libs"
+    }
 
+    //mavenLocal()
+    //maven { url 'https://jitpack.io' }
+
+}
 loom {
     forge {
         mixinConfig "banksystem.mixins.json"
@@ -38,6 +47,10 @@ dependencies {
 
     common(project(path: ':common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':common', configuration: 'transformProductionForge')
+
+
+    modImplementation("net.kroia:modutilities-forge:1.0.0")
+    include("net.kroia:modutilities-forge:1.0.0")
 }
 
 processResources {
