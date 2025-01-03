@@ -75,10 +75,3 @@ shadowJar {
 remapJar {
     inputFile.set shadowJar.archiveFile
 }
-loom {
-    mods {
-        create("banksystem") {
-            sourceSet sourceSets.main
-        }
-    }
-}

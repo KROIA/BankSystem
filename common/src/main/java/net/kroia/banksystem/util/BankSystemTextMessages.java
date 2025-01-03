@@ -4,6 +4,14 @@ import net.kroia.banksystem.BankSystemMod;
 import net.minecraft.network.chat.Component;
 
 public class BankSystemTextMessages {
+    private static boolean initialized = false;
+    public static void init() {
+        if (initialized) {
+            return;
+        }
+        initialized = true;
+    }
+
     private static class Variables
     {
         public static final String AMOUNT = "{amount}";
@@ -281,6 +289,7 @@ public class BankSystemTextMessages {
         if(!message.contains(variable))
         {
             BankSystemMod.LOGGER.error("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
+            return message;
             //throw new IllegalArgumentException("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
         }
         // Replace first occurrence of variable

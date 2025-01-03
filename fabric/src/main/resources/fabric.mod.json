@@ -18,9 +18,7 @@
     "main": [
       "net.kroia.banksystem.fabric.BankSystemFabric"
     ],
-    "client": [
-      "net.kroia.banksystem.fabric.client.ExampleModFabricClient"
-    ]
+    "client": []
   },
   "mixins": [
     "banksystem.mixins.json"
