@@ -22,7 +22,7 @@ public class BankSystemDataHandler {
     private static final String FOLDER_NAME = "Finance/BankSystem";
 
     private static final String BANK_DATA_FILE_NAME = "Bank_data.dat";
-    private static final String POTENTIAL_BANK_ITEM_FILE_NAME = "PotentialBankableItems.json";
+    //private static final String POTENTIAL_BANK_ITEM_FILE_NAME = "PotentialBankableItems.json";
     private static final boolean COMPRESSED = false;
     private static boolean isLoaded = false;
     private static File saveFolder;
@@ -47,7 +47,7 @@ public class BankSystemDataHandler {
         BankSystemMod.LOGGER.info("Saving StockMarket Mod data...");
         boolean success = true;
         success &= save_bank();
-        success &= savePotentialItemIDs(POTENTIAL_BANK_ITEM_FILE_NAME);
+        //success &= savePotentialItemIDs(POTENTIAL_BANK_ITEM_FILE_NAME);
 
         if(success) {
             BankSystemMod.LOGGER.info("BankSystem Mod data saved successfully.");
@@ -64,7 +64,7 @@ public class BankSystemDataHandler {
         BankSystemMod.LOGGER.info("Loading BankSystem Mod data...");
         boolean success = true;
         success &= load_bank();
-        success &= loadPotentialItemIDs(POTENTIAL_BANK_ITEM_FILE_NAME);
+        //success &= loadPotentialItemIDs(POTENTIAL_BANK_ITEM_FILE_NAME);
 
         if(success) {
             BankSystemMod.LOGGER.info("BankSystem Mod data loaded successfully.");
@@ -146,7 +146,7 @@ public class BankSystemDataHandler {
     }
 
 
-    public static boolean loadPotentialItemIDs(String fileName)
+   /* public static boolean loadPotentialItemIDs(String fileName)
     {
         File file = new File(saveFolder, fileName);
         if (file.exists()) {
@@ -175,7 +175,8 @@ public class BankSystemDataHandler {
         }
         else {
             BankSystemMod.LOGGER.info("Failed to read data from file: " + fileName + " Creating default data...");
-            ServerBankManager.setPotientialBankItemIDs(ItemUtilities.getAllItemIDs(BankSystemModSettings.Bank.POTENTIAL_ITEM_TAGS, BankSystemModSettings.Bank.POTENTIAL_ITEM_CONTAINS_STR));
+            ServerBankManager.setPotientialBankItemIDs(ItemUtilities.getAllItemIDs());
+            //ServerBankManager.setPotientialBankItemIDs(ItemUtilities.getAllItemIDs(BankSystemModSettings.Bank.POTENTIAL_ITEM_TAGS, BankSystemModSettings.Bank.POTENTIAL_ITEM_CONTAINS_STR));
             return savePotentialItemIDs(fileName);
         }
     }
@@ -204,5 +205,5 @@ public class BankSystemDataHandler {
             return false;
         }
         return true;
-    }
+    }*/
 }

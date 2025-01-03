@@ -32,8 +32,8 @@ public class BankSystemModSettings {
         public static final int ITEM_TRANSFER_TICK_INTERVAL = 20;
 
         public static final Map<String, Boolean> ALLOWED_ITEM_IDS = new HashMap<>();
-        public static final ArrayList<String> POTENTIAL_ITEM_TAGS = new ArrayList<>();
-        public static final ArrayList<String> POTENTIAL_ITEM_CONTAINS_STR = new ArrayList<>();
+        //public static final ArrayList<String> POTENTIAL_ITEM_TAGS = new ArrayList<>();
+        //public static final ArrayList<String> POTENTIAL_ITEM_CONTAINS_STR = new ArrayList<>();
         public static final ArrayList<String> POTENTIAL_ITEM_BLACKLIST = new ArrayList<>();
         public static final ArrayList<String> NOT_REMOVABLE_ITEM_IDS = new ArrayList<>();
 
@@ -50,7 +50,7 @@ public class BankSystemModSettings {
             ALLOWED_ITEM_IDS.put("minecraft:coal", true);
 
 
-            POTENTIAL_ITEM_TAGS.add("ores");
+           /* POTENTIAL_ITEM_TAGS.add("ores");
             POTENTIAL_ITEM_TAGS.add("ingots");
             POTENTIAL_ITEM_TAGS.add("planks");
             POTENTIAL_ITEM_TAGS.add("logs");
@@ -120,7 +120,7 @@ public class BankSystemModSettings {
             POTENTIAL_ITEM_CONTAINS_STR.add("chorus_fruit");
             POTENTIAL_ITEM_CONTAINS_STR.add("melon_slice");
             POTENTIAL_ITEM_CONTAINS_STR.add("poisonous_potato");
-
+*/
 
 
 

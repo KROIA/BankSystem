@@ -57,7 +57,9 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
 
             addChild(balanceLabel);
             addChild(amountBox);
-            amountBox.setOnTextChanged(this::saveAmount);
+            amountBox.setOnTextChanged((textBox) -> {
+                saveAmount();
+            });
             amountBox.setText(0);
             //addChild(receiveItemsFromMarketButton);
         }

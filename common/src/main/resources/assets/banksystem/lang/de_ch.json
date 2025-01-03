@@ -35,6 +35,27 @@
   "gui.banksystem.ask_popup.no": "NEI",
   "gui.banksystem.setting_screen.ask_remove_message": "Bisch dir sicher, dasst das item vo dä Bank entferne wötsch?\nDas wird s Bankkonto für das Item vo allne Spieler entferne!\nDas cha nöd rückgängig gmacht werde!",
 
+
+  "gui.banksystem.iteminfo_widget.total_supply": "Zirkulation: {amount}",
+  "gui.banksystem.iteminfo_widget.total_locked": "Reserviert:  {amount}",
+  "gui.banksystem.iteminfo_widget.player_name": "Spieler",
+  "gui.banksystem.iteminfo_widget.balance": "Konto",
+  "gui.banksystem.iteminfo_widget.locked_balance": "Reserviert",
+  "gui.banksystem.iteminfo_widget.total_balance": "Gsammt",
+  "gui.banksystem.iteminfo_widget.search_player": "Spieler sueche:",
+  "gui.banksystem.iteminfo_user_widget.manage_button": "Verwaltä",
+  "gui.banksystem.bank_account_management_item.bank_owner": "Bankkonto vom {player_name}",
+  "gui.banksystem.bank_account_management_item.close_account_button": "Konto schlüsse",
+  "gui.banksystem.bank_account_management_item.free_locked_balance_checkbox": "Reservierts Guthabä frei ge",
+  "gui.banksystem.bank_account_management_item.balance": "Kontostand",
+  "gui.banksystem.bank_account_management_item.locked_balance": "Reserviert",
+  "gui.banksystem.bank_account_management_item.total_balance": "Gsammt",
+  "gui.banksystem.bank_account_management_item.ask_remove_title": "Konto für {item_name} entferne",
+  "gui.banksystem.bank_account_management_item.ask_remove_message": "Bisch du sicher, dass du d Bank für {item_name} entferne wötsch?\nDe Spieler {player_name} wird alli {item_name} i de Bank verlüre!\nDas cha nöd rückgängig gmacht werde!",
+  "gui.banksystem.bank_account_management_screen.save_changes": "Änderige speichere",
+  "gui.banksystem.bank_account_management_screen.create_new_bank": "Bankkonto eröffne",
+
+
   "message.banksystem.bank.warning": "[Bank WARNIG]: ",
   "message.banksystem.bank.info": "[Bank]: ",
   "message.banksystem.transfered_to_user": "{amount} {item_name} a {receiver} überwise",
@@ -60,6 +81,7 @@
   "message.banksystem.bank_already_exists": "{user_name} het bereits es Bankkonto für {item_name}",
   "message.banksystem.money_bank_access_help": "Mit em Bank Terminal block chasch du uf dis Bankkonto zuegrife\nOder mit em Befehl /bank.",
 
+  "message.banksystem.item_not_allowed": "Es isch nöd erlaubt {item_name} i de Bank z lagere",
   "message.banksystem.item_now_allowed": "{item_name} cha ab ez i dä Bank gelagert werden",
   "message.banksystem.item_now_allowed_failed": "{item_name} cha für s lagere i de Bank nöd zueglo werde",
   "message.banksystem.item_already_allowed": "{item_name} cha scho i dä Bank glageret werde, du Globi",

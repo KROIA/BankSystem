@@ -57,7 +57,7 @@ public class BankUser implements ServerSaveable {
             return bank;
         if(!ServerBankManager.isItemIDAllowed(itemID))
         {
-            PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNowAllowedMessage(itemID));
+            PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNotAllowedMessage(itemID));
             return null;
         }
         bank = new ItemBank(this, itemID,  startBalance);

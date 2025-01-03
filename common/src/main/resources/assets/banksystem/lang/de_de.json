@@ -35,6 +35,27 @@
   "gui.banksystem.ask_popup.no": "NEIN",
   "gui.banksystem.setting_screen.ask_remove_message": "Bist du dir sicher, dass du das Item entfernen möchtest?\nDas wird die Items aller Spieler von deren Bankkonto entfernen\nDiese Aktion kann nicht rückgängig gemacht werden!",
 
+
+  "gui.banksystem.iteminfo_widget.total_supply": "Gesammte Zirkulation: {amount}",
+  "gui.banksystem.iteminfo_widget.total_locked": "Gesammt reserviert:   {amount}",
+  "gui.banksystem.iteminfo_widget.player_name": "Spieler",
+  "gui.banksystem.iteminfo_widget.balance": "Konto",
+  "gui.banksystem.iteminfo_widget.locked_balance": "Reserviert",
+  "gui.banksystem.iteminfo_widget.total_balance": "Total",
+  "gui.banksystem.iteminfo_widget.search_player": "Suche Spieler:",
+  "gui.banksystem.iteminfo_user_widget.manage_button": "Verwalten",
+  "gui.banksystem.bank_account_management_item.bank_owner": "Bankkonto von {player_name}",
+  "gui.banksystem.bank_account_management_item.close_account_button": "Konto schliessen",
+  "gui.banksystem.bank_account_management_item.free_locked_balance_checkbox": "Reserviertes Guthaben freigeben",
+  "gui.banksystem.bank_account_management_item.balance": "Kontostand",
+  "gui.banksystem.bank_account_management_item.locked_balance": "Reserviert",
+  "gui.banksystem.bank_account_management_item.total_balance": "Total",
+  "gui.banksystem.bank_account_management_item.ask_remove_title": "Konto für {item_name} entfernen",
+  "gui.banksystem.bank_account_management_item.ask_remove_message": "Bist du sicher, dass du die Bank für {item_name} entfernen möchtest?\nDer Spieler {player_name} wird alle {item_name} in der Bank verlieren!\nDiese Aktion kann nicht rückgängig gemacht werden!",
+  "gui.banksystem.bank_account_management_screen.save_changes": "Änderingen speichern",
+  "gui.banksystem.bank_account_management_screen.create_new_bank": "Bankkonto eröffnen",
+
+
   "message.banksystem.bank.warning": "[Bank WARNUNG]: ",
   "message.banksystem.bank.info": "[Bank]: ",
   "message.banksystem.transfered_to_user": "{amount} {item_name} an {receiver} überwiesen",
@@ -60,6 +81,7 @@
   "message.banksystem.bank_already_exists": "{user_name} hat bereits ein Bankkonto für {item_name}",
   "message.banksystem.money_bank_access_help": "Mit dem Bank Terminal block kannst du auf dein Bankkonto zugreifen\nOder mit dem Befehl /bank.",
 
+  "message.banksystem.item_not_allowed": "{item_name} ist nicht für das lagern in der Bank zugelassen",
   "message.banksystem.item_now_allowed": "{item_name} kann nun in der Bank gelagert werden",
   "message.banksystem.item_now_allowed_failed": "{item_name} kann für das lagern in der Bank nicht zugelassen werden",
   "message.banksystem.item_already_allowed": "{item_name} kann bereits in der Bank gelagert werden, du Idiot",

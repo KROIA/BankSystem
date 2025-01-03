@@ -35,6 +35,27 @@
   "gui.banksystem.ask_popup.no": "NO",
   "gui.banksystem.setting_screen.ask_remove_message": "Are you sure you want to remove this item from the bank?\nThis will remove the item from all players bank accounts!\nThis action cannot be undone!",
 
+
+  "gui.banksystem.iteminfo_widget.total_supply": "Total supply: {amount}",
+  "gui.banksystem.iteminfo_widget.total_locked": "Total locked: {amount}",
+  "gui.banksystem.iteminfo_widget.player_name": "Player",
+  "gui.banksystem.iteminfo_widget.balance": "Balance",
+  "gui.banksystem.iteminfo_widget.locked_balance": "Locked",
+  "gui.banksystem.iteminfo_widget.total_balance": "Total",
+  "gui.banksystem.iteminfo_widget.search_player": "Search player:",
+  "gui.banksystem.iteminfo_user_widget.manage_button": "Manage",
+  "gui.banksystem.bank_account_management_item.bank_owner": "Bank of {player_name}",
+  "gui.banksystem.bank_account_management_item.close_account_button": "Close account",
+  "gui.banksystem.bank_account_management_item.free_locked_balance_checkbox": "Free locked balance",
+  "gui.banksystem.bank_account_management_item.balance": "Balance",
+  "gui.banksystem.bank_account_management_item.locked_balance": "Locked",
+  "gui.banksystem.bank_account_management_item.total_balance": "Total",
+  "gui.banksystem.bank_account_management_item.ask_remove_title": "Remove account for {item_name}",
+  "gui.banksystem.bank_account_management_item.ask_remove_message": "Are you sure you want to remove this account for {item_name}?\nThe player {player_name} will lose all {item_name} in the account!\nThis action cannot be undone!",
+  "gui.banksystem.bank_account_management_screen.save_changes": "Save changes",
+  "gui.banksystem.bank_account_management_screen.create_new_bank": "Create new bank",
+
+
   "message.banksystem.bank.warning": "[Bank WARNING]: ",
   "message.banksystem.bank.info": "[Bank]: ",
   "message.banksystem.transfered_to_user": "Transfered {amount} {item_name} to {receiver}'s account",
@@ -60,6 +81,7 @@
   "message.banksystem.bank_already_exists": "{user_name} already has a bank for item {item_name}",
   "message.banksystem.money_bank_access_help": "You can access your account using the Bank Terminal block\nor the /bank command.",
 
+  "message.banksystem.item_not_allowed": "{item_name} is not allowed to be stored in the bank",
   "message.banksystem.item_now_allowed": "{item_name} is now allowed to be stored in the bank",
   "message.banksystem.item_now_allowed_failed": "Failed to allow {item_name} for banking",
   "message.banksystem.item_already_allowed": "{item_name} is already allowed to be stored in the bank, you idiot sandwich",

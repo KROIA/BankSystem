@@ -22,6 +22,7 @@ public class BankSystemTextMessages {
         public static final String USER = "{user_name}";
         public static final String RECEIVER = "{receiver}";
         public static final String SENDER = "{sender}";
+        public static final String PLAYER = "{player_name}";
     }
 
     private static final String prefix  = "message."+BankSystemMod.MOD_ID+".";
@@ -230,6 +231,14 @@ public class BankSystemTextMessages {
         return MONEY_BANK_ACCESS_HELP.getString();
     }
 
+
+    private static final Component ITEM_NOT_ALLOWED = Component.translatable(prefix+"item_not_allowed");
+    public static String getItemNotAllowedMessage(String itemName)
+    {
+        String msg = ITEM_NOT_ALLOWED.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
     private static final Component ITEM_NOW_ALLOWED = Component.translatable(prefix+"item_now_allowed");
     public static String getItemNowAllowedMessage(String itemName)
     {
@@ -277,6 +286,61 @@ public class BankSystemTextMessages {
         return CURRENCY.getString();
     }
 
+
+
+    private static final Component ITEMINFO_WIDGET_TOTAL_SUPLY = Component.translatable("gui."+BankSystemMod.MOD_ID+".iteminfo_widget.total_supply");
+    public static String getItemInfoWidgetTotalSuplyMessage(long suply)
+    {
+        String msg = ITEMINFO_WIDGET_TOTAL_SUPLY.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(suply));
+        return msg;
+    }
+    public static String getItemInfoWidgetTotalSuplyMessage(String suply)
+    {
+        String msg = ITEMINFO_WIDGET_TOTAL_SUPLY.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, suply);
+        return msg;
+    }
+    private static final Component ITEMINFO_WIDGET_TOTAL_LOCKED = Component.translatable("gui."+BankSystemMod.MOD_ID+".iteminfo_widget.total_locked");
+    public static String getItemInfoWidgetTotalLockedMessage(long locked)
+    {
+        String msg = ITEMINFO_WIDGET_TOTAL_LOCKED.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(locked));
+        return msg;
+    }
+    public static String getItemInfoWidgetTotalLockedMessage(String locked)
+    {
+        String msg = ITEMINFO_WIDGET_TOTAL_LOCKED.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, locked);
+        return msg;
+    }
+
+
+    private static final Component BANK_ACCOUNT_MANAGEMENT_ITEM_ASK_REMOVE_TILE = Component.translatable("gui."+BankSystemMod.MOD_ID+".bank_account_management_item.ask_remove_title");
+    public static String getBankAccountManagementItemAskRemoveTitleMessage(String itemName)
+    {
+        String msg = BANK_ACCOUNT_MANAGEMENT_ITEM_ASK_REMOVE_TILE.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+
+    private static final Component BANK_ACCOUNT_MANAGEMENT_ITEM_ASK_REMOVE_MSG = Component.translatable("gui."+BankSystemMod.MOD_ID+".bank_account_management_item.ask_remove_message");
+    public static String getBankAccountManagementItemAskRemoveMessage(String itemName, String playerName)
+    {
+        String  msg = BANK_ACCOUNT_MANAGEMENT_ITEM_ASK_REMOVE_MSG.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.PLAYER, playerName);
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+
+    private static final Component BANK_ACCOUNT_MANAGEMENT_BANK_OWNER = Component.translatable("gui."+BankSystemMod.MOD_ID+".bank_account_management_item.bank_owner");
+    public static String getBankAccountManagementBankOwnerMessage(String playerName)
+    {
+        String msg = BANK_ACCOUNT_MANAGEMENT_BANK_OWNER.getString();
+        msg = replaceVariable(msg, Variables.PLAYER, playerName);
+        return msg;
+    }
 
 
 

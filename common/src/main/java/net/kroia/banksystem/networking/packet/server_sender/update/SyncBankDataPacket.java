@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.UUID;
 
 public class SyncBankDataPacket extends NetworkPacket {
 
@@ -51,6 +52,7 @@ public class SyncBankDataPacket extends NetworkPacket {
 
     HashMap<String, BankData> bankData;
     ArrayList<String> allowedItemIDs;
+    String playerName;
 
     public SyncBankDataPacket(BankUser user, ArrayList<String> allowedItemIDs) {
         super();
@@ -62,6 +64,7 @@ public class SyncBankDataPacket extends NetworkPacket {
             bankData.put(data.itemID, data);
         }
         this.allowedItemIDs = allowedItemIDs;
+        playerName = user.getPlayerName();
     }
     public SyncBankDataPacket(FriendlyByteBuf buf) {
         super(buf);
@@ -100,18 +103,26 @@ public class SyncBankDataPacket extends NetworkPacket {
     public ArrayList<String> getAllowedItemIDs() {
         return allowedItemIDs;
     }
+    public String getPlayerName() {
+        return playerName;
+    }
 
-    public static void sendPacket(ServerPlayer player)
+    public static void sendPacket(ServerPlayer player, UUID courcePlayerUUID)
     {
-        BankUser user = ServerBankManager.getUser(player.getUUID());
+        BankUser user = ServerBankManager.getUser(courcePlayerUUID);
         if(user == null)
             return;
         SyncBankDataPacket packet = new SyncBankDataPacket(user, ServerBankManager.getAllowedItemIDs());
         BankSystemNetworking.sendToClient(player, packet);
     }
+    public static void sendPacket(ServerPlayer player)
+    {
+       sendPacket(player, player.getUUID());
+    }
 
     @Override
     public void toBytes(FriendlyByteBuf buf) {
+        buf.writeUtf(playerName);
         buf.writeInt(bankData.size());
         bankData.forEach((itemID, data) -> {
             data.toBytes(buf);
@@ -126,6 +137,7 @@ public class SyncBankDataPacket extends NetworkPacket {
 
     @Override
     public void fromBytes(FriendlyByteBuf buf) {
+        playerName = buf.readUtf();
         int size = buf.readInt();
         bankData = new HashMap<>();
         for(int i = 0; i < size; i++)

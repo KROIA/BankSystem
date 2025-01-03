@@ -68,6 +68,10 @@ public class ServerBankManager implements ServerSaveable {
         }
         return null;
     }
+    public static Map<UUID, BankUser> getUser()
+    {
+        return userMap;
+    }
     public static void clear()
     {
         HashMap<UUID, ServerBankCloseItemBankEvent.PlayerData> lostItems = new HashMap<>();

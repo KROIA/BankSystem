@@ -7,15 +7,10 @@ import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
-import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.MenuAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.item.Item;
 
 import java.util.function.Supplier;
 

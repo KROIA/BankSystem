@@ -303,4 +303,35 @@ public class Bank implements ServerSaveable {
         return content.toString();
     }
 
+    public static String getNormalizedAmount(long amount)
+    {
+        // depending on the exponent of the amount add a "k", "M", "G", "T", "P", "E", "Z", "Y"
+        // 1.0e3 = 1k
+        // 1.0e6 = 1M
+        // 1.0e9 = 1G
+        // 1.0e12 = 1T
+        // 1.0e15 = 1P
+        // 1.0e18 = 1E
+        String exponents = "kMGTPEZY";
+
+        String amountString = String.valueOf(amount);
+        int exponent = (int)(Math.log((double)amount)/Math.log(10));
+        int exponent3 = exponent/3;
+        if(exponent3 > 0)
+        {
+            int modValue = (exponent)%3+1;
+            String firstPart = amountString.substring(0, modValue);
+            if(firstPart.isEmpty())
+                firstPart = "0";
+            String secondPart = amountString.substring(modValue, modValue+2);
+
+            amountString = firstPart+"."+secondPart+exponents.charAt(exponent3-1);
+            //int exponent3mod = exponent%3;
+            //if(exponent3mod == 0)
+            //    return amountString.substring(0, amountString.length()-exponent3*3)+"."+amountString.substring(amountString.length()-exponent3*3, amountString.length()-exponent3*3+2)+" "+("kMGTPEZY".charAt(exponent3-1));
+            //return amountString.substring(0, amountString.length()-exponent3*3+exponent3mod)+"."+amountString.substring(amountString.length()-exponent3*3+exponent3mod,amountString.length()-exponent3*3+2)+" "+("kMGTPEZY".charAt(exponent3-1));
+        }
+        return amountString;
+    }
+
 }
