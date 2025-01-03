@@ -21,7 +21,7 @@ dependencies {
     modImplementation "dev.architectury:architectury:$rootProject.architectury_api_version"
 
 
-    modImplementation("net.kroia:modutilities-common:1.0.0")
+    modCompileOnly("net.kroia:modutilities-common:1.0.0")
     //modApi("net.kroia:modutilities-common:1.0.0")
 
     //implementation("net.kroia:modutilities-common:1.0.0")

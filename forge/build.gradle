@@ -50,7 +50,7 @@ dependencies {
 
 
     modImplementation("net.kroia:modutilities-forge:1.0.0")
-    include("net.kroia:modutilities-forge:1.0.0")
+    //includeInternal("net.kroia:modutilities-forge:1.0.0")
 }
 
 processResources {

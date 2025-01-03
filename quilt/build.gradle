@@ -55,7 +55,7 @@ dependencies {
     shadowBundle project(path: ':common', configuration: 'transformProductionQuilt')
 
     modImplementation("net.kroia:modutilities-quilt:1.0.0")
-    include("net.kroia:modutilities-quilt:1.0.0")
+    //include("net.kroia:modutilities-quilt:1.0.0")
 }
 
 processResources {
