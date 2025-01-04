@@ -1,21 +1,26 @@
 package net.kroia.banksystem;
 
 import dev.architectury.registry.menu.MenuRegistry;
+import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
 import net.kroia.banksystem.screen.custom.BankSystemSettingScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.InteractionResult;
 
+import java.util.UUID;
+
 
 public class BankSystemClientHooks {
-    public static InteractionResult openBankSystemSettingScreen()
+    public static void openBankSystemSettingScreen()
+    {
+        // Ensuring the code runs on the main thread
+        Minecraft.getInstance().submit(BankSystemSettingScreen::openScreen);
+    }
+
+    public static void openBankAccountScreen(UUID playerUUID)
     {
         // Ensuring the code runs on the main thread
         Minecraft.getInstance().submit(() -> {
-            Minecraft minecraft = Minecraft.getInstance();
-            BankSystemSettingScreen screen = new BankSystemSettingScreen();
-            //screen.init(minecraft, minecraft.getWindow().getGuiScaledWidth(), minecraft.getWindow().getGuiScaledHeight());
-            minecraft.setScreen(screen);
+            BankAccountManagementScreen.openScreen(playerUUID);
         });
-        return InteractionResult.SUCCESS;
     }
 }

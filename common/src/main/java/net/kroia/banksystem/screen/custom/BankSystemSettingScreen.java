@@ -13,6 +13,7 @@ import net.kroia.modutilities.gui.elements.CloseButton;
 import net.kroia.modutilities.gui.elements.ItemSelectionView;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 public class BankSystemSettingScreen extends GuiScreen {
@@ -95,6 +96,12 @@ public class BankSystemSettingScreen extends GuiScreen {
         addElement(itemInfoWidget);
 
         //MinecraftForge.EVENT_BUS.register(this);
+    }
+
+    public static void openScreen()
+    {
+        BankSystemSettingScreen screen = new BankSystemSettingScreen();
+        Minecraft.getInstance().setScreen(screen);
     }
 
     @Override

@@ -1,19 +1,15 @@
 package net.kroia.banksystem.networking;
 
 import dev.architectury.networking.NetworkChannel;
-import io.netty.buffer.Unpooled;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.networking.packet.client_sender.request.*;
 import net.kroia.banksystem.networking.packet.client_sender.update.UpdateBankAccountPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
-import net.kroia.banksystem.networking.packet.server_sender.SyncOpenBankSystemSettingsGUIPacket;
+import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemInfoPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncPotentialBankItemIDsPacket;
 import net.kroia.modutilities.networking.INetworkPacket;
-import net.minecraft.client.Minecraft;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -31,7 +27,7 @@ public class BankSystemNetworking {
     {
         CHANNEL.register(SyncBankDataPacket.class, SyncBankDataPacket::toBytes, SyncBankDataPacket::new, SyncBankDataPacket::receive);
         CHANNEL.register(SyncPotentialBankItemIDsPacket.class, SyncPotentialBankItemIDsPacket::toBytes, SyncPotentialBankItemIDsPacket::new, SyncPotentialBankItemIDsPacket::receive);
-        CHANNEL.register(SyncOpenBankSystemSettingsGUIPacket.class, SyncOpenBankSystemSettingsGUIPacket::toBytes, SyncOpenBankSystemSettingsGUIPacket::new, SyncOpenBankSystemSettingsGUIPacket::receive);
+        CHANNEL.register(SyncOpenGUIPacket.class, SyncOpenGUIPacket::toBytes, SyncOpenGUIPacket::new, SyncOpenGUIPacket::receive);
         CHANNEL.register(SyncItemInfoPacket.class, SyncItemInfoPacket::toBytes, SyncItemInfoPacket::new, SyncItemInfoPacket::receive);
     }
     public static void setupServerReceiverPackets()

@@ -17,6 +17,7 @@ import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -82,6 +83,19 @@ public class BankAccountManagementScreen extends GuiScreen {
     public BankAccountManagementScreen(UUID playerUUID)
     {
         this(null, playerUUID);
+    }
+
+    public static void openScreen(UUID playerUUID, GuiScreen parent)
+    {
+        RequestBankDataPacket.sendRequest(playerUUID);
+        BankAccountManagementScreen screen = new BankAccountManagementScreen(parent, playerUUID);
+        Minecraft.getInstance().setScreen(screen);
+    }
+    public static void openScreen(UUID playerUUID)
+    {
+        RequestBankDataPacket.sendRequest(playerUUID);
+        BankAccountManagementScreen screen = new BankAccountManagementScreen(playerUUID);
+        Minecraft.getInstance().setScreen(screen);
     }
 
     @Override

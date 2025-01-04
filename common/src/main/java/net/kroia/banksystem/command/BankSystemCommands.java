@@ -8,9 +8,8 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
-import net.kroia.banksystem.networking.packet.server_sender.SyncOpenBankSystemSettingsGUIPacket;
+import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
@@ -199,10 +198,13 @@ public class BankSystemCommands {
 
 
         // /bank                                                - Show bank balance (money and items)
-        // /bank <username> show                                - Show bank balance of another player
+        // /bank <username> settingsGUI                         - Open settings GUI of a player
+        // /bank <username> show                                - Show bank balance of a player
         // /bank <username> create <itemID> <amount>            - Create a bank for another player
         // /bank <username> setBalance <itemID> <amount>        - Set balance of a bank for another player
         // /bank <username> delete <itemID>                     - Delete a bank for another player
+        // /bank allowItem <itemID>                             - Makes the itemID available for bank accounts
+        // /bank settingsGUI                                    - Open settings GUI
         dispatcher.register(
                 Commands.literal("bank")
                         .executes(context -> {
@@ -222,6 +224,25 @@ public class BankSystemCommands {
                                             return builder.buildFuture();
                                         })
                                         .requires(source -> source.hasPermission(2))
+                                        .then(Commands.literal("settingsGUI")
+                                                .executes(context -> {
+                                                    CommandSourceStack source = context.getSource();
+                                                    ServerPlayer player = source.getPlayerOrException();
+                                                    String username = StringArgumentType.getString(context, "username");
+                                                    BankUser bankUser = ServerBankManager.getUser(username);
+                                                    if(bankUser == null)
+                                                    {
+                                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(username));
+                                                        return Command.SINGLE_SUCCESS;
+                                                    }
+                                                    UUID playerUUID = bankUser.getPlayerUUID();
+                                                    SyncOpenGUIPacket.send_openBankAccountScreen(player, playerUUID);
+
+
+                                                    // Execute the balance command on the server_sender
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                        )
                                         .then(Commands.literal("show")
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
@@ -332,7 +353,7 @@ public class BankSystemCommands {
                                     ServerPlayer player = source.getPlayerOrException();
 
                                     // Open screen for settings GUI
-                                    SyncOpenBankSystemSettingsGUIPacket.send(player);
+                                    SyncOpenGUIPacket.send_openBankSystemSettingScreen(player);
 
                                     return Command.SINGLE_SUCCESS;
                                 })

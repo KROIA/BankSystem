@@ -111,8 +111,6 @@ public class ItemInfoUserWidget extends GuiElement {
 
     private void onManageButtonClicked()
     {
-        RequestBankDataPacket.sendRequest(playerUUID);
-        BankAccountManagementScreen screen = new BankAccountManagementScreen((GuiScreen)getRoot().getScreen(), playerUUID);
-        Minecraft.getInstance().setScreen(screen);
+        BankAccountManagementScreen.openScreen(playerUUID, (GuiScreen)getRoot().getScreen());
     }
 }
