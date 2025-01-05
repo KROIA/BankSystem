@@ -10,11 +10,10 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.util.ArrayList;
 
 
@@ -120,10 +119,16 @@ public class BankSystemDataHandler {
             try {
                 CompoundTag data;
 
+                // Define a reasonable quota and depth for NBT reading
+                long quota = 2097152L; // 2 MB size limit
+                int maxDepth = 512; // Maximum allowed depth for NBT structures
+                NbtAccounter accounter = new NbtAccounter(quota, maxDepth);
                 if(COMPRESSED)
-                    data = NbtIo.readCompressed(file);
-                else
-                    data = NbtIo.read(file);
+                    data = NbtIo.readCompressed(new FileInputStream(file), accounter);
+                else {
+                    DataInputStream dataInputStream = new DataInputStream(new FileInputStream(file));
+                    data = NbtIo.read(dataInputStream, accounter);
+                }
 
                 dataOut = data;
                 return dataOut;
@@ -142,9 +147,9 @@ public class BankSystemDataHandler {
         File file = new File(saveFolder, fileName);
         try {
             if (COMPRESSED)
-                NbtIo.writeCompressed(data, file);
+                NbtIo.writeCompressed(data, file.toPath());
             else
-                NbtIo.write(data, file);
+                NbtIo.write(data, file.toPath());
         } catch (IOException e) {
             BankSystemMod.LOGGER.error("Failed to save data to file: " + fileName);
             e.printStackTrace();
