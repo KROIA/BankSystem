@@ -35,8 +35,8 @@ public class BankSystemDataHandler {
         tickCounter++;
         if(tickCounter >= saveTickInterval)
         {
-            saveAll();
             tickCounter = 0;
+            saveAll();
         }
     }
 
@@ -57,7 +57,7 @@ public class BankSystemDataHandler {
 
     public static boolean saveAll()
     {
-        BankSystemMod.LOGGER.info("Saving StockMarket Mod data...");
+        BankSystemMod.LOGGER.info("Saving BankSystem Mod data...");
         boolean success = true;
         success &= save_bank();
         //success &= savePotentialItemIDs(POTENTIAL_BANK_ITEM_FILE_NAME);
