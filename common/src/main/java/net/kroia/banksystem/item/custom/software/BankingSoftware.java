@@ -41,7 +41,7 @@ public class BankingSoftware extends Software {
 
     @Override
     public InteractionResult interactLivingEntity(ItemStack stack, Player player, LivingEntity target, InteractionHand hand) {
-        Level level = player.level();
+        Level level = player.level;
 
         if (target instanceof Player && player instanceof ServerPlayer serverPlayer) {
             if (!level.isClientSide()) {

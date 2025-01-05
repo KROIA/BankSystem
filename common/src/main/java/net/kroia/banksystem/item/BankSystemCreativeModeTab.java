@@ -28,9 +28,11 @@ public class BankSystemCreativeModeTab {
         // Force the class to be loaded to initialize static fields
         if(initialized) return;
         initialized = true;
-        TABS.register();
+        //TABS.register(); // mc>=1.20.1
     }
 
+    /*
+    // mc>=1.20.1
     public static final DeferredRegister<CreativeModeTab> TABS =
            DeferredRegister.create(BankSystemMod.MOD_ID, Registries.CREATIVE_MODE_TAB);
 
@@ -43,11 +45,28 @@ public class BankSystemCreativeModeTab {
                     () -> new ItemStack(BankSystemBlocks.BANK_TERMINAL_BLOCK.get()) // Icon
             );}
     );
-
-
-
     public static <T extends CreativeModeTab> RegistrySupplier<T> registerTab(String name, Supplier<T> tab)
     {
         return TABS.register(new ResourceLocation(BankSystemMod.MOD_ID, name), tab);
     }
+
+    */
+
+
+    // mc=1.19.4
+    public static final CreativeTabRegistry.TabSupplier BANK_SYSTEM_TAB = CreativeTabRegistry.create(
+            new ResourceLocation(BankSystemMod.MOD_ID, "bank_system_tab"), // Tab ID
+            () -> new ItemStack(BankSystemBlocks.BANK_TERMINAL_BLOCK.get()) // Icon
+    );
+
+
+    /*
+    // mc<1.19.4
+    public static final CreativeModeTab BANK_SYSTEM_TAB = CreativeTabsRegistry.create(
+            new ResourceLocation(BankSystemMod.MOD_ID, "bank_system_tab"), // Tab ID
+            () -> new ItemStack(BankSystemBlocks.BANK_TERMINAL_BLOCK.get()) // Icon
+    );
+    */
+
+
 }

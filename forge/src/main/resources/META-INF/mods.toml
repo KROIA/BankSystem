@@ -1,5 +1,5 @@
 modLoader = "javafml"
-loaderVersion = "[47,)"
+loaderVersion = "[45,)"
 #issueTrackerURL = ""
 license = "MIT"
 
@@ -16,20 +16,20 @@ Adds a banking system to the game that allows players to store and withdraw mone
 [[dependencies.banksystem]]
 modId = "forge"
 mandatory = true
-versionRange = "[47,)"
+versionRange = "[45,)"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.banksystem]]
 modId = "minecraft"
 mandatory = true
-versionRange = "[1.20.1,)"
+versionRange = "[1.19.4,)"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.banksystem]]
 modId = "architectury"
 mandatory = true
-versionRange = "[9.2.14,)"
+versionRange = "[8.2.91,)"
 ordering = "AFTER"
 side = "BOTH"

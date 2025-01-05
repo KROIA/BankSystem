@@ -74,7 +74,7 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender) {
         Thread t = Thread.currentThread();
-        BlockEntity blockEntity = sender.level().getBlockEntity(this.pos);
+        BlockEntity blockEntity = sender.level.getBlockEntity(this.pos);
         if(blockEntity instanceof BankTerminalBlockEntity bankTerminalBlockEntity) {
             bankTerminalBlockEntity.handlePacket(this, sender);
         }else
