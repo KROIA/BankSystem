@@ -204,7 +204,7 @@ public class BankSystemCommands {
         // /bank <username> setBalance <itemID> <amount>        - Set balance of a bank for another player
         // /bank <username> delete <itemID>                     - Delete a bank for another player
         // /bank allowItem <itemID>                             - Makes the itemID available for bank accounts
-        // /bank settingsGUI                                    - Open settings GUI
+        // /bank bankManagementGUI                              - Open bankManagement GUI
         dispatcher.register(
                 Commands.literal("bank")
                         .executes(context -> {
@@ -224,7 +224,7 @@ public class BankSystemCommands {
                                             return builder.buildFuture();
                                         })
                                         .requires(source -> source.hasPermission(2))
-                                        .then(Commands.literal("settingsGUI")
+                                        .then(Commands.literal("bankManagementGUI")
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();

@@ -3,6 +3,11 @@ plugins {
 }
 repositories {
     maven { url 'https://maven.quiltmc.org/repository/release/' }
+    maven {
+        // location of the maven that hosts JEI files since January 2023
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
+    }
     flatDir {
         dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/forge/build/libs"
     }
@@ -50,7 +55,13 @@ dependencies {
 
 
     modImplementation("net.kroia:modutilities-forge:1.0.0")
+    include("net.kroia:modutilities-forge:1.0.0")
+
+    compileOnly("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}")
     //includeInternal("net.kroia:modutilities-forge:1.0.0")
+
+    // at runtime, use the full JEI jar for Forge
+    //runtimeOnly("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
 }
 
 processResources {

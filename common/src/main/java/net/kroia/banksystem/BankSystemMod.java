@@ -2,9 +2,12 @@ package net.kroia.banksystem;
 
 import com.mojang.logging.LogUtils;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
+import dev.architectury.event.events.common.TickEvent;
+import dev.architectury.platform.Platform;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.command.BankSystemCommands;
+import net.kroia.banksystem.compat.BankSystemJeiPlugin;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.item.BankSystemItems;
@@ -39,6 +42,10 @@ public final class BankSystemMod {
 
         BankSystemNetworking.setupClientReceiverPackets();
         BankSystemNetworking.setupServerReceiverPackets();
+
+        TickEvent.ServerLevelTick.SERVER_POST.register((serverLevel) -> {
+            BankSystemDataHandler.tickUpdate();
+        });
     }
 
     public static void onClientSetup()
@@ -70,4 +77,5 @@ public final class BankSystemMod {
     public static boolean isDataLoaded() {
         return BankSystemDataHandler.isLoaded();
     }
+
 }

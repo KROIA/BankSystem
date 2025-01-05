@@ -137,6 +137,8 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
     private final VerticalListView itemListView;
     private final ContainerView<BankTerminalContainerMenu> inventoryView;
 
+    public static int widthPercentage = 100;
+
     public BankTerminalScreen(BankTerminalContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
         super(pMenu, pPlayerInventory, pTitle);
         //super(pTitle);
@@ -159,7 +161,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
 
     @Override
     protected void updateLayout(Gui gui) {
-        int width = this.width;
+        int width = this.width*widthPercentage/100;
         int height = this.height;
 
         int padding = 5;

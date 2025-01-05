@@ -3,6 +3,11 @@ architectury {
 }
 repositories {
     maven { url 'https://maven.quiltmc.org/repository/release/' }
+    maven {
+        // location of the maven that hosts JEI files since January 2023
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
+    }
     flatDir {
         dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/common/build/libs"
     }
@@ -25,6 +30,9 @@ dependencies {
     //modApi("net.kroia:modutilities-common:1.0.0")
 
     //implementation("net.kroia:modutilities-common:1.0.0")
+
+    compileOnly("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
+
 }
 /*
 sourceSets {

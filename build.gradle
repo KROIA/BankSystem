@@ -51,6 +51,9 @@ subprojects {
             officialMojangMappings()
             parchment("org.parchmentmc.data:parchment-${rootProject.minecraft_version}:${rootProject.mapping_version}")
         }
+
+
+
     }
 
     java {

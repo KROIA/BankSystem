@@ -27,6 +27,19 @@ public class BankSystemDataHandler {
     private static boolean isLoaded = false;
     private static File saveFolder;
 
+    private static long tickCounter = 0;
+    public static long saveTickInterval = 6000; // 5 minutes
+
+    public static void tickUpdate()
+    {
+        tickCounter++;
+        if(tickCounter >= saveTickInterval)
+        {
+            saveAll();
+            tickCounter = 0;
+        }
+    }
+
     public static boolean isLoaded() {
         return isLoaded;
     }
