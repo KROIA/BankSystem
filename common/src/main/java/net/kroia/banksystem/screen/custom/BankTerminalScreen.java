@@ -13,6 +13,7 @@ import net.kroia.modutilities.gui.GuiContainerScreen;
 import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -29,24 +30,28 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         public static final int HEIGHT = 20;
         public static final int textEditWidth = 100;
         private long targetAmount = 0;
-        public ItemStack stack;
+        private ItemStack stack;
+        public long stackSize;
+        private final Rectangle itemStackHitBox;
         public final String itemID;
 
         private final TextBox amountBox;
         private final Label balanceLabel;
-       // private final Button receiveItemsFromMarketButton;
+        // private final Button receiveItemsFromMarketButton;
 
         BankTerminalScreen parent;
 
-        public BankElement(BankTerminalScreen parent, ItemStack stack, String itemID) {
+        public BankElement(BankTerminalScreen parent, ItemStack stack, String itemID, long stackSize) {
             super(0, 0, 100, HEIGHT);
             this.parent = parent;
             this.stack = stack;
             this.itemID = itemID;
+            this.stackSize = stackSize;
 
             int boxPadding = 2;
 
             balanceLabel = new Label("");
+            itemStackHitBox = new Rectangle(1,1,16,16);
 
             this.amountBox = new TextBox(0,0,0);
             this.amountBox.setMaxChars(10); // Max length of input
@@ -66,14 +71,11 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
 
         @Override
         protected void render() {
-            int amount = stack.getCount();
-            if(amount == 0)
-                stack.setCount(1);
-            drawItem(stack, 1, (getHeight()-16)/2);
-            if(amount == 0)
-                stack.setCount(0);
-            String amountStr = "" + amount;
+            drawItem(stack, itemStackHitBox.x, itemStackHitBox.y);
+            String amountStr = "" + stackSize;
             balanceLabel.setText(amountStr);
+            if(itemStackHitBox.contains(getMousePos().x, getMousePos().y))
+                drawTooltipLater(stack, getMousePos());
         }
 
         @Override
@@ -82,6 +84,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
             int height = getHeight();
             int padding = 2;
             int balanceLabelWidth = width/2;
+            itemStackHitBox.y = (height-16)/2;
 
             balanceLabel.setBounds(padding+17, padding, balanceLabelWidth, height-padding*2);
             amountBox.setBounds(balanceLabel.getRight(), padding, getWidth()-balanceLabel.getRight()-padding, height-padding*2);
@@ -99,8 +102,8 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         }
         private void saveAmount() {
             targetAmount = this.amountBox.getInt();
-            if(targetAmount > stack.getCount()) {
-                targetAmount = stack.getCount();
+            if(targetAmount > stackSize) {
+                targetAmount = stackSize;
             }
             else if(targetAmount < 0)
             {
@@ -181,7 +184,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
 
 
     // Method to handle the tick event
-   // @SubscribeEvent(priority = EventPriority.NORMAL)
+    // @SubscribeEvent(priority = EventPriority.NORMAL)
     @Override
     public void containerTick() {
         super.containerTick();
@@ -216,15 +219,15 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
             BankElement element = getBankElement(pair.getFirst());
             if(element == null)
             {
-                ItemStack stack = ItemUtilities.createItemStackFromId(pair.getFirst(), amount);
-                element = new BankElement(this, stack, pair.getFirst());
+                ItemStack stack = ItemUtilities.createItemStackFromId(pair.getFirst(), 1);
+                element = new BankElement(this, stack, pair.getFirst(), amount);
                 bankElements.add(element);
                 itemListView.addChild(element);
-               // itemListView.relayout(1,1, GuiElement.LayoutDirection.VERTICAL, true, false);
+                // itemListView.relayout(1,1, GuiElement.LayoutDirection.VERTICAL, true, false);
             }
             else
             {
-                element.stack.setCount(amount);
+                element.stackSize = amount;
             }
             if(needsResize)
                 availableItems.put(pair.getFirst(), pair.getFirst());
