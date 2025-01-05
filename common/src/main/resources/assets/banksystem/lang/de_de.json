@@ -1,5 +1,5 @@
 {
-  "banksystem.creative_mode_tab_name": "Bank System",
+  "itemGroup.banksystem.bank_system_tab": "Bank System",
   "block.banksystem.bank_terminal_block": "Bank Terminal Block",
   "block.banksystem.metal_case_block": "Metall Gehäuse Block",
   "block.banksystem.terminal_block": "Terminal Block",

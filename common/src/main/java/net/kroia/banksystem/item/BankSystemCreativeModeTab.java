@@ -39,7 +39,7 @@ public class BankSystemCreativeModeTab {
             "bank_system_tab", // Tab ID
             () -> {
                 return CreativeTabRegistry.create(
-                    Component.translatable(BankSystemMod.MOD_ID+".creative_mode_tab_name"), // Tab Name
+                    Component.translatable("itemGroup."+BankSystemMod.MOD_ID+".creative_mode_tab_name"), // Tab Name
                     () -> new ItemStack(BankSystemBlocks.BANK_TERMINAL_BLOCK.get()) // Icon
             );}
     );
