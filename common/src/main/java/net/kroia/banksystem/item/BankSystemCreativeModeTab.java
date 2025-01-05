@@ -1,23 +1,13 @@
 package net.kroia.banksystem.item;
 
-import com.google.common.base.Suppliers;
-import dev.architectury.registry.CreativeTabRegistry;
-import dev.architectury.registry.registries.DeferredRegister;
-import dev.architectury.registry.registries.Registrar;
-import dev.architectury.registry.registries.RegistrarManager;
-import dev.architectury.registry.registries.RegistrySupplier;
+
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.block.BankSystemBlocks;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Block;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Supplier;
+import dev.architectury.registry.CreativeTabRegistry;
+
 
 
 // https://docs.architectury.dev/api/creative_tabs
@@ -52,21 +42,21 @@ public class BankSystemCreativeModeTab {
 
     */
 
-
+    /*
     // mc=1.19.4
     public static final CreativeTabRegistry.TabSupplier BANK_SYSTEM_TAB = CreativeTabRegistry.create(
             new ResourceLocation(BankSystemMod.MOD_ID, "bank_system_tab"), // Tab ID
             () -> new ItemStack(BankSystemBlocks.BANK_TERMINAL_BLOCK.get()) // Icon
     );
+    */
 
 
-    /*
     // mc<1.19.4
-    public static final CreativeModeTab BANK_SYSTEM_TAB = CreativeTabsRegistry.create(
+    public static final CreativeModeTab BANK_SYSTEM_TAB = CreativeTabRegistry.create(
             new ResourceLocation(BankSystemMod.MOD_ID, "bank_system_tab"), // Tab ID
             () -> new ItemStack(BankSystemBlocks.BANK_TERMINAL_BLOCK.get()) // Icon
     );
-    */
+
 
 
 }

@@ -20,7 +20,7 @@ public class MoneyItem extends Item{
 
     public MoneyItem() {
         //super(new Properties().tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB)); // 1.19.2 and below
-        super(new Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB));
+        super(new Properties().tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB));
     }
 
     public int worth() {

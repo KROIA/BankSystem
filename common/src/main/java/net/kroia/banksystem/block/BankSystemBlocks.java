@@ -2,29 +2,30 @@ package net.kroia.banksystem.block;
 
 import com.google.common.base.Suppliers;
 import dev.architectury.registry.registries.Registrar;
-import dev.architectury.registry.registries.RegistrarManager;
+import dev.architectury.registry.registries.Registries;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.block.custom.BankTerminalBlock;
 import net.kroia.banksystem.block.custom.MetalCaseBlock;
 import net.kroia.banksystem.block.custom.TerminalBlock;
 import net.kroia.banksystem.item.BankSystemItems;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.core.Registry;
 
 import java.util.function.Supplier;
 
 public class BankSystemBlocks {
+    /*
     // 1.19.4
     public static final Supplier<RegistrarManager> MANAGER = Suppliers.memoize(() -> RegistrarManager.get(BankSystemMod.MOD_ID));
     private static final Registrar<Block> BLOCKS = MANAGER.get().get(Registries.BLOCK);
+    */
+
 
     // 1.19.3 or below
-    //public static final Supplier<Registries> REGISTRIES = Suppliers.memoize(() -> Registries.get(BankSystemMod.MOD_ID));
-    //public static final Registrar<Block> BLOCKS = REGISTRIES.get().get(Registry.BLOCK_KEY);
+    public static final Supplier<Registries> REGISTRIES = Suppliers.memoize(() -> Registries.get(BankSystemMod.MOD_ID));
+    public static final Registrar<Block> BLOCKS = REGISTRIES.get().get(Registry.BLOCK);
 
     private static boolean initialized = false;
     public static void init(){
