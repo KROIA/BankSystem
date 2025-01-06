@@ -22,4 +22,12 @@ public class NeoForgeSetup {
         BankSystemMod.LOGGER.info("[NeoForgeSetup] Client setup.");
         BankSystemMod.onClientSetup();
     }
+
+    /*
+        This is a workaround since the Architectury screen registration does not work with NeoForge.
+     */
+    @SubscribeEvent
+    public static void registerScreens(RegisterMenuScreensEvent event) {
+        event.register(BankSystemMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
+    }
 }
