@@ -1,4 +1,4 @@
-package net.modutilities.neoforge;
+package net.kroia.banksystem.neoforge;
 
 import net.kroia.banksystem.util.BankSystemPlayerEvents;
 import net.minecraft.server.level.ServerPlayer;
