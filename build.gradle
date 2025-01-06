@@ -45,11 +45,12 @@ subprojects {
         //mappings "net.fabricmc:yarn:$rootProject.yarn_mappings:v2"
 
         //mappings channel: rootProject.mapping_channel, version: rootProject.mapping_version
+        mappings loom.officialMojangMappings()
 
-        mappings loom.layered() {
-            officialMojangMappings()
-            parchment("org.parchmentmc.data:parchment-${rootProject.minecraft_version}:${rootProject.mapping_version}")
-        }
+        //mappings loom.layered() {
+        //    officialMojangMappings()
+        //    parchment("org.parchmentmc.data:parchment-${rootProject.minecraft_version}:${rootProject.mapping_version}")
+        //}
 
 
 

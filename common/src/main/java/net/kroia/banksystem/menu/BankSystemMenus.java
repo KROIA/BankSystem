@@ -56,7 +56,7 @@ public class BankSystemMenus {
 
 
     public static final RegistrySupplier<MenuType<BankTerminalContainerMenu>> BANK_TERMINAL_CONTAINER_MENU =
-            MENUS.register(new ResourceLocation(BankSystemMod.MOD_ID, "bank_terminal_container_menu"), () -> MenuRegistry.ofExtended(BankTerminalContainerMenu::new));
+            MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_terminal_container_menu"), () -> MenuRegistry.ofExtended(BankTerminalContainerMenu::new));
 
 
 

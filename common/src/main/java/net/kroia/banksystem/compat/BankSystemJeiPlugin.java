@@ -22,7 +22,7 @@ public class BankSystemJeiPlugin implements IModPlugin {
     {
         //JEIIntegration.registerPlugin(new BankSystemJeiPlugin());
     }
-    private static final ResourceLocation PLUGIN_UID = new ResourceLocation(BankSystemMod.MOD_ID, "jei_plugin");
+    private static final ResourceLocation PLUGIN_UID = ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "jei_plugin");
 
     @Override
     public ResourceLocation getPluginUid() {

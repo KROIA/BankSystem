@@ -41,7 +41,7 @@ public class BankSystemBlocks {
     public static <T extends Block> RegistrySupplier<T> registerBlock(String name, Supplier<T> block)
     {
         //BankSystemMod.LOGGER.info("Registering Block: " + name);
-        RegistrySupplier<T> toReturn = BLOCKS.register(new ResourceLocation(BankSystemMod.MOD_ID, name), block);
+        RegistrySupplier<T> toReturn = BLOCKS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), block);
         BankSystemItems.registerBlockItem(name, toReturn);
         return toReturn;
     }

@@ -33,6 +33,7 @@ dependencies {
 
     compileOnly("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
 
+
 }
 /*
 sourceSets {
