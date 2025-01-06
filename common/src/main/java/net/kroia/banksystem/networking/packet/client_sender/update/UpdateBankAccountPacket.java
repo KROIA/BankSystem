@@ -1,18 +1,22 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
+import dev.architectury.networking.simple.MessageType;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.modutilities.networking.NetworkPacketC2S;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.UUID;
 
-public class UpdateBankAccountPacket extends NetworkPacket {
+public class UpdateBankAccountPacket extends NetworkPacketC2S {
+
+
 
     public static class BankData{
         public String itemID;
@@ -51,24 +55,28 @@ public class UpdateBankAccountPacket extends NetworkPacket {
     ArrayList<BankData> bankData;
 
 
+    @Override
+    public MessageType getType() {
+        return BankSystemNetworking.UPDATE_BANK_ACCOUNT;
+    }
     public UpdateBankAccountPacket(UUID playerUUID, ArrayList<BankData> bankData) {
         super();
         this.playerUUID = playerUUID;
         this.bankData = bankData;
     }
 
-    public UpdateBankAccountPacket(FriendlyByteBuf buf) {
+    public UpdateBankAccountPacket(RegistryFriendlyByteBuf buf) {
         super(buf);
     }
 
     public static void sendPacket(UUID playerUUID, ArrayList<BankData> bankData) {
         UpdateBankAccountPacket packet = new UpdateBankAccountPacket(playerUUID, bankData);
-        BankSystemNetworking.sendToServer(packet);
+        packet.sendToServer();
     }
 
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void toBytes(RegistryFriendlyByteBuf buf) {
         buf.writeUUID(playerUUID);
         buf.writeInt(bankData.size());
         for (BankData data : bankData) {
@@ -78,7 +86,7 @@ public class UpdateBankAccountPacket extends NetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void fromBytes(RegistryFriendlyByteBuf buf) {
         playerUUID = buf.readUUID();
         int size = buf.readInt();
         bankData = new ArrayList<>(size);

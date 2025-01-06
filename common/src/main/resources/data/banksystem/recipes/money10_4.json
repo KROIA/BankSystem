@@ -11,7 +11,7 @@
   ],
   "result": {
     "count": 10,
-    "item": "banksystem:money10"
+    "id": "banksystem:money10"
   },
   "show_notification": true
 }

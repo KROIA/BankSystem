@@ -1,23 +1,27 @@
 package net.kroia.banksystem.networking.packet.client_sender.update.entity;
 
+import dev.architectury.networking.simple.MessageType;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.minecraft.client.Minecraft;
+import net.kroia.modutilities.networking.NetworkPacketC2S;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.HashMap;
 
-public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
+public class UpdateBankTerminalBlockEntityPacket extends NetworkPacketC2S {
 
     private BlockPos pos;
 
     private HashMap<String, Long> itemTransferFromMarket;
     private boolean sendItemsToMarket;
+    @Override
+    public MessageType getType() {
+        return BankSystemNetworking.UPDATE_BANK_TERMINAL_BLOCK_ENTITY;
+    }
     public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<String, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
         super();
         this.pos = pos;
@@ -26,7 +30,7 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
     }
 
 
-    public UpdateBankTerminalBlockEntityPacket(FriendlyByteBuf buf) {
+    public UpdateBankTerminalBlockEntityPacket(RegistryFriendlyByteBuf buf) {
         super(buf);
     }
 
@@ -43,11 +47,11 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
 
 
     public static void sendPacketToServer(BlockPos pos, HashMap<String, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
-        BankSystemNetworking.sendToServer(new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToMarketAmounts, sendItemsToMarket));
+        new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToMarketAmounts, sendItemsToMarket).sendToServer();
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf)
+    public void toBytes(RegistryFriendlyByteBuf buf)
     {
         buf.writeBlockPos(pos);
         buf.writeBoolean(sendItemsToMarket);
@@ -59,7 +63,7 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void fromBytes(RegistryFriendlyByteBuf buf) {
         this.pos = buf.readBlockPos();
         this.itemTransferFromMarket = new HashMap<>();
         this.sendItemsToMarket = buf.readBoolean();
@@ -82,4 +86,6 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
             BankSystemMod.LOGGER.error("BankTerminalBlockEntity not found at position "+this.pos);
         }
     }
+
+
 }

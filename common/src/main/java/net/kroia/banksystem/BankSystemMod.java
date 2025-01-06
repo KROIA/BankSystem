@@ -13,6 +13,7 @@ import net.kroia.banksystem.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ItemUtilities;
@@ -40,8 +41,8 @@ public final class BankSystemMod {
         BankSystemCreativeModeTab.init();
         BankSystemTextMessages.init();
 
-        BankSystemNetworking.setupClientReceiverPackets();
-        BankSystemNetworking.setupServerReceiverPackets();
+
+        BankSystemNetworking.init();
 
         TickEvent.ServerLevelTick.SERVER_POST.register((serverLevel) -> {
             BankSystemDataHandler.tickUpdate();

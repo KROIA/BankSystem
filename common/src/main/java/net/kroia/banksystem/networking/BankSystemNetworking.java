@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking;
 
+import dev.architectury.networking.simple.MessageType;
 import dev.architectury.networking.simple.SimpleNetworkManager;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.networking.packet.client_sender.request.*;
@@ -9,55 +10,35 @@ import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemInfoPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncPotentialBankItemIDsPacket;
-import net.kroia.modutilities.networking.INetworkPacket;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerPlayer;
 
 
 public class BankSystemNetworking {
 
-    public static final SimpleNetworkManager CHANNEL = createChannel();
+    public static final SimpleNetworkManager CHANNEL = SimpleNetworkManager.create(BankSystemMod.MOD_ID);
 
-    private static SimpleNetworkManager createChannel()
-    {
-        SimpleNetworkManager chanel = SimpleNetworkManager.create(BankSystemMod.MOD_ID+".networking_channel");
-        return chanel;
+
+    public static MessageType SYNC_BANK_DATA = CHANNEL.registerS2C(getClassName(SyncBankDataPacket.class.getName()), SyncBankDataPacket::new);
+    public static MessageType SYNC_POTENTIAL_BANK_ITEM_IDS = CHANNEL.registerS2C(getClassName(SyncPotentialBankItemIDsPacket.class.getName()), SyncPotentialBankItemIDsPacket::new);
+    public static MessageType SYNC_OPEN_GUI = CHANNEL.registerS2C(getClassName(SyncOpenGUIPacket.class.getName()), SyncOpenGUIPacket::new);
+    public static MessageType SYNC_ITEM_INFO = CHANNEL.registerS2C(getClassName(SyncItemInfoPacket.class.getName()), SyncItemInfoPacket::new);
+
+
+
+    public static MessageType REQUEST_ALLOW_NEW_BANK_ITEM_ID = CHANNEL.registerC2S(getClassName(RequestAllowNewBankItemIDPacket.class.getName()), RequestAllowNewBankItemIDPacket::new);
+    public static MessageType REQUEST_BANK_DATA = CHANNEL.registerC2S(getClassName(RequestBankDataPacket.class.getName()), RequestBankDataPacket::new);
+    public static MessageType REQUEST_DISALLOW_BANKING_ITEM_ID = CHANNEL.registerC2S(getClassName(RequestDisallowBankingItemIDPacket.class.getName()), RequestDisallowBankingItemIDPacket::new);
+    public static MessageType REQUEST_POTENTIAL_BANK_ITEM_IDS = CHANNEL.registerC2S(getClassName(RequestPotentialBankItemIDsPacket.class.getName()), RequestPotentialBankItemIDsPacket::new);
+    public static MessageType UPDATE_BANK_ACCOUNT = CHANNEL.registerC2S(getClassName(UpdateBankAccountPacket.class.getName()), UpdateBankAccountPacket::new);
+    public static MessageType UPDATE_BANK_TERMINAL_BLOCK_ENTITY = CHANNEL.registerC2S(getClassName(UpdateBankTerminalBlockEntityPacket.class.getName()), UpdateBankTerminalBlockEntityPacket::new);
+    public static MessageType REQUEST_ITEM_INFO = CHANNEL.registerC2S(getClassName(RequestItemInfoPacket.class.getName()), RequestItemInfoPacket::new);
+
+
+
+    public static void init() {
+
     }
-
-    public static void setupClientReceiverPackets()
-    {
-        CHANNEL.registerS2C()
-        CHANNEL.register(SyncBankDataPacket.class, SyncBankDataPacket::toBytes, SyncBankDataPacket::new, SyncBankDataPacket::receive);
-        CHANNEL.register(SyncPotentialBankItemIDsPacket.class, SyncPotentialBankItemIDsPacket::toBytes, SyncPotentialBankItemIDsPacket::new, SyncPotentialBankItemIDsPacket::receive);
-        CHANNEL.register(SyncOpenGUIPacket.class, SyncOpenGUIPacket::toBytes, SyncOpenGUIPacket::new, SyncOpenGUIPacket::receive);
-        CHANNEL.register(SyncItemInfoPacket.class, SyncItemInfoPacket::toBytes, SyncItemInfoPacket::new, SyncItemInfoPacket::receive);
-    }
-    public static void setupServerReceiverPackets()
-    {
-
-
-
-        CHANNEL.register(RequestAllowNewBankItemIDPacket.class, RequestAllowNewBankItemIDPacket::toBytes, RequestAllowNewBankItemIDPacket::new, RequestAllowNewBankItemIDPacket::receive);
-        CHANNEL.register(RequestBankDataPacket.class, RequestBankDataPacket::toBytes, RequestBankDataPacket::new, RequestBankDataPacket::receive);
-        CHANNEL.register(RequestDisallowBankingItemIDPacket.class, RequestDisallowBankingItemIDPacket::toBytes, RequestDisallowBankingItemIDPacket::new, RequestDisallowBankingItemIDPacket::receive);
-        CHANNEL.register(RequestPotentialBankItemIDsPacket.class, RequestPotentialBankItemIDsPacket::toBytes, RequestPotentialBankItemIDsPacket::new, RequestPotentialBankItemIDsPacket::receive);
-        CHANNEL.register(UpdateBankTerminalBlockEntityPacket.class, UpdateBankTerminalBlockEntityPacket::toBytes, UpdateBankTerminalBlockEntityPacket::new, UpdateBankTerminalBlockEntityPacket::receive);
-        CHANNEL.register(RequestItemInfoPacket.class, RequestItemInfoPacket::toBytes, RequestItemInfoPacket::new, RequestItemInfoPacket::receive);
-        CHANNEL.register(UpdateBankAccountPacket.class, UpdateBankAccountPacket::toBytes, UpdateBankAccountPacket::new, UpdateBankAccountPacket::receive);
-        /*if(CHANNEL.canServerReceive(UpdateBankTerminalBlockEntityPacket.class))
-        {
-            BankSystemMod.LOGGER.info("Server can receive UpdateBankTerminalBlockEntityPacket");
-        }
-        else {
-            BankSystemMod.LOGGER.error("Server cannot receive UpdateBankTerminalBlockEntityPacket");
-        }*/
-    }
-
-
-    public static void sendToServer(INetworkPacket packet) {
-        CHANNEL.sendToServer(packet);
-    }
-    public static void sendToClient(ServerPlayer receiver, INetworkPacket packet) {
-        CHANNEL.sendToPlayer(receiver, packet);
+    private static String getClassName(String name) {
+        String sub = name.substring(name.lastIndexOf(".")+1).toLowerCase();
+        return sub;
     }
 }

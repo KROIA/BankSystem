@@ -11,7 +11,7 @@
   ],
   "result": {
     "count": 2,
-    "item": "banksystem:money500"
+    "id": "banksystem:money500"
   },
   "show_notification": true
 }

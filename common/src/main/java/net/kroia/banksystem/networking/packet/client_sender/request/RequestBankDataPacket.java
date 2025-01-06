@@ -1,22 +1,28 @@
 package net.kroia.banksystem.networking.packet.client_sender.request;
 
+import dev.architectury.networking.simple.MessageType;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.modutilities.networking.NetworkPacketC2S;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-public class RequestBankDataPacket extends NetworkPacket {
+public class RequestBankDataPacket extends NetworkPacketC2S {
     UUID playerUUID;
+
+    @Override
+    public MessageType getType() {
+        return BankSystemNetworking.REQUEST_BANK_DATA;
+    }
 
     public RequestBankDataPacket(UUID playerUUID) {
         super();
         this.playerUUID = playerUUID;
     }
-    public RequestBankDataPacket(FriendlyByteBuf buf) {
+    public RequestBankDataPacket(RegistryFriendlyByteBuf buf) {
         super(buf);
 
     }
@@ -24,7 +30,7 @@ public class RequestBankDataPacket extends NetworkPacket {
     public static void sendRequest(UUID playerUUID)
     {
         RequestBankDataPacket packet = new RequestBankDataPacket(playerUUID);
-        BankSystemNetworking.sendToServer(packet);
+        packet.sendToServer();
     }
     public static void sendRequest()
     {
@@ -33,12 +39,12 @@ public class RequestBankDataPacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void toBytes(RegistryFriendlyByteBuf buf) {
         buf.writeUUID(playerUUID);
 
     }
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void fromBytes(RegistryFriendlyByteBuf buf) {
         playerUUID = buf.readUUID();
     }
 
@@ -47,4 +53,6 @@ public class RequestBankDataPacket extends NetworkPacket {
     {
         SyncBankDataPacket.sendPacket(sender, playerUUID);
     }
+
+
 }

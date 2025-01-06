@@ -1,25 +1,31 @@
 package net.kroia.banksystem.networking.packet.client_sender.request;
 
+import dev.architectury.networking.simple.MessageType;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.minecraft.network.FriendlyByteBuf;
+import net.kroia.modutilities.networking.NetworkPacketC2S;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class RequestDisallowBankingItemIDPacket extends NetworkPacket {
+public class RequestDisallowBankingItemIDPacket extends NetworkPacketC2S {
 
     private String itemID;
 
+    @Override
+    public MessageType getType() {
+        return BankSystemNetworking.REQUEST_DISALLOW_BANKING_ITEM_ID;
+    }
+
     public static void sendRequest(String itemID)
     {
-        BankSystemNetworking.sendToServer(new RequestDisallowBankingItemIDPacket(itemID));
+        new RequestDisallowBankingItemIDPacket(itemID).sendToServer();
     }
     public RequestDisallowBankingItemIDPacket(String itemID)
     {
         this.itemID = itemID;
     }
-    public RequestDisallowBankingItemIDPacket(FriendlyByteBuf buf)
+    public RequestDisallowBankingItemIDPacket(RegistryFriendlyByteBuf buf)
     {
         this.fromBytes(buf);
     }
@@ -30,11 +36,13 @@ public class RequestDisallowBankingItemIDPacket extends NetworkPacket {
     }
 
 
-    public void toBytes(FriendlyByteBuf buf) {
+    @Override
+    public void toBytes(RegistryFriendlyByteBuf buf) {
         buf.writeUtf(itemID);
     }
 
-    public void fromBytes(FriendlyByteBuf buf)
+    @Override
+    public void fromBytes(RegistryFriendlyByteBuf buf)
     {
         itemID = buf.readUtf();
     }
@@ -44,4 +52,6 @@ public class RequestDisallowBankingItemIDPacket extends NetworkPacket {
         ServerBankManager.disallowItemID(itemID);
         SyncBankDataPacket.sendPacket(sender);
     }
+
+
 }

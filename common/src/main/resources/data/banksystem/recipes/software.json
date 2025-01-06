@@ -19,7 +19,7 @@
   ],
   "result": {
     "count": 5,
-    "item": "banksystem:software"
+    "id": "banksystem:software"
   },
   "show_notification": true
 }

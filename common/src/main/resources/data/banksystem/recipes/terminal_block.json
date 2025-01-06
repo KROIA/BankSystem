@@ -25,7 +25,7 @@
   ],
   "result": {
     "count": 1,
-    "item": "banksystem:terminal_block"
+    "id": "banksystem:terminal_block"
   },
   "show_notification": true
 }

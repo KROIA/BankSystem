@@ -1,19 +1,21 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
+import dev.architectury.networking.simple.MessageType;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.modutilities.networking.NetworkPacketS2C;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public class SyncItemInfoPacket extends NetworkPacket {
+public class SyncItemInfoPacket extends NetworkPacketS2C {
 
     String itemID;
     long totalSupply;
@@ -52,7 +54,12 @@ public class SyncItemInfoPacket extends NetworkPacket {
         playerData = new HashMap<>();
     }
 
-    public SyncItemInfoPacket(FriendlyByteBuf buf) {
+    @Override
+    public MessageType getType() {
+        return BankSystemNetworking.SYNC_ITEM_INFO;
+    }
+
+    public SyncItemInfoPacket(RegistryFriendlyByteBuf buf) {
         super(buf);
     }
     public String getItemID()
@@ -96,11 +103,11 @@ public class SyncItemInfoPacket extends NetworkPacket {
             String playerName = user.getPlayerName();
             packet.playerData.put(playerName, new BankData(player, balance, lockedBalance));
         }
-        BankSystemNetworking.sendToClient(receiver, packet);
+        packet.sendTo(receiver);
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void toBytes(RegistryFriendlyByteBuf buf) {
         buf.writeUtf(itemID);
         buf.writeLong(totalSupply);
         buf.writeLong(totalLocked);
@@ -113,7 +120,7 @@ public class SyncItemInfoPacket extends NetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void fromBytes(RegistryFriendlyByteBuf buf) {
         itemID = buf.readUtf();
         totalSupply = buf.readLong();
         totalLocked = buf.readLong();

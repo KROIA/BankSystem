@@ -12,7 +12,7 @@
     "###"
   ],
   "result": {
-    "item": "banksystem:metal_case_block"
+    "id": "banksystem:metal_case_block"
   },
   "show_notification": true
 }

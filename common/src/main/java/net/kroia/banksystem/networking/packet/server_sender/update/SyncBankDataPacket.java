@@ -1,20 +1,29 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
+import dev.architectury.networking.simple.MessageType;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.modutilities.networking.NetworkPacketS2C;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
 
-public class SyncBankDataPacket extends NetworkPacket {
+public class SyncBankDataPacket extends NetworkPacketS2C {
+
+    @Override
+    public MessageType getType() {
+        return BankSystemNetworking.SYNC_BANK_DATA;
+    }
+
+
 
     public class BankData{
         private String itemID;
@@ -66,7 +75,7 @@ public class SyncBankDataPacket extends NetworkPacket {
         this.allowedItemIDs = allowedItemIDs;
         playerName = user.getPlayerName();
     }
-    public SyncBankDataPacket(FriendlyByteBuf buf) {
+    public SyncBankDataPacket(RegistryFriendlyByteBuf buf) {
         super(buf);
     }
 
@@ -113,7 +122,7 @@ public class SyncBankDataPacket extends NetworkPacket {
         if(user == null)
             return;
         SyncBankDataPacket packet = new SyncBankDataPacket(user, ServerBankManager.getAllowedItemIDs());
-        BankSystemNetworking.sendToClient(player, packet);
+        packet.sendTo(player);
     }
     public static void sendPacket(ServerPlayer player)
     {
@@ -121,7 +130,7 @@ public class SyncBankDataPacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void toBytes(RegistryFriendlyByteBuf buf) {
         buf.writeUtf(playerName);
         buf.writeInt(bankData.size());
         bankData.forEach((itemID, data) -> {
@@ -135,8 +144,9 @@ public class SyncBankDataPacket extends NetworkPacket {
         }
     }
 
+
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void fromBytes(RegistryFriendlyByteBuf buf) {
         playerName = buf.readUtf();
         int size = buf.readInt();
         bankData = new HashMap<>();

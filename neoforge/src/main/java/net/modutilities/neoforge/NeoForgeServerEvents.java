@@ -3,10 +3,11 @@ package net.modutilities.neoforge;
 import net.kroia.banksystem.util.BankSystemServerEvents;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.event.level.LevelEvent;
 
-@Mod.EventBusSubscriber
+@EventBusSubscriber
 public class NeoForgeServerEvents {
     @SubscribeEvent
     public static void onServerStart(LevelEvent.Load event) {

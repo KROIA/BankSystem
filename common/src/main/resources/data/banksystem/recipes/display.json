@@ -13,7 +13,7 @@
   ],
   "result": {
     "count": 1,
-    "item": "banksystem:display"
+    "id": "banksystem:display"
   },
   "show_notification": true
 }

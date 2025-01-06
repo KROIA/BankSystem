@@ -12,7 +12,7 @@
   ],
   "result": {
     "count": 1,
-    "item": "banksystem:money5"
+    "id": "banksystem:money5"
   },
   "show_notification": true
 }

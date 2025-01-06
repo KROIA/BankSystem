@@ -11,5 +11,5 @@ rootProject.name = 'banksystem'
 
 include 'common'
 include 'fabric'
-include 'neoforge'
-include 'quilt'
+//include 'neoforge'
+//include 'quilt'

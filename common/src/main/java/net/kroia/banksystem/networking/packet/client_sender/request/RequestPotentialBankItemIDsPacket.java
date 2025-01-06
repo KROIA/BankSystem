@@ -1,37 +1,34 @@
 package net.kroia.banksystem.networking.packet.client_sender.request;
 
+import dev.architectury.networking.simple.MessageType;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncPotentialBankItemIDsPacket;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.minecraft.network.FriendlyByteBuf;
+import net.kroia.modutilities.networking.NetworkPacketC2S;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class RequestPotentialBankItemIDsPacket extends NetworkPacket {
+public class RequestPotentialBankItemIDsPacket extends NetworkPacketC2S {
 
     public static void sendRequest()
     {
         RequestPotentialBankItemIDsPacket packet = new RequestPotentialBankItemIDsPacket();
-        BankSystemNetworking.sendToServer(packet);
+        packet.sendToServer();
     }
 
     public RequestPotentialBankItemIDsPacket()
     {
 
     }
-    public RequestPotentialBankItemIDsPacket(FriendlyByteBuf buf)
+
+    @Override
+    public MessageType getType() {
+        return BankSystemNetworking.REQUEST_POTENTIAL_BANK_ITEM_IDS;
+    }
+
+    public RequestPotentialBankItemIDsPacket(RegistryFriendlyByteBuf buf)
     {
         this.fromBytes(buf);
-    }
-
-
-    public void toBytes(FriendlyByteBuf buf) {
-
-    }
-
-    public void fromBytes(FriendlyByteBuf buf)
-    {
-
     }
 
     protected void handleOnServer(ServerPlayer sender)

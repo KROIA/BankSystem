@@ -13,7 +13,7 @@
   ],
   "result": {
     "count": 1,
-    "item": "banksystem:circuit_board"
+    "id": "banksystem:circuit_board"
   },
   "show_notification": true
 }

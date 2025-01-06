@@ -125,7 +125,7 @@ public class ClientBankManager {
         return bankDataPacket.getPlayerName();
     }
     public static ArrayList<String> getPotentialBankItemIDs() {
-        if(potentialBankItemIDsPacket == null)
+        if(potentialBankItemIDsPacket == null || potentialBankItemIDsPacket.getPotentialBankItemIDs() == null)
         {
             BankSystemMod.LOGGER.warn("Potential bank item IDs packet not received yet");
             RequestPotentialBankItemIDsPacket.sendRequest();

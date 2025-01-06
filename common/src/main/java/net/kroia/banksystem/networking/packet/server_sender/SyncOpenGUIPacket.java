@@ -1,14 +1,15 @@
 package net.kroia.banksystem.networking.packet.server_sender;
 
+import dev.architectury.networking.simple.MessageType;
 import net.kroia.banksystem.BankSystemClientHooks;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.minecraft.network.FriendlyByteBuf;
+import net.kroia.modutilities.networking.NetworkPacketS2C;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-public class SyncOpenGUIPacket extends NetworkPacket {
+public class SyncOpenGUIPacket extends NetworkPacketS2C {
 
     enum GUIType
     {
@@ -23,7 +24,13 @@ public class SyncOpenGUIPacket extends NetworkPacket {
     public SyncOpenGUIPacket() {
         super();
     }
-    public SyncOpenGUIPacket(FriendlyByteBuf friendlyByteBuf) {
+
+    @Override
+    public MessageType getType() {
+        return BankSystemNetworking.SYNC_OPEN_GUI;
+    }
+
+    public SyncOpenGUIPacket(RegistryFriendlyByteBuf friendlyByteBuf) {
         super(friendlyByteBuf);
     }
 
@@ -36,14 +43,14 @@ public class SyncOpenGUIPacket extends NetworkPacket {
     {
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
         packet.guiType = GUIType.BANK_SYSTEM_SETTING;
-        BankSystemNetworking.sendToClient(player, packet);
+        packet.sendTo(player);
     }
     public static void send_openBankAccountScreen(ServerPlayer player, UUID targetPlayerUUID)
     {
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
         packet.guiType = GUIType.BANK_ACCOUNT;
         packet.targetPlayerUUID = targetPlayerUUID;
-        BankSystemNetworking.sendToClient(player, packet);
+        packet.sendTo(player);
     }
 
     @Override
@@ -61,7 +68,7 @@ public class SyncOpenGUIPacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void toBytes(RegistryFriendlyByteBuf buf) {
         buf.writeEnum(guiType);
 
         if(targetPlayerUUID == null)
@@ -70,7 +77,7 @@ public class SyncOpenGUIPacket extends NetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void fromBytes(RegistryFriendlyByteBuf buf) {
         guiType = buf.readEnum(GUIType.class);
         targetPlayerUUID = buf.readUUID();
     }
