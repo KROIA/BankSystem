@@ -1,11 +1,13 @@
 package net.kroia.banksystem.block.custom;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.item.custom.software.Software;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -30,40 +32,41 @@ public class TerminalBlock extends Block {
 
 
     @Override
-    public final @NotNull InteractionResult use(@NotNull BlockState state,
-                                                @NotNull Level level,
-                                                @NotNull BlockPos pos,
-                                                @NotNull Player player,
-                                                @NotNull InteractionHand hand,
-                                                @NotNull BlockHitResult hit) {
+    public final @NotNull ItemInteractionResult useItemOn(ItemStack pStack, BlockState pState, Level pLevel, BlockPos pPos, Player pPlayer, InteractionHand pHand, BlockHitResult pHitResult) {
         // Get the item in the player's hand
-        ItemStack itemInHand = player.getItemInHand(hand);
-        Item item = itemInHand.getItem();
+        Item item = pStack.getItem();
 
+        BlockState state = pLevel.getBlockState(pPos);
         Software softwareItem = null;
         if(item instanceof Software) {
             softwareItem = (Software)item;
         }
-        if (!level.isClientSide && softwareItem != null)
+        if (!pLevel.isClientSide && softwareItem != null)
         {
             TerminalBlock programmedBlock = softwareItem.getProgrammedBlock();
             if(programmedBlock == null)
             {
                 // Replace the block with the programmed block
-                level.setBlockAndUpdate(pos, BankSystemBlocks.TERMINAL_BLOCK.get().defaultBlockState().setValue(FACING, state.getValue(FACING)));
+                pLevel.setBlockAndUpdate(pPos, BankSystemBlocks.TERMINAL_BLOCK.get().defaultBlockState().setValue(FACING, state.getValue(FACING)));
             }
             else
             {
                 // Replace the block with the programmed block
-                level.setBlockAndUpdate(pos, programmedBlock.defaultBlockState().setValue(FACING, state.getValue(FACING)));
+                pLevel.setBlockAndUpdate(pPos, programmedBlock.defaultBlockState().setValue(FACING, state.getValue(FACING)));
             }
-            return InteractionResult.SUCCESS;
+            return ItemInteractionResult.SUCCESS;
         }
-
-        if(softwareItem == null) {
-            openGui(state, level, pos, player, hand, hit);
+        if(softwareItem == null)
+        {
+            // Open the GUI
+            openGui(pState, pLevel, pPos, pPlayer, pHand, pHitResult);
         }
-        return InteractionResult.SUCCESS;
+        return ItemInteractionResult.SUCCESS;
+    }
+    @Override
+    protected InteractionResult useWithoutItem(BlockState pState, Level pLevel, BlockPos pPos, Player pPlayer, BlockHitResult pHitResult) {
+        openGui(pState, pLevel, pPos, pPlayer, pPlayer.getUsedItemHand(), pHitResult);
+        return InteractionResult.PASS;
     }
     protected void openGui(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         // Open the GUI

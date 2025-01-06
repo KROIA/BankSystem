@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking;
 
-import dev.architectury.networking.NetworkChannel;
+import dev.architectury.networking.simple.SimpleNetworkManager;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.networking.packet.client_sender.request.*;
 import net.kroia.banksystem.networking.packet.client_sender.update.UpdateBankAccountPacket;
@@ -13,18 +13,20 @@ import net.kroia.modutilities.networking.INetworkPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
+
 public class BankSystemNetworking {
 
-    public static final NetworkChannel CHANNEL = createChannel();
+    public static final SimpleNetworkManager CHANNEL = createChannel();
 
-    private static NetworkChannel createChannel()
+    private static SimpleNetworkManager createChannel()
     {
-        NetworkChannel chanel = NetworkChannel.create(new ResourceLocation(BankSystemMod.MOD_ID, "networking_channel"));
+        SimpleNetworkManager chanel = SimpleNetworkManager.create(BankSystemMod.MOD_ID+".networking_channel");
         return chanel;
     }
 
     public static void setupClientReceiverPackets()
     {
+        CHANNEL.registerS2C()
         CHANNEL.register(SyncBankDataPacket.class, SyncBankDataPacket::toBytes, SyncBankDataPacket::new, SyncBankDataPacket::receive);
         CHANNEL.register(SyncPotentialBankItemIDsPacket.class, SyncPotentialBankItemIDsPacket::toBytes, SyncPotentialBankItemIDsPacket::new, SyncPotentialBankItemIDsPacket::receive);
         CHANNEL.register(SyncOpenGUIPacket.class, SyncOpenGUIPacket::toBytes, SyncOpenGUIPacket::new, SyncOpenGUIPacket::receive);

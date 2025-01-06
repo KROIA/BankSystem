@@ -15,6 +15,7 @@ import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
@@ -398,7 +399,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     continue;
                 itemTag.putInt("Slot", i);
                 CompoundTag stackTag = new CompoundTag();
-                stack.save(stackTag);
+                stackTag.putString("ItemID", ItemUtilities.getItemID(stack.getItem()));
+                stackTag.putInt("Count", stack.getCount());
                 itemTag.put("ItemStack", stackTag);
                 inventoryTag.add(itemTag);
             }
@@ -420,7 +422,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     return false;
                 int slot = itemTag.getInt("Slot");
                 CompoundTag stackTag = itemTag.getCompound("ItemStack");
-                ItemStack stack = ItemStack.of(stackTag);
+                String itemID = stackTag.getString("ItemID");
+                int count = stackTag.getInt("Count");
+                ItemStack stack = ItemUtilities.createItemStackFromId(itemID, count);
                 if(stack.isEmpty())
                     return false;
                 inventory.set(slot, stack);
@@ -593,8 +597,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
 
     @Override
-    public void load(CompoundTag nbt) {
-        super.load(nbt);
+    public void loadAdditional(CompoundTag nbt, HolderLookup.Provider pRegistries) {
+        super.loadAdditional(nbt, pRegistries);
         CompoundTag data = nbt.getCompound(BankSystemMod.MOD_ID);
 
        // this.inventory.deserializeNBT(tutorialmodData.getCompound("Inventory"));
@@ -613,8 +617,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     }
 
     @Override
-    protected void saveAdditional(CompoundTag nbt) {
-        super.saveAdditional(nbt);
+    protected void saveAdditional(CompoundTag nbt, HolderLookup.Provider pRegistries) {
+        super.saveAdditional(nbt, pRegistries);
         CompoundTag data = new CompoundTag();
         //tutorialmodData.put("Inventory", this.inventory.serializeNBT());
         //data.putInt("TransferTickAmount", transferTickAmount);
