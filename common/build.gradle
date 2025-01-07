@@ -31,7 +31,7 @@ dependencies {
 
     //implementation("net.kroia:modutilities-common:1.0.0")
 
-    compileOnly("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
+    //compileOnly("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
 
 
 }

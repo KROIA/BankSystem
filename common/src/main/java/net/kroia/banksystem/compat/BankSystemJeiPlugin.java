@@ -1,5 +1,5 @@
 package net.kroia.banksystem.compat;
-
+/*
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.gui.handlers.IGuiContainerHandler;
@@ -47,3 +47,5 @@ public class BankSystemJeiPlugin implements IModPlugin {
         BankSystemMod.LOGGER.info("JEI Runtime is available");
     }
 }
+
+*/

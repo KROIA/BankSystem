@@ -53,7 +53,7 @@ dependencies {
     modImplementation("net.kroia:modutilities-fabric:1.0.0")
     include("net.kroia:modutilities-fabric:1.0.0")
 
-    modCompileOnlyApi("mezz.jei:jei-${rootProject.minecraft_version}-fabric-api:${rootProject.jei_version}")
+    //modCompileOnlyApi("mezz.jei:jei-${rootProject.minecraft_version}-fabric-api:${rootProject.jei_version}")
     //modRuntimeOnly("mezz.jei:jei-${minecraft_version}-fabric:${jei_version}")
 }
 
