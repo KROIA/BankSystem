@@ -338,7 +338,7 @@ public class BankSystemCommands {
                                             String itemID = StringArgumentType.getString(context, "itemID");
 
 
-                                            if(ServerBankManager.allowItemID(itemID))
+                                            if(ServerBankManager.allowItemID(ItemUtilities.getNormalizedItemID(itemID)))
                                                 PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemID));
                                             else
                                                 PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemID));
