@@ -69,7 +69,12 @@ public class Bank implements ServerSaveable {
     }
     public String getItemName()
     {
-        return ItemUtilities.getItemName(itemID);
+        String name = ItemUtilities.getItemName(itemID);
+        if(name == null)
+            return "unknown";
+        if(name.contains(":"))
+            return name.substring(name.lastIndexOf(":")+1);
+        return name;
     }
 
     public void setBalance(long balance) {
