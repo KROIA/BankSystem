@@ -2,6 +2,7 @@ package net.kroia.banksystem.item.custom.software;
 
 import net.kroia.banksystem.block.custom.TerminalBlock;
 import net.kroia.banksystem.item.BankSystemCreativeModeTab;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
@@ -27,7 +28,7 @@ public class Software extends Item {
     {
 
     }
-    protected void onRightClickedServerSide()
+    protected void onRightClickedServerSide(ServerPlayer player)
     {
 
     }
@@ -41,7 +42,7 @@ public class Software extends Item {
         Level level = context.getLevel();
 
         if (player != null && !level.isClientSide()) {
-            onRightClickedServerSide();
+            onRightClickedServerSide((ServerPlayer) player);
         } else if (player != null && level.isClientSide()) {
             onRightClickedClientSide();
         }
@@ -52,7 +53,7 @@ public class Software extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack itemStack = player.getItemInHand(hand);
         if (!level.isClientSide()) {
-            onRightClickedServerSide();
+            onRightClickedServerSide((ServerPlayer) player);
         } else if (level.isClientSide()) {
             onRightClickedClientSide();
         }
