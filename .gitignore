@@ -21,6 +21,7 @@ build
 eclipse
 run
 mcmodsrepo
+.architectury-transformer
 
 # Files from Forge MDK
 forge*changelog.txt
