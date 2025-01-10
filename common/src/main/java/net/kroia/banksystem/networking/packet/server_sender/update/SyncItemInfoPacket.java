@@ -99,7 +99,7 @@ public class SyncItemInfoPacket extends NetworkPacketS2C {
             long balance = bankAccount.getBalance();
             long lockedBalance = bankAccount.getLockedBalance();
             packet.totalLocked += lockedBalance;
-            packet.totalSupply += balance;
+            packet.totalSupply += balance + lockedBalance;
             String playerName = user.getPlayerName();
             packet.playerData.put(playerName, new BankData(player, balance, lockedBalance));
         }
