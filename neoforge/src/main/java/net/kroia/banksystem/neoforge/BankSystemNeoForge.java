@@ -7,6 +7,8 @@ import net.neoforged.fml.common.Mod;
 public final class BankSystemNeoForge {
     public BankSystemNeoForge() {
         // Run our common setup.
+
+        NeoForgeServerEvents.init();
         BankSystemMod.init();
     }
 }
