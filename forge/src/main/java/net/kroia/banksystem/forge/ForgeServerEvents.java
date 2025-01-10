@@ -17,7 +17,7 @@ public class ForgeServerEvents {
             ModUtilitiesMod.LOGGER.info("[ForgeSetup] SERVER_STARTING");
             BankSystemServerEvents.onServerStart(server);
         });
-        LifecycleEvent.SERVER_STARTING.register(server -> {
+        LifecycleEvent.SERVER_STOPPING.register(server -> {
             ModUtilitiesMod.LOGGER.info("[ForgeSetup] SERVER_STOPPED");
             BankSystemServerEvents.onServerStop(server);
         });
