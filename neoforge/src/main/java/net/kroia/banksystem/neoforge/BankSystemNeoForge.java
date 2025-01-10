@@ -11,6 +11,8 @@ import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 public final class BankSystemNeoForge {
     public BankSystemNeoForge() {
         // Run our common setup.
+
+        NeoForgeServerEvents.init();
         BankSystemMod.init();
 
         //RegisterMenuScreensEvent
