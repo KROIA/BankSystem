@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "banksystem",
+  "version": "${version}",
+  "name": "Bank System",
+  "description": "Adds a banking system to the game that allows players to store and withdraw money or items.",
+  "authors": [
+    "Alex Krieg"
+  ],
+  "contact": {
+    "homepage": "https://fabricmc.net/",
+    "sources": "https://github.com/FabricMC/fabric-example-mod"
+  },
+  "license": "MIT",
+  "icon": "assets/banksystem/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "net.kroia.banksystem.fabric.BankSystemFabric"
+    ],
+    "client": []
+  },
+  "mixins": [
+    "banksystem.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.9",
+    "minecraft": "~1.20.1",
+    "java": ">=17",
+    "architectury": ">=9.2.14",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "another-mod": "*"
+  }
+}
