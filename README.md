@@ -68,32 +68,32 @@ Admins can define which items can be stored in the bank in order to prevent play
 
 
 <!--	Links to Curse1.3.1-forge:	-->
-[1.3.1-fabric-1.19.2]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073135
-[1.3.1-fabric-1.19.3]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073141
-[1.3.1-fabric-1.19.4]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073151
-[1.3.1-fabric-1.20.1]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6070778
-[1.3.1-fabric-1.20.2]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073156
-[1.3.1-fabric-1.20.4]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073162
-[1.3.1-fabric-1.20.6]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073168
-[1.3.1-fabric-1.21]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073170
-[1.3.1-fabric-1.21.1]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073172
+[1.3.1-fabric-1.19.2]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073135
+[1.3.1-fabric-1.19.3]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073141
+[1.3.1-fabric-1.19.4]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073151
+[1.3.1-fabric-1.20.1]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6070778
+[1.3.1-fabric-1.20.2]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073156
+[1.3.1-fabric-1.20.4]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073162
+[1.3.1-fabric-1.20.6]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073168
+[1.3.1-fabric-1.21]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073170
+[1.3.1-fabric-1.21.1]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073172
 
-[1.3.1-forge-1.19.2]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073139
-[1.3.1-forge-1.19.3]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073143
-[1.3.1-forge-1.19.4]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073152
-[1.3.1-forge-1.20.1]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6070780
-[1.3.1-forge-1.20.2]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073158
-[1.3.1-forge-1.20.4]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073165
+[1.3.1-forge-1.19.2]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073139
+[1.3.1-forge-1.19.3]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073143
+[1.3.1-forge-1.19.4]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073152
+[1.3.1-forge-1.20.1]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6070780
+[1.3.1-forge-1.20.2]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073158
+[1.3.1-forge-1.20.4]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073165
 
 [1.3.1-quilt-1.19.2]:-
-[1.3.1-quilt-1.19.3]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073150
-[1.3.1-quilt-1.20.1]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6070781
+[1.3.1-quilt-1.19.3]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073150
+[1.3.1-quilt-1.20.1]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6070781
 [1.3.1-quilt-1.20.2]:-
 [1.3.1-quilt-1.20.4]:-
 
-[1.3.1-neoforge-1.20.6]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073169
-[1.3.1-neoforge-1.21]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073171
-[1.3.1-neoforge-1.21.1]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073173
+[1.3.1-neoforge-1.20.6]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073169
+[1.3.1-neoforge-1.21]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073171
+[1.3.1-neoforge-1.21.1]:https://www.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073173
 
 
 <!--	1.3.2	-->
