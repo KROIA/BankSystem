@@ -52,46 +52,77 @@ Admins can define which items can be stored in the bank in order to prevent play
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/banksystem)
 | Minecraft | Fabric | Forge | Quilt | Neoforge |
 |-----------|--------|-------|-------|----------|
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21.1] |                                                                             |                                                                             | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21.1] |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21-green)      | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21]   |                                                                             |                                                                             | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21]   |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.6] |                                                                             |                                                                             | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.20.6] |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.4] | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.20.4] | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.20.4] |                                                                                |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.2] | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.20.2] | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.20.2] |                                                                                |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.1] | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.20.1] | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.20.1] |                                                                                |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.19.4] | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.19.4] |                                                                             |                                                                                |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.19.3] | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.19.3] | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.19.3] |                                                                                |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.19.2] | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.19.2] | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.19.2] |                                                                                |
-
-<!--	Links to curseforge:	-->
-[1.3.1-fabric-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073135
-[1.3.1-fabric-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073141
-[1.3.1-fabric-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073151
-[1.3.1-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6070778
-[1.3.1-fabric-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073156
-[1.3.1-fabric-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073162
-[1.3.1-fabric-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073168
-[1.3.1-fabric-1.21]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073170
-[1.3.1-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073172
-
-[1.3.1-forge-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073139
-[1.3.1-forge-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073143
-[1.3.1-forge-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073152
-[1.3.1-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6070780
-[1.3.1-forge-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073158
-[1.3.1-forge-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073165
-
-[1.3.1-quilt-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073140
-[1.3.1-quilt-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073150
-[1.3.1-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6070781
-[1.3.1-quilt-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073160
-[1.3.1-quilt-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073166
-
-[1.3.1-neoforge-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073169
-[1.3.1-neoforge-1.21]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073171
-[1.3.1-neoforge-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6073173
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.21.1] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.21.1] |                                                                                                                                                             |                                                                                                                                                             | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-neoforge-1.21.1] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-neoforge-1.21.1] |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21-green)      | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.21]   <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.21]   |                                                                                                                                                             |                                                                                                                                                             | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-neoforge-1.21]   <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-neoforge-1.21]   |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.20.6] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.20.6] |                                                                                                                                                             |                                                                                                                                                             | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-neoforge-1.20.6] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-neoforge-1.20.6] |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.20.4] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.20.4] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-forge-1.20.4] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.20.4] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-quilt-1.20.4] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-quilt-1.20.4] |                                                                                                                                                                   |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.20.2] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.20.2] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-forge-1.20.2] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.20.2] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-quilt-1.20.2] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-quilt-1.20.2] |                                                                                                                                                                   |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.20.1] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-forge-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.20.1] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-quilt-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-quilt-1.20.1] |                                                                                                                                                                   |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.19.4] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.19.4] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-forge-1.19.4] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.19.4] |                                                                             <br>                                                                            |                                                                                                                                                                   |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.19.3] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.19.3] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-forge-1.19.3] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.19.3] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-quilt-1.19.3] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-quilt-1.19.3] |                                                                                                                                                                   |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.19.2] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.19.2] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-forge-1.19.2] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.19.2] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-quilt-1.19.2] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-quilt-1.19.2] |                                                                                                                                                                   |
 
 
 
+
+
+
+<!--	Links to Curse1.3.1-forge:	-->
+[1.3.1-fabric-1.19.2]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073135
+[1.3.1-fabric-1.19.3]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073141
+[1.3.1-fabric-1.19.4]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073151
+[1.3.1-fabric-1.20.1]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6070778
+[1.3.1-fabric-1.20.2]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073156
+[1.3.1-fabric-1.20.4]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073162
+[1.3.1-fabric-1.20.6]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073168
+[1.3.1-fabric-1.21]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073170
+[1.3.1-fabric-1.21.1]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073172
+
+[1.3.1-forge-1.19.2]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073139
+[1.3.1-forge-1.19.3]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073143
+[1.3.1-forge-1.19.4]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073152
+[1.3.1-forge-1.20.1]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6070780
+[1.3.1-forge-1.20.2]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073158
+[1.3.1-forge-1.20.4]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073165
+
+[1.3.1-quilt-1.19.2]:-
+[1.3.1-quilt-1.19.3]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073150
+[1.3.1-quilt-1.20.1]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6070781
+[1.3.1-quilt-1.20.2]:-
+[1.3.1-quilt-1.20.4]:-
+
+[1.3.1-neoforge-1.20.6]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073169
+[1.3.1-neoforge-1.21]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073171
+[1.3.1-neoforge-1.21.1]:https://legacy.curse1.3.1-forge.com/minecraft/mc-mods/banksystem/download/6073173
+
+
+<!--	1.3.2	-->
+[1.3.2-fabric-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074949
+[1.3.2-fabric-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074959
+[1.3.2-fabric-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074966
+[1.3.2-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074972
+[1.3.2-fabric-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074987
+[1.3.2-fabric-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074995
+[1.3.2-fabric-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6075004
+[1.3.2-fabric-1.21]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6075007
+[1.3.2-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6075009
+
+[1.3.2-forge-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074950
+[1.3.2-forge-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074961
+[1.3.2-forge-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074968
+[1.3.2-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074977
+[1.3.2-forge-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074989
+[1.3.2-forge-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074998
+
+[1.3.2-quilt-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074958
+[1.3.2-quilt-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074964
+[1.3.2-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074983
+[1.3.2-quilt-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6074991
+[1.3.2-quilt-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6075001
+
+[1.3.2-neoforge-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6075006
+[1.3.2-neoforge-1.21]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6075008
+[1.3.2-neoforge-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6075152
 
 ---
 ## Blocks
