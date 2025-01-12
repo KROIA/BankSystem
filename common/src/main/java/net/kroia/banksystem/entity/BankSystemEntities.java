@@ -7,6 +7,7 @@ import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
+import net.kroia.banksystem.entity.custom.BankUploadEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -32,6 +33,10 @@ public class BankSystemEntities {
     public static final RegistrySupplier<BlockEntityType<?>> BANK_TERMINAL_BLOCK_ENTITY =
             registerBlockEntity("bank_terminal_block_entity",
                     () -> BlockEntityType.Builder.of(BankTerminalBlockEntity::new, BankSystemBlocks.BANK_TERMINAL_BLOCK.get()).build(null));
+
+    public static final RegistrySupplier<BlockEntityType<?>> BANK_UPLOAD_BLOCK_ENTITY =
+            registerBlockEntity("bank_upload_block_entity",
+                    () -> BlockEntityType.Builder.of(BankUploadEntity::new, BankSystemBlocks.BANK_TERMINAL_BLOCK.get()).build(null));
 
 
 

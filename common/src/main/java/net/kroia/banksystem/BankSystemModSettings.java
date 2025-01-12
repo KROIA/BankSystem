@@ -10,6 +10,7 @@ import net.kroia.banksystem.item.custom.money.MoneyItem100;
 import net.kroia.banksystem.item.custom.money.MoneyItem200;
 import net.kroia.banksystem.item.custom.money.MoneyItem500;
 import net.kroia.banksystem.item.custom.money.MoneyItem1000;
+import net.minecraft.nbt.CompoundTag;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -21,15 +22,31 @@ public class BankSystemModSettings {
     {
         Bank.init();
     }
+
+    public static void saveSettings(CompoundTag tag)
+    {
+        tag.putLong("player_starting_balance", Player.STARTING_BALANCE);
+        tag.putInt("item_transfer_tick_interval", Bank.ITEM_TRANSFER_TICK_INTERVAL);
+    }
+    public static void readSettigns(CompoundTag tag)
+    {
+        if(tag.contains("player_starting_balance"))
+            Player.STARTING_BALANCE = tag.getLong("player_starting_balance");
+        if(tag.contains("item_transfer_tick_interval"))
+            Bank.ITEM_TRANSFER_TICK_INTERVAL = tag.getInt("item_transfer_tick_interval");
+    }
+
     public static final class Player
     {
-        public static final long STARTING_BALANCE = 0;
+        public static long STARTING_BALANCE = 0;
     }
+
+
 
     public static final class Bank
     {
         private static boolean isLoaded = false;
-        public static final int ITEM_TRANSFER_TICK_INTERVAL = 20;
+        public static int ITEM_TRANSFER_TICK_INTERVAL = 20;
 
         public static final Map<String, Boolean> ALLOWED_ITEM_IDS = new HashMap<>();
         //public static final ArrayList<String> POTENTIAL_ITEM_TAGS = new ArrayList<>();

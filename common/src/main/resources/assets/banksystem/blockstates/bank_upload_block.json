@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "connection_state=connected": { "model": "banksystem:block/bank_upload_block_connected" },
+    "connection_state=not_connected": { "model": "banksystem:block/bank_upload_block_not_connected" }
+  }
+}

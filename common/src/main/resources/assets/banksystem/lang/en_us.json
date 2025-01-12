@@ -3,8 +3,7 @@
   "block.banksystem.bank_terminal_block": "Bank Terminal Block",
   "block.banksystem.metal_case_block": "Metal Case Block",
   "block.banksystem.terminal_block": "Terminal Block",
-  "item.banksystem.bank_terminal_block": "Bank Terminal Block",
-  "item.banksystem.metal_case_block": "Metal Case Block",
+  "block.banksystem.bank_upload_block": "Bank Upload Block",
   "item.banksystem.display": "Display",
   "item.banksystem.circuit_board": "Circuit Board",
   "item.banksystem.software": "Empty Software",
@@ -86,5 +85,14 @@
   "message.banksystem.item_now_allowed_failed": "Failed to allow {item_name} for banking",
   "message.banksystem.item_already_allowed": "{item_name} is already allowed to be stored in the bank, you idiot sandwich",
   "message.banksystem.invalid_item_id": "Unknown item {item_name}",
-  "message.banksystem.circulation": "Circulation of {item_name} is {amount}"
+  "message.banksystem.circulation": "Circulation of {item_name} is {amount}",
+  "message.banksystem.bank_setting_start_balance_set": "The players money start balance is set to {amount}",
+  "message.banksystem.bank_setting_item_transfer_tick_interval": "The item transfer tick interval is set to {amount}",
+  "message.banksystem.bank_data_saved": "Bank data saved",
+  "message.banksystem.bank_data_save_failed": "Failed to save bank data",
+  "message.banksystem.bank_data_load_failed": "Failed to load bank data",
+  "message.banksystem.bank_data_loaded": "Bank data loaded",
+  "message.banksystem.bank_upload_block_owned_by_you_now": "The bank upload block is now connected to your bank account",
+  "message.banksystem.bank_upload_block_already_owned_by_you": "The bank upload block is already connected to your bank account",
+  "message.banksystem.bank_upload_block_already_owned_by_player": "The bank upload block is already connected to {player_name}'s bank account"
 }

@@ -342,6 +342,67 @@ public class BankSystemTextMessages {
         return msg;
     }
 
+    private static final Component BANK_SETTING_START_BALANCE_SET = Component.translatable(prefix+"bank_setting_start_balance_set");
+    public static String getBankSettingStartBalanceSetMessage(long amount)
+    {
+        String msg = BANK_SETTING_START_BALANCE_SET.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        return msg;
+    }
+
+    private static final Component BANK_SETTING_ITEM_TRANSFER_TICK_INTERVAL = Component.translatable(prefix+"bank_setting_item_transfer_tick_interval");
+    public static String getBankSettingItemTransferTickIntervalMessage(int interval)
+    {
+        String msg = BANK_SETTING_ITEM_TRANSFER_TICK_INTERVAL.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(interval));
+        return msg;
+    }
+
+    private static final Component BANK_DATA_SAVED = Component.translatable(prefix+"bank_data_saved");
+    public static String getBankDataSavedMessage()
+    {
+        return BANK_DATA_SAVED.getString();
+    }
+
+    private static final Component BANK_DATA_SAVE_FAILED = Component.translatable(prefix+"bank_data_save_failed");
+    public static String getBankDataSaveFailedMessage()
+    {
+        return BANK_DATA_SAVE_FAILED.getString();
+    }
+
+    private static final Component BANK_DATA_LOAD_FAILED = Component.translatable(prefix+"bank_data_load_failed");
+    public static String getBankDataLoadFailedMessage()
+    {
+        return BANK_DATA_LOAD_FAILED.getString();
+    }
+
+    private static final Component BANK_DATA_LOADED = Component.translatable(prefix+"bank_data_loaded");
+    public static String getBankDataLoadedMessage()
+    {
+        return BANK_DATA_LOADED.getString();
+    }
+
+
+    private static final Component BANK_UPLOAD_BLOCK_OWNED_BY_YOU_NOW = Component.translatable(prefix+"bank_upload_block_owned_by_you_now");
+    public static String getBankUploadBlockOwnedByYouNowMessage()
+    {
+        return BANK_UPLOAD_BLOCK_OWNED_BY_YOU_NOW.getString();
+    }
+    private static final Component BANK_UPLOAD_BLOCK_ALREADY_OWNED_BY_YOU = Component.translatable(prefix+"bank_upload_block_already_owned_by_you");
+    public static String getBankUploadBlockAlreadyOwnedByYouMessage()
+    {
+        return BANK_UPLOAD_BLOCK_ALREADY_OWNED_BY_YOU.getString();
+    }
+
+    private static final Component BANK_UPLOAD_BLOCK_ALREADY_OWNED_BY_PLAYER = Component.translatable(prefix+"bank_upload_block_already_owned_by_player");
+    public static String getBankUploadBlockAlreadyOwnedByPlayerMessage(String playerName)
+    {
+        String msg = BANK_UPLOAD_BLOCK_ALREADY_OWNED_BY_PLAYER.getString();
+        msg = replaceVariable(msg, Variables.PLAYER, playerName);
+        return msg;
+    }
+
+
 
 
     //--------------------------------------------------------------------------------------------------------
