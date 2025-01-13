@@ -57,7 +57,7 @@ Admins can define which items can be stored in the bank in order to prevent play
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.20.6] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.20.6] |                                                                                                                                                             |                                                                                                                                                             | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-neoforge-1.20.6] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-neoforge-1.20.6] |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.20.4] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.20.4] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-forge-1.20.4] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.20.4] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-quilt-1.20.4] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-quilt-1.20.4] |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.20.2] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.20.2] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-forge-1.20.2] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.20.2] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-quilt-1.20.2] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-quilt-1.20.2] |                                                                                                                                                                   |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.20.1] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-forge-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.20.1] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-quilt-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-quilt-1.20.1] |                                                                                                                                                                   |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.3.3-green)][1.3.3-fabric-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.3.2-blue)][1.3.2-fabric-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.20.1] | [![Version](https://img.shields.io/badge/v1.3.3-green)][1.3.3-forge-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.3.2-blue)][1.3.2-forge-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.20.1] | [![Version](https://img.shields.io/badge/v1.3.3-green)][1.3.3-quilt-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.3.2-blue)][1.3.2-quilt-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-quilt-1.20.1] |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.19.4] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.19.4] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-forge-1.19.4] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.19.4] |                                                                             <br>                                                                            |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.19.3] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.19.3] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-forge-1.19.3] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.19.3] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-quilt-1.19.3] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-quilt-1.19.3] |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-green)    | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-fabric-1.19.2] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-fabric-1.19.2] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-forge-1.19.2] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-forge-1.19.2] | [![Version](https://img.shields.io/badge/v1.3.2-green)][1.3.2-quilt-1.19.2] <br> [![Version](https://img.shields.io/badge/v1.3.1-blue)][1.3.1-quilt-1.19.2] |                                                                                                                                                                   |
@@ -124,6 +124,10 @@ Admins can define which items can be stored in the bank in order to prevent play
 [1.3.2-neoforge-1.21]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6075008
 [1.3.2-neoforge-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6075152
 
+<!--	1.3.3	-->
+[1.3.3-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6082191
+[1.3.3-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6082208
+[1.3.3-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6082207
 ---
 ## Blocks
 <table>
@@ -170,6 +174,47 @@ Right click on a <b>Terminal Block</b> using a <b>Banking Software</b> to create
 <td>
 <div align="center">
     <img src="documentation/images/bankingTerminalBlock.png" width="100"> 
+</div>
+</td>
+</tr>
+
+
+<tr>
+<td>
+<b>Bank Upload Block</b><br>
+Used to send items to a specified bank account.<br>
+Change its settings by right clicking on it<br>
+Once the block is connected to a bankaccount, other players can't access it any more.<br>
+Can be connected to Pipes and hoppers.<br>
+Needs to be powered by redstone to send items to the bank.<br>
+6 Iron nuggets<br>
+1 Metal Case Block<br>
+1 Comparator<br>
+1 Bank Transmitter Module<br>
+</td>
+<td>
+<div align="center">
+    <img src="documentation/images/bank_upload_block.png" width="300"> 
+</div>
+</td>
+</tr>
+
+<tr>
+<td>
+<b>Bank Download Block</b><br>
+Used to receive items from a specified bank account.<br>
+Change its settings by right clicking on it<br>
+Once the block is connected to a bankaccount, other players can't access it any more.<br>
+Can be connected to Pipes and hoppers.<br>
+Needs to be powered by redstone to receive items to the bank.<br>
+6 Iron nuggets<br>
+1 Metal Case Block<br>
+1 Comparator<br>
+1 Bank Receiver Module<br>
+</td>
+<td>
+<div align="center">
+    <img src="documentation/images/bank_download_block.png" width="300"> 
 </div>
 </td>
 </tr>
@@ -236,6 +281,35 @@ Used to programm the <b>Terminal Block</b> to be a <b>Bank Terminal Block</b><br
 <td>
 <div align="center">
     <img src="documentation/images/bankingSoftware.png" width="300"> 
+</div>
+</td>
+</tr>
+
+
+<tr>
+<td>
+<b>Bank Transmitter Module</b><br>
+Used to craft the <b>Bank Upload Block</b>.<br>
+1 Iron ingot<br>
+1 circuit Board<br>
+</td>
+<td>
+<div align="center">
+    <img src="documentation/images/bank_transmitter_module.png" width="300"> 
+</div>
+</td>
+</tr>
+
+<tr>
+<td>
+<b>Bank Receiver Module</b><br>
+Used to craft the <b>Bank Download Block</b>.<br>
+1 Iron ingot<br>
+1 circuit Board<br>
+</td>
+<td>
+<div align="center">
+    <img src="documentation/images/bank_receiver_module.png" width="300"> 
 </div>
 </td>
 </tr>
@@ -376,13 +450,70 @@ The window shows all items which are currently stored on the players bank accoun
 | /bank [username] delete [itemID]                     						| Delete a bank for another player         		| :heavy_check_mark: |
 | /bank allowItem [itemID]                     						        | Adds the item to the list of bankable items   | :heavy_check_mark: |
 | /bank settingsGUI                     						            | Opens the [items management window](#managing-items-for-banking)   | :heavy_check_mark: |
-
-
+| /bank setStartingBalance                                                  | Set the starting money balance for new players when they join the server as a new player | :heavy_check_mark: |
+| /bank setItemTransferTickInterval                                         | Set the amount of ticks it uses for a item to be transfered in the bank terminal block. If set to 0, it will be instant.  | :heavy_check_mark: |
+| /bank save                                                                | Saves all bank data | :heavy_check_mark: |
+| /bank load                                                                | Loads all bank data | :heavy_check_mark: |
 
 ---- 
+
+### Interaction for automation systems
+
+<div align="center">
+    <img src="documentation/images/bank_upDownload_block.png" width=600> 
+</div>
+
+#### Bank Upload Block
+
+<table>
+<tr>
+<td width = 500 valign="top">
+To use the Bank Upload Block, it has to be connected to your bank account.<br>
+Open the block and press on the <b>Connect to Bank</b> button.<br>
+- <b>Drop items if not bankable:</b><br>
+   This setting specifies if the block drops iteps that can not be stored in the bank or not.<br>
+<br>
+Once the block is connected to your bank account, items can be placed in it.<br>
+To send the items to the bank account, the block must be powered by a redstone signal.<br>
+</td>
+<td width = 400>
+<div align="center">
+    <img src="documentation/images/bank_upload_block_gui.png" width=400> 
+</div>
+</td>
+</tr>
+</table>
+
+#### Bank Download Block
+
+<table>
+<tr>
+<td width = 500 valign="top">
+To use the Bank Download Block, it has to be connected to your bank account.<br>
+Open the block and press on the <b>Connect to Bank</b> button.<br>
+- <b>Select item:</b><br>
+   Click that button to select, which item you want to receive from your bank account.<br>
+   <br>
+- <b>Amount:</b><br>
+   Define how many items the block should try to hold in its inventory.<br>
+   If items get removed from the inventory, the block try's to download new items until the specified amount is reached.<br>
+<br>
+Press the <b>Apply</b> button to save the changes.<br>
+Once the block is configured, a redstone signal triggers the block to work<br>
+</td>
+<td width = 400>
+<div align="center">
+    <img src="documentation/images/bank_download_block_gui.png" width=400> 
+</div>
+</td>
+</tr>
+</table>
+
+--- 
 
 #### Locked amount
 Other mods which access a players bank account may want to reserve some amount for later use. <br>
 The [Stock Market Mod](https://github.com/KROIA/StockMarket) for example uses this feature to reserve the amount (money/items) you want to trade. If a trade is not executed immediately the player must wait until the transaction is processed.<br>
 To prevent double spending for the time that trade is not executed, the amount gets reserved.<br> 
 If you release the locked amount without knowing what mod reserved the amount, may cause problems.<br>
+

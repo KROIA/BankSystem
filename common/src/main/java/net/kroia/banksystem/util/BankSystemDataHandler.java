@@ -1,27 +1,26 @@
 package net.kroia.banksystem.util;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
+
+import com.mojang.serialization.DataResult;
+import com.mojang.serialization.JsonOps;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.ServerBankManager;
-import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.Tag;
 
 import java.io.File;
-import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.nio.file.Files;
 
 
 public class BankSystemDataHandler {
     private static final String FOLDER_NAME = "Finance/BankSystem";
 
     private static final String BANK_DATA_FILE_NAME = "Bank_data.dat";
+    private static final String SETTINGS_FILE_NAME = "settings.dat";
     //private static final String POTENTIAL_BANK_ITEM_FILE_NAME = "PotentialBankableItems.json";
     private static final boolean COMPRESSED = false;
     private static boolean isLoaded = false;
@@ -60,6 +59,7 @@ public class BankSystemDataHandler {
         BankSystemMod.LOGGER.info("Saving BankSystem Mod data...");
         boolean success = true;
         success &= save_bank();
+        success &= save_globalSettings();
         //success &= savePotentialItemIDs(POTENTIAL_BANK_ITEM_FILE_NAME);
 
         if(success) {
@@ -77,6 +77,7 @@ public class BankSystemDataHandler {
         BankSystemMod.LOGGER.info("Loading BankSystem Mod data...");
         boolean success = true;
         success &= load_bank();
+        success &= load_globalSettings();
         //success &= loadPotentialItemIDs(POTENTIAL_BANK_ITEM_FILE_NAME);
 
         if(success) {
@@ -109,6 +110,22 @@ public class BankSystemDataHandler {
 
         CompoundTag bankData = data.getCompound("banking");
         return ServerBankManager.loadFromTag(bankData);
+    }
+
+    public static boolean save_globalSettings()
+    {
+        CompoundTag data = new CompoundTag();
+        BankSystemModSettings.saveSettings(data);
+        return saveDataCompound(SETTINGS_FILE_NAME, data);
+    }
+
+    public static boolean load_globalSettings()
+    {
+        CompoundTag data = readDataCompound(SETTINGS_FILE_NAME);
+        if(data == null)
+            return false;
+        BankSystemModSettings.readSettigns(data);
+        return true;
     }
 
 
@@ -157,7 +174,6 @@ public class BankSystemDataHandler {
         }
         return true;
     }
-
 
    /* public static boolean loadPotentialItemIDs(String fileName)
     {

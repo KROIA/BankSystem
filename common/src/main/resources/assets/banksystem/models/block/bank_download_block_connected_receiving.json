@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "west": "banksystem:block/metal_case_block",
+    "east": "banksystem:block/metal_case_block",
+    "north": "banksystem:block/bank_download_block_connected_receiving",
+    "south": "banksystem:block/metal_case_block",
+    "down": "banksystem:block/metal_case_block",
+    "up": "banksystem:block/metal_case_block",
+    "particle": "banksystem:block/metal_case_block"
+  }
+}
