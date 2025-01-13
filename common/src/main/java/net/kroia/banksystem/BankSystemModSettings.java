@@ -46,7 +46,7 @@ public class BankSystemModSettings {
     public static final class Bank
     {
         private static boolean isLoaded = false;
-        public static int ITEM_TRANSFER_TICK_INTERVAL = 20;
+        public static int ITEM_TRANSFER_TICK_INTERVAL = 5;
 
         public static final Map<String, Boolean> ALLOWED_ITEM_IDS = new HashMap<>();
         //public static final ArrayList<String> POTENTIAL_ITEM_TAGS = new ArrayList<>();

@@ -64,6 +64,19 @@ public class BankUser implements ServerSaveable {
         bankMap.put(itemID, bank);
         return bank;
     }
+    public Bank createItemBank_noMSG_Feedback(String itemID, long startBalance)
+    {
+        Bank bank = getBank(itemID);
+        if(bank != null)
+            return bank;
+        if(!ServerBankManager.isItemIDAllowed(itemID))
+        {
+            return null;
+        }
+        bank = new ItemBank(this, itemID,  startBalance);
+        bankMap.put(itemID, bank);
+        return bank;
+    }
 
     public Bank getBank(String itemID)
     {

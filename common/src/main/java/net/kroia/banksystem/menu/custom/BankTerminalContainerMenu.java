@@ -32,8 +32,9 @@ public class BankTerminalContainerMenu extends AbstractContainerMenu {
         if(blockEntity instanceof BankTerminalBlockEntity be) {
             this.blockEntity = be;
         } else {
-            throw new IllegalStateException("Incorrect block entity class (%s) passed into ExampleMenu!"
-                    .formatted(blockEntity.getClass().getCanonicalName()));
+            this.blockEntity = null;
+            levelAccess = null;
+            return;
         }
 
         this.levelAccess = ContainerLevelAccess.create(blockEntity.getLevel(), blockEntity.getBlockPos());

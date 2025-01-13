@@ -186,6 +186,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 else
                 {
                     // send to inventory
+                    amount = Math.min(amount, amountToProcess);
                     amount = Math.min(amount, bankAccount.getBalance());
                     if(amount <= 0) {
                         cancelTask(itemID);

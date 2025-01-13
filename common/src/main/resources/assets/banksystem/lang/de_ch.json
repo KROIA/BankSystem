@@ -3,8 +3,10 @@
   "block.banksystem.bank_terminal_block": "Bank Terminal Block",
   "block.banksystem.metal_case_block": "Metall Ghüs Block",
   "block.banksystem.terminal_block": "Terminal Block",
-  "item.banksystem.bank_terminal_block": "Bank Terminal Block",
-  "item.banksystem.metal_case_block": "Metall Ghüs Block",
+  "block.banksystem.bank_upload_block": "Bank Upload Block",
+  "block.banksystem.bank_download_block": "Bank Download Block",
+  "item.banksystem.bank_transmitter_module": "Bank Sender Modul",
+  "item.banksystem.bank_receiver_module": "Bank Empfänger Modul",
   "item.banksystem.display": "Display",
   "item.banksystem.circuit_board": "Print Platinä",
   "item.banksystem.software": "Leers Programm",
@@ -35,7 +37,6 @@
   "gui.banksystem.ask_popup.no": "NEI",
   "gui.banksystem.setting_screen.ask_remove_message": "Bisch dir sicher, dasst das item vo dä Bank entferne wötsch?\nDas wird s Bankkonto für das Item vo allne Spieler entferne!\nDas cha nöd rückgängig gmacht werde!",
 
-
   "gui.banksystem.iteminfo_widget.total_supply": "Zirkulation: {amount}",
   "gui.banksystem.iteminfo_widget.total_locked": "Reserviert:  {amount}",
   "gui.banksystem.iteminfo_widget.player_name": "Spieler",
@@ -55,6 +56,16 @@
   "gui.banksystem.bank_account_management_screen.save_changes": "Änderige speichere",
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Bankkonto eröffne",
 
+  "gui.banksystem.bank_uplaod_screen.inventory_name": "Bank Upload Inventar",
+  "gui.banksystem.bank_upload_screen.connect_button": "Mit Bank verbindä",
+  "gui.banksystem.bank_upload_screen.disconnect_button": "Von de Bank trennä",
+  "gui.banksystem.bank_upload_screen.do_drop_if_not_bankable": "Erlaub Items z droppä",
+  "gui.banksystem.bank_download_screen.inventory_name": "Bank Download Inventar",
+  "gui.banksystem.bank_download_screen.connect_button": "Mit Bank verbindä",
+  "gui.banksystem.bank_download_screen.disconnect_button": "Von de Bank trennä",
+  "gui.banksystem.bank_download_screen.target_amount": "Mängi:",
+  "gui.banksystem.bank_download_screen.select_item": "Item uswählä",
+  "gui.banksystem.bank_download_screen.apply_button": "Los",
 
   "message.banksystem.bank.warning": "[Bank WARNIG]: ",
   "message.banksystem.bank.info": "[Bank]: ",
@@ -86,5 +97,11 @@
   "message.banksystem.item_now_allowed_failed": "{item_name} cha für s lagere i de Bank nöd zueglo werde",
   "message.banksystem.item_already_allowed": "{item_name} cha scho i dä Bank glageret werde, du Globi",
   "message.banksystem.invalid_item_id": "Unbekannts Item {item_name}",
-  "message.banksystem.circulation": "Zirkulation vo {item_name} isch {amount}"
+  "message.banksystem.circulation": "Zirkulation vo {item_name} isch {amount}",
+  "message.banksystem.bank_setting_start_balance_set": "D Startgeldmengi isch uf {amount} gsetzt worde",
+  "message.banksystem.bank_setting_item_transfer_tick_interval": "De Item Transfer Tick Interval isch auf {amount} gsetzt worde",
+  "message.banksystem.bank_data_saved": "Bankdatä gseichert",
+  "message.banksystem.bank_data_save_failed": "Bankdatä chönd nöd gseichert werde",
+  "message.banksystem.bank_data_load_failed": "Bankdatä chönd nöd glade werde",
+  "message.banksystem.bank_data_loaded": "Bankdatä glade"
 }

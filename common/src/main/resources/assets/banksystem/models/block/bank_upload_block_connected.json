@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:block/cube_all",
-  "textures": {
-    "all": "banksystem:block/bank_upload_block_connected"
-  }
-}

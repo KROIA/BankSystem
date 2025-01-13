@@ -1,39 +1,63 @@
 package net.kroia.banksystem.entity.custom;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.block.custom.BankUploadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
+import net.kroia.banksystem.menu.custom.BankUploadContainerMenu;
+import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
+import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.Containers;
+import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Objects;
 import java.util.UUID;
 
-public class BankUploadEntity extends BaseContainerBlockEntity {
+public class BankUploadBlockEntity extends BaseContainerBlockEntity implements MenuProvider {
+    private class ControlledContainer extends SimpleContainer {
+        public ControlledContainer(int size) {
+            super(size);
+        }
 
-    private final SimpleContainer inventory = new SimpleContainer(27); // 27 slots like a chest
+        @Override
+        public void setChanged() {
+            super.setChanged();
+            inventoryContentChanged();
+        }
+
+        @Override
+        public void setItem(int slot, ItemStack stack) {
+            super.setItem(slot, stack);
+            setChanged();
+        }
+    }
+
+    private static final Component TITLE =
+            Component.translatable("container." + BankSystemMod.MOD_ID + ".bank_upload_block");
+
+    private final SimpleContainer inventory = new ControlledContainer(27); // 27 slots like a chest
     private boolean sendingEnabled = false;
+    private boolean dropIfNotBankable = false;
 
     private UUID playerOwner = null;
 
-    public BankUploadEntity(BlockPos pos, BlockState state) {
+    public BankUploadBlockEntity(BlockPos pos, BlockState state) {
         super(BankSystemEntities.BANK_UPLOAD_BLOCK_ENTITY.get(), pos, state);
     }
 
@@ -52,13 +76,11 @@ public class BankUploadEntity extends BaseContainerBlockEntity {
         super.load(tag);
         inventory.fromTag(tag.getList("Items", 10));
         sendingEnabled = tag.getBoolean("SendingEnabled");
+        dropIfNotBankable = tag.getBoolean("DropIfNotBankable");
+        playerOwner = null;
         if(tag.contains("PlayerOwner"))
         {
             playerOwner = tag.getUUID("PlayerOwner");
-        }
-        // Print inventory to console
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
-            System.out.println("Slot " + i + ": " + inventory.getItem(i));
         }
     }
 
@@ -67,13 +89,10 @@ public class BankUploadEntity extends BaseContainerBlockEntity {
         super.saveAdditional(tag);
         tag.put("Items", inventory.createTag());
         tag.putBoolean("SendingEnabled", sendingEnabled);
+        tag.putBoolean("DropIfNotBankable", dropIfNotBankable);
         if(playerOwner != null)
         {
             tag.putUUID("PlayerOwner", playerOwner);
-        }
-        // Print inventory to console
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
-            System.out.println("Slot " + i + ": " + inventory.getItem(i));
         }
     }
 
@@ -115,10 +134,6 @@ public class BankUploadEntity extends BaseContainerBlockEntity {
     @Override
     public void setItem(int slot, ItemStack stack) {
         inventory.setItem(slot, stack);
-        if(this.sendingEnabled)
-        {
-            sendInventoryToBank();
-        }
     }
 
     @Override
@@ -131,6 +146,14 @@ public class BankUploadEntity extends BaseContainerBlockEntity {
         inventory.clearContent();
     }
 
+    private void inventoryContentChanged()
+    {
+        if(this.sendingEnabled)
+        {
+            sendInventoryToBank();
+        }
+    }
+
     public void dropContents() {
         Containers.dropContents(this.getLevel(), this.getBlockPos(), this.inventory);
     }
@@ -138,15 +161,18 @@ public class BankUploadEntity extends BaseContainerBlockEntity {
         Containers.dropItemStack(Objects.requireNonNull(this.getLevel()), this.getBlockPos().getX(), this.getBlockPos().getY(), this.getBlockPos().getZ(), stack);
     }
 
-    public void setSendingEnabled(boolean sendingEnabled) {
-        this.sendingEnabled = sendingEnabled;
-        if(this.sendingEnabled)
-        {
+    public void redstoneSignalChanged(boolean isPowered) {
+        this.sendingEnabled = isPowered;
+        BlockState blockState = level.getBlockState(worldPosition);
+        if (blockState.getBlock() instanceof BankUploadBlock) {
+            level.setBlock(worldPosition, blockState.setValue(BankUploadBlock.SENDING_STATE, (this.sendingEnabled?BankUploadBlock.SendingState.SENDING:BankUploadBlock.SendingState.NOT_SENDING)), 3);
+        }
+        if(this.sendingEnabled) {
             sendInventoryToBank();
         }
     }
 
-    public void setPlayerOwner(UUID playerOwner) {
+    private void setPlayerOwner(UUID playerOwner) {
         this.playerOwner = playerOwner;
         if(this.playerOwner != null)
         {
@@ -168,10 +194,6 @@ public class BankUploadEntity extends BaseContainerBlockEntity {
                 }
             }
         }
-        if(this.sendingEnabled)
-        {
-            sendInventoryToBank();
-        }
     }
     public UUID getPlayerOwner() {
         return playerOwner;
@@ -180,9 +202,14 @@ public class BankUploadEntity extends BaseContainerBlockEntity {
     public boolean isSendingEnabled() {
         return sendingEnabled;
     }
+    public boolean doesDropIfNotBankable() {
+        return dropIfNotBankable;
+    }
 
     private void sendInventoryToBank()
     {
+        if(!this.sendingEnabled)
+            return;
         if(playerOwner == null)
             return;
         BankUser bankUser = ServerBankManager.getUser(playerOwner);
@@ -197,14 +224,53 @@ public class BankUploadEntity extends BaseContainerBlockEntity {
                 Bank itemBank = bankUser.getBank(itemID);
                 if(itemBank == null)
                 {
-                    itemBank = bankUser.createItemBank(itemID, 0);
+                    itemBank = bankUser.createItemBank_noMSG_Feedback(itemID, 0);
                 }
-                if(itemBank == null)
+                if(itemBank != null) {
+                    itemBank.deposit(stack.getCount());
+                    inventory.setItem(i, ItemStack.EMPTY);
+                }else if(dropIfNotBankable){
                     dropItem(stack);
-
-                itemBank.deposit(stack.getCount());
-                inventory.setItem(i, ItemStack.EMPTY);
+                    inventory.setItem(i, ItemStack.EMPTY);
+                }
             }
+        }
+        setChanged();
+    }
+
+    public MenuProvider getMenuProvider() {
+        return this;
+    }
+
+    @Override
+    public Component getDisplayName() {
+        return TITLE;
+    }
+
+    @Override
+    public AbstractContainerMenu createMenu(int pContainerId, Inventory pPlayerInventory, Player pPlayer) {
+        return new BankUploadContainerMenu(pContainerId, pPlayerInventory, this);
+    }
+
+    public void handlePacket(ServerPlayer sender, UpdateBankUploadBlockEntityPacket packet)
+    {
+        UUID playerOwner = getPlayerOwner();
+        boolean sendUpdate = false;
+        dropIfNotBankable = packet.isDropIfNotBankable();
+        if(playerOwner == null || playerOwner.equals(sender.getUUID())) {
+            setPlayerOwner(packet.isOwned() ? sender.getUUID() : null);
+            sendUpdate = true;
+        }
+        if(sendingEnabled && getPlayerOwner() != null)
+        {
+            sendInventoryToBank();
+        }
+
+
+        setChanged();
+        if(sendUpdate)
+        {
+            SyncBankUploadDataPacket.sendPacket(sender, this);
         }
     }
 }

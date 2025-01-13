@@ -383,25 +383,6 @@ public class BankSystemTextMessages {
     }
 
 
-    private static final Component BANK_UPLOAD_BLOCK_OWNED_BY_YOU_NOW = Component.translatable(prefix+"bank_upload_block_owned_by_you_now");
-    public static String getBankUploadBlockOwnedByYouNowMessage()
-    {
-        return BANK_UPLOAD_BLOCK_OWNED_BY_YOU_NOW.getString();
-    }
-    private static final Component BANK_UPLOAD_BLOCK_ALREADY_OWNED_BY_YOU = Component.translatable(prefix+"bank_upload_block_already_owned_by_you");
-    public static String getBankUploadBlockAlreadyOwnedByYouMessage()
-    {
-        return BANK_UPLOAD_BLOCK_ALREADY_OWNED_BY_YOU.getString();
-    }
-
-    private static final Component BANK_UPLOAD_BLOCK_ALREADY_OWNED_BY_PLAYER = Component.translatable(prefix+"bank_upload_block_already_owned_by_player");
-    public static String getBankUploadBlockAlreadyOwnedByPlayerMessage(String playerName)
-    {
-        String msg = BANK_UPLOAD_BLOCK_ALREADY_OWNED_BY_PLAYER.getString();
-        msg = replaceVariable(msg, Variables.PLAYER, playerName);
-        return msg;
-    }
-
 
 
 
