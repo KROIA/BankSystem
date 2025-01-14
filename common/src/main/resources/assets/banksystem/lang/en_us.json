@@ -56,7 +56,7 @@
   "gui.banksystem.bank_account_management_screen.save_changes": "Save changes",
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Create new bank",
 
-  "gui.banksystem.bank_upload_screen.inventory_name": "Bank Sender Inventory",
+  "gui.banksystem.bank_upload_screen.inventory_name": "Bank Upload Inventory",
   "gui.banksystem.bank_upload_screen.connect_button": "Connect to Bank",
   "gui.banksystem.bank_upload_screen.disconnect_button": "Disconnect from Bank",
   "gui.banksystem.bank_upload_screen.do_drop_if_not_bankable": "Drop items if not bankable",
