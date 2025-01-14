@@ -56,7 +56,7 @@
   "gui.banksystem.bank_account_management_screen.save_changes": "Save changes",
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Create new bank",
 
-  "gui.banksystem.bank_uplaod_screen.inventory_name": "Bank Sender Inventory",
+  "gui.banksystem.bank_upload_screen.inventory_name": "Bank Sender Inventory",
   "gui.banksystem.bank_upload_screen.connect_button": "Connect to Bank",
   "gui.banksystem.bank_upload_screen.disconnect_button": "Disconnect from Bank",
   "gui.banksystem.bank_upload_screen.do_drop_if_not_bankable": "Drop items if not bankable",
@@ -69,7 +69,7 @@
 
   "message.banksystem.bank.warning": "[Bank WARNING]: ",
   "message.banksystem.bank.info": "[Bank]: ",
-  "message.banksystem.transfered_to_user": "Transfered {amount} {item_name} to {receiver}'s account",
+  "message.banksystem.transferred_to_user": "Transfered {amount} {item_name} to {receiver}'s account",
   "message.banksystem.removed_from_user": "Removed {amount} {item_name} from {user_name}'s account",
   "message.banksystem.bank_balance_lost": "You have lost {amount} {item_name} from your bank account",
   "message.banksystem.added_to_user": "Added {amount} {item_name} to {user_name}'s account",
