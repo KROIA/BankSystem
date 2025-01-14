@@ -29,7 +29,7 @@ public class BankSystemTextMessages {
 
 
 
-    private static final Component TRANSFERED_TO_USER = Component.translatable(prefix+"transfered_to_user");
+    private static final Component TRANSFERED_TO_USER = Component.translatable(prefix+"transferred_to_user");
     public static String getTransferedMessage(long amount, String itemName, String receiver)
     {
         String msg = TRANSFERED_TO_USER.getString();
