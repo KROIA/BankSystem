@@ -164,7 +164,6 @@ public class BankAccountManagementItem extends GuiElement {
     public void setBalance(long balance)
     {
         setBalanceLabel(balance);
-        balanceValueTextBox.setText(String.valueOf(balance));
     }
     public void setLockedBalance(long lockedBalance)
     {
@@ -173,6 +172,7 @@ public class BankAccountManagementItem extends GuiElement {
     public void setTotalBalance(long totalBalance)
     {
         totalBalanceValueLabel.setText(getFormattedAmount(totalBalance));
+        balanceValueTextBox.setText(String.valueOf(totalBalance));
     }
     private void onFreeLockedBalanceCheckBoxClicked()
     {
