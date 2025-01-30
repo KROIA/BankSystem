@@ -85,7 +85,7 @@
   "message.banksystem.balance_detailed": "Frei: {amount}, Reserviert: {locked_balance}",
   "message.banksystem.user_not_found": "Spieler {user_name} konnte nicht gefunden werde",
   "message.banksystem.bank_user_notification_enabled": "Du erhälst nun Benachrichtigungen, wenn eine Banküberweisung stattfindet",
-  "message.banksystem.bank_user_notification_diabled": "Du erhälst keine Benachrichtigungen mehr, wenn eine Banküberweisung stattfindet",
+  "message.banksystem.bank_user_notification_disabled": "Du erhälst keine Benachrichtigungen mehr, wenn eine Banküberweisung stattfindet",
   "message.banksystem.bank_of": "Bank von {user_name}",
   "message.banksystem.bank_not_found": "{user_name}'s Bankkonto für {item_name} konnte nicht gefunden werden",
   "message.banksystem.cant_create_bank": "Bankkonto für Spieler {user_name} mit Item {item_name} konnte nicht erstellt werden",
