@@ -84,6 +84,8 @@
   "message.banksystem.balance": "Kontostand: {amount}",
   "message.banksystem.balance_detailed": "Frei: {amount}, Reserviert: {locked_balance}",
   "message.banksystem.user_not_found": "Dä Spieler {user_name} isch nöd gfunde worde",
+  "message.banksystem.bank_user_notification_enabled": "Du erhaltisch ab ez Benachrichtigunge, wenn e Banküberwisig stattfindet",
+  "message.banksystem.bank_user_notification_diabled": "Du erhaltisch kei Benachrichtigunge meh, wenn e Banküberwisig stattfindet",
   "message.banksystem.bank_of": "Bank vo {user_name}",
   "message.banksystem.bank_not_found": "{user_name}'s Bankkonto für {item_name} isch nöd gfunde worde",
   "message.banksystem.cant_create_bank": "Bankkonto für dä Spieler {user_name} mit Item {item_name} het nöd chönne erstellt werde",

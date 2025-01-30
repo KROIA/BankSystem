@@ -446,6 +446,8 @@ The window shows all items which are currently stored on the players bank accoun
 | /money send [user] [amount]      											| Send money to another player                  |  |
 | /money circulation               											| Show money circulation of all players + bot   |  |
 | /bank                                                						| Show bank balance (money and items)      		|  |
+| /bank enableNotifications                                                 | Enables bank notifications on transactions    |  |
+| /bank disableNotifications                                                | Disables bank notifications on transactions   |  | 
 | /bank [username] bankManagementGUI                                		| Open the bank [management window](#managing-players-bank-account) for the specific player	| :heavy_check_mark: |
 | /bank [username] show                                						| Show bank balance of another player      		| :heavy_check_mark: |
 | /bank [username] create [itemID] [amount]            						| Create a bank for another player         		| :heavy_check_mark: |

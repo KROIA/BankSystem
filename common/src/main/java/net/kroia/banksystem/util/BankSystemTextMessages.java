@@ -173,6 +173,21 @@ public class BankSystemTextMessages {
         return msg;
     }
 
+    private static final Component BANK_USER_NOTIFICATION_ENABLED = Component.translatable(prefix+"bank_user_notification_enabled");
+    public static String getBankUserNotificationEnabledMessage()
+    {
+        String msg = BANK_USER_NOTIFICATION_ENABLED.getString();
+        return msg;
+    }
+
+    private static final Component BANK_USER_NOTIFICATION_DISABLED = Component.translatable(prefix+"bank_user_notification_disabled");
+    public static String getBankUserNotificationDisabledMessage()
+    {
+        String msg = BANK_USER_NOTIFICATION_DISABLED.getString();
+        return msg;
+    }
+
+
     private static final Component BANK_NOT_FOUND = Component.translatable(prefix+"bank_not_found");
     public static String getBankNotFoundMessage(String user, String itemName)
     {

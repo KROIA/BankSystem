@@ -95,7 +95,8 @@ public class Bank implements ServerSaveable {
         }
 
         setBalanceInternal(newBalance);
-        notifyUser(BankSystemTextMessages.getSetBalanceMessage(getBalance(), getItemName(), owner.getPlayerName()));
+        if(owner.isBankNotificationEbabled())
+            notifyUser(BankSystemTextMessages.getSetBalanceMessage(getBalance(), getItemName(), owner.getPlayerName()));
         //notifyUser("Balance set to " + balance + ".");
     }
 
@@ -280,8 +281,10 @@ public class Bank implements ServerSaveable {
         if(amount == 0)
             return;
 
-        notifyUser(BankSystemTextMessages.getTransferedMessage(amount, getItemName(), other.getPlayerName()));
-        other.notifyUser(BankSystemTextMessages.getReceivedMessage(amount, getItemName(), owner.getPlayerName()));
+        if(owner.isBankNotificationEbabled())
+            notifyUser(BankSystemTextMessages.getTransferedMessage(amount, getItemName(), other.getPlayerName()));
+        if(other.owner.isBankNotificationEbabled())
+            other.notifyUser(BankSystemTextMessages.getReceivedMessage(amount, getItemName(), owner.getPlayerName()));
         //notifyUser("Transferred " + amount + " → user: "+ other.getPlayerName());
     }
 

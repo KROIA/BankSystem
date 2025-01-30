@@ -19,6 +19,7 @@ public class BankUser implements ServerSaveable {
     private UUID userUUID;
     private String userName;
     private final HashMap<String, Bank> bankMap = new HashMap<>();
+    private boolean enableBankNotifications = true;
 
     public BankUser(ServerPlayer player)
     {
@@ -116,11 +117,20 @@ public class BankUser implements ServerSaveable {
     {
         return bankMap;
     }
+    public boolean isBankNotificationEbabled()
+    {
+        return enableBankNotifications;
+    }
+    public void setBankNotificationEnabled(boolean enabled)
+    {
+        enableBankNotifications = enabled;
+    }
 
     @Override
     public boolean save(CompoundTag tag) {
         tag.putUUID("userUUID", userUUID);
         tag.putString("userName", userName);
+        tag.putBoolean("enableBankNotifications", enableBankNotifications);
 
 
         ListTag bankElements = new ListTag();
@@ -138,6 +148,11 @@ public class BankUser implements ServerSaveable {
         boolean loadSuccess = true;
         userUUID = tag.getUUID("userUUID");
         userName = tag.getString("userName");
+        if(tag.contains("enableBankNotifications"))
+            enableBankNotifications = tag.getBoolean("enableBankNotifications");
+        else
+            enableBankNotifications = true;
+
 
         ListTag bankElements = tag.getList("bankMap", 10);
         bankMap.clear();
