@@ -227,8 +227,8 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                     itemBank = bankUser.createItemBank_noMSG_Feedback(itemID, 0);
                 }
                 if(itemBank != null) {
-                    itemBank.deposit(stack.getCount());
-                    inventory.setItem(i, ItemStack.EMPTY);
+                    if(itemBank.deposit(stack.getCount()) == Bank.Status.SUCCESS)
+                        inventory.setItem(i, ItemStack.EMPTY);
                 }else if(dropIfNotBankable){
                     dropItem(stack);
                     inventory.setItem(i, ItemStack.EMPTY);

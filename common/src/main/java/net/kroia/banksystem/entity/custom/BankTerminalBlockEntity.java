@@ -175,8 +175,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             MoneyItem moneyItem = (MoneyItem) ItemUtilities.createItemStackFromId(itemID).getItem();
                             depositAmount *= moneyItem.worth();
                         }
-                        bankAccount.deposit(depositAmount);
-                        setAmount(itemID, getAmount(itemID) + removedAmount);
+                        if(bankAccount.deposit(depositAmount) == Bank.Status.SUCCESS)
+                            setAmount(itemID, getAmount(itemID) + removedAmount);
+                        else
+                            cancelTask(itemID);
                         return true;
                     }else {
                         cancelTask(itemID);
@@ -195,7 +197,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     long addedAmount = inventory.addItem(itemID, amount);
                     if(addedAmount > 0)
                     {
-                        if(!bankAccount.withdraw(addedAmount))
+                        if(bankAccount.withdraw(addedAmount) != Bank.Status.SUCCESS)
                         {
                             // error
                             BankSystemMod.LOGGER.error("Failed to withdraw " + addedAmount + " " + itemID + " from bank account of user " + playerID);

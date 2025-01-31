@@ -281,7 +281,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                 if(amountToReceiveFromStack > 0)
                 {
                     amountToReceiveFromStack = Math.min(amountToReceiveFromStack, (int)itemBank.getBalance());
-                    if(itemBank.withdraw(amountToReceiveFromStack))
+                    if(itemBank.withdraw(amountToReceiveFromStack) == Bank.Status.SUCCESS)
                     {
                         stack.grow(amountToReceiveFromStack);
                         amountToReceive -= amountToReceiveFromStack;
@@ -294,7 +294,8 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                 if(amountToReceiveFromStack > 0)
                 {
                     amountToReceiveFromStack = Math.min(amountToReceiveFromStack, (int)itemBank.getBalance());
-                    if(itemBank.withdraw(amountToReceiveFromStack)) {
+
+                    if(itemBank.withdraw(amountToReceiveFromStack) == Bank.Status.SUCCESS) {
                         inventory.setItem(i, new ItemStack(exampleStack.getItem(), amountToReceiveFromStack));
                         amountToReceive -= amountToReceiveFromStack;
                     }
