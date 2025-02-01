@@ -88,8 +88,6 @@ public class BankSystemSettingScreen extends GuiScreen {
         addElement(currentBankingItemsView);
         addElement(currentBankingItemView);
         addElement(itemInfoWidget);
-
-        //MinecraftForge.EVENT_BUS.register(this);
     }
 
     public static void openScreen()
@@ -116,7 +114,6 @@ public class BankSystemSettingScreen extends GuiScreen {
 
 
     private void onNewBankingItemSelected(String itemID) {
-        //this.minecraft.setScreen(parentScreen);
         var items = ClientBankManager.getAllowedItemIDs();
         if(!items.contains(itemID)) {
             ClientBankManager.requestAllowNewItemID(itemID);
