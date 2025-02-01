@@ -146,7 +146,6 @@ public class BankUploadBlock extends Block implements EntityBlock {
             UUID playerOwner = blockEntity.getPlayerOwner();
             if(playerOwner == null || playerOwner.equals(player.getUUID())) {
                 MenuProvider menuProvider = blockEntity.getMenuProvider();
-                //sPlayer.openMenu(menuProvider);
                 // Open the menu
                 SyncBankUploadDataPacket.sendPacket(sPlayer, blockEntity);
                 openExtendedMenu(sPlayer, menuProvider, (menu) -> {

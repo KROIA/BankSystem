@@ -9,7 +9,6 @@ import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import org.lwjgl.system.linux.Stat;
 
 import java.util.UUID;
 
@@ -92,10 +91,6 @@ public class Bank implements ServerSaveable {
         if(newBalance < 0)
         {
             warnUser(BankSystemTextMessages.getProblemWhileTryingSetBalanceMessage(getItemName(), this.balance, balance, lockedBalance, balance));
-            //warnUser("Problem while trying to set balance to "+balance+
-            //        ".\nLocked balance is "+lockedBalance+" and your current balance is "+this.balance+
-            //        ".\nBalance will be set to 0 and locked balance to "+balance+
-            //        ".\nBecause of that, some limit orders may be cancelled.");
 
             lockedBalance = balance;
             setBalanceInternal(0);
@@ -105,7 +100,6 @@ public class Bank implements ServerSaveable {
         setBalanceInternal(newBalance);
         if(owner.isBankNotificationEbabled())
             notifyUser(BankSystemTextMessages.getSetBalanceMessage(getBalance(), getItemName(), owner.getPlayerName()));
-        //notifyUser("Balance set to " + balance + ".");
     }
 
     public UUID getPlayerUUID() {
@@ -127,9 +121,7 @@ public class Bank implements ServerSaveable {
             return Status.FAILED_NEGATIVE_VALUE;
         if(willOverflow(amount))
             return Status.FAILED_OVERFLOW;
-        //dbg_checkValueIsNegative(amount);
         addBalanceInternal(amount);
-        //notifyUser("Deposited " + amount+ ".");
         return Status.SUCCESS;
     }
 
@@ -144,9 +136,7 @@ public class Bank implements ServerSaveable {
         if (balance < amount) {
             return Status.FAILED_NOT_ENOUGH_FUNDS;
         }
-        //dbg_checkValueIsNegative(amount);
         addBalanceInternal(-amount);
-        //notifyUser("Withdrew " + amount + ".");
         return Status.SUCCESS;
     }
     public Status transfer(long amount, Bank other) {
@@ -186,7 +176,6 @@ public class Bank implements ServerSaveable {
     public Status transferFromLockedPrefered(long amount, Bank other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
-        //dbg_checkValueIsNegative(amount);
         long origAmount = amount;
         long lastLocked = lockedBalance;
         if (lockedBalance < amount) {
@@ -320,7 +309,6 @@ public class Bank implements ServerSaveable {
             notifyUser(BankSystemTextMessages.getTransferedMessage(amount, getItemName(), other.getPlayerName()));
         if(other.owner.isBankNotificationEbabled())
             other.notifyUser(BankSystemTextMessages.getReceivedMessage(amount, getItemName(), owner.getPlayerName()));
-        //notifyUser("Transferred " + amount + " → user: "+ other.getPlayerName());
     }
 
     protected void warnUser(String msg) {
@@ -369,10 +357,6 @@ public class Bank implements ServerSaveable {
             String secondPart = amountString.substring(modValue, modValue+2);
 
             amountString = firstPart+"."+secondPart+exponents.charAt(exponent3-1);
-            //int exponent3mod = exponent%3;
-            //if(exponent3mod == 0)
-            //    return amountString.substring(0, amountString.length()-exponent3*3)+"."+amountString.substring(amountString.length()-exponent3*3, amountString.length()-exponent3*3+2)+" "+("kMGTPEZY".charAt(exponent3-1));
-            //return amountString.substring(0, amountString.length()-exponent3*3+exponent3mod)+"."+amountString.substring(amountString.length()-exponent3*3+exponent3mod,amountString.length()-exponent3*3+2)+" "+("kMGTPEZY".charAt(exponent3-1));
         }
         return amountString;
     }

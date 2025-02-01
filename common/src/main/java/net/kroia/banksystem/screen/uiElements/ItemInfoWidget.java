@@ -13,7 +13,6 @@ import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -139,8 +138,6 @@ public class ItemInfoWidget extends GuiElement {
         // sort by key
         bankData.entrySet().stream().sorted(Map.Entry.comparingByKey());
         playerDataView.getLayout().enabled = false;
-        //playerDataView.removeChilds();
-        //ArrayList<GuiElement> children = playerDataView.getChilds();
         HashMap<String, ItemInfoUserWidget> toRemoveItems = new HashMap<>(playerDataWidgets);
 
         for(String playerName : bankData.keySet())
@@ -173,7 +170,6 @@ public class ItemInfoWidget extends GuiElement {
         }
         playerDataView.getLayout().enabled = true;
         layoutChangedInternal();
-        //playerDataView.layoutChangedInternal();
     }
 
     private void applyPlayerFiler(String name)

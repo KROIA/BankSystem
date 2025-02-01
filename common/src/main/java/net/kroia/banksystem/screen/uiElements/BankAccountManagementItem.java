@@ -50,7 +50,6 @@ public class BankAccountManagementItem extends GuiElement {
         this.itemID = itemID;
         this.playerName = playerName;
         itemView = new ItemView(ItemUtilities.createItemStackFromId(itemID));
-        //closeAccountButton = new Button(CLOSE_ACCOUNT_BUTTON.getString(), this::onCloseAccountButtonClicked);
         balanceLabel = new Label(BALANCE.getString());
         balanceValueLabel = new Label();
         balanceValueTextBox = new TextBox();

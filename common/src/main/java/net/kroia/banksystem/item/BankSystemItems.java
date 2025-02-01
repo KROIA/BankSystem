@@ -58,7 +58,6 @@ public class BankSystemItems {
 
     public static <T extends Item> RegistrySupplier<T> registerItem(String name, Supplier<T> item)
     {
-        //BankSystemMod.LOGGER.info("Registering Item: " + name);
         return ITEMS.register(new ResourceLocation(BankSystemMod.MOD_ID, name), item);
     }
     public static <T extends Block> RegistrySupplier<Item> registerBlockItem(String name, RegistrySupplier<T> block)

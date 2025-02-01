@@ -56,7 +56,6 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     private final SimpleContainer inventory = new ControlledContainer(27); // 27 slots like a chest
     private boolean receivingEnabled = false;
     private boolean currentlyReceiving = false;
-    //private boolean dropIfNotBankable = false;
 
     private UUID playerOwner = null;
     private String itemID;
