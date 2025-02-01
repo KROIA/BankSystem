@@ -2,14 +2,11 @@ package net.kroia.banksystem.screen.uiElements;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
-import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.util.UUID;

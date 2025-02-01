@@ -76,7 +76,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 return false;
             BankUser bank = ServerBankManager.getUser(playerID);
             if(bank == null) {
-                // Create bank account for this item if it can be traded
+                // Create bank account for this item if it can be used for banking
                 ArrayList<String> keys = new ArrayList<>();
                 String userName = PlayerUtilities.getOnlinePlayer(playerID).getName().getString();
                 keys.add(itemID);
@@ -127,7 +127,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             return transferItems.size();
         }
 
-        public boolean processTaskStep(long amountToProcess)
+        public boolean processTaskStep(long amountToProcess, boolean processWholeItemStack)
         {
             if(amountToProcess<=0)
             {
@@ -143,6 +143,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             for(String itemID : keys)
             {
                 long amount = transferItems.get(itemID);
+                if(processWholeItemStack)
+                    amountToProcess = Math.abs(amount);
                 if(amount == 0)
                     continue;
                 String bankITemID = itemID;
@@ -173,8 +175,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             MoneyItem moneyItem = (MoneyItem) ItemUtilities.createItemStackFromId(itemID).getItem();
                             depositAmount *= moneyItem.worth();
                         }
-                        bankAccount.deposit(depositAmount);
-                        setAmount(itemID, getAmount(itemID) + removedAmount);
+                        if(bankAccount.deposit(depositAmount) == Bank.Status.SUCCESS)
+                            setAmount(itemID, getAmount(itemID) + removedAmount);
+                        else
+                            cancelTask(itemID);
                         return true;
                     }else {
                         cancelTask(itemID);
@@ -193,7 +197,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     long addedAmount = inventory.addItem(itemID, amount);
                     if(addedAmount > 0)
                     {
-                        if(!bankAccount.withdraw(addedAmount))
+                        if(bankAccount.withdraw(addedAmount) != Bank.Status.SUCCESS)
                         {
                             // error
                             BankSystemMod.LOGGER.error("Failed to withdraw " + addedAmount + " " + itemID + " from bank account of user " + playerID);
@@ -582,8 +586,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
     private final HashMap<UUID, PlayerData> playerDataTable = new HashMap<>();
 
-
-    private int transferTickAmount = BankSystemModSettings.Bank.ITEM_TRANSFER_TICK_INTERVAL;
+    ;
     private int lastTickCounter = 0;
     private int tickCounter = 0;
 
@@ -719,14 +722,16 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         // Your block entity logic here
         //System.out.println("Block entity is ticking!");
         tickCounter++;
-        if(tickCounter - lastTickCounter >= transferTickAmount) {
+        if(tickCounter - lastTickCounter >= BankSystemModSettings.Bank.ITEM_TRANSFER_TICK_INTERVAL) {
             lastTickCounter = tickCounter;
             for(UUID playerID : playerDataTable.keySet())
             {
                 PlayerData playerData = playerDataTable.get(playerID);
-                if(playerData.getTransferTask().taskCount() > 0)
+                TransferTask task = playerData.getTransferTask();
+                if(task.taskCount() > 0)
                 {
-                    playerData.getTransferTask().processTaskStep(1);
+                    boolean transferTheWholeItemStack = BankSystemModSettings.Bank.ITEM_TRANSFER_TICK_INTERVAL == 0;
+                    task.processTaskStep(1, transferTheWholeItemStack);
                 }
             }
         }

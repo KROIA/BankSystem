@@ -54,8 +54,8 @@ dependencies {
     shadowBundle project(path: ':common', configuration: 'transformProductionForge')
 
 
-    modImplementation("net.kroia:modutilities-forge:1.0.0")
-    include("net.kroia:modutilities-forge:1.0.0")
+    modImplementation("net.kroia:modutilities-forge:$rootProject.modutilities_version")
+    include("net.kroia:modutilities-forge:$rootProject.modutilities_version")
 
     compileOnly("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}")
     //includeInternal("net.kroia:modutilities-forge:1.0.0")

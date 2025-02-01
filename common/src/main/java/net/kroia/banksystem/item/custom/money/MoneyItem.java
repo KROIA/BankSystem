@@ -7,7 +7,6 @@ import net.minecraft.world.item.Item;
 
 public class MoneyItem extends Item{
     public static final String NAME = "money";
-    //public static final String CURRENCY_NAME = "Money";
     private static final Component ITEM_NAME = Component.translatable("item."+ BankSystemMod.MOD_ID+".money_name");
     private static final Component CURRENCY_NAME = Component.translatable("item."+ BankSystemMod.MOD_ID+".currency");
 
