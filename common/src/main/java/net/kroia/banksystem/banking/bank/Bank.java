@@ -123,7 +123,7 @@ public class Bank implements ServerSaveable {
 
 
     public Status deposit(long amount) {
-        if(amount <= 0)
+        if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         if(willOverflow(amount))
             return Status.FAILED_OVERFLOW;
