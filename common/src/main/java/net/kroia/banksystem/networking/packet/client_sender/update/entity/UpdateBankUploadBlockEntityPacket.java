@@ -45,7 +45,7 @@ public class UpdateBankUploadBlockEntityPacket extends NetworkPacket {
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {
-        BlockEntity blockEntity = sender.level().getBlockEntity(pos);
+        BlockEntity blockEntity = sender.level.getBlockEntity(pos);
         if (blockEntity instanceof BankUploadBlockEntity be) {
             be.handlePacket(sender,this);
         }
