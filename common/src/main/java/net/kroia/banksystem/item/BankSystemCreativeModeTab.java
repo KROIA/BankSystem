@@ -4,6 +4,7 @@ import dev.architectury.registry.CreativeTabRegistry;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.ItemStack;
 
 
