@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "C": {
+      "item": "banksystem:circuit_board"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "I",
+    "C"
+  ],
+  "result": {
+    "count": 1,
+    "item": "banksystem:bank_transmitter_module"
+  },
+  "show_notification": true
+}

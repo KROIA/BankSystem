@@ -143,7 +143,6 @@ public class ClientBankManager {
                 continue; // Skip the money bank
             sortedBankAccounts.add(new Pair<>(itemID, bankAccounts.get(itemID)));
         }
-        //sortedBankAccounts.sort((a, b) -> a.getFirst().compareTo(b.getFirst()));
         // Sort by balance
         sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().getBalance(), a.getSecond().getBalance()));
         return sortedBankAccounts;
@@ -156,7 +155,6 @@ public class ClientBankManager {
         for (String itemID : bankAccounts.keySet()) {
             sortedBankAccounts.add(new Pair<>(itemID, bankAccounts.get(itemID)));
         }
-        //sortedBankAccounts.sort((a, b) -> a.getFirst().compareTo(b.getFirst()));
         // Sort by balance
         sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().getBalance(), a.getSecond().getBalance()));
         return sortedBankAccounts;
@@ -193,12 +191,10 @@ public class ClientBankManager {
     private static void msgBankDataNotReceived()
     {
         RequestBankDataPacket.sendRequest();
-        //BankSystemMod.LOGGER.warn("Bank data packet not received yet");
     }
     private static void msgItemInfoNotReceived(String itemID)
     {
         RequestItemInfoPacket.sendRequest(itemID);
-        //BankSystemMod.LOGGER.warn("Item info packet not received yet");
     }
 
     public static void requestAllowNewItemID(String itemID)
