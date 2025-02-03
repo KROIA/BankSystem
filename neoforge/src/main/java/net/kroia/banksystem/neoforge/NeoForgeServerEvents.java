@@ -6,7 +6,6 @@ import net.kroia.modutilities.ModUtilitiesMod;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.event.level.LevelEvent;
 
 @EventBusSubscriber

@@ -23,13 +23,14 @@ public class BankSystemTextMessages {
         public static final String RECEIVER = "{receiver}";
         public static final String SENDER = "{sender}";
         public static final String PLAYER = "{player_name}";
+        public static final String REASON = "{reason}";
     }
 
     private static final String prefix  = "message."+BankSystemMod.MOD_ID+".";
 
 
 
-    private static final Component TRANSFERED_TO_USER = Component.translatable(prefix+"transfered_to_user");
+    private static final Component TRANSFERED_TO_USER = Component.translatable(prefix+"transferred_to_user");
     public static String getTransferedMessage(long amount, String itemName, String receiver)
     {
         String msg = TRANSFERED_TO_USER.getString();
@@ -77,6 +78,16 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.USER, user);
         return msg;
     }
+    private static final Component CANT_ADD_TO_USER = Component.translatable(prefix+"cant_add_to_user");
+    public static String getCantAddMessage(long amount, String itemName, String user, String reason)
+    {
+        String msg = CANT_ADD_TO_USER.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.USER, user);
+        msg = replaceVariable(msg, Variables.REASON, reason);
+        return msg;
+    }
 
     private static final Component SET_BALANCE_TO = Component.translatable(prefix+"set_balance_to");
     public static String getSetBalanceMessage(long amount, String itemName, String user)
@@ -122,13 +133,14 @@ public class BankSystemTextMessages {
 
 
     private static final Component TRANSFER_FAILED = Component.translatable(prefix+"transfer_failed");
-    public static String getTransferFailedMessage(String sender, String receiver, long amount, String itemName)
+    public static String getTransferFailedMessage(String sender, String receiver, long amount, String itemName, String reason)
     {
         String msg = TRANSFER_FAILED.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.SENDER, sender);
         msg = replaceVariable(msg, Variables.RECEIVER, receiver);
+        msg = replaceVariable(msg, Variables.REASON, reason);
         return msg;
     }
     private static final Component TRANSFER_TO_SAME_ACCOUNT = Component.translatable(prefix+"transfer_to_same_account");
@@ -172,6 +184,21 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.USER, user);
         return msg;
     }
+
+    private static final Component BANK_USER_NOTIFICATION_ENABLED = Component.translatable(prefix+"bank_user_notification_enabled");
+    public static String getBankUserNotificationEnabledMessage()
+    {
+        String msg = BANK_USER_NOTIFICATION_ENABLED.getString();
+        return msg;
+    }
+
+    private static final Component BANK_USER_NOTIFICATION_DISABLED = Component.translatable(prefix+"bank_user_notification_disabled");
+    public static String getBankUserNotificationDisabledMessage()
+    {
+        String msg = BANK_USER_NOTIFICATION_DISABLED.getString();
+        return msg;
+    }
+
 
     private static final Component BANK_NOT_FOUND = Component.translatable(prefix+"bank_not_found");
     public static String getBankNotFoundMessage(String user, String itemName)
@@ -341,6 +368,48 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.PLAYER, playerName);
         return msg;
     }
+
+    private static final Component BANK_SETTING_START_BALANCE_SET = Component.translatable(prefix+"bank_setting_start_balance_set");
+    public static String getBankSettingStartBalanceSetMessage(long amount)
+    {
+        String msg = BANK_SETTING_START_BALANCE_SET.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        return msg;
+    }
+
+    private static final Component BANK_SETTING_ITEM_TRANSFER_TICK_INTERVAL = Component.translatable(prefix+"bank_setting_item_transfer_tick_interval");
+    public static String getBankSettingItemTransferTickIntervalMessage(int interval)
+    {
+        String msg = BANK_SETTING_ITEM_TRANSFER_TICK_INTERVAL.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(interval));
+        return msg;
+    }
+
+    private static final Component BANK_DATA_SAVED = Component.translatable(prefix+"bank_data_saved");
+    public static String getBankDataSavedMessage()
+    {
+        return BANK_DATA_SAVED.getString();
+    }
+
+    private static final Component BANK_DATA_SAVE_FAILED = Component.translatable(prefix+"bank_data_save_failed");
+    public static String getBankDataSaveFailedMessage()
+    {
+        return BANK_DATA_SAVE_FAILED.getString();
+    }
+
+    private static final Component BANK_DATA_LOAD_FAILED = Component.translatable(prefix+"bank_data_load_failed");
+    public static String getBankDataLoadFailedMessage()
+    {
+        return BANK_DATA_LOAD_FAILED.getString();
+    }
+
+    private static final Component BANK_DATA_LOADED = Component.translatable(prefix+"bank_data_loaded");
+    public static String getBankDataLoadedMessage()
+    {
+        return BANK_DATA_LOADED.getString();
+    }
+
+
 
 
 

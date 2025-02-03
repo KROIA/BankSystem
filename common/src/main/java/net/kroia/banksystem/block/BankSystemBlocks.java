@@ -5,14 +5,10 @@ import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.block.custom.BankTerminalBlock;
-import net.kroia.banksystem.block.custom.MetalCaseBlock;
-import net.kroia.banksystem.block.custom.TerminalBlock;
+import net.kroia.banksystem.block.custom.*;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 
 import java.util.function.Supplier;
@@ -36,11 +32,12 @@ public class BankSystemBlocks {
     public static final RegistrySupplier<Block> METAL_CASE_BLOCK = registerBlock(MetalCaseBlock.NAME, MetalCaseBlock::new);
     public static final RegistrySupplier<TerminalBlock> TERMINAL_BLOCK = registerBlock(TerminalBlock.NAME, TerminalBlock::new);
     public static final RegistrySupplier<TerminalBlock> BANK_TERMINAL_BLOCK = registerBlock(BankTerminalBlock.NAME, BankTerminalBlock::new);
+    public static final RegistrySupplier<Block> BANK_UPLOAD_BLOCK = registerBlock(BankUploadBlock.NAME, BankUploadBlock::new);
+    public static final RegistrySupplier<Block> BANK_DOWNLOAD_BLOCK = registerBlock(BankDownloadBlock.NAME, BankDownloadBlock::new);
 
 
     public static <T extends Block> RegistrySupplier<T> registerBlock(String name, Supplier<T> block)
     {
-        //BankSystemMod.LOGGER.info("Registering Block: " + name);
         RegistrySupplier<T> toReturn = BLOCKS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), block);
         BankSystemItems.registerBlockItem(name, toReturn);
         return toReturn;

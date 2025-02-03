@@ -10,6 +10,7 @@ import net.kroia.banksystem.item.custom.money.MoneyItem100;
 import net.kroia.banksystem.item.custom.money.MoneyItem200;
 import net.kroia.banksystem.item.custom.money.MoneyItem500;
 import net.kroia.banksystem.item.custom.money.MoneyItem1000;
+import net.minecraft.nbt.CompoundTag;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -21,19 +22,33 @@ public class BankSystemModSettings {
     {
         Bank.init();
     }
+
+    public static void saveSettings(CompoundTag tag)
+    {
+        tag.putLong("player_starting_balance", Player.STARTING_BALANCE);
+        tag.putInt("item_transfer_tick_interval", Bank.ITEM_TRANSFER_TICK_INTERVAL);
+    }
+    public static void readSettigns(CompoundTag tag)
+    {
+        if(tag.contains("player_starting_balance"))
+            Player.STARTING_BALANCE = tag.getLong("player_starting_balance");
+        if(tag.contains("item_transfer_tick_interval"))
+            Bank.ITEM_TRANSFER_TICK_INTERVAL = tag.getInt("item_transfer_tick_interval");
+    }
+
     public static final class Player
     {
-        public static final long STARTING_BALANCE = 0;
+        public static long STARTING_BALANCE = 0;
     }
+
+
 
     public static final class Bank
     {
         private static boolean isLoaded = false;
-        public static final int ITEM_TRANSFER_TICK_INTERVAL = 20;
+        public static int ITEM_TRANSFER_TICK_INTERVAL = 5;
 
         public static final Map<String, Boolean> ALLOWED_ITEM_IDS = new HashMap<>();
-        //public static final ArrayList<String> POTENTIAL_ITEM_TAGS = new ArrayList<>();
-        //public static final ArrayList<String> POTENTIAL_ITEM_CONTAINS_STR = new ArrayList<>();
         public static final ArrayList<String> POTENTIAL_ITEM_BLACKLIST = new ArrayList<>();
         public static final ArrayList<String> NOT_REMOVABLE_ITEM_IDS = new ArrayList<>();
 
@@ -48,79 +63,6 @@ public class BankSystemModSettings {
             ALLOWED_ITEM_IDS.put("minecraft:diamond", true);
             ALLOWED_ITEM_IDS.put("minecraft:emerald", true);
             ALLOWED_ITEM_IDS.put("minecraft:coal", true);
-
-
-           /* POTENTIAL_ITEM_TAGS.add("ores");
-            POTENTIAL_ITEM_TAGS.add("ingots");
-            POTENTIAL_ITEM_TAGS.add("planks");
-            POTENTIAL_ITEM_TAGS.add("logs");
-            POTENTIAL_ITEM_TAGS.add("gemstones");
-            POTENTIAL_ITEM_TAGS.add("cobblestone");
-            POTENTIAL_ITEM_TAGS.add("stone");
-            POTENTIAL_ITEM_TAGS.add("wool");
-            POTENTIAL_ITEM_TAGS.add("crops");
-            POTENTIAL_ITEM_TAGS.add("seeds");
-            POTENTIAL_ITEM_TAGS.add("flowers");
-            POTENTIAL_ITEM_TAGS.add("dirt");
-            POTENTIAL_ITEM_TAGS.add("sand");
-            POTENTIAL_ITEM_TAGS.add("glass");
-            POTENTIAL_ITEM_TAGS.add("gravel");
-            POTENTIAL_ITEM_TAGS.add("gems");
-            POTENTIAL_ITEM_TAGS.add("trim_materials");
-            POTENTIAL_ITEM_TAGS.add("trim_blocks");
-            POTENTIAL_ITEM_TAGS.add("wool");
-            POTENTIAL_ITEM_TAGS.add("foods");
-            POTENTIAL_ITEM_TAGS.add("ender_pearls");
-
-            POTENTIAL_ITEM_CONTAINS_STR.add("ingot");
-            POTENTIAL_ITEM_CONTAINS_STR.add("ore");
-            POTENTIAL_ITEM_CONTAINS_STR.add("cooked");
-            POTENTIAL_ITEM_CONTAINS_STR.add("ender_eye");
-            POTENTIAL_ITEM_CONTAINS_STR.add("ender_pearl");
-            POTENTIAL_ITEM_CONTAINS_STR.add("honey");
-
-            // Foods
-            POTENTIAL_ITEM_CONTAINS_STR.add("beetroot");
-            POTENTIAL_ITEM_CONTAINS_STR.add("apple");
-            POTENTIAL_ITEM_CONTAINS_STR.add("golden_carrot");
-            POTENTIAL_ITEM_CONTAINS_STR.add("honey_bottle");
-            POTENTIAL_ITEM_CONTAINS_STR.add("rabbit_stew");
-            POTENTIAL_ITEM_CONTAINS_STR.add("porkchop");
-            POTENTIAL_ITEM_CONTAINS_STR.add("chicken");
-            POTENTIAL_ITEM_CONTAINS_STR.add("cooked_beef");
-            POTENTIAL_ITEM_CONTAINS_STR.add("rotten_flesh");
-            POTENTIAL_ITEM_CONTAINS_STR.add("potato");
-            POTENTIAL_ITEM_CONTAINS_STR.add("cooked_rabbit");
-            POTENTIAL_ITEM_CONTAINS_STR.add("spider_eye");
-            POTENTIAL_ITEM_CONTAINS_STR.add("tropical_fish");
-            POTENTIAL_ITEM_CONTAINS_STR.add("beef");
-            POTENTIAL_ITEM_CONTAINS_STR.add("mutton");
-            POTENTIAL_ITEM_CONTAINS_STR.add("cooked_cod");
-            POTENTIAL_ITEM_CONTAINS_STR.add("cod");
-            POTENTIAL_ITEM_CONTAINS_STR.add("salmon");
-            POTENTIAL_ITEM_CONTAINS_STR.add("baked_potato");
-            POTENTIAL_ITEM_CONTAINS_STR.add("rabbit");
-            POTENTIAL_ITEM_CONTAINS_STR.add("cooked_porkchop");
-            POTENTIAL_ITEM_CONTAINS_STR.add("bread");
-            POTENTIAL_ITEM_CONTAINS_STR.add("carrot");
-            POTENTIAL_ITEM_CONTAINS_STR.add("glow_berries");
-            POTENTIAL_ITEM_CONTAINS_STR.add("cooked_chicken");
-            POTENTIAL_ITEM_CONTAINS_STR.add("sweet_berries");
-            POTENTIAL_ITEM_CONTAINS_STR.add("golden_apple");
-            POTENTIAL_ITEM_CONTAINS_STR.add("cooked_mutton");
-            POTENTIAL_ITEM_CONTAINS_STR.add("pufferfish");
-            POTENTIAL_ITEM_CONTAINS_STR.add("beetroot_soup");
-            POTENTIAL_ITEM_CONTAINS_STR.add("cookie");
-            POTENTIAL_ITEM_CONTAINS_STR.add("cooked_salmon");
-            POTENTIAL_ITEM_CONTAINS_STR.add("suspicious_stew");
-            POTENTIAL_ITEM_CONTAINS_STR.add("mushroom_stew");
-            POTENTIAL_ITEM_CONTAINS_STR.add("pumpkin_pie");
-            POTENTIAL_ITEM_CONTAINS_STR.add("enchanted_golden_apple");
-            POTENTIAL_ITEM_CONTAINS_STR.add("dried_kelp");
-            POTENTIAL_ITEM_CONTAINS_STR.add("chorus_fruit");
-            POTENTIAL_ITEM_CONTAINS_STR.add("melon_slice");
-            POTENTIAL_ITEM_CONTAINS_STR.add("poisonous_potato");
-*/
 
 
 

@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "connection_state=connected,sending_state=sending,facing=north": { "model": "banksystem:block/bank_upload_block_connected_sending" },
+    "connection_state=connected,sending_state=sending,facing=south": { "model": "banksystem:block/bank_upload_block_connected_sending", "y": 180 },
+    "connection_state=connected,sending_state=sending,facing=east":  { "model": "banksystem:block/bank_upload_block_connected_sending", "y": 90 },
+    "connection_state=connected,sending_state=sending,facing=west":  { "model": "banksystem:block/bank_upload_block_connected_sending", "y": 270 },
+    "connection_state=connected,sending_state=not_sending,facing=north": { "model": "banksystem:block/bank_upload_block_connected_not_sending" },
+    "connection_state=connected,sending_state=not_sending,facing=south": { "model": "banksystem:block/bank_upload_block_connected_not_sending", "y": 180 },
+    "connection_state=connected,sending_state=not_sending,facing=east":  { "model": "banksystem:block/bank_upload_block_connected_not_sending", "y": 90 },
+    "connection_state=connected,sending_state=not_sending,facing=west":  { "model": "banksystem:block/bank_upload_block_connected_not_sending", "y": 270 },
+    "connection_state=not_connected,facing=north": { "model": "banksystem:block/bank_upload_block_not_connected" },
+    "connection_state=not_connected,facing=south": { "model": "banksystem:block/bank_upload_block_not_connected", "y": 180 },
+    "connection_state=not_connected,facing=east":  { "model": "banksystem:block/bank_upload_block_not_connected", "y": 90 },
+    "connection_state=not_connected,facing=west":  { "model": "banksystem:block/bank_upload_block_not_connected", "y": 270 }
+  }
+}

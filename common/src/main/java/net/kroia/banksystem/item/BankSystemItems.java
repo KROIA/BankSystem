@@ -37,6 +37,8 @@ public class BankSystemItems {
 
     public static final Supplier<Item> DISPLAY = registerItem("display", () -> new Item(new Item.Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB)));
     public static final Supplier<Item> CIRCUIT_BOARD = registerItem("circuit_board", () -> new Item(new Item.Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB)));
+    public static final Supplier<Item> BANK_TRANSMITTER_MODULE = registerItem("bank_transmitter_module", () -> new Item(new Item.Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB)));
+    public static final Supplier<Item> BANK_RECEIVER_MODULE = registerItem("bank_receiver_module", () -> new Item(new Item.Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB)));
 
     // Software
     public static final Supplier<Item> SOFTWARE = registerItem(Software.NAME, Software::new);
@@ -56,7 +58,6 @@ public class BankSystemItems {
 
     public static <T extends Item> RegistrySupplier<T> registerItem(String name, Supplier<T> item)
     {
-        //BankSystemMod.LOGGER.info("Registering Item: " + name);
         return ITEMS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), item);
     }
     public static <T extends Block> RegistrySupplier<Item> registerBlockItem(String name, RegistrySupplier<T> block)
