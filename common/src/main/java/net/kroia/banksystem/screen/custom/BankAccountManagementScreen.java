@@ -144,7 +144,6 @@ public class BankAccountManagementScreen extends GuiScreen {
     private void updateBankData()
     {
         ArrayList<Pair<String, SyncBankDataPacket.BankData>> sortedBankAccounts = ClientBankManager.getSortedBankData();
-        // bankElementListView.removeChilds();
         playerName = ClientBankManager.getBankDataPlayerName();
         playerNameLabel.setText(BankSystemTextMessages.getBankAccountManagementBankOwnerMessage(playerName));
         HashMap<String, BankAccountManagementItem> stillExistingItems = new HashMap<>();
@@ -187,7 +186,6 @@ public class BankAccountManagementScreen extends GuiScreen {
         data.createBank = true;
         bankData.add(data);
         UpdateBankAccountPacket.sendPacket(playerUUID, bankData);
-        //RequestBankDataPacket.sendRequest(playerUUID);
     }
 
     @Override
