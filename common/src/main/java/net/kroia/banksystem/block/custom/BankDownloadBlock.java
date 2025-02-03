@@ -72,7 +72,7 @@ public class BankDownloadBlock extends Block implements EntityBlock {
     public static final EnumProperty<ReceivingState> RECEIVING_STATE = EnumProperty.create("receiving_state", ReceivingState.class);
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     public BankDownloadBlock() {
-        super(Properties.copy(net.minecraft.world.level.block.Blocks.CHEST).isRedstoneConductor((state, level, pos) -> false));
+        super(Properties.ofFullCopy(net.minecraft.world.level.block.Blocks.CHEST).isRedstoneConductor((state, level, pos) -> false));
         this.registerDefaultState(this.stateDefinition.any().setValue(CONNECTION_STATE, ConnectionState.NOT_CONNECTED));
         this.registerDefaultState(this.stateDefinition.any().setValue(RECEIVING_STATE, ReceivingState.NOT_RECEIVING));
         this.registerDefaultState(this.defaultBlockState().setValue(FACING, Direction.NORTH)); // Default facing
