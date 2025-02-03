@@ -15,7 +15,7 @@
   ],
   "result": {
     "count": 1,
-    "item": "banksystem:bank_transmitter_module"
+    "id": "banksystem:bank_transmitter_module"
   },
   "show_notification": true
 }

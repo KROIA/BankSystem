@@ -22,7 +22,7 @@
   ],
   "result": {
     "count": 1,
-    "item": "banksystem:bank_upload_block"
+    "id": "banksystem:bank_upload_block"
   },
   "show_notification": true
 }
