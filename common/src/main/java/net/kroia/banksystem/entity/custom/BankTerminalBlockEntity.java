@@ -84,7 +84,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             }
 
             String bankITemID = itemID;
-            if(isMoney(itemID))
+            if(MoneyItem.isMoney(itemID))
             {
                 bankITemID = MoneyBank.ITEM_ID;
             }
@@ -98,20 +98,6 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
             setAmount(itemID, getAmount(itemID) + amount);
             return true;
-        }
-
-        boolean isMoney(String itemID)
-        {
-            // "money" -> "money"
-            // "money10" -> "money"
-            // "money20" -> "money"
-            // "money50" -> "money"
-            // "money100" -> "money"
-            // "money1000" -> "money"
-
-            boolean hasMoney = itemID.contains("money");
-            String modID = itemID.split(":")[0];
-            return hasMoney && modID.compareTo(BankSystemMod.MOD_ID) == 0;
         }
 
         public void cancelTask(String itemID)
@@ -148,7 +134,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 if(amount == 0)
                     continue;
                 String bankITemID = itemID;
-                boolean isMoney = isMoney(itemID);
+                boolean isMoney = MoneyItem.isMoney(itemID);
                 if(isMoney)
                     bankITemID = MoneyBank.ITEM_ID;
 
