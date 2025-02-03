@@ -7,11 +7,11 @@ import dev.architectury.utils.Env;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.networking.packet.client_sender.request.*;
 import net.kroia.banksystem.networking.packet.client_sender.update.UpdateBankAccountPacket;
+import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
+import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemInfoPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncPotentialBankItemIDsPacket;
+import net.kroia.banksystem.networking.packet.server_sender.update.*;
 
 import java.util.List;
 
@@ -25,6 +25,8 @@ public class BankSystemNetworking {
     public static MessageType SYNC_POTENTIAL_BANK_ITEM_IDS = registerS2C(getClassName(SyncPotentialBankItemIDsPacket.class.getName()), SyncPotentialBankItemIDsPacket::new);
     public static MessageType SYNC_OPEN_GUI = registerS2C(getClassName(SyncOpenGUIPacket.class.getName()), SyncOpenGUIPacket::new);
     public static MessageType SYNC_ITEM_INFO = registerS2C(getClassName(SyncItemInfoPacket.class.getName()), SyncItemInfoPacket::new);
+    public static MessageType SYNC_BANK_UPLOAD_DATA = registerS2C(getClassName(SyncBankUploadDataPacket.class.getName()), SyncBankUploadDataPacket::new);
+    public static MessageType SYNC_BANK_DOWNLOAD_DATA = registerS2C(getClassName(SyncBankDownloadDataPacket.class.getName()), SyncBankDownloadDataPacket::new);
 
 
 
@@ -35,6 +37,8 @@ public class BankSystemNetworking {
     public static MessageType UPDATE_BANK_ACCOUNT = registerC2S(getClassName(UpdateBankAccountPacket.class.getName()), UpdateBankAccountPacket::new);
     public static MessageType UPDATE_BANK_TERMINAL_BLOCK_ENTITY = registerC2S(getClassName(UpdateBankTerminalBlockEntityPacket.class.getName()), UpdateBankTerminalBlockEntityPacket::new);
     public static MessageType REQUEST_ITEM_INFO = registerC2S(getClassName(RequestItemInfoPacket.class.getName()), RequestItemInfoPacket::new);
+    public static MessageType UPDATE_BANK_UPLOAD_BLOCK_ENTITY = registerC2S(getClassName(UpdateBankUploadBlockEntityPacket.class.getName()), UpdateBankUploadBlockEntityPacket::new);
+    public static MessageType UPDATE_BANK_DOWNLOAD_BLOCK_ENTITY = registerC2S(getClassName(UpdateBankDownloadBlockEntityPacket.class.getName()), UpdateBankDownloadBlockEntityPacket::new);
 
 
 

@@ -1,7 +1,6 @@
 package net.kroia.banksystem.item.custom.software;
 
 import net.kroia.banksystem.BankSystemClientHooks;
-import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.block.custom.TerminalBlock;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
@@ -54,6 +53,4 @@ public class BankingSoftware extends Software {
 
         return super.interactLivingEntity(stack, player, target, hand);
     }
-
-
 }

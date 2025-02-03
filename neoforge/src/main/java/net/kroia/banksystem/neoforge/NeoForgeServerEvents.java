@@ -1,4 +1,4 @@
-package net.modutilities.neoforge;
+package net.kroia.banksystem.neoforge;
 
 import dev.architectury.event.events.common.LifecycleEvent;
 import net.kroia.banksystem.util.BankSystemServerEvents;
@@ -6,7 +6,6 @@ import net.kroia.modutilities.ModUtilitiesMod;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.event.level.LevelEvent;
 
 @EventBusSubscriber
