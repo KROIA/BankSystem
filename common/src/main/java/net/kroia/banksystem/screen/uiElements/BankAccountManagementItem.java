@@ -50,7 +50,6 @@ public class BankAccountManagementItem extends GuiElement {
         this.itemID = itemID;
         this.playerName = playerName;
         itemView = new ItemView(ItemUtilities.createItemStackFromId(itemID));
-        //closeAccountButton = new Button(CLOSE_ACCOUNT_BUTTON.getString(), this::onCloseAccountButtonClicked);
         balanceLabel = new Label(BALANCE.getString());
         balanceValueLabel = new Label();
         balanceValueTextBox = new TextBox();
@@ -164,7 +163,6 @@ public class BankAccountManagementItem extends GuiElement {
     public void setBalance(long balance)
     {
         setBalanceLabel(balance);
-        balanceValueTextBox.setText(String.valueOf(balance));
     }
     public void setLockedBalance(long lockedBalance)
     {
@@ -173,6 +171,8 @@ public class BankAccountManagementItem extends GuiElement {
     public void setTotalBalance(long totalBalance)
     {
         totalBalanceValueLabel.setText(getFormattedAmount(totalBalance));
+        if(!balanceChanged)
+            balanceValueTextBox.setText(String.valueOf(totalBalance));
     }
     private void onFreeLockedBalanceCheckBoxClicked()
     {

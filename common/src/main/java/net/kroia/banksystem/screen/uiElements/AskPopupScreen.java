@@ -46,8 +46,6 @@ public class AskPopupScreen extends GuiScreen {
         msgLabel.setAlignment(Label.Alignment.TOP_LEFT);
 
         addElement(frame);
-        //frame.setBackgroundColor(0xFFe8711c);
-        //frame.setOutlineColor(0xFFe04c12);
         frame.addChild(yesButton);
         frame.addChild(noButton);
         frame.addChild(titleLabel);

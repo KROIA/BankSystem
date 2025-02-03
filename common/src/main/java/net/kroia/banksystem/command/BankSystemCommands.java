@@ -5,11 +5,13 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
+import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
@@ -198,6 +200,8 @@ public class BankSystemCommands {
 
 
         // /bank                                                - Show bank balance (money and items)
+        // /bank enableNotifications                            - Enables bank notifications on transactions
+        // /bank disableNotifications                           - Disables bank notifications on transactions
         // /bank <username> settingsGUI                         - Open settings GUI of a player
         // /bank <username> show                                - Show bank balance of a player
         // /bank <username> create <itemID> <amount>            - Create a bank for another player
@@ -205,6 +209,10 @@ public class BankSystemCommands {
         // /bank <username> delete <itemID>                     - Delete a bank for another player
         // /bank allowItem <itemID>                             - Makes the itemID available for bank accounts
         // /bank bankManagementGUI                              - Open bankManagement GUI
+        // /bank setStartingBalance                             - Set the starting money balance for new players
+        // /bank setItemTransferTickInterval                    - Set the amount of ticks it uses for a item to be transfered in the bank terminal block. If set to 0, it will be instant.
+        // /bank save                                           - Save all bank data
+        // /bank load                                           - Load all bank data
         dispatcher.register(
                 Commands.literal("bank")
                         .executes(context -> {
@@ -214,6 +222,36 @@ public class BankSystemCommands {
                             // Execute the balance command on the server_sender
                             return bank_show(player, player.getName().getString());
                         })
+                        .then(Commands.literal("enableNotifications")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+                                    BankUser bankUser = ServerBankManager.getUser(player.getUUID());
+                                    if(bankUser == null)
+                                    {
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(player.getName().getString()));
+                                        return Command.SINGLE_SUCCESS;
+                                    }
+                                    bankUser.setBankNotificationEnabled(true);
+                                    PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankUserNotificationEnabledMessage());
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("disableNotifications")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+                                    BankUser bankUser = ServerBankManager.getUser(player.getUUID());
+                                    if(bankUser == null)
+                                    {
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(player.getName().getString()));
+                                        return Command.SINGLE_SUCCESS;
+                                    }
+                                    bankUser.setBankNotificationEnabled(false);
+                                    PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankUserNotificationDisabledMessage());
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
                                             //builder.suggest("\""+ BankSystemModSettings.MarketBot.USER_NAME +"\"");
                                             Map<UUID, String> uuidToNameMap = PlayerUtilities.getUUIDToNameMap();
@@ -359,7 +397,64 @@ public class BankSystemCommands {
                                 })
 
                         )
+                        .then(Commands.literal("setStartingBalance")
+                                .requires(source -> source.hasPermission(2))
+                                .then(Commands.argument("amount", LongArgumentType.longArg(0))
+                                        .executes(context -> {
+                                            CommandSourceStack source = context.getSource();
+                                            ServerPlayer player = source.getPlayerOrException();
 
+                                            // Get arguments
+                                            long amount = LongArgumentType.getLong(context, "amount");
+                                            BankSystemModSettings.Player.STARTING_BALANCE = amount;
+                                            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(amount));
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("setItemTransferTickInterval")
+                                .requires(source -> source.hasPermission(2))
+                                .then(Commands.argument("ticks", IntegerArgumentType.integer(0))
+                                        .executes(context -> {
+                                            CommandSourceStack source = context.getSource();
+                                            ServerPlayer player = source.getPlayerOrException();
+
+                                            // Get arguments
+                                            int amount = IntegerArgumentType.getInteger(context, "ticks");
+                                            BankSystemModSettings.Bank.ITEM_TRANSFER_TICK_INTERVAL = amount;
+                                            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingItemTransferTickIntervalMessage(amount));
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("save")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    if(BankSystemDataHandler.saveAll())
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
+                                    else
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("load")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    if(BankSystemDataHandler.loadAll())
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadedMessage());
+                                    else
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadFailedMessage());
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
 
         );
     }
@@ -372,8 +467,12 @@ public class BankSystemCommands {
             PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getBankNotFoundMessage(username, MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;
         }
-        bank.deposit(amount);
-        PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getAddedMessage(amount, MoneyItem.getName(), username));
+        Bank.Status status = bank.deposit(amount);
+        if(status == Bank.Status.SUCCESS)
+            PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getAddedMessage(amount, MoneyItem.getName(), username));
+        else {
+            PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getCantAddMessage(amount, MoneyItem.getName(), username, status.toString()));
+        }
         return Command.SINGLE_SUCCESS;
     }
     private static int executeSetMoney(ServerPlayer executor, String username, int amount) {
@@ -425,11 +524,12 @@ public class BankSystemCommands {
             PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getTransferToSameAccountMessage(MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;
         }
-        if(!fromBank.transfer(amount, toBank)) {
+        Bank.Status status = fromBank.transfer(amount, toBank);
+        if(status != Bank.Status.SUCCESS) {
             if (fromBank.getBalance() < amount)
                PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getNotEnoughMoneyForTransfer(fromUser, toUser, amount, MoneyItem.getName()));
             else
-               PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getTransferFailedMessage(fromUser, toUser, amount, MoneyItem.getName()));
+               PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getTransferFailedMessage(fromUser, toUser, amount, MoneyItem.getName(), status.toString()));
         }
         return Command.SINGLE_SUCCESS;
     }
