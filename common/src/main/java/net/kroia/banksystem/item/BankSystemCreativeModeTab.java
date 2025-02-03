@@ -1,12 +1,10 @@
 package net.kroia.banksystem.item;
 
-
+import dev.architectury.registry.CreativeTabRegistry;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.ItemStack;
-import dev.architectury.registry.CreativeTabRegistry;
 
 
 
@@ -31,7 +29,7 @@ public class BankSystemCreativeModeTab {
             "bank_system_tab", // Tab ID
             () -> {
                 return CreativeTabRegistry.create(
-                    Component.translatable(BankSystemMod.MOD_ID+".creative_mode_tab_name"), // Tab Name
+                    Component.translatable("itemGroup."+BankSystemMod.MOD_ID+".bank_system_tab"), // Tab Name
                     () -> new ItemStack(BankSystemBlocks.BANK_TERMINAL_BLOCK.get()) // Icon
             );}
     );

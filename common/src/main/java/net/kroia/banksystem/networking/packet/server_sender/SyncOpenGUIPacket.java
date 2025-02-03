@@ -27,11 +27,6 @@ public class SyncOpenGUIPacket extends NetworkPacket {
         super(friendlyByteBuf);
     }
 
-    /*public static void send(ServerPlayer player)
-    {
-        SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
-        BankSystemNetworking.sendToClient(player, packet);
-    }*/
     public static void send_openBankSystemSettingScreen(ServerPlayer player)
     {
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();

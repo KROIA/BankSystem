@@ -15,7 +15,6 @@ import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -28,7 +27,6 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
     private class BankElement extends GuiElement
     {
         public static final int HEIGHT = 20;
-        public static final int textEditWidth = 100;
         private long targetAmount = 0;
         private ItemStack stack;
         public long stackSize;
@@ -37,7 +35,6 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
 
         private final TextBox amountBox;
         private final Label balanceLabel;
-        // private final Button receiveItemsFromMarketButton;
 
         BankTerminalScreen parent;
 
@@ -56,9 +53,6 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
             this.amountBox = new TextBox(0,0,0);
             this.amountBox.setMaxChars(10); // Max length of input
             this.amountBox.setAllowLetters(false); // Allow only digits
-
-            //receiveItemsFromMarketButton = new Button(x+width-textEditWidth-100, y, 100, HEIGHT, RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT.getString());
-            //receiveItemsFromMarketButton.setOnFallingEdge(this::onReceiveItemsFromMarket);
 
             addChild(balanceLabel);
             addChild(amountBox);
@@ -112,15 +106,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
             amountBox.setText(targetAmount);
 
         }
-        /*private void onReceiveItemsFromMarket() {
-            //StockMarketMod.LOGGER.info("Sending item: "+itemID + " amount: "+getTargetAmount());
-            HashMap<String, Long> itemTransferToMarketAmounts = new HashMap<>();
-            itemTransferToMarketAmounts.put(itemID, getTargetAmount());
-            UpdateBankTerminalBlockEntityPacket.sendPacketToServer(parent.menu.getBlockPos(), itemTransferToMarketAmounts, false);
-            //RequestOrderPacket.generateRequest(itemID, getTargetAmount());
-        }*/
     }
-    //private static final ResourceLocation TEXTURE = new ResourceLocation(BankSystemMod.MODID, "textures/gui/inventory_hpc.png");
 
     private static final Component SEND_ITEMS_TO_BANK_BUTTON_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_terminal_screen.send_items_to_bank_button");
     private static final Component RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_terminal_screen.receive_items_from_bank_button");
@@ -129,7 +115,6 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
 
     private int lastTickCount = 0;
     private int tickCount = 0;
-    //private boolean mouseClickToggle = false;
     private final ArrayList<BankElement> bankElements = new ArrayList<>();
 
     BankTerminalContainerMenu menu;
@@ -178,17 +163,11 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         receiveItemsFromBankButton.setBounds(padding, padding, itemListViewWidth, 20);
         itemListView.setBounds(padding, receiveItemsFromBankButton.getY() + receiveItemsFromBankButton.getHeight() + padding,
                 itemListViewWidth, height - padding - receiveItemsFromBankButton.getHeight() - padding*2);
-
-        //itemListView.relayout(1,1, GuiElement.LayoutDirection.VERTICAL, true, false);
     }
 
-
-    // Method to handle the tick event
-    // @SubscribeEvent(priority = EventPriority.NORMAL)
     @Override
     public void containerTick() {
         super.containerTick();
-        // Your custom logic here
         handleTick();
     }
 
@@ -197,7 +176,6 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         if(tickCount - lastTickCount > 10)
         {
             RequestBankDataPacket.sendRequest();
-            //StockMarketMod.LOGGER.info("Updating bank terminal screen");
             lastTickCount = tickCount;
             buildItemButtons();
         }
@@ -212,7 +190,6 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
 
         boolean needsResize = sortedBankAccounts.size() != bankElements.size();
         HashMap<String,String> availableItems = new HashMap<>();
-        //bankElements.clear();
         for (int i=0; i<sortedBankAccounts.size(); i++) {
             Pair<String,SyncBankDataPacket.BankData> pair = sortedBankAccounts.get(i);
             int amount = (int)pair.getSecond().getBalance();
@@ -223,7 +200,6 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
                 element = new BankElement(this, stack, pair.getFirst(), amount);
                 bankElements.add(element);
                 itemListView.addChild(element);
-                // itemListView.relayout(1,1, GuiElement.LayoutDirection.VERTICAL, true, false);
             }
             else
             {
@@ -231,9 +207,6 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
             }
             if(needsResize)
                 availableItems.put(pair.getFirst(), pair.getFirst());
-            //ItemStack stack = StockMarketMod.createItemStackFromId(pair.getFirst(), amount);
-            //BankElement button = new BankElement(x, y + i * BankElement.SIZE+2, stack, pair.getFirst());
-            //bankElements.add(button);
         }
 
         if(needsResize)
