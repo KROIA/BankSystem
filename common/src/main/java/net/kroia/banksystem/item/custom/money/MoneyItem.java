@@ -25,4 +25,18 @@ public class MoneyItem extends Item{
     public int worth() {
         return 1;
     }
+
+    public static boolean isMoney(String itemID)
+    {
+        // "money" -> "money"
+        // "money10" -> "money"
+        // "money20" -> "money"
+        // "money50" -> "money"
+        // "money100" -> "money"
+        // "money1000" -> "money"
+
+        boolean hasMoney = itemID.contains("money");
+        String modID = itemID.split(":")[0];
+        return hasMoney && modID.compareTo(BankSystemMod.MOD_ID) == 0;
+    }
 }
