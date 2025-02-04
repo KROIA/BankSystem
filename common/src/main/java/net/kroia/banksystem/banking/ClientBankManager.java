@@ -135,6 +135,11 @@ public class ClientBankManager {
     }
     public static ArrayList<Pair<String, SyncBankDataPacket.BankData>> getSortedItemData()
     {
+        if(bankDataPacket == null)
+        {
+            msgBankDataNotReceived();
+            return new ArrayList<>();
+        }
         HashMap<String, SyncBankDataPacket.BankData> bankAccounts = bankDataPacket.getBankData();
         // Sort the bank accounts by itemID
         ArrayList<Pair<String,SyncBankDataPacket.BankData>> sortedBankAccounts = new ArrayList<>();
@@ -149,6 +154,11 @@ public class ClientBankManager {
     }
     public static ArrayList<Pair<String, SyncBankDataPacket.BankData>> getSortedBankData()
     {
+        if(bankDataPacket == null)
+        {
+            msgBankDataNotReceived();
+            return new ArrayList<>();
+        }
         HashMap<String, SyncBankDataPacket.BankData> bankAccounts = bankDataPacket.getBankData();
         // Sort the bank accounts by itemID
         ArrayList<Pair<String,SyncBankDataPacket.BankData>> sortedBankAccounts = new ArrayList<>();
