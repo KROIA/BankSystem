@@ -153,16 +153,18 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         cancelTask(itemID);
                         continue;
                     }
-                    long removedAmount = inventory.removeItem(itemID, amount);
-                    if(removedAmount > 0)
+                    long availableAmount = Math.min(amount, inventory.getItemCount(itemID));
+                    if(availableAmount > 0)
                     {
-                        long depositAmount = removedAmount;
+                        long depositAmount = availableAmount;
                         if(isMoney) {
                             MoneyItem moneyItem = (MoneyItem) ItemUtilities.createItemStackFromId(itemID).getItem();
                             depositAmount *= moneyItem.worth();
                         }
-                        if(bankAccount.deposit(depositAmount) == Bank.Status.SUCCESS)
-                            setAmount(itemID, getAmount(itemID) + removedAmount);
+                        if(bankAccount.deposit(depositAmount) == Bank.Status.SUCCESS) {
+                            inventory.removeItem(itemID, availableAmount);
+                            setAmount(itemID, getAmount(itemID) + availableAmount);
+                        }
                         else
                             cancelTask(itemID);
                         return true;
@@ -312,6 +314,28 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
             }
             return items;
+        }
+        public long getItemCount(String itemID)
+        {
+            long count = 0;
+            for (int i = 0; i < this.getContainerSize(); i++) {
+                ItemStack stack = this.getItem(i);
+
+                // If the slot is empty, it has space
+                if (stack.isEmpty()) {
+                    continue;
+                }
+
+                // Get the item's ResourceLocation
+                String _itemID = ItemUtilities.getItemID(stack.getItem());
+
+                // Compare the ResourceLocation to the provided string
+                if (_itemID != null && _itemID.equals(itemID)) {
+                    // Check if the stack can fit the amount
+                    count += stack.getCount();
+                }
+            }
+            return count;
         }
 
         public long addItem(String ItemID, long amount)

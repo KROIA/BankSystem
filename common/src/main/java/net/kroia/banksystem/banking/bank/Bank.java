@@ -360,10 +360,27 @@ public class Bank implements ServerSaveable {
         }
         return amountString;
     }
+    public static String getFormattedAmount(long amount)
+    {
+        String nr = String.valueOf(amount);
+        // add ' for every 3 digits
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        for(int j = nr.length()-1; j >= 0; j--)
+        {
+            sb.append(nr.charAt(j));
+            i++;
+            if(i % 3 == 0 && j > 0)
+                sb.append('\'');
+        }
+        return sb.reverse().toString();
+    }
 
     private boolean willOverflow(long tryToAddAmount)
     {
         return Long.MAX_VALUE - tryToAddAmount < (balance+lockedBalance);
     }
+
+
 
 }
