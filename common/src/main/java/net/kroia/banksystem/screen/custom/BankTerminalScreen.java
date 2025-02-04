@@ -145,6 +145,8 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         addElement(receiveItemsFromBankButton);
         addElement(itemListView);
         addElement(inventoryView);
+
+        buildItemButtons();
     }
 
     @Override
