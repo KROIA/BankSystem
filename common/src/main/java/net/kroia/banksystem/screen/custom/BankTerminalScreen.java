@@ -3,6 +3,7 @@ package net.kroia.banksystem.screen.custom;
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.ClientBankManager;
+import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
@@ -66,7 +67,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         @Override
         protected void render() {
             drawItem(stack, itemStackHitBox.x, itemStackHitBox.y);
-            String amountStr = "" + stackSize;
+            String amountStr = Bank.getFormattedAmount(stackSize);
             balanceLabel.setText(amountStr);
             if(itemStackHitBox.contains(getMousePos().x, getMousePos().y))
                 drawTooltipLater(stack, getMousePos());
@@ -194,7 +195,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         HashMap<String,String> availableItems = new HashMap<>();
         for (int i=0; i<sortedBankAccounts.size(); i++) {
             Pair<String,SyncBankDataPacket.BankData> pair = sortedBankAccounts.get(i);
-            int amount = (int)pair.getSecond().getBalance();
+            long amount = pair.getSecond().getBalance();
             BankElement element = getBankElement(pair.getFirst());
             if(element == null)
             {
