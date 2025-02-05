@@ -1,7 +1,6 @@
 package net.kroia.banksystem.networking.packet.client_sender.update.entity;
 
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.core.BlockPos;
@@ -20,8 +19,6 @@ public class UpdateBankDownloadBlockEntityPacket extends NetworkPacket {
         this.isOwned = isOwned;
         this.itemID = itemID;
         this.targetAmount = targetAmount;
-        if(itemID == null)
-            itemID = "";
     }
 
     public UpdateBankDownloadBlockEntityPacket(FriendlyByteBuf buf) {

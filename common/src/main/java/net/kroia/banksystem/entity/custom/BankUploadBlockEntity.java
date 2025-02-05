@@ -4,8 +4,10 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.block.custom.BankUploadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
@@ -221,14 +223,20 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             if(!stack.isEmpty())
             {
                 String itemID = ItemUtilities.getItemID(stack.getItem());
+                int amount = stack.getCount();
+                if(MoneyItem.isMoney(itemID))
+                {
+                    itemID = MoneyBank.ITEM_ID;
+                    amount *= ((MoneyItem)stack.getItem()).worth();
+                }
                 Bank itemBank = bankUser.getBank(itemID);
                 if(itemBank == null)
                 {
                     itemBank = bankUser.createItemBank_noMSG_Feedback(itemID, 0);
                 }
                 if(itemBank != null) {
-                    itemBank.deposit(stack.getCount());
-                    inventory.setItem(i, ItemStack.EMPTY);
+                    if(itemBank.deposit(amount) == Bank.Status.SUCCESS)
+                        inventory.setItem(i, ItemStack.EMPTY);
                 }else if(dropIfNotBankable){
                     dropItem(stack);
                     inventory.setItem(i, ItemStack.EMPTY);

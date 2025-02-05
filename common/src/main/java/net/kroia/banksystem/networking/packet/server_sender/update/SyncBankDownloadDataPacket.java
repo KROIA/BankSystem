@@ -1,10 +1,8 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.screen.custom.BankDownloadScreen;
-import net.kroia.banksystem.screen.custom.BankUploadScreen;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;

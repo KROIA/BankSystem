@@ -200,6 +200,8 @@ public class BankSystemCommands {
 
 
         // /bank                                                - Show bank balance (money and items)
+        // /bank enableNotifications                            - Enables bank notifications on transactions
+        // /bank disableNotifications                           - Disables bank notifications on transactions
         // /bank <username> settingsGUI                         - Open settings GUI of a player
         // /bank <username> show                                - Show bank balance of a player
         // /bank <username> create <itemID> <amount>            - Create a bank for another player
@@ -220,6 +222,36 @@ public class BankSystemCommands {
                             // Execute the balance command on the server_sender
                             return bank_show(player, player.getName().getString());
                         })
+                        .then(Commands.literal("enableNotifications")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+                                    BankUser bankUser = ServerBankManager.getUser(player.getUUID());
+                                    if(bankUser == null)
+                                    {
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(player.getName().getString()));
+                                        return Command.SINGLE_SUCCESS;
+                                    }
+                                    bankUser.setBankNotificationEnabled(true);
+                                    PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankUserNotificationEnabledMessage());
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("disableNotifications")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+                                    BankUser bankUser = ServerBankManager.getUser(player.getUUID());
+                                    if(bankUser == null)
+                                    {
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(player.getName().getString()));
+                                        return Command.SINGLE_SUCCESS;
+                                    }
+                                    bankUser.setBankNotificationEnabled(false);
+                                    PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankUserNotificationDisabledMessage());
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
                                             //builder.suggest("\""+ BankSystemModSettings.MarketBot.USER_NAME +"\"");
                                             Map<UUID, String> uuidToNameMap = PlayerUtilities.getUUIDToNameMap();
@@ -435,8 +467,12 @@ public class BankSystemCommands {
             PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getBankNotFoundMessage(username, MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;
         }
-        bank.deposit(amount);
-        PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getAddedMessage(amount, MoneyItem.getName(), username));
+        Bank.Status status = bank.deposit(amount);
+        if(status == Bank.Status.SUCCESS)
+            PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getAddedMessage(amount, MoneyItem.getName(), username));
+        else {
+            PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getCantAddMessage(amount, MoneyItem.getName(), username, status.toString()));
+        }
         return Command.SINGLE_SUCCESS;
     }
     private static int executeSetMoney(ServerPlayer executor, String username, int amount) {
@@ -488,11 +524,12 @@ public class BankSystemCommands {
             PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getTransferToSameAccountMessage(MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;
         }
-        if(!fromBank.transfer(amount, toBank)) {
+        Bank.Status status = fromBank.transfer(amount, toBank);
+        if(status != Bank.Status.SUCCESS) {
             if (fromBank.getBalance() < amount)
                PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getNotEnoughMoneyForTransfer(fromUser, toUser, amount, MoneyItem.getName()));
             else
-               PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getTransferFailedMessage(fromUser, toUser, amount, MoneyItem.getName()));
+               PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getTransferFailedMessage(fromUser, toUser, amount, MoneyItem.getName(), status.toString()));
         }
         return Command.SINGLE_SUCCESS;
     }

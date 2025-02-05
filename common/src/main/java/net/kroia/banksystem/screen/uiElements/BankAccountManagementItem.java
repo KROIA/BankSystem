@@ -1,6 +1,7 @@
 package net.kroia.banksystem.screen.uiElements;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.GuiScreen;
@@ -50,7 +51,6 @@ public class BankAccountManagementItem extends GuiElement {
         this.itemID = itemID;
         this.playerName = playerName;
         itemView = new ItemView(ItemUtilities.createItemStackFromId(itemID));
-        //closeAccountButton = new Button(CLOSE_ACCOUNT_BUTTON.getString(), this::onCloseAccountButtonClicked);
         balanceLabel = new Label(BALANCE.getString());
         balanceValueLabel = new Label();
         balanceValueTextBox = new TextBox();
@@ -159,38 +159,25 @@ public class BankAccountManagementItem extends GuiElement {
     }
     public void setBalanceLabel(long balance)
     {
-        balanceValueLabel.setText(getFormattedAmount(balance));
+        balanceValueLabel.setText(Bank.getFormattedAmount(balance));
     }
     public void setBalance(long balance)
     {
         setBalanceLabel(balance);
-        balanceValueTextBox.setText(String.valueOf(balance));
     }
     public void setLockedBalance(long lockedBalance)
     {
-        lockedBalanceValueLabel.setText(getFormattedAmount(lockedBalance));
+        lockedBalanceValueLabel.setText(Bank.getFormattedAmount(lockedBalance));
     }
     public void setTotalBalance(long totalBalance)
     {
-        totalBalanceValueLabel.setText(getFormattedAmount(totalBalance));
+        totalBalanceValueLabel.setText(Bank.getFormattedAmount(totalBalance));
+        if(!balanceChanged)
+            balanceValueTextBox.setText(String.valueOf(totalBalance));
     }
     private void onFreeLockedBalanceCheckBoxClicked()
     {
         freeLockedBalance = freeLockedBalanceCheckBox.isChecked();
     }
-    private String getFormattedAmount(long amount)
-    {
-        String nr = String.valueOf(amount);
-        // add ' for every 3 digits
-        StringBuilder sb = new StringBuilder();
-        int i = 0;
-        for(int j = nr.length()-1; j >= 0; j--)
-        {
-            sb.append(nr.charAt(j));
-            i++;
-            if(i % 3 == 0 && j > 0)
-                sb.append('\'');
-        }
-        return sb.reverse().toString();
-    }
+
 }

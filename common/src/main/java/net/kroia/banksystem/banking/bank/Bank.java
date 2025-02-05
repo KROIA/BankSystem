@@ -21,6 +21,13 @@ public class Bank implements ServerSaveable {
         MONEY,
         ITEM
     }
+    public enum Status
+    {
+        SUCCESS,
+        FAILED_NOT_ENOUGH_FUNDS,
+        FAILED_OVERFLOW,
+        FAILED_NEGATIVE_VALUE
+    }
 
     private final BankUser owner;
     protected long balance;
@@ -84,10 +91,6 @@ public class Bank implements ServerSaveable {
         if(newBalance < 0)
         {
             warnUser(BankSystemTextMessages.getProblemWhileTryingSetBalanceMessage(getItemName(), this.balance, balance, lockedBalance, balance));
-            //warnUser("Problem while trying to set balance to "+balance+
-            //        ".\nLocked balance is "+lockedBalance+" and your current balance is "+this.balance+
-            //        ".\nBalance will be set to 0 and locked balance to "+balance+
-            //        ".\nBecause of that, some limit orders may be cancelled.");
 
             lockedBalance = balance;
             setBalanceInternal(0);
@@ -95,8 +98,8 @@ public class Bank implements ServerSaveable {
         }
 
         setBalanceInternal(newBalance);
-        notifyUser(BankSystemTextMessages.getSetBalanceMessage(getBalance(), getItemName(), owner.getPlayerName()));
-        //notifyUser("Balance set to " + balance + ".");
+        if(owner.isBankNotificationEbabled())
+            notifyUser(BankSystemTextMessages.getSetBalanceMessage(getBalance(), getItemName(), owner.getPlayerName()));
     }
 
     public UUID getPlayerUUID() {
@@ -113,13 +116,13 @@ public class Bank implements ServerSaveable {
     }
 
 
-    public boolean deposit(long amount) {
-        if(amount <= 0)
-            return false;
-        //dbg_checkValueIsNegative(amount);
+    public Status deposit(long amount) {
+        if(amount < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
+        if(willOverflow(amount))
+            return Status.FAILED_OVERFLOW;
         addBalanceInternal(amount);
-        //notifyUser("Deposited " + amount+ ".");
-        return true;
+        return Status.SUCCESS;
     }
 
 
@@ -127,61 +130,81 @@ public class Bank implements ServerSaveable {
         return balance >= amount;
     }
 
-    public boolean withdraw(long amount) {
-        if (balance < amount || amount < 0) {
-            return false;
+    public Status withdraw(long amount) {
+        if(amount < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
+        if (balance < amount) {
+            return Status.FAILED_NOT_ENOUGH_FUNDS;
         }
-        //dbg_checkValueIsNegative(amount);
         addBalanceInternal(-amount);
-        //notifyUser("Withdrew " + amount + ".");
-        return true;
+        return Status.SUCCESS;
     }
-    public boolean transfer(long amount, Bank other) {
-        if (balance < amount || amount < 0) {
-            return false;
+    public Status transfer(long amount, Bank other) {
+        if(amount < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
+        if (balance < amount) {
+            return Status.FAILED_NOT_ENOUGH_FUNDS;
         }
         if(other == this)
-            return true;
+            return Status.SUCCESS;
         dbg_checkValueIsNegative(amount);
-        addBalanceInternal(-amount);
-        other.deposit(amount);
 
-        notifyUser_transfer(amount, other);
-        return true;
-    }
-    public boolean transferFromLocked(long amount, Bank other) {
-        if (lockedBalance < amount || amount < 0) {
-            return false;
+        addBalanceInternal(-amount);
+        Status otherStatus = other.deposit(amount);
+        if(otherStatus == Status.SUCCESS) {
+            notifyUser_transfer(amount, other);
+            return Status.SUCCESS;
         }
-        //dbg_checkValueIsNegative(amount);
-        lockedBalance -= amount;
-        other.deposit(amount);
-        notifyUser_transfer(amount, other);
-        return true;
+        addBalanceInternal(amount);
+        return otherStatus;
     }
-    public boolean transferFromLockedPrefered(long amount, Bank other) {
+    public Status transferFromLocked(long amount, Bank other) {
         if(amount < 0)
-            return false;
-        //dbg_checkValueIsNegative(amount);
+            return Status.FAILED_NEGATIVE_VALUE;
+        if (lockedBalance < amount) {
+            return Status.FAILED_NOT_ENOUGH_FUNDS;
+        }
+        lockedBalance -= amount;
+        Status otherStatus = other.deposit(amount);
+        if(otherStatus == Status.SUCCESS) {
+            notifyUser_transfer(amount, other);
+            return Status.SUCCESS;
+        }
+        lockedBalance += amount;
+        return otherStatus;
+    }
+    public Status transferFromLockedPrefered(long amount, Bank other) {
+        if(amount < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
         long origAmount = amount;
+        long lastLocked = lockedBalance;
         if (lockedBalance < amount) {
             if (balance+lockedBalance < amount) {
-                return false;
+                return Status.FAILED_NOT_ENOUGH_FUNDS;
             }
             amount -= lockedBalance;
             lockedBalance = 0;
-            addBalanceInternal(-amount);
-            other.deposit(origAmount);
-            notifyUser_transfer(origAmount, other);
-            return true;
+            Status otherStatus = other.deposit(origAmount);
+            if(otherStatus == Status.SUCCESS) {
+                addBalanceInternal(-amount);
+                notifyUser_transfer(origAmount, other);
+                return Status.SUCCESS;
+            }
+            lockedBalance = lastLocked;
+            return otherStatus;
         }
+
         lockedBalance -= amount;
-        other.deposit(amount);
-        notifyUser_transfer(amount, other);
-        return true;
+        Status otherStatus = other.deposit(amount);
+        if(otherStatus == Status.SUCCESS) {
+            notifyUser_transfer(amount, other);
+            return Status.SUCCESS;
+        }
+        lockedBalance = lastLocked;
+        return otherStatus;
     }
 
-    public static boolean exchangeFromLockedPrefered(Bank from1, Bank to1, long amount1, Bank from2, Bank to2, long amount2)
+    public static Status exchangeFromLockedPrefered(Bank from1, Bank to1, long amount1, Bank from2, Bank to2, long amount2)
     {
         dbg_checkValueIsNegative(amount1);
         dbg_checkValueIsNegative(amount2);
@@ -194,38 +217,40 @@ public class Bank implements ServerSaveable {
         long origBalance2 = from2.balance;
 
         // Try to transfer from locked balance
-        if(from1.transferFromLockedPrefered(amount1, to1) && from2.transferFromLockedPrefered(amount2, to2))
+        Status status1 = from1.transferFromLockedPrefered(amount1, to1);
+        Status status2 = from2.transferFromLockedPrefered(amount2, to2);
+        if(status1 == Status.SUCCESS && status2 == Status.SUCCESS)
         {
-            return true;
+            return Status.SUCCESS;
         }
         // If not possible, revert changes
         from1.lockedBalance = origLockedBalance1;
         from2.lockedBalance = origLockedBalance2;
         from1.balance = origBalance1;
         from2.balance = origBalance2;
-        return false;
+        if(status1 == Status.SUCCESS)
+            return status2;
+        return status1;
     }
 
-    public boolean lockAmount(long amount) {
+    public Status lockAmount(long amount) {
         dbg_checkValueIsNegative(amount);
         if (balance < amount) {
-            return false;
+            return Status.FAILED_NOT_ENOUGH_FUNDS;
         }
         addBalanceInternal(-amount);
         lockedBalance += amount;
         dbg_checkValueIsNegative(lockedBalance);
-        //notifyUser("Locked " + amount+".");
-        return true;
+        return Status.SUCCESS;
     }
-    public boolean unlockAmount(long amount) {
+    public Status unlockAmount(long amount) {
         dbg_checkValueIsNegative(amount);
         if (lockedBalance < amount) {
-            return false;
+            return Status.FAILED_NOT_ENOUGH_FUNDS;
         }
         addBalanceInternal(amount);
         lockedBalance -= amount;
-        //notifyUser("Unlocked " + amount+".");
-        return true;
+        return Status.SUCCESS;
     }
 
     public void unlockAll()
@@ -280,9 +305,10 @@ public class Bank implements ServerSaveable {
         if(amount == 0)
             return;
 
-        notifyUser(BankSystemTextMessages.getTransferedMessage(amount, getItemName(), other.getPlayerName()));
-        other.notifyUser(BankSystemTextMessages.getReceivedMessage(amount, getItemName(), owner.getPlayerName()));
-        //notifyUser("Transferred " + amount + " → user: "+ other.getPlayerName());
+        if(owner.isBankNotificationEbabled())
+            notifyUser(BankSystemTextMessages.getTransferedMessage(amount, getItemName(), other.getPlayerName()));
+        if(other.owner.isBankNotificationEbabled())
+            other.notifyUser(BankSystemTextMessages.getReceivedMessage(amount, getItemName(), owner.getPlayerName()));
     }
 
     protected void warnUser(String msg) {
@@ -331,12 +357,30 @@ public class Bank implements ServerSaveable {
             String secondPart = amountString.substring(modValue, modValue+2);
 
             amountString = firstPart+"."+secondPart+exponents.charAt(exponent3-1);
-            //int exponent3mod = exponent%3;
-            //if(exponent3mod == 0)
-            //    return amountString.substring(0, amountString.length()-exponent3*3)+"."+amountString.substring(amountString.length()-exponent3*3, amountString.length()-exponent3*3+2)+" "+("kMGTPEZY".charAt(exponent3-1));
-            //return amountString.substring(0, amountString.length()-exponent3*3+exponent3mod)+"."+amountString.substring(amountString.length()-exponent3*3+exponent3mod,amountString.length()-exponent3*3+2)+" "+("kMGTPEZY".charAt(exponent3-1));
         }
         return amountString;
     }
+    public static String getFormattedAmount(long amount)
+    {
+        String nr = String.valueOf(amount);
+        // add ' for every 3 digits
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        for(int j = nr.length()-1; j >= 0; j--)
+        {
+            sb.append(nr.charAt(j));
+            i++;
+            if(i % 3 == 0 && j > 0)
+                sb.append('\'');
+        }
+        return sb.reverse().toString();
+    }
+
+    private boolean willOverflow(long tryToAddAmount)
+    {
+        return Long.MAX_VALUE - tryToAddAmount < (balance+lockedBalance);
+    }
+
+
 
 }

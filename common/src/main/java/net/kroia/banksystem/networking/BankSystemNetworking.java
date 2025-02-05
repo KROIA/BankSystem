@@ -34,9 +34,6 @@ public class BankSystemNetworking {
     }
     public static void setupServerReceiverPackets()
     {
-
-
-
         CHANNEL.register(RequestAllowNewBankItemIDPacket.class, RequestAllowNewBankItemIDPacket::toBytes, RequestAllowNewBankItemIDPacket::new, RequestAllowNewBankItemIDPacket::receive);
         CHANNEL.register(RequestBankDataPacket.class, RequestBankDataPacket::toBytes, RequestBankDataPacket::new, RequestBankDataPacket::receive);
         CHANNEL.register(RequestDisallowBankingItemIDPacket.class, RequestDisallowBankingItemIDPacket::toBytes, RequestDisallowBankingItemIDPacket::new, RequestDisallowBankingItemIDPacket::receive);
@@ -46,13 +43,6 @@ public class BankSystemNetworking {
         CHANNEL.register(UpdateBankAccountPacket.class, UpdateBankAccountPacket::toBytes, UpdateBankAccountPacket::new, UpdateBankAccountPacket::receive);
         CHANNEL.register(UpdateBankUploadBlockEntityPacket.class, UpdateBankUploadBlockEntityPacket::toBytes, UpdateBankUploadBlockEntityPacket::new, UpdateBankUploadBlockEntityPacket::receive);
         CHANNEL.register(UpdateBankDownloadBlockEntityPacket.class, UpdateBankDownloadBlockEntityPacket::toBytes, UpdateBankDownloadBlockEntityPacket::new, UpdateBankDownloadBlockEntityPacket::receive);
-        /*if(CHANNEL.canServerReceive(UpdateBankTerminalBlockEntityPacket.class))
-        {
-            BankSystemMod.LOGGER.info("Server can receive UpdateBankTerminalBlockEntityPacket");
-        }
-        else {
-            BankSystemMod.LOGGER.error("Server cannot receive UpdateBankTerminalBlockEntityPacket");
-        }*/
     }
 
 

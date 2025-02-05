@@ -56,7 +56,6 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     private final SimpleContainer inventory = new ControlledContainer(27); // 27 slots like a chest
     private boolean receivingEnabled = false;
     private boolean currentlyReceiving = false;
-    //private boolean dropIfNotBankable = false;
 
     private UUID playerOwner = null;
     private String itemID;
@@ -276,26 +275,27 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             ItemStack stack = inventory.getItem(i);
             if(ItemUtilities.getItemID(stack.getItem()).equals(itemID))
             {
-                int fillInStackAmount = stackSize - stack.getCount();
-                int amountToReceiveFromStack = Math.min(fillInStackAmount, amountToReceive);
+                long fillInStackAmount = stackSize - stack.getCount();
+                long amountToReceiveFromStack = Math.min(fillInStackAmount, amountToReceive);
                 if(amountToReceiveFromStack > 0)
                 {
-                    amountToReceiveFromStack = Math.min(amountToReceiveFromStack, (int)itemBank.getBalance());
-                    if(itemBank.withdraw(amountToReceiveFromStack))
+                    amountToReceiveFromStack = Math.min(amountToReceiveFromStack, itemBank.getBalance());
+                    if(itemBank.withdraw(amountToReceiveFromStack) == Bank.Status.SUCCESS)
                     {
-                        stack.grow(amountToReceiveFromStack);
+                        stack.grow((int)amountToReceiveFromStack);
                         amountToReceive -= amountToReceiveFromStack;
                     }
                 }
             }
             else if(stack.isEmpty())
             {
-                int amountToReceiveFromStack = Math.min(stackSize, amountToReceive);
+                long amountToReceiveFromStack = Math.min(stackSize, amountToReceive);
                 if(amountToReceiveFromStack > 0)
                 {
-                    amountToReceiveFromStack = Math.min(amountToReceiveFromStack, (int)itemBank.getBalance());
-                    if(itemBank.withdraw(amountToReceiveFromStack)) {
-                        inventory.setItem(i, new ItemStack(exampleStack.getItem(), amountToReceiveFromStack));
+                    amountToReceiveFromStack = Math.min(amountToReceiveFromStack, itemBank.getBalance());
+
+                    if(itemBank.withdraw(amountToReceiveFromStack) == Bank.Status.SUCCESS) {
+                        inventory.setItem(i, new ItemStack(exampleStack.getItem(), (int)amountToReceiveFromStack));
                         amountToReceive -= amountToReceiveFromStack;
                     }
                 }

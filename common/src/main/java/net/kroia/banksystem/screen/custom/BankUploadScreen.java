@@ -1,7 +1,6 @@
 package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;

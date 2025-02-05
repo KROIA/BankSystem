@@ -319,10 +319,4 @@ public class ServerBankManager implements ServerSaveable {
         }
         return success;
     }
-
-
-    /*public static void handlePacket(ServerPlayer sender, RequestBankDataPacket packet)
-    {
-        SyncBankDataPacket.sendPacket(sender);
-    }*/
 }

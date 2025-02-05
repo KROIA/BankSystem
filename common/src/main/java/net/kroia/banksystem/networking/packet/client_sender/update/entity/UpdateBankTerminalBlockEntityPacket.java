@@ -4,7 +4,6 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.modutilities.networking.NetworkPacket;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;

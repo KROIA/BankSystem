@@ -2,12 +2,10 @@ package net.kroia.banksystem.networking.packet.client_sender.update.entity;
 
 import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.UUID;

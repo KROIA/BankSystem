@@ -84,7 +84,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             }
 
             String bankITemID = itemID;
-            if(isMoney(itemID))
+            if(MoneyItem.isMoney(itemID))
             {
                 bankITemID = MoneyBank.ITEM_ID;
             }
@@ -98,20 +98,6 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
             setAmount(itemID, getAmount(itemID) + amount);
             return true;
-        }
-
-        boolean isMoney(String itemID)
-        {
-            // "money" -> "money"
-            // "money10" -> "money"
-            // "money20" -> "money"
-            // "money50" -> "money"
-            // "money100" -> "money"
-            // "money1000" -> "money"
-
-            boolean hasMoney = itemID.contains("money");
-            String modID = itemID.split(":")[0];
-            return hasMoney && modID.compareTo(BankSystemMod.MOD_ID) == 0;
         }
 
         public void cancelTask(String itemID)
@@ -148,7 +134,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 if(amount == 0)
                     continue;
                 String bankITemID = itemID;
-                boolean isMoney = isMoney(itemID);
+                boolean isMoney = MoneyItem.isMoney(itemID);
                 if(isMoney)
                     bankITemID = MoneyBank.ITEM_ID;
 
@@ -167,16 +153,20 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         cancelTask(itemID);
                         continue;
                     }
-                    long removedAmount = inventory.removeItem(itemID, amount);
-                    if(removedAmount > 0)
+                    long availableAmount = Math.min(amount, inventory.getItemCount(itemID));
+                    if(availableAmount > 0)
                     {
-                        long depositAmount = removedAmount;
+                        long depositAmount = availableAmount;
                         if(isMoney) {
                             MoneyItem moneyItem = (MoneyItem) ItemUtilities.createItemStackFromId(itemID).getItem();
                             depositAmount *= moneyItem.worth();
                         }
-                        bankAccount.deposit(depositAmount);
-                        setAmount(itemID, getAmount(itemID) + removedAmount);
+                        if(bankAccount.deposit(depositAmount) == Bank.Status.SUCCESS) {
+                            inventory.removeItem(itemID, availableAmount);
+                            setAmount(itemID, getAmount(itemID) + availableAmount);
+                        }
+                        else
+                            cancelTask(itemID);
                         return true;
                     }else {
                         cancelTask(itemID);
@@ -195,7 +185,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     long addedAmount = inventory.addItem(itemID, amount);
                     if(addedAmount > 0)
                     {
-                        if(!bankAccount.withdraw(addedAmount))
+                        if(bankAccount.withdraw(addedAmount) != Bank.Status.SUCCESS)
                         {
                             // error
                             BankSystemMod.LOGGER.error("Failed to withdraw " + addedAmount + " " + itemID + " from bank account of user " + playerID);
@@ -324,6 +314,28 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
             }
             return items;
+        }
+        public long getItemCount(String itemID)
+        {
+            long count = 0;
+            for (int i = 0; i < this.getContainerSize(); i++) {
+                ItemStack stack = this.getItem(i);
+
+                // If the slot is empty, it has space
+                if (stack.isEmpty()) {
+                    continue;
+                }
+
+                // Get the item's ResourceLocation
+                String _itemID = ItemUtilities.getItemID(stack.getItem());
+
+                // Compare the ResourceLocation to the provided string
+                if (_itemID != null && _itemID.equals(itemID)) {
+                    // Check if the stack can fit the amount
+                    count += stack.getCount();
+                }
+            }
+            return count;
         }
 
         public long addItem(String ItemID, long amount)

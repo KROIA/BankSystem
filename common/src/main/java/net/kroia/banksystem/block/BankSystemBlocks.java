@@ -9,8 +9,6 @@ import net.kroia.banksystem.block.custom.*;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 
 import java.util.function.Supplier;
@@ -40,7 +38,6 @@ public class BankSystemBlocks {
 
     public static <T extends Block> RegistrySupplier<T> registerBlock(String name, Supplier<T> block)
     {
-        //BankSystemMod.LOGGER.info("Registering Block: " + name);
         RegistrySupplier<T> toReturn = BLOCKS.register(new ResourceLocation(BankSystemMod.MOD_ID, name), block);
         BankSystemItems.registerBlockItem(name, toReturn);
         return toReturn;

@@ -135,6 +135,11 @@ public class ClientBankManager {
     }
     public static ArrayList<Pair<String, SyncBankDataPacket.BankData>> getSortedItemData()
     {
+        if(bankDataPacket == null)
+        {
+            msgBankDataNotReceived();
+            return new ArrayList<>();
+        }
         HashMap<String, SyncBankDataPacket.BankData> bankAccounts = bankDataPacket.getBankData();
         // Sort the bank accounts by itemID
         ArrayList<Pair<String,SyncBankDataPacket.BankData>> sortedBankAccounts = new ArrayList<>();
@@ -143,20 +148,23 @@ public class ClientBankManager {
                 continue; // Skip the money bank
             sortedBankAccounts.add(new Pair<>(itemID, bankAccounts.get(itemID)));
         }
-        //sortedBankAccounts.sort((a, b) -> a.getFirst().compareTo(b.getFirst()));
         // Sort by balance
         sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().getBalance(), a.getSecond().getBalance()));
         return sortedBankAccounts;
     }
     public static ArrayList<Pair<String, SyncBankDataPacket.BankData>> getSortedBankData()
     {
+        if(bankDataPacket == null)
+        {
+            msgBankDataNotReceived();
+            return new ArrayList<>();
+        }
         HashMap<String, SyncBankDataPacket.BankData> bankAccounts = bankDataPacket.getBankData();
         // Sort the bank accounts by itemID
         ArrayList<Pair<String,SyncBankDataPacket.BankData>> sortedBankAccounts = new ArrayList<>();
         for (String itemID : bankAccounts.keySet()) {
             sortedBankAccounts.add(new Pair<>(itemID, bankAccounts.get(itemID)));
         }
-        //sortedBankAccounts.sort((a, b) -> a.getFirst().compareTo(b.getFirst()));
         // Sort by balance
         sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().getBalance(), a.getSecond().getBalance()));
         return sortedBankAccounts;
@@ -193,12 +201,10 @@ public class ClientBankManager {
     private static void msgBankDataNotReceived()
     {
         RequestBankDataPacket.sendRequest();
-        //BankSystemMod.LOGGER.warn("Bank data packet not received yet");
     }
     private static void msgItemInfoNotReceived(String itemID)
     {
         RequestItemInfoPacket.sendRequest(itemID);
-        //BankSystemMod.LOGGER.warn("Item info packet not received yet");
     }
 
     public static void requestAllowNewItemID(String itemID)
