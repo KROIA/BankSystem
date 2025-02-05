@@ -9,9 +9,11 @@ public class MoneyBank extends Bank {
 
     public static final String ITEM_ID = ItemUtilities.getItemID(BankSystemItems.MONEY.get());
 
-    static String compatibilityMoneyItemIDConvert(String itemID)
+    public static String compatibilityMoneyItemIDConvert(String itemID)
     {
         if(itemID.equals("$"))
+            return ITEM_ID;
+        if(itemID.equals("money"))
             return ITEM_ID;
         return itemID;
     }
