@@ -9,6 +9,7 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.util.BankSystemDataHandler;
@@ -584,8 +585,8 @@ public class BankSystemCommands {
         return Command.SINGLE_SUCCESS;
     }
     private static int bank_setBalance(ServerPlayer player,String targetPlayer, String itemID, long balance) {
-        String orgItemID = itemID;
-        itemID = ItemUtilities.getNormalizedItemID(itemID);
+        String orgItemID = MoneyBank.compatibilityMoneyItemIDConvert(itemID);
+        itemID = ItemUtilities.getNormalizedItemID(orgItemID);
         if(itemID == null)
         {
             PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage(orgItemID));
