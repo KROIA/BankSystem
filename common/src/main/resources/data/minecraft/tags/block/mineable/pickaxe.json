@@ -1,0 +1,8 @@
+{
+  "values": [
+    "banksystem:bank_terminal_block",
+    "banksystem:terminal_block",
+    "banksystem:bank_upload_block",
+    "banksystem:bank_download_block"
+  ]
+}
