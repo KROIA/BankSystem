@@ -211,10 +211,15 @@ public class Bank implements ServerSaveable {
 
         // Both transactions must be possible, otherwise no transaction is done
         // Copy original data
-        long origLockedBalance1 = from1.lockedBalance;
-        long origLockedBalance2 = from2.lockedBalance;
-        long origBalance1 = from1.balance;
-        long origBalance2 = from2.balance;
+        long origFrom1LockedBalance1 = from1.lockedBalance;
+        long origFrom2LockedBalance2 = from2.lockedBalance;
+        long origFrom1Balance1 = from1.balance;
+        long origFrom2Balance2 = from2.balance;
+        long origTo1LockedBalance1 = to1.lockedBalance;
+        long origTo2LockedBalance2 = to2.lockedBalance;
+        long origTo1Balance1 = to1.balance;
+        long origTo2Balance2 = to2.balance;
+
 
         // Try to transfer from locked balance
         Status status1 = from1.transferFromLockedPrefered(amount1, to1);
@@ -224,10 +229,14 @@ public class Bank implements ServerSaveable {
             return Status.SUCCESS;
         }
         // If not possible, revert changes
-        from1.lockedBalance = origLockedBalance1;
-        from2.lockedBalance = origLockedBalance2;
-        from1.balance = origBalance1;
-        from2.balance = origBalance2;
+        from1.lockedBalance = origFrom1LockedBalance1;
+        from2.lockedBalance = origFrom2LockedBalance2;
+        from1.balance = origFrom1Balance1;
+        from2.balance = origFrom2Balance2;
+        to1.lockedBalance = origTo1LockedBalance1;
+        to2.lockedBalance = origTo2LockedBalance2;
+        to1.balance = origTo1Balance1;
+        to2.balance = origTo2Balance2;
         if(status1 == Status.SUCCESS)
             return status2;
         return status1;
