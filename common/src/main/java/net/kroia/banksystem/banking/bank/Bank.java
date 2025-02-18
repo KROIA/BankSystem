@@ -139,6 +139,33 @@ public class Bank implements ServerSaveable {
         addBalanceInternal(-amount);
         return Status.SUCCESS;
     }
+    public Status withdrawLocked(long amount) {
+        if(amount < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
+        if (lockedBalance < amount) {
+            return Status.FAILED_NOT_ENOUGH_FUNDS;
+        }
+        lockedBalance -= amount;
+        return Status.SUCCESS;
+    }
+    public Status withdrawLockedPrefered(long amount) {
+        if(amount < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
+        long origAmount = amount;
+        long lastLocked = lockedBalance;
+        if (lockedBalance < amount) {
+            if (balance+lockedBalance < amount) {
+                return Status.FAILED_NOT_ENOUGH_FUNDS;
+            }
+            amount -= lockedBalance;
+            lockedBalance = 0;
+            addBalanceInternal(-amount);
+            return Status.SUCCESS;
+        }
+
+        lockedBalance -= amount;
+        return Status.SUCCESS;
+    }
     public Status transfer(long amount, Bank other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
