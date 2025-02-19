@@ -222,6 +222,17 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             ItemStack stack = inventory.getItem(i);
             if(!stack.isEmpty())
             {
+                // Ignore damaged or enchanted items
+                if(stack.isDamaged() || stack.isEnchanted())
+                {
+                    if(dropIfNotBankable){
+                        dropItem(stack);
+                        inventory.setItem(i, ItemStack.EMPTY);
+                    }
+                    else {
+                        continue;
+                    }
+                }
                 String itemID = ItemUtilities.getItemID(stack.getItem());
                 int amount = stack.getCount();
                 if(MoneyItem.isMoney(itemID))

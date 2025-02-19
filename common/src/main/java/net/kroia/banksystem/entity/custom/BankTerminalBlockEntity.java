@@ -278,6 +278,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     freeSpace+=64;
                     continue;
                 }
+                if(stack.isDamaged() || stack.isEnchanted())
+                    continue;
 
                 String stackItemID = ItemUtilities.getItemID(stack.getItem());
 
@@ -290,6 +292,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
             return freeSpace;
         }
+
+        // Only counts items that are not damaged or enchanted
         public HashMap<String, Long> getItemCount()
         {
             HashMap<String, Long> items = new HashMap<>();
@@ -297,7 +301,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 ItemStack stack = this.getItem(i);
 
                 // If the slot is empty, it has space
-                if (stack.isEmpty()) {
+                if (stack.isEmpty() || stack.isDamaged() || stack.isEnchanted()) {
                     continue;
                 }
 
@@ -315,6 +319,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             }
             return items;
         }
+        // Only counts items that are not damaged or enchanted
         public long getItemCount(String itemID)
         {
             long count = 0;
@@ -322,7 +327,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 ItemStack stack = this.getItem(i);
 
                 // If the slot is empty, it has space
-                if (stack.isEmpty()) {
+                if (stack.isEmpty() || stack.isDamaged() || stack.isEnchanted()) {
                     continue;
                 }
 
@@ -331,13 +336,14 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
                 // Compare the ResourceLocation to the provided string
                 if (_itemID != null && _itemID.equals(itemID)) {
-                    // Check if the stack can fit the amount
+                    // Check if the stack can fit the amount)
                     count += stack.getCount();
                 }
             }
             return count;
         }
 
+        // Only adds items that are not damaged or enchanted
         public long addItem(String ItemID, long amount)
         {
             if(amount <=0)
@@ -354,7 +360,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     amount -= stackSize;
                     this.setStackInSlot(i, ItemUtilities.createItemStackFromId(ItemID, stackSize));
                     continue;
-                }
+                }else if(stack.isDamaged() || stack.isEnchanted())
+                    continue;
 
                 // Get the item's ResourceLocation
                 String itemID = ItemUtilities.getItemID(stack.getItem());
@@ -371,6 +378,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             setChanged();
             return orgAmount - amount;
         }
+
+        // Only removes items that are not damaged or enchanted
         public long removeItem(String itemID, long amount)
         {
             long orgAmount = amount;
@@ -380,7 +389,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 ItemStack stack = this.getItem(i);
 
                 // If the slot is empty, it has space
-                if (stack.isEmpty()) {
+                if (stack.isEmpty() || stack.isDamaged() || stack.isEnchanted()) {
                     continue;
                 }
 

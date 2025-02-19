@@ -275,6 +275,8 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             ItemStack stack = inventory.getItem(i);
             if(ItemUtilities.getItemID(stack.getItem()).equals(itemID))
             {
+                if(stack.isDamaged() || stack.isEnchanted())
+                    continue;
                 long fillInStackAmount = stackSize - stack.getCount();
                 long amountToReceiveFromStack = Math.min(fillInStackAmount, amountToReceive);
                 if(amountToReceiveFromStack > 0)
@@ -359,7 +361,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         int count = 0;
         for (int i = 0; i < inventory.getContainerSize(); i++) {
             ItemStack stack = inventory.getItem(i);
-            if(!stack.isEmpty() && itemID.equals(ItemUtilities.getItemID(stack.getItem())))
+            if(!stack.isEmpty() && itemID.equals(ItemUtilities.getItemID(stack.getItem())) && !stack.isDamaged() && !stack.isEnchanted())
             {
                 count += stack.getCount();
             }
