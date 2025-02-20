@@ -1,5 +1,6 @@
 package net.kroia.banksystem.screen.custom;
 
+import dev.architectury.event.events.client.ClientGuiEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestPotentialBankItemIDsPacket;
@@ -12,9 +13,17 @@ import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CloseButton;
 import net.kroia.modutilities.gui.elements.ItemSelectionView;
 import net.kroia.modutilities.gui.elements.ItemView;
+import net.kroia.modutilities.gui.screens.CreativeModeItemSelectionScreen;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.flag.FeatureFlagSet;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 
@@ -55,6 +64,13 @@ public class BankSystemSettingScreen extends GuiScreen {
         newBankingItemButton = new Button(NEW_BANKING_ITEM_BUTTON.getString());
         newBankingItemButton.setOnFallingEdge(() -> {
 
+            FeatureFlagSet enabledFeatures = minecraft.player.level().enabledFeatures();
+            boolean showOperatorTab = false; // Set this to `true` if you need the operator tab
+
+
+            Minecraft.getInstance().setScreen(new CreativeModeItemSelectionScreen(this::onNewBankingItemSelected));
+
+        /*
             ArrayList<String> potentialItems = new ArrayList<>();
             for(ItemID itemID : ClientBankManager.getPotentialBankItemIDs())
             {
@@ -63,7 +79,7 @@ public class BankSystemSettingScreen extends GuiScreen {
 
             ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, potentialItems, this::onNewBankingItemSelected);
             itemSelectionScreen.sortItems();
-            this.minecraft.setScreen(itemSelectionScreen);
+            this.minecraft.setScreen(itemSelectionScreen);*/
         });
 
         ArrayList<String> allowedItems = new ArrayList<>();
@@ -135,6 +151,14 @@ public class BankSystemSettingScreen extends GuiScreen {
         }
         setCurrentBankingItemID(itemID);
     }
+    private void onNewBankingItemSelected(ItemStack stack) {
+        var items = ClientBankManager.getAllowedItemIDs();
+        ItemID itemID = new ItemID(stack);
+        if(!items.contains(itemID)) {
+            ClientBankManager.requestAllowNewItemID(itemID);
+        }
+        setCurrentBankingItemID(itemID);
+    }
     private void setCurrentBankingItemID(String newItemID) {
         currentBankingItemID = null;
         itemInfoWidget.setItemID(null);
@@ -146,7 +170,8 @@ public class BankSystemSettingScreen extends GuiScreen {
         currentBankingItemView.setItemStack(null);
 
         for(ItemID itemID : ClientBankManager.getAllowedItemIDs()) {
-            if (itemID.getName().compareTo(newItemID) == 0) {
+            String name = itemID.getName();
+            if (name.compareTo(newItemID) == 0) {
                 currentBankingItemView.setItemStack(itemID.getStack());
                 currentBankingItemID = new ItemID(newItemID);
                 itemInfoWidget.setItemID(currentBankingItemID);

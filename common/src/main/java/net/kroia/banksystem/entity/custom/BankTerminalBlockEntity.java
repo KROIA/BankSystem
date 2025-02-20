@@ -410,10 +410,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
 
                 // Get the item's ResourceLocation
-                String _itemID = ItemUtilities.getItemID(stack.getItem());
+                ItemID _itemID = new ItemID(stack);
 
                 // Compare the ResourceLocation to the provided string
-                if (_itemID != null && _itemID.equals(itemID)) {
+                if (_itemID.equals(itemID)) {
                     // Check if the stack can fit the amount
                     int stackSize = (int)Math.min(amount, stack.getCount());
                     stack.shrink(stackSize);

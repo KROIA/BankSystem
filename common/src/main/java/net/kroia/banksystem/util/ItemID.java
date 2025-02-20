@@ -37,7 +37,7 @@ public class ItemID implements ServerSaveable {
         return stack;
     }
     public String getName() {
-        return ItemUtilities.getItemName(stack.getItem());
+        return ItemUtilities.getItemID(stack.getItem());
     }
 
     @Override

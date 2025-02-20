@@ -22,7 +22,7 @@ import java.util.function.Consumer;
 public class ServerBankManager implements ServerSaveable {
 
     private static Map<UUID, BankUser> userMap = new HashMap<>();
-    private static Map<ItemID, Boolean> allowedItemIDs = BankSystemModSettings.Bank.ALLOWED_ITEM_IDS;
+    private static Map<ItemID, Boolean> allowedItemIDs = BankSystemModSettings.Bank.getAllowedItemIDs();
     private static ArrayList<ItemID> potentialBankItemIDs = new ArrayList<>();
     private static ArrayList<Consumer<ServerBankEvent>> eventListeners = new ArrayList<>();
     public static BankUser createUser(UUID userUUID, String userName, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney)
@@ -214,7 +214,7 @@ public class ServerBankManager implements ServerSaveable {
     {
         if(itemID == null)
             return false;
-        ArrayList<ItemID> blackList = BankSystemModSettings.Bank.POTENTIAL_ITEM_BLACKLIST;
+        ArrayList<ItemID> blackList = BankSystemModSettings.Bank.getPotentialItemBlacklist();
         if(blackList.contains(itemID))
         {
             BankSystemMod.LOGGER.info("It is not allowed to add the itemID: " + itemID);
@@ -227,7 +227,7 @@ public class ServerBankManager implements ServerSaveable {
     {
         if(itemID == null)
             return;
-        ArrayList<ItemID> notRemovable = BankSystemModSettings.Bank.NOT_REMOVABLE_ITEM_IDS;
+        ArrayList<ItemID> notRemovable = BankSystemModSettings.Bank.getNotRemovableItemIDs();
         if(notRemovable.contains(itemID))
         {
             BankSystemMod.LOGGER.info("It is not allowed to remove the itemID: " + itemID);
@@ -246,13 +246,13 @@ public class ServerBankManager implements ServerSaveable {
     {
         ServerBankManager.potentialBankItemIDs = potentialBankItemIDs;
 
-        ArrayList<ItemID> blackList = BankSystemModSettings.Bank.POTENTIAL_ITEM_BLACKLIST;
+        ArrayList<ItemID> blackList = BankSystemModSettings.Bank.getPotentialItemBlacklist();
         for(ItemID itemID : blackList)
         {
             potentialBankItemIDs.remove(itemID);
         }
 
-        ArrayList<ItemID> notRemovable = BankSystemModSettings.Bank.NOT_REMOVABLE_ITEM_IDS;
+        ArrayList<ItemID> notRemovable = BankSystemModSettings.Bank.getNotRemovableItemIDs();
         for(ItemID itemID : notRemovable)
         {
             if(!potentialBankItemIDs.contains(itemID))

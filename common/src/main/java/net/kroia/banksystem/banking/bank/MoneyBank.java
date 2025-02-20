@@ -18,7 +18,7 @@ public class MoneyBank extends Bank {
         if(itemID.equals("money"))
             return ITEM_ID;
         ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
-        if(itemStack == ItemStack.EMPTY || itemStack == null)
+        if(itemStack == ItemStack.EMPTY || itemStack == null || itemStack.is(new ItemID("minecraft:air").getStack().getItem()))
             return null;
         return new ItemID(itemStack);
     }

@@ -49,15 +49,15 @@ public class BankSystemModSettings {
         private static boolean isLoaded = false;
         public static int ITEM_TRANSFER_TICK_INTERVAL = 5;
 
-        public static final Map<ItemID, Boolean> ALLOWED_ITEM_IDS = new HashMap<>();
-        public static final ArrayList<ItemID> POTENTIAL_ITEM_BLACKLIST = new ArrayList<>();
-        public static final ArrayList<ItemID> NOT_REMOVABLE_ITEM_IDS = new ArrayList<>();
+        //public static final Map<ItemID, Boolean> ALLOWED_ITEM_IDS = new HashMap<>();
+        //public static final ArrayList<ItemID> POTENTIAL_ITEM_BLACKLIST = new ArrayList<>();
+        //public static final ArrayList<ItemID> NOT_REMOVABLE_ITEM_IDS = new ArrayList<>();
 
         public static void init()
         {
             if(isLoaded)
                 return;
-
+/*
             ALLOWED_ITEM_IDS.put(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME), true);
             ALLOWED_ITEM_IDS.put(new ItemID("minecraft:iron_ingot"), true);
             ALLOWED_ITEM_IDS.put(new ItemID("minecraft:gold_ingot"), true);
@@ -87,8 +87,49 @@ public class BankSystemModSettings {
             POTENTIAL_ITEM_BLACKLIST.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem1000.NAME));
 
             NOT_REMOVABLE_ITEM_IDS.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME));
-
+*/
             isLoaded = true;
+        }
+        public static Map<ItemID, Boolean> getAllowedItemIDs()
+        {
+            Map<ItemID, Boolean> itemIDs = new HashMap<>();
+            itemIDs.put(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME), true);
+            itemIDs.put(new ItemID("minecraft:iron_ingot"), true);
+            itemIDs.put(new ItemID("minecraft:gold_ingot"), true);
+            itemIDs.put(new ItemID("minecraft:diamond"), true);
+            itemIDs.put(new ItemID("minecraft:emerald"), true);
+            itemIDs.put(new ItemID("minecraft:coal"), true);
+            return itemIDs;
+        }
+        public static ArrayList<ItemID> getPotentialItemBlacklist()
+        {
+            ArrayList<ItemID> itemIDs = new ArrayList<>();
+            itemIDs.add(new ItemID("minecraft:air"));
+            itemIDs.add(new ItemID("minecraft:bedrock"));
+            itemIDs.add(new ItemID("minecraft:barrier"));
+            itemIDs.add(new ItemID("minecraft:structure_void"));
+            itemIDs.add(new ItemID("minecraft:command_block"));
+            itemIDs.add(new ItemID("minecraft:repeating_command_block"));
+            itemIDs.add(new ItemID("minecraft:chain_command_block"));
+            itemIDs.add(new ItemID("minecraft:debug_stick"));
+            itemIDs.add(new ItemID("minecraft:knowledge_book"));
+
+            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+ MoneyItem5.NAME));
+            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+ MoneyItem10.NAME));
+            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem20.NAME));
+            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem50.NAME));
+            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem100.NAME));
+            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem200.NAME));
+            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem500.NAME));
+            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem1000.NAME));
+            return itemIDs;
+        }
+
+        public static ArrayList<ItemID> getNotRemovableItemIDs()
+        {
+            ArrayList<ItemID> itemIDs = new ArrayList<>();
+            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME));
+            return itemIDs;
         }
     }
 }

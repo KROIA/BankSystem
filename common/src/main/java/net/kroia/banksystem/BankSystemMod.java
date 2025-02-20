@@ -29,7 +29,7 @@ public final class BankSystemMod {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public static void init() {
-        BankSystemModSettings.init();
+
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
             BankSystemCommands.register(dispatcher);
         });
@@ -46,6 +46,7 @@ public final class BankSystemMod {
         TickEvent.ServerLevelTick.SERVER_POST.register((serverLevel) -> {
             BankSystemDataHandler.tickUpdate();
         });
+        BankSystemModSettings.init();
     }
 
     public static void onClientSetup()
