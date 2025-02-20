@@ -2,14 +2,15 @@ package net.kroia.banksystem.networking.packet.client_sender.request;
 
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemInfoPacket;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 public class RequestItemInfoPacket extends NetworkPacket {
 
-    String itemID;
-    public RequestItemInfoPacket(String itemID) {
+    ItemID itemID;
+    public RequestItemInfoPacket(ItemID itemID) {
         super();
         this.itemID = itemID;
     }
@@ -18,18 +19,18 @@ public class RequestItemInfoPacket extends NetworkPacket {
         super(buf);
     }
 
-    public static void sendRequest(String itemID) {
+    public static void sendRequest(ItemID itemID) {
         BankSystemNetworking.sendToServer(new RequestItemInfoPacket(itemID));
     }
 
     @Override
     public void toBytes(FriendlyByteBuf buf) {
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
     }
 
     @Override
     public void fromBytes(FriendlyByteBuf buf) {
-        itemID = buf.readUtf();
+        itemID = new ItemID(buf.readItem());
     }
 
     @Override

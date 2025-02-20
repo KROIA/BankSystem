@@ -2,6 +2,7 @@ package net.kroia.banksystem.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -9,15 +10,15 @@ import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
 
 public class SyncPotentialBankItemIDsPacket extends NetworkPacket {
-    private ArrayList<String> potentialBankItemIDs;
+    private ArrayList<ItemID> potentialBankItemIDs;
 
 
-    public static void sendPacket(ServerPlayer receiver, ArrayList<String> potentialBankItemIDs)
+    public static void sendPacket(ServerPlayer receiver, ArrayList<ItemID> potentialBankItemIDs)
     {
         SyncPotentialBankItemIDsPacket packet = new SyncPotentialBankItemIDsPacket(potentialBankItemIDs);
         BankSystemNetworking.sendToClient(receiver, packet);
     }
-    public SyncPotentialBankItemIDsPacket(ArrayList<String> potentialBankItemIDs)
+    public SyncPotentialBankItemIDsPacket(ArrayList<ItemID> potentialBankItemIDs)
     {
         this.potentialBankItemIDs = potentialBankItemIDs;
     }
@@ -26,16 +27,16 @@ public class SyncPotentialBankItemIDsPacket extends NetworkPacket {
         this.fromBytes(buf);
     }
 
-    public ArrayList<String> getPotentialBankItemIDs()
+    public ArrayList<ItemID> getPotentialBankItemIDs()
     {
         return potentialBankItemIDs;
     }
 
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeInt(potentialBankItemIDs.size());
-        for(String itemID : potentialBankItemIDs)
+        for(ItemID itemID : potentialBankItemIDs)
         {
-            buf.writeUtf(itemID);
+            buf.writeItem(itemID.getStack());
         }
     }
 
@@ -45,7 +46,7 @@ public class SyncPotentialBankItemIDsPacket extends NetworkPacket {
         potentialBankItemIDs = new ArrayList<>(size);
         for(int i = 0; i < size; i++)
         {
-            potentialBankItemIDs.add(buf.readUtf());
+            potentialBankItemIDs.add(new ItemID(buf.readItem()));
         }
     }
 

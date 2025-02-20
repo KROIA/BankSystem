@@ -11,6 +11,7 @@ import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -233,7 +234,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                         continue;
                     }
                 }
-                String itemID = ItemUtilities.getItemID(stack.getItem());
+                ItemID itemID = new ItemID(stack);
                 int amount = stack.getCount();
                 if(MoneyItem.isMoney(itemID))
                 {

@@ -13,12 +13,14 @@ import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.util.ArrayList;
 
 public final class BankSystemMod {
     public static final String MOD_ID = "banksystem";
@@ -55,7 +57,12 @@ public final class BankSystemMod {
     public static void onServerSetup()
     {
         //BankSystemNetworking.setupServerReceiverPackets();
-        ServerBankManager.setPotientialBankItemIDs(ItemUtilities.getAllItemIDs());
+        ArrayList<ItemID> itemIDs = new ArrayList<>();
+        for(String itemID : ItemUtilities.getAllItemIDs())
+        {
+            itemIDs.add(new ItemID(itemID));
+        }
+        ServerBankManager.setPotientialBankItemIDs(itemIDs);
     }
 
     public static void loadDataFromFiles(MinecraftServer server)

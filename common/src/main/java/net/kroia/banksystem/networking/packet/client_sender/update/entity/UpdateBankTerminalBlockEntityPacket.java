@@ -3,6 +3,7 @@ package net.kroia.banksystem.networking.packet.client_sender.update.entity;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -15,9 +16,9 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
 
     private BlockPos pos;
 
-    private HashMap<String, Long> itemTransferFromMarket;
+    private HashMap<ItemID, Long> itemTransferFromMarket;
     private boolean sendItemsToMarket;
-    public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<String, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
+    public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<ItemID, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
         super();
         this.pos = pos;
         this.itemTransferFromMarket = itemTransferToMarketAmounts;
@@ -33,7 +34,7 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
         return pos;
     }
 
-    public HashMap<String, Long> getItemTransferFromMarket() {
+    public HashMap<ItemID, Long> getItemTransferFromMarket() {
         return itemTransferFromMarket;
     }
     public boolean isSendItemsToMarket() {
@@ -41,7 +42,7 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
     }
 
 
-    public static void sendPacketToServer(BlockPos pos, HashMap<String, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
+    public static void sendPacketToServer(BlockPos pos, HashMap<ItemID, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
         BankSystemNetworking.sendToServer(new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToMarketAmounts, sendItemsToMarket));
     }
 
@@ -52,7 +53,7 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
         buf.writeBoolean(sendItemsToMarket);
         buf.writeInt(itemTransferFromMarket.size());
         itemTransferFromMarket.forEach((itemID, amount) -> {
-            buf.writeUtf(itemID);
+            buf.writeItem(itemID.getStack());
             buf.writeLong(amount);
         });
     }
@@ -64,7 +65,7 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
         this.sendItemsToMarket = buf.readBoolean();
         int size = buf.readInt();
         for (int i = 0; i < size; i++) {
-            String itemID = buf.readUtf();
+            ItemID itemID = new ItemID(buf.readItem());
             long amount = buf.readLong();
             this.itemTransferFromMarket.put(itemID, amount);
         }

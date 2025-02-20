@@ -7,6 +7,7 @@ import net.kroia.banksystem.networking.packet.client_sender.request.*;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemInfoPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncPotentialBankItemIDsPacket;
+import net.kroia.banksystem.util.ItemID;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,7 +62,7 @@ public class ClientBankManager {
         }
         return bankDataPacket.getBalance();
     }
-    public static long getBalance(String itemID)
+    public static long getBalance(ItemID itemID)
     {
         if(bankDataPacket == null)
         {
@@ -80,7 +81,7 @@ public class ClientBankManager {
         }
         return bankDataPacket.getLockedBalance();
     }
-    public static long getLockedBalance(String itemID)
+    public static long getLockedBalance(ItemID itemID)
     {
         if(bankDataPacket == null)
         {
@@ -89,7 +90,7 @@ public class ClientBankManager {
         }
         return bankDataPacket.getLockedBalance(itemID);
     }
-    public static boolean hasItemBank(String itemID)
+    public static boolean hasItemBank(ItemID itemID)
     {
         if(bankDataPacket == null)
         {
@@ -99,7 +100,7 @@ public class ClientBankManager {
         return bankDataPacket.hasItemBank(itemID);
     }
 
-    public static Map<String, SyncBankDataPacket.BankData> getBankData() {
+    public static Map<ItemID, SyncBankDataPacket.BankData> getBankData() {
         if(bankDataPacket == null)
         {
             msgBankDataNotReceived();
@@ -107,7 +108,7 @@ public class ClientBankManager {
         }
         return bankDataPacket.getBankData();
     }
-    public static ArrayList<String> getAllowedItemIDs() {
+    public static ArrayList<ItemID> getAllowedItemIDs() {
         if(bankDataPacket == null)
         {
             msgBankDataNotReceived();
@@ -124,7 +125,7 @@ public class ClientBankManager {
         }
         return bankDataPacket.getPlayerName();
     }
-    public static ArrayList<String> getPotentialBankItemIDs() {
+    public static ArrayList<ItemID> getPotentialBankItemIDs() {
         if(potentialBankItemIDsPacket == null)
         {
             BankSystemMod.LOGGER.warn("Potential bank item IDs packet not received yet");
@@ -133,17 +134,17 @@ public class ClientBankManager {
         }
         return potentialBankItemIDsPacket.getPotentialBankItemIDs();
     }
-    public static ArrayList<Pair<String, SyncBankDataPacket.BankData>> getSortedItemData()
+    public static ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> getSortedItemData()
     {
         if(bankDataPacket == null)
         {
             msgBankDataNotReceived();
             return new ArrayList<>();
         }
-        HashMap<String, SyncBankDataPacket.BankData> bankAccounts = bankDataPacket.getBankData();
+        HashMap<ItemID, SyncBankDataPacket.BankData> bankAccounts = bankDataPacket.getBankData();
         // Sort the bank accounts by itemID
-        ArrayList<Pair<String,SyncBankDataPacket.BankData>> sortedBankAccounts = new ArrayList<>();
-        for (String itemID : bankAccounts.keySet()) {
+        ArrayList<Pair<ItemID,SyncBankDataPacket.BankData>> sortedBankAccounts = new ArrayList<>();
+        for (ItemID itemID : bankAccounts.keySet()) {
             if(itemID.equals(MoneyBank.ITEM_ID))
                 continue; // Skip the money bank
             sortedBankAccounts.add(new Pair<>(itemID, bankAccounts.get(itemID)));
@@ -152,17 +153,17 @@ public class ClientBankManager {
         sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().getBalance(), a.getSecond().getBalance()));
         return sortedBankAccounts;
     }
-    public static ArrayList<Pair<String, SyncBankDataPacket.BankData>> getSortedBankData()
+    public static ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> getSortedBankData()
     {
         if(bankDataPacket == null)
         {
             msgBankDataNotReceived();
             return new ArrayList<>();
         }
-        HashMap<String, SyncBankDataPacket.BankData> bankAccounts = bankDataPacket.getBankData();
+        HashMap<ItemID, SyncBankDataPacket.BankData> bankAccounts = bankDataPacket.getBankData();
         // Sort the bank accounts by itemID
-        ArrayList<Pair<String,SyncBankDataPacket.BankData>> sortedBankAccounts = new ArrayList<>();
-        for (String itemID : bankAccounts.keySet()) {
+        ArrayList<Pair<ItemID,SyncBankDataPacket.BankData>> sortedBankAccounts = new ArrayList<>();
+        for (ItemID itemID : bankAccounts.keySet()) {
             sortedBankAccounts.add(new Pair<>(itemID, bankAccounts.get(itemID)));
         }
         // Sort by balance
@@ -170,7 +171,7 @@ public class ClientBankManager {
         return sortedBankAccounts;
     }
 
-    public static long getTotalSupply(String itemID)
+    public static long getTotalSupply(ItemID itemID)
     {
         if(itemInfoPacket == null || !itemInfoPacket.getItemID().equals(itemID))
         {
@@ -179,7 +180,7 @@ public class ClientBankManager {
         }
         return itemInfoPacket.getTotalSupply();
     }
-    public static long getTotalLocked(String itemID)
+    public static long getTotalLocked(ItemID itemID)
     {
         if(itemInfoPacket == null || !itemInfoPacket.getItemID().equals(itemID))
         {
@@ -188,7 +189,7 @@ public class ClientBankManager {
         }
         return itemInfoPacket.getTotalLocked();
     }
-    public static Map<String, SyncItemInfoPacket.BankData> getItemInfoBankData(String itemID)
+    public static Map<String, SyncItemInfoPacket.BankData> getItemInfoBankData(ItemID itemID)
     {
         if(itemInfoPacket == null || !itemInfoPacket.getItemID().equals(itemID))
         {
@@ -202,20 +203,20 @@ public class ClientBankManager {
     {
         RequestBankDataPacket.sendRequest();
     }
-    private static void msgItemInfoNotReceived(String itemID)
+    private static void msgItemInfoNotReceived(ItemID itemID)
     {
         RequestItemInfoPacket.sendRequest(itemID);
     }
 
-    public static void requestAllowNewItemID(String itemID)
+    public static void requestAllowNewItemID(ItemID itemID)
     {
         RequestAllowNewBankItemIDPacket.sendRequest(itemID);
     }
-    public static void requestRemoveItemID(String itemID)
+    public static void requestRemoveItemID(ItemID itemID)
     {
         RequestDisallowBankingItemIDPacket.sendRequest(itemID);
     }
-    public static void requestItemInfo(String itemID)
+    public static void requestItemInfo(ItemID itemID)
     {
         RequestItemInfoPacket.sendRequest(itemID);
     }

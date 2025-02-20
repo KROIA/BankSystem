@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,7 +16,7 @@ import java.util.UUID;
 
 public class SyncItemInfoPacket extends NetworkPacket {
 
-    String itemID;
+    ItemID itemID;
     long totalSupply;
     long totalLocked;
 
@@ -55,7 +56,7 @@ public class SyncItemInfoPacket extends NetworkPacket {
     public SyncItemInfoPacket(FriendlyByteBuf buf) {
         super(buf);
     }
-    public String getItemID()
+    public ItemID getItemID()
     {
         return itemID;
     }
@@ -76,7 +77,7 @@ public class SyncItemInfoPacket extends NetworkPacket {
         return playerData;
     }
 
-    public static void sendResponse(ServerPlayer receiver, String itemID)
+    public static void sendResponse(ServerPlayer receiver, ItemID itemID)
     {
         SyncItemInfoPacket packet = new SyncItemInfoPacket();
         packet.itemID = itemID;
@@ -101,7 +102,7 @@ public class SyncItemInfoPacket extends NetworkPacket {
 
     @Override
     public void toBytes(FriendlyByteBuf buf) {
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
         buf.writeLong(totalSupply);
         buf.writeLong(totalLocked);
         buf.writeInt(playerData.size());
@@ -114,7 +115,7 @@ public class SyncItemInfoPacket extends NetworkPacket {
 
     @Override
     public void fromBytes(FriendlyByteBuf buf) {
-        itemID = buf.readUtf();
+        itemID = new ItemID(buf.readItem());
         totalSupply = buf.readLong();
         totalLocked = buf.readLong();
         int size = buf.readInt();

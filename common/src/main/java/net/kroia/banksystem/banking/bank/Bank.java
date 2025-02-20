@@ -1,14 +1,17 @@
 package net.kroia.banksystem.banking.bank;
 
+import com.sun.jna.platform.win32.COM.util.annotation.ComObject;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.UUID;
 
@@ -33,10 +36,10 @@ public class Bank implements ServerSaveable {
     protected long balance;
     protected long lockedBalance;
 
-    String itemID;
+    ItemID itemID;
 
 
-    public Bank(BankUser owner, String itemID, long balance) {
+    public Bank(BankUser owner, ItemID itemID, long balance) {
         this.owner = owner;
         this.itemID = itemID;
         setBalanceInternal(balance);
@@ -71,12 +74,12 @@ public class Bank implements ServerSaveable {
     public long getTotalBalance() {
         return balance + lockedBalance;
     }
-    public String getItemID() {
+    public ItemID getItemID() {
         return itemID;
     }
     public String getItemName()
     {
-        String name = ItemUtilities.getItemName(itemID);
+        String name = itemID.getName();
         if(name == null)
             return "unknown";
         if(name.contains(":"))
@@ -297,7 +300,9 @@ public class Bank implements ServerSaveable {
 
     @Override
     public boolean save(CompoundTag tag) {
-        tag.putString("itemID", itemID);
+        CompoundTag itemTag = new CompoundTag();
+        itemID.save(itemTag);
+        tag.put("itemID", itemTag);
         tag.putLong("balance", balance);
         tag.putLong("lockedBalance", lockedBalance);
         return true;
@@ -312,10 +317,17 @@ public class Bank implements ServerSaveable {
                 !tag.contains("lockedBalance"))
             return false;
         itemID = MoneyBank.compatibilityMoneyItemIDConvert(tag.getString("itemID"));
+        // Compatibility with old money item ID format
+        if(itemID == null)
+        {
+            CompoundTag itemTag = tag.getCompound("itemID");
+            itemID = new ItemID(itemTag);
+        }
+
 
         setBalanceInternal(tag.getLong("balance"));
         lockedBalance = tag.getLong("lockedBalance");
-        return balance >= 0 && lockedBalance >= 0 && !itemID.isEmpty();
+        return balance >= 0 && lockedBalance >= 0;
     }
 
     private void addBalanceInternal(long balance) {

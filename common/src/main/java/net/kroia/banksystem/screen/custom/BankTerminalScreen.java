@@ -8,6 +8,7 @@ import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiContainerScreen;
@@ -32,14 +33,14 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         private ItemStack stack;
         public long stackSize;
         private final Rectangle itemStackHitBox;
-        public final String itemID;
+        public final ItemID itemID;
 
         private final TextBox amountBox;
         private final Label balanceLabel;
 
         BankTerminalScreen parent;
 
-        public BankElement(BankTerminalScreen parent, ItemStack stack, String itemID, long stackSize) {
+        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long stackSize) {
             super(0, 0, 100, HEIGHT);
             this.parent = parent;
             this.stack = stack;
@@ -189,17 +190,17 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         int x = 0;
         int y = 0;
         // Sort the bank accounts by itemID
-        ArrayList<Pair<String, SyncBankDataPacket.BankData>> sortedBankAccounts = ClientBankManager.getSortedBankData();
+        ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> sortedBankAccounts = ClientBankManager.getSortedBankData();
 
         boolean needsResize = sortedBankAccounts.size() != bankElements.size();
-        HashMap<String,String> availableItems = new HashMap<>();
+        HashMap<ItemID,ItemID> availableItems = new HashMap<>();
         for (int i=0; i<sortedBankAccounts.size(); i++) {
-            Pair<String,SyncBankDataPacket.BankData> pair = sortedBankAccounts.get(i);
+            Pair<ItemID,SyncBankDataPacket.BankData> pair = sortedBankAccounts.get(i);
             long amount = pair.getSecond().getBalance();
             BankElement element = getBankElement(pair.getFirst());
             if(element == null)
             {
-                ItemStack stack = ItemUtilities.createItemStackFromId(pair.getFirst(), 1);
+                ItemStack stack = pair.getFirst().getStack();
                 element = new BankElement(this, stack, pair.getFirst(), amount);
                 bankElements.add(element);
                 itemListView.addChild(element);
@@ -228,7 +229,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         }
     }
 
-    private BankElement getBankElement(String itemID)
+    private BankElement getBankElement(ItemID itemID)
     {
         for (BankElement button : bankElements) {
             if(button.itemID.equals(itemID))
@@ -245,7 +246,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
             BankSystemMod.LOGGER.info("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
         }
 
-        HashMap<String, Long> itemTransferToMarketAmounts = new HashMap<>();
+        HashMap<ItemID, Long> itemTransferToMarketAmounts = new HashMap<>();
         UpdateBankTerminalBlockEntityPacket.sendPacketToServer(this.menu.getBlockPos(), itemTransferToMarketAmounts, true);
     }
     private void onReceiveItemsFromMarket() {
@@ -254,7 +255,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
             element.saveAmount();
             BankSystemMod.LOGGER.info("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
         }
-        HashMap<String, Long> itemTransferToMarketAmounts = new HashMap<>();
+        HashMap<ItemID, Long> itemTransferToMarketAmounts = new HashMap<>();
         for(BankElement button : bankElements)
         {
             long amount = button.getTargetAmount();

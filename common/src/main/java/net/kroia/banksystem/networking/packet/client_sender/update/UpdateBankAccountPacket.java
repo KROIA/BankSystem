@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,7 +16,7 @@ import java.util.UUID;
 public class UpdateBankAccountPacket extends NetworkPacket {
 
     public static class BankData{
-        public String itemID;
+        public ItemID itemID;
         public long balance = 0;
         public boolean setBalance = false;
         public boolean resetLockedBalance = false;
@@ -29,7 +30,7 @@ public class UpdateBankAccountPacket extends NetworkPacket {
         }
 
         public void toBytes(FriendlyByteBuf buf) {
-            buf.writeUtf(itemID);
+            buf.writeItem(itemID.getStack());
             buf.writeLong(balance);
             buf.writeBoolean(setBalance);
             buf.writeBoolean(resetLockedBalance);
@@ -39,7 +40,7 @@ public class UpdateBankAccountPacket extends NetworkPacket {
 
 
         public void fromBytes(FriendlyByteBuf buf) {
-            itemID = buf.readUtf();
+            itemID = new ItemID(buf.readItem());
             balance = buf.readLong();
             setBalance = buf.readBoolean();
             resetLockedBalance = buf.readBoolean();

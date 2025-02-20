@@ -14,11 +14,13 @@ import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.Map;
 import java.util.UUID;
@@ -310,9 +312,16 @@ public class BankSystemCommands {
                                                                             long balance = LongArgumentType.getLong(context, "balance");
                                                                             String username = StringArgumentType.getString(context, "username");
 
+                                                                            ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+                                                                            if(itemStack == ItemStack.EMPTY)
+                                                                            {
+                                                                                PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
+                                                                                return Command.SINGLE_SUCCESS;
+                                                                            }
+                                                                            ItemID itemIDObj = new ItemID(itemStack);
 
                                                                             // Execute the command on the server_sender
-                                                                            return bank_create(player, username,  itemID, balance);
+                                                                            return bank_create(player, username,  itemIDObj, balance);
                                                                         })
                                                                 )
                                                 )
@@ -337,8 +346,16 @@ public class BankSystemCommands {
                                                                             String username = StringArgumentType.getString(context, "username");
 
 
+                                                                            ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+                                                                            if(itemStack == ItemStack.EMPTY)
+                                                                            {
+                                                                                PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
+                                                                                return Command.SINGLE_SUCCESS;
+                                                                            }
+                                                                            ItemID itemIDObj = new ItemID(itemStack);
+
                                                                             // Execute the command on the server_sender
-                                                                            return bank_setBalance(player, username,  itemID, balance);
+                                                                            return bank_setBalance(player, username,  itemIDObj, balance);
                                                                         })
                                                                 )
                                                 )
@@ -361,7 +378,15 @@ public class BankSystemCommands {
 
 
                                                                     // Execute the command on the server_sender
-                                                                    return bank_delete(player, username, itemID);
+                                                                    ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+                                                                    if(itemStack == ItemStack.EMPTY)
+                                                                    {
+                                                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
+                                                                        return Command.SINGLE_SUCCESS;
+                                                                    }
+                                                                    ItemID itemIDObj = new ItemID(itemStack);
+
+                                                                    return bank_delete(player, username, itemIDObj);
                                                                 })
                                                 )
                                         )
@@ -376,8 +401,14 @@ public class BankSystemCommands {
                                             // Get arguments
                                             String itemID = StringArgumentType.getString(context, "itemID");
 
-
-                                            if(ServerBankManager.allowItemID(ItemUtilities.getNormalizedItemID(itemID)))
+                                            ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+                                            if(itemStack == ItemStack.EMPTY)
+                                            {
+                                                PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
+                                                return Command.SINGLE_SUCCESS;
+                                            }
+                                            ItemID itemIDObj = new ItemID(itemStack);
+                                            if(ServerBankManager.allowItemID(itemIDObj))
                                                 PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemID));
                                             else
                                                 PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemID));
@@ -556,12 +587,10 @@ public class BankSystemCommands {
         return Command.SINGLE_SUCCESS;
     }
 
-    private static int bank_create(ServerPlayer player,String targetPlayer, String itemID, long balance) {
-        String orgItemID = itemID;
-        itemID = ItemUtilities.getNormalizedItemID(itemID);
+    private static int bank_create(ServerPlayer player, String targetPlayer, ItemID itemID, long balance) {
         if(itemID == null)
         {
-            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage(orgItemID));
+            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
         BankUser user = ServerBankManager.getUser(targetPlayer);
@@ -575,21 +604,21 @@ public class BankSystemCommands {
         bank = user.createItemBank(itemID, balance);
         if(bank == null)
         {
-            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getCantCreateBankMessage(targetPlayer, itemID));
+            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getCantCreateBankMessage(targetPlayer, itemID.getName()));
             return Command.SINGLE_SUCCESS;
         }
         if(created)
-            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankCreatedMessage(player.getName().getString(), itemID)+"\n"+bank.toStringNoOwner());
+            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankCreatedMessage(player.getName().getString(), itemID.getName())+"\n"+bank.toStringNoOwner());
         else
-            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankAlreadyExistsMessage(player.getName().getString(), itemID)+"\n"+bank.toStringNoOwner());
+            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankAlreadyExistsMessage(player.getName().getString(), itemID.getName())+"\n"+bank.toStringNoOwner());
         return Command.SINGLE_SUCCESS;
     }
-    private static int bank_setBalance(ServerPlayer player,String targetPlayer, String itemID, long balance) {
-        String orgItemID = MoneyBank.compatibilityMoneyItemIDConvert(itemID);
-        itemID = ItemUtilities.getNormalizedItemID(orgItemID);
+    private static int bank_setBalance(ServerPlayer player,String targetPlayer, ItemID itemID, long balance) {
+        //String orgItemID = MoneyBank.compatibilityMoneyItemIDConvert(itemID);
+        //itemID = ItemUtilities.getNormalizedItemID(orgItemID);
         if(itemID == null)
         {
-            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage(orgItemID));
+            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
         BankUser user = ServerBankManager.getUser(targetPlayer);
@@ -599,7 +628,7 @@ public class BankSystemCommands {
         }
         Bank bank = user.getBank(itemID);
         if(bank == null) {
-            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID));
+            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID.getName()));
             return Command.SINGLE_SUCCESS;
         }
         bank.setBalance(balance);
@@ -607,13 +636,13 @@ public class BankSystemCommands {
         return Command.SINGLE_SUCCESS;
     }
 
-    private static int bank_delete(ServerPlayer player,String targetPlayer, String itemID)
+    private static int bank_delete(ServerPlayer player,String targetPlayer, ItemID itemID)
     {
-        String orgItemID = itemID;
-        itemID = ItemUtilities.getNormalizedItemID(itemID);
+        //String orgItemID = itemID;
+        //itemID = ItemUtilities.getNormalizedItemID(itemID);
         if(itemID == null)
         {
-            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage(orgItemID));
+            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
         BankUser user = ServerBankManager.getUser(targetPlayer);
@@ -623,16 +652,16 @@ public class BankSystemCommands {
         }
         Bank bank = user.getBank(itemID);
         if(bank == null) {
-            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID));
+            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID.getName()));
             return Command.SINGLE_SUCCESS;
         }
 
         UUID playerUUID = user.getPlayerUUID();
         if(ServerBankManager.closeBankAccount(playerUUID, itemID)) {
-            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDeletedMessage(player.getName().getString(), itemID));
+            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDeletedMessage(player.getName().getString(), itemID.getName()));
         }
         else {
-            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID));
+            PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID.getName()));
         }
         return Command.SINGLE_SUCCESS;
     }

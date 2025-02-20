@@ -9,6 +9,7 @@ import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -58,7 +59,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     private boolean currentlyReceiving = false;
 
     private UUID playerOwner = null;
-    private String itemID;
+    private ItemID itemID;
     private int targetAmount;
     public static int tickCounter = 0;
 
@@ -83,7 +84,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         receivingEnabled = tag.getBoolean("RecievingEnabled");
         itemID = null;
         if(tag.contains("ItemID"))
-            itemID = tag.getString("ItemID");
+        {
+            CompoundTag itemTag = tag.getCompound("ItemID");
+            itemID = new ItemID(itemTag);
+        }
         targetAmount = tag.getInt("TargetAmount");
         playerOwner = null;
         if(tag.contains("PlayerOwner"))
@@ -97,8 +101,11 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         super.saveAdditional(tag);
         tag.put("Items", inventory.createTag());
         tag.putBoolean("RecievingEnabled", receivingEnabled);
-        if(itemID != null)
-            tag.putString("ItemID", itemID);
+        if(itemID != null) {
+            CompoundTag itemTag = new CompoundTag();
+            itemID.save(itemTag);
+            tag.put("ItemID", itemTag);
+        }
         tag.putInt("TargetAmount", targetAmount);
         if(playerOwner != null)
         {
@@ -210,7 +217,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         return receivingEnabled;
     }
 
-    public String getItemID() {
+    public ItemID getItemID() {
         return itemID;
     }
 
@@ -221,7 +228,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         int stackSize = 64;
         if(itemID != null)
         {
-            stackSize = ItemUtilities.createItemStackFromId(itemID).getMaxStackSize();
+            stackSize = itemID.getStack().getMaxStackSize();
         }
         return inventory.getContainerSize() * stackSize;
     }
@@ -259,7 +266,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         Bank itemBank = bankUser.getBank(itemID);
         if(itemBank == null)
             return;
-        ItemStack exampleStack = ItemUtilities.createItemStackFromId(itemID);
+        ItemStack exampleStack = itemID.getStack();
         if(exampleStack == null)
             return;
         int stackSize = exampleStack.getMaxStackSize();
@@ -327,7 +334,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         boolean sendUpdate = false;
         itemID = packet.getItemID();
 
-        ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+        ItemStack itemStack = itemID.getStack();
         if(itemStack == null)
         {
             itemID = null;

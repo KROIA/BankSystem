@@ -3,6 +3,7 @@ package net.kroia.banksystem.screen.uiElements;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
@@ -24,7 +25,7 @@ public class BankAccountManagementItem extends GuiElement {
     private static final Component SAVE_CHANGES = Component.translatable(PREFIX+"save_changes");
 
     private final String playerName;
-    private final String itemID;
+    private final ItemID itemID;
     private final ItemView itemView;
     private final Button closeAccountButton;
     private final CheckBox freeLockedBalanceCheckBox;
@@ -45,12 +46,12 @@ public class BankAccountManagementItem extends GuiElement {
     private boolean freeLockedBalance = false;
 
 
-    public BankAccountManagementItem(String itemID, String playerName)
+    public BankAccountManagementItem(ItemID itemID, String playerName)
     {
         super();
         this.itemID = itemID;
         this.playerName = playerName;
-        itemView = new ItemView(ItemUtilities.createItemStackFromId(itemID));
+        itemView = new ItemView(itemID.getStack());
         balanceLabel = new Label(BALANCE.getString());
         balanceValueLabel = new Label();
         balanceValueTextBox = new TextBox();
@@ -63,8 +64,8 @@ public class BankAccountManagementItem extends GuiElement {
         totalBalanceValueLabel = new Label();
 
         closeAccountButton = new Button(CLOSE_ACCOUNT_BUTTON.getString(), () -> {
-            String askTitle = BankSystemTextMessages.getBankAccountManagementItemAskRemoveTitleMessage(itemID);
-            String askMessage = BankSystemTextMessages.getBankAccountManagementItemAskRemoveMessage(itemID, playerName);
+            String askTitle = BankSystemTextMessages.getBankAccountManagementItemAskRemoveTitleMessage(itemID.getName());
+            String askMessage = BankSystemTextMessages.getBankAccountManagementItemAskRemoveMessage(itemID.getName(), playerName);
             AskPopupScreen popup = new AskPopupScreen((GuiScreen)getRoot().getScreen(), this::onCloseAccountButtonClicked, () -> {}, askTitle, askMessage);
             popup.setSize(400,100);
             popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
@@ -144,7 +145,7 @@ public class BankAccountManagementItem extends GuiElement {
         return freeLockedBalance;
     }
 
-    public String getItemID()
+    public ItemID getItemID()
     {
         return itemID;
     }

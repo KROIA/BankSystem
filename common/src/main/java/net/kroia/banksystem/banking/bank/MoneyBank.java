@@ -2,20 +2,25 @@ package net.kroia.banksystem.banking.bank;
 
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.item.BankSystemItems;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.ItemStack;
 
 public class MoneyBank extends Bank {
 
-    public static final String ITEM_ID = ItemUtilities.getItemID(BankSystemItems.MONEY.get());
+    public static final ItemID ITEM_ID = new ItemID(new ItemStack(BankSystemItems.MONEY.get()));
 
-    public static String compatibilityMoneyItemIDConvert(String itemID)
+    public static ItemID compatibilityMoneyItemIDConvert(String itemID)
     {
         if(itemID.equals("$"))
             return ITEM_ID;
         if(itemID.equals("money"))
             return ITEM_ID;
-        return itemID;
+        ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+        if(itemStack == ItemStack.EMPTY || itemStack == null)
+            return null;
+        return new ItemID(itemStack);
     }
 
 

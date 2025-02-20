@@ -8,6 +8,7 @@ import net.kroia.banksystem.networking.packet.client_sender.update.UpdateBankAcc
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.screen.uiElements.BankAccountManagementItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
@@ -42,7 +43,7 @@ public class BankAccountManagementScreen extends GuiScreen {
     private final ListView bankElementListView;
 
     private int lastTickCount = 0;
-    private final HashMap<String, BankAccountManagementItem> bankAccountManagementItems = new HashMap<>();
+    private final HashMap<ItemID, BankAccountManagementItem> bankAccountManagementItems = new HashMap<>();
 
     public BankAccountManagementScreen(GuiScreen parent, UUID playerUUID) {
         super(TITLE);
@@ -69,7 +70,12 @@ public class BankAccountManagementScreen extends GuiScreen {
 
         createNewBankButton = new Button(CREATE_NEW_BANK.getString());
         createNewBankButton.setOnFallingEdge(() -> {
-            ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, ClientBankManager.getAllowedItemIDs(), this::onCreateNewBank);
+            ArrayList<String> allowedItemIDs = new ArrayList<>();
+            for(ItemID itemID : ClientBankManager.getAllowedItemIDs())
+            {
+                allowedItemIDs.add(itemID.getName());
+            }
+            ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, allowedItemIDs, this::onCreateNewBank);
             itemSelectionScreen.sortItems();
             this.minecraft.setScreen(itemSelectionScreen);
         });
@@ -143,11 +149,11 @@ public class BankAccountManagementScreen extends GuiScreen {
     }
     private void updateBankData()
     {
-        ArrayList<Pair<String, SyncBankDataPacket.BankData>> sortedBankAccounts = ClientBankManager.getSortedBankData();
+        ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> sortedBankAccounts = ClientBankManager.getSortedBankData();
         playerName = ClientBankManager.getBankDataPlayerName();
         playerNameLabel.setText(BankSystemTextMessages.getBankAccountManagementBankOwnerMessage(playerName));
-        HashMap<String, BankAccountManagementItem> stillExistingItems = new HashMap<>();
-        for(Pair<String, SyncBankDataPacket.BankData> pair : sortedBankAccounts)
+        HashMap<ItemID, BankAccountManagementItem> stillExistingItems = new HashMap<>();
+        for(Pair<ItemID, SyncBankDataPacket.BankData> pair : sortedBankAccounts)
         {
             BankAccountManagementItem item = bankAccountManagementItems.get(pair.getFirst());
             SyncBankDataPacket.BankData bankData = pair.getSecond();
@@ -165,8 +171,8 @@ public class BankAccountManagementScreen extends GuiScreen {
 
 
         }
-        HashMap<String, BankAccountManagementItem> toRemove = new HashMap<>(bankAccountManagementItems);
-        for(String key : stillExistingItems.keySet())
+        HashMap<ItemID, BankAccountManagementItem> toRemove = new HashMap<>(bankAccountManagementItems);
+        for(ItemID key : stillExistingItems.keySet())
             toRemove.remove(key);
         for(BankAccountManagementItem item : toRemove.values())
         {
@@ -174,9 +180,10 @@ public class BankAccountManagementScreen extends GuiScreen {
             bankAccountManagementItems.remove(item.getItemID());
         }
     }
-    private void onCreateNewBank(String itemID)
+    private void onCreateNewBank(String itemIDStr)
     {
-        if(bankAccountManagementItems.containsKey(itemID) || itemID == null)
+        ItemID itemID = new ItemID(itemIDStr);
+        if(bankAccountManagementItems.containsKey(itemID))
             return;
         UpdateBankAccountPacket.BankData data = new UpdateBankAccountPacket.BankData();
 

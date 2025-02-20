@@ -4,6 +4,7 @@ import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.ItemBank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
@@ -18,7 +19,7 @@ import java.util.UUID;
 public class BankUser implements ServerSaveable {
     private UUID userUUID;
     private String userName;
-    private final HashMap<String, Bank> bankMap = new HashMap<>();
+    private final HashMap<ItemID, Bank> bankMap = new HashMap<>();
     private boolean enableBankNotifications = true;
 
     public BankUser(ServerPlayer player)
@@ -51,21 +52,21 @@ public class BankUser implements ServerSaveable {
         bankMap.put(MoneyBank.ITEM_ID, bank);
         return bank;
     }
-    public Bank createItemBank(String itemID, long startBalance)
+    public Bank createItemBank(ItemID itemID, long startBalance)
     {
         Bank bank = getBank(itemID);
         if(bank != null)
             return bank;
         if(!ServerBankManager.isItemIDAllowed(itemID))
         {
-            PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNotAllowedMessage(itemID));
+            PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
             return null;
         }
         bank = new ItemBank(this, itemID,  startBalance);
         bankMap.put(itemID, bank);
         return bank;
     }
-    public Bank createItemBank_noMSG_Feedback(String itemID, long startBalance)
+    public Bank createItemBank_noMSG_Feedback(ItemID itemID, long startBalance)
     {
         Bank bank = getBank(itemID);
         if(bank != null)
@@ -79,11 +80,11 @@ public class BankUser implements ServerSaveable {
         return bank;
     }
 
-    public Bank getBank(String itemID)
+    public Bank getBank(ItemID itemID)
     {
         return bankMap.get(itemID);
     }
-    public boolean removeBank(String itemID)
+    public boolean removeBank(ItemID itemID)
     {
         Bank bank = bankMap.get(itemID);
         if(bank == null)
@@ -113,7 +114,7 @@ public class BankUser implements ServerSaveable {
         return 0;
     }
 
-    public HashMap<String, Bank> getBankMap()
+    public HashMap<ItemID, Bank> getBankMap()
     {
         return bankMap;
     }
@@ -134,7 +135,7 @@ public class BankUser implements ServerSaveable {
 
 
         ListTag bankElements = new ListTag();
-        for (Map.Entry<String, Bank> entry : bankMap.entrySet()) {
+        for (Map.Entry<ItemID, Bank> entry : bankMap.entrySet()) {
             CompoundTag bankTag = new CompoundTag();
             entry.getValue().save(bankTag);
             bankElements.add(bankTag);

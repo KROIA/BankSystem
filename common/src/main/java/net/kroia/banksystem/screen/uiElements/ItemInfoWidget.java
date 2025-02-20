@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemInfoPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.VerticalListView;
@@ -27,7 +28,7 @@ public class ItemInfoWidget extends GuiElement {
     private static final Component SEARCH_PLAYER = Component.translatable(PREFIX+"search_player");
 
 
-    String itemID;
+    ItemID itemID;
 
 
     final Label totalSuplyTextLabel;
@@ -121,7 +122,7 @@ public class ItemInfoWidget extends GuiElement {
     }
 
 
-    public void setItemID(String itemID) {
+    public void setItemID(ItemID itemID) {
         this.itemID = itemID;
         if(this.itemID == null)
             return;

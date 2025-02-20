@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiContainerScreen;
@@ -16,6 +17,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+
+import java.util.ArrayList;
 
 public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainerMenu> {
     private static final Component INVENTORY_NAME_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_download_screen.inventory_name");
@@ -86,7 +89,7 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
     private final SettingsMenu settingsMenu;
 
     public static boolean isOwned = false;
-    public static String itemID;
+    public static ItemID itemID;
     public static int targetAmount;
     public static int maxTargetAmount;
 
@@ -111,7 +114,7 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
         }
         settingsMenu.targetAmountTextBox.setText(String.valueOf(targetAmount));
 
-        ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+        ItemStack itemStack = itemID.getStack();
         settingsMenu.itemView.setItemStack(itemStack);
 
 
@@ -146,7 +149,7 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
             }
             instance.settingsMenu.targetAmountTextBox.setText(String.valueOf(targetAmount));
 
-            ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+            ItemStack itemStack = itemID.getStack();
             instance.settingsMenu.itemView.setItemStack(itemStack);
         }
     }
@@ -170,13 +173,19 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
         applySettigns();
     }
     private void onSelectItemButtonClicked() {
-        ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, ClientBankManager.getAllowedItemIDs(), this::onItemSelected);
+        ArrayList<String> allowedItemIDs = new ArrayList<>();
+        for(ItemID itemID : ClientBankManager.getAllowedItemIDs())
+        {
+            allowedItemIDs.add(itemID.getName());
+        }
+        ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, allowedItemIDs, this::onItemSelected);
         itemSelectionScreen.sortItems();
+        assert this.minecraft != null;
         this.minecraft.setScreen(itemSelectionScreen);
     }
     private void onItemSelected(String itemID)
     {
-        this.itemID = itemID;
+        BankDownloadScreen.itemID = new ItemID(itemID);
         ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
         instance.settingsMenu.itemView.setItemStack(itemStack);
     }

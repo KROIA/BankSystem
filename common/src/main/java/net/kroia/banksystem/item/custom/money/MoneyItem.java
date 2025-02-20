@@ -2,6 +2,7 @@ package net.kroia.banksystem.item.custom.money;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.item.BankSystemCreativeModeTab;
+import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 
@@ -38,5 +39,9 @@ public class MoneyItem extends Item{
         boolean hasMoney = itemID.contains("money");
         String modID = itemID.split(":")[0];
         return hasMoney && modID.compareTo(BankSystemMod.MOD_ID) == 0;
+    }
+    public static boolean isMoney(ItemID itemID)
+    {
+        return isMoney(itemID.getName());
     }
 }
