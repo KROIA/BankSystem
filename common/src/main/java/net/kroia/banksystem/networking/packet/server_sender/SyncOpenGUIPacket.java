@@ -2,6 +2,8 @@ package net.kroia.banksystem.networking.packet.server_sender;
 
 import net.kroia.banksystem.BankSystemClientHooks;
 import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -29,6 +31,13 @@ public class SyncOpenGUIPacket extends NetworkPacket {
 
     public static void send_openBankSystemSettingScreen(ServerPlayer player)
     {
+        // check if player is in creative mode
+        if(!player.isCreative())
+        {
+            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNeedCreativeModeForThisScreenMessage());
+            return;
+        }
+
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
         packet.guiType = GUIType.BANK_SYSTEM_SETTING;
         BankSystemNetworking.sendToClient(player, packet);

@@ -106,5 +106,6 @@
   "message.banksystem.bank_data_saved": "Bankdaten gespeichert",
   "message.banksystem.bank_data_save_failed": "Bankdaten konnten nicht gespeichert werden",
   "message.banksystem.bank_data_load_failed": "Bankdaten konnten nicht geladen werden",
-  "message.banksystem.bank_data_loaded": "Bankdaten geladen"
+  "message.banksystem.bank_data_loaded": "Bankdaten geladen",
+  "message.banksystem.need_creative_mode_for_this_screen": "Du musst im Kreativmodus sein um auf diesen Bildschirm zuzugreifen"
 }

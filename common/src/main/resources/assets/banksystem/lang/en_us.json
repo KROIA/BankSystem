@@ -106,5 +106,6 @@
   "message.banksystem.bank_data_saved": "Bank data saved",
   "message.banksystem.bank_data_save_failed": "Failed to save bank data",
   "message.banksystem.bank_data_load_failed": "Failed to load bank data",
-  "message.banksystem.bank_data_loaded": "Bank data loaded"
+  "message.banksystem.bank_data_loaded": "Bank data loaded",
+  "message.banksystem.need_creative_mode_for_this_screen": "You need to be in creative mode to access this screen"
 }

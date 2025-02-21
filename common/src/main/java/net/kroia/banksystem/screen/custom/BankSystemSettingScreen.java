@@ -69,9 +69,12 @@ public class BankSystemSettingScreen extends GuiScreen {
             boolean showOperatorTab = false; // Set this to `true` if you need the operator tab
 
 
-            //Minecraft.getInstance().setScreen(new CreativeModeItemSelectionScreen(this::onNewBankingItemSelected));
+            Minecraft.getInstance().setScreen(new CreativeModeItemSelectionScreen(this::onNewBankingItemSelected,()->
+            {
+                minecraft.setScreen(this);
+            }));
 
-
+/*
             ArrayList<ItemStack> potentialItems = new ArrayList<>();
             for(ItemID itemID : ClientBankManager.getPotentialBankItemIDs())
             {
@@ -80,7 +83,7 @@ public class BankSystemSettingScreen extends GuiScreen {
 
             ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, potentialItems, this::onNewBankingItemSelected);
             itemSelectionScreen.sortItems();
-            this.minecraft.setScreen(itemSelectionScreen);
+            this.minecraft.setScreen(itemSelectionScreen);*/
         });
 
         ArrayList<ItemStack> allowedItems = new ArrayList<>();

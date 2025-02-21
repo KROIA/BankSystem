@@ -205,7 +205,7 @@ public class BankSystemCommands {
         // /bank                                                - Show bank balance (money and items)
         // /bank enableNotifications                            - Enables bank notifications on transactions
         // /bank disableNotifications                           - Disables bank notifications on transactions
-        // /bank <username> settingsGUI                         - Open settings GUI of a player
+        // /bank settingsGUI                                    - Open bank settings GUI to manage the bankable items
         // /bank <username> show                                - Show bank balance of a player
         // /bank <username> create <itemID> <amount>            - Create a bank for another player
         // /bank <username> setBalance <itemID> <amount>        - Set balance of a bank for another player
