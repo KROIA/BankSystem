@@ -20,6 +20,7 @@ import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -70,10 +71,10 @@ public class BankAccountManagementScreen extends GuiScreen {
 
         createNewBankButton = new Button(CREATE_NEW_BANK.getString());
         createNewBankButton.setOnFallingEdge(() -> {
-            ArrayList<String> allowedItemIDs = new ArrayList<>();
+            ArrayList<ItemStack> allowedItemIDs = new ArrayList<>();
             for(ItemID itemID : ClientBankManager.getAllowedItemIDs())
             {
-                allowedItemIDs.add(itemID.getName());
+                allowedItemIDs.add(itemID.getStack());
             }
             ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, allowedItemIDs, this::onCreateNewBank);
             itemSelectionScreen.sortItems();
@@ -180,9 +181,9 @@ public class BankAccountManagementScreen extends GuiScreen {
             bankAccountManagementItems.remove(item.getItemID());
         }
     }
-    private void onCreateNewBank(String itemIDStr)
+    private void onCreateNewBank(ItemStack item)
     {
-        ItemID itemID = new ItemID(itemIDStr);
+        ItemID itemID = new ItemID(item);
         if(bankAccountManagementItems.containsKey(itemID))
             return;
         UpdateBankAccountPacket.BankData data = new UpdateBankAccountPacket.BankData();

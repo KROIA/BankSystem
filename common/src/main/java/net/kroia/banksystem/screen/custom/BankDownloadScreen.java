@@ -173,20 +173,19 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
         applySettigns();
     }
     private void onSelectItemButtonClicked() {
-        ArrayList<String> allowedItemIDs = new ArrayList<>();
+        ArrayList<ItemStack> allowedItemIDs = new ArrayList<>();
         for(ItemID itemID : ClientBankManager.getAllowedItemIDs())
         {
-            allowedItemIDs.add(itemID.getName());
+            allowedItemIDs.add(itemID.getStack());
         }
         ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, allowedItemIDs, this::onItemSelected);
         itemSelectionScreen.sortItems();
         assert this.minecraft != null;
         this.minecraft.setScreen(itemSelectionScreen);
     }
-    private void onItemSelected(String itemID)
+    private void onItemSelected(ItemStack itemStack)
     {
-        BankDownloadScreen.itemID = new ItemID(itemID);
-        ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+        BankDownloadScreen.itemID = new ItemID(itemStack);;
         instance.settingsMenu.itemView.setItemStack(itemStack);
     }
     private void applySettigns()

@@ -15,7 +15,10 @@ import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
 
@@ -58,12 +61,18 @@ public final class BankSystemMod {
     public static void onServerSetup()
     {
         //BankSystemNetworking.setupServerReceiverPackets();
-        ArrayList<ItemID> itemIDs = new ArrayList<>();
-        for(String itemID : ItemUtilities.getAllItemIDs())
+        //ArrayList<ItemID> items = new ArrayList<>();
+        /*for(ItemStack item : ItemUtilities.getAllItems())
         {
-            itemIDs.add(new ItemID(itemID));
+            items.add(new ItemID(item));
+        }*/
+        /*for (CreativeModeTab tab : BuiltInRegistries.CREATIVE_MODE_TAB) {
+            for(ItemStack item : tab.getDisplayItems())
+            {
+                items.add(new ItemID(item));
+            }
         }
-        ServerBankManager.setPotientialBankItemIDs(itemIDs);
+        ServerBankManager.setPotientialBankItemIDs(items);*/
     }
 
     public static void loadDataFromFiles(MinecraftServer server)

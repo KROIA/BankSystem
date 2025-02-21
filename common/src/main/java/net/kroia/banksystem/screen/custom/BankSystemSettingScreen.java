@@ -7,6 +7,7 @@ import net.kroia.banksystem.networking.packet.client_sender.request.RequestPoten
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.ItemInfoWidget;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
@@ -54,10 +55,10 @@ public class BankSystemSettingScreen extends GuiScreen {
     public BankSystemSettingScreen() {
         super(TITLE);
         instance = this;
-        if(ClientBankManager.getPotentialBankItemIDs().isEmpty())
-        {
-            RequestPotentialBankItemIDsPacket.sendRequest();
-        }
+        //if(ClientBankManager.getPotentialBankItemIDs().isEmpty())
+        //{
+        RequestPotentialBankItemIDsPacket.sendRequest();
+        //}
 
         closeButton = new CloseButton(this::onClose);
 
@@ -68,24 +69,24 @@ public class BankSystemSettingScreen extends GuiScreen {
             boolean showOperatorTab = false; // Set this to `true` if you need the operator tab
 
 
-            Minecraft.getInstance().setScreen(new CreativeModeItemSelectionScreen(this::onNewBankingItemSelected));
+            //Minecraft.getInstance().setScreen(new CreativeModeItemSelectionScreen(this::onNewBankingItemSelected));
 
-        /*
-            ArrayList<String> potentialItems = new ArrayList<>();
+
+            ArrayList<ItemStack> potentialItems = new ArrayList<>();
             for(ItemID itemID : ClientBankManager.getPotentialBankItemIDs())
             {
-                potentialItems.add(itemID.getName());
+                potentialItems.add(itemID.getStack());
             }
 
             ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, potentialItems, this::onNewBankingItemSelected);
             itemSelectionScreen.sortItems();
-            this.minecraft.setScreen(itemSelectionScreen);*/
+            this.minecraft.setScreen(itemSelectionScreen);
         });
 
-        ArrayList<String> allowedItems = new ArrayList<>();
+        ArrayList<ItemStack> allowedItems = new ArrayList<>();
         for(ItemID itemID : ClientBankManager.getAllowedItemIDs())
         {
-            allowedItems.add(itemID.getName());
+            allowedItems.add(itemID.getStack());
         }
         currentBankingItemsView = new ItemSelectionView(allowedItems, this::setCurrentBankingItemID);
         currentBankingItemsView.setPosition(padding, padding);
@@ -96,7 +97,7 @@ public class BankSystemSettingScreen extends GuiScreen {
             if(currentBankingItemID != null) {
                 AskPopupScreen popup = new AskPopupScreen(this, () -> {
                     ClientBankManager.requestRemoveItemID(currentBankingItemID);
-                    setCurrentBankingItemID((String)null);
+                    setCurrentBankingItemID(null);
                 }, () -> {}, ASK_TITLE.getString() + " "+currentBankingItemID + "?", ASK_MSG.getString());
                 popup.setSize(400,100);
                 popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
@@ -143,56 +144,29 @@ public class BankSystemSettingScreen extends GuiScreen {
     }
 
 
-    private void onNewBankingItemSelected(String itemID) {
+    private void onNewBankingItemSelected(ItemStack itemStack) {
         var items = ClientBankManager.getAllowedItemIDs();
-        ItemID newItemID = new ItemID(itemID);
+        ItemID newItemID = new ItemID(itemStack);
         if(!items.contains(newItemID)) {
             ClientBankManager.requestAllowNewItemID(newItemID);
         }
-        setCurrentBankingItemID(itemID);
+        setCurrentBankingItemID(itemStack);
     }
-    private void onNewBankingItemSelected(ItemStack stack) {
-        var items = ClientBankManager.getAllowedItemIDs();
-        ItemID itemID = new ItemID(stack);
-        if(!items.contains(itemID)) {
-            ClientBankManager.requestAllowNewItemID(itemID);
-        }
-        setCurrentBankingItemID(itemID);
-    }
-    private void setCurrentBankingItemID(String newItemID) {
+    private void setCurrentBankingItemID(ItemStack itemStack) {
         currentBankingItemID = null;
         itemInfoWidget.setItemID(null);
-        if(newItemID == null) {
+        if(itemStack == null) {
             currentBankingItemView.setItemStack(null);
             return;
         }
-        ClientBankManager.requestItemInfo(new ItemID(newItemID));
+        ClientBankManager.requestItemInfo(new ItemID(itemStack));
         currentBankingItemView.setItemStack(null);
 
         for(ItemID itemID : ClientBankManager.getAllowedItemIDs()) {
             String name = itemID.getName();
-            if (name.compareTo(newItemID) == 0) {
+            if (name.compareTo(ItemUtilities.getItemID(itemStack.getItem())) == 0) {
                 currentBankingItemView.setItemStack(itemID.getStack());
-                currentBankingItemID = new ItemID(newItemID);
-                itemInfoWidget.setItemID(currentBankingItemID);
-                break;
-            }
-        }
-    }
-    private void setCurrentBankingItemID(ItemID newItemID) {
-        currentBankingItemID = null;
-        itemInfoWidget.setItemID(null);
-        if(newItemID == null) {
-            currentBankingItemView.setItemStack(null);
-            return;
-        }
-        ClientBankManager.requestItemInfo(newItemID);
-        currentBankingItemView.setItemStack(null);
-
-        for(ItemID itemID : ClientBankManager.getAllowedItemIDs()) {
-            if (itemID.equals(newItemID)) {
-                currentBankingItemView.setItemStack(itemID.getStack());
-                currentBankingItemID = newItemID;
+                currentBankingItemID = new ItemID(itemStack);
                 itemInfoWidget.setItemID(currentBankingItemID);
                 break;
             }
@@ -202,14 +176,14 @@ public class BankSystemSettingScreen extends GuiScreen {
     public void updateBankData()
     {
         var items = ClientBankManager.getAllowedItemIDs();
-        ArrayList<String> allowedItems = new ArrayList<>();
+        ArrayList<ItemStack> allowedItems = new ArrayList<>();
         for(ItemID itemID : items)
         {
-            allowedItems.add(itemID.getName());
+            allowedItems.add(itemID.getStack());
         }
         currentBankingItemsView.setAllowedItems(allowedItems);
         currentBankingItemsView.sortItems();
-        setCurrentBankingItemID(currentBankingItemID);
+        setCurrentBankingItemID((currentBankingItemID != null?currentBankingItemID.getStack():null));
     }
     public void updateItemInfoData()
     {

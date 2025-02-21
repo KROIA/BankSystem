@@ -7,11 +7,15 @@ import net.kroia.banksystem.banking.events.ServerBankEvent;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -261,6 +265,24 @@ public class ServerBankManager implements ServerSaveable {
     }
     public static ArrayList<ItemID> getPotentialBankItemIDs()
     {
+        //BankSystemNetworking.setupServerReceiverPackets();
+        ArrayList<ItemID> items = new ArrayList<>();
+        /*for(ItemStack item : ItemUtilities.getAllItems())
+        {
+            items.add(new ItemID(item));
+        }*/
+        /*for (CreativeModeTab tab : BuiltInRegistries.CREATIVE_MODE_TAB) {
+            for(ItemStack item : tab.getDisplayItems())
+            {
+                items.add(new ItemID(item));
+            }
+        }*/
+        for(ItemStack item : ItemUtilities.getAllItems())
+        {
+            items.add(new ItemID(item));
+        }
+
+        setPotientialBankItemIDs(items);
         return potentialBankItemIDs;
     }
 
