@@ -160,8 +160,11 @@ public class BankUser implements ServerSaveable {
         for (int i = 0; i < bankElements.size(); i++) {
             CompoundTag bankTag = bankElements.getCompound(i);
             Bank bank = Bank.loadFromTag(this, bankTag);
-            if(bank != null)
+            if(bank != null) {
+                if(!bank.getItemID().isValid())
+                    continue;
                 bankMap.put(bank.getItemID(), bank);
+            }
             else
                 loadSuccess = false;
         }

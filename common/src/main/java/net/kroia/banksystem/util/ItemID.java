@@ -45,6 +45,9 @@ public class ItemID implements ServerSaveable {
     public String getName() {
         return ItemUtilities.getItemID(stack.getItem());
     }
+    public boolean isAir() {
+        return getName().equals("minecraft:air");
+    }
 
     @Override
     public boolean save(CompoundTag tag) {
@@ -61,6 +64,6 @@ public class ItemID implements ServerSaveable {
     }
 
     public boolean isValid() {
-        return !stack.isEmpty() && stack != null && !stack.equals(new ItemID("minecraft:air").getStack());
+        return !stack.isEmpty() && stack != null && !isAir();
     }
 }

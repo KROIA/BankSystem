@@ -85,8 +85,15 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         itemID = null;
         if(tag.contains("ItemID"))
         {
-            CompoundTag itemTag = tag.getCompound("ItemID");
-            itemID = new ItemID(itemTag);
+            String itemIDStr = tag.getString("ItemID");
+            if(!itemIDStr.isEmpty())
+            {
+                itemID = new ItemID(itemIDStr);
+            }
+            else {
+                CompoundTag itemTag = tag.getCompound("ItemID");
+                itemID = new ItemID(itemTag);
+            }
         }
         targetAmount = tag.getInt("TargetAmount");
         playerOwner = null;

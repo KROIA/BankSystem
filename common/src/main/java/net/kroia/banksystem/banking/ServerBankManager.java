@@ -61,6 +61,7 @@ public class ServerBankManager implements ServerSaveable {
         return user;
     }
 
+
     public static BankUser getUser(UUID userUUID)
     {
         return userMap.get(userUUID);
@@ -138,6 +139,23 @@ public class ServerBankManager implements ServerSaveable {
         itemIDs.add(itemID);
         ServerBankCloseItemBankEvent event = new ServerBankCloseItemBankEvent(lostItems, itemIDs);
         ServerBankManager.fireEvent(event);
+    }
+
+    public static boolean removeUser(UUID userUUID)
+    {
+        BankUser user = userMap.get(userUUID);
+        if(user == null)
+            return false;
+        HashMap<ItemID, Long> itemAmounts = new HashMap<>();
+        for (Map.Entry<ItemID, Bank> entry : user.getBankMap().entrySet()) {
+            itemAmounts.put(entry.getKey(), entry.getValue().getTotalBalance());
+        }
+        HashMap<UUID, ServerBankCloseItemBankEvent.PlayerData> lostItems = new HashMap<>();
+        lostItems.put(user.getPlayerUUID(), new ServerBankCloseItemBankEvent.PlayerData(user.getPlayerUUID(), itemAmounts));
+        userMap.remove(userUUID);
+        ServerBankCloseItemBankEvent event = new ServerBankCloseItemBankEvent(lostItems, new ArrayList<>(itemAmounts.keySet()));
+        ServerBankManager.fireEvent(event);
+        return true;
     }
 
     public static void addEventListener(Consumer<ServerBankEvent> listener)
@@ -349,7 +367,8 @@ public class ServerBankManager implements ServerSaveable {
                 CompoundTag itemTag = allowedItemTag.getCompound("itemID");
                 itemID = new ItemID(itemTag);
             }
-
+            if(!itemID.isValid())
+                continue;
             allowedItemIDs.put(itemID, true);
         }
         return success;
