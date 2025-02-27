@@ -184,8 +184,7 @@ public class BankSystemSettingScreen extends GuiScreen {
         {
             allowedItems.add(itemID.getStack());
         }
-        currentBankingItemsView.setAllowedItems(allowedItems);
-        currentBankingItemsView.sortItems();
+        currentBankingItemsView.setItems(allowedItems);
         setCurrentBankingItemID((currentBankingItemID != null?currentBankingItemID.getStack():null));
     }
     public void updateItemInfoData()
