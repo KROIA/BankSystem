@@ -263,7 +263,7 @@ public class ATMScreen /*extends GuiContainerScreen<ATMContainerMenu>*/extends G
         if(sum <= 0 || sum > currentBalanceWeekVar)
         {
             Player player = Minecraft.getInstance().player;
-            if(player != null)
+            if(player != null && sum > currentBalanceWeekVar)
             {
                 String text = BankSystemTextMessages.getATMNotEnoughBalance(sum);
                 player.sendSystemMessage(Component.translatable(text));
