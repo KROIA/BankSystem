@@ -37,7 +37,9 @@ public abstract class AbstractBankContainerMenu extends AbstractContainerMenu {
 
         createPlayerHotbar(playerInv);
         createPlayerInventory(playerInv);
-        createBlockEntityInventory(blockInventory);
+        if(blockInventory != null) {
+            createBlockEntityInventory(blockInventory);
+        }
     }
 
 

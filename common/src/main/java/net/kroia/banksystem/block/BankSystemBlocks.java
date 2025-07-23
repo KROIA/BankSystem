@@ -32,6 +32,7 @@ public class BankSystemBlocks {
     public static final RegistrySupplier<Block> METAL_CASE_BLOCK = registerBlock(MetalCaseBlock.NAME, MetalCaseBlock::new);
     public static final RegistrySupplier<TerminalBlock> TERMINAL_BLOCK = registerBlock(TerminalBlock.NAME, TerminalBlock::new);
     public static final RegistrySupplier<TerminalBlock> BANK_TERMINAL_BLOCK = registerBlock(BankTerminalBlock.NAME, BankTerminalBlock::new);
+    public static final RegistrySupplier<TerminalBlock> ATM_BLOCK = registerBlock(ATMBlock.NAME, ATMBlock::new);
     public static final RegistrySupplier<Block> BANK_UPLOAD_BLOCK = registerBlock(BankUploadBlock.NAME, BankUploadBlock::new);
     public static final RegistrySupplier<Block> BANK_DOWNLOAD_BLOCK = registerBlock(BankDownloadBlock.NAME, BankDownloadBlock::new);
 

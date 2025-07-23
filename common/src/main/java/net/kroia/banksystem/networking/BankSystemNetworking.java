@@ -4,6 +4,7 @@ import dev.architectury.networking.NetworkChannel;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.networking.packet.client_sender.request.*;
 import net.kroia.banksystem.networking.packet.client_sender.update.UpdateBankAccountPacket;
+import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
@@ -43,6 +44,7 @@ public class BankSystemNetworking {
         CHANNEL.register(UpdateBankAccountPacket.class, UpdateBankAccountPacket::toBytes, UpdateBankAccountPacket::new, UpdateBankAccountPacket::receive);
         CHANNEL.register(UpdateBankUploadBlockEntityPacket.class, UpdateBankUploadBlockEntityPacket::toBytes, UpdateBankUploadBlockEntityPacket::new, UpdateBankUploadBlockEntityPacket::receive);
         CHANNEL.register(UpdateBankDownloadBlockEntityPacket.class, UpdateBankDownloadBlockEntityPacket::toBytes, UpdateBankDownloadBlockEntityPacket::new, UpdateBankDownloadBlockEntityPacket::receive);
+        CHANNEL.register(WithdrawMoneyPacket.class, WithdrawMoneyPacket::toBytes, WithdrawMoneyPacket::new, WithdrawMoneyPacket::receive);
     }
 
 

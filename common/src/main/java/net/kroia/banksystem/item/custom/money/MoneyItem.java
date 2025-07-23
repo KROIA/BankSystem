@@ -5,6 +5,9 @@ import net.kroia.banksystem.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+
+import java.util.ArrayList;
 
 public class MoneyItem extends Item{
     public static final String NAME = "money";
@@ -44,4 +47,6 @@ public class MoneyItem extends Item{
     {
         return isMoney(itemID.getName());
     }
+
+
 }

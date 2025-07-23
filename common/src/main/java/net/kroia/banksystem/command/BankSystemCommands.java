@@ -500,9 +500,7 @@ public class BankSystemCommands {
             return Command.SINGLE_SUCCESS;
         }
         Bank.Status status = bank.deposit(amount);
-        if(status == Bank.Status.SUCCESS)
-            PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getAddedMessage(amount, MoneyItem.getName(), username));
-        else {
+        if(status != Bank.Status.SUCCESS){
             PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getCantAddMessage(amount, MoneyItem.getName(), username, status.toString()));
         }
         return Command.SINGLE_SUCCESS;
@@ -528,8 +526,6 @@ public class BankSystemCommands {
         }
         if(bank.getBalance() >= amount) {
             bank.withdraw(amount);
-
-            PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getRemovedMessage(amount, MoneyItem.getName(), username));
         }
         else {
             PlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getNotEnoughInAccountMessage(username, MoneyItem.getName()));

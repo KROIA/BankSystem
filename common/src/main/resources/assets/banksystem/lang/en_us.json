@@ -107,5 +107,10 @@
   "message.banksystem.bank_data_save_failed": "Failed to save bank data",
   "message.banksystem.bank_data_load_failed": "Failed to load bank data",
   "message.banksystem.bank_data_loaded": "Bank data loaded",
-  "message.banksystem.need_creative_mode_for_this_screen": "You need to be in creative mode to access this screen"
+  "message.banksystem.need_creative_mode_for_this_screen": "You need to be in creative mode to access this screen",
+
+  "gui.banksystem.atm_screen.receive_button": "Withdraw money",
+  "gui.banksystem.atm_screen.sum_text": "Current withdrawal sum: {amount}",
+  "gui.banksystem.atm_screen.available_text": "Available for withdrawal: {amount}",
+  "gui.banksystem.atm_screen.not_enough_money_in_bank": "You do not have enough money in the bank to withdraw {amount}"
 }

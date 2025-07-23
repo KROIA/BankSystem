@@ -1,7 +1,9 @@
 package net.kroia.banksystem.block.custom;
 
 import net.kroia.banksystem.entity.BankSystemEntities;
+//import net.kroia.banksystem.entity.custom.ATMBlockEntity;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
+import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
@@ -24,67 +26,44 @@ import java.util.UUID;
 
 import static dev.architectury.registry.menu.MenuRegistry.openExtendedMenu;
 
-public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
+public class ATMBlock  extends TerminalBlock/* implements EntityBlock*/ {
 
-    public static final String NAME = "bank_terminal_block";
+    public static final String NAME = "atm_block";
 
-    public BankTerminalBlock()
-    {
-        super();
-    }
-
-    @Nullable
+    /*@Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        return BankSystemEntities.BANK_TERMINAL_BLOCK_ENTITY.get().create(pos, state);
-    }
+        return BankSystemEntities.BANK_ATM_BLOCK_ENTITY.get().create(pos, state);
+    }*/
+
+
 
     @Override
     public void openGui(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
-        BlockEntity be = level.getBlockEntity(pos);
-        if (!(be instanceof BankTerminalBlockEntity blockEntity))
-            return;
+        //BlockEntity be = level.getBlockEntity(pos);
+        //if (!(be instanceof ATMBlockEntity blockEntity))
+        //    return;
 
         if (level.isClientSide())
             return;
 
         // open screen
         if (player instanceof ServerPlayer sPlayer) {
-            MenuProvider menuProvider = blockEntity.getMenuProvider();
+            //MenuProvider menuProvider = blockEntity.getMenuProvider();
             // Open the menu
             SyncBankDataPacket.sendPacket(sPlayer);
-            openExtendedMenu(sPlayer, menuProvider, (menu) -> {
+            SyncOpenGUIPacket.send_openATMScreen(sPlayer);
+            //openExtendedMenu(sPlayer, menuProvider, (menu) -> {
                 // Set the block position
-                menu.writeBlockPos(pos);
-            });
+            //    menu.writeBlockPos(pos);
+            //});
         }
     }
 
-    @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
-        if (!level.isClientSide()) {
-            // Drop all items from the terminal inventories that have not been transfered to the bank
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof BankTerminalBlockEntity blockEntity) {
-                HashMap<UUID, BankTerminalBlockEntity.TerminalInventory> inventories = blockEntity.getPlayerInventories();
-                for (BankTerminalBlockEntity.TerminalInventory inventory : inventories.values()) {
-                    for (int index = 0; index < inventory.getContainerSize(); index++) {
-                        ItemStack stack = inventory.getItem(index);
-                        var entity = new ItemEntity(level, pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, stack);
-                        level.addFreshEntity(entity);
-                    }
-                }
-            }
-        }
 
-        super.onRemove(state, level, pos, newState, isMoving);
-    }
-
-
-
-    @Nullable
+   /* @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         return type == BankSystemEntities.BANK_TERMINAL_BLOCK_ENTITY.get() ? BankTerminalBlockEntity::tick : null;
-    }
+    }*/
 }

@@ -125,6 +125,8 @@ public class Bank implements ServerSaveable {
         if(willOverflow(amount))
             return Status.FAILED_OVERFLOW;
         addBalanceInternal(amount);
+        if(owner.isBankNotificationEbabled())
+            notifyUser(BankSystemTextMessages.getAddedMessage(amount, getItemName(), owner.getPlayerName()));
         return Status.SUCCESS;
     }
 
@@ -140,6 +142,8 @@ public class Bank implements ServerSaveable {
             return Status.FAILED_NOT_ENOUGH_FUNDS;
         }
         addBalanceInternal(-amount);
+        if(owner.isBankNotificationEbabled())
+            notifyUser(BankSystemTextMessages.getRemovedMessage(amount, getItemName(), owner.getPlayerName()));
         return Status.SUCCESS;
     }
     public Status withdrawLocked(long amount) {

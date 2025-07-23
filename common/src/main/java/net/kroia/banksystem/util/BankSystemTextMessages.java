@@ -1,6 +1,7 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.screen.custom.ATMScreen;
 import net.minecraft.network.chat.Component;
 
 public class BankSystemTextMessages {
@@ -417,6 +418,29 @@ public class BankSystemTextMessages {
     }
 
 
+    private static final Component ATM_SUM_TEXT = Component.translatable(ATMScreen.COMPONENT_STR_START + "sum_text");
+    public static String getATMSumTextMessage(long sum)
+    {
+        String msg = ATM_SUM_TEXT.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(sum));
+        return msg;
+    }
+
+    private static final Component ATM_AVAILABLE_TEXT = Component.translatable(ATMScreen.COMPONENT_STR_START + "available_text");
+    public static String getATMAvailableTextMessage(long sum)
+    {
+        String msg = ATM_AVAILABLE_TEXT.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(sum));
+        return msg;
+    }
+
+    private static final Component ATM_NOT_ENOUGH_BALANCE_TEXT = Component.translatable(ATMScreen.COMPONENT_STR_START + "not_enough_money_in_bank");
+    public static String getATMNotEnoughBalance(long sum)
+    {
+        String msg = ATM_NOT_ENOUGH_BALANCE_TEXT.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(sum));
+        return msg;
+    }
 
 
 

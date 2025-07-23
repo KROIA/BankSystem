@@ -7,14 +7,17 @@ import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.item.custom.money.*;
+import net.kroia.banksystem.item.custom.software.ATMSoftware;
 import net.kroia.banksystem.item.custom.software.BankingSoftware;
 import net.kroia.banksystem.item.custom.software.Software;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 
+import java.util.ArrayList;
 import java.util.function.Supplier;
 
 public class BankSystemItems {
@@ -43,6 +46,7 @@ public class BankSystemItems {
     // Software
     public static final Supplier<Item> SOFTWARE = registerItem(Software.NAME, Software::new);
     public static final Supplier<Item> BANKING_SOFTWARE = registerItem(BankingSoftware.NAME, BankingSoftware::new);
+    public static final Supplier<Item> ATM_SOFTWARE = registerItem(ATMSoftware.NAME, ATMSoftware::new);
 
     // Money
     public static final Supplier<Item> MONEY     = registerItem(MoneyItem.NAME, MoneyItem::new);
@@ -54,6 +58,22 @@ public class BankSystemItems {
     public static final Supplier<Item> MONEY200  = registerItem(MoneyItem200.NAME, MoneyItem200::new);
     public static final Supplier<Item> MONEY500  = registerItem(MoneyItem500.NAME, MoneyItem500::new);
     public static final Supplier<Item> MONEY1000 = registerItem(MoneyItem1000.NAME, MoneyItem1000::new);
+
+
+
+    public static ArrayList<ItemStack> getMoneyItems() {
+        ArrayList<ItemStack> moneyItems = new ArrayList<>();
+        moneyItems.add(new ItemStack(MONEY.get()));
+        moneyItems.add(new ItemStack(MONEY5.get()));
+        moneyItems.add(new ItemStack(MONEY10.get()));
+        moneyItems.add(new ItemStack(MONEY20.get()));
+        moneyItems.add(new ItemStack(MONEY50.get()));
+        moneyItems.add(new ItemStack(MONEY100.get()));
+        moneyItems.add(new ItemStack(MONEY200.get()));
+        moneyItems.add(new ItemStack(MONEY500.get()));
+        moneyItems.add(new ItemStack(MONEY1000.get()));
+        return moneyItems;
+    }
 
 
     public static <T extends Item> RegistrySupplier<T> registerItem(String name, Supplier<T> item)

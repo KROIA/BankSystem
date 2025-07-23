@@ -6,8 +6,10 @@ import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.banksystem.BankSystemMod;
+//import net.kroia.banksystem.menu.custom.ATMContainerMenu;
 import net.kroia.banksystem.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
+import net.kroia.banksystem.screen.custom.ATMScreen;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.screen.custom.BankUploadScreen;
@@ -42,6 +44,7 @@ public class BankSystemMenus {
         MenuRegistry.registerScreenFactory(BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
         MenuRegistry.registerScreenFactory(BANK_UPLOAD_CONTAINER_MENU.get(), BankUploadScreen::new);
         MenuRegistry.registerScreenFactory(BANK_DOWNLOAD_CONTAINER_MENU.get(), BankDownloadScreen::new);
+        //MenuRegistry.registerScreenFactory(ATM_CONTAINER_MENU.get(), ATMScreen::new);
     }
 
 
@@ -70,6 +73,9 @@ public class BankSystemMenus {
     public static final RegistrySupplier<MenuType<BankDownloadContainerMenu>> BANK_DOWNLOAD_CONTAINER_MENU =
             MENUS.register(new ResourceLocation(BankSystemMod.MOD_ID, "bank_download_container_menu"), () -> MenuRegistry.ofExtended(BankDownloadContainerMenu::new));
 
+    /*public static final RegistrySupplier<MenuType<ATMContainerMenu>> ATM_CONTAINER_MENU =
+            MENUS.register(new ResourceLocation(BankSystemMod.MOD_ID, "atm_container_menu"), () -> MenuRegistry.ofExtended(ATMContainerMenu::new));
+*/
 
 
 }

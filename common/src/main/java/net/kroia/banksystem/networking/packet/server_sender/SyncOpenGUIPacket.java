@@ -15,7 +15,8 @@ public class SyncOpenGUIPacket extends NetworkPacket {
     enum GUIType
     {
         BANK_SYSTEM_SETTING,
-        BANK_ACCOUNT
+        BANK_ACCOUNT,
+        ATM_SCREEN, // ATM screen is not implemented yet
     }
 
     GUIType guiType;
@@ -50,6 +51,13 @@ public class SyncOpenGUIPacket extends NetworkPacket {
         BankSystemNetworking.sendToClient(player, packet);
     }
 
+    public static void send_openATMScreen(ServerPlayer player)
+    {
+        SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
+        packet.guiType = GUIType.ATM_SCREEN;
+        BankSystemNetworking.sendToClient(player, packet);
+    }
+
     @Override
     protected void handleOnClient()
     {
@@ -60,6 +68,9 @@ public class SyncOpenGUIPacket extends NetworkPacket {
                 break;
             case BANK_ACCOUNT:
                 BankSystemClientHooks.openBankAccountScreen(targetPlayerUUID);
+                break;
+            case ATM_SCREEN:
+                BankSystemClientHooks.openATMScreen();
                 break;
         }
     }
