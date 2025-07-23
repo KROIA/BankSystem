@@ -106,5 +106,6 @@
   "message.banksystem.bank_data_saved": "Bankdatä gseichert",
   "message.banksystem.bank_data_save_failed": "Bankdatä chönd nöd gseichert werde",
   "message.banksystem.bank_data_load_failed": "Bankdatä chönd nöd glade werde",
-  "message.banksystem.bank_data_loaded": "Bankdatä glade"
+  "message.banksystem.bank_data_loaded": "Bankdatä glade",
+  "message.banksystem.need_creative_mode_for_this_screen": "Du muesch im Kreativmodus si zum uf dä Bildschirm z'zugreife"
 }

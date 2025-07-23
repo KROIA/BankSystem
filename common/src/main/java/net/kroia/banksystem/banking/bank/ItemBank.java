@@ -1,11 +1,12 @@
 package net.kroia.banksystem.banking.bank;
 
 import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.util.ItemID;
 import net.minecraft.nbt.CompoundTag;
 
 public class ItemBank extends Bank {
 
-    public ItemBank(BankUser owner, String itemID, long balance) {
+    public ItemBank(BankUser owner, ItemID itemID, long balance) {
         super(owner, itemID, balance);
     }
     public ItemBank(BankUser owner, CompoundTag tag) {

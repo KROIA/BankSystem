@@ -13,12 +13,17 @@ import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.util.ArrayList;
 
 public final class BankSystemMod {
     public static final String MOD_ID = "banksystem";
@@ -27,7 +32,7 @@ public final class BankSystemMod {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public static void init() {
-        BankSystemModSettings.init();
+
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
             BankSystemCommands.register(dispatcher);
         });
@@ -44,6 +49,7 @@ public final class BankSystemMod {
         TickEvent.ServerLevelTick.SERVER_POST.register((serverLevel) -> {
             BankSystemDataHandler.tickUpdate();
         });
+        BankSystemModSettings.init();
     }
 
     public static void onClientSetup()
@@ -55,7 +61,18 @@ public final class BankSystemMod {
     public static void onServerSetup()
     {
         //BankSystemNetworking.setupServerReceiverPackets();
-        ServerBankManager.setPotientialBankItemIDs(ItemUtilities.getAllItemIDs());
+        //ArrayList<ItemID> items = new ArrayList<>();
+        /*for(ItemStack item : ItemUtilities.getAllItems())
+        {
+            items.add(new ItemID(item));
+        }*/
+        /*for (CreativeModeTab tab : BuiltInRegistries.CREATIVE_MODE_TAB) {
+            for(ItemStack item : tab.getDisplayItems())
+            {
+                items.add(new ItemID(item));
+            }
+        }
+        ServerBankManager.setPotientialBankItemIDs(items);*/
     }
 
     public static void loadDataFromFiles(MinecraftServer server)

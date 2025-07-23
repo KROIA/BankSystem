@@ -6,11 +6,16 @@ import net.kroia.banksystem.banking.events.ServerBankCloseItemBankEvent;
 import net.kroia.banksystem.banking.events.ServerBankEvent;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -21,16 +26,16 @@ import java.util.function.Consumer;
 public class ServerBankManager implements ServerSaveable {
 
     private static Map<UUID, BankUser> userMap = new HashMap<>();
-    private static Map<String, Boolean> allowedItemIDs = BankSystemModSettings.Bank.ALLOWED_ITEM_IDS;
-    private static ArrayList<String> potentialBankItemIDs = new ArrayList<>();
+    private static Map<ItemID, Boolean> allowedItemIDs = BankSystemModSettings.Bank.getAllowedItemIDs();
+    private static ArrayList<ItemID> potentialBankItemIDs = new ArrayList<>();
     private static ArrayList<Consumer<ServerBankEvent>> eventListeners = new ArrayList<>();
-    public static BankUser createUser(UUID userUUID, String userName, ArrayList<String> itemIDs, boolean createMoneyBank, long startMoney)
+    public static BankUser createUser(UUID userUUID, String userName, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney)
     {
         BankUser user = userMap.get(userUUID);
         if(user != null)
             return user;
         user = new BankUser(userUUID, userName);
-        for(String itemID : itemIDs)
+        for(ItemID itemID : itemIDs)
             user.createItemBank(itemID, 0);
         if(createMoneyBank)
             user.createMoneyBank(startMoney);
@@ -39,14 +44,14 @@ public class ServerBankManager implements ServerSaveable {
         userMap.put(userUUID, user);
         return user;
     }
-    public static BankUser createUser(ServerPlayer player, ArrayList<String> itemIDs, boolean createMoneyBank, long startMoney)
+    public static BankUser createUser(ServerPlayer player, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney)
     {
         String userName = player.getName().getString();
         BankUser user = userMap.get(player.getUUID());
         if(user != null)
             return user;
         user = new BankUser(player.getUUID(), userName);
-        for(String itemID : itemIDs)
+        for(ItemID itemID : itemIDs)
             user.createItemBank(itemID, 0);
         if(createMoneyBank)
             user.createMoneyBank(startMoney);
@@ -55,6 +60,7 @@ public class ServerBankManager implements ServerSaveable {
         userMap.put(player.getUUID(), user);
         return user;
     }
+
 
     public static BankUser getUser(UUID userUUID)
     {
@@ -75,10 +81,10 @@ public class ServerBankManager implements ServerSaveable {
     public static void clear()
     {
         HashMap<UUID, ServerBankCloseItemBankEvent.PlayerData> lostItems = new HashMap<>();
-        HashMap<String, Boolean> allRemovedItemIDs = new HashMap<>();
+        HashMap<ItemID, Boolean> allRemovedItemIDs = new HashMap<>();
         for(BankUser user : userMap.values())
         {
-            HashMap<String, Long> itemAmounts = new HashMap<>();
+            HashMap<ItemID, Long> itemAmounts = new HashMap<>();
             user.getBankMap().forEach((itemID, bank) -> {
                 itemAmounts.put(itemID, bank.getTotalBalance());
                 allRemovedItemIDs.put(itemID, true);
@@ -95,20 +101,20 @@ public class ServerBankManager implements ServerSaveable {
         ServerBankCloseItemBankEvent event = new ServerBankCloseItemBankEvent(lostItems, new ArrayList<>(allRemovedItemIDs.keySet()));
         ServerBankManager.fireEvent(event);
     }
-    public static boolean closeBankAccount(UUID playerUUID, String itemID)
+    public static boolean closeBankAccount(UUID playerUUID, ItemID itemID)
     {
         BankUser user = userMap.get(playerUUID);
         Bank bank = user.getBank(itemID);
         if(bank == null) {
             return false;
         }
-        HashMap<String, Long> itemAmounts = new HashMap<>();
+        HashMap<ItemID, Long> itemAmounts = new HashMap<>();
         itemAmounts.put(itemID, bank.getTotalBalance());
         HashMap<UUID, ServerBankCloseItemBankEvent.PlayerData> lostItems = new HashMap<>();
         lostItems.put(user.getPlayerUUID(), new ServerBankCloseItemBankEvent.PlayerData(user.getPlayerUUID(), itemAmounts));
         if(user.removeBank(itemID))
         {
-            ArrayList<String> itemIDs= new ArrayList<>();
+            ArrayList<ItemID> itemIDs= new ArrayList<>();
             itemIDs.add(itemID);
             ServerBankCloseItemBankEvent event = new ServerBankCloseItemBankEvent(lostItems, itemIDs);
             ServerBankManager.fireEvent(event);
@@ -116,7 +122,7 @@ public class ServerBankManager implements ServerSaveable {
         }
         return false;
     }
-    public static void closeBankAccount(String itemID)
+    public static void closeBankAccount(ItemID itemID)
     {
         HashMap<UUID, ServerBankCloseItemBankEvent.PlayerData> lostItems = new HashMap<>();
         for(BankUser user : userMap.values())
@@ -124,15 +130,32 @@ public class ServerBankManager implements ServerSaveable {
             Bank bank = user.getBank(itemID);
             if(bank == null)
                 continue;
-            HashMap<String, Long> itemAmounts = new HashMap<>();
+            HashMap<ItemID, Long> itemAmounts = new HashMap<>();
             itemAmounts.put(itemID, bank.getTotalBalance());
             user.removeBank(itemID);
             lostItems.put(user.getPlayerUUID(), new ServerBankCloseItemBankEvent.PlayerData(user.getPlayerUUID(), itemAmounts));
         }
-        ArrayList<String> itemIDs= new ArrayList<>();
+        ArrayList<ItemID> itemIDs= new ArrayList<>();
         itemIDs.add(itemID);
         ServerBankCloseItemBankEvent event = new ServerBankCloseItemBankEvent(lostItems, itemIDs);
         ServerBankManager.fireEvent(event);
+    }
+
+    public static boolean removeUser(UUID userUUID)
+    {
+        BankUser user = userMap.get(userUUID);
+        if(user == null)
+            return false;
+        HashMap<ItemID, Long> itemAmounts = new HashMap<>();
+        for (Map.Entry<ItemID, Bank> entry : user.getBankMap().entrySet()) {
+            itemAmounts.put(entry.getKey(), entry.getValue().getTotalBalance());
+        }
+        HashMap<UUID, ServerBankCloseItemBankEvent.PlayerData> lostItems = new HashMap<>();
+        lostItems.put(user.getPlayerUUID(), new ServerBankCloseItemBankEvent.PlayerData(user.getPlayerUUID(), itemAmounts));
+        userMap.remove(userUUID);
+        ServerBankCloseItemBankEvent event = new ServerBankCloseItemBankEvent(lostItems, new ArrayList<>(itemAmounts.keySet()));
+        ServerBankManager.fireEvent(event);
+        return true;
     }
 
     public static void addEventListener(Consumer<ServerBankEvent> listener)
@@ -179,14 +202,14 @@ public class ServerBankManager implements ServerSaveable {
         }
         return null;
     }
-    public static Bank getBank(UUID userUUID, String itemID)
+    public static Bank getBank(UUID userUUID, ItemID itemID)
     {
         BankUser user = userMap.get(userUUID);
         if(user == null)
             return null;
         return user.getBank(itemID);
     }
-    public static Bank getMoneyBank(String userName, String itemID)
+    public static Bank getMoneyBank(String userName, ItemID itemID)
     {
         for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
             if(entry.getValue().getPlayerName().equals(userName))
@@ -205,15 +228,15 @@ public class ServerBankManager implements ServerSaveable {
         return total;
     }
 
-    public static boolean isItemIDAllowed(String itemID)
+    public static boolean isItemIDAllowed(ItemID itemID)
     {
         return allowedItemIDs.containsKey(itemID);
     }
-    public static boolean allowItemID(String itemID)
+    public static boolean allowItemID(ItemID itemID)
     {
         if(itemID == null)
             return false;
-        ArrayList<String> blackList = BankSystemModSettings.Bank.POTENTIAL_ITEM_BLACKLIST;
+        ArrayList<ItemID> blackList = BankSystemModSettings.Bank.getPotentialItemBlacklist();
         if(blackList.contains(itemID))
         {
             BankSystemMod.LOGGER.info("It is not allowed to add the itemID: " + itemID);
@@ -222,11 +245,11 @@ public class ServerBankManager implements ServerSaveable {
         allowedItemIDs.put(itemID, true);
         return true;
     }
-    public static void disallowItemID(String itemID)
+    public static void disallowItemID(ItemID itemID)
     {
         if(itemID == null)
             return;
-        ArrayList<String> notRemovable = BankSystemModSettings.Bank.NOT_REMOVABLE_ITEM_IDS;
+        ArrayList<ItemID> notRemovable = BankSystemModSettings.Bank.getNotRemovableItemIDs();
         if(notRemovable.contains(itemID))
         {
             BankSystemMod.LOGGER.info("It is not allowed to remove the itemID: " + itemID);
@@ -235,31 +258,49 @@ public class ServerBankManager implements ServerSaveable {
         allowedItemIDs.remove(itemID);
         closeBankAccount(itemID);
     }
-    public static ArrayList<String> getAllowedItemIDs()
+    public static ArrayList<ItemID> getAllowedItemIDs()
     {
         return new ArrayList<>(allowedItemIDs.keySet());
     }
 
 
-    public static void setPotientialBankItemIDs(ArrayList<String> potentialBankItemIDs)
+    public static void setPotientialBankItemIDs(ArrayList<ItemID> potentialBankItemIDs)
     {
         ServerBankManager.potentialBankItemIDs = potentialBankItemIDs;
 
-        ArrayList<String> blackList = BankSystemModSettings.Bank.POTENTIAL_ITEM_BLACKLIST;
-        for(String itemID : blackList)
+        ArrayList<ItemID> blackList = BankSystemModSettings.Bank.getPotentialItemBlacklist();
+        for(ItemID itemID : blackList)
         {
             potentialBankItemIDs.remove(itemID);
         }
 
-        ArrayList<String> notRemovable = BankSystemModSettings.Bank.NOT_REMOVABLE_ITEM_IDS;
-        for(String itemID : notRemovable)
+        ArrayList<ItemID> notRemovable = BankSystemModSettings.Bank.getNotRemovableItemIDs();
+        for(ItemID itemID : notRemovable)
         {
             if(!potentialBankItemIDs.contains(itemID))
                 potentialBankItemIDs.add(itemID);
         }
     }
-    public static ArrayList<String> getPotentialBankItemIDs()
+    public static ArrayList<ItemID> getPotentialBankItemIDs()
     {
+        //BankSystemNetworking.setupServerReceiverPackets();
+        ArrayList<ItemID> items = new ArrayList<>();
+        /*for(ItemStack item : ItemUtilities.getAllItems())
+        {
+            items.add(new ItemID(item));
+        }*/
+        /*for (CreativeModeTab tab : BuiltInRegistries.CREATIVE_MODE_TAB) {
+            for(ItemStack item : tab.getDisplayItems())
+            {
+                items.add(new ItemID(item));
+            }
+        }*/
+        for(ItemStack item : ItemUtilities.getAllItems())
+        {
+            items.add(new ItemID(item));
+        }
+
+        setPotientialBankItemIDs(items);
         return potentialBankItemIDs;
     }
 
@@ -279,9 +320,11 @@ public class ServerBankManager implements ServerSaveable {
         tag.put("users", bankElements);
 
         ListTag allowedItemIDsTag = new ListTag();
-        for (Map.Entry<String, Boolean> entry : allowedItemIDs.entrySet()) {
+        for (Map.Entry<ItemID, Boolean> entry : allowedItemIDs.entrySet()) {
             CompoundTag allowedItemTag = new CompoundTag();
-            allowedItemTag.putString("itemID", entry.getKey());
+            CompoundTag itemTag = new CompoundTag();
+            entry.getKey().save(itemTag);
+            allowedItemTag.put("itemID", itemTag);
             allowedItemIDsTag.add(allowedItemTag);
         }
         tag.put("allowedItemIDs", allowedItemIDsTag);
@@ -314,7 +357,18 @@ public class ServerBankManager implements ServerSaveable {
         allowedItemIDs.clear();
         for (int i = 0; i < allowedItemIDsTag.size(); i++) {
             CompoundTag allowedItemTag = allowedItemIDsTag.getCompound(i);
-            String itemID = allowedItemTag.getString("itemID");
+            ItemID itemID;
+            if(!allowedItemTag.getString("itemID").isEmpty())
+            {
+                itemID = new ItemID(allowedItemTag.getString("itemID"));
+            }
+            else
+            {
+                CompoundTag itemTag = allowedItemTag.getCompound("itemID");
+                itemID = new ItemID(itemTag);
+            }
+            if(!itemID.isValid())
+                continue;
             allowedItemIDs.put(itemID, true);
         }
         return success;

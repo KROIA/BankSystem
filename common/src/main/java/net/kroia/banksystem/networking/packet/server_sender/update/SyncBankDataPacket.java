@@ -6,6 +6,7 @@ import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -17,13 +18,13 @@ import java.util.UUID;
 public class SyncBankDataPacket extends NetworkPacket {
 
     public class BankData{
-        private String itemID;
+        private ItemID itemID;
         private long balance;
         private long lockedBalance;
 
         public BankData(FriendlyByteBuf buf)
         {
-            this.itemID = buf.readUtf();
+            this.itemID = new ItemID(buf.readItem());
             this.balance = buf.readLong();
             this.lockedBalance = buf.readLong();
         }
@@ -35,11 +36,11 @@ public class SyncBankDataPacket extends NetworkPacket {
         }
         public void toBytes(FriendlyByteBuf buf)
         {
-            buf.writeUtf(itemID);
+            buf.writeItem(itemID.getStack());
             buf.writeLong(balance);
             buf.writeLong(lockedBalance);
         }
-        public String getItemID() {
+        public ItemID getItemID() {
             return itemID;
         }
         public long getBalance() {
@@ -50,14 +51,14 @@ public class SyncBankDataPacket extends NetworkPacket {
         }
     }
 
-    HashMap<String, BankData> bankData;
-    ArrayList<String> allowedItemIDs;
+    HashMap<ItemID, BankData> bankData;
+    ArrayList<ItemID> allowedItemIDs;
     String playerName;
 
-    public SyncBankDataPacket(BankUser user, ArrayList<String> allowedItemIDs) {
+    public SyncBankDataPacket(BankUser user, ArrayList<ItemID> allowedItemIDs) {
         super();
         bankData = new HashMap<>();
-        HashMap<String, Bank> bankMap = user.getBankMap();
+        HashMap<ItemID, Bank> bankMap = user.getBankMap();
         for(Bank bank : bankMap.values())
         {
             BankData data = new BankData(bank);
@@ -70,7 +71,7 @@ public class SyncBankDataPacket extends NetworkPacket {
         super(buf);
     }
 
-    public long getBalance(String itemID)
+    public long getBalance(ItemID itemID)
     {
         BankData data = bankData.get(itemID);
         if(data == null)
@@ -81,7 +82,7 @@ public class SyncBankDataPacket extends NetworkPacket {
     {
         return getBalance(MoneyBank.ITEM_ID);
     }
-    public long getLockedBalance(String itemID)
+    public long getLockedBalance(ItemID itemID)
     {
         BankData data = bankData.get(itemID);
         if(data == null)
@@ -92,15 +93,15 @@ public class SyncBankDataPacket extends NetworkPacket {
     {
         return getLockedBalance(MoneyBank.ITEM_ID);
     }
-    public boolean hasItemBank(String itemID)
+    public boolean hasItemBank(ItemID itemID)
     {
         return bankData.containsKey(itemID);
     }
 
-    public HashMap<String, BankData> getBankData() {
+    public HashMap<ItemID, BankData> getBankData() {
         return bankData;
     }
-    public ArrayList<String> getAllowedItemIDs() {
+    public ArrayList<ItemID> getAllowedItemIDs() {
         return allowedItemIDs;
     }
     public String getPlayerName() {
@@ -129,9 +130,9 @@ public class SyncBankDataPacket extends NetworkPacket {
         });
 
         buf.writeInt(allowedItemIDs.size());
-        for(String itemID : allowedItemIDs)
+        for(ItemID itemID : allowedItemIDs)
         {
-            buf.writeUtf(itemID);
+            buf.writeItem(itemID.getStack());
         }
     }
 
@@ -150,7 +151,7 @@ public class SyncBankDataPacket extends NetworkPacket {
         allowedItemIDs = new ArrayList<>();
         for(int i = 0; i < size; i++)
         {
-            allowedItemIDs.add(buf.readUtf());
+            allowedItemIDs.add(new ItemID(buf.readItem()));
         }
     }
 
