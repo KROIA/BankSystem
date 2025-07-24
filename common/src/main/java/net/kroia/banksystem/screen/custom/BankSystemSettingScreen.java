@@ -1,6 +1,7 @@
 package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.ItemInfoWidget;
 import net.kroia.banksystem.util.ItemID;
@@ -20,16 +21,16 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 
 public class BankSystemSettingScreen extends GuiScreen {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
-    private static final String PREFIX = "gui.";
-    private static final String NAME = ".setting_screen.";
-    public static final Component TITLE = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "title");
-    public static final Component CLOSE = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "close");
-    public static final Component NEW_BANKING_ITEM_BUTTON = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "new_banking_item");
-    public static final Component REMOVE_BANKING_ITEM_BUTTON = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "remove_banking_item");
-    public static final Component BANKING_ITEMS = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "banking_items");
-    public static final Component ASK_TITLE = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "ask_remove_title");
-    public static final Component ASK_MSG = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "ask_remove_message");
+    private static final String PREFIX = "gui." + BankSystemMod.MOD_ID + ".setting_screen.";
+    public static final Component TITLE = Component.translatable(PREFIX+ "title");
+    //public static final Component CLOSE = Component.translatable(PREFIX+ "close");
+    public static final Component NEW_BANKING_ITEM_BUTTON = Component.translatable(PREFIX+ "new_banking_item");
+    public static final Component REMOVE_BANKING_ITEM_BUTTON = Component.translatable(PREFIX+ "remove_banking_item");
+    public static final Component BANKING_ITEMS = Component.translatable(PREFIX+ "banking_items");
+    public static final Component ASK_TITLE = Component.translatable(PREFIX+ "ask_remove_title");
+    public static final Component ASK_MSG = Component.translatable(PREFIX+ "ask_remove_message");
 
     private ItemID currentBankingItemID;
 
@@ -43,6 +44,11 @@ public class BankSystemSettingScreen extends GuiScreen {
     private final ItemInfoWidget itemInfoWidget;
     private static BankSystemSettingScreen instance;
     private int lastTickCount = 0;
+
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankSystemSettingScreen.BACKEND_INSTANCES = backend;
+    }
+
     public BankSystemSettingScreen() {
         super(TITLE);
         instance = this;
@@ -65,7 +71,7 @@ public class BankSystemSettingScreen extends GuiScreen {
 
 /*
             ArrayList<ItemStack> potentialItems = new ArrayList<>();
-            for(ItemID itemID : BankSystemMod.CLIENT_BANK_MANAGER.getPotentialBankItemIDs())
+            for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getPotentialBankItemIDs())
             {
                 potentialItems.add(itemID.getStack());
             }
@@ -76,7 +82,7 @@ public class BankSystemSettingScreen extends GuiScreen {
         });
 
         ArrayList<ItemStack> allowedItems = new ArrayList<>();
-        for(ItemID itemID : BankSystemMod.CLIENT_BANK_MANAGER.getAllowedItemIDs())
+        for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs())
         {
             allowedItems.add(itemID.getStack());
         }
@@ -88,7 +94,7 @@ public class BankSystemSettingScreen extends GuiScreen {
         removeBankingItemButton = new Button(REMOVE_BANKING_ITEM_BUTTON.getString(), () -> {
             if(currentBankingItemID != null) {
                 AskPopupScreen popup = new AskPopupScreen(this, () -> {
-                    BankSystemMod.CLIENT_BANK_MANAGER.requestRemoveItemID(currentBankingItemID);
+                    BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestRemoveItemID(currentBankingItemID);
                     setCurrentBankingItemID(null);
                 }, () -> {}, ASK_TITLE.getString() + " "+currentBankingItemID + "?", ASK_MSG.getString());
                 popup.setSize(400,100);
@@ -137,10 +143,10 @@ public class BankSystemSettingScreen extends GuiScreen {
 
 
     private void onNewBankingItemSelected(ItemStack itemStack) {
-        var items = BankSystemMod.CLIENT_BANK_MANAGER.getAllowedItemIDs();
+        var items = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs();
         ItemID newItemID = new ItemID(itemStack);
         if(!items.contains(newItemID)) {
-            BankSystemMod.CLIENT_BANK_MANAGER.requestAllowNewItemID(newItemID);
+            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestAllowNewItemID(newItemID);
         }
         setCurrentBankingItemID(itemStack);
     }
@@ -151,10 +157,10 @@ public class BankSystemSettingScreen extends GuiScreen {
             currentBankingItemView.setItemStack(null);
             return;
         }
-        BankSystemMod.CLIENT_BANK_MANAGER.requestItemInfo(new ItemID(itemStack));
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestItemInfo(new ItemID(itemStack));
         currentBankingItemView.setItemStack(null);
 
-        for(ItemID itemID : BankSystemMod.CLIENT_BANK_MANAGER.getAllowedItemIDs()) {
+        for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs()) {
             String name = itemID.getName();
             if (name.compareTo(ItemUtilities.getItemID(itemStack.getItem())) == 0) {
                 currentBankingItemView.setItemStack(itemID.getStack());
@@ -167,7 +173,7 @@ public class BankSystemSettingScreen extends GuiScreen {
 
     public void updateBankData()
     {
-        var items = BankSystemMod.CLIENT_BANK_MANAGER.getAllowedItemIDs();
+        var items = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs();
         ArrayList<ItemStack> allowedItems = new ArrayList<>();
         for(ItemID itemID : items)
         {
@@ -183,10 +189,10 @@ public class BankSystemSettingScreen extends GuiScreen {
 
     @Override
     public void tick() {
-        if(BankSystemMod.CLIENT_BANK_MANAGER.hasUpdatedBankData())
+        if(BACKEND_INSTANCES.CLIENT_BANK_MANAGER.hasUpdatedBankData())
             updateBankData();
 
-        if(BankSystemMod.CLIENT_BANK_MANAGER.hasUpdatedItemInfo())
+        if(BACKEND_INSTANCES.CLIENT_BANK_MANAGER.hasUpdatedItemInfo())
             updateItemInfoData();
 
 
@@ -194,7 +200,7 @@ public class BankSystemSettingScreen extends GuiScreen {
         if(lastTickCount > 20 && currentBankingItemID != null)
         {
             lastTickCount = 0;
-            BankSystemMod.CLIENT_BANK_MANAGER.requestItemInfo(currentBankingItemID);
+            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestItemInfo(currentBankingItemID);
         }
     }
 }

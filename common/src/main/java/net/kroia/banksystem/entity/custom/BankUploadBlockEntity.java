@@ -1,8 +1,8 @@
 package net.kroia.banksystem.entity.custom;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.BankUser;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.block.custom.BankUploadBlock;
@@ -12,7 +12,6 @@ import net.kroia.banksystem.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -33,6 +32,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 public class BankUploadBlockEntity extends BaseContainerBlockEntity implements MenuProvider {
+
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private class ControlledContainer extends SimpleContainer {
         public ControlledContainer(int size) {
             super(size);
@@ -59,6 +60,11 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
     private boolean dropIfNotBankable = false;
 
     private UUID playerOwner = null;
+
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankUploadBlockEntity.BACKEND_INSTANCES = backend;
+    }
+
 
     public BankUploadBlockEntity(BlockPos pos, BlockState state) {
         super(BankSystemEntities.BANK_UPLOAD_BLOCK_ENTITY.get(), pos, state);
@@ -215,7 +221,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             return;
         if(playerOwner == null)
             return;
-        BankUser bankUser = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerOwner);
+        BankUser bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerOwner);
         if(bankUser == null)
             return;
 

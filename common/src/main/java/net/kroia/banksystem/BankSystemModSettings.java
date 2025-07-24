@@ -3,19 +3,24 @@ package net.kroia.banksystem;
 
 import com.google.gson.reflect.TypeToken;
 import net.kroia.banksystem.item.custom.money.*;
-import net.kroia.modutilities.settings.ModSettings;
-import net.kroia.modutilities.settings.Setting;
-import net.kroia.modutilities.settings.SettingsGroup;
+import net.kroia.modutilities.setting.ModSettings;
+import net.kroia.modutilities.setting.Setting;
+import net.kroia.modutilities.setting.SettingsGroup;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public final class BankSystemModSettings extends ModSettings {
 
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+
     public final Utilities UTILITIES = createGroup(new Utilities());
     public final Player PLAYER = createGroup(new Player());
     public final Bank BANK = createGroup(new Bank());
 
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankSystemModSettings.BACKEND_INSTANCES = backend;
+    }
 
     public BankSystemModSettings() {
         super("BankSystemModSettings", "settings.json");
@@ -102,6 +107,25 @@ public final class BankSystemModSettings extends ModSettings {
 
     @Override
     public String getSettingsFilePath() {
-        return BankSystemMod.SERVER_DATA_HANDLER.getSaveFolder().getPath();
+        return BACKEND_INSTANCES.SERVER_DATA_HANDLER.getSaveFolder().getPath();
+    }
+
+
+    @Override
+    public boolean saveSettings() {
+        boolean success = super.saveSettings();
+        if (success) {
+            BACKEND_INSTANCES.SERVER_EVENTS.SETTINGS_SAVED_TO_FILE.notifyListeners();
+        }
+        return success;
+    }
+
+    @Override
+    public boolean loadSettings() {
+        boolean success = super.loadSettings();
+        if (success) {
+            BACKEND_INSTANCES.SERVER_EVENTS.SETTINGS_LOADED_FROM_FILE.notifyListeners();
+        }
+        return success;
     }
 }

@@ -1,7 +1,7 @@
 package net.kroia.banksystem.screen.uiElements;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.ClientBankManager;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemInfoPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -18,6 +18,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ItemInfoWidget extends GuiElement {
+
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
     private static final String PREFIX = "gui."+BankSystemMod.MOD_ID+".iteminfo_widget.";
 
@@ -44,6 +46,11 @@ public class ItemInfoWidget extends GuiElement {
     final TextBox searchTextBox;
     final ListView playerDataView;
     final HashMap<String, ItemInfoUserWidget> playerDataWidgets = new HashMap<>();
+
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        ItemInfoWidget.BACKEND_INSTANCES = backend;
+    }
+
 
     public ItemInfoWidget()
     {
@@ -127,13 +134,13 @@ public class ItemInfoWidget extends GuiElement {
         if(this.itemID == null)
             return;
 
-        long totalSupply = BankSystemMod.CLIENT_BANK_MANAGER.getTotalSupply(itemID);
-        long totalLocked = BankSystemMod.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
+        long totalSupply = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalSupply(itemID);
+        long totalLocked = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
         totalSuplyTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalSuplyMessage(Bank.getNormalizedAmount(totalSupply)));
         totalLockedTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalLockedMessage(Bank.getNormalizedAmount(totalLocked)));
 
 
-        Map<String, SyncItemInfoPacket.BankData> bankData = BankSystemMod.CLIENT_BANK_MANAGER.getItemInfoBankData(itemID);
+        Map<String, SyncItemInfoPacket.BankData> bankData = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getItemInfoBankData(itemID);
         if(bankData == null)
             return;
         // sort by key

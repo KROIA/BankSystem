@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
-import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
@@ -15,6 +15,8 @@ import java.util.HashMap;
 import java.util.UUID;
 
 public class SyncBankDataPacket extends NetworkPacket {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+
 
     public class BankData{
         private ItemID itemID;
@@ -53,6 +55,10 @@ public class SyncBankDataPacket extends NetworkPacket {
     HashMap<ItemID, BankData> bankData;
     ArrayList<ItemID> allowedItemIDs;
     String playerName;
+
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        SyncBankDataPacket.BACKEND_INSTANCES = backend;
+    }
 
     public SyncBankDataPacket(BankUser user, ArrayList<ItemID> allowedItemIDs) {
         super();
@@ -109,10 +115,10 @@ public class SyncBankDataPacket extends NetworkPacket {
 
     public static void sendPacket(ServerPlayer player, UUID courcePlayerUUID)
     {
-        BankUser user = BankSystemMod.SERVER_BANK_MANAGER.getUser(courcePlayerUUID);
+        BankUser user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(courcePlayerUUID);
         if(user == null)
             return;
-        SyncBankDataPacket packet = new SyncBankDataPacket(user, BankSystemMod.SERVER_BANK_MANAGER.getAllowedItemIDs());
+        SyncBankDataPacket packet = new SyncBankDataPacket(user, BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAllowedItemIDs());
         BankSystemNetworking.sendToClient(player, packet);
     }
     public static void sendPacket(ServerPlayer player)
@@ -156,6 +162,6 @@ public class SyncBankDataPacket extends NetworkPacket {
 
     @Override
     protected void handleOnClient() {
-        BankSystemMod.CLIENT_BANK_MANAGER.handlePacket(this);
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.handlePacket(this);
     }
 }

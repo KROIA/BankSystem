@@ -1,5 +1,6 @@
-package net.kroia.banksystem.banking.events;
+package net.kroia.banksystem.banking.eventdata;
 
+/*
 public class ServerBankEvent {
 
     protected final String msg;
@@ -12,3 +13,4 @@ public class ServerBankEvent {
         return msg;
     }
 }
+*/

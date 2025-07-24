@@ -1,4 +1,4 @@
-package net.kroia.banksystem;
+package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.screen.custom.ATMScreen;
 import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;

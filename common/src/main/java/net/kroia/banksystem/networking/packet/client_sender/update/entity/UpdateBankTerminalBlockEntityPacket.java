@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.packet.client_sender.update.entity;
 
-import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.ItemID;
@@ -14,10 +14,17 @@ import java.util.HashMap;
 
 public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
 
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+
     private BlockPos pos;
 
     private HashMap<ItemID, Long> itemTransferFromMarket;
     private boolean sendItemsToMarket;
+
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        UpdateBankTerminalBlockEntityPacket.BACKEND_INSTANCES = backend;
+    }
+
     public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<ItemID, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
         super();
         this.pos = pos;
@@ -79,7 +86,7 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
             bankTerminalBlockEntity.handlePacket(this, sender);
         }else
         {
-            BankSystemMod.logError("BankTerminalBlockEntity not found at position "+this.pos);
+            BACKEND_INSTANCES.LOGGER.error("BankTerminalBlockEntity not found at position "+this.pos);
         }
     }
 }

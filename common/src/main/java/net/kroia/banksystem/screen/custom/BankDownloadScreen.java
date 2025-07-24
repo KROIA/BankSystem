@@ -1,6 +1,7 @@
 package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
@@ -19,12 +20,15 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 
 public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainerMenu> {
-    private static final Component INVENTORY_NAME_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_download_screen.inventory_name");
-    private static final Component CONNECT_BUTTON = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_download_screen.connect_button");
-    private static final Component DISCONNECT_BUTTON = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_download_screen.disconnect_button");
-    private static final Component TARGET_AMOUNT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_download_screen.target_amount");
-    private static final Component SELECT_ITEM = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_download_screen.select_item");
-    private static final Component APPLY_BUTTON = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_download_screen.apply_button");
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+
+    private static final String prefix = "gui." + BankSystemMod.MOD_ID + ".bank_download_screen.";
+    private static final Component INVENTORY_NAME_TEXT = Component.translatable(prefix+"inventory_name");
+    private static final Component CONNECT_BUTTON = Component.translatable(prefix+"connect_button");
+    private static final Component DISCONNECT_BUTTON = Component.translatable(prefix+"disconnect_button");
+    private static final Component TARGET_AMOUNT = Component.translatable(prefix+"target_amount");
+    private static final Component SELECT_ITEM = Component.translatable(prefix+"select_item");
+    private static final Component APPLY_BUTTON = Component.translatable(prefix+"apply_button");
 
 
     private  class SettingsMenu extends GuiElement{
@@ -94,6 +98,9 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
 
     private static BankDownloadScreen instance;
 
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankDownloadScreen.BACKEND_INSTANCES = backend;
+    }
     public BankDownloadScreen(BankDownloadContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
         super(pMenu, pPlayerInventory, pTitle);
         instance = this;
@@ -172,7 +179,7 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
     }
     private void onSelectItemButtonClicked() {
         ArrayList<ItemStack> allowedItemIDs = new ArrayList<>();
-        for(ItemID itemID : BankSystemMod.CLIENT_BANK_MANAGER.getAllowedItemIDs())
+        for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs())
         {
             allowedItemIDs.add(itemID.getStack());
         }

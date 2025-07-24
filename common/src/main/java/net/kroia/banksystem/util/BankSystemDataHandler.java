@@ -6,6 +6,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.PlayerUtilities;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
@@ -19,6 +20,8 @@ import java.nio.file.Paths;
 
 
 public class BankSystemDataHandler {
+
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private final String FOLDER_NAME = "Finance/BankSystem";
 
@@ -32,10 +35,14 @@ public class BankSystemDataHandler {
     private int lastPlayerCount = 0;
     //public static long saveTickInterval = 6000; // 5 minutes
 
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankSystemDataHandler.BACKEND_INSTANCES = backend;
+    }
+
     public void tickUpdate()
     {
         tickCounter++;
-        if(tickCounter >= BankSystemMod.SERVER_SETTINGS.UTILITIES.SAVE_INTERVAL_MINUTES.get() * 1200) // 1 minute = 1200 ticks
+        if(tickCounter >= BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.SAVE_INTERVAL_MINUTES.get() * 1200) // 1 minute = 1200 ticks
         {
             tickCounter = 0;
             // Check if any player is online
@@ -64,34 +71,34 @@ public class BankSystemDataHandler {
 
     public boolean saveAll()
     {
-        BankSystemMod.logInfo("Saving BankSystem Mod data...");
+        BACKEND_INSTANCES.LOGGER.info("Saving BankSystem Mod data...");
         boolean success = true;
         success &= save_bank();
         success &= save_globalSettings();
 
         if(success) {
-            BankSystemMod.logInfo("BankSystem Mod data saved successfully.");
+            BACKEND_INSTANCES.LOGGER.info("BankSystem Mod data saved successfully.");
 
         }
         else
-            BankSystemMod.logError("Failed to save BankSystem Mod data.");
+            BACKEND_INSTANCES.LOGGER.error("Failed to save BankSystem Mod data.");
         return success;
     }
 
     public boolean loadAll()
     {
         isLoaded = false;
-        BankSystemMod.logInfo("Loading BankSystem Mod data...");
+        BACKEND_INSTANCES.LOGGER.info("Loading BankSystem Mod data...");
         boolean success = true;
         success &= load_bank();
         success &= load_globalSettings();
 
         if(success) {
-            BankSystemMod.logInfo("BankSystem Mod data loaded successfully.");
+            BACKEND_INSTANCES.LOGGER.info("BankSystem Mod data loaded successfully.");
             isLoaded = true;
         }
         else
-            BankSystemMod.logError("Failed to load BankSystem Mod data.");
+            BACKEND_INSTANCES.LOGGER.error("Failed to load BankSystem Mod data.");
         return success;
     }
 
@@ -100,9 +107,13 @@ public class BankSystemDataHandler {
         boolean success = true;
         CompoundTag data = new CompoundTag();
         CompoundTag bankData = new CompoundTag();
-        success = BankSystemMod.SERVER_BANK_MANAGER.save(bankData);
+        success = BACKEND_INSTANCES.SERVER_BANK_MANAGER.save(bankData);
         data.put("banking", bankData);
         saveDataCompound(BANK_DATA_FILE_NAME, data);
+        if(success)
+        {
+            BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_SAVED_TO_FILE.notifyListeners();
+        }
         return success;
     }
 
@@ -115,17 +126,22 @@ public class BankSystemDataHandler {
             return false;
 
         CompoundTag bankData = data.getCompound("banking");
-        return BankSystemMod.SERVER_BANK_MANAGER.load(bankData);
+        if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.load(bankData))
+        {
+            BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.notifyListeners();
+            return true;
+        }
+        return false;
     }
 
     public boolean save_globalSettings()
     {
-        return BankSystemMod.SERVER_SETTINGS.saveSettings();
+        return BACKEND_INSTANCES.SERVER_SETTINGS.saveSettings();
     }
 
     public boolean load_globalSettings()
     {
-        return BankSystemMod.SERVER_SETTINGS.loadSettings();
+        return BACKEND_INSTANCES.SERVER_SETTINGS.loadSettings();
     }
 
 
@@ -150,11 +166,11 @@ public class BankSystemDataHandler {
                 dataOut = data;
                 return dataOut;
             } catch (IOException e) {
-                BankSystemMod.logError("Failed to read data from file: " + fileName);
+                BACKEND_INSTANCES.LOGGER.error("Failed to read data from file: " + fileName);
                 e.printStackTrace();
             } catch(Exception e)
             {
-                BankSystemMod.logError("Failed to read data from file: " + fileName);
+                BACKEND_INSTANCES.LOGGER.error("Failed to read data from file: " + fileName);
                 e.printStackTrace();
             }
         }
@@ -168,12 +184,12 @@ public class BankSystemDataHandler {
             else
                 NbtIo.write(data, file);
         } catch (IOException e) {
-            BankSystemMod.logError("Failed to save data to file: " + fileName);
+            BACKEND_INSTANCES.LOGGER.error("Failed to save data to file: " + fileName);
             e.printStackTrace();
             return false;
         } catch(Exception e)
         {
-            BankSystemMod.logError("Failed to save data to file: " + fileName);
+            BACKEND_INSTANCES.LOGGER.error("Failed to save data to file: " + fileName);
             e.printStackTrace();
             return false;
         }

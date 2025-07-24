@@ -1,10 +1,12 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.screen.custom.ATMScreen;
 import net.minecraft.network.chat.Component;
 
 public class BankSystemTextMessages {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private static boolean initialized = false;
     public static void init() {
         if (initialized) {
@@ -30,6 +32,9 @@ public class BankSystemTextMessages {
     private static final String prefix  = "message."+BankSystemMod.MOD_ID+".";
 
 
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankSystemTextMessages.BACKEND_INSTANCES = backend;
+    }
 
     private static final Component TRANSFERED_TO_USER = Component.translatable(prefix+"transferred_to_user");
     public static String getTransferedMessage(long amount, String itemName, String receiver)
@@ -466,7 +471,7 @@ public class BankSystemTextMessages {
     {
         if(!message.contains(variable))
         {
-            BankSystemMod.logDebug("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
+            BACKEND_INSTANCES.LOGGER.debug("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
             return message;
             //throw new IllegalArgumentException("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
         }

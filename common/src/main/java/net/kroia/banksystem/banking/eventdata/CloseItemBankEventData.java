@@ -1,4 +1,5 @@
-package net.kroia.banksystem.banking.events;
+package net.kroia.banksystem.banking.eventdata;
+
 
 import net.kroia.banksystem.util.ItemID;
 
@@ -6,7 +7,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
 
-public class ServerBankCloseItemBankEvent extends ServerBankEvent {
+public class CloseItemBankEventData {
     public static class PlayerData
     {
         public final UUID playerUUID;
@@ -22,8 +23,7 @@ public class ServerBankCloseItemBankEvent extends ServerBankEvent {
     private final HashMap<UUID, PlayerData> lostItems;
     private final ArrayList<ItemID> allRemovedItemIDs;
 
-    public ServerBankCloseItemBankEvent(HashMap<UUID, PlayerData> lostItems, ArrayList<ItemID> allRemovedItemIDs) {
-        super("Item bank closed");
+    public CloseItemBankEventData(HashMap<UUID, PlayerData> lostItems, ArrayList<ItemID> allRemovedItemIDs) {
         this.lostItems = lostItems;
         this.allRemovedItemIDs = allRemovedItemIDs;
     }
@@ -35,3 +35,4 @@ public class ServerBankCloseItemBankEvent extends ServerBankEvent {
         return allRemovedItemIDs;
     }
 }
+

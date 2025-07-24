@@ -1,8 +1,7 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
-import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.BankUser;
-import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.ItemID;
@@ -16,9 +15,16 @@ import java.util.UUID;
 
 public class SyncItemInfoPacket extends NetworkPacket {
 
+
     ItemID itemID;
     long totalSupply;
     long totalLocked;
+
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        SyncItemInfoPacket.BACKEND_INSTANCES = backend;
+    }
+
 
     public static class BankData
     {
@@ -81,7 +87,7 @@ public class SyncItemInfoPacket extends NetworkPacket {
     {
         SyncItemInfoPacket packet = new SyncItemInfoPacket();
         packet.itemID = itemID;
-        Map<UUID, BankUser> users = BankSystemMod.SERVER_BANK_MANAGER.getUser();
+        Map<UUID, BankUser> users = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser();
         for(UUID player : users.keySet())
         {
             BankUser user = users.get(player);
@@ -130,6 +136,6 @@ public class SyncItemInfoPacket extends NetworkPacket {
 
     @Override
     protected void handleOnClient() {
-        BankSystemMod.CLIENT_BANK_MANAGER.handlePacket(this);
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.handlePacket(this);
     }
 }

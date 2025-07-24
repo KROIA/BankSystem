@@ -1,22 +1,19 @@
 package net.kroia.banksystem.banking.bank;
 
-import com.sun.jna.platform.win32.COM.util.annotation.ComObject;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.ItemStack;
 
 import java.util.UUID;
 
 public class Bank implements ServerSaveable {
-    private static final Component WARNING = Component.translatable("message."+BankSystemMod.MOD_ID+".bank.warning");
+    private static final Component WARNING = Component.translatable("message."+ BankSystemMod.MOD_ID+".bank.warning");
     private static final Component INFO = Component.translatable("message."+BankSystemMod.MOD_ID+".bank.info");
 
     public enum BankType

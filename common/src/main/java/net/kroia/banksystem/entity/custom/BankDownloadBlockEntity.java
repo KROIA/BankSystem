@@ -1,8 +1,8 @@
 package net.kroia.banksystem.entity.custom;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.BankUser;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.block.custom.BankDownloadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
@@ -33,6 +33,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements MenuProvider {
+
     private class ControlledContainer extends SimpleContainer {
         public ControlledContainer(int size) {
             super(size);
@@ -51,6 +52,8 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         }
     }
 
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+
     private static final Component TITLE =
             Component.translatable("container." + BankSystemMod.MOD_ID + ".bank_download_block");
 
@@ -62,6 +65,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     private ItemID itemID;
     private int targetAmount;
     public static int tickCounter = 0;
+
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankDownloadBlockEntity.BACKEND_INSTANCES = backend;
+    }
 
     public BankDownloadBlockEntity(BlockPos pos, BlockState state) {
         super(BankSystemEntities.BANK_DOWNLOAD_BLOCK_ENTITY.get(), pos, state);
@@ -267,7 +274,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
 
 
-        BankUser bankUser = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerOwner);
+        BankUser bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerOwner);
         if(bankUser == null)
             return;
         Bank itemBank = bankUser.getBank(itemID);

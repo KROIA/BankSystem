@@ -2,6 +2,7 @@ package net.kroia.banksystem.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
@@ -22,8 +23,9 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public class ATMScreen /*extends GuiContainerScreen<ATMContainerMenu>*/extends GuiScreen {
+public class ATMScreen extends GuiScreen {
 
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
     private static final String PREFIX = "gui.";
     private static final String NAME = ".atm_screen.";
@@ -85,7 +87,7 @@ public class ATMScreen /*extends GuiContainerScreen<ATMContainerMenu>*/extends G
                 value = Long.parseLong(text);
             } catch (NumberFormatException e) {
                 // If the text is not a valid number, return 0
-                BankSystemMod.logWarning("Invalid amount entered: " + text + ". Returning 0.");
+                BACKEND_INSTANCES.LOGGER.warn("Invalid amount entered: " + text + ". Returning 0.");
             }
             if(value < 0)
                 value = 0;
@@ -170,7 +172,11 @@ public class ATMScreen /*extends GuiContainerScreen<ATMContainerMenu>*/extends G
     private static long lastTickCount = 0;
     private long currentBalanceWeekVar = 0;
 
-    //public ATMScreen(ATMContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle)
+
+
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        ATMScreen.BACKEND_INSTANCES = backend;
+    }
     public ATMScreen()
     {
         super(TITLE);
@@ -243,9 +249,9 @@ public class ATMScreen /*extends GuiContainerScreen<ATMContainerMenu>*/extends G
             lastTickCount = currentTickCount;
             RequestBankDataPacket.sendRequest();
         }
-        if(BankSystemMod.CLIENT_BANK_MANAGER.hasUpdatedBankData())
+        if(BACKEND_INSTANCES.CLIENT_BANK_MANAGER.hasUpdatedBankData())
         {
-            long balance = BankSystemMod.CLIENT_BANK_MANAGER.getBalance();
+            long balance = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBalance();
             instance.currentBalanceWeekVar = balance;
             instance.balanceView.updateBalance(balance);
         }

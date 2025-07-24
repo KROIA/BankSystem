@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
-import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.BankSystemNetworking;
@@ -17,10 +17,14 @@ import java.util.HashMap;
 import java.util.UUID;
 
 public class WithdrawMoneyPacket extends NetworkPacket {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
     // Contains the item ID and the requested amount of the bank notes
     HashMap<String, Long> requestedBankNoteIDs;// = new HashMap<>();
 
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        WithdrawMoneyPacket.BACKEND_INSTANCES = backend;
+    }
     public WithdrawMoneyPacket(FriendlyByteBuf buf) {
         super(buf);
     }
@@ -58,7 +62,7 @@ public class WithdrawMoneyPacket extends NetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender) {
         UUID playerUUID = sender.getUUID();
-        Bank moneyBank = BankSystemMod.SERVER_BANK_MANAGER.getMoneyBank(playerUUID);
+        Bank moneyBank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyBank(playerUUID);
         if(moneyBank == null) {
             return; // No money bank found for the player
         }
@@ -75,7 +79,7 @@ public class WithdrawMoneyPacket extends NetworkPacket {
                         availableBankNotes.put(itemID, moneyItem);
                     }
                 } catch (Exception e) {
-                    BankSystemMod.logError("WithdrawMoneyPacket: Error setting stack size for item ID: " + itemID + "\n" + e.getMessage());
+                    BACKEND_INSTANCES.LOGGER.error("WithdrawMoneyPacket: Error setting stack size for item ID: " + itemID + "\n" + e.getMessage());
                     continue; // Skip this item if it cannot be set
                 }
             }
@@ -88,7 +92,7 @@ public class WithdrawMoneyPacket extends NetworkPacket {
             MoneyItem moneyItem = availableBankNotes.get(itemID);
             if(moneyItem == null)
             {
-                BankSystemMod.logError("WithdrawMoneyPacket: Invalid money item ID: " + itemID);
+                BACKEND_INSTANCES.LOGGER.error("WithdrawMoneyPacket: Invalid money item ID: " + itemID);
                 continue;
             }
             long itemValue = moneyItem.worth();

@@ -2,6 +2,7 @@ package net.kroia.banksystem.screen.custom;
 
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
@@ -24,6 +25,7 @@ import java.util.HashMap;
 
 public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainerMenu>
 {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private class BankElement extends GuiElement
     {
         public static final int HEIGHT = 20;
@@ -127,6 +129,11 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
 
     public static int widthPercentage = 100;
 
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankTerminalScreen.BACKEND_INSTANCES = backend;
+    }
+
+
     public BankTerminalScreen(BankTerminalContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
         super(pMenu, pPlayerInventory, pTitle);
         //super(pTitle);
@@ -188,7 +195,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         int x = 0;
         int y = 0;
         // Sort the bank accounts by itemID
-        ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> sortedBankAccounts = BankSystemMod.CLIENT_BANK_MANAGER.getSortedBankData();
+        ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> sortedBankAccounts = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getSortedBankData();
 
         boolean needsResize = sortedBankAccounts.size() != bankElements.size();
         HashMap<ItemID,ItemID> availableItems = new HashMap<>();
@@ -241,7 +248,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         for(BankElement element : bankElements)
         {
             element.saveAmount();
-            BankSystemMod.logInfo("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
+            BACKEND_INSTANCES.LOGGER.info("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
         }
 
         HashMap<ItemID, Long> itemTransferToMarketAmounts = new HashMap<>();
@@ -251,7 +258,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         for(BankElement element : bankElements)
         {
             element.saveAmount();
-            BankSystemMod.logInfo("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
+            BACKEND_INSTANCES.LOGGER.info("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
         }
         HashMap<ItemID, Long> itemTransferToMarketAmounts = new HashMap<>();
         for(BankElement button : bankElements)

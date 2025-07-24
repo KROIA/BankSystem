@@ -1,6 +1,7 @@
 package net.kroia.banksystem.entity.custom;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
@@ -74,13 +75,13 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         {
             if(amount == 0)
                 return false;
-            BankUser bank = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerID);
+            BankUser bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerID);
             if(bank == null) {
                 // Create bank account for this item if it can be used for banking
                 ArrayList<ItemID> keys = new ArrayList<>();
                 String userName = PlayerUtilities.getOnlinePlayer(playerID).getName().getString();
                 keys.add(itemID);
-                bank = BankSystemMod.SERVER_BANK_MANAGER.createUser(playerID, userName, keys, true,0 );
+                bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.createUser(playerID, userName, keys, true,0 );
             }
 
             ItemID bankITemID = itemID;
@@ -120,7 +121,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 cancelTasks();
                 return false;
             }
-            BankUser bank = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerID);
+            BankUser bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerID);
             if(bank == null) {
                 cancelTasks();
                 return false;
@@ -188,7 +189,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         if(bankAccount.withdraw(addedAmount) != Bank.Status.SUCCESS)
                         {
                             // error
-                            BankSystemMod.logError("Failed to withdraw " + addedAmount + " " + itemID + " from bank account of user " + playerID);
+                            BACKEND_INSTANCES.LOGGER.error("Failed to withdraw " + addedAmount + " " + itemID + " from bank account of user " + playerID);
                             inventory.removeItem(itemID, addedAmount);
                             cancelTask(itemID);
                             continue;
@@ -614,6 +615,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         }
     }
 
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private static final Component TITLE =
             Component.translatable("container." + BankSystemMod.MOD_ID + ".bank_terminal_block_entity");
 
@@ -622,6 +624,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     ;
     private int lastTickCounter = 0;
     private int tickCounter = 0;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankTerminalBlockEntity.BACKEND_INSTANCES = backend;
+    }
 
     public BankTerminalBlockEntity(BlockPos pos, BlockState state) {
         super(BankSystemEntities.BANK_TERMINAL_BLOCK_ENTITY.get(), pos, state);
@@ -720,9 +725,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
     public void handlePacket(UpdateBankTerminalBlockEntityPacket packet, ServerPlayer player) {
         String userNameStr  = player.getName().getString();
-        BankUser user = BankSystemMod.SERVER_BANK_MANAGER.getUser(player.getUUID());
+        BankUser user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(player.getUUID());
         if (user == null) {
-            BankSystemMod.logError("BankUser is null for user: " + userNameStr);
+            BACKEND_INSTANCES.LOGGER.error("BankUser is null for user: " + userNameStr);
             return;
         }
 
@@ -755,7 +760,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         // Your block entity logic here
         //System.out.println("Block entity is ticking!");
         tickCounter++;
-        int itemTransferTickInterval = BankSystemMod.SERVER_SETTINGS.BANK.ITEM_TRANSFER_TICK_INTERVAL.get();
+        int itemTransferTickInterval = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ITEM_TRANSFER_TICK_INTERVAL.get();
         if(tickCounter - lastTickCounter >= itemTransferTickInterval) {
             lastTickCounter = tickCounter;
             for(UUID playerID : playerDataTable.keySet())

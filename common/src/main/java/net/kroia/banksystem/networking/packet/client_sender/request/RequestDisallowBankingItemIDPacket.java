@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.packet.client_sender.request;
 
-import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.util.ItemID;
@@ -9,8 +9,14 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 public class RequestDisallowBankingItemIDPacket extends NetworkPacket {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
     private ItemID itemID;
+
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        RequestDisallowBankingItemIDPacket.BACKEND_INSTANCES = backend;
+    }
+
 
     public static void sendRequest(ItemID itemID)
     {
@@ -42,7 +48,7 @@ public class RequestDisallowBankingItemIDPacket extends NetworkPacket {
 
     protected void handleOnServer(ServerPlayer sender)
     {
-        BankSystemMod.SERVER_BANK_MANAGER.disallowItemID(itemID);
+        BACKEND_INSTANCES.SERVER_BANK_MANAGER.disallowItemID(itemID);
         SyncBankDataPacket.sendPacket(sender);
     }
 }

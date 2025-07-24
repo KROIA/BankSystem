@@ -2,7 +2,7 @@ package net.kroia.banksystem.screen.custom;
 
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.ClientBankManager;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.UpdateBankAccountPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.UUID;
 
 public class BankAccountManagementScreen extends GuiScreen {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private static final String PREFIX = "gui."+ BankSystemMod.MOD_ID+".bank_account_management_screen.";
     private static final Component TITLE = Component.translatable(PREFIX+"title");
 
@@ -45,6 +46,11 @@ public class BankAccountManagementScreen extends GuiScreen {
 
     private int lastTickCount = 0;
     private final HashMap<ItemID, BankAccountManagementItem> bankAccountManagementItems = new HashMap<>();
+
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankAccountManagementScreen.BACKEND_INSTANCES = backend;
+    }
+
 
     public BankAccountManagementScreen(GuiScreen parent, UUID playerUUID) {
         super(TITLE);
@@ -72,7 +78,7 @@ public class BankAccountManagementScreen extends GuiScreen {
         createNewBankButton = new Button(CREATE_NEW_BANK.getString());
         createNewBankButton.setOnFallingEdge(() -> {
             ArrayList<ItemStack> allowedItemIDs = new ArrayList<>();
-            for(ItemID itemID : BankSystemMod.CLIENT_BANK_MANAGER.getAllowedItemIDs())
+            for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs())
             {
                 allowedItemIDs.add(itemID.getStack());
             }
@@ -150,8 +156,8 @@ public class BankAccountManagementScreen extends GuiScreen {
     }
     private void updateBankData()
     {
-        ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> sortedBankAccounts = BankSystemMod.CLIENT_BANK_MANAGER.getSortedBankData();
-        playerName = BankSystemMod.CLIENT_BANK_MANAGER.getBankDataPlayerName();
+        ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> sortedBankAccounts = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getSortedBankData();
+        playerName = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankDataPlayerName();
         playerNameLabel.setText(BankSystemTextMessages.getBankAccountManagementBankOwnerMessage(playerName));
         HashMap<ItemID, BankAccountManagementItem> stillExistingItems = new HashMap<>();
         for(Pair<ItemID, SyncBankDataPacket.BankData> pair : sortedBankAccounts)
@@ -198,7 +204,7 @@ public class BankAccountManagementScreen extends GuiScreen {
 
     @Override
     public void tick() {
-        if(BankSystemMod.CLIENT_BANK_MANAGER.hasUpdatedBankData())
+        if(BACKEND_INSTANCES.CLIENT_BANK_MANAGER.hasUpdatedBankData())
             updateBankData();
 
         ++lastTickCount;

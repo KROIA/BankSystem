@@ -1,6 +1,7 @@
 package net.kroia.banksystem.forge;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
@@ -12,14 +13,14 @@ public class ForgeSetup {
     // Mod setup for common (server)
     @SubscribeEvent
     public static void commonSetup(FMLCommonSetupEvent event) {
-        BankSystemMod.logDebug("[ForgeSetup] Common setup for server.");
-        BankSystemMod.onServerSetup();
+        //BankSystemMod.logDebug("[ForgeSetup] Common setup for server.");
+        BankSystemModBackend.onServerSetup();
     }
 
     // Client setup (for client-side logic)
     @SubscribeEvent
     public static void clientSetup(FMLClientSetupEvent event) {
-        BankSystemMod.logDebug("[ForgeSetup] Client setup.");
-        BankSystemMod.onClientSetup();
+        //BankSystemMod.logDebug("[ForgeSetup] Client setup.");
+        BankSystemModBackend.onClientSetup();
     }
 }

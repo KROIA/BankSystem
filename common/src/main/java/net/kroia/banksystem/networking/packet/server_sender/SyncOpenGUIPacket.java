@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.packet.server_sender;
 
-import net.kroia.banksystem.BankSystemClientHooks;
+import net.kroia.banksystem.util.BankSystemClientHooks;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.PlayerUtilities;

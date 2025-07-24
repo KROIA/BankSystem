@@ -1,6 +1,6 @@
 package net.kroia.banksystem.banking;
 
-import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.ItemBank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
@@ -18,11 +18,15 @@ import java.util.Map;
 import java.util.UUID;
 
 public class BankUser implements ServerSaveable {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private UUID userUUID;
     private String userName;
     private final HashMap<ItemID, Bank> bankMap = new HashMap<>();
     private boolean enableBankNotifications = true;
 
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankUser.BACKEND_INSTANCES = backend;
+    }
     public BankUser(ServerPlayer player)
     {
         this(player.getUUID(), player.getName().getString());
@@ -58,7 +62,7 @@ public class BankUser implements ServerSaveable {
         Bank bank = getBank(itemID);
         if(bank != null)
             return bank;
-        if(!BankSystemMod.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
+        if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
         {
             PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
             return null;
@@ -72,7 +76,7 @@ public class BankUser implements ServerSaveable {
         Bank bank = getBank(itemID);
         if(bank != null)
             return bank;
-        if(!BankSystemMod.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
+        if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
         {
             return null;
         }
