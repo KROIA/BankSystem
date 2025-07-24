@@ -85,7 +85,7 @@ public class ATMScreen /*extends GuiContainerScreen<ATMContainerMenu>*/extends G
                 value = Long.parseLong(text);
             } catch (NumberFormatException e) {
                 // If the text is not a valid number, return 0
-                BankSystemMod.LOGGER.warn("Invalid amount entered: " + text + ". Returning 0.");
+                BankSystemMod.logWarning("Invalid amount entered: " + text + ". Returning 0.");
             }
             if(value < 0)
                 value = 0;

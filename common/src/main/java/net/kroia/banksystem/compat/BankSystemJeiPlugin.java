@@ -44,6 +44,6 @@ public class BankSystemJeiPlugin implements IModPlugin {
     @Override
     public void onRuntimeAvailable(IJeiRuntime jeiRuntime) {
         // Optional: Interact with JEI runtime if needed
-        BankSystemMod.LOGGER.info("JEI Runtime is available");
+        BankSystemMod.logInfo("JEI Runtime is available");
     }
 }

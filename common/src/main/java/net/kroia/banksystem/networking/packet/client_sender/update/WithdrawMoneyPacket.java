@@ -75,7 +75,7 @@ public class WithdrawMoneyPacket extends NetworkPacket {
                         availableBankNotes.put(itemID, moneyItem);
                     }
                 } catch (Exception e) {
-                    BankSystemMod.LOGGER.error("WithdrawMoneyPacket: Error setting stack size for item ID: " + itemID, e);
+                    BankSystemMod.logError("WithdrawMoneyPacket: Error setting stack size for item ID: " + itemID + "\n" + e.getMessage());
                     continue; // Skip this item if it cannot be set
                 }
             }
@@ -88,7 +88,7 @@ public class WithdrawMoneyPacket extends NetworkPacket {
             MoneyItem moneyItem = availableBankNotes.get(itemID);
             if(moneyItem == null)
             {
-                BankSystemMod.LOGGER.error("WithdrawMoneyPacket: Invalid money item ID: " + itemID);
+                BankSystemMod.logError("WithdrawMoneyPacket: Invalid money item ID: " + itemID);
                 continue;
             }
             long itemValue = moneyItem.worth();

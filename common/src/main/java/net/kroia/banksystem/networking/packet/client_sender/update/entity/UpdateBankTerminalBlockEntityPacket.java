@@ -79,7 +79,7 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
             bankTerminalBlockEntity.handlePacket(this, sender);
         }else
         {
-            BankSystemMod.LOGGER.error("BankTerminalBlockEntity not found at position "+this.pos);
+            BankSystemMod.logError("BankTerminalBlockEntity not found at position "+this.pos);
         }
     }
 }

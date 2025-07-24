@@ -188,7 +188,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         if(bankAccount.withdraw(addedAmount) != Bank.Status.SUCCESS)
                         {
                             // error
-                            BankSystemMod.LOGGER.error("Failed to withdraw " + addedAmount + " " + itemID + " from bank account of user " + playerID);
+                            BankSystemMod.logError("Failed to withdraw " + addedAmount + " " + itemID + " from bank account of user " + playerID);
                             inventory.removeItem(itemID, addedAmount);
                             cancelTask(itemID);
                             continue;
@@ -722,7 +722,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         String userNameStr  = player.getName().getString();
         BankUser user = BankSystemMod.SERVER_BANK_MANAGER.getUser(player.getUUID());
         if (user == null) {
-            BankSystemMod.LOGGER.error("BankUser is null for user: " + userNameStr);
+            BankSystemMod.logError("BankUser is null for user: " + userNameStr);
             return;
         }
 

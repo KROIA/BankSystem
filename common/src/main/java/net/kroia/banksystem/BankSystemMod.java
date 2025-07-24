@@ -25,7 +25,7 @@ public final class BankSystemMod {
     public static final String MOD_ID = "banksystem";
 
 
-    public static final Logger LOGGER = LogUtils.getLogger();
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     public static BankSystemModSettings SERVER_SETTINGS;
     public static BankSystemDataHandler SERVER_DATA_HANDLER;
@@ -119,19 +119,31 @@ public final class BankSystemMod {
     }
 
     public static void logInfo(String message) {
-        if(SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_INFO.get())
+        boolean enabled = true;
+        if(SERVER_SETTINGS != null)
+            enabled = SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_INFO.get();
+        if(enabled)
             LOGGER.info(message);
     }
     public static void logError(String message) {
-        if(SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_ERROR.get())
+        boolean enabled = true;
+        if(SERVER_SETTINGS != null)
+            enabled = SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_ERROR.get();
+        if(enabled)
             LOGGER.error(message);
     }
     public static void logWarning(String message) {
-        if(SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_WARNING.get())
+        boolean enabled = true;
+        if(SERVER_SETTINGS != null)
+            enabled = SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_WARNING.get();
+        if(enabled)
             LOGGER.warn(message);
     }
     public static void logDebug(String message) {
-        if(SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_DEBUG.get())
+        boolean enabled = true;
+        if(SERVER_SETTINGS != null)
+            enabled = SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_DEBUG.get();
+        if(enabled)
             LOGGER.debug(message);
     }
 

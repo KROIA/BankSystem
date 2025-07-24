@@ -241,7 +241,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         for(BankElement element : bankElements)
         {
             element.saveAmount();
-            BankSystemMod.LOGGER.info("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
+            BankSystemMod.logInfo("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
         }
 
         HashMap<ItemID, Long> itemTransferToMarketAmounts = new HashMap<>();
@@ -251,7 +251,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         for(BankElement element : bankElements)
         {
             element.saveAmount();
-            BankSystemMod.LOGGER.info("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
+            BankSystemMod.logInfo("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
         }
         HashMap<ItemID, Long> itemTransferToMarketAmounts = new HashMap<>();
         for(BankElement button : bankElements)

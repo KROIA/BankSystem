@@ -24,7 +24,7 @@ public final class BankSystemFabric implements ModInitializer {
         // Client Events
         if(FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
             ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
-                BankSystemMod.LOGGER.info("[FabricSetup] CLIENT_STARTED");
+                BankSystemMod.logDebug("[FabricSetup] CLIENT_STARTED");
                 BankSystemMod.onClientSetup();
             });
         }
@@ -32,17 +32,17 @@ public final class BankSystemFabric implements ModInitializer {
 
         // Server Events
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
-            BankSystemMod.LOGGER.info("[FabricSetup] SERVER_STARTING");
+            BankSystemMod.logDebug("[FabricSetup] SERVER_STARTING");
             BankSystemMod.onServerSetup();
         });
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            BankSystemMod.LOGGER.info("[FabricSetup] SERVER_STARTED");
+            BankSystemMod.logDebug("[FabricSetup] SERVER_STARTED");
             BankSystemServerEvents.onServerStart(server); // Handle world load (start)
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            BankSystemMod.LOGGER.info("[FabricSetup] SERVER_STOPPING");
+            BankSystemMod.logDebug("[FabricSetup] SERVER_STOPPING");
             BankSystemServerEvents.onServerStop(server);
         });
 

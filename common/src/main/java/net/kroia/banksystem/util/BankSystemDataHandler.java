@@ -6,7 +6,6 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.modutilities.PlayerUtilities;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
@@ -65,34 +64,34 @@ public class BankSystemDataHandler {
 
     public boolean saveAll()
     {
-        BankSystemMod.LOGGER.info("Saving BankSystem Mod data...");
+        BankSystemMod.logInfo("Saving BankSystem Mod data...");
         boolean success = true;
         success &= save_bank();
         success &= save_globalSettings();
 
         if(success) {
-            BankSystemMod.LOGGER.info("BankSystem Mod data saved successfully.");
+            BankSystemMod.logInfo("BankSystem Mod data saved successfully.");
 
         }
         else
-            BankSystemMod.LOGGER.error("Failed to save BankSystem Mod data.");
+            BankSystemMod.logError("Failed to save BankSystem Mod data.");
         return success;
     }
 
     public boolean loadAll()
     {
         isLoaded = false;
-        BankSystemMod.LOGGER.info("Loading BankSystem Mod data...");
+        BankSystemMod.logInfo("Loading BankSystem Mod data...");
         boolean success = true;
         success &= load_bank();
         success &= load_globalSettings();
 
         if(success) {
-            BankSystemMod.LOGGER.info("BankSystem Mod data loaded successfully.");
+            BankSystemMod.logInfo("BankSystem Mod data loaded successfully.");
             isLoaded = true;
         }
         else
-            BankSystemMod.LOGGER.error("Failed to load BankSystem Mod data.");
+            BankSystemMod.logError("Failed to load BankSystem Mod data.");
         return success;
     }
 
@@ -151,11 +150,11 @@ public class BankSystemDataHandler {
                 dataOut = data;
                 return dataOut;
             } catch (IOException e) {
-                BankSystemMod.LOGGER.error("Failed to read data from file: " + fileName);
+                BankSystemMod.logError("Failed to read data from file: " + fileName);
                 e.printStackTrace();
             } catch(Exception e)
             {
-                BankSystemMod.LOGGER.error("Failed to read data from file: " + fileName);
+                BankSystemMod.logError("Failed to read data from file: " + fileName);
                 e.printStackTrace();
             }
         }
@@ -169,12 +168,12 @@ public class BankSystemDataHandler {
             else
                 NbtIo.write(data, file);
         } catch (IOException e) {
-            BankSystemMod.LOGGER.error("Failed to save data to file: " + fileName);
+            BankSystemMod.logError("Failed to save data to file: " + fileName);
             e.printStackTrace();
             return false;
         } catch(Exception e)
         {
-            BankSystemMod.LOGGER.error("Failed to save data to file: " + fileName);
+            BankSystemMod.logError("Failed to save data to file: " + fileName);
             e.printStackTrace();
             return false;
         }

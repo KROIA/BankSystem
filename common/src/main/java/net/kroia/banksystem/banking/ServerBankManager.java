@@ -276,7 +276,7 @@ public class ServerBankManager implements ServerSaveable {
             return false;
         if(isItemIDBlacklisted(itemID))
         {
-            BankSystemMod.LOGGER.info("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
+            BankSystemMod.logInfo("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
             return false;
         }
         ArrayList<String> allowed = BankSystemMod.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
@@ -290,7 +290,7 @@ public class ServerBankManager implements ServerSaveable {
             return false;
         if(isItemIDNotRemovable(itemID))
         {
-            BankSystemMod.LOGGER.info("It is not allowed to remove the itemID: " + itemID);
+            BankSystemMod.logInfo("It is not allowed to remove the itemID: " + itemID);
             return false;
         }
         ArrayList<String> allowed = BankSystemMod.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
