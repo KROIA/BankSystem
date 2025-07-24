@@ -2,14 +2,12 @@ package net.kroia.banksystem.screen.custom;
 
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiContainerScreen;
 import net.kroia.modutilities.gui.GuiTexture;
@@ -190,7 +188,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         int x = 0;
         int y = 0;
         // Sort the bank accounts by itemID
-        ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> sortedBankAccounts = ClientBankManager.getSortedBankData();
+        ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> sortedBankAccounts = BankSystemMod.CLIENT_BANK_MANAGER.getSortedBankData();
 
         boolean needsResize = sortedBankAccounts.size() != bankElements.size();
         HashMap<ItemID,ItemID> availableItems = new HashMap<>();

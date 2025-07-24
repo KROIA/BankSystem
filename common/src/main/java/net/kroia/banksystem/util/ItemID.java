@@ -3,7 +3,6 @@ package net.kroia.banksystem.util;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.Objects;
@@ -65,5 +64,10 @@ public class ItemID implements ServerSaveable {
 
     public boolean isValid() {
         return !stack.isEmpty() && stack != null && !isAir();
+    }
+
+    @Override
+    public String toString() {
+        return getName();
     }
 }

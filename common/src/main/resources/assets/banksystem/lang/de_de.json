@@ -96,10 +96,12 @@
   "message.banksystem.money_bank_access_help": "Mit dem Bank Terminal block kannst du auf dein Bankkonto zugreifen\nOder mit dem Befehl /bank.",
 
   "message.banksystem.item_not_allowed": "{item_name} ist nicht für das lagern in der Bank zugelassen",
+  "message.banksystem.item_not_allowed_failed": "Das lagern von {item_name} kann nicht verboten werden",
   "message.banksystem.item_now_allowed": "{item_name} kann nun in der Bank gelagert werden",
   "message.banksystem.item_now_allowed_failed": "{item_name} kann für das lagern in der Bank nicht zugelassen werden",
   "message.banksystem.item_already_allowed": "{item_name} kann bereits in der Bank gelagert werden, du Idiot",
   "message.banksystem.invalid_item_id": "Unbekanntes Item {item_name}",
+  "message.banksystem.no_item_in_hand": "Kein Item in der Hand",
   "message.banksystem.circulation": "Zirkulation von {item_name} ist {amount}",
   "message.banksystem.bank_setting_start_balance_set": "Die Start Geldmenge für Spieler wurde auf {amount} gesetzt",
   "message.banksystem.bank_setting_item_transfer_tick_interval": "Der Item Transfer Tick Interval wurde auf {amount} gesetzt",

@@ -1,135 +1,107 @@
 package net.kroia.banksystem;
 
 
-import net.kroia.banksystem.item.custom.money.MoneyItem;
-import net.kroia.banksystem.item.custom.money.MoneyItem5;
-import net.kroia.banksystem.item.custom.money.MoneyItem10;
-import net.kroia.banksystem.item.custom.money.MoneyItem20;
-import net.kroia.banksystem.item.custom.money.MoneyItem50;
-import net.kroia.banksystem.item.custom.money.MoneyItem100;
-import net.kroia.banksystem.item.custom.money.MoneyItem200;
-import net.kroia.banksystem.item.custom.money.MoneyItem500;
-import net.kroia.banksystem.item.custom.money.MoneyItem1000;
-import net.kroia.banksystem.util.ItemID;
-import net.minecraft.nbt.CompoundTag;
+import com.google.gson.reflect.TypeToken;
+import net.kroia.banksystem.item.custom.money.*;
+import net.kroia.modutilities.settings.ModSettings;
+import net.kroia.modutilities.settings.Setting;
+import net.kroia.modutilities.settings.SettingsGroup;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
-public class BankSystemModSettings {
+public final class BankSystemModSettings extends ModSettings {
 
-    public static void init()
-    {
-        Bank.init();
-    }
+    public final Utilities UTILITIES = createGroup(new Utilities());
+    public final Player PLAYER = createGroup(new Player());
+    public final Bank BANK = createGroup(new Bank());
 
-    public static void saveSettings(CompoundTag tag)
-    {
-        tag.putLong("player_starting_balance", Player.STARTING_BALANCE);
-        tag.putInt("item_transfer_tick_interval", Bank.ITEM_TRANSFER_TICK_INTERVAL);
-    }
-    public static void readSettigns(CompoundTag tag)
-    {
-        if(tag.contains("player_starting_balance"))
-            Player.STARTING_BALANCE = tag.getLong("player_starting_balance");
-        if(tag.contains("item_transfer_tick_interval"))
-            Bank.ITEM_TRANSFER_TICK_INTERVAL = tag.getInt("item_transfer_tick_interval");
-    }
 
-    public static final class Player
-    {
-        public static long STARTING_BALANCE = 0;
+    public BankSystemModSettings() {
+        super("BankSystemModSettings", "settings.json");
     }
 
 
-
-    public static final class Bank
+    public static final class Utilities extends SettingsGroup
     {
-        private static boolean isLoaded = false;
-        public static int ITEM_TRANSFER_TICK_INTERVAL = 5;
+        public final Setting<Long> SAVE_INTERVAL_MINUTES = registerSetting("SAVE_INTERVAL_MINUTES",5L, Long.class); // 5 minutes
+        public final Setting<Boolean> LOGGING_ENABLE_INFO = registerSetting("LOGGING_ENABLE_INFO",true, Boolean.class);
+        public final Setting<Boolean> LOGGING_ENABLE_WARNING = registerSetting("LOGGING_ENABLE_WARNING",true, Boolean.class);
+        public final Setting<Boolean> LOGGING_ENABLE_ERROR = registerSetting("LOGGING_ENABLE_ERROR",true, Boolean.class);
+        public final Setting<Boolean> LOGGING_ENABLE_DEBUG = registerSetting("LOGGING_ENABLE_DEBUG",false, Boolean.class);
 
-        //public static final Map<ItemID, Boolean> ALLOWED_ITEM_IDS = new HashMap<>();
-        //public static final ArrayList<ItemID> POTENTIAL_ITEM_BLACKLIST = new ArrayList<>();
-        //public static final ArrayList<ItemID> NOT_REMOVABLE_ITEM_IDS = new ArrayList<>();
+        public Utilities() { super("Utilities"); }
+    }
+    public static final class Player extends SettingsGroup
+    {
+        public final Setting<Long> STARTING_BALANCE = registerSetting("STARTING_BALANCE", 0L, Long.class); // Starting balance for new players
 
-        public static void init()
+        public Player() { super("Player"); }
+    }
+
+
+
+    public static final class Bank extends SettingsGroup
+    {
+        public final Setting<Integer> ITEM_TRANSFER_TICK_INTERVAL = registerSetting("ITEM_TRANSFER_TICK_INTERVAL", 5, Integer.class); // Interval in ticks for item transfer operations
+
+        public final Setting<ArrayList<String>> ALLOWED_ITEM_IDS = registerSetting("ALLOWED_ITEM_IDS", new ArrayList<>(
+                List.of(BankSystemMod.MOD_ID+":"+MoneyItem.NAME,
+                        "minecraft:iron_ingot",
+                        "minecraft:gold_ingot",
+                        "minecraft:diamond",
+                        "minecraft:emerald",
+                        "minecraft:coal"
+                )), // Default allowed item IDs
+                new TypeToken<ArrayList<String>>() {}.getType()); // List of allowed item IDs for bank transactions
+
+        public final Setting<ArrayList<String>> BLACKLIST_ITEM_IDS = registerSetting("BLACKLIST_ITEM_IDS", new ArrayList<>(
+                        List.of("minecraft:air",
+                                "minecraft:bedrock",
+                                "minecraft:barrier",
+                                "minecraft:structure_void",
+                                "minecraft:command_block",
+                                "minecraft:repeating_command_block",
+                                "minecraft:chain_command_block",
+                                "minecraft:debug_stick",
+                                "minecraft:knowledge_book",
+
+                                BankSystemMod.MOD_ID+":"+MoneyItem5.NAME,
+                                BankSystemMod.MOD_ID+":"+MoneyItem10.NAME,
+                                BankSystemMod.MOD_ID+":"+MoneyItem20.NAME,
+                                BankSystemMod.MOD_ID+":"+MoneyItem50.NAME,
+                                BankSystemMod.MOD_ID+":"+MoneyItem100.NAME,
+                                BankSystemMod.MOD_ID+":"+MoneyItem200.NAME,
+                                BankSystemMod.MOD_ID+":"+MoneyItem500.NAME,
+                                BankSystemMod.MOD_ID+":"+MoneyItem1000.NAME
+                        )), // Default allowed item IDs
+                new TypeToken<ArrayList<String>>() {}.getType()); // List of allowed item IDs for bank transactions
+
+        public final Setting<ArrayList<String>> NOT_REMOVABLE_ITEM_IDS = registerSetting("NOT_REMOVABLE_ITEM_IDS", new ArrayList<>(
+                        List.of(BankSystemMod.MOD_ID+":"+MoneyItem.NAME
+                        )), // Default allowed item IDs
+                new TypeToken<ArrayList<String>>() {}.getType()); // List of allowed item IDs for bank transactions
+
+
+        public Bank()
         {
-            if(isLoaded)
-                return;
-/*
-            ALLOWED_ITEM_IDS.put(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME), true);
-            ALLOWED_ITEM_IDS.put(new ItemID("minecraft:iron_ingot"), true);
-            ALLOWED_ITEM_IDS.put(new ItemID("minecraft:gold_ingot"), true);
-            ALLOWED_ITEM_IDS.put(new ItemID("minecraft:diamond"), true);
-            ALLOWED_ITEM_IDS.put(new ItemID("minecraft:emerald"), true);
-            ALLOWED_ITEM_IDS.put(new ItemID("minecraft:coal"), true);
-
-
-
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID("minecraft:air"));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID("minecraft:bedrock"));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID("minecraft:barrier"));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID("minecraft:structure_void"));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID("minecraft:command_block"));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID("minecraft:repeating_command_block"));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID("minecraft:chain_command_block"));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID("minecraft:debug_stick"));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID("minecraft:knowledge_book"));
-
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID(BankSystemMod.MOD_ID+":"+ MoneyItem5.NAME));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID(BankSystemMod.MOD_ID+":"+ MoneyItem10.NAME));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem20.NAME));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem50.NAME));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem100.NAME));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem200.NAME));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem500.NAME));
-            POTENTIAL_ITEM_BLACKLIST.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem1000.NAME));
-
-            NOT_REMOVABLE_ITEM_IDS.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME));
-*/
-            isLoaded = true;
+            super("Bank");
         }
-        public static Map<ItemID, Boolean> getAllowedItemIDs()
-        {
-            Map<ItemID, Boolean> itemIDs = new HashMap<>();
-            itemIDs.put(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME), true);
-            itemIDs.put(new ItemID("minecraft:iron_ingot"), true);
-            itemIDs.put(new ItemID("minecraft:gold_ingot"), true);
-            itemIDs.put(new ItemID("minecraft:diamond"), true);
-            itemIDs.put(new ItemID("minecraft:emerald"), true);
-            itemIDs.put(new ItemID("minecraft:coal"), true);
-            return itemIDs;
-        }
-        public static ArrayList<ItemID> getPotentialItemBlacklist()
-        {
-            ArrayList<ItemID> itemIDs = new ArrayList<>();
-            itemIDs.add(new ItemID("minecraft:air"));
-            itemIDs.add(new ItemID("minecraft:bedrock"));
-            itemIDs.add(new ItemID("minecraft:barrier"));
-            itemIDs.add(new ItemID("minecraft:structure_void"));
-            itemIDs.add(new ItemID("minecraft:command_block"));
-            itemIDs.add(new ItemID("minecraft:repeating_command_block"));
-            itemIDs.add(new ItemID("minecraft:chain_command_block"));
-            itemIDs.add(new ItemID("minecraft:debug_stick"));
-            itemIDs.add(new ItemID("minecraft:knowledge_book"));
+    }
 
-            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+ MoneyItem5.NAME));
-            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+ MoneyItem10.NAME));
-            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem20.NAME));
-            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem50.NAME));
-            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem100.NAME));
-            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem200.NAME));
-            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem500.NAME));
-            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem1000.NAME));
-            return itemIDs;
-        }
 
-        public static ArrayList<ItemID> getNotRemovableItemIDs()
-        {
-            ArrayList<ItemID> itemIDs = new ArrayList<>();
-            itemIDs.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME));
-            return itemIDs;
-        }
+
+
+
+
+    /**
+     * ---------------------------------------------------------------------------------------
+     *                Utilities for creating and managing settings groups
+     * ---------------------------------------------------------------------------------------
+     */
+
+    @Override
+    public String getSettingsFilePath() {
+        return BankSystemMod.SERVER_DATA_HANDLER.getSaveFolder().getPath();
     }
 }

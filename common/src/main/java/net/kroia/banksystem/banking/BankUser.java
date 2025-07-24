@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.ItemBank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
@@ -57,7 +58,7 @@ public class BankUser implements ServerSaveable {
         Bank bank = getBank(itemID);
         if(bank != null)
             return bank;
-        if(!ServerBankManager.isItemIDAllowed(itemID))
+        if(!BankSystemMod.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
         {
             PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
             return null;
@@ -71,7 +72,7 @@ public class BankUser implements ServerSaveable {
         Bank bank = getBank(itemID);
         if(bank != null)
             return bank;
-        if(!ServerBankManager.isItemIDAllowed(itemID))
+        if(!BankSystemMod.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
         {
             return null;
         }
@@ -84,6 +85,12 @@ public class BankUser implements ServerSaveable {
     {
         return bankMap.get(itemID);
     }
+
+    public HashMap<ItemID, Bank> getAllBanks()
+    {
+        return new HashMap<>(bankMap);
+    }
+
     public boolean removeBank(ItemID itemID)
     {
         Bank bank = bankMap.get(itemID);

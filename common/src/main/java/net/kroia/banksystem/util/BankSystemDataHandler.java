@@ -1,41 +1,57 @@
 package net.kroia.banksystem.util;
 
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
+import com.google.gson.reflect.TypeToken;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.modutilities.PlayerUtilities;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
+
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 
 public class BankSystemDataHandler {
-    private static final String FOLDER_NAME = "Finance/BankSystem";
+    private final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private final String FOLDER_NAME = "Finance/BankSystem";
 
-    private static final String BANK_DATA_FILE_NAME = "Bank_data.dat";
-    private static final String SETTINGS_FILE_NAME = "settings.dat";
-    private static final boolean COMPRESSED = false;
-    private static boolean isLoaded = false;
-    private static File saveFolder;
+    private final String BANK_DATA_FILE_NAME = "Bank_data.dat";
+    private final String SETTINGS_FILE_NAME = "settings.dat";
+    private final boolean COMPRESSED = false;
+    private boolean isLoaded = false;
+    private File saveFolder;
 
-    private static long tickCounter = 0;
-    public static long saveTickInterval = 6000; // 5 minutes
+    private long tickCounter = 0;
+    private int lastPlayerCount = 0;
+    //public static long saveTickInterval = 6000; // 5 minutes
 
-    public static void tickUpdate()
+    public void tickUpdate()
     {
         tickCounter++;
-        if(tickCounter >= saveTickInterval)
+        if(tickCounter >= BankSystemMod.SERVER_SETTINGS.UTILITIES.SAVE_INTERVAL_MINUTES.get() * 1200) // 1 minute = 1200 ticks
         {
             tickCounter = 0;
-            saveAll();
+            // Check if any player is online
+            int playerCount = PlayerUtilities.getOnlinePlayers().size();
+            if(playerCount > 0 || lastPlayerCount > 0) {
+                lastPlayerCount = playerCount;
+                saveAll();
+            }
         }
     }
 
-    public static boolean isLoaded() {
+    public boolean isLoaded() {
         return isLoaded;
     }
-    public static void setSaveFolder(File folder) {
+    public void setSaveFolder(File folder) {
         File rootFolder = new File(folder, FOLDER_NAME);
         // check if folder exists
         if (!rootFolder.exists()) {
@@ -43,11 +59,11 @@ public class BankSystemDataHandler {
         }
         saveFolder = rootFolder;
     }
-    public static File getSaveFolder() {
+    public File getSaveFolder() {
         return saveFolder;
     }
 
-    public static boolean saveAll()
+    public boolean saveAll()
     {
         BankSystemMod.LOGGER.info("Saving BankSystem Mod data...");
         boolean success = true;
@@ -63,7 +79,7 @@ public class BankSystemDataHandler {
         return success;
     }
 
-    public static boolean loadAll()
+    public boolean loadAll()
     {
         isLoaded = false;
         BankSystemMod.LOGGER.info("Loading BankSystem Mod data...");
@@ -80,18 +96,18 @@ public class BankSystemDataHandler {
         return success;
     }
 
-    public static boolean save_bank()
+    public boolean save_bank()
     {
         boolean success = true;
         CompoundTag data = new CompoundTag();
         CompoundTag bankData = new CompoundTag();
-        success = ServerBankManager.saveToTag(bankData);
+        success = BankSystemMod.SERVER_BANK_MANAGER.save(bankData);
         data.put("banking", bankData);
         saveDataCompound(BANK_DATA_FILE_NAME, data);
         return success;
     }
 
-    public static boolean load_bank()
+    public boolean load_bank()
     {
         CompoundTag data = readDataCompound(BANK_DATA_FILE_NAME);
         if(data == null)
@@ -100,27 +116,26 @@ public class BankSystemDataHandler {
             return false;
 
         CompoundTag bankData = data.getCompound("banking");
-        return ServerBankManager.loadFromTag(bankData);
+        return BankSystemMod.SERVER_BANK_MANAGER.load(bankData);
     }
 
-    public static boolean save_globalSettings()
+    public boolean save_globalSettings()
     {
-        CompoundTag data = new CompoundTag();
-        BankSystemModSettings.saveSettings(data);
-        return saveDataCompound(SETTINGS_FILE_NAME, data);
+        return BankSystemMod.SERVER_SETTINGS.saveSettings();
     }
 
-    public static boolean load_globalSettings()
+    public boolean load_globalSettings()
     {
-        CompoundTag data = readDataCompound(SETTINGS_FILE_NAME);
-        if(data == null)
-            return false;
-        BankSystemModSettings.readSettigns(data);
-        return true;
+        return BankSystemMod.SERVER_SETTINGS.loadSettings();
     }
 
 
-    private static CompoundTag readDataCompound(String fileName)
+    public boolean fileExists(String fileName) {
+        File file = new File(getSaveFolder(), fileName);
+        return file.exists();
+    }
+
+    private CompoundTag readDataCompound(String fileName)
     {
         CompoundTag dataOut = new CompoundTag();
         File file = new File(saveFolder, fileName);
@@ -146,7 +161,7 @@ public class BankSystemDataHandler {
         }
         return null;
     }
-    public static boolean saveDataCompound(String fileName, CompoundTag data) {
+    public boolean saveDataCompound(String fileName, CompoundTag data) {
         File file = new File(saveFolder, fileName);
         try {
             if (COMPRESSED)
@@ -164,5 +179,31 @@ public class BankSystemDataHandler {
             return false;
         }
         return true;
+    }
+
+
+
+    public boolean saveAsJson(Object o, String fileName)
+    {
+        String json = GSON.toJson(o);
+        try {
+            Path path = Paths.get(getSaveFolder()+"/"+fileName);
+            Files.createDirectories(path.getParent());
+            Files.writeString(Paths.get(getSaveFolder()+"/"+fileName), json);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+    public <T> T loadFromJson(String fileName, Type typeOfT) throws JsonSyntaxException {
+        try {
+            // Read JSON content
+            String json = Files.readString(Paths.get(getSaveFolder()+"/"+fileName));
+            return (T) GSON.fromJson(json, TypeToken.get(typeOfT));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 }

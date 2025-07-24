@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.packet.client_sender.request;
 
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.util.ItemID;
@@ -42,7 +42,7 @@ public class RequestDisallowBankingItemIDPacket extends NetworkPacket {
 
     protected void handleOnServer(ServerPlayer sender)
     {
-        ServerBankManager.disallowItemID(itemID);
+        BankSystemMod.SERVER_BANK_MANAGER.disallowItemID(itemID);
         SyncBankDataPacket.sendPacket(sender);
     }
 }

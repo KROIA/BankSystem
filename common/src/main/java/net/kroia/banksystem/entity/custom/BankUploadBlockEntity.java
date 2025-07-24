@@ -215,7 +215,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             return;
         if(playerOwner == null)
             return;
-        BankUser bankUser = ServerBankManager.getUser(playerOwner);
+        BankUser bankUser = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerOwner);
         if(bankUser == null)
             return;
 

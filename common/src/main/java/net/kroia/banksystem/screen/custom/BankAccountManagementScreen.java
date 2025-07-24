@@ -72,7 +72,7 @@ public class BankAccountManagementScreen extends GuiScreen {
         createNewBankButton = new Button(CREATE_NEW_BANK.getString());
         createNewBankButton.setOnFallingEdge(() -> {
             ArrayList<ItemStack> allowedItemIDs = new ArrayList<>();
-            for(ItemID itemID : ClientBankManager.getAllowedItemIDs())
+            for(ItemID itemID : BankSystemMod.CLIENT_BANK_MANAGER.getAllowedItemIDs())
             {
                 allowedItemIDs.add(itemID.getStack());
             }
@@ -150,8 +150,8 @@ public class BankAccountManagementScreen extends GuiScreen {
     }
     private void updateBankData()
     {
-        ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> sortedBankAccounts = ClientBankManager.getSortedBankData();
-        playerName = ClientBankManager.getBankDataPlayerName();
+        ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> sortedBankAccounts = BankSystemMod.CLIENT_BANK_MANAGER.getSortedBankData();
+        playerName = BankSystemMod.CLIENT_BANK_MANAGER.getBankDataPlayerName();
         playerNameLabel.setText(BankSystemTextMessages.getBankAccountManagementBankOwnerMessage(playerName));
         HashMap<ItemID, BankAccountManagementItem> stillExistingItems = new HashMap<>();
         for(Pair<ItemID, SyncBankDataPacket.BankData> pair : sortedBankAccounts)
@@ -198,7 +198,7 @@ public class BankAccountManagementScreen extends GuiScreen {
 
     @Override
     public void tick() {
-        if(ClientBankManager.hasUpdatedBankData())
+        if(BankSystemMod.CLIENT_BANK_MANAGER.hasUpdatedBankData())
             updateBankData();
 
         ++lastTickCount;

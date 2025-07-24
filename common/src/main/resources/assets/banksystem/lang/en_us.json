@@ -96,10 +96,12 @@
   "message.banksystem.money_bank_access_help": "You can access your account using the Bank Terminal block\nor the /bank command.",
 
   "message.banksystem.item_not_allowed": "{item_name} is not allowed to be stored in the bank",
+  "message.banksystem.item_not_allowed_failed": "Failed to disallow {item_name} for banking",
   "message.banksystem.item_now_allowed": "{item_name} is now allowed to be stored in the bank",
   "message.banksystem.item_now_allowed_failed": "Failed to allow {item_name} for banking",
   "message.banksystem.item_already_allowed": "{item_name} is already allowed to be stored in the bank, you idiot sandwich",
   "message.banksystem.invalid_item_id": "Unknown item {item_name}",
+  "message.banksystem.no_item_in_hand": "No item in hand",
   "message.banksystem.circulation": "Circulation of {item_name} is {amount}",
   "message.banksystem.bank_setting_start_balance_set": "The players money start balance is set to {amount}",
   "message.banksystem.bank_setting_item_transfer_tick_interval": "The item transfer tick interval is set to {amount}",

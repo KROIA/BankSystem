@@ -1,25 +1,19 @@
 package net.kroia.banksystem.util;
 
-import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.BankSystemMod;
 import net.minecraft.server.level.ServerPlayer;
-
-import java.util.ArrayList;
 
 
 public class BankSystemPlayerEvents {
 
 
     public static void onPlayerJoin(ServerPlayer player) {
-        ServerBankManager.createUser(
-                player,
-                new ArrayList<>(),
-                true,
-                BankSystemModSettings.Player.STARTING_BALANCE
-        );
+
+        BankSystemMod.onPlayerJoin(player);
     }
 
     public static void onPlayerLeave(ServerPlayer player) {
         // Add logic for player leaving
+        BankSystemMod.onPlayerLeave(player);
     }
 }

@@ -127,13 +127,13 @@ public class ItemInfoWidget extends GuiElement {
         if(this.itemID == null)
             return;
 
-        long totalSupply = ClientBankManager.getTotalSupply(itemID);
-        long totalLocked = ClientBankManager.getTotalLocked(itemID);
+        long totalSupply = BankSystemMod.CLIENT_BANK_MANAGER.getTotalSupply(itemID);
+        long totalLocked = BankSystemMod.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
         totalSuplyTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalSuplyMessage(Bank.getNormalizedAmount(totalSupply)));
         totalLockedTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalLockedMessage(Bank.getNormalizedAmount(totalLocked)));
 
 
-        Map<String, SyncItemInfoPacket.BankData> bankData = ClientBankManager.getItemInfoBankData(itemID);
+        Map<String, SyncItemInfoPacket.BankData> bankData = BankSystemMod.CLIENT_BANK_MANAGER.getItemInfoBankData(itemID);
         if(bankData == null)
             return;
         // sort by key

@@ -1,9 +1,7 @@
 package net.kroia.banksystem.entity.custom;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.BankUser;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.entity.BankSystemEntities;
@@ -29,6 +27,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
@@ -75,13 +74,13 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         {
             if(amount == 0)
                 return false;
-            BankUser bank = ServerBankManager.getUser(playerID);
+            BankUser bank = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerID);
             if(bank == null) {
                 // Create bank account for this item if it can be used for banking
                 ArrayList<ItemID> keys = new ArrayList<>();
                 String userName = PlayerUtilities.getOnlinePlayer(playerID).getName().getString();
                 keys.add(itemID);
-                bank = ServerBankManager.createUser(playerID, userName, keys, true,0 );
+                bank = BankSystemMod.SERVER_BANK_MANAGER.createUser(playerID, userName, keys, true,0 );
             }
 
             ItemID bankITemID = itemID;
@@ -121,7 +120,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 cancelTasks();
                 return false;
             }
-            BankUser bank = ServerBankManager.getUser(playerID);
+            BankUser bank = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerID);
             if(bank == null) {
                 cancelTasks();
                 return false;
@@ -721,7 +720,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
     public void handlePacket(UpdateBankTerminalBlockEntityPacket packet, ServerPlayer player) {
         String userNameStr  = player.getName().getString();
-        BankUser user = ServerBankManager.getUser(player.getUUID());
+        BankUser user = BankSystemMod.SERVER_BANK_MANAGER.getUser(player.getUUID());
         if (user == null) {
             BankSystemMod.LOGGER.error("BankUser is null for user: " + userNameStr);
             return;
@@ -756,7 +755,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         // Your block entity logic here
         //System.out.println("Block entity is ticking!");
         tickCounter++;
-        if(tickCounter - lastTickCounter >= BankSystemModSettings.Bank.ITEM_TRANSFER_TICK_INTERVAL) {
+        int itemTransferTickInterval = BankSystemMod.SERVER_SETTINGS.BANK.ITEM_TRANSFER_TICK_INTERVAL.get();
+        if(tickCounter - lastTickCounter >= itemTransferTickInterval) {
             lastTickCounter = tickCounter;
             for(UUID playerID : playerDataTable.keySet())
             {
@@ -764,7 +764,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 TransferTask task = playerData.getTransferTask();
                 if(task.taskCount() > 0)
                 {
-                    boolean transferTheWholeItemStack = BankSystemModSettings.Bank.ITEM_TRANSFER_TICK_INTERVAL == 0;
+                    boolean transferTheWholeItemStack = itemTransferTickInterval == 0;
                     task.processTaskStep(1, transferTheWholeItemStack);
                 }
             }

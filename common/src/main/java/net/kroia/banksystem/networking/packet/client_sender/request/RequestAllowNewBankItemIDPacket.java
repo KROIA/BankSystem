@@ -1,11 +1,10 @@
 package net.kroia.banksystem.networking.packet.client_sender.request;
 
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
@@ -48,12 +47,12 @@ public class RequestAllowNewBankItemIDPacket extends NetworkPacket {
         //String normalized = ItemUtilities.getNormalizedItemID(itemID);
         if(itemID != null)
         {
-            if(ServerBankManager.isItemIDAllowed(itemID))
+            if(BankSystemMod.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
             {
                 PlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemAlreadyAllowedMessage(itemID.getName()));
                 return;
             }
-            if(ServerBankManager.allowItemID(itemID))
+            if(BankSystemMod.SERVER_BANK_MANAGER.allowItemID(itemID))
             {
                 PlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedMessage(itemID.getName()));
                 SyncBankDataPacket.sendPacket(sender);

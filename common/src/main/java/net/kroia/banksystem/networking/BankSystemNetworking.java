@@ -27,7 +27,7 @@ public class BankSystemNetworking {
     public static void setupClientReceiverPackets()
     {
         CHANNEL.register(SyncBankDataPacket.class, SyncBankDataPacket::toBytes, SyncBankDataPacket::new, SyncBankDataPacket::receive);
-        CHANNEL.register(SyncPotentialBankItemIDsPacket.class, SyncPotentialBankItemIDsPacket::toBytes, SyncPotentialBankItemIDsPacket::new, SyncPotentialBankItemIDsPacket::receive);
+        //CHANNEL.register(SyncPotentialBankItemIDsPacket.class, SyncPotentialBankItemIDsPacket::toBytes, SyncPotentialBankItemIDsPacket::new, SyncPotentialBankItemIDsPacket::receive);
         CHANNEL.register(SyncOpenGUIPacket.class, SyncOpenGUIPacket::toBytes, SyncOpenGUIPacket::new, SyncOpenGUIPacket::receive);
         CHANNEL.register(SyncItemInfoPacket.class, SyncItemInfoPacket::toBytes, SyncItemInfoPacket::new, SyncItemInfoPacket::receive);
         CHANNEL.register(SyncBankUploadDataPacket.class, SyncBankUploadDataPacket::toBytes, SyncBankUploadDataPacket::new, SyncBankUploadDataPacket::receive);
@@ -38,7 +38,7 @@ public class BankSystemNetworking {
         CHANNEL.register(RequestAllowNewBankItemIDPacket.class, RequestAllowNewBankItemIDPacket::toBytes, RequestAllowNewBankItemIDPacket::new, RequestAllowNewBankItemIDPacket::receive);
         CHANNEL.register(RequestBankDataPacket.class, RequestBankDataPacket::toBytes, RequestBankDataPacket::new, RequestBankDataPacket::receive);
         CHANNEL.register(RequestDisallowBankingItemIDPacket.class, RequestDisallowBankingItemIDPacket::toBytes, RequestDisallowBankingItemIDPacket::new, RequestDisallowBankingItemIDPacket::receive);
-        CHANNEL.register(RequestPotentialBankItemIDsPacket.class, RequestPotentialBankItemIDsPacket::toBytes, RequestPotentialBankItemIDsPacket::new, RequestPotentialBankItemIDsPacket::receive);
+        //CHANNEL.register(RequestPotentialBankItemIDsPacket.class, RequestPotentialBankItemIDsPacket::toBytes, RequestPotentialBankItemIDsPacket::new, RequestPotentialBankItemIDsPacket::receive);
         CHANNEL.register(UpdateBankTerminalBlockEntityPacket.class, UpdateBankTerminalBlockEntityPacket::toBytes, UpdateBankTerminalBlockEntityPacket::new, UpdateBankTerminalBlockEntityPacket::receive);
         CHANNEL.register(RequestItemInfoPacket.class, RequestItemInfoPacket::toBytes, RequestItemInfoPacket::new, RequestItemInfoPacket::receive);
         CHANNEL.register(UpdateBankAccountPacket.class, UpdateBankAccountPacket::toBytes, UpdateBankAccountPacket::new, UpdateBankAccountPacket::receive);

@@ -1,9 +1,6 @@
 package net.kroia.banksystem.screen.custom;
 
-import dev.architectury.event.events.client.ClientGuiEvent;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.ClientBankManager;
-import net.kroia.banksystem.networking.packet.client_sender.request.RequestPotentialBankItemIDsPacket;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.ItemInfoWidget;
 import net.kroia.banksystem.util.ItemID;
@@ -15,16 +12,10 @@ import net.kroia.modutilities.gui.elements.CloseButton;
 import net.kroia.modutilities.gui.elements.ItemSelectionView;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.screens.CreativeModeItemSelectionScreen;
-import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.flag.FeatureFlagSet;
-import net.minecraft.world.inventory.ClickType;
-import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 
@@ -55,10 +46,8 @@ public class BankSystemSettingScreen extends GuiScreen {
     public BankSystemSettingScreen() {
         super(TITLE);
         instance = this;
-        //if(ClientBankManager.getPotentialBankItemIDs().isEmpty())
-        //{
-        RequestPotentialBankItemIDsPacket.sendRequest();
-        //}
+        //RequestPotentialBankItemIDsPacket.sendRequest();
+
 
         closeButton = new CloseButton(this::onClose);
 
@@ -76,7 +65,7 @@ public class BankSystemSettingScreen extends GuiScreen {
 
 /*
             ArrayList<ItemStack> potentialItems = new ArrayList<>();
-            for(ItemID itemID : ClientBankManager.getPotentialBankItemIDs())
+            for(ItemID itemID : BankSystemMod.CLIENT_BANK_MANAGER.getPotentialBankItemIDs())
             {
                 potentialItems.add(itemID.getStack());
             }
@@ -87,7 +76,7 @@ public class BankSystemSettingScreen extends GuiScreen {
         });
 
         ArrayList<ItemStack> allowedItems = new ArrayList<>();
-        for(ItemID itemID : ClientBankManager.getAllowedItemIDs())
+        for(ItemID itemID : BankSystemMod.CLIENT_BANK_MANAGER.getAllowedItemIDs())
         {
             allowedItems.add(itemID.getStack());
         }
@@ -99,7 +88,7 @@ public class BankSystemSettingScreen extends GuiScreen {
         removeBankingItemButton = new Button(REMOVE_BANKING_ITEM_BUTTON.getString(), () -> {
             if(currentBankingItemID != null) {
                 AskPopupScreen popup = new AskPopupScreen(this, () -> {
-                    ClientBankManager.requestRemoveItemID(currentBankingItemID);
+                    BankSystemMod.CLIENT_BANK_MANAGER.requestRemoveItemID(currentBankingItemID);
                     setCurrentBankingItemID(null);
                 }, () -> {}, ASK_TITLE.getString() + " "+currentBankingItemID + "?", ASK_MSG.getString());
                 popup.setSize(400,100);
@@ -148,10 +137,10 @@ public class BankSystemSettingScreen extends GuiScreen {
 
 
     private void onNewBankingItemSelected(ItemStack itemStack) {
-        var items = ClientBankManager.getAllowedItemIDs();
+        var items = BankSystemMod.CLIENT_BANK_MANAGER.getAllowedItemIDs();
         ItemID newItemID = new ItemID(itemStack);
         if(!items.contains(newItemID)) {
-            ClientBankManager.requestAllowNewItemID(newItemID);
+            BankSystemMod.CLIENT_BANK_MANAGER.requestAllowNewItemID(newItemID);
         }
         setCurrentBankingItemID(itemStack);
     }
@@ -162,10 +151,10 @@ public class BankSystemSettingScreen extends GuiScreen {
             currentBankingItemView.setItemStack(null);
             return;
         }
-        ClientBankManager.requestItemInfo(new ItemID(itemStack));
+        BankSystemMod.CLIENT_BANK_MANAGER.requestItemInfo(new ItemID(itemStack));
         currentBankingItemView.setItemStack(null);
 
-        for(ItemID itemID : ClientBankManager.getAllowedItemIDs()) {
+        for(ItemID itemID : BankSystemMod.CLIENT_BANK_MANAGER.getAllowedItemIDs()) {
             String name = itemID.getName();
             if (name.compareTo(ItemUtilities.getItemID(itemStack.getItem())) == 0) {
                 currentBankingItemView.setItemStack(itemID.getStack());
@@ -178,7 +167,7 @@ public class BankSystemSettingScreen extends GuiScreen {
 
     public void updateBankData()
     {
-        var items = ClientBankManager.getAllowedItemIDs();
+        var items = BankSystemMod.CLIENT_BANK_MANAGER.getAllowedItemIDs();
         ArrayList<ItemStack> allowedItems = new ArrayList<>();
         for(ItemID itemID : items)
         {
@@ -194,10 +183,10 @@ public class BankSystemSettingScreen extends GuiScreen {
 
     @Override
     public void tick() {
-        if(ClientBankManager.hasUpdatedBankData())
+        if(BankSystemMod.CLIENT_BANK_MANAGER.hasUpdatedBankData())
             updateBankData();
 
-        if(ClientBankManager.hasUpdatedItemInfo())
+        if(BankSystemMod.CLIENT_BANK_MANAGER.hasUpdatedItemInfo())
             updateItemInfoData();
 
 
@@ -205,7 +194,7 @@ public class BankSystemSettingScreen extends GuiScreen {
         if(lastTickCount > 20 && currentBankingItemID != null)
         {
             lastTickCount = 0;
-            ClientBankManager.requestItemInfo(currentBankingItemID);
+            BankSystemMod.CLIENT_BANK_MANAGER.requestItemInfo(currentBankingItemID);
         }
     }
 }

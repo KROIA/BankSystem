@@ -96,10 +96,12 @@
   "message.banksystem.money_bank_access_help": "Mit em Bank Terminal block chasch du uf dis Bankkonto zuegrife\nOder mit em Befehl /bank.",
 
   "message.banksystem.item_not_allowed": "Es isch nöd erlaubt {item_name} i de Bank z lagere",
+  "message.banksystem.item_not_allowed_failed": "S lagere vo {item_name} cha nöd verbotte werde",
   "message.banksystem.item_now_allowed": "{item_name} cha ab ez i dä Bank gelagert werden",
   "message.banksystem.item_now_allowed_failed": "{item_name} cha für s lagere i de Bank nöd zueglo werde",
   "message.banksystem.item_already_allowed": "{item_name} cha scho i dä Bank glageret werde, du Globi",
   "message.banksystem.invalid_item_id": "Unbekannts Item {item_name}",
+  "message.banksystem.no_item_in_hand": "Keins Item i de Hand",
   "message.banksystem.circulation": "Zirkulation vo {item_name} isch {amount}",
   "message.banksystem.bank_setting_start_balance_set": "D Startgeldmengi isch uf {amount} gsetzt worde",
   "message.banksystem.bank_setting_item_transfer_tick_interval": "De Item Transfer Tick Interval isch auf {amount} gsetzt worde",

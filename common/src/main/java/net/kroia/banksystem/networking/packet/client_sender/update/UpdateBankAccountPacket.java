@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankUser;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
@@ -95,7 +95,7 @@ public class UpdateBankAccountPacket extends NetworkPacket {
         if (!isAdmin) {
             return;
         }
-        BankUser bankUser = ServerBankManager.getUser(playerUUID);
+        BankUser bankUser = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerUUID);
         if(bankUser == null)
             return;
         for (BankData data : bankData) {

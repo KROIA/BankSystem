@@ -1,12 +1,10 @@
 package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiContainerScreen;
 import net.kroia.modutilities.gui.GuiTexture;
@@ -174,7 +172,7 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
     }
     private void onSelectItemButtonClicked() {
         ArrayList<ItemStack> allowedItemIDs = new ArrayList<>();
-        for(ItemID itemID : ClientBankManager.getAllowedItemIDs())
+        for(ItemID itemID : BankSystemMod.CLIENT_BANK_MANAGER.getAllowedItemIDs())
         {
             allowedItemIDs.add(itemID.getStack());
         }

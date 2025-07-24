@@ -1,7 +1,6 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.BankSystemNetworking;
@@ -11,11 +10,8 @@ import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.UUID;
@@ -62,7 +58,7 @@ public class WithdrawMoneyPacket extends NetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender) {
         UUID playerUUID = sender.getUUID();
-        Bank moneyBank = ServerBankManager.getMoneyBank(playerUUID);
+        Bank moneyBank = BankSystemMod.SERVER_BANK_MANAGER.getMoneyBank(playerUUID);
         if(moneyBank == null) {
             return; // No money bank found for the player
         }

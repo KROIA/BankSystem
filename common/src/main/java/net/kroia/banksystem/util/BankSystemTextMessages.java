@@ -267,6 +267,13 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
+    private static final Component ITEM_NOT_ALLOWED_FAILED = Component.translatable(prefix+"item_not_allowed_failed");
+    public static String getItemNotAllowedFailedMessage(String itemName)
+    {
+        String msg = ITEM_NOT_ALLOWED_FAILED.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
     private static final Component ITEM_NOW_ALLOWED = Component.translatable(prefix+"item_now_allowed");
     public static String getItemNowAllowedMessage(String itemName)
     {
@@ -294,6 +301,13 @@ public class BankSystemTextMessages {
     {
         String msg = INVALID_ITEM_ID.getString();
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+
+    private static final Component NO_ITEM_IN_HAND = Component.translatable(prefix+"no_item_in_hand");
+    public static String getNoItemInHandMessage()
+    {
+        String msg = NO_ITEM_IN_HAND.getString();
         return msg;
     }
 

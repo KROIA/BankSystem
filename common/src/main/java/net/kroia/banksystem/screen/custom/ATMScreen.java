@@ -2,17 +2,13 @@ package net.kroia.banksystem.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
-//import net.kroia.banksystem.menu.custom.ATMContainerMenu;
-import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ItemUtilities;
-import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiContainerScreen;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
@@ -20,7 +16,6 @@ import net.kroia.modutilities.gui.layout.LayoutHorizontal;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
@@ -248,9 +243,9 @@ public class ATMScreen /*extends GuiContainerScreen<ATMContainerMenu>*/extends G
             lastTickCount = currentTickCount;
             RequestBankDataPacket.sendRequest();
         }
-        if(ClientBankManager.hasUpdatedBankData())
+        if(BankSystemMod.CLIENT_BANK_MANAGER.hasUpdatedBankData())
         {
-            long balance = ClientBankManager.getBalance();
+            long balance = BankSystemMod.CLIENT_BANK_MANAGER.getBalance();
             instance.currentBalanceWeekVar = balance;
             instance.balanceView.updateBalance(balance);
         }

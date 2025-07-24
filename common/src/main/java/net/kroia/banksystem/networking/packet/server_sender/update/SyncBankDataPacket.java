@@ -1,8 +1,7 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankUser;
-import net.kroia.banksystem.banking.ClientBankManager;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.networking.BankSystemNetworking;
@@ -110,10 +109,10 @@ public class SyncBankDataPacket extends NetworkPacket {
 
     public static void sendPacket(ServerPlayer player, UUID courcePlayerUUID)
     {
-        BankUser user = ServerBankManager.getUser(courcePlayerUUID);
+        BankUser user = BankSystemMod.SERVER_BANK_MANAGER.getUser(courcePlayerUUID);
         if(user == null)
             return;
-        SyncBankDataPacket packet = new SyncBankDataPacket(user, ServerBankManager.getAllowedItemIDs());
+        SyncBankDataPacket packet = new SyncBankDataPacket(user, BankSystemMod.SERVER_BANK_MANAGER.getAllowedItemIDs());
         BankSystemNetworking.sendToClient(player, packet);
     }
     public static void sendPacket(ServerPlayer player)
@@ -157,6 +156,6 @@ public class SyncBankDataPacket extends NetworkPacket {
 
     @Override
     protected void handleOnClient() {
-        ClientBankManager.handlePacket(this);
+        BankSystemMod.CLIENT_BANK_MANAGER.handlePacket(this);
     }
 }

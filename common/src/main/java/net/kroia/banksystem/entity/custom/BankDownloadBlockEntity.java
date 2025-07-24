@@ -267,7 +267,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
 
 
-        BankUser bankUser = ServerBankManager.getUser(playerOwner);
+        BankUser bankUser = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerOwner);
         if(bankUser == null)
             return;
         Bank itemBank = bankUser.getBank(itemID);
