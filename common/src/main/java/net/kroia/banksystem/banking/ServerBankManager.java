@@ -254,12 +254,48 @@ public class ServerBankManager implements ServerSaveable {
         return total;
     }
 
+    public ArrayList<ItemID> getAllowedItemIDs()
+    {
+        ArrayList<ItemID> allowedItemIDs = new ArrayList<>();
+        ArrayList<String> allowed = BankSystemMod.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
+        for(String itemIDstr : allowed)
+        {
+            ItemID itemID = new ItemID(itemIDstr);
+            if(itemID.isValid())
+                allowedItemIDs.add(itemID);
+        }
+        return allowedItemIDs;
+    }
+    public ArrayList<ItemID> getBlacklistedItemIDs()
+    {
+        ArrayList<ItemID> notAllowedItemIDs = new ArrayList<>();
+        ArrayList<String> notAllowed = BankSystemMod.SERVER_SETTINGS.BANK.BLACKLIST_ITEM_IDS.get();
+        for(String itemIDstr : notAllowed)
+        {
+            ItemID itemID = new ItemID(itemIDstr);
+            if(itemID.isValid())
+                notAllowedItemIDs.add(itemID);
+        }
+        return notAllowedItemIDs;
+    }
+    public ArrayList<ItemID> getNotRemovableItemIDs()
+    {
+        ArrayList<ItemID> notRemovableItemIDs = new ArrayList<>();
+        ArrayList<String> notRemovable = BankSystemMod.SERVER_SETTINGS.BANK.NOT_REMOVABLE_ITEM_IDS.get();
+        for(String itemIDstr : notRemovable)
+        {
+            ItemID itemID = new ItemID(itemIDstr);
+            if(itemID.isValid())
+                notRemovableItemIDs.add(itemID);
+        }
+        return notRemovableItemIDs;
+    }
+
     public boolean isItemIDAllowed(ItemID itemID)
     {
         ArrayList<String> allowed = BankSystemMod.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
         return allowed.contains(itemID.getName());
     }
-
     public boolean isItemIDBlacklisted(ItemID itemID)
     {
         ArrayList<String> blackList = BankSystemMod.SERVER_SETTINGS.BANK.BLACKLIST_ITEM_IDS.get();
@@ -303,18 +339,7 @@ public class ServerBankManager implements ServerSaveable {
         closeBankAccount(itemID.getName());
         return true;
     }
-    public ArrayList<ItemID> getAllowedItemIDs()
-    {
-        ArrayList<ItemID> allowedItemIDs = new ArrayList<>();
-        ArrayList<String> allowed = BankSystemMod.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        for(String itemIDstr : allowed)
-        {
-            ItemID itemID = new ItemID(itemIDstr);
-            if(itemID.isValid())
-                allowedItemIDs.add(itemID);
-        }
-        return allowedItemIDs;
-    }
+
 
 
     /*
