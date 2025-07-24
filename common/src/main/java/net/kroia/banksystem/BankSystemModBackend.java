@@ -229,4 +229,10 @@ public class BankSystemModBackend implements BankSystemAPI {
     {
         return INSTANCES.SERVER_BANK_MANAGER;
     }
+
+    @Override
+    public ClientBankManager getClientBankManager()
+    {
+        return INSTANCES.CLIENT_BANK_MANAGER;
+    }
 }
