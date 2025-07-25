@@ -1,5 +1,7 @@
 package net.kroia.banksystem.block.custom;
 
+import net.kroia.banksystem.entity.BankSystemEntities;
+import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
 import net.minecraft.core.BlockPos;
@@ -17,6 +19,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityTicker;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -110,6 +114,7 @@ public class BankUploadBlock extends Block implements EntityBlock {
         super.neighborChanged(state, level, pos, block, fromPos, isMoving); // Call super to handle other changes
     }
 
+    @Override
     public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         boolean isPowered = level.hasNeighborSignal(pos);
         BlockEntity blockEntity = level.getBlockEntity(pos);
@@ -156,5 +161,11 @@ public class BankUploadBlock extends Block implements EntityBlock {
         }
 
         return InteractionResult.SUCCESS;
+    }
+
+    @Override
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
+        // Return the ticker for the server-side logic
+        return type == BankSystemEntities.BANK_UPLOAD_BLOCK_ENTITY.get() ? BankUploadBlockEntity::tick: null;
     }
 }

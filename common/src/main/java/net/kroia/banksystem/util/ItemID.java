@@ -42,7 +42,7 @@ public class ItemID implements ServerSaveable {
         return stack;
     }
     public String getName() {
-        return ItemUtilities.getItemID(stack.getItem());
+        return ItemUtilities.getItemIDStr(stack.getItem());
     }
     public boolean isAir() {
         return getName().equals("minecraft:air");

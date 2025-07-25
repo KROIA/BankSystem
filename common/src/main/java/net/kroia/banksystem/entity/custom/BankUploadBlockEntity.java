@@ -24,7 +24,9 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
 
@@ -61,6 +63,8 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
 
     private UUID playerOwner = null;
 
+    private int tickCounter = 0;
+
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BankUploadBlockEntity.BACKEND_INSTANCES = backend;
     }
@@ -74,6 +78,26 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         return inventory;
     }
 
+    public void update()
+    {
+        sendInventoryToBank();
+    }
+
+    // The tick method
+    public static <T extends BlockEntity> void tick(Level level, BlockPos blockPos, BlockState blockState, T t) {
+        if(t instanceof BankUploadBlockEntity blockEntity)
+        {
+            if (!level.isClientSide) { // Ensure this only runs on the server
+                blockEntity.tickCounter++;
+
+                int targetTickCount = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get();
+                if (blockEntity.tickCounter >= targetTickCount) {
+                    blockEntity.tickCounter = 0;
+                    blockEntity.update();
+                }
+            }
+        }
+    }
     @Override
     public void setRemoved() {
         super.setRemoved();
@@ -157,10 +181,10 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
 
     private void inventoryContentChanged()
     {
-        if(this.sendingEnabled)
+        /*if(this.sendingEnabled)
         {
             sendInventoryToBank();
-        }
+        }*/
     }
 
     public void dropContents() {
@@ -176,9 +200,9 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         if (blockState.getBlock() instanceof BankUploadBlock) {
             level.setBlock(worldPosition, blockState.setValue(BankUploadBlock.SENDING_STATE, (this.sendingEnabled?BankUploadBlock.SendingState.SENDING:BankUploadBlock.SendingState.NOT_SENDING)), 3);
         }
-        if(this.sendingEnabled) {
+        /*if(this.sendingEnabled) {
             sendInventoryToBank();
-        }
+        }*/
     }
 
     private void setPlayerOwner(UUID playerOwner) {
@@ -287,10 +311,10 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             setPlayerOwner(packet.isOwned() ? sender.getUUID() : null);
             sendUpdate = true;
         }
-        if(sendingEnabled && getPlayerOwner() != null)
+       /* if(sendingEnabled && getPlayerOwner() != null)
         {
             sendInventoryToBank();
-        }
+        }*/
 
 
         setChanged();

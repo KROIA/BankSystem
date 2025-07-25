@@ -1,20 +1,21 @@
 package net.kroia.banksystem.networking.packet.client_sender.update.entity;
 
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import org.jetbrains.annotations.Nullable;
 
-public class UpdateBankDownloadBlockEntityPacket extends NetworkPacket {
+public class UpdateBankDownloadBlockEntityPacket extends BankSystemNetworkPacket {
 
     BlockPos pos;
     boolean isOwned;
-    ItemID itemID;
+    @Nullable ItemID itemID;
     int targetAmount;
+
     public UpdateBankDownloadBlockEntityPacket(BlockPos pos, boolean isOwned, ItemID itemID, int targetAmount) {
         this.pos = pos;
         this.isOwned = isOwned;
@@ -27,14 +28,16 @@ public class UpdateBankDownloadBlockEntityPacket extends NetworkPacket {
     }
 
     public static void sendPacket(BlockPos pos, boolean isOwned, ItemID itemID, int targetAmount) {
-        BankSystemNetworking.sendToServer(new UpdateBankDownloadBlockEntityPacket(pos, isOwned, itemID, targetAmount));
+        new UpdateBankDownloadBlockEntityPacket(pos, isOwned, itemID, targetAmount).sendToServer();
     }
 
     @Override
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeBlockPos(pos);
         buf.writeBoolean(isOwned);
-        buf.writeItem(itemID.getStack());
+        buf.writeBoolean(itemID != null);
+        if(itemID != null)
+            buf.writeItem(itemID.getStack());
         buf.writeInt(targetAmount);
     }
 
@@ -42,7 +45,12 @@ public class UpdateBankDownloadBlockEntityPacket extends NetworkPacket {
     public void fromBytes(FriendlyByteBuf buf) {
         pos = buf.readBlockPos();
         isOwned = buf.readBoolean();
-        itemID = new ItemID(buf.readItem());
+        itemID = null;
+        if(buf.readBoolean())
+        {
+            itemID = new ItemID(buf.readItem());
+        }
+
         targetAmount = buf.readInt();
     }
 
@@ -60,7 +68,7 @@ public class UpdateBankDownloadBlockEntityPacket extends NetworkPacket {
     public boolean isOwned() {
         return isOwned;
     }
-    public ItemID getItemID() {
+    public @Nullable ItemID getItemID() {
         return itemID;
     }
     public int getTargetAmount() {

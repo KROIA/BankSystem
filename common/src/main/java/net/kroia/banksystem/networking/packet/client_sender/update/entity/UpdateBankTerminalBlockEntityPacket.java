@@ -1,10 +1,8 @@
 package net.kroia.banksystem.networking.packet.client_sender.update.entity;
 
-import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
-import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -12,18 +10,12 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.HashMap;
 
-public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
-
-    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket {
 
     private BlockPos pos;
 
     private HashMap<ItemID, Long> itemTransferFromMarket;
     private boolean sendItemsToMarket;
-
-    public static void setBackend(BankSystemModBackend.Instances backend) {
-        UpdateBankTerminalBlockEntityPacket.BACKEND_INSTANCES = backend;
-    }
 
     public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<ItemID, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
         super();
@@ -50,7 +42,7 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
 
 
     public static void sendPacketToServer(BlockPos pos, HashMap<ItemID, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
-        BankSystemNetworking.sendToServer(new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToMarketAmounts, sendItemsToMarket));
+        new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToMarketAmounts, sendItemsToMarket).sendToServer();
     }
 
     @Override

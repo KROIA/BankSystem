@@ -1,16 +1,15 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.screen.custom.BankDownloadScreen;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-public class SyncBankDownloadDataPacket extends NetworkPacket {
+public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
 
     boolean isOwned;
     ItemID itemID;
@@ -33,17 +32,16 @@ public class SyncBankDownloadDataPacket extends NetworkPacket {
         int targetAmount = blockEntity.getTargetAmount();
         int maxTargetAmount = blockEntity.getMaxTargetAmount();
         boolean isOwned = playerOwner != null && playerOwner.equals(receiver.getUUID());
-        BankSystemNetworking.sendToClient(receiver, new SyncBankDownloadDataPacket(isOwned, itemID, targetAmount, maxTargetAmount));
+        new SyncBankDownloadDataPacket(isOwned, itemID, targetAmount, maxTargetAmount).sendToClient(receiver);
     }
 
 
     @Override
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeBoolean(isOwned);
-        //if(itemID == null)
-        //    itemID = "";
-
-        buf.writeItem(itemID.getStack());
+        buf.writeBoolean(itemID != null);
+        if(itemID != null)
+            buf.writeItem(itemID.getStack());
         buf.writeInt(targetAmount);
         buf.writeInt(maxTargetAmount);
     }
@@ -51,10 +49,12 @@ public class SyncBankDownloadDataPacket extends NetworkPacket {
     @Override
     public void fromBytes(FriendlyByteBuf buf) {
         isOwned = buf.readBoolean();
-        //itemID = buf.readUtf();
-        //if(itemID.isEmpty())
-        //    itemID = null;
-        itemID = new ItemID(buf.readItem());
+        itemID = null;
+         // Read itemID only if it exists
+        if(buf.readBoolean()) {
+            itemID = new ItemID(buf.readItem());
+        }
+
         targetAmount = buf.readInt();
         maxTargetAmount = buf.readInt();
     }

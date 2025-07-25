@@ -1,57 +1,52 @@
 package net.kroia.banksystem.networking;
 
-import dev.architectury.networking.NetworkChannel;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.networking.packet.client_sender.request.*;
+import net.kroia.banksystem.networking.packet.client_sender.request.RequestAllowNewBankItemIDPacket;
+import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
+import net.kroia.banksystem.networking.packet.client_sender.request.RequestDisallowBankingItemIDPacket;
+import net.kroia.banksystem.networking.packet.client_sender.request.RequestItemInfoPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.UpdateBankAccountPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.*;
-import net.kroia.modutilities.networking.INetworkPacket;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerPlayer;
+import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
+import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
+import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemInfoPacket;
+import net.kroia.modutilities.networking.NetworkManager;
 
-public class BankSystemNetworking {
+public class BankSystemNetworking extends NetworkManager {
 
-    public static final NetworkChannel CHANNEL = createChannel();
+    public BankSystemNetworking() {
+        super(BankSystemMod.MOD_ID);
 
-    private static NetworkChannel createChannel()
+        setupClientReceiverPackets();
+        setupServerReceiverPackets();
+    }
+
+    @Override
+    public void setupClientReceiverPackets()
     {
-        NetworkChannel chanel = NetworkChannel.create(new ResourceLocation(BankSystemMod.MOD_ID, "networking_channel"));
-        return chanel;
+        register(SyncBankDataPacket.class, SyncBankDataPacket::toBytes, SyncBankDataPacket::new, SyncBankDataPacket::receive);
+        register(SyncOpenGUIPacket.class, SyncOpenGUIPacket::toBytes, SyncOpenGUIPacket::new, SyncOpenGUIPacket::receive);
+        register(SyncItemInfoPacket.class, SyncItemInfoPacket::toBytes, SyncItemInfoPacket::new, SyncItemInfoPacket::receive);
+        register(SyncBankUploadDataPacket.class, SyncBankUploadDataPacket::toBytes, SyncBankUploadDataPacket::new, SyncBankUploadDataPacket::receive);
+        register(SyncBankDownloadDataPacket.class, SyncBankDownloadDataPacket::toBytes, SyncBankDownloadDataPacket::new, SyncBankDownloadDataPacket::receive);
     }
 
-    public static void setupClientReceiverPackets()
+    @Override
+    public void setupServerReceiverPackets()
     {
-        CHANNEL.register(SyncBankDataPacket.class, SyncBankDataPacket::toBytes, SyncBankDataPacket::new, SyncBankDataPacket::receive);
-        //CHANNEL.register(SyncPotentialBankItemIDsPacket.class, SyncPotentialBankItemIDsPacket::toBytes, SyncPotentialBankItemIDsPacket::new, SyncPotentialBankItemIDsPacket::receive);
-        CHANNEL.register(SyncOpenGUIPacket.class, SyncOpenGUIPacket::toBytes, SyncOpenGUIPacket::new, SyncOpenGUIPacket::receive);
-        CHANNEL.register(SyncItemInfoPacket.class, SyncItemInfoPacket::toBytes, SyncItemInfoPacket::new, SyncItemInfoPacket::receive);
-        CHANNEL.register(SyncBankUploadDataPacket.class, SyncBankUploadDataPacket::toBytes, SyncBankUploadDataPacket::new, SyncBankUploadDataPacket::receive);
-        CHANNEL.register(SyncBankDownloadDataPacket.class, SyncBankDownloadDataPacket::toBytes, SyncBankDownloadDataPacket::new, SyncBankDownloadDataPacket::receive);
-    }
-    public static void setupServerReceiverPackets()
-    {
-        CHANNEL.register(RequestAllowNewBankItemIDPacket.class, RequestAllowNewBankItemIDPacket::toBytes, RequestAllowNewBankItemIDPacket::new, RequestAllowNewBankItemIDPacket::receive);
-        CHANNEL.register(RequestBankDataPacket.class, RequestBankDataPacket::toBytes, RequestBankDataPacket::new, RequestBankDataPacket::receive);
-        CHANNEL.register(RequestDisallowBankingItemIDPacket.class, RequestDisallowBankingItemIDPacket::toBytes, RequestDisallowBankingItemIDPacket::new, RequestDisallowBankingItemIDPacket::receive);
-        //CHANNEL.register(RequestPotentialBankItemIDsPacket.class, RequestPotentialBankItemIDsPacket::toBytes, RequestPotentialBankItemIDsPacket::new, RequestPotentialBankItemIDsPacket::receive);
-        CHANNEL.register(UpdateBankTerminalBlockEntityPacket.class, UpdateBankTerminalBlockEntityPacket::toBytes, UpdateBankTerminalBlockEntityPacket::new, UpdateBankTerminalBlockEntityPacket::receive);
-        CHANNEL.register(RequestItemInfoPacket.class, RequestItemInfoPacket::toBytes, RequestItemInfoPacket::new, RequestItemInfoPacket::receive);
-        CHANNEL.register(UpdateBankAccountPacket.class, UpdateBankAccountPacket::toBytes, UpdateBankAccountPacket::new, UpdateBankAccountPacket::receive);
-        CHANNEL.register(UpdateBankUploadBlockEntityPacket.class, UpdateBankUploadBlockEntityPacket::toBytes, UpdateBankUploadBlockEntityPacket::new, UpdateBankUploadBlockEntityPacket::receive);
-        CHANNEL.register(UpdateBankDownloadBlockEntityPacket.class, UpdateBankDownloadBlockEntityPacket::toBytes, UpdateBankDownloadBlockEntityPacket::new, UpdateBankDownloadBlockEntityPacket::receive);
-        CHANNEL.register(WithdrawMoneyPacket.class, WithdrawMoneyPacket::toBytes, WithdrawMoneyPacket::new, WithdrawMoneyPacket::receive);
-    }
-
-
-    public static void sendToServer(INetworkPacket packet) {
-        CHANNEL.sendToServer(packet);
-    }
-    public static void sendToClient(ServerPlayer receiver, INetworkPacket packet) {
-        CHANNEL.sendToPlayer(receiver, packet);
+        register(RequestAllowNewBankItemIDPacket.class, RequestAllowNewBankItemIDPacket::toBytes, RequestAllowNewBankItemIDPacket::new, RequestAllowNewBankItemIDPacket::receive);
+        register(RequestBankDataPacket.class, RequestBankDataPacket::toBytes, RequestBankDataPacket::new, RequestBankDataPacket::receive);
+        register(RequestDisallowBankingItemIDPacket.class, RequestDisallowBankingItemIDPacket::toBytes, RequestDisallowBankingItemIDPacket::new, RequestDisallowBankingItemIDPacket::receive);
+        register(UpdateBankTerminalBlockEntityPacket.class, UpdateBankTerminalBlockEntityPacket::toBytes, UpdateBankTerminalBlockEntityPacket::new, UpdateBankTerminalBlockEntityPacket::receive);
+        register(RequestItemInfoPacket.class, RequestItemInfoPacket::toBytes, RequestItemInfoPacket::new, RequestItemInfoPacket::receive);
+        register(UpdateBankAccountPacket.class, UpdateBankAccountPacket::toBytes, UpdateBankAccountPacket::new, UpdateBankAccountPacket::receive);
+        register(UpdateBankUploadBlockEntityPacket.class, UpdateBankUploadBlockEntityPacket::toBytes, UpdateBankUploadBlockEntityPacket::new, UpdateBankUploadBlockEntityPacket::receive);
+        register(UpdateBankDownloadBlockEntityPacket.class, UpdateBankDownloadBlockEntityPacket::toBytes, UpdateBankDownloadBlockEntityPacket::new, UpdateBankDownloadBlockEntityPacket::receive);
+        register(WithdrawMoneyPacket.class, WithdrawMoneyPacket::toBytes, WithdrawMoneyPacket::new, WithdrawMoneyPacket::receive);
     }
 }

@@ -91,6 +91,7 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
     private final SettingsMenu settingsMenu;
 
     public static boolean isOwned = false;
+
     public static ItemID itemID;
     public static int targetAmount;
     public static int maxTargetAmount;
@@ -119,8 +120,11 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
         }
         settingsMenu.targetAmountTextBox.setText(String.valueOf(targetAmount));
 
+        if(itemID != null)
+        {
         ItemStack itemStack = itemID.getStack();
         settingsMenu.itemView.setItemStack(itemStack);
+        }
 
 
         addElement(inventoryView);
@@ -154,8 +158,13 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
             }
             instance.settingsMenu.targetAmountTextBox.setText(String.valueOf(targetAmount));
 
-            ItemStack itemStack = itemID.getStack();
-            instance.settingsMenu.itemView.setItemStack(itemStack);
+            if(itemID != null) {
+                ItemStack itemStack = itemID.getStack();
+                instance.settingsMenu.itemView.setItemStack(itemStack);
+            }
+            else {
+                instance.settingsMenu.itemView.setItemStack(ItemStack.EMPTY);
+            }
         }
     }
 

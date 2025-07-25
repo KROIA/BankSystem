@@ -1,16 +1,15 @@
 package net.kroia.banksystem.networking.packet.server_sender;
 
+import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemClientHooks;
-import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-public class SyncOpenGUIPacket extends NetworkPacket {
+public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
 
     enum GUIType
     {
@@ -41,21 +40,21 @@ public class SyncOpenGUIPacket extends NetworkPacket {
 
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
         packet.guiType = GUIType.BANK_SYSTEM_SETTING;
-        BankSystemNetworking.sendToClient(player, packet);
+        packet.sendToClient(player);
     }
     public static void send_openBankAccountScreen(ServerPlayer player, UUID targetPlayerUUID)
     {
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
         packet.guiType = GUIType.BANK_ACCOUNT;
         packet.targetPlayerUUID = targetPlayerUUID;
-        BankSystemNetworking.sendToClient(player, packet);
+        packet.sendToClient(player);
     }
 
     public static void send_openATMScreen(ServerPlayer player)
     {
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
         packet.guiType = GUIType.ATM_SCREEN;
-        BankSystemNetworking.sendToClient(player, packet);
+        packet.sendToClient(player);
     }
 
     @Override

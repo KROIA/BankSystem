@@ -1,15 +1,14 @@
 package net.kroia.banksystem.networking.packet.client_sender.request;
 
-import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-public class RequestBankDataPacket extends NetworkPacket {
+public class RequestBankDataPacket extends BankSystemNetworkPacket {
     UUID playerUUID;
 
     public RequestBankDataPacket(UUID playerUUID) {
@@ -24,7 +23,7 @@ public class RequestBankDataPacket extends NetworkPacket {
     public static void sendRequest(UUID playerUUID)
     {
         RequestBankDataPacket packet = new RequestBankDataPacket(playerUUID);
-        BankSystemNetworking.sendToServer(packet);
+        packet.sendToServer();
     }
     public static void sendRequest()
     {

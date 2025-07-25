@@ -1,11 +1,9 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
-import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.BankUserAPI;
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -13,17 +11,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public class SyncItemInfoPacket extends NetworkPacket {
-
-
+public class SyncItemInfoPacket extends BankSystemNetworkPacket {
     ItemID itemID;
     long totalSupply;
     long totalLocked;
-
-    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(BankSystemModBackend.Instances backend) {
-        SyncItemInfoPacket.BACKEND_INSTANCES = backend;
-    }
 
 
     public static class BankData
@@ -103,7 +94,7 @@ public class SyncItemInfoPacket extends NetworkPacket {
             String playerName = user.getPlayerName();
             packet.playerData.put(playerName, new BankData(player, balance, lockedBalance));
         }
-        BankSystemNetworking.sendToClient(receiver, packet);
+        packet.sendToClient(receiver);
     }
 
     @Override

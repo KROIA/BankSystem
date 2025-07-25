@@ -1,15 +1,14 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
-import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.screen.custom.BankUploadScreen;
-import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-public class SyncBankUploadDataPacket extends NetworkPacket {
+public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
 
     boolean isOwned;
     boolean dropIfNotBankable;
@@ -26,7 +25,7 @@ public class SyncBankUploadDataPacket extends NetworkPacket {
         UUID playerOwner = blockEntity.getPlayerOwner();
         boolean dropIfNotBankable = blockEntity.doesDropIfNotBankable();
         boolean isOwned = playerOwner != null && playerOwner.equals(receiver.getUUID());
-        BankSystemNetworking.sendToClient(receiver, new SyncBankUploadDataPacket(isOwned, dropIfNotBankable));
+        new SyncBankUploadDataPacket(isOwned, dropIfNotBankable).sendToClient(receiver);
     }
 
 

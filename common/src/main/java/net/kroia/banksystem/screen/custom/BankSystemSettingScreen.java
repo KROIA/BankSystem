@@ -162,7 +162,7 @@ public class BankSystemSettingScreen extends GuiScreen {
 
         for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs()) {
             String name = itemID.getName();
-            if (name.compareTo(ItemUtilities.getItemID(itemStack.getItem())) == 0) {
+            if (name.compareTo(ItemUtilities.getItemIDStr(itemStack.getItem())) == 0) {
                 currentBankingItemView.setItemStack(itemID.getStack());
                 currentBankingItemID = new ItemID(itemStack);
                 itemInfoWidget.setItemID(currentBankingItemID);

@@ -1,16 +1,13 @@
 package net.kroia.banksystem.networking.packet.client_sender.update.entity;
 
 import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
-import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
-import java.util.UUID;
-
-public class UpdateBankUploadBlockEntityPacket extends NetworkPacket {
+public class UpdateBankUploadBlockEntityPacket extends BankSystemNetworkPacket {
 
     BlockPos pos;
     boolean isOwned;
@@ -26,7 +23,7 @@ public class UpdateBankUploadBlockEntityPacket extends NetworkPacket {
     }
 
     public static void sendPacket(BlockPos pos, boolean isOwned, boolean dropIfNotBankable) {
-        BankSystemNetworking.sendToServer(new UpdateBankUploadBlockEntityPacket(pos, isOwned, dropIfNotBankable));
+        new UpdateBankUploadBlockEntityPacket(pos, isOwned, dropIfNotBankable).sendToServer();
     }
 
     @Override

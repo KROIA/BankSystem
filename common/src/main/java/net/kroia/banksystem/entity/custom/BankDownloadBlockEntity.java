@@ -3,7 +3,6 @@ package net.kroia.banksystem.entity.custom;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.BankUserAPI;
-import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.block.custom.BankDownloadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
@@ -11,7 +10,6 @@ import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -65,7 +63,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     private UUID playerOwner = null;
     private ItemID itemID;
     private int targetAmount;
-    public static int tickCounter = 0;
+    private int tickCounter = 0;
 
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BankDownloadBlockEntity.BACKEND_INSTANCES = backend;
@@ -180,7 +178,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     private void inventoryContentChanged()
     {
-        receiveItemsFromBank();
+        //receiveItemsFromBank();
     }
 
     public void dropContents() {
@@ -196,9 +194,9 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         if (blockState.getBlock() instanceof BankDownloadBlock) {
             level.setBlock(worldPosition, blockState.setValue(BankDownloadBlock.RECEIVING_STATE, (this.receivingEnabled? BankDownloadBlock.ReceivingState.RECEIVING:BankDownloadBlock.ReceivingState.NOT_RECEIVING)), 3);
         }
-        if(this.receivingEnabled) {
+        /*if(this.receivingEnabled) {
             receiveItemsFromBank();
-        }
+        }*/
     }
 
     private void setPlayerOwner(UUID playerOwner) {
@@ -258,9 +256,11 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         if(t instanceof BankDownloadBlockEntity blockEntity)
         {
             if (!level.isClientSide) { // Ensure this only runs on the server
-                tickCounter++;
-                if (tickCounter >= 20) {
-                    tickCounter = 0;
+                blockEntity.tickCounter++;
+
+                int targetTickCount = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.get();
+                if (blockEntity.tickCounter >= targetTickCount) {
+                    blockEntity.tickCounter = 0;
                     blockEntity.update();
                 }
             }
@@ -285,47 +285,48 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         if(exampleStack == null)
             return;
         int stackSize = exampleStack.getMaxStackSize();
-        int currentItemCount = countItems();
-        int targetItemCount = targetAmount;
+        long currentItemCount = countItems();
+        long targetItemCount = targetAmount;
         if(currentItemCount >= targetItemCount)
             return;
         currentlyReceiving = true;
-        int amountToReceive = targetItemCount - currentItemCount;
+        long amountToReceive = targetItemCount - currentItemCount;
 
-        for(int i = 0; i < inventory.getContainerSize(); i++)
-        {
-            ItemStack stack = inventory.getItem(i);
-            if(ItemUtilities.getItemID(stack.getItem()).equals(itemID))
-            {
-                if(stack.isDamaged() || stack.isEnchanted())
-                    continue;
-                long fillInStackAmount = stackSize - stack.getCount();
-                long amountToReceiveFromStack = Math.min(fillInStackAmount, amountToReceive);
-                if(amountToReceiveFromStack > 0)
-                {
-                    amountToReceiveFromStack = Math.min(amountToReceiveFromStack, itemBank.getBalance());
-                    if(itemBank.withdraw(amountToReceiveFromStack) == Bank.Status.SUCCESS)
-                    {
-                        stack.grow((int)amountToReceiveFromStack);
-                        amountToReceive -= amountToReceiveFromStack;
+        long balance = itemBank.getBalance();
+        if(balance > 0) {
+            for (int i = 0; i < inventory.getContainerSize(); i++) {
+                balance = itemBank.getBalance();
+                if(balance == 0 || amountToReceive <= 0)
+                    break;
+                ItemStack stack = inventory.getItem(i);
+                if (new ItemID(stack).equals(itemID)) {
+                    if (stack.isDamaged() || stack.isEnchanted())
+                        continue;
+                    long fillInStackAmount = stackSize - stack.getCount();
+                    long amountToReceiveFromStack = Math.min(fillInStackAmount, amountToReceive);
+                    if (amountToReceiveFromStack > 0) {
+
+                        amountToReceiveFromStack = Math.min(amountToReceiveFromStack, balance);
+
+                        if (itemBank.withdraw(amountToReceiveFromStack) == Bank.Status.SUCCESS) {
+                            stack.grow((int) amountToReceiveFromStack);
+                            amountToReceive -= amountToReceiveFromStack;
+                        }
+                    }
+                } else if (stack.isEmpty()) {
+                    long amountToReceiveFromStack = Math.min(stackSize, amountToReceive);
+                    if (amountToReceiveFromStack > 0 ) {
+                        amountToReceiveFromStack = Math.min(amountToReceiveFromStack, balance);
+
+                        if (itemBank.withdraw(amountToReceiveFromStack) == Bank.Status.SUCCESS) {
+                            inventory.setItem(i, new ItemStack(exampleStack.getItem(), (int) amountToReceiveFromStack));
+                            amountToReceive -= amountToReceiveFromStack;
+                        }
                     }
                 }
             }
-            else if(stack.isEmpty())
-            {
-                long amountToReceiveFromStack = Math.min(stackSize, amountToReceive);
-                if(amountToReceiveFromStack > 0)
-                {
-                    amountToReceiveFromStack = Math.min(amountToReceiveFromStack, itemBank.getBalance());
-
-                    if(itemBank.withdraw(amountToReceiveFromStack) == Bank.Status.SUCCESS) {
-                        inventory.setItem(i, new ItemStack(exampleStack.getItem(), (int)amountToReceiveFromStack));
-                        amountToReceive -= amountToReceiveFromStack;
-                    }
-                }
-            }
+            setChanged();
         }
-        setChanged();
         currentlyReceiving = false;
     }
 
@@ -349,26 +350,26 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         boolean sendUpdate = false;
         itemID = packet.getItemID();
 
-        ItemStack itemStack = itemID.getStack();
-        if(itemStack == null)
-        {
-            itemID = null;
-            targetAmount = 0;
-            setChanged();
-        }
-        else {
-            targetAmount = Math.max(0,Math.min(packet.getTargetAmount(), inventory.getContainerSize() * itemStack.getMaxStackSize()));
+        if(itemID != null) {
+            ItemStack itemStack = itemID.getStack();
+            if (itemStack == null) {
+                itemID = null;
+                targetAmount = 0;
+                setChanged();
+            } else {
+                targetAmount = Math.max(0, Math.min(packet.getTargetAmount(), inventory.getContainerSize() * itemStack.getMaxStackSize()));
+            }
         }
 
         if(playerOwner == null || playerOwner.equals(sender.getUUID())) {
             setPlayerOwner(packet.isOwned() ? sender.getUUID() : null);
             sendUpdate = true;
         }
-        if(receivingEnabled && getPlayerOwner() != null)
+        /*if(receivingEnabled && getPlayerOwner() != null)
         {
             receiveItemsFromBank();
         }
-        receiveItemsFromBank();
+        receiveItemsFromBank();*/
 
         if(sendUpdate)
         {
@@ -383,7 +384,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         int count = 0;
         for (int i = 0; i < inventory.getContainerSize(); i++) {
             ItemStack stack = inventory.getItem(i);
-            if(!stack.isEmpty() && itemID.equals(ItemUtilities.getItemID(stack.getItem())) && !stack.isDamaged() && !stack.isEnchanted())
+            if(!stack.isEmpty() && itemID.equals(new ItemID(stack)) && !stack.isDamaged() && !stack.isEnchanted())
             {
                 count += stack.getCount();
             }

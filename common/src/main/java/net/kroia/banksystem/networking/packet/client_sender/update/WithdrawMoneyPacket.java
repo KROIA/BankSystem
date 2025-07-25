@@ -1,13 +1,11 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
-import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
-import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
@@ -16,15 +14,11 @@ import net.minecraft.world.item.ItemStack;
 import java.util.HashMap;
 import java.util.UUID;
 
-public class WithdrawMoneyPacket extends NetworkPacket {
-    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
+
 
     // Contains the item ID and the requested amount of the bank notes
     HashMap<String, Long> requestedBankNoteIDs;// = new HashMap<>();
-
-    public static void setBackend(BankSystemModBackend.Instances backend) {
-        WithdrawMoneyPacket.BACKEND_INSTANCES = backend;
-    }
     public WithdrawMoneyPacket(FriendlyByteBuf buf) {
         super(buf);
     }
@@ -35,7 +29,7 @@ public class WithdrawMoneyPacket extends NetworkPacket {
 
     public static void sendPacket(HashMap<String, Long> requestedBankNoteIDs) {
         WithdrawMoneyPacket packet = new WithdrawMoneyPacket(requestedBankNoteIDs);
-        BankSystemNetworking.sendToServer(packet);
+        packet.sendToServer();
     }
 
     @Override

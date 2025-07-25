@@ -296,7 +296,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 if(stack.isDamaged() || stack.isEnchanted())
                     continue;
 
-                String stackItemID = ItemUtilities.getItemID(stack.getItem());
+                String stackItemID = ItemUtilities.getItemIDStr(stack.getItem());
 
                 // Compare the ResourceLocation to the provided string
                 if (stackItemID != null && stackItemID.equals(itemID)) {

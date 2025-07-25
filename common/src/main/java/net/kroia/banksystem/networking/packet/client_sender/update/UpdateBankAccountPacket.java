@@ -1,21 +1,17 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
-import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.BankUserAPI;
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.UUID;
 
-public class UpdateBankAccountPacket extends NetworkPacket {
-
-    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
 
     public static class BankData{
         public ItemID itemID;
@@ -53,10 +49,6 @@ public class UpdateBankAccountPacket extends NetworkPacket {
     UUID playerUUID;
     ArrayList<BankData> bankData;
 
-
-    public static void setBackend(BankSystemModBackend.Instances backend) {
-        UpdateBankAccountPacket.BACKEND_INSTANCES = backend;
-    }
     public UpdateBankAccountPacket(UUID playerUUID, ArrayList<BankData> bankData) {
         super();
         this.playerUUID = playerUUID;
@@ -69,7 +61,7 @@ public class UpdateBankAccountPacket extends NetworkPacket {
 
     public static void sendPacket(UUID playerUUID, ArrayList<BankData> bankData) {
         UpdateBankAccountPacket packet = new UpdateBankAccountPacket(playerUUID, bankData);
-        BankSystemNetworking.sendToServer(packet);
+        packet.sendToServer();
     }
 
 

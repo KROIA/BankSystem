@@ -87,6 +87,8 @@ public final class BankSystemModSettings extends ModSettings {
                         )), // Default allowed item IDs
                 new TypeToken<ArrayList<String>>() {}.getType()); // List of allowed item IDs for bank transactions
 
+        public final Setting<Integer> BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL = registerSetting("BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL", 20, Integer.class); // Interval in ticks for bank download block updates
+        public final Setting<Integer> BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL = registerSetting("BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL", 20, Integer.class); // Interval in ticks for bank download block updates
 
         public Bank()
         {

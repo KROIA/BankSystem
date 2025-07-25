@@ -278,7 +278,7 @@ public class ATMScreen extends GuiScreen {
             long amount = moneyElement.getAmount();
             if(amount > 0)
             {
-                String itemID = ItemUtilities.getItemID(moneyElement.getItemStack().getItem());
+                String itemID = ItemUtilities.getItemIDStr(moneyElement.getItemStack().getItem());
                 requestedBankNoteIDs.put(itemID, amount);
             }
         }

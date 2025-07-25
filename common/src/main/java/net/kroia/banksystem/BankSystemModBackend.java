@@ -17,13 +17,8 @@ import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.menu.BankSystemMenus;
+import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.banksystem.networking.packet.client_sender.request.RequestAllowNewBankItemIDPacket;
-import net.kroia.banksystem.networking.packet.client_sender.request.RequestDisallowBankingItemIDPacket;
-import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
-import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemInfoPacket;
 import net.kroia.banksystem.screen.custom.*;
 import net.kroia.banksystem.screen.uiElements.ItemInfoWidget;
 import net.kroia.banksystem.util.BankSystemDataHandler;
@@ -50,6 +45,8 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         public ClientBankManager CLIENT_BANK_MANAGER;
 
+        public BankSystemNetworking NETWORKING;
+
         public BankSystemLogger LOGGER;
     }
 
@@ -66,11 +63,11 @@ public class BankSystemModBackend implements BankSystemAPI {
         ServerBankManager.setBackend(INSTANCES);
         BankUser.setBackend(INSTANCES);
         BankSystemModSettings.setBackend(INSTANCES);
-        SyncBankDataPacket.setBackend(INSTANCES);
-        SyncItemInfoPacket.setBackend(INSTANCES);
-        RequestAllowNewBankItemIDPacket.setBackend(INSTANCES);
-        UpdateBankTerminalBlockEntityPacket.setBackend(INSTANCES);
-        RequestDisallowBankingItemIDPacket.setBackend(INSTANCES);
+        //SyncBankDataPacket.setBackend(INSTANCES);
+        //SyncItemInfoPacket.setBackend(INSTANCES);
+        //RequestAllowNewBankItemIDPacket.setBackend(INSTANCES);
+        //UpdateBankTerminalBlockEntityPacket.setBackend(INSTANCES);
+        //RequestDisallowBankingItemIDPacket.setBackend(INSTANCES);
         BankSystemCommands.setBackend(INSTANCES);
         //BankSystemJeiPlugin.setBackend(INSTANCES);
         BankDownloadBlockEntity.setBackend(INSTANCES);
@@ -81,7 +78,10 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemSettingScreen.setBackend(INSTANCES);
         ATMScreen.setBackend(INSTANCES);
         BankDownloadScreen.setBackend(INSTANCES);
-        WithdrawMoneyPacket.setBackend(INSTANCES);
+        //WithdrawMoneyPacket.setBackend(INSTANCES);
+        //UpdateBankDownloadBlockEntityPacket.setBackend(INSTANCES);
+
+        BankSystemNetworkPacket.setBackend(INSTANCES);
         BankSystemTextMessages.setBackend(INSTANCES);
 
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -97,8 +97,10 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemCreativeModeTab.init();
         BankSystemTextMessages.init();
 
-        BankSystemNetworking.setupClientReceiverPackets();
-        BankSystemNetworking.setupServerReceiverPackets();
+
+        INSTANCES.NETWORKING = new BankSystemNetworking();
+        //BankSystemNetworking.setupClientReceiverPackets();
+        //BankSystemNetworking.setupServerReceiverPackets();
 
 
         BankSystemModSettings.setLogger((msg)->{INSTANCES.LOGGER.error(msg);}, (msg)->{INSTANCES.LOGGER.info(msg);});

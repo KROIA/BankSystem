@@ -7,7 +7,6 @@ import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.BankUserAPI;
-import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
@@ -222,8 +221,11 @@ public class BankSystemCommands {
         // /bank bankManagementGUI                              - Open bankManagement GUI
         // /bank setStartingBalance                             - Set the starting money balance for new players
         // /bank setItemTransferTickInterval                    - Set the amount of ticks it uses for a item to be transfered in the bank terminal block. If set to 0, it will be instant.
-        // /bank save                                           - Save all bank data
-        // /bank load                                           - Load all bank data
+        // /bank save                                           - Save all bank data and settings
+        // /bank saveBankaccounts                               - Save all bank data
+        // /bank saveSettings                                   - Save BankSystemMod settings to file
+        // /bank loadBankaccounts                               - Load all bank data from file
+        // /bank loadSettings                                   - Load BankSystemMod settings from file
         dispatcher.register(
                 Commands.literal("bank")
                         .executes(context -> {
@@ -432,7 +434,7 @@ public class BankSystemCommands {
 
                                             // Get arguments
                                             Item item = player.getMainHandItem().getItem();
-                                            String itemID = ItemUtilities.getItemID(item);
+                                            String itemID = ItemUtilities.getItemIDStr(item);
                                             if(item.equals(Items.AIR))
                                             {
                                                 PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoItemInHandMessage());
@@ -487,7 +489,7 @@ public class BankSystemCommands {
 
                                     // Get arguments
                                     Item item = player.getMainHandItem().getItem();
-                                    String itemID = ItemUtilities.getItemID(item);
+                                    String itemID = ItemUtilities.getItemIDStr(item);
                                     if(item.equals(Items.AIR))
                                     {
                                         PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoItemInHandMessage());
@@ -566,13 +568,55 @@ public class BankSystemCommands {
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
-                        .then(Commands.literal("load")
+                        .then(Commands.literal("saveBankaccounts")
                                 .requires(source -> source.hasPermission(2))
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.loadAll())
+                                    if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.save_bank())
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
+                                    else
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("saveSettings")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.save_globalSettings())
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
+                                    else
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("loadBankaccounts")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.load_bank())
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadedMessage());
+                                    else
+                                        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadFailedMessage());
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("loadSettings")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.load_globalSettings())
                                         PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadedMessage());
                                     else
                                         PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadFailedMessage());

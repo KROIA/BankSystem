@@ -113,6 +113,7 @@ public class BankDownloadBlock extends Block implements EntityBlock {
         super.neighborChanged(state, level, pos, block, fromPos, isMoving); // Call super to handle other changes
     }
 
+    @Override
     public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         boolean isPowered = level.hasNeighborSignal(pos);
 
