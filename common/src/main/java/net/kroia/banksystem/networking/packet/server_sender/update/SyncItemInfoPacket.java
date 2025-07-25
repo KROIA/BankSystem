@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.api.BankUserAPI;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.ItemID;
@@ -87,10 +87,10 @@ public class SyncItemInfoPacket extends NetworkPacket {
     {
         SyncItemInfoPacket packet = new SyncItemInfoPacket();
         packet.itemID = itemID;
-        Map<UUID, BankUser> users = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser();
+        Map<UUID, BankUserAPI> users = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser();
         for(UUID player : users.keySet())
         {
-            BankUser user = users.get(player);
+            BankUserAPI user = users.get(player);
             if(user == null)
                 continue;
             Bank bankAccount = user.getBank(itemID);

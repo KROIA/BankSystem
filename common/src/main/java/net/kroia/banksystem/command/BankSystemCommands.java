@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.BankUserAPI;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
@@ -236,7 +237,7 @@ public class BankSystemCommands {
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-                                    BankUser bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(player.getUUID());
+                                    BankUserAPI bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(player.getUUID());
                                     if(bankUser == null)
                                     {
                                         PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(player.getName().getString()));
@@ -251,7 +252,7 @@ public class BankSystemCommands {
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-                                    BankUser bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(player.getUUID());
+                                    BankUserAPI bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(player.getUUID());
                                     if(bankUser == null)
                                     {
                                         PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(player.getName().getString()));
@@ -277,7 +278,7 @@ public class BankSystemCommands {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
                                                     String username = StringArgumentType.getString(context, "username");
-                                                    BankUser bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(username);
+                                                    BankUserAPI bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(username);
                                                     if(bankUser == null)
                                                     {
                                                         PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(username));
@@ -666,7 +667,7 @@ public class BankSystemCommands {
     }
 
     private static int bank_show(ServerPlayer player, String targetPlayer) {
-        BankUser user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(targetPlayer);
+        BankUserAPI user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(targetPlayer);
         if(user == null) {
             PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getUserNotFoundMessage(targetPlayer));
             return Command.SINGLE_SUCCESS;
@@ -681,7 +682,7 @@ public class BankSystemCommands {
             PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
-        BankUser user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(targetPlayer);
+        BankUserAPI user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(targetPlayer);
         if(user == null) {
             PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getUserNotFoundMessage(targetPlayer));
             return Command.SINGLE_SUCCESS;
@@ -689,7 +690,7 @@ public class BankSystemCommands {
         Bank bank = user.getBank(itemID);
         boolean created = bank == null;
 
-        bank = user.createItemBank(itemID, balance);
+        bank = user.createItemBank(itemID, balance, true);
         if(bank == null)
         {
             PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getCantCreateBankMessage(targetPlayer, itemID.getName()));
@@ -709,7 +710,7 @@ public class BankSystemCommands {
             PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
-        BankUser user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(targetPlayer);
+        BankUserAPI user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(targetPlayer);
         if(user == null) {
             PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getUserNotFoundMessage(targetPlayer));
             return Command.SINGLE_SUCCESS;
@@ -733,7 +734,7 @@ public class BankSystemCommands {
             PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
-        BankUser user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(targetPlayer);
+        BankUserAPI user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(targetPlayer);
         if(user == null) {
             PlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getUserNotFoundMessage(targetPlayer));
             return Command.SINGLE_SUCCESS;

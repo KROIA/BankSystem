@@ -4,6 +4,7 @@ import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.api.BankSystemEventsAPI;
+import net.kroia.banksystem.api.ServerBankManagerAPI;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.banking.ServerBankManager;
@@ -225,7 +226,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
 
     @Override
-    public ServerBankManager getServerBankManager()
+    public ServerBankManagerAPI getServerBankManager()
     {
         return INSTANCES.SERVER_BANK_MANAGER;
     }

@@ -1,6 +1,7 @@
 package net.kroia.banksystem.banking;
 
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.BankUserAPI;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.ItemBank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
@@ -11,13 +12,14 @@ import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public class BankUser implements ServerSaveable {
+public class BankUser implements ServerSaveable, BankUserAPI {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private UUID userUUID;
     private String userName;
@@ -40,7 +42,7 @@ public class BankUser implements ServerSaveable {
     {
 
     }
-    public static BankUser loadFromTag(CompoundTag tag)
+    public static @Nullable BankUser loadFromTag(CompoundTag tag)
     {
         BankUser user = new BankUser();
         if(user.load(tag))
@@ -48,6 +50,7 @@ public class BankUser implements ServerSaveable {
         return null;
     }
 
+    @Override
     public Bank createMoneyBank(long startBalance)
     {
         Bank bank = getBank(MoneyBank.ITEM_ID);
@@ -57,27 +60,16 @@ public class BankUser implements ServerSaveable {
         bankMap.put(MoneyBank.ITEM_ID, bank);
         return bank;
     }
-    public Bank createItemBank(ItemID itemID, long startBalance)
+    @Override
+    public @Nullable Bank createItemBank(ItemID itemID, long startBalance, boolean notifyPlayerOnFail)
     {
         Bank bank = getBank(itemID);
         if(bank != null)
             return bank;
         if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
         {
-            PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
-            return null;
-        }
-        bank = new ItemBank(this, itemID,  startBalance);
-        bankMap.put(itemID, bank);
-        return bank;
-    }
-    public Bank createItemBank_noMSG_Feedback(ItemID itemID, long startBalance)
-    {
-        Bank bank = getBank(itemID);
-        if(bank != null)
-            return bank;
-        if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
-        {
+            if(notifyPlayerOnFail)
+                PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
             return null;
         }
         bank = new ItemBank(this, itemID,  startBalance);
@@ -85,16 +77,19 @@ public class BankUser implements ServerSaveable {
         return bank;
     }
 
+    @Override
     public Bank getBank(ItemID itemID)
     {
         return bankMap.get(itemID);
     }
 
+    @Override
     public HashMap<ItemID, Bank> getAllBanks()
     {
         return new HashMap<>(bankMap);
     }
 
+    @Override
     public boolean removeBank(ItemID itemID)
     {
         Bank bank = bankMap.get(itemID);
@@ -105,10 +100,12 @@ public class BankUser implements ServerSaveable {
                 BankSystemTextMessages.getBankBalanceLostMessage(bank.getTotalBalance(), bank.getItemName()));
         return bankMap.remove(itemID) != null;
     }
+    @Override
     public Bank getMoneyBank()
     {
         return bankMap.get(MoneyBank.ITEM_ID);
     }
+    @Override
     public long getMoneyBalance()
     {
         Bank bank = getMoneyBank();
@@ -117,6 +114,7 @@ public class BankUser implements ServerSaveable {
         return 0;
     }
 
+    @Override
     public long getTotalMoneyBalance()
     {
         Bank bank = getMoneyBank();
@@ -125,14 +123,17 @@ public class BankUser implements ServerSaveable {
         return 0;
     }
 
+    @Override
     public HashMap<ItemID, Bank> getBankMap()
     {
         return bankMap;
     }
+    @Override
     public boolean isBankNotificationEbabled()
     {
         return enableBankNotifications;
     }
+    @Override
     public void setBankNotificationEnabled(boolean enabled)
     {
         enableBankNotifications = enabled;
@@ -182,14 +183,17 @@ public class BankUser implements ServerSaveable {
         return loadSuccess;
     }
 
+    @Override
     public UUID getPlayerUUID() {
         return userUUID;
     }
+    @Override
     public ServerPlayer getPlayer()
     {
         return PlayerUtilities.getOnlinePlayer(userUUID);
     }
 
+    @Override
     public String getPlayerName()
     {
         ServerPlayer player = getPlayer();
@@ -201,6 +205,7 @@ public class BankUser implements ServerSaveable {
         return userName;
     }
 
+    @Override
     public String toString()
     {
         String owner = getPlayerName();

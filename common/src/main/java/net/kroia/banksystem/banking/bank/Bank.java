@@ -1,6 +1,7 @@
 package net.kroia.banksystem.banking.bank;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.api.BankAPI;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
@@ -12,22 +13,11 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-public class Bank implements ServerSaveable {
+public class Bank implements ServerSaveable, BankAPI {
     private static final Component WARNING = Component.translatable("message."+ BankSystemMod.MOD_ID+".bank.warning");
     private static final Component INFO = Component.translatable("message."+BankSystemMod.MOD_ID+".bank.info");
 
-    public enum BankType
-    {
-        MONEY,
-        ITEM
-    }
-    public enum Status
-    {
-        SUCCESS,
-        FAILED_NOT_ENOUGH_FUNDS,
-        FAILED_OVERFLOW,
-        FAILED_NEGATIVE_VALUE
-    }
+
 
     private final BankUser owner;
     protected long balance;
@@ -39,6 +29,7 @@ public class Bank implements ServerSaveable {
     public Bank(BankUser owner, ItemID itemID, long balance) {
         this.owner = owner;
         this.itemID = itemID;
+        balance = Math.max(balance, 0); // Ensure balance is not negative
         setBalanceInternal(balance);
         this.lockedBalance = 0;
     }
@@ -61,19 +52,24 @@ public class Bank implements ServerSaveable {
     }
 
 
+    @Override
     public long getBalance() {
         return balance;
     }
+    @Override
     public long getLockedBalance() {
         return lockedBalance;
     }
 
+    @Override
     public long getTotalBalance() {
         return balance + lockedBalance;
     }
+    @Override
     public ItemID getItemID() {
         return itemID;
     }
+    @Override
     public String getItemName()
     {
         String name = itemID.getName();
@@ -84,9 +80,10 @@ public class Bank implements ServerSaveable {
         return name;
     }
 
-    public void setBalance(long balance) {
+    @Override
+    public boolean setBalance(long balance) {
         if(balance < 0)
-            return;
+            return false;
         long newBalance = balance - this.lockedBalance;
         if(newBalance < 0)
         {
@@ -94,28 +91,34 @@ public class Bank implements ServerSaveable {
 
             lockedBalance = balance;
             setBalanceInternal(0);
-            return;
+            return false;
         }
 
         setBalanceInternal(newBalance);
         if(owner.isBankNotificationEbabled())
             notifyUser(BankSystemTextMessages.getSetBalanceMessage(getBalance(), getItemName(), owner.getPlayerName()));
+        return true;
     }
 
+    @Override
     public UUID getPlayerUUID() {
         return owner.getPlayerUUID();
     }
+
+    @Override
     public ServerPlayer getUser()
     {
         return owner.getPlayer();
     }
 
+    @Override
     public String getPlayerName()
     {
         return owner.getPlayerName();
     }
 
 
+    @Override
     public Status deposit(long amount) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
@@ -128,10 +131,12 @@ public class Bank implements ServerSaveable {
     }
 
 
+    @Override
     public boolean hasSufficientFunds(long amount) {
         return balance >= amount;
     }
 
+    @Override
     public Status withdraw(long amount) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
@@ -143,6 +148,8 @@ public class Bank implements ServerSaveable {
             notifyUser(BankSystemTextMessages.getRemovedMessage(amount, getItemName(), owner.getPlayerName()));
         return Status.SUCCESS;
     }
+
+    @Override
     public Status withdrawLocked(long amount) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
@@ -152,6 +159,8 @@ public class Bank implements ServerSaveable {
         lockedBalance -= amount;
         return Status.SUCCESS;
     }
+
+    @Override
     public Status withdrawLockedPrefered(long amount) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
@@ -170,7 +179,9 @@ public class Bank implements ServerSaveable {
         lockedBalance -= amount;
         return Status.SUCCESS;
     }
-    public Status transfer(long amount, Bank other) {
+
+    @Override
+    public Status transfer(long amount, BankAPI other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         if (balance < amount) {
@@ -189,7 +200,9 @@ public class Bank implements ServerSaveable {
         addBalanceInternal(amount);
         return otherStatus;
     }
-    public Status transferFromLocked(long amount, Bank other) {
+
+    @Override
+    public Status transferFromLocked(long amount, BankAPI other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         if (lockedBalance < amount) {
@@ -204,7 +217,9 @@ public class Bank implements ServerSaveable {
         lockedBalance += amount;
         return otherStatus;
     }
-    public Status transferFromLockedPrefered(long amount, Bank other) {
+
+    @Override
+    public Status transferFromLockedPrefered(long amount, BankAPI other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         long origAmount = amount;
@@ -235,44 +250,51 @@ public class Bank implements ServerSaveable {
         return otherStatus;
     }
 
-    public static Status exchangeFromLockedPrefered(Bank from1, Bank to1, long amount1, Bank from2, Bank to2, long amount2)
+    public static Status exchangeFromLockedPrefered(BankAPI from1, BankAPI to1, long amount1, BankAPI from2, BankAPI to2, long amount2)
     {
         dbg_checkValueIsNegative(amount1);
         dbg_checkValueIsNegative(amount2);
-
-        // Both transactions must be possible, otherwise no transaction is done
-        // Copy original data
-        long origFrom1LockedBalance1 = from1.lockedBalance;
-        long origFrom2LockedBalance2 = from2.lockedBalance;
-        long origFrom1Balance1 = from1.balance;
-        long origFrom2Balance2 = from2.balance;
-        long origTo1LockedBalance1 = to1.lockedBalance;
-        long origTo2LockedBalance2 = to2.lockedBalance;
-        long origTo1Balance1 = to1.balance;
-        long origTo2Balance2 = to2.balance;
-
-
-        // Try to transfer from locked balance
-        Status status1 = from1.transferFromLockedPrefered(amount1, to1);
-        Status status2 = from2.transferFromLockedPrefered(amount2, to2);
-        if(status1 == Status.SUCCESS && status2 == Status.SUCCESS)
+        if ((from1 instanceof  Bank castedFrom1) &&
+            (to1 instanceof  Bank castedTo1) &&
+            (from2 instanceof  Bank castedFrom2) &&
+            (to2 instanceof  Bank castedTo2))
         {
-            return Status.SUCCESS;
+            // Both transactions must be possible, otherwise no transaction is done
+            // Copy original data
+            long origFrom1LockedBalance1 = castedFrom1.lockedBalance;
+            long origFrom2LockedBalance2 = castedFrom2.lockedBalance;
+            long origFrom1Balance1 = castedFrom1.balance;
+            long origFrom2Balance2 = castedFrom2.balance;
+            long origTo1LockedBalance1 = castedTo1.lockedBalance;
+            long origTo2LockedBalance2 = castedTo2.lockedBalance;
+            long origTo1Balance1 = castedTo1.balance;
+            long origTo2Balance2 = castedTo2.balance;
+
+
+            // Try to transfer from locked balance
+            Status status1 = from1.transferFromLockedPrefered(amount1, to1);
+            Status status2 = from2.transferFromLockedPrefered(amount2, to2);
+            if(status1 == Status.SUCCESS && status2 == Status.SUCCESS)
+            {
+                return Status.SUCCESS;
+            }
+            // If not possible, revert changes
+            castedFrom1.lockedBalance = origFrom1LockedBalance1;
+            castedFrom2.lockedBalance = origFrom2LockedBalance2;
+            castedFrom1.balance = origFrom1Balance1;
+            castedFrom2.balance = origFrom2Balance2;
+            castedTo1.lockedBalance = origTo1LockedBalance1;
+            castedTo2.lockedBalance = origTo2LockedBalance2;
+            castedTo1.balance = origTo1Balance1;
+            castedTo2.balance = origTo2Balance2;
+            if(status1 == Status.SUCCESS)
+                return status2;
+            return status1;
         }
-        // If not possible, revert changes
-        from1.lockedBalance = origFrom1LockedBalance1;
-        from2.lockedBalance = origFrom2LockedBalance2;
-        from1.balance = origFrom1Balance1;
-        from2.balance = origFrom2Balance2;
-        to1.lockedBalance = origTo1LockedBalance1;
-        to2.lockedBalance = origTo2LockedBalance2;
-        to1.balance = origTo1Balance1;
-        to2.balance = origTo2Balance2;
-        if(status1 == Status.SUCCESS)
-            return status2;
-        return status1;
+        return Status.FAILED_WRONG_INSTANCE_TYPE;
     }
 
+    @Override
     public Status lockAmount(long amount) {
         dbg_checkValueIsNegative(amount);
         if (balance < amount) {
@@ -283,6 +305,8 @@ public class Bank implements ServerSaveable {
         dbg_checkValueIsNegative(lockedBalance);
         return Status.SUCCESS;
     }
+
+    @Override
     public Status unlockAmount(long amount) {
         dbg_checkValueIsNegative(amount);
         if (lockedBalance < amount) {
@@ -297,6 +321,23 @@ public class Bank implements ServerSaveable {
     {
         addBalanceInternal(lockedBalance);
         lockedBalance = 0;
+    }
+
+    @Override
+    public String toString()
+    {
+        return "Owner: "+getPlayerName()+" "+toStringNoOwner();
+    }
+
+    @Override
+    public String toStringNoOwner()
+    {
+        //StringBuilder content = new StringBuilder(getItemName() +" Balance: "+(balance+lockedBalance));
+        StringBuilder content = new StringBuilder(getItemName() +BankSystemTextMessages.getBalanceMessage(balance+lockedBalance));
+        if(lockedBalance > 0)
+            content.append("("+BankSystemTextMessages.getBalanceDetailedMessage(balance, lockedBalance)+")");
+
+        return content.toString();
     }
 
     @Override
@@ -350,14 +391,16 @@ public class Bank implements ServerSaveable {
     }
 
 
-    protected void notifyUser_transfer(long amount, Bank other) {
-        if(amount == 0)
+    protected void notifyUser_transfer(long amount, BankAPI other) {
+        if (amount == 0)
             return;
 
-        if(owner.isBankNotificationEbabled())
+        if (owner.isBankNotificationEbabled())
             notifyUser(BankSystemTextMessages.getTransferedMessage(amount, getItemName(), other.getPlayerName()));
-        if(other.owner.isBankNotificationEbabled())
-            other.notifyUser(BankSystemTextMessages.getReceivedMessage(amount, getItemName(), owner.getPlayerName()));
+        if (other instanceof  Bank casted){
+            if (casted.owner.isBankNotificationEbabled())
+                casted.notifyUser(BankSystemTextMessages.getReceivedMessage(amount, getItemName(), owner.getPlayerName()));
+        }
     }
 
     protected void warnUser(String msg) {
@@ -368,20 +411,7 @@ public class Bank implements ServerSaveable {
         PlayerUtilities.printToClientConsole(getPlayerUUID(), INFO.getString()+msg);
     }
 
-    public String toString()
-    {
-        return "Owner: "+getPlayerName()+" "+toStringNoOwner();
-    }
 
-    public String toStringNoOwner()
-    {
-        //StringBuilder content = new StringBuilder(getItemName() +" Balance: "+(balance+lockedBalance));
-        StringBuilder content = new StringBuilder(getItemName() +BankSystemTextMessages.getBalanceMessage(balance+lockedBalance));
-        if(lockedBalance > 0)
-            content.append("("+BankSystemTextMessages.getBalanceDetailedMessage(balance, lockedBalance)+")");
-
-        return content.toString();
-    }
 
     public static String getNormalizedAmount(long amount)
     {

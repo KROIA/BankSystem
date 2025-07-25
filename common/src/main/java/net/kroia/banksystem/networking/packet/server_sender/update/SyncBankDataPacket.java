@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.api.BankUserAPI;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.networking.BankSystemNetworking;
@@ -60,7 +60,7 @@ public class SyncBankDataPacket extends NetworkPacket {
         SyncBankDataPacket.BACKEND_INSTANCES = backend;
     }
 
-    public SyncBankDataPacket(BankUser user, ArrayList<ItemID> allowedItemIDs) {
+    public SyncBankDataPacket(BankUserAPI user, ArrayList<ItemID> allowedItemIDs) {
         super();
         bankData = new HashMap<>();
         HashMap<ItemID, Bank> bankMap = user.getBankMap();
@@ -115,7 +115,7 @@ public class SyncBankDataPacket extends NetworkPacket {
 
     public static void sendPacket(ServerPlayer player, UUID courcePlayerUUID)
     {
-        BankUser user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(courcePlayerUUID);
+        BankUserAPI user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(courcePlayerUUID);
         if(user == null)
             return;
         SyncBankDataPacket packet = new SyncBankDataPacket(user, BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAllowedItemIDs());

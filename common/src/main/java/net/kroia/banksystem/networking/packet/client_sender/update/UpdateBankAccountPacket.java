@@ -1,12 +1,10 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.api.BankUserAPI;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
@@ -102,7 +100,7 @@ public class UpdateBankAccountPacket extends NetworkPacket {
         if (!isAdmin) {
             return;
         }
-        BankUser bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerUUID);
+        BankUserAPI bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerUUID);
         if(bankUser == null)
             return;
         for (BankData data : bankData) {
@@ -121,7 +119,7 @@ public class UpdateBankAccountPacket extends NetworkPacket {
             {
                 if(data.createBank)
                 {
-                    bankUser.createItemBank(data.itemID, data.balance);
+                    bankUser.createItemBank(data.itemID, data.balance, true);
                 }
             }
         }
