@@ -72,12 +72,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         //BankSystemJeiPlugin.setBackend(INSTANCES);
         BankDownloadBlockEntity.setBackend(INSTANCES);
         BankUploadBlockEntity.setBackend(INSTANCES);
-        ItemInfoWidget.setBackend(INSTANCES);
-        BankTerminalScreen.setBackend(INSTANCES);
-        BankAccountManagementScreen.setBackend(INSTANCES);
-        BankSystemSettingScreen.setBackend(INSTANCES);
-        ATMScreen.setBackend(INSTANCES);
-        BankDownloadScreen.setBackend(INSTANCES);
+
+
         //WithdrawMoneyPacket.setBackend(INSTANCES);
         //UpdateBankDownloadBlockEntityPacket.setBackend(INSTANCES);
 
@@ -111,6 +107,13 @@ public class BankSystemModBackend implements BankSystemAPI {
     {
         BankSystemMenus.setupScreens();
         INSTANCES.CLIENT_BANK_MANAGER = new ClientBankManager();
+
+        BankTerminalScreen.setBackend(INSTANCES);
+        BankAccountManagementScreen.setBackend(INSTANCES);
+        BankSystemSettingScreen.setBackend(INSTANCES);
+        ATMScreen.setBackend(INSTANCES);
+        BankDownloadScreen.setBackend(INSTANCES);
+        ItemInfoWidget.setBackend(INSTANCES);
     }
 
     // Called from the server side

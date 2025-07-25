@@ -39,7 +39,6 @@ public class ATMScreen extends GuiScreen {
         private final ItemView itemView;
         private final TextBox amountTextBox;
 
-        private final LayoutHorizontal layout;
         public MoneyElement(ItemStack moneyItem)
         {
             super();
@@ -54,7 +53,7 @@ public class ATMScreen extends GuiScreen {
                 onRequestedAmountChanged(this);
             }));
 
-            layout = new LayoutHorizontal();
+            LayoutHorizontal layout = new LayoutHorizontal();
             this.setLayout(layout);
 
 
@@ -100,14 +99,14 @@ public class ATMScreen extends GuiScreen {
         }
     }
 
-    private class BalanceView extends GuiElement{
+    private static class BalanceView extends GuiElement{
 
         private final ItemView coinItemView;
         private final Label balanceLabel;
         private final Label sumLabel;
         private final LayoutHorizontal layout;
 
-        private int defaultTextColor;
+        private final int defaultTextColor;
         public BalanceView()
         {
             super();

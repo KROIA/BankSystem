@@ -15,15 +15,22 @@ import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataP
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemInfoPacket;
+import net.kroia.banksystem.networking.request.TestRequest;
 import net.kroia.modutilities.networking.NetworkManager;
+import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
 
 public class BankSystemNetworking extends NetworkManager {
 
+
+    public static TestRequest TEST_REQUEST = (TestRequest) AsynchronousRequestResponseSystem.register(new TestRequest());
     public BankSystemNetworking() {
         super(BankSystemMod.MOD_ID);
 
         setupClientReceiverPackets();
         setupServerReceiverPackets();
+
+        this.setupARRS(); // Setup the Asynchronous Request Response System (ARRS)
+
     }
 
     @Override
