@@ -1,6 +1,5 @@
 package net.kroia.banksystem.api;
 
-import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -9,15 +8,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public interface ServerBankManagerAPI {
+public interface IServerBankManager {
 
-    BankUserAPI createUser(UUID userUUID, String userName, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney);
-    BankUserAPI createUser(ServerPlayer player, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney);
+    IBankUser createUser(UUID userUUID, String userName, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney);
+    IBankUser createUser(ServerPlayer player, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney);
 
 
-    BankUserAPI getUser(UUID userUUID);
-    BankUserAPI getUser(String userName);
-    Map<UUID, BankUserAPI> getUser();
+    IBankUser getUser(UUID userUUID);
+    IBankUser getUser(String userName);
+    Map<UUID, IBankUser> getUser();
     void clear();
     boolean closeBankAccount(UUID playerUUID, ItemID itemID);
     void closeBankAccount(ItemID itemID);
@@ -27,13 +26,16 @@ public interface ServerBankManagerAPI {
 
     HashMap<UUID, String> getPlayerNameMap();
 
-    Bank getMoneyBank(UUID userUUID);
-    Bank getMoneyBank(String userName);
-    Bank getBank(UUID userUUID, ItemID itemID);
-    Bank getBank(String userName, ItemID itemID);
+    IBank getMoneyBank(UUID userUUID);
+    IBank getMoneyBank(String userName);
+    IBank getBank(UUID userUUID, ItemID itemID);
+    IBank getBank(String userName, ItemID itemID);
 
 
     long getMoneyCirculation();
+
+    long getItemCirculation(ItemID itemID);
+    long getLockedItemCirculation(ItemID itemID);
 
     ArrayList<ItemID> getAllowedItemIDs();
     ArrayList<ItemID> getBlacklistedItemIDs();

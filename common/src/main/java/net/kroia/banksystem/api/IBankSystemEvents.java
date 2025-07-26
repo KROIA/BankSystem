@@ -4,7 +4,7 @@ import net.kroia.banksystem.banking.eventdata.CloseItemBankEventData;
 import net.kroia.modutilities.event.DataEvent;
 import net.kroia.modutilities.event.Signal;
 
-public interface BankSystemEventsAPI {
+public interface IBankSystemEvents {
     DataEvent<CloseItemBankEventData> getCloseItemBankEvent();
 
     Signal getBankDataSavedToFileSignal();

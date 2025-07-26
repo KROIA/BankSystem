@@ -1,11 +1,12 @@
 package net.kroia.banksystem.api;
 
+import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-public interface BankAPI {
+public interface IBank {
     enum BankType
     {
         MONEY,
@@ -21,6 +22,7 @@ public interface BankAPI {
     }
 
 
+    MinimalBankData getMinimalData();
 
     long getBalance();
     long getLockedBalance();
@@ -45,9 +47,9 @@ public interface BankAPI {
     Status withdraw(long amount);
     Status withdrawLocked(long amount);
     Status withdrawLockedPrefered(long amount);
-    Status transfer(long amount, BankAPI other);
-    Status transferFromLocked(long amount, BankAPI other);
-    Status transferFromLockedPrefered(long amount, BankAPI other);
+    Status transfer(long amount, IBank other);
+    Status transferFromLocked(long amount, IBank other);
+    Status transferFromLockedPrefered(long amount, IBank other);
 
     Status lockAmount(long amount);
     Status unlockAmount(long amount) ;
