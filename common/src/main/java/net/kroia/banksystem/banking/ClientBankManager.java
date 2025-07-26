@@ -1,6 +1,10 @@
 package net.kroia.banksystem.banking;
 
 import com.mojang.datafixers.util.Pair;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.banking.clientdata.ItemInfoData;
+import net.kroia.banksystem.banking.clientdata.MinimalBankManagerData;
+import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestAllowNewBankItemIDPacket;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestDisallowBankingItemIDPacket;
@@ -12,32 +16,36 @@ import net.kroia.banksystem.util.ItemID;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class ClientBankManager {
+
+    protected BankSystemModBackend.Instances BACKEND_INSTANCES;
     private SyncBankDataPacket bankDataPacket;
-    private SyncItemInfoPacket itemInfoPacket;
-    //private SyncPotentialBankItemIDsPacket potentialBankItemIDsPacket;
+    //private SyncItemInfoPacket itemInfoPacket;
     private boolean hasUpdatedBankData = false;
-    private boolean hasUpdatedItemInfo = false;
+    //private boolean hasUpdatedItemInfo = false;
+
+    public ClientBankManager(BankSystemModBackend.Instances backendInstances)
+    {
+        this.BACKEND_INSTANCES = backendInstances;
+    }
 
     public void clear()
     {
         bankDataPacket = null;
-        itemInfoPacket = null;
+        //itemInfoPacket = null;
     }
     public void handlePacket(SyncBankDataPacket packet)
     {
         bankDataPacket = packet;
         hasUpdatedBankData = true;
     }
-    /*public void handlePacket(SyncPotentialBankItemIDsPacket packet)
-    {
-        potentialBankItemIDsPacket = packet;
-    }*/
+
     public void handlePacket(SyncItemInfoPacket packet)
     {
-        itemInfoPacket = packet;
-        hasUpdatedItemInfo = true;
+        //itemInfoPacket = packet;
+        //hasUpdatedItemInfo = true;
     }
 
     public boolean hasUpdatedBankData()
@@ -46,12 +54,12 @@ public class ClientBankManager {
         hasUpdatedBankData = false;
         return has;
     }
-    public boolean hasUpdatedItemInfo()
+    /*public boolean hasUpdatedItemInfo()
     {
         boolean has = hasUpdatedItemInfo;
         hasUpdatedItemInfo = false;
         return has;
-    }
+    }*/
 
     public long getBalance()
     {
@@ -108,14 +116,14 @@ public class ClientBankManager {
         }
         return bankDataPacket.getBankData();
     }
-    public ArrayList<ItemID> getAllowedItemIDs() {
+   /* public ArrayList<ItemID> getAllowedItemIDs() {
         if(bankDataPacket == null)
         {
             msgBankDataNotReceived();
             return new ArrayList<>();
         }
         return bankDataPacket.getAllowedItemIDs();
-    }
+    }*/
     public String getBankDataPlayerName()
     {
         if(bankDataPacket == null)
@@ -125,34 +133,7 @@ public class ClientBankManager {
         }
         return bankDataPacket.getPlayerName();
     }
-    /*public ArrayList<ItemID> getPotentialBankItemIDs() {
-        if(potentialBankItemIDsPacket == null)
-        {
-            BankSystemMod.LOGGER.warn("Potential bank item IDs packet not received yet");
-            RequestPotentialBankItemIDsPacket.sendRequest();
-            return new ArrayList<>();
-        }
-        return potentialBankItemIDsPacket.getPotentialBankItemIDs();
-    }*/
-    /*public ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> getSortedItemData()
-    {
-        if(bankDataPacket == null)
-        {
-            msgBankDataNotReceived();
-            return new ArrayList<>();
-        }
-        HashMap<ItemID, SyncBankDataPacket.BankData> bankAccounts = bankDataPacket.getBankData();
-        // Sort the bank accounts by itemID
-        ArrayList<Pair<ItemID,SyncBankDataPacket.BankData>> sortedBankAccounts = new ArrayList<>();
-        for (ItemID itemID : bankAccounts.keySet()) {
-            if(itemID.equals(MoneyBank.ITEM_ID))
-                continue; // Skip the money bank
-            sortedBankAccounts.add(new Pair<>(itemID, bankAccounts.get(itemID)));
-        }
-        // Sort by balance
-        sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().getBalance(), a.getSecond().getBalance()));
-        return sortedBankAccounts;
-    }*/
+
     public ArrayList<Pair<ItemID, SyncBankDataPacket.BankData>> getSortedBankData()
     {
         if(bankDataPacket == null)
@@ -171,7 +152,7 @@ public class ClientBankManager {
         return sortedBankAccounts;
     }
 
-    public long getTotalSupply(ItemID itemID)
+    /*public long getTotalSupply(ItemID itemID)
     {
         if(itemInfoPacket == null || !itemInfoPacket.getItemID().equals(itemID))
         {
@@ -197,7 +178,7 @@ public class ClientBankManager {
             return null;
         }
         return itemInfoPacket.getBankData();
-    }
+    }*/
 
     private void msgBankDataNotReceived()
     {
@@ -216,8 +197,23 @@ public class ClientBankManager {
     {
         RequestDisallowBankingItemIDPacket.sendRequest(itemID);
     }
-    public void requestItemInfo(ItemID itemID)
+
+
+
+    public void requestAllowItem(ItemID itemID, Consumer<Boolean> consumer)
     {
-        RequestItemInfoPacket.sendRequest(itemID);
+        BankSystemNetworking.ALLOW_ITEM_REQUEST.sendRequestToServer(itemID, consumer);
+        //RequestAllowNewBankItemIDPacket.sendRequest(itemID, consumer);
+    }
+    public void requestMinimalBankManagerData(Consumer<MinimalBankManagerData> consumer)
+    {
+        BankSystemNetworking.MINIMAL_BANK_DATA_REQUEST.sendRequestToServer(0, consumer);
+        //RequestBankDataPacket.sendRequest(consumer);
+    }
+
+    public void requestItemInfoData(ItemID itemID, Consumer<ItemInfoData> consumer)
+    {
+        BankSystemNetworking.ITEM_INFO_REQUEST.sendRequestToServer(itemID, consumer);
+        //RequestItemInfoPacket.sendRequest(itemID);
     }
 }

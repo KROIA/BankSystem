@@ -37,7 +37,7 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
 
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeBoolean(isOwned);
         buf.writeBoolean(itemID != null);
         if(itemID != null)
@@ -47,7 +47,7 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         isOwned = buf.readBoolean();
         itemID = null;
          // Read itemID only if it exists

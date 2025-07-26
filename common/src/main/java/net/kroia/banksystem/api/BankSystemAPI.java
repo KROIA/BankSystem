@@ -5,9 +5,9 @@ import net.kroia.banksystem.banking.ClientBankManager;
 public interface BankSystemAPI {
 
     String getModID();
-    BankSystemEventsAPI getEvents();
+    IBankSystemEvents getEvents();
 
-    ServerBankManagerAPI getServerBankManager();
+    IServerBankManager getServerBankManager();
     ClientBankManager getClientBankManager();
 
 }

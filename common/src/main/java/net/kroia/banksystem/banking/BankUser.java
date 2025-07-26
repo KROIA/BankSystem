@@ -1,10 +1,13 @@
 package net.kroia.banksystem.banking;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.BankUserAPI;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.ItemBank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
+import net.kroia.banksystem.banking.clientdata.MinimalBankData;
+import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
@@ -19,7 +22,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public class BankUser implements ServerSaveable, BankUserAPI {
+public class BankUser implements ServerSaveable, IBankUser {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private UUID userUUID;
     private String userName;
@@ -51,19 +54,33 @@ public class BankUser implements ServerSaveable, BankUserAPI {
     }
 
     @Override
-    public Bank createMoneyBank(long startBalance)
+    public MinimalBankUserData getMinimalData()
     {
-        Bank bank = getBank(MoneyBank.ITEM_ID);
-        if(bank != null)
-            return bank;
-        bank = new MoneyBank(this, startBalance);
-        bankMap.put(MoneyBank.ITEM_ID, bank);
-        return bank;
+        return new MinimalBankUserData(this);
+    }
+
+    @Override
+    public @Nullable MinimalBankData getMinimalBankData(ItemID itemID)
+    {
+        IBank bank = getBank(itemID);
+        if(bank == null)
+            return null;
+        return bank.getMinimalData();
     }
     @Override
-    public @Nullable Bank createItemBank(ItemID itemID, long startBalance, boolean notifyPlayerOnFail)
+    public IBank createMoneyBank(long startBalance)
     {
-        Bank bank = getBank(itemID);
+        IBank bank = getBank(MoneyBank.ITEM_ID);
+        if(bank != null)
+            return bank;
+        MoneyBank moneyBank = new MoneyBank(this, startBalance);
+        bankMap.put(MoneyBank.ITEM_ID, moneyBank);
+        return moneyBank;
+    }
+    @Override
+    public @Nullable IBank createItemBank(ItemID itemID, long startBalance, boolean notifyPlayerOnFail)
+    {
+        IBank bank = getBank(itemID);
         if(bank != null)
             return bank;
         if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
@@ -72,19 +89,19 @@ public class BankUser implements ServerSaveable, BankUserAPI {
                 PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
             return null;
         }
-        bank = new ItemBank(this, itemID,  startBalance);
-        bankMap.put(itemID, bank);
-        return bank;
+        ItemBank itemBank = new ItemBank(this, itemID,  startBalance);
+        bankMap.put(itemID, itemBank);
+        return itemBank;
     }
 
     @Override
-    public Bank getBank(ItemID itemID)
+    public @Nullable IBank getBank(ItemID itemID)
     {
         return bankMap.get(itemID);
     }
 
     @Override
-    public HashMap<ItemID, Bank> getAllBanks()
+    public HashMap<ItemID, IBank> getAllBanks()
     {
         return new HashMap<>(bankMap);
     }
@@ -101,7 +118,7 @@ public class BankUser implements ServerSaveable, BankUserAPI {
         return bankMap.remove(itemID) != null;
     }
     @Override
-    public Bank getMoneyBank()
+    public @Nullable Bank getMoneyBank()
     {
         return bankMap.get(MoneyBank.ITEM_ID);
     }
@@ -124,9 +141,9 @@ public class BankUser implements ServerSaveable, BankUserAPI {
     }
 
     @Override
-    public HashMap<ItemID, Bank> getBankMap()
+    public HashMap<ItemID, IBank> getBankMap()
     {
-        return bankMap;
+        return new HashMap<ItemID, IBank>(bankMap);
     }
     @Override
     public boolean isBankNotificationEbabled()
@@ -188,7 +205,7 @@ public class BankUser implements ServerSaveable, BankUserAPI {
         return userUUID;
     }
     @Override
-    public ServerPlayer getPlayer()
+    public @Nullable ServerPlayer getPlayer()
     {
         return PlayerUtilities.getOnlinePlayer(userUUID);
     }

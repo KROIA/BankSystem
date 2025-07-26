@@ -1,9 +1,14 @@
 package net.kroia.banksystem.banking;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.BankUserAPI;
-import net.kroia.banksystem.api.ServerBankManagerAPI;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankUser;
+import net.kroia.banksystem.api.IServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.clientdata.ItemInfoData;
+import net.kroia.banksystem.banking.clientdata.MinimalBankData;
+import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
+import net.kroia.banksystem.banking.clientdata.MinimalBankManagerData;
 import net.kroia.banksystem.banking.eventdata.CloseItemBankEventData;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -14,12 +19,9 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
-public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
+public class ServerBankManager implements ServerSaveable, IServerBankManager {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private Map<UUID, BankUser> userMap = new HashMap<>();
@@ -27,8 +29,43 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
     public static void setBackend(BankSystemModBackend.Instances backend) {
         ServerBankManager.BACKEND_INSTANCES = backend;
     }
+
+
     @Override
-    public BankUserAPI createUser(UUID userUUID, String userName, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney)
+    public MinimalBankUserData getMinimalBankUserData(UUID userUUID)
+    {
+        BankUser user = userMap.get(userUUID);
+        if(user == null)
+            return null;
+        return user.getMinimalData();
+    }
+
+    @Override
+    public MinimalBankData getMinimalBankData(UUID userUUID, ItemID itemID)
+    {
+        BankUser user = userMap.get(userUUID);
+        if(user == null)
+            return null;
+        IBank bank = user.getBank(itemID);
+        if(bank == null)
+            return null;
+        return bank.getMinimalData();
+    }
+
+    @Override
+    public ItemInfoData getItemInfoData(ItemID itemID)
+    {
+        return new ItemInfoData(this, itemID);
+    }
+
+    @Override
+    public MinimalBankManagerData getMinimalData()
+    {
+        return new MinimalBankManagerData(this);
+    }
+
+    @Override
+    public IBankUser createUser(UUID userUUID, String userName, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney)
     {
         BankUser user = userMap.get(userUUID);
         if(user != null)
@@ -45,7 +82,7 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
     }
 
     @Override
-    public BankUserAPI createUser(ServerPlayer player, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney)
+    public IBankUser createUser(ServerPlayer player, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney)
     {
         String userName = player.getName().getString();
         UUID uuid = player.getUUID();
@@ -54,12 +91,12 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
 
 
     @Override
-    public BankUserAPI getUser(UUID userUUID)
+    public IBankUser getUser(UUID userUUID)
     {
         return userMap.get(userUUID);
     }
     @Override
-    public BankUserAPI getUser(String userName)
+    public IBankUser getUser(String userName)
     {
         for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
             if(entry.getValue().getPlayerName().equals(userName))
@@ -69,7 +106,7 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
     }
 
     @Override
-    public Map<UUID, BankUserAPI> getUser()
+    public Map<UUID, IBankUser> getUser()
     {
         return new HashMap<>(userMap);
     }
@@ -100,10 +137,10 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
     }
 
     @Override
-    public boolean closeBankAccount(UUID playerUUID, ItemID itemID)
+    public boolean closeBankAccount(UUID userUUID, ItemID itemID)
     {
-        BankUser user = userMap.get(playerUUID);
-        Bank bank = user.getBank(itemID);
+        BankUser user = userMap.get(userUUID);
+        IBank bank = user.getBank(itemID);
         if(bank == null) {
             return false;
         }
@@ -128,7 +165,7 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
         HashMap<UUID, CloseItemBankEventData.PlayerData> lostItems = new HashMap<>();
         for(BankUser user : userMap.values())
         {
-            Bank bank = user.getBank(itemID);
+            IBank bank = user.getBank(itemID);
             if(bank == null)
                 continue;
             HashMap<ItemID, Long> itemAmounts = new HashMap<>();
@@ -149,13 +186,13 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
         ArrayList<ItemID> itemIDs= new ArrayList<>();
         for(BankUser user : userMap.values())
         {
-            HashMap<ItemID, Bank> bankMap = user.getBankMap();
+            HashMap<ItemID, IBank> bankMap = user.getBankMap();
             ArrayList<ItemID> itemIDsToRemove = new ArrayList<>();
-            for(Map.Entry<ItemID, Bank> entry : bankMap.entrySet())
+            for(Map.Entry<ItemID, IBank> entry : bankMap.entrySet())
             {
                 if(!entry.getKey().getName().equals(itemIDStr))
                     continue;
-                Bank bank = entry.getValue();
+                IBank bank = entry.getValue();
                 if(bank == null)
                     continue;
                 ItemID itemID = entry.getKey();
@@ -180,7 +217,7 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
         if(user == null)
             return false;
         HashMap<ItemID, Long> itemAmounts = new HashMap<>();
-        for (Map.Entry<ItemID, Bank> entry : user.getBankMap().entrySet()) {
+        for (Map.Entry<ItemID, IBank> entry : user.getBankMap().entrySet()) {
             itemAmounts.put(entry.getKey(), entry.getValue().getTotalBalance());
         }
         HashMap<UUID, CloseItemBankEventData.PlayerData> lostItems = new HashMap<>();
@@ -192,13 +229,24 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
     }
 
     @Override
-    public HashMap<UUID, String> getPlayerNameMap()
+    public HashMap<UUID, String> getUserNameMap()
     {
         HashMap<UUID, String> map = new HashMap<>();
         for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
             map.put(entry.getKey(), entry.getValue().getPlayerName());
         }
         return map;
+    }
+
+
+    @Override
+    public List<UUID> getUserUUIDList()
+    {
+        List<UUID> userUUIDs = new ArrayList<>();
+        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
+            userUUIDs.add(entry.getKey());
+        }
+        return userUUIDs;
     }
 
     @Override
@@ -219,7 +267,7 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
         return null;
     }
     @Override
-    public Bank getBank(UUID userUUID, ItemID itemID)
+    public IBank getBank(UUID userUUID, ItemID itemID)
     {
         BankUser user = userMap.get(userUUID);
         if(user == null)
@@ -227,7 +275,7 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
         return user.getBank(itemID);
     }
     @Override
-    public Bank getBank(String userName, ItemID itemID)
+    public IBank getBank(String userName, ItemID itemID)
     {
         for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
             if(entry.getValue().getPlayerName().equals(userName))
@@ -243,6 +291,30 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
         long total = 0;
         for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
             total += entry.getValue().getTotalMoneyBalance();
+        }
+        return total;
+    }
+
+    @Override
+    public long getItemCirculation(ItemID itemID)
+    {
+        long total = 0;
+        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
+            IBank bank = entry.getValue().getBank(itemID);
+            if(bank != null)
+                total += bank.getTotalBalance();
+        }
+        return total;
+    }
+
+    @Override
+    public long getLockedItemCirculation(ItemID itemID)
+    {
+        long total = 0;
+        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
+            IBank bank = entry.getValue().getBank(itemID);
+            if(bank != null)
+                total += bank.getLockedBalance();
         }
         return total;
     }
@@ -317,8 +389,11 @@ public class ServerBankManager implements ServerSaveable, ServerBankManagerAPI {
             return false;
         }
         ArrayList<String> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        allowed.add(itemID.getName());
-        BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.set(allowed);
+        String itemIdStr = itemID.getName();
+        if(!allowed.contains(itemIdStr)) {
+            allowed.add(itemIdStr);
+            BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.set(allowed);
+        }
         return true;
     }
     @Override

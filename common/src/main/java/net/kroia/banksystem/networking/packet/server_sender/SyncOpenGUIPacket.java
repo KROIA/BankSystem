@@ -75,7 +75,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeEnum(guiType);
 
         if(targetPlayerUUID == null)
@@ -84,7 +84,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         guiType = buf.readEnum(GUIType.class);
         targetPlayerUUID = buf.readUUID();
     }

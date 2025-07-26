@@ -20,7 +20,7 @@ public class RequestDisallowBankingItemIDPacket extends BankSystemNetworkPacket 
     }
     public RequestDisallowBankingItemIDPacket(FriendlyByteBuf buf)
     {
-        this.fromBytes(buf);
+        super(buf);
     }
 
     public ItemID getItemID()
@@ -29,11 +29,11 @@ public class RequestDisallowBankingItemIDPacket extends BankSystemNetworkPacket 
     }
 
 
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
     }
 
-    public void fromBytes(FriendlyByteBuf buf)
+    public void decode(FriendlyByteBuf buf)
     {
         itemID = new ItemID(buf.readItem());
     }

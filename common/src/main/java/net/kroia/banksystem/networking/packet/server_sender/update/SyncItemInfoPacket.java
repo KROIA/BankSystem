@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
-import net.kroia.banksystem.api.BankUserAPI;
-import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.FriendlyByteBuf;
@@ -78,13 +78,13 @@ public class SyncItemInfoPacket extends BankSystemNetworkPacket {
     {
         SyncItemInfoPacket packet = new SyncItemInfoPacket();
         packet.itemID = itemID;
-        Map<UUID, BankUserAPI> users = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser();
+        Map<UUID, IBankUser> users = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser();
         for(UUID player : users.keySet())
         {
-            BankUserAPI user = users.get(player);
+            IBankUser user = users.get(player);
             if(user == null)
                 continue;
-            Bank bankAccount = user.getBank(itemID);
+            IBank bankAccount = user.getBank(itemID);
             if(bankAccount == null)
                 continue;
             long balance = bankAccount.getBalance();
@@ -98,7 +98,7 @@ public class SyncItemInfoPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
         buf.writeLong(totalSupply);
         buf.writeLong(totalLocked);
@@ -111,7 +111,7 @@ public class SyncItemInfoPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         itemID = new ItemID(buf.readItem());
         totalSupply = buf.readLong();
         totalLocked = buf.readLong();

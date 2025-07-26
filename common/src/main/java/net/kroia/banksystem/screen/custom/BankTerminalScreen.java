@@ -139,10 +139,10 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         //super(pTitle);
         menu = pMenu;
         sendItemsToBankButton = new Button(SEND_ITEMS_TO_BANK_BUTTON_TEXT.getString());
-        sendItemsToBankButton.setOnFallingEdge(this::onTransmittItemsToMarket);
+        sendItemsToBankButton.setOnFallingEdge(this::onTransmittItemsToBank);
 
         receiveItemsFromBankButton = new Button(RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT.getString());
-        receiveItemsFromBankButton.setOnFallingEdge(this::onReceiveItemsFromMarket);
+        receiveItemsFromBankButton.setOnFallingEdge(this::onReceiveItemsFromBank);
 
         itemListView = new VerticalListView(0, 0, 100, 100);
         itemListView.setLayout(new LayoutVertical(0,0,true, false));
@@ -243,18 +243,18 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
         return null;
     }
 
-    private void onTransmittItemsToMarket() {
+    private void onTransmittItemsToBank() {
 
-        for(BankElement element : bankElements)
+        /*for(BankElement element : bankElements)
         {
             element.saveAmount();
             BACKEND_INSTANCES.LOGGER.info("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
-        }
+        }*/
 
-        HashMap<ItemID, Long> itemTransferToMarketAmounts = new HashMap<>();
-        UpdateBankTerminalBlockEntityPacket.sendPacketToServer(this.menu.getBlockPos(), itemTransferToMarketAmounts, true);
+        HashMap<ItemID, Long> itemTransferToBankAmounts = new HashMap<>();
+        UpdateBankTerminalBlockEntityPacket.sendPacketToServer(this.menu.getBlockPos(), itemTransferToBankAmounts, true);
     }
-    private void onReceiveItemsFromMarket() {
+    private void onReceiveItemsFromBank() {
         for(BankElement element : bankElements)
         {
             element.saveAmount();

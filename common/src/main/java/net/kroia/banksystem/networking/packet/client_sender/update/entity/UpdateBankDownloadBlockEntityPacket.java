@@ -32,7 +32,7 @@ public class UpdateBankDownloadBlockEntityPacket extends BankSystemNetworkPacket
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeBlockPos(pos);
         buf.writeBoolean(isOwned);
         buf.writeBoolean(itemID != null);
@@ -42,7 +42,7 @@ public class UpdateBankDownloadBlockEntityPacket extends BankSystemNetworkPacket
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         pos = buf.readBlockPos();
         isOwned = buf.readBoolean();
         itemID = null;

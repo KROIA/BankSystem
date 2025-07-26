@@ -2,7 +2,8 @@ package net.kroia.banksystem.entity.custom;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.BankUserAPI;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.block.custom.BankDownloadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
@@ -275,10 +276,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
 
 
-        BankUserAPI bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerOwner);
+        IBankUser bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerOwner);
         if(bankUser == null)
             return;
-        Bank itemBank = bankUser.getBank(itemID);
+        IBank itemBank = bankUser.getBank(itemID);
         if(itemBank == null)
             return;
         ItemStack exampleStack = itemID.getStack();

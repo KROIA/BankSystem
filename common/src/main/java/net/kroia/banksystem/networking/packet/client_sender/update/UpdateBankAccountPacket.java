@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
-import net.kroia.banksystem.api.BankUserAPI;
-import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.util.ItemID;
@@ -66,7 +66,7 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
 
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeUUID(playerUUID);
         buf.writeInt(bankData.size());
         for (BankData data : bankData) {
@@ -76,7 +76,7 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         playerUUID = buf.readUUID();
         int size = buf.readInt();
         bankData = new ArrayList<>(size);
@@ -92,7 +92,7 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
         if (!isAdmin) {
             return;
         }
-        BankUserAPI bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerUUID);
+        IBankUser bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerUUID);
         if(bankUser == null)
             return;
         for (BankData data : bankData) {
@@ -100,7 +100,7 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
                 bankUser.removeBank(data.itemID);
                 continue;
             }
-            Bank bank = bankUser.getBank(data.itemID);
+            IBank bank = bankUser.getBank(data.itemID);
             if(bank != null) {
                 if (data.resetLockedBalance)
                     bank.unlockAll();

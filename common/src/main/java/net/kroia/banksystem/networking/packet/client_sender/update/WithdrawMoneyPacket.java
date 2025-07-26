@@ -33,7 +33,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeVarInt(requestedBankNoteIDs.size());
         for (String itemID : requestedBankNoteIDs.keySet()) {
             buf.writeUtf(itemID);
@@ -42,7 +42,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         int size = buf.readVarInt();
         requestedBankNoteIDs = new HashMap<>();
         for (int i = 0; i < size; i++) {

@@ -3,7 +3,8 @@ package net.kroia.banksystem.screen.uiElements;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemInfoPacket;
+import net.kroia.banksystem.banking.clientdata.ItemInfoData;
+import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.Label;
@@ -15,7 +16,7 @@ import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.minecraft.network.chat.Component;
 
 import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
 public class ItemInfoWidget extends GuiElement {
 
@@ -129,47 +130,46 @@ public class ItemInfoWidget extends GuiElement {
     }
 
 
-    public void setItemID(ItemID itemID) {
-        this.itemID = itemID;
+    public void setItemInfo(ItemInfoData info) {
+        if(info == null) {
+            this.itemID = null;
+            return;
+        }
+        this.itemID = info.itemID;
         if(this.itemID == null)
             return;
 
-        long totalSupply = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalSupply(itemID);
-        long totalLocked = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
+        long totalSupply = info.totalSupply; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalSupply(itemID);
+        long totalLocked = info.totalLocked; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
         totalSuplyTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalSuplyMessage(Bank.getNormalizedAmount(totalSupply)));
         totalLockedTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalLockedMessage(Bank.getNormalizedAmount(totalLocked)));
 
 
-        Map<String, SyncItemInfoPacket.BankData> bankData = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getItemInfoBankData(itemID);
+        List<MinimalBankData> bankData = info.playerBanks;
         if(bankData == null)
             return;
-        // sort by key
-        bankData.entrySet().stream().sorted(Map.Entry.comparingByKey());
+        // sort by total balance
+        bankData = bankData.stream().sorted((a, b) -> Long.compare(b.balance+b.lockedBalance, a.balance+a.lockedBalance)).toList();
         playerDataView.getLayout().enabled = false;
         HashMap<String, ItemInfoUserWidget> toRemoveItems = new HashMap<>(playerDataWidgets);
 
-        for(String playerName : bankData.keySet())
+        for(MinimalBankData userBank : bankData)
         {
-            ItemInfoUserWidget userWidget = toRemoveItems.get(playerName);
+            ItemInfoUserWidget userWidget = toRemoveItems.get(userBank.playerName);
             if(userWidget == null)
             {
                 userWidget = new ItemInfoUserWidget();
-                playerDataWidgets.put(playerName, userWidget);
+                playerDataWidgets.put(userBank.playerName, userWidget);
                 playerDataView.addChild(userWidget);
             }
             else
-                toRemoveItems.remove(playerName);
+                toRemoveItems.remove(userBank.playerName);
 
-
-            SyncItemInfoPacket.BankData data = bankData.get(playerName);
-
-            userWidget.setBalance(data.balance);
-            userWidget.setLockedBalance(data.lockedBalance);
-            userWidget.setTotalBalance(data.lockedBalance+data.balance);
-            userWidget.setPlayerName(playerName);
-            userWidget.setPlayerUUID(data.player);
-
-
+            userWidget.setBalance(userBank.balance);
+            userWidget.setLockedBalance(userBank.lockedBalance);
+            userWidget.setTotalBalance(userBank.balance + userBank.lockedBalance);
+            userWidget.setPlayerName(userBank.playerName);
+            userWidget.setPlayerUUID(userBank.playerUUID);
         }
         for(ItemInfoUserWidget item : toRemoveItems.values())
         {

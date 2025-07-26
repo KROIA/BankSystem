@@ -46,6 +46,7 @@ public class BankAccountManagementScreen extends GuiScreen {
 
     private int lastTickCount = 0;
     private final HashMap<ItemID, BankAccountManagementItem> bankAccountManagementItems = new HashMap<>();
+    private static boolean screenIsOpen = false;
 
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BankAccountManagementScreen.BACKEND_INSTANCES = backend;
@@ -77,14 +78,16 @@ public class BankAccountManagementScreen extends GuiScreen {
 
         createNewBankButton = new Button(CREATE_NEW_BANK.getString());
         createNewBankButton.setOnFallingEdge(() -> {
-            ArrayList<ItemStack> allowedItemIDs = new ArrayList<>();
-            for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs())
-            {
-                allowedItemIDs.add(itemID.getStack());
-            }
-            ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, allowedItemIDs, this::onCreateNewBank);
-            itemSelectionScreen.sortItems();
-            this.minecraft.setScreen(itemSelectionScreen);
+            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankManagerData((minimalBankManagerData) -> {
+                if(!screenIsOpen)
+                    return;
+                ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(
+                        this,
+                        minimalBankManagerData.createAllowedItemStacks(),
+                        this::onCreateNewBank);
+                itemSelectionScreen.sortItems();
+                this.minecraft.setScreen(itemSelectionScreen);
+            });
         });
 
         addElement(playerNameLabel);
@@ -103,12 +106,14 @@ public class BankAccountManagementScreen extends GuiScreen {
         RequestBankDataPacket.sendRequest(playerUUID);
         BankAccountManagementScreen screen = new BankAccountManagementScreen(parent, playerUUID);
         Minecraft.getInstance().setScreen(screen);
+        screenIsOpen = true;
     }
     public static void openScreen(UUID playerUUID)
     {
         RequestBankDataPacket.sendRequest(playerUUID);
         BankAccountManagementScreen screen = new BankAccountManagementScreen(playerUUID);
         Minecraft.getInstance().setScreen(screen);
+        screenIsOpen = true;
     }
 
     @Override
@@ -131,6 +136,7 @@ public class BankAccountManagementScreen extends GuiScreen {
 
     @Override
     public void onClose() {
+        screenIsOpen = false;
         if(parent != null && this.minecraft != null) {
             this.minecraft.setScreen(parent);
         }

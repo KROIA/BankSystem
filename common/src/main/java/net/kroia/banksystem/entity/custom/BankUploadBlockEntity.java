@@ -2,7 +2,8 @@ package net.kroia.banksystem.entity.custom;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.BankUserAPI;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.block.custom.BankUploadBlock;
@@ -245,7 +246,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             return;
         if(playerOwner == null)
             return;
-        BankUserAPI bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerOwner);
+        IBankUser bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerOwner);
         if(bankUser == null)
             return;
 
@@ -271,7 +272,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                     itemID = MoneyBank.ITEM_ID;
                     amount *= ((MoneyItem)stack.getItem()).worth();
                 }
-                Bank itemBank = bankUser.getBank(itemID);
+                IBank itemBank = bankUser.getBank(itemID);
                 if(itemBank == null)
                 {
                     itemBank = bankUser.createItemBank(itemID, 0,false);

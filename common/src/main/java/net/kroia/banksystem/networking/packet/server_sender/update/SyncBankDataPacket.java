@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
-import net.kroia.banksystem.api.BankUserAPI;
-import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.ItemID;
@@ -25,7 +25,7 @@ public class SyncBankDataPacket extends BankSystemNetworkPacket {
             this.balance = buf.readLong();
             this.lockedBalance = buf.readLong();
         }
-        public BankData(Bank bank)
+        public BankData(IBank bank)
         {
             this.itemID = bank.getItemID();
             this.balance = bank.getBalance();
@@ -52,11 +52,11 @@ public class SyncBankDataPacket extends BankSystemNetworkPacket {
     ArrayList<ItemID> allowedItemIDs;
     String playerName;
 
-    public SyncBankDataPacket(BankUserAPI user, ArrayList<ItemID> allowedItemIDs) {
+    public SyncBankDataPacket(IBankUser user, ArrayList<ItemID> allowedItemIDs) {
         super();
         bankData = new HashMap<>();
-        HashMap<ItemID, Bank> bankMap = user.getBankMap();
-        for(Bank bank : bankMap.values())
+        HashMap<ItemID, IBank> bankMap = user.getBankMap();
+        for(IBank bank : bankMap.values())
         {
             BankData data = new BankData(bank);
             bankData.put(data.itemID, data);
@@ -105,9 +105,9 @@ public class SyncBankDataPacket extends BankSystemNetworkPacket {
         return playerName;
     }
 
-    public static void sendPacket(ServerPlayer player, UUID courcePlayerUUID)
+    public static void sendPacket(ServerPlayer player, UUID sourcePlayerUUID)
     {
-        BankUserAPI user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(courcePlayerUUID);
+        IBankUser user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(sourcePlayerUUID);
         if(user == null)
             return;
         SyncBankDataPacket packet = new SyncBankDataPacket(user, BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAllowedItemIDs());
@@ -119,7 +119,7 @@ public class SyncBankDataPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeUtf(playerName);
         buf.writeInt(bankData.size());
         bankData.forEach((itemID, data) -> {
@@ -134,7 +134,7 @@ public class SyncBankDataPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         playerName = buf.readUtf();
         int size = buf.readInt();
         bankData = new HashMap<>();

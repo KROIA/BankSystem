@@ -3,8 +3,8 @@ package net.kroia.banksystem;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.api.BankSystemAPI;
-import net.kroia.banksystem.api.BankSystemEventsAPI;
-import net.kroia.banksystem.api.ServerBankManagerAPI;
+import net.kroia.banksystem.api.IBankSystemEvents;
+import net.kroia.banksystem.api.IServerBankManager;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.banking.ServerBankManager;
@@ -19,6 +19,7 @@ import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.request.BankSystemGenericRequest;
 import net.kroia.banksystem.screen.custom.*;
 import net.kroia.banksystem.screen.uiElements.ItemInfoWidget;
 import net.kroia.banksystem.util.BankSystemDataHandler;
@@ -78,6 +79,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         //UpdateBankDownloadBlockEntityPacket.setBackend(INSTANCES);
 
         BankSystemNetworkPacket.setBackend(INSTANCES);
+        BankSystemGenericRequest.setBackend(INSTANCES);
         BankSystemTextMessages.setBackend(INSTANCES);
 
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -106,7 +108,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     public static void onClientSetup()
     {
         BankSystemMenus.setupScreens();
-        INSTANCES.CLIENT_BANK_MANAGER = new ClientBankManager();
+        INSTANCES.CLIENT_BANK_MANAGER = new ClientBankManager(INSTANCES);
 
         BankTerminalScreen.setBackend(INSTANCES);
         BankAccountManagementScreen.setBackend(INSTANCES);
@@ -222,7 +224,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         return BankSystemMod.MOD_ID;
     }
     @Override
-    public BankSystemEventsAPI getEvents() {
+    public IBankSystemEvents getEvents() {
         if(INSTANCES.SERVER_EVENTS == null)
         {
             INSTANCES.SERVER_EVENTS = new BankSystemEvents();
@@ -231,7 +233,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
 
     @Override
-    public ServerBankManagerAPI getServerBankManager()
+    public IServerBankManager getServerBankManager()
     {
         return INSTANCES.SERVER_BANK_MANAGER;
     }

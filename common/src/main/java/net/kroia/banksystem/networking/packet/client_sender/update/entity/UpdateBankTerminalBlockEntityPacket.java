@@ -41,12 +41,12 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     }
 
 
-    public static void sendPacketToServer(BlockPos pos, HashMap<ItemID, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
-        new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToMarketAmounts, sendItemsToMarket).sendToServer();
+    public static void sendPacketToServer(BlockPos pos, HashMap<ItemID, Long> itemTransferToBankAmounts, boolean sendItemsToMarket) {
+        new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToBankAmounts, sendItemsToMarket).sendToServer();
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf)
+    public void encode(FriendlyByteBuf buf)
     {
         buf.writeBlockPos(pos);
         buf.writeBoolean(sendItemsToMarket);
@@ -58,7 +58,7 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         this.pos = buf.readBlockPos();
         this.itemTransferFromMarket = new HashMap<>();
         this.sendItemsToMarket = buf.readBoolean();
@@ -72,7 +72,6 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {
-        Thread t = Thread.currentThread();
         BlockEntity blockEntity = sender.level().getBlockEntity(this.pos);
         if(blockEntity instanceof BankTerminalBlockEntity bankTerminalBlockEntity) {
             bankTerminalBlockEntity.handlePacket(this, sender);

@@ -1,14 +1,21 @@
 package net.kroia.banksystem.api;
 
+import net.kroia.banksystem.banking.clientdata.ItemInfoData;
+import net.kroia.banksystem.banking.clientdata.MinimalBankData;
+import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
+import net.kroia.banksystem.banking.clientdata.MinimalBankManagerData;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 public interface IServerBankManager {
+
+    MinimalBankUserData getMinimalBankUserData(UUID userUUID);
+    MinimalBankData getMinimalBankData(UUID userUUID, ItemID itemID);
+    ItemInfoData getItemInfoData(ItemID itemID);
+    MinimalBankManagerData getMinimalData();
+
 
     IBankUser createUser(UUID userUUID, String userName, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney);
     IBankUser createUser(ServerPlayer player, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney);
@@ -18,13 +25,14 @@ public interface IServerBankManager {
     IBankUser getUser(String userName);
     Map<UUID, IBankUser> getUser();
     void clear();
-    boolean closeBankAccount(UUID playerUUID, ItemID itemID);
+    boolean closeBankAccount(UUID userUUID, ItemID itemID);
     void closeBankAccount(ItemID itemID);
 
     void closeBankAccount(String itemIDStr);
     boolean removeUser(UUID userUUID);
 
-    HashMap<UUID, String> getPlayerNameMap();
+    HashMap<UUID, String> getUserNameMap();
+    List<UUID> getUserUUIDList();
 
     IBank getMoneyBank(UUID userUUID);
     IBank getMoneyBank(String userName);

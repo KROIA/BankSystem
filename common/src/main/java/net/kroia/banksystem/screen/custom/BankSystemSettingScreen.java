@@ -5,7 +5,6 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.ItemInfoWidget;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
@@ -17,8 +16,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.ItemStack;
-
-import java.util.ArrayList;
 
 public class BankSystemSettingScreen extends GuiScreen {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -44,6 +41,7 @@ public class BankSystemSettingScreen extends GuiScreen {
     private final ItemInfoWidget itemInfoWidget;
     private static BankSystemSettingScreen instance;
     private int lastTickCount = 0;
+    private static boolean screenIsOpen = false;
 
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BankSystemSettingScreen.BACKEND_INSTANCES = backend;
@@ -81,15 +79,19 @@ public class BankSystemSettingScreen extends GuiScreen {
             this.minecraft.setScreen(itemSelectionScreen);*/
         });
 
-        ArrayList<ItemStack> allowedItems = new ArrayList<>();
-        for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs())
-        {
-            allowedItems.add(itemID.getStack());
-        }
-        currentBankingItemsView = new ItemSelectionView(allowedItems, this::setCurrentBankingItemID);
+        //ArrayList<ItemStack> allowedItems = new ArrayList<>();
+        //for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs())
+        //{
+        //    allowedItems.add(itemID.getStack());
+        //}
+
+
+        currentBankingItemsView = new ItemSelectionView(this::setCurrentBankingItemID);
         currentBankingItemsView.setPosition(padding, padding);
         currentBankingItemsView.setItemLabelText(BANKING_ITEMS.getString());
-        currentBankingItemsView.sortItems();
+
+
+
 
         removeBankingItemButton = new Button(REMOVE_BANKING_ITEM_BUTTON.getString(), () -> {
             if(currentBankingItemID != null) {
@@ -117,12 +119,21 @@ public class BankSystemSettingScreen extends GuiScreen {
         addElement(currentBankingItemsView);
         addElement(currentBankingItemView);
         addElement(itemInfoWidget);
+
+        updateCurrentBankingItemsView();
     }
 
     public static void openScreen()
     {
         BankSystemSettingScreen screen = new BankSystemSettingScreen();
         Minecraft.getInstance().setScreen(screen);
+        screenIsOpen = true;
+    }
+
+    @Override
+    public void onClose() {
+        screenIsOpen = false;
+        super.onClose();
     }
 
     @Override
@@ -143,64 +154,66 @@ public class BankSystemSettingScreen extends GuiScreen {
 
 
     private void onNewBankingItemSelected(ItemStack itemStack) {
-        var items = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs();
-        ItemID newItemID = new ItemID(itemStack);
-        if(!items.contains(newItemID)) {
-            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestAllowNewItemID(newItemID);
-        }
-        setCurrentBankingItemID(itemStack);
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestAllowItem(new ItemID(itemStack), (result) ->
+        {
+            if(!screenIsOpen)
+                return; // Do not update if the screen is not open
+            setCurrentBankingItemID(itemStack);
+            updateCurrentBankingItemsView();
+        });
     }
     private void setCurrentBankingItemID(ItemStack itemStack) {
         currentBankingItemID = null;
-        itemInfoWidget.setItemID(null);
+
         if(itemStack == null) {
             currentBankingItemView.setItemStack(null);
+            itemInfoWidget.setItemInfo(null);
             return;
         }
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestItemInfo(new ItemID(itemStack));
         currentBankingItemView.setItemStack(null);
+        currentBankingItemView.setItemStack(itemStack);
+        currentBankingItemID = new ItemID(itemStack);
+        updateItemInfoData();
 
-        for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs()) {
+        /*for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs()) {
             String name = itemID.getName();
             if (name.compareTo(ItemUtilities.getItemIDStr(itemStack.getItem())) == 0) {
                 currentBankingItemView.setItemStack(itemID.getStack());
                 currentBankingItemID = new ItemID(itemStack);
-                itemInfoWidget.setItemID(currentBankingItemID);
+                updateItemInfoData();
                 break;
             }
-        }
+        }*/
     }
 
-    public void updateBankData()
+    public void updateCurrentBankingItemsView()
     {
-        var items = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs();
-        ArrayList<ItemStack> allowedItems = new ArrayList<>();
-        for(ItemID itemID : items)
-        {
-            allowedItems.add(itemID.getStack());
-        }
-        currentBankingItemsView.setItems(allowedItems);
-        setCurrentBankingItemID((currentBankingItemID != null?currentBankingItemID.getStack():null));
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankManagerData((minimalBankManagerData) -> {
+            if(!screenIsOpen)
+                return; // Do not update if the screen is not open
+            currentBankingItemsView.setItems(minimalBankManagerData.createAllowedItemStacks());
+            currentBankingItemsView.sortItems();
+        });
     }
     public void updateItemInfoData()
     {
-        itemInfoWidget.setItemID(currentBankingItemID);
+        if(currentBankingItemID == null)
+            return;
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestItemInfoData(currentBankingItemID, itemInfoWidget::setItemInfo);
+        //itemInfoWidget.setItemID(currentBankingItemID);
     }
 
     @Override
     public void tick() {
         if(BACKEND_INSTANCES.CLIENT_BANK_MANAGER.hasUpdatedBankData())
-            updateBankData();
-
-        if(BACKEND_INSTANCES.CLIENT_BANK_MANAGER.hasUpdatedItemInfo())
-            updateItemInfoData();
+            updateCurrentBankingItemsView();
 
 
         lastTickCount++;
         if(lastTickCount > 20 && currentBankingItemID != null)
         {
             lastTickCount = 0;
-            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestItemInfo(currentBankingItemID);
+            updateItemInfoData();
         }
     }
 }

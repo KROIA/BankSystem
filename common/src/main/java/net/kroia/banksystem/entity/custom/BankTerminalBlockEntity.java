@@ -2,7 +2,8 @@ package net.kroia.banksystem.entity.custom;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.BankUserAPI;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.entity.BankSystemEntities;
@@ -75,7 +76,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         {
             if(amount == 0)
                 return false;
-            BankUserAPI bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerID);
+            IBankUser bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerID);
             if(bank == null) {
                 // Create bank account for this item if it can be used for banking
                 ArrayList<ItemID> keys = new ArrayList<>();
@@ -89,12 +90,13 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             {
                 bankITemID = MoneyBank.ITEM_ID;
             }
-            Bank bankAccount = bank.getBank(bankITemID);
+            IBank bankAccount = bank.getBank(bankITemID);
             if(bankAccount == null) {
                 // Create item bank account
                 if(bankAccount == null) {
                     bankAccount = bank.createItemBank(bankITemID, 0, true);
-                    return false;
+                    if(bankAccount == null)
+                        return false;
                 }
             }
 
@@ -122,7 +124,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 cancelTasks();
                 return false;
             }
-            BankUserAPI bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerID);
+            IBankUser bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerID);
             if(bank == null) {
                 cancelTasks();
                 return false;
@@ -140,7 +142,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 if(isMoney)
                     bankITemID = MoneyBank.ITEM_ID;
 
-                Bank bankAccount = bank.getBank(bankITemID);
+                IBank bankAccount = bank.getBank(bankITemID);
                 if(bankAccount == null) {
                     cancelTask(itemID);
                     continue;
@@ -726,7 +728,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
     public void handlePacket(UpdateBankTerminalBlockEntityPacket packet, ServerPlayer player) {
         String userNameStr  = player.getName().getString();
-        BankUserAPI user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(player.getUUID());
+        IBankUser user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(player.getUUID());
         if (user == null) {
             BACKEND_INSTANCES.LOGGER.error("BankUser is null for user: " + userNameStr);
             return;

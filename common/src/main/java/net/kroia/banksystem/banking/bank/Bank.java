@@ -1,8 +1,9 @@
 package net.kroia.banksystem.banking.bank;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.api.BankAPI;
+import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
@@ -13,17 +14,15 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-public class Bank implements ServerSaveable, BankAPI {
+public class Bank implements ServerSaveable, IBank {
     private static final Component WARNING = Component.translatable("message."+ BankSystemMod.MOD_ID+".bank.warning");
     private static final Component INFO = Component.translatable("message."+BankSystemMod.MOD_ID+".bank.info");
-
 
 
     private final BankUser owner;
     protected long balance;
     protected long lockedBalance;
-
-    ItemID itemID;
+    private ItemID itemID;
 
 
     public Bank(BankUser owner, ItemID itemID, long balance) {
@@ -36,6 +35,10 @@ public class Bank implements ServerSaveable, BankAPI {
     public Bank(BankUser owner, CompoundTag tag) {
         this.owner = owner;
         load(tag);
+    }
+
+    public MinimalBankData getMinimalData() {
+        return new MinimalBankData(this);
     }
 
     public static Bank loadFromTag(BankUser owner, CompoundTag tag) {
@@ -181,7 +184,7 @@ public class Bank implements ServerSaveable, BankAPI {
     }
 
     @Override
-    public Status transfer(long amount, BankAPI other) {
+    public Status transfer(long amount, IBank other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         if (balance < amount) {
@@ -202,7 +205,7 @@ public class Bank implements ServerSaveable, BankAPI {
     }
 
     @Override
-    public Status transferFromLocked(long amount, BankAPI other) {
+    public Status transferFromLocked(long amount, IBank other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         if (lockedBalance < amount) {
@@ -219,7 +222,7 @@ public class Bank implements ServerSaveable, BankAPI {
     }
 
     @Override
-    public Status transferFromLockedPrefered(long amount, BankAPI other) {
+    public Status transferFromLockedPrefered(long amount, IBank other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         long origAmount = amount;
@@ -250,7 +253,7 @@ public class Bank implements ServerSaveable, BankAPI {
         return otherStatus;
     }
 
-    public static Status exchangeFromLockedPrefered(BankAPI from1, BankAPI to1, long amount1, BankAPI from2, BankAPI to2, long amount2)
+    public static Status exchangeFromLockedPrefered(IBank from1, IBank to1, long amount1, IBank from2, IBank to2, long amount2)
     {
         dbg_checkValueIsNegative(amount1);
         dbg_checkValueIsNegative(amount2);
@@ -391,7 +394,7 @@ public class Bank implements ServerSaveable, BankAPI {
     }
 
 
-    protected void notifyUser_transfer(long amount, BankAPI other) {
+    protected void notifyUser_transfer(long amount, IBank other) {
         if (amount == 0)
             return;
 

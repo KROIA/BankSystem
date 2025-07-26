@@ -16,21 +16,20 @@ public class RequestAllowNewBankItemIDPacket extends BankSystemNetworkPacket {
         RequestAllowNewBankItemIDPacket packet = new RequestAllowNewBankItemIDPacket(itemID);
         packet.sendToServer();
     }
+    public RequestAllowNewBankItemIDPacket(FriendlyByteBuf buf) {
+        super(buf);
+    }
 
     public RequestAllowNewBankItemIDPacket(ItemID itemID) {
         this.itemID = itemID;
     }
-    public RequestAllowNewBankItemIDPacket(FriendlyByteBuf buf)
-    {
-        this.fromBytes(buf);
-    }
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf)
+    public void decode(FriendlyByteBuf buf)
     {
         this.itemID = new ItemID(buf.readItem());
     }

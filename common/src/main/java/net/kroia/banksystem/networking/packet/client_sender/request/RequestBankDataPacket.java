@@ -17,7 +17,6 @@ public class RequestBankDataPacket extends BankSystemNetworkPacket {
     }
     public RequestBankDataPacket(FriendlyByteBuf buf) {
         super(buf);
-
     }
 
     public static void sendRequest(UUID playerUUID)
@@ -32,12 +31,12 @@ public class RequestBankDataPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeUUID(playerUUID);
 
     }
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         playerUUID = buf.readUUID();
     }
 

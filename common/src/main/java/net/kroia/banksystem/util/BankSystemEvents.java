@@ -1,11 +1,11 @@
 package net.kroia.banksystem.util;
 
-import net.kroia.banksystem.api.BankSystemEventsAPI;
+import net.kroia.banksystem.api.IBankSystemEvents;
 import net.kroia.banksystem.banking.eventdata.CloseItemBankEventData;
 import net.kroia.modutilities.event.DataEvent;
 import net.kroia.modutilities.event.Signal;
 
-public class BankSystemEvents implements BankSystemEventsAPI {
+public class BankSystemEvents implements IBankSystemEvents {
 
     public final DataEvent<CloseItemBankEventData> CLOSE_ITEM_BANK_EVENT = new DataEvent<>();
 

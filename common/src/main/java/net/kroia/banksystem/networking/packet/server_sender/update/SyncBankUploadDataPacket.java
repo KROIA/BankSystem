@@ -30,14 +30,14 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
 
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeBoolean(isOwned);
         buf.writeBoolean(dropIfNotBankable);
 
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         isOwned = buf.readBoolean();
         dropIfNotBankable = buf.readBoolean();
     }
