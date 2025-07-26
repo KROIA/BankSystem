@@ -3,7 +3,6 @@ package net.kroia.banksystem.networking.packet.client_sender.update;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.networking.BankSystemNetworkPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -88,7 +87,7 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender) {
         // Check if the player is a admin
-        boolean isAdmin = sender.hasPermissions(2);
+        boolean isAdmin = sender.hasPermissions(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get());
         if (!isAdmin) {
             return;
         }
@@ -115,6 +114,6 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
                 }
             }
         }
-        SyncBankDataPacket.sendPacket(sender, playerUUID);
+        //SyncBankDataPacket.sendPacket(sender, playerUUID);
     }
 }

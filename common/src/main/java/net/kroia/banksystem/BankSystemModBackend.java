@@ -19,7 +19,7 @@ import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.banksystem.networking.request.BankSystemGenericRequest;
+import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.screen.custom.*;
 import net.kroia.banksystem.screen.uiElements.ItemInfoWidget;
 import net.kroia.banksystem.util.BankSystemDataHandler;

@@ -15,13 +15,13 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     private BlockPos pos;
 
     private HashMap<ItemID, Long> itemTransferFromMarket;
-    private boolean sendItemsToMarket;
+    private boolean sendItemsToBank;
 
     public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<ItemID, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
         super();
         this.pos = pos;
         this.itemTransferFromMarket = itemTransferToMarketAmounts;
-        this.sendItemsToMarket = sendItemsToMarket;
+        this.sendItemsToBank = sendItemsToMarket;
     }
 
 
@@ -36,8 +36,8 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     public HashMap<ItemID, Long> getItemTransferFromMarket() {
         return itemTransferFromMarket;
     }
-    public boolean isSendItemsToMarket() {
-        return sendItemsToMarket;
+    public boolean isSendItemsToBank() {
+        return sendItemsToBank;
     }
 
 
@@ -49,7 +49,7 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     public void encode(FriendlyByteBuf buf)
     {
         buf.writeBlockPos(pos);
-        buf.writeBoolean(sendItemsToMarket);
+        buf.writeBoolean(sendItemsToBank);
         buf.writeInt(itemTransferFromMarket.size());
         itemTransferFromMarket.forEach((itemID, amount) -> {
             buf.writeItem(itemID.getStack());
@@ -61,7 +61,7 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     public void decode(FriendlyByteBuf buf) {
         this.pos = buf.readBlockPos();
         this.itemTransferFromMarket = new HashMap<>();
-        this.sendItemsToMarket = buf.readBoolean();
+        this.sendItemsToBank = buf.readBoolean();
         int size = buf.readInt();
         for (int i = 0; i < size; i++) {
             ItemID itemID = new ItemID(buf.readItem());

@@ -17,6 +17,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
+
 public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainerMenu> {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
@@ -186,9 +188,17 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
     }
     private void onSelectItemButtonClicked() {
         BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankManagerData((minimalBankManagerData) -> {
+            ArrayList<ItemStack> allowedItemStacks;
+            if(minimalBankManagerData == null)
+            {
+                allowedItemStacks = new ArrayList<>();
+            }
+            else {
+                allowedItemStacks = minimalBankManagerData.createAllowedItemStacks();
+            }
             ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(
                     this,
-                    minimalBankManagerData.createAllowedItemStacks(),
+                    allowedItemStacks,
                     this::onItemSelected);
 
             itemSelectionScreen.sortItems();

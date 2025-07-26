@@ -1,13 +1,11 @@
 package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.util.BankSystemGenericRequest;
-import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.PlayerUtilities;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class AllowItemRequest extends BankSystemGenericRequest<ItemID, Boolean> {
+public class DisallowItemRequest extends BankSystemGenericRequest<ItemID, Boolean> {
     @Override
     public String getRequestTypeID() {
         return AllowItemRequest.class.getName();
@@ -22,27 +20,7 @@ public class AllowItemRequest extends BankSystemGenericRequest<ItemID, Boolean> 
     public Boolean handleOnServer(ItemID itemID, ServerPlayer sender) {
         // Check if sender has permission to allow the item
         if(sender.hasPermissions(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get())) {
-            if(itemID != null)
-            {
-                if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
-                {
-                    PlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemAlreadyAllowedMessage(itemID.getName()));
-                    return true;
-                }
-                if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(itemID))
-                {
-                    PlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedMessage(itemID.getName()));
-                    return true;
-                }
-                else
-                {
-                    PlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemID.getName()));
-                }
-            }
-            else
-            {
-                PlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getInvalidItemIDMessage("null"));
-            }
+            return BACKEND_INSTANCES.SERVER_BANK_MANAGER.disallowItemID(itemID);
         }
         return false;
     }

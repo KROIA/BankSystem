@@ -1,30 +1,13 @@
 package net.kroia.banksystem.block.custom;
 
-import net.kroia.banksystem.entity.BankSystemEntities;
-//import net.kroia.banksystem.entity.custom.ATMBlockEntity;
-import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.MenuProvider;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.EntityBlock;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.BlockEntityTicker;
-import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.HashMap;
-import java.util.UUID;
-
-import static dev.architectury.registry.menu.MenuRegistry.openExtendedMenu;
 
 public class ATMBlock  extends TerminalBlock/* implements EntityBlock*/ {
 
@@ -51,7 +34,7 @@ public class ATMBlock  extends TerminalBlock/* implements EntityBlock*/ {
         if (player instanceof ServerPlayer sPlayer) {
             //MenuProvider menuProvider = blockEntity.getMenuProvider();
             // Open the menu
-            SyncBankDataPacket.sendPacket(sPlayer);
+            //SyncBankDataPacket.sendPacket(sPlayer);
             SyncOpenGUIPacket.send_openATMScreen(sPlayer);
             //openExtendedMenu(sPlayer, menuProvider, (menu) -> {
                 // Set the block position

@@ -17,6 +17,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
+
 public class BankSystemSettingScreen extends GuiScreen {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
@@ -96,8 +98,10 @@ public class BankSystemSettingScreen extends GuiScreen {
         removeBankingItemButton = new Button(REMOVE_BANKING_ITEM_BUTTON.getString(), () -> {
             if(currentBankingItemID != null) {
                 AskPopupScreen popup = new AskPopupScreen(this, () -> {
-                    BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestRemoveItemID(currentBankingItemID);
-                    setCurrentBankingItemID(null);
+                    BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestDisallowItem(currentBankingItemID, (success)->{
+                        if(success)
+                            setCurrentBankingItemID(null);
+                    });
                 }, () -> {}, ASK_TITLE.getString() + " "+currentBankingItemID + "?", ASK_MSG.getString());
                 popup.setSize(400,100);
                 popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
@@ -191,7 +195,15 @@ public class BankSystemSettingScreen extends GuiScreen {
         BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankManagerData((minimalBankManagerData) -> {
             if(!screenIsOpen)
                 return; // Do not update if the screen is not open
-            currentBankingItemsView.setItems(minimalBankManagerData.createAllowedItemStacks());
+            ArrayList<ItemStack> allowedItemStacks;
+            if(minimalBankManagerData == null)
+            {
+                allowedItemStacks = new ArrayList<>();
+            }
+            else {
+                allowedItemStacks = minimalBankManagerData.createAllowedItemStacks();
+            }
+            currentBankingItemsView.setItems(allowedItemStacks);
             currentBankingItemsView.sortItems();
         });
     }
@@ -205,10 +217,6 @@ public class BankSystemSettingScreen extends GuiScreen {
 
     @Override
     public void tick() {
-        if(BACKEND_INSTANCES.CLIENT_BANK_MANAGER.hasUpdatedBankData())
-            updateCurrentBankingItemsView();
-
-
         lastTickCount++;
         if(lastTickCount > 20 && currentBankingItemID != null)
         {

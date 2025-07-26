@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.request;
+package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.networking.arrs.GenericRequest;

@@ -2,7 +2,6 @@ package net.kroia.banksystem.block.custom;
 
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -52,7 +51,7 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
         if (player instanceof ServerPlayer sPlayer) {
             MenuProvider menuProvider = blockEntity.getMenuProvider();
             // Open the menu
-            SyncBankDataPacket.sendPacket(sPlayer);
+            //SyncBankDataPacket.sendPacket(sPlayer);
             openExtendedMenu(sPlayer, menuProvider, (menu) -> {
                 // Set the block position
                 menu.writeBlockPos(pos);

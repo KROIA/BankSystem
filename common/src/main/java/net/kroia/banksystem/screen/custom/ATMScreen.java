@@ -5,9 +5,9 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
-import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
@@ -205,8 +205,8 @@ public class ATMScreen extends GuiScreen {
 
         lastTickCount = System.currentTimeMillis();
         TickEvent.PLAYER_POST.register(ATMScreen::onClientTick);
-        RequestBankDataPacket.sendRequest();
         instance = this;
+        updateBalanceView();
         calculateSum();
     }
 
@@ -246,14 +246,20 @@ public class ATMScreen extends GuiScreen {
         if(currentTickCount - lastTickCount > 1000)
         {
             lastTickCount = currentTickCount;
-            RequestBankDataPacket.sendRequest();
+            instance.updateBalanceView();
         }
-        if(BACKEND_INSTANCES.CLIENT_BANK_MANAGER.hasUpdatedBankData())
+    }
+
+    private void updateBalanceView()
+    {
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankData(Minecraft.getInstance().player.getUUID(),
+                new ItemID(BankSystemItems.MONEY.get().getDefaultInstance()), (minimalBankData) ->
         {
-            long balance = BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBalance();
-            instance.currentBalanceWeekVar = balance;
-            instance.balanceView.updateBalance(balance);
-        }
+            if(instance == null || minimalBankData == null)
+                return;
+            currentBalanceWeekVar = minimalBankData.balance;
+            balanceView.updateBalance(currentBalanceWeekVar);
+        });
     }
 
 

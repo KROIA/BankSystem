@@ -1,6 +1,7 @@
 package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.banking.clientdata.MinimalBankManagerData;
+import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 

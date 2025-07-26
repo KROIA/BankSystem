@@ -2,7 +2,6 @@ package net.kroia.banksystem.block.custom;
 
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -151,7 +150,7 @@ public class BankDownloadBlock extends Block implements EntityBlock {
             UUID playerOwner = blockEntity.getPlayerOwner();
             if(playerOwner == null || playerOwner.equals(player.getUUID())) {
                 MenuProvider menuProvider = blockEntity.getMenuProvider();
-                SyncBankDataPacket.sendPacket(sPlayer, player.getUUID());
+                //SyncBankDataPacket.sendPacket(sPlayer, player.getUUID());
                 SyncBankDownloadDataPacket.sendPacket(sPlayer, blockEntity);
                 openExtendedMenu(sPlayer, menuProvider, (menu) -> {
                     menu.writeBlockPos(pos);

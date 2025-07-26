@@ -10,7 +10,6 @@ import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
@@ -739,7 +738,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
         HashMap<ItemID, Long> items;
         int sendToMarketSign = 1;
-        if(packet.isSendItemsToMarket())
+        if(packet.isSendItemsToBank())
         {
             items = inventory.getItemCount();
             sendToMarketSign = -1;
@@ -756,7 +755,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
         // mark the block entity for saving
         setChanged();
-        SyncBankDataPacket.sendPacket(player);
+        //SyncBankDataPacket.sendPacket(player);
     }
 
     public void tick(Level level, BlockPos pos, BlockState state) {
