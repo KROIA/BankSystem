@@ -4,6 +4,7 @@ import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.api.IBankSystemEvents;
+import net.kroia.banksystem.api.IClientBankManager;
 import net.kroia.banksystem.api.IServerBankManager;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ClientBankManager;
@@ -34,18 +35,13 @@ import java.io.File;
 import java.util.ArrayList;
 
 public class BankSystemModBackend implements BankSystemAPI {
-
-
-    //private static final Logger LOGGER = LogUtils.getLogger();
     public static class Instances
     {
         public BankSystemModSettings SERVER_SETTINGS;
         public BankSystemDataHandler SERVER_DATA_HANDLER;
         public ServerBankManager SERVER_BANK_MANAGER;
         public BankSystemEvents SERVER_EVENTS;
-
         public ClientBankManager CLIENT_BANK_MANAGER;
-
         public BankSystemNetworking NETWORKING;
 
         public BankSystemLogger LOGGER;
@@ -54,29 +50,17 @@ public class BankSystemModBackend implements BankSystemAPI {
     private static Instances INSTANCES = new Instances();
 
 
-
-
-
-    public static void init() {
+    BankSystemModBackend()
+    {
         INSTANCES.LOGGER = new BankSystemLogger(INSTANCES);
         BankSystemDataHandler.setBackend(INSTANCES);
         BankTerminalBlockEntity.setBackend(INSTANCES);
         ServerBankManager.setBackend(INSTANCES);
         BankUser.setBackend(INSTANCES);
         BankSystemModSettings.setBackend(INSTANCES);
-        //SyncBankDataPacket.setBackend(INSTANCES);
-        //SyncItemInfoPacket.setBackend(INSTANCES);
-        //RequestAllowNewBankItemIDPacket.setBackend(INSTANCES);
-        //UpdateBankTerminalBlockEntityPacket.setBackend(INSTANCES);
-        //RequestDisallowBankingItemIDPacket.setBackend(INSTANCES);
         BankSystemCommands.setBackend(INSTANCES);
-        //BankSystemJeiPlugin.setBackend(INSTANCES);
         BankDownloadBlockEntity.setBackend(INSTANCES);
         BankUploadBlockEntity.setBackend(INSTANCES);
-
-
-        //WithdrawMoneyPacket.setBackend(INSTANCES);
-        //UpdateBankDownloadBlockEntityPacket.setBackend(INSTANCES);
 
         BankSystemNetworkPacket.setBackend(INSTANCES);
         BankSystemGenericRequest.setBackend(INSTANCES);
@@ -97,9 +81,6 @@ public class BankSystemModBackend implements BankSystemAPI {
 
 
         INSTANCES.NETWORKING = new BankSystemNetworking();
-        //BankSystemNetworking.setupClientReceiverPackets();
-        //BankSystemNetworking.setupServerReceiverPackets();
-
 
         BankSystemModSettings.setLogger((msg)->{INSTANCES.LOGGER.error(msg);}, (msg)->{INSTANCES.LOGGER.info(msg);});
     }
@@ -144,7 +125,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.SERVER_SETTINGS = null;
         INSTANCES.SERVER_DATA_HANDLER = null;
         INSTANCES.SERVER_BANK_MANAGER = null;
-        INSTANCES.SERVER_EVENTS.clearListeners();
+        INSTANCES.SERVER_EVENTS.removeListeners();
     }
 
     // Called from the server side
@@ -188,35 +169,6 @@ public class BankSystemModBackend implements BankSystemAPI {
         return INSTANCES.SERVER_DATA_HANDLER.isLoaded();
     }
 
-    /*public static void logInfo(String message) {
-        boolean enabled = true;
-        if(INSTANCES.SERVER_SETTINGS != null)
-            enabled = INSTANCES.SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_INFO.get();
-        if(enabled)
-            LOGGER.info(message);
-    }
-    public static void logError(String message) {
-        boolean enabled = true;
-        if(INSTANCES.SERVER_SETTINGS != null)
-            enabled = INSTANCES.SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_ERROR.get();
-        if(enabled)
-            LOGGER.error(message);
-    }
-    public static void logWarning(String message) {
-        boolean enabled = true;
-        if(INSTANCES.SERVER_SETTINGS != null)
-            enabled = INSTANCES.SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_WARNING.get();
-        if(enabled)
-            LOGGER.warn(message);
-    }
-    public static void logDebug(String message) {
-        boolean enabled = true;
-        if(INSTANCES.SERVER_SETTINGS != null)
-            enabled = INSTANCES.SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_DEBUG.get();
-        if(enabled)
-            LOGGER.debug(message);
-    }*/
-
 
     @Override
     public String getModID()
@@ -239,7 +191,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
 
     @Override
-    public ClientBankManager getClientBankManager()
+    public IClientBankManager getClientBankManager()
     {
         return INSTANCES.CLIENT_BANK_MANAGER;
     }

@@ -26,7 +26,6 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         this.blockEntity = blockEntity;
     }
 
-
     public BankTerminalBlockEntity getBlockEntity() {
         return this.blockEntity;
     }

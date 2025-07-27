@@ -67,6 +67,28 @@ public class BankUser implements ServerSaveable, IBankUser {
             return null;
         return bank.getMinimalData();
     }
+
+    @Override
+    public UUID getPlayerUUID() {
+        return userUUID;
+    }
+    @Override
+    public @Nullable ServerPlayer getPlayer()
+    {
+        return PlayerUtilities.getOnlinePlayer(userUUID);
+    }
+
+    @Override
+    public String getPlayerName()
+    {
+        ServerPlayer player = getPlayer();
+        if(player != null) {
+            userName = player.getName().getString();
+        }
+        if(userName == null)
+            return "UnknownUserName";
+        return userName;
+    }
     @Override
     public IBank createMoneyBank(long startBalance)
     {
@@ -101,6 +123,11 @@ public class BankUser implements ServerSaveable, IBankUser {
     }
 
     @Override
+    public @Nullable Bank getMoneyBank()
+    {
+        return bankMap.get(MoneyBank.ITEM_ID);
+    }
+    @Override
     public HashMap<ItemID, IBank> getAllBanks()
     {
         return new HashMap<>(bankMap);
@@ -109,25 +136,30 @@ public class BankUser implements ServerSaveable, IBankUser {
     @Override
     public boolean removeBank(ItemID itemID)
     {
-        Bank bank = bankMap.get(itemID);
+        Bank bank = bankMap.remove(itemID);
         if(bank == null)
-            return bankMap.remove(itemID) != null;
+            return false;
 
         PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getBankDeletedMessage(getPlayerName(), bank.getItemName())+"\n"+
                 BankSystemTextMessages.getBankBalanceLostMessage(bank.getTotalBalance(), bank.getItemName()));
-        return bankMap.remove(itemID) != null;
+        return true;
     }
-    @Override
-    public @Nullable Bank getMoneyBank()
-    {
-        return bankMap.get(MoneyBank.ITEM_ID);
-    }
+
     @Override
     public long getMoneyBalance()
     {
         Bank bank = getMoneyBank();
         if(bank != null)
             return bank.getBalance();
+        return 0;
+    }
+
+    @Override
+    public long getLockedMoneyBalance()
+    {
+        Bank bank = getMoneyBank();
+        if(bank != null)
+            return bank.getLockedBalance();
         return 0;
     }
 
@@ -139,14 +171,8 @@ public class BankUser implements ServerSaveable, IBankUser {
             return bank.getTotalBalance();
         return 0;
     }
-
     @Override
-    public HashMap<ItemID, IBank> getBankMap()
-    {
-        return new HashMap<ItemID, IBank>(bankMap);
-    }
-    @Override
-    public boolean isBankNotificationEbabled()
+    public boolean isBankNotificationEnabled()
     {
         return enableBankNotifications;
     }
@@ -200,27 +226,7 @@ public class BankUser implements ServerSaveable, IBankUser {
         return loadSuccess;
     }
 
-    @Override
-    public UUID getPlayerUUID() {
-        return userUUID;
-    }
-    @Override
-    public @Nullable ServerPlayer getPlayer()
-    {
-        return PlayerUtilities.getOnlinePlayer(userUUID);
-    }
 
-    @Override
-    public String getPlayerName()
-    {
-        ServerPlayer player = getPlayer();
-        if(player != null) {
-            userName = player.getName().getString();
-        }
-        if(userName == null)
-            return "UnknownUserName";
-        return userName;
-    }
 
     @Override
     public String toString()
@@ -252,8 +258,7 @@ public class BankUser implements ServerSaveable, IBankUser {
         {
 
             content.append(" | ");
-            for(int j=0; j<=maxAmountLength-itemBalances.get(i).length(); j++)
-                content.append("_");
+            content.append("_".repeat(Math.max(0, maxAmountLength - itemBalances.get(i).length() + 1)));
             content.append(itemBalances.get(i)).append(" ");
 
             content.append(" ").append(itemNames.get(i)).append("\n");

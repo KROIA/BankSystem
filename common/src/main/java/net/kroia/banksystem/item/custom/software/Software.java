@@ -11,6 +11,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.NotNull;
 
 public class Software extends Item {
     public static final String NAME = "software";
@@ -36,7 +37,7 @@ public class Software extends Item {
 
 
     @Override
-    public InteractionResult useOn(UseOnContext context) {
+    public @NotNull InteractionResult useOn(UseOnContext context) {
         // Called when the item is used on a block
         Player player = context.getPlayer();
         Level level = context.getLevel();
@@ -50,7 +51,7 @@ public class Software extends Item {
         return InteractionResult.SUCCESS;
     }
     @Override
-    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+    public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack itemStack = player.getItemInHand(hand);
         if (!level.isClientSide()) {
             onRightClickedServerSide((ServerPlayer) player);

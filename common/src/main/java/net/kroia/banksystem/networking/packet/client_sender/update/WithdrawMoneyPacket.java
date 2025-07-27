@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
+import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.BankSystemNetworkPacket;
@@ -8,7 +9,6 @@ import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.HashMap;
@@ -56,7 +56,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender) {
         UUID playerUUID = sender.getUUID();
-        Bank moneyBank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyBank(playerUUID);
+        IBank moneyBank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyBank(playerUUID);
         if(moneyBank == null) {
             return; // No money bank found for the player
         }
@@ -68,13 +68,12 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             ItemStack moneyItemStack = ItemUtilities.createItemStackFromId(normalizedID);
             if(moneyItemStack != null) {
                 try {
-                    MoneyItem moneyItem = (MoneyItem) moneyItemStack.getItem();
-                    if (moneyItem != null) {
+                    if(moneyItemStack.getItem() instanceof MoneyItem moneyItem)
+                    {
                         availableBankNotes.put(itemID, moneyItem);
                     }
                 } catch (Exception e) {
                     BACKEND_INSTANCES.LOGGER.error("WithdrawMoneyPacket: Error setting stack size for item ID: " + itemID + "\n" + e.getMessage());
-                    continue; // Skip this item if it cannot be set
                 }
             }
         }
@@ -101,9 +100,8 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 continue;
             }
 
-            // Withdraw the requested amount of bank notes
+            // Withdraw the requested amount of banknotes
             if(moneyBank.withdraw(totalValue) == Bank.Status.SUCCESS){
-                Inventory playerInventory = sender.getInventory();
                 int intAmount = (int) requestedAmount;
                 if(requestedAmount > Integer.MAX_VALUE)
                 {

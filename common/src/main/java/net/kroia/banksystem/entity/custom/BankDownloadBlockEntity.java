@@ -128,12 +128,12 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     }
 
     @Override
-    protected Component getDefaultName() {
-        return Component.translatable("container.banksystem.bank_download");
+    protected @NotNull Component getDefaultName() {
+        return TITLE;
     }
 
     @Override
-    protected AbstractContainerMenu createMenu(int containerId, Inventory inventory) {
+    protected @NotNull AbstractContainerMenu createMenu(int containerId, Inventory inventory) {
         return null;
     }
 
@@ -148,17 +148,17 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     }
 
     @Override
-    public ItemStack getItem(int slot) {
+    public @NotNull ItemStack getItem(int slot) {
         return inventory.getItem(slot);
     }
 
     @Override
-    public ItemStack removeItem(int slot, int amount) {
+    public @NotNull ItemStack removeItem(int slot, int amount) {
         return inventory.removeItem(slot, amount);
     }
 
     @Override
-    public ItemStack removeItemNoUpdate(int slot) {
+    public @NotNull ItemStack removeItemNoUpdate(int slot) {
         return inventory.removeItemNoUpdate(slot);
     }
 
@@ -179,7 +179,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     private void inventoryContentChanged()
     {
-        //receiveItemsFromBank();
+
     }
 
     public void dropContents() {
@@ -195,9 +195,6 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         if (blockState.getBlock() instanceof BankDownloadBlock) {
             level.setBlock(worldPosition, blockState.setValue(BankDownloadBlock.RECEIVING_STATE, (this.receivingEnabled? BankDownloadBlock.ReceivingState.RECEIVING:BankDownloadBlock.ReceivingState.NOT_RECEIVING)), 3);
         }
-        /*if(this.receivingEnabled) {
-            receiveItemsFromBank();
-        }*/
     }
 
     private void setPlayerOwner(UUID playerOwner) {

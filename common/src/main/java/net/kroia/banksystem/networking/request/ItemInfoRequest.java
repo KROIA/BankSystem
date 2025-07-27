@@ -22,6 +22,9 @@ public class ItemInfoRequest extends BankSystemGenericRequest<ItemID, ItemInfoDa
 
     @Override
     public ItemInfoData handleOnServer(ItemID itemID, ServerPlayer sender) {
+        if(!sender.hasPermissions(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get())) {
+            return null; // If the player is not an admin, return null
+        }
         ItemInfoData data = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemInfoData(itemID);
         return data;
     }

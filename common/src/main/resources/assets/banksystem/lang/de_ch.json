@@ -1,4 +1,7 @@
 {
+  "container.banksystem.bank_download_block": "Bank Download Block",
+  "container.banksystem.bank_terminal_block_entity": "Bank Terminal Block",
+  "container.banksystem.bank_upload_block": "Bank Upload Block",
   "itemGroup.banksystem.bank_system_tab": "Bank System",
   "block.banksystem.bank_terminal_block": "Bank Terminal Block",
   "block.banksystem.metal_case_block": "Metall Ghüs Block",

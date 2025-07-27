@@ -13,6 +13,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
+import java.util.Objects;
+
 public abstract class AbstractBankContainerMenu extends AbstractContainerMenu {
 
     protected final ContainerLevelAccess levelAccess;
@@ -25,7 +27,7 @@ public abstract class AbstractBankContainerMenu extends AbstractContainerMenu {
 
     // Client Constructor
     protected AbstractBankContainerMenu(Block block, MenuType<?> menuType, Container blockInventory, int containerId, Inventory playerInv, FriendlyByteBuf additionalData) {
-        this(block, menuType, blockInventory, containerId, playerInv, playerInv.player.level().getBlockEntity(additionalData.readBlockPos()));
+        this(block, menuType, blockInventory, containerId, playerInv, Objects.requireNonNull(playerInv.player.level().getBlockEntity(additionalData.readBlockPos())));
     }
 
     // Server Constructor
@@ -110,10 +112,6 @@ public abstract class AbstractBankContainerMenu extends AbstractContainerMenu {
     public boolean stillValid(Player pPlayer) {
         return stillValid(this.levelAccess, pPlayer, block);
     }
-
-    /*public BankTerminalBlockEntity getBlockEntity() {
-        return this.blockEntity;
-    }*/
 
     abstract public BlockPos getBlockPos();
 

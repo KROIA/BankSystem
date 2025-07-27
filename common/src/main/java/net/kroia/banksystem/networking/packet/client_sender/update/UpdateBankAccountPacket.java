@@ -114,6 +114,5 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
                 }
             }
         }
-        //SyncBankDataPacket.sendPacket(sender, playerUUID);
     }
 }

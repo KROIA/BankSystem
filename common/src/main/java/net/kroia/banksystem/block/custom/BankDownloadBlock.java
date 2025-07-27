@@ -60,7 +60,7 @@ public class BankDownloadBlock extends Block implements EntityBlock {
         }
 
         @Override
-        public String getSerializedName() {
+        public @NotNull String getSerializedName() {
             return this.name;
         }
     }
@@ -150,7 +150,6 @@ public class BankDownloadBlock extends Block implements EntityBlock {
             UUID playerOwner = blockEntity.getPlayerOwner();
             if(playerOwner == null || playerOwner.equals(player.getUUID())) {
                 MenuProvider menuProvider = blockEntity.getMenuProvider();
-                //SyncBankDataPacket.sendPacket(sPlayer, player.getUUID());
                 SyncBankDownloadDataPacket.sendPacket(sPlayer, blockEntity);
                 openExtendedMenu(sPlayer, menuProvider, (menu) -> {
                     menu.writeBlockPos(pos);

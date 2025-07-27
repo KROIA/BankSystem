@@ -51,7 +51,6 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
         if (player instanceof ServerPlayer sPlayer) {
             MenuProvider menuProvider = blockEntity.getMenuProvider();
             // Open the menu
-            //SyncBankDataPacket.sendPacket(sPlayer);
             openExtendedMenu(sPlayer, menuProvider, (menu) -> {
                 // Set the block position
                 menu.writeBlockPos(pos);

@@ -10,9 +10,6 @@ public final class BankSystemMod {
     public static void init() {
         if(backend == null)
             backend = new BankSystemModBackend();
-
-        backend.init();
-
     }
 
 

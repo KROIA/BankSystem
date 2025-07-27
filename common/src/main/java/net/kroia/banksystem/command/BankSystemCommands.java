@@ -701,7 +701,7 @@ public class BankSystemCommands {
     }
 
     private static int showBalance(ServerPlayer player) {
-        Bank bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyBank(player.getUUID());
+        IBank bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyBank(player.getUUID());
         if(bank == null) {
             PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(), MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;

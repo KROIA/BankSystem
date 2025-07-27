@@ -9,44 +9,20 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 
-public class ATMBlock  extends TerminalBlock/* implements EntityBlock*/ {
+public class ATMBlock  extends TerminalBlock {
 
     public static final String NAME = "atm_block";
-
-    /*@Nullable
-    @Override
-    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        return BankSystemEntities.BANK_ATM_BLOCK_ENTITY.get().create(pos, state);
-    }*/
-
 
 
     @Override
     public void openGui(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
-        //BlockEntity be = level.getBlockEntity(pos);
-        //if (!(be instanceof ATMBlockEntity blockEntity))
-        //    return;
 
         if (level.isClientSide())
             return;
 
         // open screen
         if (player instanceof ServerPlayer sPlayer) {
-            //MenuProvider menuProvider = blockEntity.getMenuProvider();
-            // Open the menu
-            //SyncBankDataPacket.sendPacket(sPlayer);
             SyncOpenGUIPacket.send_openATMScreen(sPlayer);
-            //openExtendedMenu(sPlayer, menuProvider, (menu) -> {
-                // Set the block position
-            //    menu.writeBlockPos(pos);
-            //});
         }
     }
-
-
-   /* @Nullable
-    @Override
-    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return type == BankSystemEntities.BANK_TERMINAL_BLOCK_ENTITY.get() ? BankTerminalBlockEntity::tick : null;
-    }*/
 }

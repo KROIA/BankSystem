@@ -44,11 +44,6 @@ public class BankSystemEntities {
             registerBlockEntity("bank_download_block_entity",
                     () -> BlockEntityType.Builder.of(BankDownloadBlockEntity::new, BankSystemBlocks.BANK_DOWNLOAD_BLOCK.get()).build(null));
 
-    /*public static final RegistrySupplier<BlockEntityType<?>> BANK_ATM_BLOCK_ENTITY =
-            registerBlockEntity("atm_block_entity",
-                    () -> BlockEntityType.Builder.of(ATMBlockEntity::new, BankSystemBlocks.ATM_BLOCK.get()).build(null));
-    */
-
 
 
     public static <T extends BlockEntityType<?>> RegistrySupplier<T> registerBlockEntity(String name, Supplier<T> item)

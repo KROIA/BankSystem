@@ -17,12 +17,12 @@ public class BankSystemEvents implements IBankSystemEvents {
 
 
     @Override
-    public void clearListeners() {
-        CLOSE_ITEM_BANK_EVENT.clearListeners();
-        BANK_DATA_SAVED_TO_FILE.clearListeners();
-        BANK_DATA_LOADED_FROM_FILE.clearListeners();
-        SETTINGS_SAVED_TO_FILE.clearListeners();
-        SETTINGS_LOADED_FROM_FILE.clearListeners();
+    public void removeListeners() {
+        CLOSE_ITEM_BANK_EVENT.removeListeners();
+        BANK_DATA_SAVED_TO_FILE.removeListeners();
+        BANK_DATA_LOADED_FROM_FILE.removeListeners();
+        SETTINGS_SAVED_TO_FILE.removeListeners();
+        SETTINGS_LOADED_FROM_FILE.removeListeners();
     }
 
     @Override

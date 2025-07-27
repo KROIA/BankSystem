@@ -28,6 +28,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -92,11 +93,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             IBank bankAccount = bank.getBank(bankITemID);
             if(bankAccount == null) {
                 // Create item bank account
-                if(bankAccount == null) {
-                    bankAccount = bank.createItemBank(bankITemID, 0, true);
-                    if(bankAccount == null)
-                        return false;
-                }
+                bankAccount = bank.createItemBank(bankITemID, 0, true);
+                if(bankAccount == null)
+                    return false;
             }
 
             setAmount(itemID, getAmount(itemID) + amount);
@@ -484,14 +483,14 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         }
 
         @Override
-        public ItemStack getItem(int slot) {
+        public @NotNull ItemStack getItem(int slot) {
             if(slot < 0 || slot >= inventory.size())
                 return null;
             return inventory.get(slot);
         }
 
         @Override
-        public ItemStack removeItem(int slot, int amount) {
+        public @NotNull ItemStack removeItem(int slot, int amount) {
             if(slot < 0 || slot >= inventory.size())
                 return null;
             ItemStack stack = inventory.get(slot);
@@ -512,7 +511,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         }
 
         @Override
-        public ItemStack removeItemNoUpdate(int slot) {
+        public @NotNull ItemStack removeItemNoUpdate(int slot) {
             if(slot < 0 || slot >= inventory.size())
                 return null;
             ItemStack stack = inventory.get(slot);
@@ -640,9 +639,6 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         super.load(nbt);
         CompoundTag data = nbt.getCompound(BankSystemMod.MOD_ID);
 
-       // this.inventory.deserializeNBT(tutorialmodData.getCompound("Inventory"));
-        //transferTickAmount = data.getInt("TransferTickAmount");
-
         ListTag playerDataTag = data.getList("PlayerData", ListTag.TAG_COMPOUND);
         for(int i = 0; i < playerDataTag.size(); i++)
         {
@@ -673,20 +669,6 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         data.put("PlayerData", playerInventoriesTag);
         nbt.put(BankSystemMod.MOD_ID, data);
     }
-/*
-    @Override
-    public <T> LazyOptional<T> getCapability(Capability<T> cap) {
-        return super.getCapability(cap);
-
-
-        //return cap == ForgeCapabilities.ITEM_HANDLER ? this.optional.cast() : super.getCapability(cap);
-    }*/
-
-    /*@Override
-    public void invalidateCaps() {
-        super.invalidateCaps();
-        //this.optional.invalidate();
-    }*/
 
 
     public TerminalInventory getInventory(UUID playerID) {
@@ -704,7 +686,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     }
 
     @Override
-    public Component getDisplayName() {
+    public @NotNull Component getDisplayName() {
         return TITLE;
     }
 
@@ -755,12 +737,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
         // mark the block entity for saving
         setChanged();
-        //SyncBankDataPacket.sendPacket(player);
     }
 
     public void tick(Level level, BlockPos pos, BlockState state) {
-        // Your block entity logic here
-        //System.out.println("Block entity is ticking!");
         tickCounter++;
         int itemTransferTickInterval = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ITEM_TRANSFER_TICK_INTERVAL.get();
         if(tickCounter - lastTickCounter >= itemTransferTickInterval) {

@@ -1,13 +1,26 @@
 package net.kroia.banksystem.api;
 
-import net.kroia.banksystem.banking.ClientBankManager;
-
 public interface BankSystemAPI {
 
+    /**
+     * Returns the mod ID of the Bank System.
+     *
+     * @return The mod ID as a String.
+     */
     String getModID();
+
+    /**
+     * @return An instance of IBankSystemEvents that provides access to various events and signals related to the bank system.
+     */
     IBankSystemEvents getEvents();
 
+    /**
+     * @return An instance of IBankUserManager that provides access to bank user management functionalities.
+     */
     IServerBankManager getServerBankManager();
-    ClientBankManager getClientBankManager();
 
+    /**
+     * @return An instance of IClientBankManager that provides access to client-side bank management functionalities.
+     */
+    IClientBankManager getClientBankManager();
 }

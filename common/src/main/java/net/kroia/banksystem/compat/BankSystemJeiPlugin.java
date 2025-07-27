@@ -15,10 +15,6 @@ import java.util.List;
 @JeiPlugin
 public class BankSystemJeiPlugin implements IModPlugin {
 
-    //private static BankSystemModBackend.Instances BACKEND_INSTANCES;
-    //public static void setBackend(BankSystemModBackend.Instances backend) {
-    //    BankSystemJeiPlugin.BACKEND_INSTANCES = backend;
-    //}
 
     public BankSystemJeiPlugin() {
     }
@@ -49,6 +45,5 @@ public class BankSystemJeiPlugin implements IModPlugin {
     @Override
     public void onRuntimeAvailable(IJeiRuntime jeiRuntime) {
         // Optional: Interact with JEI runtime if needed
-        //BACKEND_INSTANCES.LOGGER.info("JEI Runtime is available");
     }
 }

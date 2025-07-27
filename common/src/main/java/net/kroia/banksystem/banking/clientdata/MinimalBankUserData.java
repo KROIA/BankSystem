@@ -24,14 +24,14 @@ public class MinimalBankUserData implements INetworkPayloadEncoder {
         this.userUUID = bankUserAPI.getPlayerUUID();
         this.userName = bankUserAPI.getPlayerName();
         this.bankMap = new HashMap<>();
-        HashMap<ItemID, IBank> bankDataMap = bankUserAPI.getBankMap();
+        HashMap<ItemID, IBank> bankDataMap = bankUserAPI.getAllBanks();
         for (var entry : bankDataMap.entrySet()) {
             ItemID bankID = entry.getKey();
             IBank bank = entry.getValue();
             MinimalBankData minimalBankData = bank.getMinimalData();
             this.bankMap.put(bankID, minimalBankData);
         }
-        this.enableBankNotifications = bankUserAPI.isBankNotificationEbabled();
+        this.enableBankNotifications = bankUserAPI.isBankNotificationEnabled();
     }
     public MinimalBankUserData(UUID userUUID,
                                String userName,

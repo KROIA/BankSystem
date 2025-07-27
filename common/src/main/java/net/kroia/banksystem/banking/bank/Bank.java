@@ -11,6 +11,8 @@ import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
@@ -43,15 +45,10 @@ public class Bank implements ServerSaveable, IBank {
 
     public static Bank loadFromTag(BankUser owner, CompoundTag tag) {
         BankType type = BankType.valueOf(tag.getString("BankType"));
-        switch(type)
-        {
-            case MONEY:
-                return new MoneyBank(owner, tag);
-            case ITEM:
-                return new ItemBank(owner, tag);
-            default:
-                return null;
-        }
+        return switch (type) {
+            case MONEY -> new MoneyBank(owner, tag);
+            case ITEM -> new ItemBank(owner, tag);
+        };
     }
 
 
@@ -98,7 +95,7 @@ public class Bank implements ServerSaveable, IBank {
         }
 
         setBalanceInternal(newBalance);
-        if(owner.isBankNotificationEbabled())
+        if(owner.isBankNotificationEnabled())
             notifyUser(BankSystemTextMessages.getSetBalanceMessage(getBalance(), getItemName(), owner.getPlayerName()));
         return true;
     }
@@ -109,7 +106,7 @@ public class Bank implements ServerSaveable, IBank {
     }
 
     @Override
-    public ServerPlayer getUser()
+    public @Nullable ServerPlayer getUser()
     {
         return owner.getPlayer();
     }
@@ -128,7 +125,7 @@ public class Bank implements ServerSaveable, IBank {
         if(willOverflow(amount))
             return Status.FAILED_OVERFLOW;
         addBalanceInternal(amount);
-        if(owner.isBankNotificationEbabled())
+        if(owner.isBankNotificationEnabled())
             notifyUser(BankSystemTextMessages.getAddedMessage(amount, getItemName(), owner.getPlayerName()));
         return Status.SUCCESS;
     }
@@ -147,7 +144,7 @@ public class Bank implements ServerSaveable, IBank {
             return Status.FAILED_NOT_ENOUGH_FUNDS;
         }
         addBalanceInternal(-amount);
-        if(owner.isBankNotificationEbabled())
+        if(owner.isBankNotificationEnabled())
             notifyUser(BankSystemTextMessages.getRemovedMessage(amount, getItemName(), owner.getPlayerName()));
         return Status.SUCCESS;
     }
@@ -167,8 +164,6 @@ public class Bank implements ServerSaveable, IBank {
     public Status withdrawLockedPrefered(long amount) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
-        long origAmount = amount;
-        long lastLocked = lockedBalance;
         if (lockedBalance < amount) {
             if (balance+lockedBalance < amount) {
                 return Status.FAILED_NOT_ENOUGH_FUNDS;
@@ -184,7 +179,7 @@ public class Bank implements ServerSaveable, IBank {
     }
 
     @Override
-    public Status transfer(long amount, IBank other) {
+    public Status transfer(long amount, @NotNull IBank other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         if (balance < amount) {
@@ -192,7 +187,6 @@ public class Bank implements ServerSaveable, IBank {
         }
         if(other == this)
             return Status.SUCCESS;
-        dbg_checkValueIsNegative(amount);
 
         addBalanceInternal(-amount);
         Status otherStatus = other.deposit(amount);
@@ -205,7 +199,7 @@ public class Bank implements ServerSaveable, IBank {
     }
 
     @Override
-    public Status transferFromLocked(long amount, IBank other) {
+    public Status transferFromLocked(long amount, @NotNull IBank other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         if (lockedBalance < amount) {
@@ -222,7 +216,7 @@ public class Bank implements ServerSaveable, IBank {
     }
 
     @Override
-    public Status transferFromLockedPrefered(long amount, IBank other) {
+    public Status transferFromLockedPrefered(long amount, @NotNull IBank other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         long origAmount = amount;
@@ -253,10 +247,12 @@ public class Bank implements ServerSaveable, IBank {
         return otherStatus;
     }
 
-    public static Status exchangeFromLockedPrefered(IBank from1, IBank to1, long amount1, IBank from2, IBank to2, long amount2)
+    public static Status exchangeFromLockedPrefered(@NotNull IBank from1,@NotNull IBank to1, long amount1,
+                                                    @NotNull IBank from2,@NotNull IBank to2, long amount2)
     {
-        dbg_checkValueIsNegative(amount1);
-        dbg_checkValueIsNegative(amount2);
+        if(amount1 < 0 || amount2 < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
+
         if ((from1 instanceof  Bank castedFrom1) &&
             (to1 instanceof  Bank castedTo1) &&
             (from2 instanceof  Bank castedFrom2) &&
@@ -299,19 +295,20 @@ public class Bank implements ServerSaveable, IBank {
 
     @Override
     public Status lockAmount(long amount) {
-        dbg_checkValueIsNegative(amount);
+        if(amount < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
         if (balance < amount) {
             return Status.FAILED_NOT_ENOUGH_FUNDS;
         }
         addBalanceInternal(-amount);
         lockedBalance += amount;
-        dbg_checkValueIsNegative(lockedBalance);
         return Status.SUCCESS;
     }
 
     @Override
     public Status unlockAmount(long amount) {
-        dbg_checkValueIsNegative(amount);
+        if(amount < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
         if (lockedBalance < amount) {
             return Status.FAILED_NOT_ENOUGH_FUNDS;
         }
@@ -335,10 +332,9 @@ public class Bank implements ServerSaveable, IBank {
     @Override
     public String toStringNoOwner()
     {
-        //StringBuilder content = new StringBuilder(getItemName() +" Balance: "+(balance+lockedBalance));
         StringBuilder content = new StringBuilder(getItemName() +BankSystemTextMessages.getBalanceMessage(balance+lockedBalance));
         if(lockedBalance > 0)
-            content.append("("+BankSystemTextMessages.getBalanceDetailedMessage(balance, lockedBalance)+")");
+            content.append("(").append(BankSystemTextMessages.getBalanceDetailedMessage(balance, lockedBalance)).append(")");
 
         return content.toString();
     }
@@ -388,20 +384,15 @@ public class Bank implements ServerSaveable, IBank {
     private static void dbg_invalid_balance(long balance) {
         throw new IllegalArgumentException("Balance is negative: "+balance);
     }
-    private static void dbg_checkValueIsNegative(long value) {
-        if(value < 0)
-            throw new IllegalArgumentException("Value is negative: "+value);
-    }
-
 
     protected void notifyUser_transfer(long amount, IBank other) {
         if (amount == 0)
             return;
 
-        if (owner.isBankNotificationEbabled())
+        if (owner.isBankNotificationEnabled())
             notifyUser(BankSystemTextMessages.getTransferedMessage(amount, getItemName(), other.getPlayerName()));
         if (other instanceof  Bank casted){
-            if (casted.owner.isBankNotificationEbabled())
+            if (casted.owner.isBankNotificationEnabled())
                 casted.notifyUser(BankSystemTextMessages.getReceivedMessage(amount, getItemName(), owner.getPlayerName()));
         }
     }
@@ -460,7 +451,10 @@ public class Bank implements ServerSaveable, IBank {
 
     private boolean willOverflow(long tryToAddAmount)
     {
-        return Long.MAX_VALUE - tryToAddAmount < (balance+lockedBalance);
+        return willAdditionOverflow(balance + lockedBalance, tryToAddAmount);
+    }
+    private static boolean willAdditionOverflow(long a, long b) {
+        return Long.MAX_VALUE - a < b;
     }
 
 
