@@ -27,6 +27,13 @@ public class BankSystemLogger {
         if(enabled)
             LOGGER.error(message);
     }
+    public void error(String message, Throwable throwable) {
+        boolean enabled = true;
+        if(INSTANCES.SERVER_SETTINGS != null)
+            enabled = INSTANCES.SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_ERROR.get();
+        if(enabled)
+            LOGGER.error(message, throwable);
+    }
     public void warn(String message) {
         boolean enabled = true;
         if(INSTANCES.SERVER_SETTINGS != null)

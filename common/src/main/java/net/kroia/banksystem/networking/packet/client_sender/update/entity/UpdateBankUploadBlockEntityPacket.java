@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.packet.client_sender.update.entity;
 
 import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
-import net.kroia.banksystem.networking.BankSystemNetworkPacket;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;

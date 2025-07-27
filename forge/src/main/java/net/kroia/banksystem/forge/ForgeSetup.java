@@ -13,14 +13,12 @@ public class ForgeSetup {
     // Mod setup for common (server)
     @SubscribeEvent
     public static void commonSetup(FMLCommonSetupEvent event) {
-        //BankSystemMod.logDebug("[ForgeSetup] Common setup for server.");
         BankSystemModBackend.onServerSetup();
     }
 
     // Client setup (for client-side logic)
     @SubscribeEvent
     public static void clientSetup(FMLClientSetupEvent event) {
-        //BankSystemMod.logDebug("[ForgeSetup] Client setup.");
         BankSystemModBackend.onClientSetup();
     }
 }

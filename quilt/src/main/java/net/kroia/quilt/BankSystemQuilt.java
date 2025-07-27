@@ -17,7 +17,6 @@ public final class BankSystemQuilt implements ModInitializer {
         // Client Events
         if(MinecraftQuiltLoader.getEnvironmentType() == EnvType.CLIENT) {
             ClientLifecycleEvents.READY.register(client -> {
-                //BankSystemMod.logDebug("[QuiltSetup] CLIENT READY");
                 BankSystemModBackend.onClientSetup();
             });
         }
@@ -25,19 +24,14 @@ public final class BankSystemQuilt implements ModInitializer {
 
         // Server Events
         ServerLifecycleEvents.STARTING.register(server-> {
-            //BankSystemMod.logDebug("[QuiltSetup] SERVER STARTING");
             BankSystemModBackend.onServerSetup();
         });
 
-        ServerLifecycleEvents.READY.register(server-> {
-            //BankSystemMod.logDebug("[QuiltSetup] SERVER READY");
-            BankSystemModBackend.onServerStart(server); // Handle world load (start)
-        });
+        // Handle world load (start)
+        ServerLifecycleEvents.READY.register(BankSystemModBackend::onServerStart);
 
-        ServerLifecycleEvents.STOPPING.register(server -> {
-            //BankSystemMod.logDebug("[QuiltSetup] SERVER STOPPING");
-            BankSystemModBackend.onServerStop(server); // Handle world save (stop)
-        });
+        // Handle world save (stop)
+        ServerLifecycleEvents.STOPPING.register(BankSystemModBackend::onServerStop);
 
 
         // Player Events

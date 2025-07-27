@@ -2,7 +2,7 @@ package net.kroia.banksystem.networking.packet.client_sender.update;
 
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankUser;
-import net.kroia.banksystem.networking.BankSystemNetworkPacket;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;

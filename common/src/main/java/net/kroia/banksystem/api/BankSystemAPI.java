@@ -23,4 +23,9 @@ public interface BankSystemAPI {
      * @return An instance of IClientBankManager that provides access to client-side bank management functionalities.
      */
     IClientBankManager getClientBankManager();
+
+    /**
+     * @return An instance of IBankSystemDataHandler that provides access to data handling functionalities for the bank system.
+     */
+    IBankSystemDataHandler getDataHandler();
 }

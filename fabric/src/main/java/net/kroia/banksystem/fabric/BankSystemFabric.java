@@ -17,7 +17,6 @@ public final class BankSystemFabric implements ModInitializer {
         // Client Events
         if(FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
             ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
-                //BankSystemMod.logDebug("[FabricSetup] CLIENT_STARTED");
                 BankSystemModBackend.onClientSetup();
             });
         }
@@ -25,19 +24,13 @@ public final class BankSystemFabric implements ModInitializer {
 
         // Server Events
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
-            //BankSystemMod.logDebug("[FabricSetup] SERVER_STARTING");
             BankSystemModBackend.onServerSetup();
         });
 
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            //BankSystemMod.logDebug("[FabricSetup] SERVER_STARTED");
-            BankSystemModBackend.onServerStart(server); // Handle world load (start)
-        });
+        // Handle world load (start)
+        ServerLifecycleEvents.SERVER_STARTED.register(BankSystemModBackend::onServerStart);
 
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            //BankSystemMod.logDebug("[FabricSetup] SERVER_STOPPING");
-            BankSystemModBackend.onServerStop(server);
-        });
+        ServerLifecycleEvents.SERVER_STOPPING.register(BankSystemModBackend::onServerStop);
 
 
         // Player Events
@@ -56,33 +49,6 @@ public final class BankSystemFabric implements ModInitializer {
 
         if (isJeiLoaded()) {
             BankTerminalScreen.widthPercentage = 70;
-            // Dynamically register JEI plugin
-            /*try {
-                Class<?> pluginClass = Class.forName("net.kroia.banksystem.compat.BankSystemJeiPlugin");
-                Object pluginInstance = pluginClass.getDeclaredConstructor().newInstance();
-
-
-                // Optionally, invoke methods to ensure plugin registration
-                System.out.println("JEI integration loaded: " + pluginClass.getName());
-            } catch (Exception e) {
-                e.printStackTrace();
-                System.err.println("Failed to load JEI integration.");
-            }*/
-
-            /*try {
-                Class<?> jeiLoaderClass = Class.forName("mezz.jei.startup.JeiStarter");
-                Field pluginManagerField = jeiLoaderClass.getDeclaredField("pluginManager");
-                pluginManagerField.setAccessible(true);
-                Object pluginManager = pluginManagerField.get(null);
-
-                // Assuming there's an addPlugin method in pluginManager
-                Method addPluginMethod = pluginManager.getClass().getDeclaredMethod("addPlugin", IModPlugin.class);
-                addPluginMethod.invoke(pluginManager, new BankSystemJeiPlugin());
-                System.out.println("JEI plugin registered dynamically.");
-            } catch (Exception e) {
-                e.printStackTrace();
-                System.err.println("Failed to register JEI plugin dynamically.");
-            }*/
         }
     }
 

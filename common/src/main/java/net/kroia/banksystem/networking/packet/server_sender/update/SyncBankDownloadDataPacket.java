@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.networking.BankSystemNetworkPacket;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.screen.custom.BankDownloadScreen;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.FriendlyByteBuf;

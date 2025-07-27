@@ -3,7 +3,7 @@ package net.kroia.banksystem.networking.packet.client_sender.update;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
-import net.kroia.banksystem.networking.BankSystemNetworkPacket;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
@@ -73,7 +73,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                         availableBankNotes.put(itemID, moneyItem);
                     }
                 } catch (Exception e) {
-                    BACKEND_INSTANCES.LOGGER.error("WithdrawMoneyPacket: Error setting stack size for item ID: " + itemID + "\n" + e.getMessage());
+                    BACKEND_INSTANCES.LOGGER.error("WithdrawMoneyPacket: Error setting stack size for item ID: " + itemID + "\n" + e.getMessage(), e);
                 }
             }
         }

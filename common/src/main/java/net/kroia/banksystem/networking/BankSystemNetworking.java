@@ -24,7 +24,7 @@ public class BankSystemNetworking extends NetworkManager {
     public static AllowItemRequest ALLOW_ITEM_REQUEST = (AllowItemRequest) AsynchronousRequestResponseSystem.register(new AllowItemRequest());
     public static DisallowItemRequest DISALLOW_ITEM_REQUEST = (DisallowItemRequest) AsynchronousRequestResponseSystem.register(new DisallowItemRequest());
     public BankSystemNetworking() {
-        super(BankSystemMod.MOD_ID);
+        super(BankSystemMod.MOD_ID, "bank_system_channel");
 
         setupClientReceiverPackets();
         setupServerReceiverPackets();

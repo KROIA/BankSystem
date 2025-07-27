@@ -19,11 +19,11 @@ public final class BankSystemModSettings extends ModSettings {
     public final Bank BANK = createGroup(new Bank());
 
     public static void setBackend(BankSystemModBackend.Instances backend) {
-        BankSystemModSettings.BACKEND_INSTANCES = backend;
+        BACKEND_INSTANCES = backend;
     }
 
     public BankSystemModSettings() {
-        super("BankSystemModSettings", "settings.json");
+        super("BankSystemModSettings");
     }
 
 
@@ -109,14 +109,8 @@ public final class BankSystemModSettings extends ModSettings {
      */
 
     @Override
-    public String getSettingsFilePath() {
-        return BACKEND_INSTANCES.SERVER_DATA_HANDLER.getSaveFolder().getPath();
-    }
-
-
-    @Override
-    public boolean saveSettings() {
-        boolean success = super.saveSettings();
+    public boolean saveSettings(String filePath) {
+        boolean success = super.saveSettings(filePath);
         if (success) {
             BACKEND_INSTANCES.SERVER_EVENTS.SETTINGS_SAVED_TO_FILE.notifyListeners();
         }
@@ -124,8 +118,8 @@ public final class BankSystemModSettings extends ModSettings {
     }
 
     @Override
-    public boolean loadSettings() {
-        boolean success = super.loadSettings();
+    public boolean loadSettings(String filePaht) {
+        boolean success = super.loadSettings(filePaht);
         if (success) {
             BACKEND_INSTANCES.SERVER_EVENTS.SETTINGS_LOADED_FROM_FILE.notifyListeners();
         }

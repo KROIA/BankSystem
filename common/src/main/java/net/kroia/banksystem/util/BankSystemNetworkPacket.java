@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking;
+package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.networking.NetworkPacket;
@@ -26,5 +26,21 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
     protected void sendToClient(ServerPlayer player)
     {
         BACKEND_INSTANCES.NETWORKING.sendToClient(player, this);
+    }
+
+    public void info(String message) {
+        BACKEND_INSTANCES.LOGGER.info(message);
+    }
+    public void error(String message) {
+        BACKEND_INSTANCES.LOGGER.error(message);
+    }
+    public void error(String message, Throwable throwable) {
+        BACKEND_INSTANCES.LOGGER.error(message, throwable);
+    }
+    public void warn(String message) {
+        BACKEND_INSTANCES.LOGGER.warn(message);
+    }
+    public void debug(String message) {
+        BACKEND_INSTANCES.LOGGER.debug(message);
     }
 }

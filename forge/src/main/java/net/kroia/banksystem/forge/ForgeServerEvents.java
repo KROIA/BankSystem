@@ -9,13 +9,7 @@ public class ForgeServerEvents {
 
     public static void init()
     {
-        LifecycleEvent.SERVER_STARTED.register(server -> {
-            //BankSystemMod.logDebug("[ForgeSetup] SERVER_STARTING");
-            BankSystemModBackend.onServerStart(server);
-        });
-        LifecycleEvent.SERVER_STOPPING.register(server -> {
-            //BankSystemMod.logDebug("[ForgeSetup] SERVER_STOPPED");
-            BankSystemModBackend.onServerStop(server);
-        });
+        LifecycleEvent.SERVER_STARTED.register(BankSystemModBackend::onServerStart);
+        LifecycleEvent.SERVER_STOPPING.register(BankSystemModBackend::onServerStop);
     }
 }

@@ -2,10 +2,7 @@ package net.kroia.banksystem;
 
 import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.TickEvent;
-import net.kroia.banksystem.api.BankSystemAPI;
-import net.kroia.banksystem.api.IBankSystemEvents;
-import net.kroia.banksystem.api.IClientBankManager;
-import net.kroia.banksystem.api.IServerBankManager;
+import net.kroia.banksystem.api.*;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.banking.ServerBankManager;
@@ -18,20 +15,15 @@ import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.menu.BankSystemMenus;
-import net.kroia.banksystem.networking.BankSystemNetworkPacket;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.screen.custom.*;
 import net.kroia.banksystem.screen.uiElements.ItemInfoWidget;
-import net.kroia.banksystem.util.BankSystemDataHandler;
-import net.kroia.banksystem.util.BankSystemEvents;
-import net.kroia.banksystem.util.BankSystemLogger;
-import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
 
-import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 
 public class BankSystemModBackend implements BankSystemAPI {
@@ -40,8 +32,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         public BankSystemModSettings SERVER_SETTINGS;
         public BankSystemDataHandler SERVER_DATA_HANDLER;
         public ServerBankManager SERVER_BANK_MANAGER;
-        public BankSystemEvents SERVER_EVENTS;
         public ClientBankManager CLIENT_BANK_MANAGER;
+        public BankSystemEvents SERVER_EVENTS;
+
         public BankSystemNetworking NETWORKING;
 
         public BankSystemLogger LOGGER;
@@ -82,8 +75,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         INSTANCES.NETWORKING = new BankSystemNetworking();
 
-        BankSystemModSettings.setLogger((msg)->{INSTANCES.LOGGER.error(msg);}, (msg)->{INSTANCES.LOGGER.info(msg);});
-    }
+        }
 
     // Called from the client side
     public static void onClientSetup()
@@ -104,11 +96,14 @@ public class BankSystemModBackend implements BankSystemAPI {
     {
         if(INSTANCES.SERVER_EVENTS == null)
             INSTANCES.SERVER_EVENTS = new BankSystemEvents();
+
     }
 
     // Called from the server side
     public static void onServerStart(MinecraftServer server) {
         INSTANCES.SERVER_SETTINGS = new BankSystemModSettings();
+        INSTANCES.SERVER_SETTINGS.setLogger((msg)->{INSTANCES.LOGGER.error(msg);}, (msg, e)->{INSTANCES.LOGGER.error(msg, e);}, (msg)->{INSTANCES.LOGGER.info(msg);});
+
         INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
         INSTANCES.SERVER_BANK_MANAGER = new ServerBankManager();
 
@@ -123,6 +118,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         TickEvent.SERVER_POST.unregister(BankSystemModBackend::onServerTick);
         saveDataToFiles(server);
         INSTANCES.SERVER_SETTINGS = null;
+        BankSystemDataHandler.resetBankDataLoaded();
+        BankSystemDataHandler.resetGlobalDataLoaded();
         INSTANCES.SERVER_DATA_HANDLER = null;
         INSTANCES.SERVER_BANK_MANAGER = null;
         INSTANCES.SERVER_EVENTS.removeListeners();
@@ -153,21 +150,26 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     public static void loadDataFromFiles(MinecraftServer server)
     {
-        File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
+        Path rootSaveFolder = server.getWorldPath(LevelResource.ROOT);
         // Load data from the root save folder
-        INSTANCES.SERVER_DATA_HANDLER.setSaveFolder(rootSaveFolder);
-        INSTANCES.SERVER_DATA_HANDLER.loadAll();
+        INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder);
+        if(!INSTANCES.SERVER_DATA_HANDLER.loadAll())
+        {
+            INSTANCES.SERVER_DATA_HANDLER.saveAll();
+            INSTANCES.SERVER_DATA_HANDLER.loadAll(); // Try loading again after saving
+        }
+
     }
     public static void saveDataToFiles(MinecraftServer server)
     {
-        File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
+        Path rootSaveFolder = server.getWorldPath(LevelResource.ROOT);
         // Load data from the root save folder
-        INSTANCES.SERVER_DATA_HANDLER.setSaveFolder(rootSaveFolder);
+        INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder);
         INSTANCES.SERVER_DATA_HANDLER.saveAll();
     }
-    public static boolean isDataLoaded() {
+    /*public static boolean isDataLoaded() {
         return INSTANCES.SERVER_DATA_HANDLER.isLoaded();
-    }
+    }*/
 
 
     @Override
@@ -194,5 +196,11 @@ public class BankSystemModBackend implements BankSystemAPI {
     public IClientBankManager getClientBankManager()
     {
         return INSTANCES.CLIENT_BANK_MANAGER;
+    }
+
+    @Override
+    public IBankSystemDataHandler getDataHandler()
+    {
+        return INSTANCES.SERVER_DATA_HANDLER;
     }
 }

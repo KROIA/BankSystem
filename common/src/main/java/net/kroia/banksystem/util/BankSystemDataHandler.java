@@ -3,40 +3,47 @@ package net.kroia.banksystem.util;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonSyntaxException;
-import com.google.gson.reflect.TypeToken;
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.IBankSystemDataHandler;
+import net.kroia.modutilities.DataPersistence;
 import net.kroia.modutilities.PlayerUtilities;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtIo;
 
-import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.Type;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
 
-public class BankSystemDataHandler {
+public class BankSystemDataHandler extends DataPersistence implements IBankSystemDataHandler {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private final String FOLDER_NAME = "Finance/BankSystem";
 
     private final String BANK_DATA_FILE_NAME = "Bank_data.dat";
-    private final String SETTINGS_FILE_NAME = "settings.dat";
-    private final boolean COMPRESSED = false;
-    private boolean isLoaded = false;
-    private File saveFolder;
-
+    private final String BANK_SETTINGS_FILE_NAME = "settings.json";
     private long tickCounter = 0;
     private int lastPlayerCount = 0;
-    //public static long saveTickInterval = 6000; // 5 minutes
-
+    private static boolean globalSettingsLoaded = false;
+    private static boolean bankDataLoaded = false;
+    public BankSystemDataHandler() {
+        super(JsonFormat.PRETTY, NbtFormat.UNCOMPRESSED, Paths.get("Finance/BankSystem"));
+        bankDataLoaded = false;
+        globalSettingsLoaded = false;
+    }
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BankSystemDataHandler.BACKEND_INSTANCES = backend;
+    }
+
+    public static boolean isGlobalSettingsLoaded() {
+        return globalSettingsLoaded;
+    }
+    public static void resetGlobalDataLoaded() {
+        globalSettingsLoaded = false;
+    }
+    public static boolean isBankDataLoaded() {
+        return bankDataLoaded;
+    }
+    public static void resetBankDataLoaded() {
+        bankDataLoaded = false;
     }
 
     public void tickUpdate()
@@ -54,27 +61,20 @@ public class BankSystemDataHandler {
         }
     }
 
-    public boolean isLoaded() {
-        return isLoaded;
-    }
-    public void setSaveFolder(File folder) {
-        File rootFolder = new File(folder, FOLDER_NAME);
-        // check if folder exists
-        if (!rootFolder.exists()) {
-            rootFolder.mkdirs();
-        }
-        saveFolder = rootFolder;
-    }
-    public File getSaveFolder() {
-        return saveFolder;
+    @Override
+    public void setLevelSavePath(Path path) {
+        super.setLevelSavePath(path);
+        createSaveFolder();
     }
 
+    @Override
     public boolean saveAll()
     {
         BACKEND_INSTANCES.LOGGER.info("Saving BankSystem Mod data...");
         boolean success = true;
-        success &= save_bank();
         success &= save_globalSettings();
+        success &= save_bank();
+
 
         if(success) {
             BACKEND_INSTANCES.LOGGER.info("BankSystem Mod data saved successfully.");
@@ -85,23 +85,30 @@ public class BankSystemDataHandler {
         return success;
     }
 
+    @Override
     public boolean loadAll()
     {
-        isLoaded = false;
         BACKEND_INSTANCES.LOGGER.info("Loading BankSystem Mod data...");
         boolean success = true;
+        Path settingsFilePath = getGlobalSettingsFilePath();
+        if(!fileExists(settingsFilePath)) {
+            BACKEND_INSTANCES.LOGGER.warn("Bank settings file not found, creating default settings file.");
+            success &= save_globalSettings(settingsFilePath);
+        }
+        else
+            success &= load_globalSettings(settingsFilePath);
         success &= load_bank();
-        success &= load_globalSettings();
+
 
         if(success) {
             BACKEND_INSTANCES.LOGGER.info("BankSystem Mod data loaded successfully.");
-            isLoaded = true;
         }
         else
             BACKEND_INSTANCES.LOGGER.error("Failed to load BankSystem Mod data.");
         return success;
     }
 
+    @Override
     public boolean save_bank()
     {
         boolean success = true;
@@ -109,7 +116,7 @@ public class BankSystemDataHandler {
         CompoundTag bankData = new CompoundTag();
         success = BACKEND_INSTANCES.SERVER_BANK_MANAGER.save(bankData);
         data.put("banking", bankData);
-        saveDataCompound(BANK_DATA_FILE_NAME, data);
+        saveDataCompound(getAbsoluteSavePath(BANK_DATA_FILE_NAME), data);
         if(success)
         {
             BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_SAVED_TO_FILE.notifyListeners();
@@ -117,9 +124,10 @@ public class BankSystemDataHandler {
         return success;
     }
 
+    @Override
     public boolean load_bank()
     {
-        CompoundTag data = readDataCompound(BANK_DATA_FILE_NAME);
+        CompoundTag data = readDataCompound(getAbsoluteSavePath(BANK_DATA_FILE_NAME));
         if(data == null)
             return false;
         if(!data.contains("banking"))
@@ -128,97 +136,46 @@ public class BankSystemDataHandler {
         CompoundTag bankData = data.getCompound("banking");
         if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.load(bankData))
         {
+            bankDataLoaded = true;
             BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.notifyListeners();
             return true;
         }
+        bankDataLoaded = false;
         return false;
     }
 
+
+    public boolean save_globalSettings(Path filePath)
+    {
+        return BACKEND_INSTANCES.SERVER_SETTINGS.saveSettings(filePath.toString());
+    }
+    @Override
     public boolean save_globalSettings()
     {
-        return BACKEND_INSTANCES.SERVER_SETTINGS.saveSettings();
+        return save_globalSettings(getGlobalSettingsFilePath());
     }
 
+    public boolean load_globalSettings(Path filePath)
+    {
+        if(BACKEND_INSTANCES.SERVER_SETTINGS.loadSettings(filePath.toString()))
+        {
+            globalSettingsLoaded = true;
+            return true;
+        }
+        else
+        {
+            globalSettingsLoaded = false;
+            return false;
+        }
+    }
+    @Override
     public boolean load_globalSettings()
     {
-        return BACKEND_INSTANCES.SERVER_SETTINGS.loadSettings();
+        return load_globalSettings(getGlobalSettingsFilePath());
     }
 
-
-    public boolean fileExists(String fileName) {
-        File file = new File(getSaveFolder(), fileName);
-        return file.exists();
-    }
-
-    private CompoundTag readDataCompound(String fileName)
+    public Path getGlobalSettingsFilePath()
     {
-        CompoundTag dataOut = new CompoundTag();
-        File file = new File(saveFolder, fileName);
-        if (file.exists()) {
-            try {
-                CompoundTag data;
-
-                if(COMPRESSED)
-                    data = NbtIo.readCompressed(file);
-                else
-                    data = NbtIo.read(file);
-
-                dataOut = data;
-                return dataOut;
-            } catch (IOException e) {
-                BACKEND_INSTANCES.LOGGER.error("Failed to read data from file: " + fileName);
-                e.printStackTrace();
-            } catch(Exception e)
-            {
-                BACKEND_INSTANCES.LOGGER.error("Failed to read data from file: " + fileName);
-                e.printStackTrace();
-            }
-        }
-        return null;
-    }
-    public boolean saveDataCompound(String fileName, CompoundTag data) {
-        File file = new File(saveFolder, fileName);
-        try {
-            if (COMPRESSED)
-                NbtIo.writeCompressed(data, file);
-            else
-                NbtIo.write(data, file);
-        } catch (IOException e) {
-            BACKEND_INSTANCES.LOGGER.error("Failed to save data to file: " + fileName);
-            e.printStackTrace();
-            return false;
-        } catch(Exception e)
-        {
-            BACKEND_INSTANCES.LOGGER.error("Failed to save data to file: " + fileName);
-            e.printStackTrace();
-            return false;
-        }
-        return true;
-    }
-
-
-
-    public boolean saveAsJson(Object o, String fileName)
-    {
-        String json = GSON.toJson(o);
-        try {
-            Path path = Paths.get(getSaveFolder()+"/"+fileName);
-            Files.createDirectories(path.getParent());
-            Files.writeString(Paths.get(getSaveFolder()+"/"+fileName), json);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
-        return true;
-    }
-    public <T> T loadFromJson(String fileName, Type typeOfT) throws JsonSyntaxException {
-        try {
-            // Read JSON content
-            String json = Files.readString(Paths.get(getSaveFolder()+"/"+fileName));
-            return (T) GSON.fromJson(json, TypeToken.get(typeOfT));
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
+        return getAbsoluteSavePath(BANK_SETTINGS_FILE_NAME);
     }
 }
