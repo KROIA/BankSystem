@@ -15,8 +15,6 @@ import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
 
 public class BankSystemNetworking extends NetworkManager {
 
-
-    public static TestRequest TEST_REQUEST = (TestRequest) AsynchronousRequestResponseSystem.register(new TestRequest());
     public static ItemInfoRequest ITEM_INFO_REQUEST = (ItemInfoRequest) AsynchronousRequestResponseSystem.register(new ItemInfoRequest());
     public static MinimalBankManagerDataRequest MINIMAL_BANK_MANAGER_DATA_REQUEST = (MinimalBankManagerDataRequest) AsynchronousRequestResponseSystem.register(new MinimalBankManagerDataRequest());
     public static MinimalBankUserDataRequest MINIMAL_BANK_USER_DATA_REQUEST = (MinimalBankUserDataRequest) AsynchronousRequestResponseSystem.register(new MinimalBankUserDataRequest());

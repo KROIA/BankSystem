@@ -19,7 +19,7 @@ public class MinimalBankManagerDataRequest extends BankSystemGenericRequest<Inte
     @Override
     public MinimalBankManagerData handleOnServer(Integer input, ServerPlayer sender) {
         // Check if sender has admin permissions
-        if(sender.hasPermissions(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get())) {
+        if(playerIsAdmin(sender)) {
             // If the player has admin permissions, return the minimal data
             return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMinimalData();
         }

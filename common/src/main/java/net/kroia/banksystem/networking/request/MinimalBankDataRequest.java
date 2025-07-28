@@ -50,7 +50,7 @@ public class MinimalBankDataRequest extends BankSystemGenericRequest<MinimalBank
     public MinimalBankData handleOnServer(InputType input, ServerPlayer sender) {
         if(input.userUUID.compareTo(sender.getUUID()) == 0) {
             // If the request is for the sender's own data, check if they are an admin
-            if(!sender.hasPermissions(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get())) {
+            if(!playerIsAdmin(sender)) {
                 return null; // If the player is not an admin, return null
             }
         }

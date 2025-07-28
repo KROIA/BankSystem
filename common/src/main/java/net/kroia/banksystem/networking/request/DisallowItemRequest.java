@@ -19,7 +19,7 @@ public class DisallowItemRequest extends BankSystemGenericRequest<ItemID, Boolea
     @Override
     public Boolean handleOnServer(ItemID itemID, ServerPlayer sender) {
         // Check if sender has permission to allow the item
-        if(sender.hasPermissions(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get())) {
+        if(playerIsAdmin(sender)) {
             return BACKEND_INSTANCES.SERVER_BANK_MANAGER.disallowItemID(itemID);
         }
         return false;

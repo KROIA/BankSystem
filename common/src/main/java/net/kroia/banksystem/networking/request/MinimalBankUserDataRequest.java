@@ -21,7 +21,7 @@ public class MinimalBankUserDataRequest extends BankSystemGenericRequest<UUID, M
     @Override
     public MinimalBankUserData handleOnServer(UUID input, ServerPlayer sender) {
         if(input.compareTo(sender.getUUID()) == 0) {
-            if(!sender.hasPermissions(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get())) {
+            if(!playerIsAdmin(sender)) {
                 return null; // If the player is not an admin, return null
             }
         }
