@@ -1,13 +1,20 @@
 package net.kroia.banksystem.util;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.networking.INetworkPayloadConverter;
+import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.Objects;
+import java.util.UUID;
 
-public class ItemID implements ServerSaveable {
+public class ItemID implements ServerSaveable, INetworkPayloadConverter {
     private ItemStack stack;
 
     public ItemID(String itemID) {
@@ -24,6 +31,12 @@ public class ItemID implements ServerSaveable {
     }
     public ItemID(CompoundTag tag) {
         load(tag);
+    }
+    public ItemID(JsonElement jsonElement) {
+        fromJson(jsonElement);
+    }
+    public ItemID(FriendlyByteBuf buf) {
+        decode(buf);
     }
 
     @Override
@@ -62,12 +75,51 @@ public class ItemID implements ServerSaveable {
         return true;
     }
 
+    @Override
+    public void encode(FriendlyByteBuf buf) {
+        buf.writeItem(stack); // Encode the ItemID as an ItemStack
+    }
+
+    @Override
+    public void decode(FriendlyByteBuf buf) {
+        stack = buf.readItem(); // Decode the ItemID from an ItemStack
+    }
+
+    public JsonElement toJson() {
+        ItemStackJsonParser parser = new ItemStackJsonParser();
+        return parser.toJson(stack);
+    }
+
+    public boolean fromJson(JsonElement json) {
+        ItemStackJsonParser parser = new ItemStackJsonParser();
+        this.stack = parser.fromJson(json);
+        if (this.stack == null || this.stack.isEmpty()) {
+            this.stack = ItemUtilities.createItemStackFromId("minecraft:air");
+            return false;
+        }
+        this.stack.setCount(1); // Ensure count is 1
+        return true;
+    }
+
+    public String toJsonString()
+    {
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        return gson.toJson(toJson());
+    }
+
+
     public boolean isValid() {
         return !stack.isEmpty() && stack != null && !isAir();
     }
 
     @Override
     public String toString() {
-        return getName();
+        return toJsonString();
     }
+
+    public UUID getUUID() {
+        return UUID.nameUUIDFromBytes(toString().getBytes());
+    }
+
+
 }
