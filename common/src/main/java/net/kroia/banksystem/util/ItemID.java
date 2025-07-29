@@ -1,9 +1,8 @@
 package net.kroia.banksystem.util;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import net.kroia.modutilities.ItemUtilities;
+import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
@@ -103,8 +102,7 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
 
     public String toJsonString()
     {
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        return gson.toJson(toJson());
+        return JsonUtilities.toPrettyString(toJson());
     }
 
 
