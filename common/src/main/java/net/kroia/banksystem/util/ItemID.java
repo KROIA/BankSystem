@@ -9,6 +9,7 @@ import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -47,6 +48,9 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
 
     @Override
     public int hashCode() {
+        if(stack == null || stack.isEmpty()) {
+            return Objects.hash(Items.AIR.getDefaultInstance(), null); // Handle empty stack
+        }
         return Objects.hash(stack.getItem(), stack.getTag()); // Consider NBT
     }
 

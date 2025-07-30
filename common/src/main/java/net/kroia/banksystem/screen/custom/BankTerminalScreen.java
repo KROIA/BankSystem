@@ -72,7 +72,7 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
             String amountStr = Bank.getFormattedAmount(stackSize);
             balanceLabel.setText(amountStr);
             if(itemStackHitBox.contains(getMousePos().x, getMousePos().y))
-                drawTooltipLater(stack, getMousePos());
+                drawTooltip(stack, getMousePos());
         }
 
         @Override
