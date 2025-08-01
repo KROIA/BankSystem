@@ -14,6 +14,7 @@
   "item.banksystem.circuit_board": "Circuit Board",
   "item.banksystem.software": "Empty Software",
   "item.banksystem.banking_software": "Banking Software",
+  "item.banksystem.atm_software": "ATM Software",
   "item.banksystem.money_name": "money",
   "item.banksystem.currency": "Dollar",
   "item.banksystem.money": "Dollar",

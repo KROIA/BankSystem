@@ -178,7 +178,7 @@ public class BankSystemTextMessages {
     {
         String msg = BALANCE_DETAILED.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(balance));
-        msg = replaceVariable(msg, Variables.LOCKED_BALANCE, String.valueOf(balance));
+        msg = replaceVariable(msg, Variables.LOCKED_BALANCE, String.valueOf(lockedBalance));
         return msg;
     }
 
