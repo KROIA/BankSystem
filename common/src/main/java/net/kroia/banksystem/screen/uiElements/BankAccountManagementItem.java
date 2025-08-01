@@ -4,13 +4,8 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.GuiScreen;
-import net.kroia.modutilities.gui.elements.Button;
-import net.kroia.modutilities.gui.elements.CheckBox;
-import net.kroia.modutilities.gui.elements.ItemView;
-import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.TextBox;
+import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.minecraft.network.chat.Component;
 
@@ -176,9 +171,9 @@ public class BankAccountManagementItem extends GuiElement {
         if(!balanceChanged)
             balanceValueTextBox.setText(String.valueOf(totalBalance));
     }
-    private void onFreeLockedBalanceCheckBoxClicked()
+    private void onFreeLockedBalanceCheckBoxClicked(Boolean checked)
     {
-        freeLockedBalance = freeLockedBalanceCheckBox.isChecked();
+        freeLockedBalance = checked;
     }
 
 }

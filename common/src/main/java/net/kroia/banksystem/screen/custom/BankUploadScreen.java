@@ -120,7 +120,7 @@ public class BankUploadScreen extends GuiContainerScreen<BankUploadContainerMenu
         isOwned = !isOwned;
         sendUpdatePacket();
     }
-    private void onDoDropIfNotBankableCheckBoxClicked()
+    private void onDoDropIfNotBankableCheckBoxClicked(Boolean checked)
     {
         sendUpdatePacket();
     }
