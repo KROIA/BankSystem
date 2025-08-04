@@ -5,12 +5,12 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
+import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.VerticalListView;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.minecraft.network.chat.Component;
@@ -18,7 +18,7 @@ import net.minecraft.network.chat.Component;
 import java.util.HashMap;
 import java.util.List;
 
-public class ItemInfoWidget extends GuiElement {
+public class ItemInfoWidget extends BankSystemGuiElement {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 

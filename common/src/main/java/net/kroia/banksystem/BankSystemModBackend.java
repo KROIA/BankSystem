@@ -16,8 +16,6 @@ import net.kroia.banksystem.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.banksystem.screen.custom.*;
-import net.kroia.banksystem.screen.uiElements.ItemInfoWidget;
 import net.kroia.banksystem.util.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -83,12 +81,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemMenus.setupScreens();
         INSTANCES.CLIENT_BANK_MANAGER = new ClientBankManager(INSTANCES);
 
-        BankTerminalScreen.setBackend(INSTANCES);
-        BankAccountManagementScreen.setBackend(INSTANCES);
-        BankSystemSettingScreen.setBackend(INSTANCES);
-        ATMScreen.setBackend(INSTANCES);
-        BankDownloadScreen.setBackend(INSTANCES);
-        ItemInfoWidget.setBackend(INSTANCES);
+        BankSystemGuiScreen.setBackend(INSTANCES);
+        BankSystemGuiContainerScreen.setBackend(INSTANCES);
+        BankSystemGuiElement.setBackend(INSTANCES);
     }
 
     // Called from the server side

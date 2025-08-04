@@ -1,12 +1,11 @@
 package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.ItemInfoWidget;
+import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CloseButton;
 import net.kroia.modutilities.gui.elements.ItemSelectionView;
@@ -19,8 +18,7 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 
-public class BankSystemSettingScreen extends GuiScreen {
-    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+public class BankSystemSettingScreen extends BankSystemGuiScreen {
 
     private static final String PREFIX = "gui." + BankSystemMod.MOD_ID + ".setting_screen.";
     public static final Component TITLE = Component.translatable(PREFIX+ "title");
@@ -45,9 +43,6 @@ public class BankSystemSettingScreen extends GuiScreen {
     private int lastTickCount = 0;
     private static boolean screenIsOpen = false;
 
-    public static void setBackend(BankSystemModBackend.Instances backend) {
-        BankSystemSettingScreen.BACKEND_INSTANCES = backend;
-    }
 
     public BankSystemSettingScreen() {
         super(TITLE);

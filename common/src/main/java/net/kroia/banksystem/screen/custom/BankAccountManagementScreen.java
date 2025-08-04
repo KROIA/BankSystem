@@ -2,10 +2,10 @@ package net.kroia.banksystem.screen.custom;
 
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.networking.packet.client_sender.update.UpdateBankAccountPacket;
 import net.kroia.banksystem.screen.uiElements.BankAccountManagementItem;
+import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
@@ -25,8 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
 
-public class BankAccountManagementScreen extends GuiScreen {
-    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final String PREFIX = "gui."+ BankSystemMod.MOD_ID+".bank_account_management_screen.";
     private static final Component TITLE = Component.translatable(PREFIX+"title");
 
@@ -46,10 +45,6 @@ public class BankAccountManagementScreen extends GuiScreen {
     private int lastTickCount = 0;
     private final HashMap<ItemID, BankAccountManagementItem> bankAccountManagementItems = new HashMap<>();
     private static boolean screenIsOpen = false;
-
-    public static void setBackend(BankSystemModBackend.Instances backend) {
-        BankAccountManagementScreen.BACKEND_INSTANCES = backend;
-    }
 
 
     public BankAccountManagementScreen(GuiScreen parent, UUID playerUUID) {

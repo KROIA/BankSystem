@@ -2,17 +2,16 @@ package net.kroia.banksystem.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
+import net.kroia.banksystem.util.BankSystemGuiElement;
+import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.*;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.layout.LayoutHorizontal;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.minecraft.client.Minecraft;
@@ -23,17 +22,14 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public class ATMScreen extends GuiScreen {
-
-    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
-
+public class ATMScreen extends BankSystemGuiScreen {
     private static final String PREFIX = "gui.";
     private static final String NAME = ".atm_screen.";
     public static final String COMPONENT_STR_START = PREFIX + BankSystemMod.MOD_ID + NAME;
     public static final Component TITLE = Component.translatable(COMPONENT_STR_START + "title");
     public static final Component RECEIVE_BUTTON_TEXT = Component.translatable(COMPONENT_STR_START + "receive_button");
 
-    private class MoneyElement extends GuiElement{
+    private class MoneyElement extends BankSystemGuiElement{
 
         private final ItemStack itemStack;
         private final ItemView itemView;
@@ -99,7 +95,7 @@ public class ATMScreen extends GuiScreen {
         }
     }
 
-    private static class BalanceView extends GuiElement{
+    private static class BalanceView extends BankSystemGuiElement {
 
         private final ItemView coinItemView;
         private final Label balanceLabel;
@@ -172,10 +168,6 @@ public class ATMScreen extends GuiScreen {
     private long currentBalanceWeekVar = 0;
 
 
-
-    public static void setBackend(BankSystemModBackend.Instances backend) {
-        ATMScreen.BACKEND_INSTANCES = backend;
-    }
     public ATMScreen()
     {
         super(TITLE);

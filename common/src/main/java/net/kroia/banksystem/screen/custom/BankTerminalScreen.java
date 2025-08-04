@@ -2,17 +2,16 @@ package net.kroia.banksystem.screen.custom;
 
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
+import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
+import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiContainerScreen;
 import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.elements.*;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.minecraft.client.Minecraft;
@@ -24,10 +23,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
 
-public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainerMenu>
+public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTerminalContainerMenu>
 {
-    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
-    private class BankElement extends GuiElement
+    private class BankElement extends BankSystemGuiElement
     {
         public static final int HEIGHT = 20;
         private long targetAmount = 0;
@@ -133,9 +131,6 @@ public class BankTerminalScreen extends GuiContainerScreen<BankTerminalContainer
     private final String playerName;
     private static boolean screenIsOpen = false;
 
-    public static void setBackend(BankSystemModBackend.Instances backend) {
-        BankTerminalScreen.BACKEND_INSTANCES = backend;
-    }
 
 
     public BankTerminalScreen(BankTerminalContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {

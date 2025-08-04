@@ -4,25 +4,25 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
+import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
+import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiContainerScreen;
 import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.ContainerView;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 
-public class BankUploadScreen extends GuiContainerScreen<BankUploadContainerMenu> {
+public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadContainerMenu> {
 
     private static final Component INVENTORY_NAME_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_upload_screen.inventory_name");
     private static final Component CONNECT_BUTTON = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_upload_screen.connect_button");
     private static final Component DISCONNECT_BUTTON = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_upload_screen.disconnect_button");
     private static final Component DO_DROP_IF_NOT_BANKABLE = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_upload_screen.do_drop_if_not_bankable");
 
-    private  class SettingsMenu extends GuiElement {
+    private  class SettingsMenu extends BankSystemGuiElement {
 
         public final Button connectDisconnectButton;
         public final CheckBox doDropIfNotBankableCheckBox;

@@ -3,15 +3,15 @@ package net.kroia.banksystem.screen.uiElements;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
+import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.minecraft.network.chat.Component;
 
 import java.util.UUID;
 
-public class ItemInfoUserWidget extends GuiElement {
+public class ItemInfoUserWidget extends BankSystemGuiElement {
 
     private static final String PREFIX = "gui."+ BankSystemMod.MOD_ID+".iteminfo_user_widget.";
     private static final Component MANAGE_BUTTON = Component.translatable(PREFIX+"manage_button");

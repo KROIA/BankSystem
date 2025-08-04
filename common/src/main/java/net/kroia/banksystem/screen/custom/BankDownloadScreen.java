@@ -1,16 +1,15 @@
 package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
+import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiContainerScreen;
 import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.elements.*;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -19,9 +18,7 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 
-public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainerMenu> {
-    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
-
+public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloadContainerMenu> {
     private static final String prefix = "gui." + BankSystemMod.MOD_ID + ".bank_download_screen.";
     private static final Component INVENTORY_NAME_TEXT = Component.translatable(prefix+"inventory_name");
     private static final Component CONNECT_BUTTON = Component.translatable(prefix+"connect_button");
@@ -31,7 +28,7 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
     private static final Component APPLY_BUTTON = Component.translatable(prefix+"apply_button");
 
 
-    private  class SettingsMenu extends GuiElement{
+    private  class SettingsMenu extends BankSystemGuiElement {
 
         public final Button connectDisconnectButton;
         public final Button selectItemButton;
@@ -99,9 +96,6 @@ public class BankDownloadScreen extends GuiContainerScreen<BankDownloadContainer
 
     private static BankDownloadScreen instance;
 
-    public static void setBackend(BankSystemModBackend.Instances backend) {
-        BankDownloadScreen.BACKEND_INSTANCES = backend;
-    }
     public BankDownloadScreen(BankDownloadContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
         super(pMenu, pPlayerInventory, pTitle);
         instance = this;

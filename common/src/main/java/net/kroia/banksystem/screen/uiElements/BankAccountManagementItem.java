@@ -2,14 +2,14 @@ package net.kroia.banksystem.screen.uiElements;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.*;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.minecraft.network.chat.Component;
 
-public class BankAccountManagementItem extends GuiElement {
+public class BankAccountManagementItem extends BankSystemGuiElement {
 
     private static final String PREFIX = "gui."+ BankSystemMod.MOD_ID+".bank_account_management_item.";
     private static final Component CLOSE_ACCOUNT_BUTTON = Component.translatable(PREFIX+"close_account_button");
