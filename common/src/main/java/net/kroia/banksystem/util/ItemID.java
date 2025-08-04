@@ -23,7 +23,7 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
     public ItemID(ItemStack stack) {
         if(stack == null)
         {
-            this.stack = ItemUtilities.createItemStackFromId("minecraft:air");
+            this.stack = Items.AIR.getDefaultInstance();
             return;
         }
         this.stack = stack.copy(); // Ensure immutability
@@ -61,7 +61,7 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
         return ItemUtilities.getItemIDStr(stack.getItem());
     }
     public boolean isAir() {
-        return getName().equals("minecraft:air");
+        return stack == null || stack.isEmpty() || stack.is(Items.AIR);
     }
 
     @Override
@@ -97,7 +97,7 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
         ItemStackJsonParser parser = new ItemStackJsonParser();
         this.stack = parser.fromJson(json);
         if (this.stack == null || this.stack.isEmpty()) {
-            this.stack = ItemUtilities.createItemStackFromId("minecraft:air");
+            this.stack = Items.AIR.getDefaultInstance();
             return false;
         }
         this.stack.setCount(1); // Ensure count is 1
