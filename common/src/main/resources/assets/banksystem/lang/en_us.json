@@ -27,6 +27,7 @@
   "item.banksystem.money500": "500 Dollar",
   "item.banksystem.money1000": "1000 Dollar",
 
+  "gui.banksystem.bank_terminal_screen.remove_empty_banks_button": "Remove empty banks",
   "gui.banksystem.bank_terminal_screen.send_items_to_bank_button": "Send items to bank",
   "gui.banksystem.bank_terminal_screen.receive_items_from_bank_button": "Receive items from bank",
   "gui.banksystem.bank_terminal_screen.inventory_name": "Bank Terminal Inventory",

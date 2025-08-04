@@ -109,6 +109,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         }
     }
 
+    private static final Component REMOVE_EMPTY_BANKS_BUTTON_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_terminal_screen.remove_empty_banks_button");
     private static final Component SEND_ITEMS_TO_BANK_BUTTON_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_terminal_screen.send_items_to_bank_button");
     private static final Component RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_terminal_screen.receive_items_from_bank_button");
     private static final Component INVENTORY_NAME_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_terminal_screen.inventory_name");
@@ -121,6 +122,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     BankTerminalContainerMenu menu;
 
     // Gui elements
+    private final Button removeEmptyBankAccountsButton;
     private final Button sendItemsToBankButton;
     private final Button receiveItemsFromBankButton;
     private final VerticalListView itemListView;
@@ -140,6 +142,13 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         screenIsOpen = true;
         playerUUID = Minecraft.getInstance().player.getUUID();
         playerName = Minecraft.getInstance().player.getName().getString();
+
+        removeEmptyBankAccountsButton = new Button(REMOVE_EMPTY_BANKS_BUTTON_TEXT.getString());
+        removeEmptyBankAccountsButton.setOnFallingEdge(() -> {
+            getBankManager().requestRemoveEmptyBanks(playerUUID, (removed) -> {
+                updateBankList();
+            });
+        });
         sendItemsToBankButton = new Button(SEND_ITEMS_TO_BANK_BUTTON_TEXT.getString());
         sendItemsToBankButton.setOnFallingEdge(this::onTransmittItemsToBank);
 
@@ -150,6 +159,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         itemListView.setLayout(new LayoutVertical(0,0,true, false));
         inventoryView = new ContainerView<>(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 176, 166));
 
+        addElement(removeEmptyBankAccountsButton);
         addElement(sendItemsToBankButton);
         addElement(receiveItemsFromBankButton);
         addElement(itemListView);
@@ -164,6 +174,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         int height = this.height;
 
         int padding = 5;
+        int spacing = 5;
         int inventoryWidth = inventoryView.getWidth();
         int inventoryHeight = inventoryView.getHeight();
         inventoryView.setPosition(width - inventoryWidth - padding, (height - inventoryHeight) / 2);
@@ -171,7 +182,8 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         sendItemsToBankButton.setBounds(inventoryView.getX(), padding, inventoryView.getWidth(), 20);
 
         int itemListViewWidth = inventoryView.getX()-padding*2;
-        receiveItemsFromBankButton.setBounds(padding, padding, itemListViewWidth, 20);
+        removeEmptyBankAccountsButton.setBounds(padding, padding, itemListViewWidth/2-spacing, sendItemsToBankButton.getHeight());
+        receiveItemsFromBankButton.setBounds(removeEmptyBankAccountsButton.getRight()+spacing, removeEmptyBankAccountsButton.getTop(), itemListViewWidth/2, removeEmptyBankAccountsButton.getHeight());
         itemListView.setBounds(padding, receiveItemsFromBankButton.getY() + receiveItemsFromBankButton.getHeight() + padding,
                 itemListViewWidth, height - padding - receiveItemsFromBankButton.getHeight() - padding*2);
     }

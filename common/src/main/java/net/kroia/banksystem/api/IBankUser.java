@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
 
 public interface IBankUser {
@@ -95,6 +96,15 @@ public interface IBankUser {
      * @return True if the bank was successfully removed, false otherwise.
      */
     boolean removeBank(ItemID itemID);
+
+    /**
+     * Removes all empty banks from this user's bank list.
+     * This will remove all banks that have a balance of 0.
+     * It will also remove the money bank if it has a balance of 0.
+     *
+     * @return A list of item IDs of the removed banks.
+     */
+    List<ItemID> removeEmptyBanks();
 
     /**
      * Gets the currently free available money balance of this user.

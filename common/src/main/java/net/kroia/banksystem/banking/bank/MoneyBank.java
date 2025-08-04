@@ -6,6 +6,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public class MoneyBank extends Bank {
 
@@ -18,7 +19,7 @@ public class MoneyBank extends Bank {
         if(itemID.equals("money"))
             return ITEM_ID;
         ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
-        if(itemStack == ItemStack.EMPTY || itemStack == null || itemStack.is(new ItemID("minecraft:air").getStack().getItem()))
+        if(itemStack == ItemStack.EMPTY || itemStack == null || itemStack.is(Items.AIR))
             return null;
         return new ItemID(itemStack);
     }

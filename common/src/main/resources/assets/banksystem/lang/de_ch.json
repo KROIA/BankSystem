@@ -27,6 +27,7 @@
   "item.banksystem.money500": "500 Fr.",
   "item.banksystem.money1000": "1000 Fr.",
 
+  "gui.banksystem.bank_terminal_screen.remove_empty_banks_button": "Leere Banken entferne",
   "gui.banksystem.bank_terminal_screen.send_items_to_bank_button": "Schigg Items zu dä Bank",
   "gui.banksystem.bank_terminal_screen.receive_items_from_bank_button": "Empfang Items vo dä Bank",
   "gui.banksystem.bank_terminal_screen.inventory_name": "Bank Terminal Inventar",

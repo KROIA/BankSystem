@@ -3,6 +3,7 @@ package net.kroia.banksystem.util;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
 import net.kroia.modutilities.DataPersistence;
@@ -116,6 +117,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         CompoundTag bankData = new CompoundTag();
         success = BACKEND_INSTANCES.SERVER_BANK_MANAGER.save(bankData);
         data.put("banking", bankData);
+        data.putString("version", BankSystemMod.VERSION);
         saveDataCompound(getAbsoluteSavePath(BANK_DATA_FILE_NAME), data);
         if(success)
         {
@@ -134,6 +136,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             return false;
 
         CompoundTag bankData = data.getCompound("banking");
+        String version = data.getString("version");
         if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.load(bankData))
         {
             bankDataLoaded = true;

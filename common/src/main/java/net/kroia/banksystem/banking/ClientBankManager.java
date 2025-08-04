@@ -9,8 +9,10 @@ import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.request.MinimalBankDataRequest;
 import net.kroia.banksystem.util.ItemID;
+import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -28,39 +30,52 @@ public class ClientBankManager implements IClientBankManager {
 
 
     @Override
-    public void requestMinimalBankData(UUID playerUUID, ItemID itemID, Consumer<@Nullable MinimalBankData> consumer)
+    public void requestMinimalBankData(UUID playerUUID, ItemID itemID, Consumer<@Nullable MinimalBankData> callback)
     {
         MinimalBankDataRequest.InputType input = new MinimalBankDataRequest.InputType(playerUUID, itemID);
-        BankSystemNetworking.MINIMAL_BANK_DATA_REQUEST.sendRequestToServer(input, consumer);
+        BankSystemNetworking.MINIMAL_BANK_DATA_REQUEST.sendRequestToServer(input, callback);
     }
 
     @Override
-    public void requestMinimalBankUserData(UUID playerUUID, Consumer<@Nullable MinimalBankUserData> consumer)
+    public void requestMinimalBankUserData(UUID playerUUID, Consumer<@Nullable MinimalBankUserData> callback)
     {
-        BankSystemNetworking.MINIMAL_BANK_USER_DATA_REQUEST.sendRequestToServer(playerUUID, consumer);
+        BankSystemNetworking.MINIMAL_BANK_USER_DATA_REQUEST.sendRequestToServer(playerUUID, callback);
     }
 
     @Override
-    public void requestMinimalBankManagerData(Consumer<@Nullable MinimalBankManagerData> consumer)
+    public void requestMinimalBankManagerData(Consumer<@Nullable MinimalBankManagerData> callback)
     {
-        BankSystemNetworking.MINIMAL_BANK_MANAGER_DATA_REQUEST.sendRequestToServer(0, consumer);
+        BankSystemNetworking.MINIMAL_BANK_MANAGER_DATA_REQUEST.sendRequestToServer(0, callback);
     }
 
     @Override
-    public void requestItemInfoData(ItemID itemID, Consumer<@Nullable ItemInfoData> consumer)
+    public void requestItemInfoData(ItemID itemID, Consumer<@Nullable ItemInfoData> callback)
     {
-        BankSystemNetworking.ITEM_INFO_REQUEST.sendRequestToServer(itemID, consumer);
+        BankSystemNetworking.ITEM_INFO_REQUEST.sendRequestToServer(itemID, callback);
     }
 
     @Override
-    public void requestAllowItem(ItemID itemID, Consumer<Boolean> consumer)
+    public void requestAllowItem(ItemID itemID, Consumer<Boolean> callback)
     {
-        BankSystemNetworking.ALLOW_ITEM_REQUEST.sendRequestToServer(itemID, consumer);
+        BankSystemNetworking.ALLOW_ITEM_REQUEST.sendRequestToServer(itemID, callback);
     }
 
     @Override
-    public void requestDisallowItem(ItemID itemID, Consumer<Boolean> consumer)
+    public void requestDisallowItem(ItemID itemID, Consumer<Boolean> callback)
     {
-        BankSystemNetworking.DISALLOW_ITEM_REQUEST.sendRequestToServer(itemID, consumer);
+        BankSystemNetworking.DISALLOW_ITEM_REQUEST.sendRequestToServer(itemID, callback);
+    }
+
+    @Override
+    public void requestRemoveEmptyBanks(UUID player, Consumer<List<ItemID>> callback)
+    {
+        BankSystemNetworking.REMOVE_EMPTY_BANKS_REQUEST.sendRequestToServer(player, callback);
+    }
+
+    @Override
+    public void requestRemoveEmptyBanks(Consumer<List<ItemID>> callback)
+    {
+        UUID thisPlayer = Minecraft.getInstance().player.getUUID();
+        BankSystemNetworking.REMOVE_EMPTY_BANKS_REQUEST.sendRequestToServer(thisPlayer, callback);
     }
 }

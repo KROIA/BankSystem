@@ -17,10 +17,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 public class BankUser implements ServerSaveable, IBankUser {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -143,6 +140,25 @@ public class BankUser implements ServerSaveable, IBankUser {
         PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getBankDeletedMessage(getPlayerName(), bank.getItemName())+"\n"+
                 BankSystemTextMessages.getBankBalanceLostMessage(bank.getTotalBalance(), bank.getItemName()));
         return true;
+    }
+
+    @Override
+    public List<ItemID> removeEmptyBanks()
+    {
+        List<ItemID> removedBanks = new ArrayList<>();
+        Iterator<Map.Entry<ItemID, Bank>> iterator = bankMap.entrySet().iterator();
+        while(iterator.hasNext())
+        {
+            Map.Entry<ItemID, Bank> entry = iterator.next();
+            if(entry.getValue().getTotalBalance() <= 0)
+            {
+                //PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getBankDeletedMessage(getPlayerName(), entry.getValue().getItemName())+"\n"+
+                //        BankSystemTextMessages.getBankBalanceLostMessage(entry.getValue().getTotalBalance(), entry.getValue().getItemName()));
+                removedBanks.add(entry.getKey());
+                iterator.remove();
+            }
+        }
+        return removedBanks;
     }
 
     @Override

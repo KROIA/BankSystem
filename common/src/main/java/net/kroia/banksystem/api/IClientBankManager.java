@@ -7,6 +7,7 @@ import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
 import net.kroia.banksystem.util.ItemID;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -23,9 +24,9 @@ public interface IClientBankManager {
      *
      * @param playerUUID The UUID of the player.
      * @param itemID     The ID of the item.
-     * @param consumer   A callback that receives the MinimalBankData.
+     * @param callback   A callback that receives the MinimalBankData.
      */
-    void requestMinimalBankData(UUID playerUUID, ItemID itemID, Consumer<@Nullable MinimalBankData> consumer);
+    void requestMinimalBankData(UUID playerUUID, ItemID itemID, Consumer<@Nullable MinimalBankData> callback);
 
     /**
      * Requests minimal bank user data for a specific player.
@@ -35,9 +36,9 @@ public interface IClientBankManager {
      * The resulting MinimalBankUserData may be null if the player is not allowed to view the bank data of the specified player.
      *
      * @param playerUUID The UUID of the player.
-     * @param consumer   A callback that receives the MinimalBankUserData.
+     * @param callback   A callback that receives the MinimalBankUserData.
      */
-    void requestMinimalBankUserData(UUID playerUUID, Consumer<@Nullable  MinimalBankUserData> consumer);
+    void requestMinimalBankUserData(UUID playerUUID, Consumer<@Nullable  MinimalBankUserData> callback);
 
     /**
      * Requests minimal bank manager data.
@@ -46,9 +47,9 @@ public interface IClientBankManager {
      * @warning
      * The resulting MinimalBankManagerData may be null if the player is not allowed to view the bank data of the specified player.
      *
-     * @param consumer A callback that receives the MinimalBankManagerData.
+     * @param callback A callback that receives the MinimalBankManagerData.
      */
-    void requestMinimalBankManagerData(Consumer<@Nullable MinimalBankManagerData> consumer);
+    void requestMinimalBankManagerData(Consumer<@Nullable MinimalBankManagerData> callback);
 
     /**
      * Requests item information data for a specific item.
@@ -58,25 +59,44 @@ public interface IClientBankManager {
      * The resulting ItemInfoData may be null if the player is not allowed to view the bank data of the specified player.
      *
      * @param itemID   The ID of the item.
-     * @param consumer A callback that receives the ItemInfoData.
+     * @param callback A callback that receives the ItemInfoData.
      */
-    void requestItemInfoData(ItemID itemID, Consumer<@Nullable ItemInfoData> consumer);
+    void requestItemInfoData(ItemID itemID, Consumer<@Nullable ItemInfoData> callback);
 
     /**
      * Requests to the server to allow an item to be used in the bank system.
      * Returns a Boolean indicating success or failure.
      *
      * @param itemID   The ID of the item to allow.
-     * @param consumer A callback that receives a Boolean indicating success or failure.
+     * @param callback A callback that receives a Boolean indicating success or failure.
      */
-    void requestAllowItem(ItemID itemID, Consumer<Boolean> consumer);
+    void requestAllowItem(ItemID itemID, Consumer<Boolean> callback);
 
     /**
      * Requests to the server to forbid an item to be used in the bank system.
      * Returns a Boolean indicating success or failure.
      *
      * @param itemID   The ID of the item to disallow.
-     * @param consumer A callback that receives a Boolean indicating success or failure.
+     * @param callback A callback that receives a Boolean indicating success or failure.
      */
-    void requestDisallowItem(ItemID itemID, Consumer<Boolean> consumer);
+    void requestDisallowItem(ItemID itemID, Consumer<Boolean> callback);
+
+
+    /**
+     * Requests to the server to remove empty banks for a specific player.
+     * Returns a list of ItemIDs of the removed banks through a callback.
+     * Only admins can remove banks of other players.
+     *
+     * @param player The UUID of the player whose empty banks should be removed.
+     * @param callback A callback that receives a list of ItemIDs of the removed banks.
+     */
+    void requestRemoveEmptyBanks(UUID player, Consumer<List<ItemID>> callback);
+
+    /**
+     * Requests to the server to remove empty banks for the current player.
+     * Returns a list of ItemIDs of the removed banks through a callback.
+     *
+     * @param callback A callback that receives a list of ItemIDs of the removed banks.
+     */
+    void requestRemoveEmptyBanks(Consumer<List<ItemID>> callback);
 }
