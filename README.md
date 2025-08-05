@@ -20,7 +20,7 @@ Admins can define which items can be stored in the bank in order to prevent play
 * [Downloads](#downloads)
 * [Blocks](#blocks)
 * [Items](#items)
-* [How to use](#how-to-use)
+* [Usage](#usage)
     * [For server player / single player](#for-server-player--single-player)
     * [For admins / single player](#for-admins--single-player)
 * [Commands](#commands)
@@ -155,6 +155,22 @@ Right click on a <b>Terminal Block</b> using a <b>Banking Software</b> to create
 </tr>
 
 
+
+<tr>
+<td>
+<b>ATM Block</b><br>
+Used to withdraw money.<br>
+Interaction using right click.<br>
+Right click on a <b>Terminal Block</b> using a <b>ATM Software</b> to create this block.
+</td>
+<td>
+<div align="center">
+    <img src="documentation/images/atmBlock.png" width="100"> 
+</div>
+</td>
+</tr>
+
+
 <tr>
 <td>
 <b>Bank Upload Block</b><br>
@@ -262,6 +278,22 @@ Used to programm the <b>Terminal Block</b> to be a <b>Bank Terminal Block</b><br
 </tr>
 
 
+
+<tr>
+<td>
+<b>ATM Software</b><br>
+Used to programm the <b>Terminal Block</b> to be a <b>ATM Block</b><br>
+1 Empty Software<br>
+1 Dispenser<br>
+</td>
+<td>
+<div align="center">
+    <img src="documentation/images/atmSoftware.png" width="300"> 
+</div>
+</td>
+</tr>
+
+
 <tr>
 <td>
 <b>Bank Transmitter Module</b><br>
@@ -317,92 +349,6 @@ The admin is responsible to bring money in to circulation.<br>
 
 </table>
 
----
-## How to use
-### For server player / single player
-<div align="center">
-    <img src="documentation/images/bankingView.png" > 
-</div>
-<br>
-
-Now open the **Bank Terminal Block** using right click.<br>
-This opens a menu which lets you send and receive items/money to your bank account.<br>
-Each player has its own bank terminal inventory, other player can not access your items, contained in this block.<br>
-If the block gets destroyed, all items which are not transfered to the bank will drop.<br>
-It drops all items from all players which let some items in it.<br>
-
-## Send items to the bank
-Put your items you want to send to the bank inside the bank terminal inventory and click the **Send items to bank** button.<br>
-It takes some time for all items to arrive on your bank acoount.<br>
-
-## Receive items from the bank
-Put the amount you want to withdraw in to the textfield next to the item.<br>
-Press the **Receive items from bank** button to start the transaction.<br>
-It also takes some time for the items to arrive in the bank terminal block.<br>
-
----
-### For Admins / Single Player
-#### Managing items for banking
-By default only some items can be stored in a bank. To change which items can be used for banking, a Admin can type the following command:
-```
-/bank settingsGUI
-```
-<div align="center">
-    <img src="documentation/images/settingsGUI.png" > 
-</div>
-<br>
-
-In this window you can add/remove items which can be used for banking.<br>
-On the left side is a list of all items that can be stored inside a bank.<br>
-Click on a item to get more informations about that item.<br>
-On the right side is a overview over the item you have currently selected using the list on the left side.<br>
-It shows the total suply, this is the sum of all players bank accounts for that item.<br>
-You can also see the sum of [locked amount](#locked-amount) over all players.<br>
-Using the **Manage** button on each players display, the [bank account window](#managing-items-for-banking) for that player will be opened.<br>
-
-#### Managing players bank account
-Manage players bank account using the GUI. To open the gui, type the following command:
-```
-/bank <player_name> bankManagementGUI
-```
-Other ways to open this window:
-* clicking on the **Manage** button in the [items management window](#managing-items-for-banking).
-* Right click on a player with the **Banking Software**.
-
-<div align="center">
-    <img src="documentation/images/bankManagementGUI.png" > 
-</div>
-<br>
-
-The window shows all items which are currently stored on the players bank account.<br>
-<details close> 
-    <summary> 
-      <b>Add new item</b>
-    </summary>
-    Click on the <b>Create new bank</b> button and select the item you want to add to the players account.<br>
-    The item bank will be created instantly, no need to press the save button.<br>
-</details>
-<details close> 
-    <summary> 
-      <b>Remove a item</b>
-    </summary>
-    If you want to delete a item from the users bank, click on <b>Close account</b>. A deleted account is marked red<br>
-    Click the <b>Save changes</b> button to apply your changes.<br>
-</details>
-<details close> 
-    <summary> 
-      <b>Change balance</b>
-    </summary>
-    Change the balance of a specific item using the text field.<br>
-    Click the <b>Save changes</b> button to apply your changes.<br>
-</details>
-<details close> 
-    <summary> 
-      <b>Release locked amount</b>
-    </summary>
-    Check the check box if you want to release the locked amount for a specific item. This may affect other mods which have locked the money/item in the first place.<br>
-    Click the <b>Save changes</b> button to apply your changes.<br>
-</details>
 
 ---
 
@@ -435,10 +381,50 @@ The window shows all items which are currently stored on the players bank accoun
 
 ---- 
 
+
+## Usage
+### Bank Terminal Block
+<table>
+<tr>
+<td width = 500 valign="top">
+The Bank Terminal Block is used to deposit/withdraw items to/from the bank account.
+
+> [!NOTE]  
+> The block contains an inventory which is unique for every player. 
+> Like a ender chest but when the block gets destroyed, 
+> the items which are not stored in the bank account will be dropped.
+> 
+<br>
+</td>
+<td width = 600>
+<div align="center">
+    <img src="documentation/images/BankTerminalBlock.gif" width=600> 
+</div>
+</td>
+</tr>
+</table>
+
+
+---
+### ATM Block
+<table>
+<tr>
+<td width = 500 valign="top">
+The ATM Block lets you withdraw money as specific bank notes.<br>
+</td>
+<td width = 600>
+<div align="center">
+    <img src="documentation/images/ATMBlock.gif" width=600> 
+</div>
+</td>
+</tr>
+</table>
+
+---
 ### Interaction for automation systems
 
 <div align="center">
-    <img src="documentation/images/bank_upDownload_block.png" width=600> 
+    <img src="documentation/images/bank_upDownload_block.png" > 
 </div>
 
 #### Bank Upload Block
@@ -454,9 +440,9 @@ Open the block and press on the <b>Connect to Bank</b> button.<br>
 Once the block is connected to your bank account, items can be placed in it.<br>
 To send the items to the bank account, the block must be powered by a redstone signal.<br>
 </td>
-<td width = 400>
+<td width = 600>
 <div align="center">
-    <img src="documentation/images/bank_upload_block_gui.png" width=400> 
+    <img src="documentation/images/BankUploadBlock.gif" width=600> 
 </div>
 </td>
 </tr>
@@ -479,15 +465,51 @@ Open the block and press on the <b>Connect to Bank</b> button.<br>
 Press the <b>Apply</b> button to save the changes.<br>
 Once the block is configured, a redstone signal triggers the block to work<br>
 </td>
-<td width = 400>
+<td width = 600>
 <div align="center">
-    <img src="documentation/images/bank_download_block_gui.png" width=400> 
+    <img src="documentation/images/BankDownloadBlock.gif" width=600> 
 </div>
 </td>
 </tr>
 </table>
 
---- 
+
+
+
+---
+### For Admins / Single Player
+#### Managing items for banking
+By default only some items can be stored in a bank. To change which items can be used for banking, a Admin can type the following command:
+```
+/bank settingsGUI
+```
+<div align="center">
+    <img src="documentation/images/settingsGUI.png" > 
+</div>
+<br>
+
+In this window you can add/remove items which can be used for banking.<br>
+On the left side is a list of all items that can be stored inside a bank.<br>
+Click on a item to get more informations about that item.<br>
+On the right side is a overview over the item you have currently selected using the list on the left side.<br>
+It shows the total suply, this is the sum of all players bank accounts for that item.<br>
+You can also see the sum of [locked amount](#locked-amount) over all players.<br>
+Using the **Manage** button on each players display, the [bank account window](#managing-items-for-banking) for that player will be opened.<br>
+
+---
+#### Managing players bank account
+Manage players bank account using the GUI. To open the gui, type the following command:
+```
+/bank <player_name> bankManagementGUI
+```
+Other ways to open this window:
+* clicking on the **Manage** button in the [items management window](#managing-items-for-banking).
+* Right click on a player with the **Banking Software**.
+
+<div align="center">
+    <img src="documentation/images/bankManagementGUI.png" > 
+</div>
+<br>
 
 #### Locked amount
 Other mods which access a players bank account may want to reserve some amount for later use. <br>
@@ -495,3 +517,34 @@ The [Stock Market Mod](https://github.com/KROIA/StockMarket) for example uses th
 To prevent double spending for the time that trade is not executed, the amount gets reserved.<br> 
 If you release the locked amount without knowing what mod reserved the amount, may cause problems.<br>
 
+
+
+The window shows all items which are currently stored on the players bank account.<br>
+<details close> 
+    <summary> 
+      <b>Add new item</b>
+    </summary>
+    Click on the <b>Create new bank</b> button and select the item you want to add to the players account.<br>
+    The item bank will be created instantly, no need to press the save button.<br>
+</details>
+<details close> 
+    <summary> 
+      <b>Remove a item</b>
+    </summary>
+    If you want to delete a item from the users bank, click on <b>Close account</b>. A deleted account is marked red<br>
+    Click the <b>Save changes</b> button to apply your changes.<br>
+</details>
+<details close> 
+    <summary> 
+      <b>Change balance</b>
+    </summary>
+    Change the balance of a specific item using the text field.<br>
+    Click the <b>Save changes</b> button to apply your changes.<br>
+</details>
+<details close> 
+    <summary> 
+      <b>Release locked amount</b>
+    </summary>
+    Check the check box if you want to release the locked amount for a specific item. This may affect other mods which have locked the money/item in the first place.<br>
+    Click the <b>Save changes</b> button to apply your changes.<br>
+</details>
