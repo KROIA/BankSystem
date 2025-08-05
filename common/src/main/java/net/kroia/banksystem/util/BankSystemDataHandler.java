@@ -1,8 +1,6 @@
 package net.kroia.banksystem.util;
 
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
@@ -17,7 +15,6 @@ import java.nio.file.Paths;
 public class BankSystemDataHandler extends DataPersistence implements IBankSystemDataHandler {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
-    private final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private final String BANK_DATA_FILE_NAME = "Bank_data.dat";
     private final String BANK_SETTINGS_FILE_NAME = "settings.json";
@@ -71,29 +68,29 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     @Override
     public boolean saveAll()
     {
-        BACKEND_INSTANCES.LOGGER.info("Saving BankSystem Mod data...");
+        info("Saving BankSystem Mod data...");
         boolean success = true;
         success &= save_globalSettings();
         success &= save_bank();
 
 
         if(success) {
-            BACKEND_INSTANCES.LOGGER.info("BankSystem Mod data saved successfully.");
+            info("BankSystem Mod data saved successfully.");
 
         }
         else
-            BACKEND_INSTANCES.LOGGER.error("Failed to save BankSystem Mod data.");
+            error("Failed to save BankSystem Mod data.");
         return success;
     }
 
     @Override
     public boolean loadAll()
     {
-        BACKEND_INSTANCES.LOGGER.info("Loading BankSystem Mod data...");
+        info("Loading BankSystem Mod data...");
         boolean success = true;
         Path settingsFilePath = getGlobalSettingsFilePath();
         if(!fileExists(settingsFilePath)) {
-            BACKEND_INSTANCES.LOGGER.warn("Bank settings file not found, creating default settings file.");
+            warn("Bank settings file not found, creating default settings file.");
             success &= save_globalSettings(settingsFilePath);
         }
         else
@@ -102,10 +99,10 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
 
         if(success) {
-            BACKEND_INSTANCES.LOGGER.info("BankSystem Mod data loaded successfully.");
+            info("BankSystem Mod data loaded successfully.");
         }
         else
-            BACKEND_INSTANCES.LOGGER.error("Failed to load BankSystem Mod data.");
+            error("Failed to load BankSystem Mod data.");
         return success;
     }
 
@@ -181,4 +178,29 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     {
         return getAbsoluteSavePath(BANK_SETTINGS_FILE_NAME);
     }
+
+
+
+
+    protected void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[BankSystemDataHandler] " + msg);
+    }
+    protected void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[BankSystemDataHandler] " + msg);
+    }
+    protected void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[BankSystemDataHandler] " + msg, e);
+    }
+    protected void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[BankSystemDataHandler] " + msg);
+    }
+    protected void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[BankSystemDataHandler] " + msg);
+    }
+    
 }

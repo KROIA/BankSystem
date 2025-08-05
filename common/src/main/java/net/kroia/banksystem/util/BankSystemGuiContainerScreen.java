@@ -23,4 +23,27 @@ public abstract class BankSystemGuiContainerScreen<T extends AbstractContainerMe
     protected ClientBankManager getBankManager() {
         return BACKEND_INSTANCES.CLIENT_BANK_MANAGER;
     }
+
+
+
+    protected void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[BankSystemGuiContainerScreen] " + msg);
+    }
+    protected void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[BankSystemGuiContainerScreen] " + msg);
+    }
+    protected void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[BankSystemGuiContainerScreen] " + msg, e);
+    }
+    protected void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[BankSystemGuiContainerScreen] " + msg);
+    }
+    protected void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[BankSystemGuiContainerScreen] " + msg);
+    }
 }

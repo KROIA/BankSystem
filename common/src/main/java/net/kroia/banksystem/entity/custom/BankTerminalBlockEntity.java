@@ -190,7 +190,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         if(bankAccount.withdraw(addedAmount) != Bank.Status.SUCCESS)
                         {
                             // error
-                            BACKEND_INSTANCES.LOGGER.error("Failed to withdraw " + addedAmount + " " + itemID + " from bank account of user " + playerID);
+                            error("Failed to withdraw " + addedAmount + " " + itemID + " from bank account of user " + playerID);
                             inventory.removeItem(itemID, addedAmount);
                             cancelTask(itemID);
                             continue;
@@ -711,7 +711,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         String userNameStr  = player.getName().getString();
         IBankUser user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(player.getUUID());
         if (user == null) {
-            BACKEND_INSTANCES.LOGGER.error("BankUser is null for user: " + userNameStr);
+            error("BankUser is null for user: " + userNameStr);
             return;
         }
 
@@ -766,4 +766,26 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     }
 
 
+
+
+    private static void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[BankTerminalBlockEntity] " + msg);
+    }
+    private static void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[BankTerminalBlockEntity] " + msg);
+    }
+    private static void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[BankTerminalBlockEntity] " + msg, e);
+    }
+    private static void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[BankTerminalBlockEntity] " + msg);
+    }
+    private static void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[BankTerminalBlockEntity] " + msg);
+    }
 }

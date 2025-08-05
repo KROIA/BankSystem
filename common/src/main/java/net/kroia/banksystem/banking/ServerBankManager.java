@@ -401,7 +401,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             return false;
         if(isItemIDBlacklisted(itemID))
         {
-            BACKEND_INSTANCES.LOGGER.info("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
+            info("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
             return false;
         }
         ArrayList<String> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
@@ -419,7 +419,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             return false;
         if(isItemIDNotRemovable(itemID))
         {
-            BACKEND_INSTANCES.LOGGER.info("It is not allowed to remove the itemID: " + itemID);
+            info("It is not allowed to remove the itemID: " + itemID);
             return false;
         }
         ArrayList<String> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
@@ -463,4 +463,28 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         }
         return success;
     }
+
+
+    private void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[ServerBankManager] " + msg);
+    }
+    private void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[ServerBankManager] " + msg);
+    }
+    private void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[ServerBankManager] " + msg, e);
+    }
+    private void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[ServerBankManager] " + msg);
+    }
+    private void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[ServerBankManager] " + msg);
+    }
+
+    
 }

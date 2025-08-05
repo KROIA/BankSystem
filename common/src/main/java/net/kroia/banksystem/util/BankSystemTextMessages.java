@@ -471,7 +471,7 @@ public class BankSystemTextMessages {
     {
         if(!message.contains(variable))
         {
-            BACKEND_INSTANCES.LOGGER.debug("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
+            BACKEND_INSTANCES.LOGGER.debug("[BankSystemTextMessages] Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
             return message;
             //throw new IllegalArgumentException("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
         }

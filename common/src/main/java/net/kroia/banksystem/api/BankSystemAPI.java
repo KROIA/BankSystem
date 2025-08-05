@@ -3,11 +3,18 @@ package net.kroia.banksystem.api;
 public interface BankSystemAPI {
 
     /**
-     * Returns the mod ID of the Bank System.
+     * Returns the mod ID of the Bank System mod.
      *
      * @return The mod ID as a String.
      */
     String getModID();
+
+    /**
+     * Returns the version of the Bank System mod.
+     *
+     * @return The mod version as a String.
+     */
+    String getModVersion();
 
     /**
      * @return An instance of IBankSystemEvents that provides access to various events and signals related to the bank system.

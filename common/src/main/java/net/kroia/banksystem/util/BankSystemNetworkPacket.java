@@ -28,19 +28,19 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
         BACKEND_INSTANCES.NETWORKING.sendToClient(player, this);
     }
 
-    public void info(String message) {
-        BACKEND_INSTANCES.LOGGER.info(message);
+    protected void info(String message) {
+        BACKEND_INSTANCES.LOGGER.info("[BankSystemNetworkPacket] "+ message);
     }
-    public void error(String message) {
-        BACKEND_INSTANCES.LOGGER.error(message);
+    protected void error(String message) {
+        BACKEND_INSTANCES.LOGGER.error("[BankSystemNetworkPacket] "+ message);
     }
-    public void error(String message, Throwable throwable) {
-        BACKEND_INSTANCES.LOGGER.error(message, throwable);
+    protected void error(String message, Throwable throwable) {
+        BACKEND_INSTANCES.LOGGER.error("[BankSystemNetworkPacket] "+ message, throwable);
     }
-    public void warn(String message) {
-        BACKEND_INSTANCES.LOGGER.warn(message);
+    protected void warn(String message) {
+        BACKEND_INSTANCES.LOGGER.warn("[BankSystemNetworkPacket] "+ message);
     }
-    public void debug(String message) {
-        BACKEND_INSTANCES.LOGGER.debug(message);
+    protected void debug(String message) {
+        BACKEND_INSTANCES.LOGGER.debug("[BankSystemNetworkPacket] "+ message);
     }
 }

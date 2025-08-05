@@ -21,4 +21,27 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
     protected ClientBankManager getBankManager() {
         return BACKEND_INSTANCES.CLIENT_BANK_MANAGER;
     }
+
+
+
+    protected void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[BankSystemGuiScreen] " + msg);
+    }
+    protected void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[BankSystemGuiScreen] " + msg);
+    }
+    protected void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[BankSystemGuiScreen] " + msg, e);
+    }
+    protected void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[BankSystemGuiScreen] " + msg);
+    }
+    protected void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[BankSystemGuiScreen] " + msg);
+    }
 }

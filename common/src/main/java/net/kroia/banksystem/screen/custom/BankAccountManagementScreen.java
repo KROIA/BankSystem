@@ -169,7 +169,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                 return;
             if(minimalBankUserData == null)
             {
-                BACKEND_INSTANCES.LOGGER.error("Failed to update bank data for player: " + playerUUID + ". MinimalBankUserData is null.");
+                error("Failed to update bank data for player: " + playerUUID + ". MinimalBankUserData is null.");
                 return;
             }
 

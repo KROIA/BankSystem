@@ -82,7 +82,7 @@ public class ATMScreen extends BankSystemGuiScreen {
                 value = Long.parseLong(text);
             } catch (NumberFormatException e) {
                 // If the text is not a valid number, return 0
-                BACKEND_INSTANCES.LOGGER.warn("Invalid amount entered: " + text + ". Returning 0.");
+                warn("Invalid amount entered: " + text + ". Returning 0.");
             }
             if(value < 0)
                 value = 0;

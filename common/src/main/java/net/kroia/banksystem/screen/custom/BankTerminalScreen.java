@@ -215,7 +215,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
                 return;
             if(minimalBankUserData == null)
             {
-                BACKEND_INSTANCES.LOGGER.error("Failed to update bank data for player: " + playerName + ". MinimalBankUserData is null.");
+                error("Failed to update bank data for player: " + playerName + ". MinimalBankUserData is null.");
                 return;
             }
 
@@ -282,7 +282,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         /*for(BankElement element : bankElements)
         {
             element.saveAmount();
-            BACKEND_INSTANCES.LOGGER.info("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
+            info("Sending item: "+element.itemID + " amount: "+element.getTargetAmount());
         }*/
 
         HashMap<ItemID, Long> itemTransferToBankAmounts = new HashMap<>();
@@ -300,7 +300,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             long amount = button.getTargetAmount();
             if(amount > 0)
             {
-                BACKEND_INSTANCES.LOGGER.debug("Sending item: "+button.itemID + " amount: "+amount);
+                debug("Sending item: "+button.itemID + " amount: "+amount);
                 itemTransferToMarketAmounts.put(button.itemID, amount);
             }
         }
