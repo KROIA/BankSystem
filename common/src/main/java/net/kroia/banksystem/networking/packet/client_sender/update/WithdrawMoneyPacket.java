@@ -6,7 +6,7 @@ import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ItemUtilities;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -96,7 +96,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
 
             if (!moneyBank.hasSufficientFunds(totalValue)) {
-                PlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getName(), sender.getName().getString()));
+                ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getName(), sender.getName().getString()));
                 continue;
             }
 
@@ -110,7 +110,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                         intAmount = (int) Math.min(requestedAmount, Integer.MAX_VALUE);
                         requestedAmount -= intAmount;
                         ItemStack moneyStack = new ItemStack(moneyItem, intAmount);
-                        if(PlayerUtilities.addToPlayerInventory(sender, moneyStack) > 0)
+                        if(ServerPlayerUtilities.addToPlayerInventory(sender, moneyStack) > 0)
                         {
                             // Drop remaining
                             ItemUtilities.dropItemAtPlayer(sender, moneyStack);
@@ -119,7 +119,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 }
                 else {
                     ItemStack moneyStack = new ItemStack(moneyItem, intAmount);
-                    if(PlayerUtilities.addToPlayerInventory(sender, moneyStack) > 0)
+                    if(ServerPlayerUtilities.addToPlayerInventory(sender, moneyStack) > 0)
                     {
                         // Drop remaining
                         ItemUtilities.dropItemAtPlayer(sender, moneyStack);

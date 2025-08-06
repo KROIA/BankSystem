@@ -1,5 +1,7 @@
 package net.kroia.banksystem.api;
 
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankManagerData;
@@ -11,6 +13,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+@Environment(EnvType.CLIENT)
 public interface IClientBankManager {
 
     /**

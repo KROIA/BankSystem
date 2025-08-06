@@ -13,7 +13,7 @@ import net.kroia.banksystem.banking.eventdata.CloseItemBankEventData;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -76,7 +76,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             user.createItemBank(itemID, 0, true);
         if(createMoneyBank)
             user.createMoneyBank(startMoney);
-        PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getBankCreatedMessage(userName, MoneyItem.getName())+"\n"+
+        ServerPlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getBankCreatedMessage(userName, MoneyItem.getName())+"\n"+
                 BankSystemTextMessages.getMoneyBankAccessHelpMessage());
         userMap.put(userUUID, user);
         return user;

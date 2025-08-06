@@ -32,7 +32,6 @@ public class BankSystemModBackend implements BankSystemAPI {
         public ServerBankManager SERVER_BANK_MANAGER;
         public ClientBankManager CLIENT_BANK_MANAGER;
         public BankSystemEvents SERVER_EVENTS;
-
         public BankSystemNetworking NETWORKING;
 
         public BankSystemLogger LOGGER;

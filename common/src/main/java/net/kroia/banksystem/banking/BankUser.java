@@ -10,7 +10,7 @@ import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -72,7 +72,7 @@ public class BankUser implements ServerSaveable, IBankUser {
     @Override
     public @Nullable ServerPlayer getPlayer()
     {
-        return PlayerUtilities.getOnlinePlayer(userUUID);
+        return ServerPlayerUtilities.getOnlinePlayer(userUUID);
     }
 
     @Override
@@ -105,7 +105,7 @@ public class BankUser implements ServerSaveable, IBankUser {
         if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
         {
             if(notifyPlayerOnFail)
-                PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
+                ServerPlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
             return null;
         }
         ItemBank itemBank = new ItemBank(this, itemID,  startBalance);
@@ -137,7 +137,7 @@ public class BankUser implements ServerSaveable, IBankUser {
         if(bank == null)
             return false;
 
-        PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getBankDeletedMessage(getPlayerName(), bank.getItemName())+"\n"+
+        ServerPlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getBankDeletedMessage(getPlayerName(), bank.getItemName())+"\n"+
                 BankSystemTextMessages.getBankBalanceLostMessage(bank.getTotalBalance(), bank.getItemName()));
         return true;
     }

@@ -12,7 +12,7 @@ import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -80,7 +80,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             if(bank == null) {
                 // Create bank account for this item if it can be used for banking
                 ArrayList<ItemID> keys = new ArrayList<>();
-                String userName = PlayerUtilities.getOnlinePlayer(playerID).getName().getString();
+                String userName = ServerPlayerUtilities.getOnlinePlayer(playerID).getName().getString();
                 keys.add(itemID);
                 bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.createUser(playerID, userName, keys, true,0 );
             }

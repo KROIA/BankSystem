@@ -5,7 +5,7 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
 import net.kroia.modutilities.DataPersistence;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.minecraft.nbt.CompoundTag;
 
 import java.nio.file.Path;
@@ -51,7 +51,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         {
             tickCounter = 0;
             // Check if any player is online
-            int playerCount = PlayerUtilities.getOnlinePlayers().size();
+            int playerCount = ServerPlayerUtilities.getOnlinePlayers().size();
             if(playerCount > 0 || lastPlayerCount > 0) {
                 lastPlayerCount = playerCount;
                 saveAll();

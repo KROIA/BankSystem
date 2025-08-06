@@ -1,9 +1,9 @@
 package net.kroia.banksystem.networking.packet.server_sender;
 
-import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemClientHooks;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -34,7 +34,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         // check if player is in creative mode
         if(!player.isCreative())
         {
-            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNeedCreativeModeForThisScreenMessage());
+            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNeedCreativeModeForThisScreenMessage());
             return;
         }
 

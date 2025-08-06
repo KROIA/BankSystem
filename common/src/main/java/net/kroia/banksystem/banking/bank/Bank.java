@@ -6,7 +6,7 @@ import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -398,11 +398,11 @@ public class Bank implements ServerSaveable, IBank {
     }
 
     protected void warnUser(String msg) {
-        PlayerUtilities.printToClientConsole(getPlayerUUID(), WARNING.getString()+msg);
+        ServerPlayerUtilities.printToClientConsole(getPlayerUUID(), WARNING.getString()+msg);
     }
 
     protected void notifyUser(String msg) {
-        PlayerUtilities.printToClientConsole(getPlayerUUID(), INFO.getString()+msg);
+        ServerPlayerUtilities.printToClientConsole(getPlayerUUID(), INFO.getString()+msg);
     }
 
 
