@@ -217,17 +217,17 @@ public interface IServerBankManager {
     /**
      * @return A list of all item IDs that are allowed to be stored in a bank account.
      */
-    ArrayList<ItemID> getAllowedItemIDs();
+    List<ItemID>  getAllowedItemIDs();
 
     /**
      * @return A list of all item IDs that are blacklisted and cannot be stored in a bank account.
      */
-    ArrayList<ItemID> getBlacklistedItemIDs();
+    List<ItemID>  getBlacklistedItemIDs();
 
     /**
      * @return A list of all item IDs that cannot be removed to be stored in a bank account.
      */
-    ArrayList<ItemID> getNotRemovableItemIDs();
+    List<ItemID>  getNotRemovableItemIDs();
 
     /**
      * Checks if the given item ID is allowed to be stored in a bank account.

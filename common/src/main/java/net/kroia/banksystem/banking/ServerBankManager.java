@@ -336,63 +336,39 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     }
 
     @Override
-    public ArrayList<ItemID> getAllowedItemIDs()
+    public List<ItemID> getAllowedItemIDs()
     {
-        ArrayList<ItemID> allowedItemIDs = new ArrayList<>();
-        ArrayList<String> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        for(String itemIDstr : allowed)
-        {
-            ItemID itemID = new ItemID(itemIDstr);
-            if(itemID.isValid())
-                allowedItemIDs.add(itemID);
-        }
-        return allowedItemIDs;
+        return new ArrayList<>(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get());
     }
 
     @Override
-    public ArrayList<ItemID> getBlacklistedItemIDs()
+    public List<ItemID> getBlacklistedItemIDs()
     {
-        ArrayList<ItemID> notAllowedItemIDs = new ArrayList<>();
-        ArrayList<String> notAllowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BLACKLIST_ITEM_IDS.get();
-        for(String itemIDstr : notAllowed)
-        {
-            ItemID itemID = new ItemID(itemIDstr);
-            if(itemID.isValid())
-                notAllowedItemIDs.add(itemID);
-        }
-        return notAllowedItemIDs;
+        return new ArrayList<>(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BLACKLIST_ITEM_IDS.get());
     }
     @Override
-    public ArrayList<ItemID> getNotRemovableItemIDs()
+    public List<ItemID> getNotRemovableItemIDs()
     {
-        ArrayList<ItemID> notRemovableItemIDs = new ArrayList<>();
-        ArrayList<String> notRemovable = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.NOT_REMOVABLE_ITEM_IDS.get();
-        for(String itemIDstr : notRemovable)
-        {
-            ItemID itemID = new ItemID(itemIDstr);
-            if(itemID.isValid())
-                notRemovableItemIDs.add(itemID);
-        }
-        return notRemovableItemIDs;
+        return new ArrayList<>(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.NOT_REMOVABLE_ITEM_IDS.get());
     }
 
     @Override
     public boolean isItemIDAllowed(ItemID itemID)
     {
-        ArrayList<String> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        return allowed.contains(itemID.getName());
+        List<ItemID> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
+        return allowed.contains(itemID);
     }
     @Override
     public boolean isItemIDBlacklisted(ItemID itemID)
     {
-        ArrayList<String> blackList = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BLACKLIST_ITEM_IDS.get();
-        return blackList.contains(itemID.getName());
+        List<ItemID> blackList = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BLACKLIST_ITEM_IDS.get();
+        return blackList.contains(itemID);
     }
     @Override
     public boolean isItemIDNotRemovable(ItemID itemID)
     {
-        ArrayList<String> notRemovable = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.NOT_REMOVABLE_ITEM_IDS.get();
-        return notRemovable.contains(itemID.getName());
+        List<ItemID> notRemovable = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.NOT_REMOVABLE_ITEM_IDS.get();
+        return notRemovable.contains(itemID);
     }
     @Override
     public boolean allowItemID(ItemID itemID)
@@ -404,10 +380,9 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             info("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
             return false;
         }
-        ArrayList<String> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        String itemIdStr = itemID.getName();
-        if(!allowed.contains(itemIdStr)) {
-            allowed.add(itemIdStr);
+        List<ItemID> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
+        if(!allowed.contains(itemID)) {
+            allowed.add(itemID);
             BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.set(allowed);
         }
         return true;
@@ -422,14 +397,15 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             info("It is not allowed to remove the itemID: " + itemID);
             return false;
         }
-        ArrayList<String> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        allowed.remove(itemID.getName());
-        BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.set(allowed);
-        //closeBankAccount(itemID);
+        List<ItemID> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
+        if(allowed.remove(itemID)) {
+            BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.set(allowed);
+            // Remove banks by item ID string to make sure banks for special items like Enchanted Books, potions, etc.
+            // are closed for all variants of the item.
+            closeBankAccount(itemID);
+        }
 
-        // Remove banks by item ID string to make sure banks for special items like Enchanted Books, potions, etc.
-        // are closed for all variants of the item.
-        closeBankAccount(itemID.getName());
+
         return true;
     }
 

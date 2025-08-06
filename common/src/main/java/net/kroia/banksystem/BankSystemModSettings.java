@@ -1,11 +1,17 @@
 package net.kroia.banksystem;
 
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.reflect.TypeToken;
 import net.kroia.banksystem.item.custom.money.*;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
+import net.kroia.modutilities.setting.parser.CustomJsonParser;
+import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,44 +55,74 @@ public final class BankSystemModSettings extends ModSettings {
 
     public static final class Bank extends SettingsGroup
     {
+        public static final class ItemIDArrayParser implements CustomJsonParser<List<ItemID>>
+        {
+            private static final ItemStackJsonParser stackParser = new ItemStackJsonParser();
+            @Override
+            public JsonElement toJson(List<ItemID> value) {
+                JsonArray jsonArray = new JsonArray();
+                for (ItemID itemID : value) {
+                    jsonArray.add(stackParser.toJson(itemID.getStack()));
+                }
+                return jsonArray;
+            }
+
+            @Override
+            public List<ItemID> fromJson(JsonElement json) {
+                List<ItemID> itemIDs = new ArrayList<>();
+                if (json.isJsonArray()) {
+                    JsonArray jsonArray = json.getAsJsonArray();
+                    for (JsonElement element : jsonArray) {
+                        ItemStack stack = stackParser.fromJson(element);
+                        if (stack != null && !stack.isEmpty()) {
+                            itemIDs.add(new ItemID(stack));
+                        }
+                    }
+                }
+                return itemIDs;
+            }
+        }
         public final Setting<Integer> ITEM_TRANSFER_TICK_INTERVAL = registerSetting("ITEM_TRANSFER_TICK_INTERVAL", 5, Integer.class); // Interval in ticks for item transfer operations
 
-        public final Setting<ArrayList<String>> ALLOWED_ITEM_IDS = registerSetting("ALLOWED_ITEM_IDS", new ArrayList<>(
-                List.of(BankSystemMod.MOD_ID+":"+MoneyItem.NAME,
-                        "minecraft:iron_ingot",
-                        "minecraft:gold_ingot",
-                        "minecraft:diamond",
-                        "minecraft:emerald",
-                        "minecraft:coal"
+        public final Setting<List<ItemID>> ALLOWED_ITEM_IDS = registerSetting("ALLOWED_ITEM_IDS",
+                new ArrayList<>(List.of(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME),
+                        new ItemID("minecraft:iron_ingot"),
+                        new ItemID("minecraft:gold_ingot"),
+                        new ItemID("minecraft:diamond"),
+                        new ItemID("minecraft:emerald"),
+                        new ItemID("minecraft:coal")
                 )), // Default allowed item IDs
-                new TypeToken<ArrayList<String>>() {}.getType()); // List of allowed item IDs for bank transactions
+                new TypeToken<List<ItemID>>() {}.getType(),
+                new ItemIDArrayParser()); // List of allowed item IDs for bank transactions
 
-        public final Setting<ArrayList<String>> BLACKLIST_ITEM_IDS = registerSetting("BLACKLIST_ITEM_IDS", new ArrayList<>(
-                        List.of("minecraft:air",
-                                "minecraft:bedrock",
-                                "minecraft:barrier",
-                                "minecraft:structure_void",
-                                "minecraft:command_block",
-                                "minecraft:repeating_command_block",
-                                "minecraft:chain_command_block",
-                                "minecraft:debug_stick",
-                                "minecraft:knowledge_book",
+        public final Setting<List<ItemID>> BLACKLIST_ITEM_IDS = registerSetting("BLACKLIST_ITEM_IDS",
+                new ArrayList<>(List.of(new ItemID("minecraft:air"),
+                                new ItemID("minecraft:bedrock"),
+                                new ItemID("minecraft:barrier"),
+                                new ItemID("minecraft:structure_void"),
+                                new ItemID("minecraft:command_block"),
+                                new ItemID("minecraft:repeating_command_block"),
+                                new ItemID("minecraft:chain_command_block"),
+                                new ItemID("minecraft:debug_stick"),
+                                new ItemID("minecraft:knowledge_book"),
 
-                                BankSystemMod.MOD_ID+":"+MoneyItem5.NAME,
-                                BankSystemMod.MOD_ID+":"+MoneyItem10.NAME,
-                                BankSystemMod.MOD_ID+":"+MoneyItem20.NAME,
-                                BankSystemMod.MOD_ID+":"+MoneyItem50.NAME,
-                                BankSystemMod.MOD_ID+":"+MoneyItem100.NAME,
-                                BankSystemMod.MOD_ID+":"+MoneyItem200.NAME,
-                                BankSystemMod.MOD_ID+":"+MoneyItem500.NAME,
-                                BankSystemMod.MOD_ID+":"+MoneyItem1000.NAME
+                                new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem5.NAME),
+                                new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem10.NAME),
+                                new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem20.NAME),
+                                new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem50.NAME),
+                                new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem100.NAME),
+                                new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem200.NAME),
+                                new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem500.NAME),
+                                new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem1000.NAME)
                         )), // Default allowed item IDs
-                new TypeToken<ArrayList<String>>() {}.getType()); // List of allowed item IDs for bank transactions
+                new TypeToken<List<ItemID>>() {}.getType(),
+                new ItemIDArrayParser()); // List of allowed item IDs for bank transactions
 
-        public final Setting<ArrayList<String>> NOT_REMOVABLE_ITEM_IDS = registerSetting("NOT_REMOVABLE_ITEM_IDS", new ArrayList<>(
-                        List.of(BankSystemMod.MOD_ID+":"+MoneyItem.NAME
-                        )), // Default allowed item IDs
-                new TypeToken<ArrayList<String>>() {}.getType()); // List of allowed item IDs for bank transactions
+        public final Setting<List<ItemID>> NOT_REMOVABLE_ITEM_IDS = registerSetting("NOT_REMOVABLE_ITEM_IDS",
+                new ArrayList<>(List.of(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME)
+                )), // Default allowed item IDs
+                new TypeToken<List<ItemID>>() {}.getType(),
+                new ItemIDArrayParser()); // List of allowed item IDs for bank transactions
 
         public final Setting<Integer> BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL = registerSetting("BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL", 20, Integer.class); // Interval in ticks for bank download block updates
         public final Setting<Integer> BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL = registerSetting("BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL", 20, Integer.class); // Interval in ticks for bank download block updates

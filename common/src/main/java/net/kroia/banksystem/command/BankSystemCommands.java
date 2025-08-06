@@ -18,9 +18,7 @@ import net.kroia.modutilities.ServerPlayerUtilities;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 import java.util.Map;
 import java.util.UUID;
@@ -434,25 +432,19 @@ public class BankSystemCommands {
                                             ServerPlayer player = source.getPlayerOrException();
 
                                             // Get arguments
-                                            Item item = player.getMainHandItem().getItem();
-                                            String itemID = ItemUtilities.getItemIDStr(item);
-                                            if(item.equals(Items.AIR))
+                                            ItemStack item = player.getMainHandItem();
+                                            if(item.isEmpty())
                                             {
                                                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoItemInHandMessage());
                                                 return Command.SINGLE_SUCCESS;
                                             }
 
-                                            ItemStack itemStack = new ItemStack(item);
-                                            if(itemStack == ItemStack.EMPTY)
-                                            {
-                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
-                                                return Command.SINGLE_SUCCESS;
-                                            }
-                                            ItemID itemIDObj = new ItemID(itemStack);
+
+                                            ItemID itemIDObj = new ItemID(item);
                                             if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(itemIDObj))
-                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemID));
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemIDObj.toString()));
                                             else
-                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemID));
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemIDObj.toString()));
                                             return Command.SINGLE_SUCCESS;
                                         })
 
@@ -488,26 +480,21 @@ public class BankSystemCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
+
                                     // Get arguments
-                                    Item item = player.getMainHandItem().getItem();
-                                    String itemID = ItemUtilities.getItemIDStr(item);
-                                    if(item.equals(Items.AIR))
+                                    ItemStack item = player.getMainHandItem();
+                                    if(item.isEmpty())
                                     {
                                         ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoItemInHandMessage());
                                         return Command.SINGLE_SUCCESS;
                                     }
 
-                                    ItemStack itemStack = new ItemStack(item);
-                                    if(itemStack == ItemStack.EMPTY)
-                                    {
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
-                                        return Command.SINGLE_SUCCESS;
-                                    }
-                                    ItemID itemIDObj = new ItemID(itemStack);
+
+                                    ItemID itemIDObj = new ItemID(item);
                                     if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.disallowItemID(itemIDObj))
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedMessage(itemID));
+                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedMessage(itemIDObj.toString()));
                                     else
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedFailedMessage(itemID));
+                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedFailedMessage(itemIDObj.toString()));
                                     return Command.SINGLE_SUCCESS;
                                 })
 
