@@ -14,8 +14,9 @@ import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CloseButton;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.VerticalListView;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
-import net.kroia.modutilities.gui.layout.LayoutVertical;
+import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -63,11 +64,13 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
         saveChangesButton = new Button(SAVE_CHANGES.getString(), this::onSaveChangesButtonClicked);
         bankElementListView = new VerticalListView();
-        LayoutVertical layout = new LayoutVertical();
+        LayoutGrid layout = new LayoutGrid();
+        layout.columns = 2;
         layout.spacing = 0;
         layout.padding = 0;
         layout.stretchX = true;
         layout.stretchY = false;
+        layout.alignment = GuiElement.Alignment.TOP;
         bankElementListView.setLayout(layout);
 
         createNewBankButton = new Button(CREATE_NEW_BANK.getString());

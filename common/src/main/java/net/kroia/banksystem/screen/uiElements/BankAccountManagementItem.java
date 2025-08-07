@@ -17,7 +17,14 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     private static final Component BALANCE = Component.translatable(PREFIX+"balance");
     private static final Component LOCKED_BALANCE = Component.translatable(PREFIX+"locked_balance");
     private static final Component TOTAL_BALANCE = Component.translatable(PREFIX+"total_balance");
-    private static final Component SAVE_CHANGES = Component.translatable(PREFIX+"save_changes");
+
+    private static final Component CLOSE_ACCOUNT_BUTTON_TOOLTIP = Component.translatable(PREFIX+"close_account_button.tooltip");
+    private static final Component FREE_LOCKED_BALANCE_CHECKBOX_TOOLTIP = Component.translatable(PREFIX+"free_locked_balance_checkbox.tooltip");
+    private static final Component BALANCE_TEXTBOX_TOOLTIP = Component.translatable(PREFIX+"balance_textbox.tooltip");
+    private static final Component BALANCE_LABEL_TOOLTIP = Component.translatable(PREFIX+"balance_label.tooltip");
+    private static final Component LOCKED_LABEL_TOOLTIP = Component.translatable(PREFIX+"locked_label.tooltip");
+    private static final Component TOTAL_LABEL_TOOLTIP = Component.translatable(PREFIX+"total_label.tooltip");
+
 
     private final String playerName;
     private final ItemID itemID;
@@ -66,8 +73,29 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
             popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
             getMinecraft().setScreen(popup);
         });
+
         freeLockedBalanceCheckBox = new CheckBox(FREE_LOCKED_BALANCE_CHECKBOX.getString(), this::onFreeLockedBalanceCheckBoxClicked);
 
+        closeAccountButton.setHoverTooltipSupplier(CLOSE_ACCOUNT_BUTTON_TOOLTIP::getString);
+        balanceValueTextBox.setHoverTooltipSupplier(BALANCE_TEXTBOX_TOOLTIP::getString);
+        freeLockedBalanceCheckBox.setHoverTooltipSupplier(FREE_LOCKED_BALANCE_CHECKBOX_TOOLTIP::getString);
+        balanceValueLabel.setHoverTooltipSupplier(BALANCE_LABEL_TOOLTIP::getString);
+        lockedBalanceValueLabel.setHoverTooltipSupplier(LOCKED_LABEL_TOOLTIP::getString);
+        totalBalanceValueLabel.setHoverTooltipSupplier(TOTAL_LABEL_TOOLTIP::getString);
+
+        closeAccountButton.setHoverTooltipFontScale(0.8f);
+        balanceValueTextBox.setHoverTooltipFontScale(0.8f);
+        freeLockedBalanceCheckBox.setHoverTooltipFontScale(0.8f);
+        balanceValueLabel.setHoverTooltipFontScale(0.8f);
+        lockedBalanceValueLabel.setHoverTooltipFontScale(0.8f);
+        totalBalanceValueLabel.setHoverTooltipFontScale(0.8f);
+
+        closeAccountButton.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+        freeLockedBalanceCheckBox.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+        balanceValueTextBox.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+        balanceValueLabel.setHoverTooltipMousePositionAlignment(Alignment.LEFT);
+        lockedBalanceValueLabel.setHoverTooltipMousePositionAlignment(Alignment.LEFT);
+        totalBalanceValueLabel.setHoverTooltipMousePositionAlignment(Alignment.LEFT);
 
 
         addChild(itemView);
@@ -91,25 +119,27 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     @Override
     protected void layoutChanged() {
         int padding = 5;
-        int spacing = 2;
+        int vSpacing = 0;
         int width = getWidth()-padding*2;
-        int elementHeight = 20;
+        int elementHeight = 15;
 
         itemView.setBounds(padding, padding, 20, elementHeight);
-        int textWidth = getFont().width(CLOSE_ACCOUNT_BUTTON.getString())+10;
-        closeAccountButton.setBounds(width-textWidth, padding, textWidth, elementHeight);
-        textWidth = getFont().width(FREE_LOCKED_BALANCE_CHECKBOX.getString())+10;
-        freeLockedBalanceCheckBox.setBounds(closeAccountButton.getLeft()-spacing-textWidth-elementHeight, padding, textWidth+elementHeight, elementHeight);
+        //int textWidth = Math.max(getTextWidth(CLOSE_ACCOUNT_BUTTON.getString()), getTextWidth(FREE_LOCKED_BALANCE_CHECKBOX.getString())) +10;
 
-        balanceLabel.setBounds(padding, itemView.getBottom()+spacing, width/4, elementHeight);
-        balanceValueLabel.setBounds(balanceLabel.getRight(), balanceLabel.getTop(), (width-balanceLabel.getWidth()-padding)/2, elementHeight);
-        balanceValueTextBox.setBounds(balanceValueLabel.getRight(), balanceLabel.getTop(), balanceValueLabel.getWidth(), elementHeight);
 
-        lockedBalanceLabel.setBounds(padding, balanceLabel.getBottom()+spacing, balanceLabel.getWidth(), elementHeight);
-        lockedBalanceValueLabel.setBounds(lockedBalanceLabel.getRight(), lockedBalanceLabel.getTop(), width-lockedBalanceLabel.getWidth()-padding, elementHeight);
+        balanceLabel.setBounds(padding, itemView.getBottom()+vSpacing, width/4, elementHeight);
+        balanceValueLabel.setBounds(balanceLabel.getRight(), balanceLabel.getTop(), (width-balanceLabel.getWidth())/2, elementHeight);
+        balanceValueTextBox.setBounds(balanceValueLabel.getRight(), balanceLabel.getTop(), width-balanceValueLabel.getRight()+padding, elementHeight);
 
-        totalBalanceLabel.setBounds(padding, lockedBalanceLabel.getBottom()+spacing, balanceLabel.getWidth(), elementHeight);
-        totalBalanceValueLabel.setBounds(totalBalanceLabel.getRight(), totalBalanceLabel.getTop(), width-totalBalanceLabel.getWidth()-padding, elementHeight);
+        closeAccountButton.setBounds(balanceValueTextBox.getLeft(), padding, balanceValueTextBox.getWidth(), elementHeight);
+
+        lockedBalanceLabel.setBounds(padding, balanceLabel.getBottom()+vSpacing, balanceLabel.getWidth(), elementHeight);
+        lockedBalanceValueLabel.setBounds(lockedBalanceLabel.getRight(), lockedBalanceLabel.getTop(), balanceValueTextBox.getLeft()-lockedBalanceLabel.getRight(), elementHeight);
+        freeLockedBalanceCheckBox.setBounds(lockedBalanceValueLabel.getRight(), lockedBalanceValueLabel.getTop(), width-lockedBalanceValueLabel.getRight()+padding, elementHeight);
+
+
+        totalBalanceLabel.setBounds(padding, lockedBalanceLabel.getBottom()+vSpacing, balanceLabel.getWidth(), elementHeight);
+        totalBalanceValueLabel.setBounds(totalBalanceLabel.getRight(), totalBalanceLabel.getTop(), width-totalBalanceLabel.getRight()+padding, elementHeight);
 
         setHeight(totalBalanceValueLabel.getBottom()+padding);
     }
