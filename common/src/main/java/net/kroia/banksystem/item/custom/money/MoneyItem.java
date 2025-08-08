@@ -2,6 +2,7 @@ package net.kroia.banksystem.item.custom.money;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.item.BankSystemCreativeModeTab;
+import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
@@ -26,26 +27,39 @@ public class MoneyItem extends Item{
         super(new Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB));
     }
 
-    public int worth() {
-        return 1;
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (!(obj instanceof MoneyItem)) return false;
+        MoneyItem other = (MoneyItem) obj;
+
+        // Compare the class and worth of the items
+        return this.getClass().equals(other.getClass()) &&
+                this.worth() == other.worth();
     }
 
-    public static boolean isMoney(String itemID)
-    {
-        // "money" -> "money"
-        // "money10" -> "money"
-        // "money20" -> "money"
-        // "money50" -> "money"
-        // "money100" -> "money"
-        // "money1000" -> "money"
-
-        boolean hasMoney = itemID.contains("money");
-        String modID = itemID.split(":")[0];
-        return hasMoney && modID.compareTo(BankSystemMod.MOD_ID) == 0;
+    @Override
+    public int hashCode() {
+        long worth = (int) worth();
+        return (int) (worth ^ (worth >>> 32)) ^ getClass().hashCode(); // Use worth as hash code
     }
+
+
+    public long worth() {
+        return 100; // 100 represents 1.00 currency units
+    }
+
     public static boolean isMoney(ItemID itemID)
     {
-        return isMoney(itemID.getName());
+        ArrayList<ItemStack> moneyItems = BankSystemItems.getMoneyItems();
+        for (ItemStack itemStack : moneyItems) {
+            if (    itemStack.getItem() instanceof MoneyItem &&
+                    ItemStack.isSameItemSameTags(itemStack, itemID.getStack()))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
 

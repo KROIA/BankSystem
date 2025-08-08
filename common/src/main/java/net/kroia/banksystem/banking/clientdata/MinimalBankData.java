@@ -17,6 +17,7 @@ public class MinimalBankData implements INetworkPayloadEncoder {
     public final ItemID itemID;
     public final long balance;
     public final long lockedBalance;
+    public final long centScaleFactor;
 
     public MinimalBankData(IBank bank) {
         this.playerUUID = bank.getPlayerUUID();
@@ -24,17 +25,20 @@ public class MinimalBankData implements INetworkPayloadEncoder {
         this.itemID = bank.getItemID();
         this.balance = bank.getBalance();
         this.lockedBalance = bank.getLockedBalance();
+        this.centScaleFactor = bank.getCentScaleFactor();
     }
     public MinimalBankData(UUID playerUUID,
                            String playerName,
                            ItemID itemID,
                            long balance,
-                           long lockedBalance) {
+                           long lockedBalance,
+                           long centScaleFactor) {
         this.playerUUID = playerUUID;
         this.playerName = playerName;
         this.itemID = itemID;
         this.balance = balance;
         this.lockedBalance = lockedBalance;
+        this.centScaleFactor = centScaleFactor;
     }
 
     @Override
@@ -44,6 +48,7 @@ public class MinimalBankData implements INetworkPayloadEncoder {
         buf.writeItem(itemID.getStack());
         buf.writeLong(balance);
         buf.writeLong(lockedBalance);
+        buf.writeLong(centScaleFactor);
     }
     public static MinimalBankData decode(net.minecraft.network.FriendlyByteBuf buf) {
         UUID playerUUID = buf.readUUID();
@@ -51,6 +56,7 @@ public class MinimalBankData implements INetworkPayloadEncoder {
         ItemID itemID = new ItemID(buf.readItem());
         long balance = buf.readLong();
         long lockedBalance = buf.readLong();
-        return new MinimalBankData(playerUUID, name, itemID, balance, lockedBalance);
+        long centScaleFactor = buf.readLong();
+        return new MinimalBankData(playerUUID, name, itemID, balance, lockedBalance, centScaleFactor);
     }
 }

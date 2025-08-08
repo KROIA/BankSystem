@@ -46,18 +46,23 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     private boolean balanceChanged = false;
     private boolean deleteAccount = false;
     private boolean freeLockedBalance = false;
+    private final long centScaleFactor;
 
 
-    public BankAccountManagementItem(ItemID itemID, String playerName)
+    public BankAccountManagementItem(ItemID itemID, String playerName, long centScaleFactor)
     {
         super();
         this.itemID = itemID;
         this.playerName = playerName;
+        this.centScaleFactor = centScaleFactor;
         itemView = new ItemView(itemID.getStack());
         balanceLabel = new Label(BALANCE.getString());
         balanceValueLabel = new Label();
         balanceValueTextBox = new TextBox();
         balanceValueTextBox.setAllowLetters(false);
+        balanceValueTextBox.setAllowNumbers(true, true);
+        balanceValueTextBox.setAllowNegativeNumbers(false);
+        balanceValueTextBox.setMaxDecimalChar((int)centScaleFactor-1);
         balanceValueTextBox.setOnTextChanged(this::onBalanceTextBoxChanged);
         balanceValueTextBox.setMaxChars(6*3+1); // Max size of a long
         lockedBalanceLabel = new Label(LOCKED_BALANCE.getString());
@@ -157,6 +162,10 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
         //long value = balanceValueTextBox.getInt();
         balanceChanged = true;
     }
+    public long getCentScaleFactor()
+    {
+        return centScaleFactor;
+    }
     public boolean balanceHasChanged()
     {
         return balanceChanged;
@@ -181,11 +190,21 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
 
     public long getBalance()
     {
+        if(centScaleFactor > 1)
+        {
+            if(balanceValueTextBox.getText().isEmpty())
+                return 0;
+            try {
+                return (long)Math.max(0.0, balanceValueTextBox.getDouble() * (double)centScaleFactor);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
         return Math.max(0,balanceValueTextBox.getLong());
     }
     public void setBalanceLabel(long balance)
     {
-        balanceValueLabel.setText(Bank.getFormattedAmount(balance));
+        balanceValueLabel.setText(Bank.getFormattedAmount(balance, centScaleFactor));
     }
     public void setBalance(long balance)
     {
@@ -193,13 +212,13 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     }
     public void setLockedBalance(long lockedBalance)
     {
-        lockedBalanceValueLabel.setText(Bank.getFormattedAmount(lockedBalance));
+        lockedBalanceValueLabel.setText(Bank.getFormattedAmount(lockedBalance, centScaleFactor));
     }
     public void setTotalBalance(long totalBalance)
     {
-        totalBalanceValueLabel.setText(Bank.getFormattedAmount(totalBalance));
+        totalBalanceValueLabel.setText(Bank.getFormattedAmount(totalBalance, centScaleFactor));
         if(!balanceChanged)
-            balanceValueTextBox.setText(String.valueOf(totalBalance));
+            balanceValueTextBox.setText(Bank.getFormattedAmount(totalBalance, centScaleFactor));
     }
     private void onFreeLockedBalanceCheckBoxClicked(Boolean checked)
     {

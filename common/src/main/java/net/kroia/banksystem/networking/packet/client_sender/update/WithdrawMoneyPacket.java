@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.minecraft.network.FriendlyByteBuf;
@@ -18,16 +19,16 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
 
     // Contains the item ID and the requested amount of the bank notes
-    HashMap<String, Long> requestedBankNoteIDs;// = new HashMap<>();
+    HashMap<ItemID, Long> requestedBankNoteIDs;// = new HashMap<>();
     public WithdrawMoneyPacket(FriendlyByteBuf buf) {
         super(buf);
     }
-    public WithdrawMoneyPacket(HashMap<String, Long> requestedBankNoteIDs) {
+    public WithdrawMoneyPacket(HashMap<ItemID, Long> requestedBankNoteIDs) {
         super();
         this.requestedBankNoteIDs = requestedBankNoteIDs;
     }
 
-    public static void sendPacket(HashMap<String, Long> requestedBankNoteIDs) {
+    public static void sendPacket(HashMap<ItemID, Long> requestedBankNoteIDs) {
         WithdrawMoneyPacket packet = new WithdrawMoneyPacket(requestedBankNoteIDs);
         packet.sendToServer();
     }
@@ -35,8 +36,8 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     @Override
     public void encode(FriendlyByteBuf buf) {
         buf.writeVarInt(requestedBankNoteIDs.size());
-        for (String itemID : requestedBankNoteIDs.keySet()) {
-            buf.writeUtf(itemID);
+        for (ItemID itemID : requestedBankNoteIDs.keySet()) {
+            buf.writeItem(itemID.getStack());
             buf.writeVarLong(requestedBankNoteIDs.get(itemID));
         }
     }
@@ -46,7 +47,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         int size = buf.readVarInt();
         requestedBankNoteIDs = new HashMap<>();
         for (int i = 0; i < size; i++) {
-            String itemID = buf.readUtf();
+            ItemID itemID = new ItemID(buf.readItem());
             long amount = buf.readVarInt();
             requestedBankNoteIDs.put(itemID, amount);
         }
@@ -62,25 +63,21 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         }
 
         // Get a list of all needed bank notes
-        HashMap<String, MoneyItem> availableBankNotes = new HashMap<>();
-        for (String itemID : requestedBankNoteIDs.keySet()) {
-            String normalizedID = ItemUtilities.getNormalizedItemID(itemID);
-            ItemStack moneyItemStack = ItemUtilities.createItemStackFromId(normalizedID);
-            if(moneyItemStack != null) {
-                try {
-                    if(moneyItemStack.getItem() instanceof MoneyItem moneyItem)
-                    {
-                        availableBankNotes.put(itemID, moneyItem);
-                    }
-                } catch (Exception e) {
-                    error("WithdrawMoneyPacket: Error setting stack size for item ID: " + itemID + "\n" + e.getMessage(), e);
+        HashMap<ItemID, MoneyItem> availableBankNotes = new HashMap<>();
+        for (ItemID itemID : requestedBankNoteIDs.keySet()) {
+            ItemStack moneyItemStack = itemID.getStack().copy();
+            try {
+                if (moneyItemStack.getItem() instanceof MoneyItem moneyItem) {
+                    availableBankNotes.put(itemID, moneyItem);
                 }
+            } catch (Exception e) {
+                error("WithdrawMoneyPacket: Error setting stack size for item ID: " + itemID + "\n" + e.getMessage(), e);
             }
         }
 
 
         // Ckeck if the player has enough balance to withdraw the requested amounts
-        for (String itemID : requestedBankNoteIDs.keySet()) {
+        for (ItemID itemID : requestedBankNoteIDs.keySet()) {
             long requestedAmount = requestedBankNoteIDs.get(itemID);
             MoneyItem moneyItem = availableBankNotes.get(itemID);
             if(moneyItem == null)

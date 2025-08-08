@@ -30,6 +30,13 @@ public interface IBank {
         FAILED_WRONG_INSTANCE_TYPE
     }
 
+    /**
+     * Returns the scale factor for this bank.
+     * For item banks its always 1, for money banks its 100.
+     * @return The scale factor for this bank.
+     */
+    long getCentScaleFactor();
+
 
     /**
      * Returns minimalistic data about this bank.
@@ -90,7 +97,7 @@ public interface IBank {
      * Other mods must therefore check if the locked amount still contains as much as needed to fulfill the transaction it
      * locked the money beforehand.
      *
-     * @param balance The new balance to set.
+     * @param balance The new balance to set. 
      * @return true if the balance was set successfully,
      *         false if the balance is negative or if it ran in the case where it was to force the locked amount to be reduced.
      */
@@ -120,7 +127,7 @@ public interface IBank {
     /**
      * Deposits an amount of money or items into this bank.
      *
-     * @param amount The amount to deposit.
+     * @param amount The amount to deposit. 
      * @return Status indicating the result of the deposit operation.
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
@@ -131,7 +138,7 @@ public interface IBank {
      * Checks if the bank has sufficient funds to perform a transaction.
      * It only checks for the available balance, not the locked balance.
      *
-     * @param amount The amount to check.
+     * @param amount The amount to check. 
      * @return true if the bank has sufficient funds, false otherwise.
      */
     boolean hasSufficientFunds(long amount);
@@ -139,7 +146,7 @@ public interface IBank {
     /**
      * Withdraws an amount of money or items from this bank.
      *
-     * @param amount The amount to withdraw.
+     * @param amount The amount to withdraw. 
      * @return Status indicating the result of the withdrawal operation.
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
@@ -149,7 +156,7 @@ public interface IBank {
      * Withdraws an amount of money or items from this bank, but only if the amount is locked.
      * This is useful for transactions that require the amount to be locked before the withdrawal.
      *
-     * @param amount The amount to withdraw.
+     * @param amount The amount to withdraw. 
      * @return Status indicating the result of the withdrawal operation.
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
@@ -162,7 +169,7 @@ public interface IBank {
      * Use this function prefered over the 'withdrawLocked' function, because it will not fail
      * if the amount is not locked. (can happen because of the 'setBalance' function)
      *
-     * @param amount The amount to withdraw.
+     * @param amount The amount to withdraw. 
      * @return Status indicating the result of the withdrawal operation.
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
@@ -171,7 +178,7 @@ public interface IBank {
     /**
      * Transfers an amount of money or items from this bank to another bank.
      *
-     * @param amount The amount to transfer.
+     * @param amount The amount to transfer. 
      * @param other  The bank to transfer the amount to.
      * @return Status indicating the result of the transfer operation.
      *         If the status is not Status.SUCCESS, then nothing has changed in both banks.
@@ -182,7 +189,7 @@ public interface IBank {
      * Transfers an amount of money or items from this bank to another bank, but only if the amount is locked.
      * This is useful for transactions that require the amount to be locked before the transfer.
      *
-     * @param amount The amount to transfer.
+     * @param amount The amount to transfer. 
      * @param other  The bank to transfer the amount to.
      * @return Status indicating the result of the transfer operation.
      *         If the status is not Status.SUCCESS, then nothing has changed in both banks.
@@ -196,7 +203,7 @@ public interface IBank {
      * Use this function prefered over the 'transferFromLocked' function, because it will not fail
      * if the amount is not locked. (can happen because of the 'setBalance' function)
      *
-     * @param amount The amount to transfer.
+     * @param amount The amount to transfer. 
      * @param other  The bank to transfer the amount to.
      * @return Status indicating the result of the transfer operation.
      *         If the status is not Status.SUCCESS, then nothing has changed in both banks.
@@ -207,7 +214,7 @@ public interface IBank {
      * Locks an amount of money or items in this bank.
      * This is useful for transactions that require the amount to be locked before the transaction.
      *
-     * @param amount The amount to lock.
+     * @param amount The amount to lock. 
      * @return Status indicating the result of the lock operation.
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
@@ -218,7 +225,7 @@ public interface IBank {
      * This is useful for transactions that require the amount to be locked before the transaction and
      * then was cancelled.
      *
-     * @param amount The amount to unlock.
+     * @param amount The amount to unlock. 
      * @return Status indicating the result of the unlock operation.
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */

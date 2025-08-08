@@ -201,6 +201,10 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         if (blockState.getBlock() instanceof BankUploadBlock) {
             level.setBlock(worldPosition, blockState.setValue(BankUploadBlock.SENDING_STATE, (this.sendingEnabled?BankUploadBlock.SendingState.SENDING:BankUploadBlock.SendingState.NOT_SENDING)), 3);
         }
+        if(this.sendingEnabled)
+        {
+            this.tickCounter = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get();
+        }
         /*if(this.sendingEnabled) {
             sendInventoryToBank();
         }*/
@@ -215,6 +219,10 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                 BlockState blockState = level.getBlockState(worldPosition);
                 if (blockState.getBlock() instanceof BankUploadBlock) {
                     level.setBlock(worldPosition, blockState.setValue(BankUploadBlock.CONNECTION_STATE, BankUploadBlock.ConnectionState.CONNECTED), 3);
+                }
+                if(this.sendingEnabled)
+                {
+                    this.tickCounter = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get();
                 }
             }
         }
@@ -250,6 +258,8 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         if(bankUser == null)
             return;
 
+
+
         for (int i = 0; i < inventory.getContainerSize(); i++) {
             ItemStack stack = inventory.getItem(i);
             if(!stack.isEmpty())
@@ -266,7 +276,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                     }
                 }
                 ItemID itemID = new ItemID(stack);
-                int amount = stack.getCount();
+                long amount = stack.getCount();
                 if(MoneyItem.isMoney(itemID))
                 {
                     itemID = MoneyBank.ITEM_ID;

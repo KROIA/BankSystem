@@ -24,6 +24,15 @@ public class MoneyBank extends Bank {
         return new ItemID(itemStack);
     }
 
+    public static long getCentScaleFactorStatic()
+    {
+        return 100L;
+    }
+    @Override
+    public long getCentScaleFactor()
+    {
+        return getCentScaleFactorStatic();
+    }
 
     public MoneyBank(BankUser owner, long balance) {
         super(owner, ITEM_ID, balance);
@@ -35,12 +44,18 @@ public class MoneyBank extends Bank {
     @Override
     public boolean save(CompoundTag tag) {
         tag.putString("BankType", BankType.MONEY.name());
+        tag.putBoolean("useCents", true);
         return super.save(tag);
     }
 
     @Override
     public boolean load(CompoundTag tag) {
-        return super.load(tag);
+        boolean result = super.load(tag);
+        if(!tag.contains("useCents")) {
+            balance *= getCentScaleFactor(); // Convert to cents if not already in cents
+            lockedBalance *= getCentScaleFactor(); // Convert locked balance to cents as well
+        }
+        return result;
     }
 
 

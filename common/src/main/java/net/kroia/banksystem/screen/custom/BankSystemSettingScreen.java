@@ -5,6 +5,7 @@ import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.ItemInfoWidget;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CloseButton;
@@ -96,8 +97,9 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
                     BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestDisallowItem(currentBankingItemID, (success)->{
                         if(success)
                             setCurrentBankingItemID(null);
+                        updateCurrentBankingItemsView();
                     });
-                }, () -> {}, ASK_TITLE.getString() + " "+currentBankingItemID + "?", ASK_MSG.getString());
+                }, () -> {}, ASK_TITLE.getString() + " " + ItemUtilities.getItemName(currentBankingItemID.getStack().getItem())  + "?", ASK_MSG.getString());
                 popup.setSize(400,100);
                 popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
                 minecraft.setScreen(popup);

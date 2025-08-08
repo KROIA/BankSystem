@@ -7,6 +7,7 @@ import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.entity.BankSystemEntities;
+import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
@@ -178,28 +179,63 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 else
                 {
                     // send to inventory
-                    amount = Math.min(amount, amountToProcess);
-                    amount = Math.min(amount, bankAccount.getBalance());
-                    if(amount <= 0) {
-                        cancelTask(itemID);
-                        continue;
-                    }
-                    long addedAmount = inventory.addItem(itemID, amount);
-                    if(addedAmount > 0)
+
+                    if(isMoney)
                     {
-                        if(bankAccount.withdraw(addedAmount) != Bank.Status.SUCCESS)
-                        {
-                            // error
-                            error("Failed to withdraw " + addedAmount + " " + itemID + " from bank account of user " + playerID);
-                            inventory.removeItem(itemID, addedAmount);
+                        amount = Math.min(amount, amountToProcess);
+                        amount *= ((MoneyItem)BankSystemItems.MONEY.get()).worth();
+                        amount = Math.min(amount, bankAccount.getBalance());
+                        if(amount < 100)
+                            amount = 0; // don't transfer less than 100 cents
+                        if(amount % 100 != 0)
+                            amount = (amount / 100) * 100; // round to whole dollars
+                        if(amount <= 0) {
                             cancelTask(itemID);
                             continue;
                         }
-                        setAmount(itemID, getAmount(itemID) - addedAmount);
-                        return true;
+
+                        long addedAmount = inventory.addItem(itemID, amount/100);
+                        if(addedAmount > 0)
+                        {
+                            if(bankAccount.withdraw(addedAmount*100) != Bank.Status.SUCCESS)
+                            {
+                                // error
+                                error("Failed to withdraw " + Bank.getNormalizedAmount(addedAmount,bankAccount.getCentScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
+                                inventory.removeItem(itemID, addedAmount);
+                                cancelTask(itemID);
+                                continue;
+                            }
+                            setAmount(itemID, getAmount(itemID) - addedAmount);
+                            return true;
+                        }
+                        else
+                            cancelTask(itemID); // inventory full
                     }
                     else
-                        cancelTask(itemID); // inventory full
+                    {
+                        amount = Math.min(amount, amountToProcess);
+                        amount = Math.min(amount, bankAccount.getBalance());
+                        if(amount <= 0) {
+                            cancelTask(itemID);
+                            continue;
+                        }
+                        long addedAmount = inventory.addItem(itemID, amount);
+                        if(addedAmount > 0)
+                        {
+                            if(bankAccount.withdraw(addedAmount) != Bank.Status.SUCCESS)
+                            {
+                                // error
+                                error("Failed to withdraw " + Bank.getNormalizedAmount(addedAmount,bankAccount.getCentScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
+                                inventory.removeItem(itemID, addedAmount);
+                                cancelTask(itemID);
+                                continue;
+                            }
+                            setAmount(itemID, getAmount(itemID) - addedAmount);
+                            return true;
+                        }
+                        else
+                            cancelTask(itemID); // inventory full
+                    }
                 }
             }
             return false;

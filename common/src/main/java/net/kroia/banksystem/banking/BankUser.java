@@ -8,6 +8,7 @@ import net.kroia.banksystem.banking.bank.ItemBank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerPlayerUtilities;
@@ -102,6 +103,13 @@ public class BankUser implements ServerSaveable, IBankUser {
         IBank bank = getBank(itemID);
         if(bank != null)
             return bank;
+
+        // Cehck if it is a money item
+        if(MoneyItem.isMoney(itemID))
+        {
+            return createMoneyBank(startBalance);
+        }
+
         if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
         {
             if(notifyPlayerOnFail)
@@ -138,7 +146,7 @@ public class BankUser implements ServerSaveable, IBankUser {
             return false;
 
         ServerPlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getBankDeletedMessage(getPlayerName(), bank.getItemName())+"\n"+
-                BankSystemTextMessages.getBankBalanceLostMessage(bank.getTotalBalance(), bank.getItemName()));
+                BankSystemTextMessages.getBankBalanceLostMessage(Bank.getFormattedAmount(bank.getTotalBalance(), bank.getCentScaleFactor()), bank.getItemName()));
         return true;
     }
 

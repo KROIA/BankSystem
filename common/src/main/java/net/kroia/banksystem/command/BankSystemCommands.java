@@ -9,6 +9,7 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -196,7 +197,7 @@ public class BankSystemCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
                                     long circulation = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyCirculation();
-                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getCirculationMessage(circulation, MoneyItem.getName()));
+                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getCirculationMessage(Bank.getFormattedAmount(circulation, MoneyBank.getCentScaleFactorStatic()), MoneyItem.getName()));
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
@@ -522,7 +523,7 @@ public class BankSystemCommands {
                                             // Get arguments
                                             long amount = LongArgumentType.getLong(context, "amount");
                                             BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.set(amount);
-                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(amount));
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(Bank.getFormattedAmount(amount, 1)));
                                             return Command.SINGLE_SUCCESS;
                                         })
                                 )
@@ -626,7 +627,12 @@ public class BankSystemCommands {
         }
         Bank.Status status = bank.deposit(amount);
         if(status != Bank.Status.SUCCESS){
-            ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getCantAddMessage(amount, MoneyItem.getName(), username, status.toString()));
+            ServerPlayerUtilities.printToClientConsole(executor,
+                    BankSystemTextMessages.getCantAddMessage(
+                            Bank.getFormattedAmount(amount, bank.getCentScaleFactor()),
+                            MoneyItem.getName(),
+                            username,
+                            status.toString()));
         }
         return Command.SINGLE_SUCCESS;
     }
@@ -639,7 +645,7 @@ public class BankSystemCommands {
         }
         bank.setBalance(amount);
         if(!executor.getName().getString().equals(username))
-            ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getSetBalanceMessage(amount, MoneyItem.getName(), username));
+            ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getSetBalanceMessage(Bank.getFormattedAmount(amount, bank.getCentScaleFactor()), MoneyItem.getName(), username));
         return Command.SINGLE_SUCCESS;
     }
     private static int executeRemoveMoney(ServerPlayer executor, String username, int amount) {
@@ -680,9 +686,9 @@ public class BankSystemCommands {
         Bank.Status status = fromBank.transfer(amount, toBank);
         if(status != Bank.Status.SUCCESS) {
             if (fromBank.getBalance() < amount)
-               ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getNotEnoughMoneyForTransfer(fromUser, toUser, amount, MoneyItem.getName()));
+               ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getNotEnoughMoneyForTransfer(fromUser, toUser, Bank.getFormattedAmount(amount,fromBank.getCentScaleFactor()), MoneyItem.getName()));
             else
-               ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getTransferFailedMessage(fromUser, toUser, amount, MoneyItem.getName(), status.toString()));
+               ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getTransferFailedMessage(fromUser, toUser, Bank.getFormattedAmount(amount, fromBank.getCentScaleFactor()), MoneyItem.getName(), status.toString()));
         }
         return Command.SINGLE_SUCCESS;
     }
@@ -694,7 +700,7 @@ public class BankSystemCommands {
             return Command.SINGLE_SUCCESS;
         }
         long balance = bank.getBalance();
-        ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getYourBalanceMessage(balance));
+        ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getYourBalanceMessage(Bank.getFormattedAmount(balance, bank.getCentScaleFactor())));
         return Command.SINGLE_SUCCESS;
     }
 

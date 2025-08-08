@@ -8,7 +8,7 @@ import net.minecraft.server.level.ServerPlayer;
 public class DisallowItemRequest extends BankSystemGenericRequest<ItemID, Boolean> {
     @Override
     public String getRequestTypeID() {
-        return AllowItemRequest.class.getName();
+        return DisallowItemRequest.class.getName();
     }
 
     @Override

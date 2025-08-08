@@ -7,6 +7,7 @@ import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.block.custom.BankDownloadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
@@ -195,6 +196,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         if (blockState.getBlock() instanceof BankDownloadBlock) {
             level.setBlock(worldPosition, blockState.setValue(BankDownloadBlock.RECEIVING_STATE, (this.receivingEnabled? BankDownloadBlock.ReceivingState.RECEIVING:BankDownloadBlock.ReceivingState.NOT_RECEIVING)), 3);
         }
+        if(this.receivingEnabled)
+        {
+            this.tickCounter = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get();
+        }
     }
 
     private void setPlayerOwner(UUID playerOwner) {
@@ -206,6 +211,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                 BlockState blockState = level.getBlockState(worldPosition);
                 if (blockState.getBlock() instanceof BankDownloadBlock) {
                     level.setBlock(worldPosition, blockState.setValue(BankDownloadBlock.CONNECTION_STATE, BankDownloadBlock.ConnectionState.CONNECTED), 3);
+                }
+                if(this.receivingEnabled)
+                {
+                    this.tickCounter = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get();
                 }
             }
         }
@@ -282,18 +291,20 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         ItemStack exampleStack = itemID.getStack();
         if(exampleStack == null)
             return;
+        boolean isMoney = MoneyItem.isMoney(itemID);
+        long centScaleFactor = itemBank.getCentScaleFactor();
         int stackSize = exampleStack.getMaxStackSize();
         long currentItemCount = countItems();
         long targetItemCount = targetAmount;
         if(currentItemCount >= targetItemCount)
             return;
         currentlyReceiving = true;
-        long amountToReceive = targetItemCount - currentItemCount;
+        long amountToReceive = (targetItemCount - currentItemCount);
 
-        long balance = itemBank.getBalance();
+        long balance = itemBank.getBalance() / centScaleFactor;
         if(balance > 0) {
             for (int i = 0; i < inventory.getContainerSize(); i++) {
-                balance = itemBank.getBalance();
+                balance = itemBank.getBalance() / centScaleFactor;
                 if(balance == 0 || amountToReceive <= 0)
                     break;
                 ItemStack stack = inventory.getItem(i);
@@ -306,7 +317,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
                         amountToReceiveFromStack = Math.min(amountToReceiveFromStack, balance);
 
-                        if (itemBank.withdraw(amountToReceiveFromStack) == Bank.Status.SUCCESS) {
+                        if (itemBank.withdraw(amountToReceiveFromStack * centScaleFactor) == Bank.Status.SUCCESS) {
                             stack.grow((int) amountToReceiveFromStack);
                             amountToReceive -= amountToReceiveFromStack;
                         }
@@ -316,7 +327,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                     if (amountToReceiveFromStack > 0 ) {
                         amountToReceiveFromStack = Math.min(amountToReceiveFromStack, balance);
 
-                        if (itemBank.withdraw(amountToReceiveFromStack) == Bank.Status.SUCCESS) {
+                        if (itemBank.withdraw(amountToReceiveFromStack * centScaleFactor) == Bank.Status.SUCCESS) {
                             inventory.setItem(i, new ItemStack(exampleStack.getItem(), (int) amountToReceiveFromStack));
                             amountToReceive -= amountToReceiveFromStack;
                         }

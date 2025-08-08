@@ -21,7 +21,6 @@ public class ItemInfoData implements INetworkPayloadEncoder {
     public final ItemID itemID;
     public final long totalSupply;
     public final long totalLocked;
-
     public final List<MinimalBankData> playerBanks;
 
 

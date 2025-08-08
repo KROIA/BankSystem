@@ -2,6 +2,8 @@ package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.screen.custom.ATMScreen;
 import net.minecraft.network.chat.Component;
 
@@ -37,10 +39,10 @@ public class BankSystemTextMessages {
     }
 
     private static final Component TRANSFERED_TO_USER = Component.translatable(prefix+"transferred_to_user");
-    public static String getTransferedMessage(long amount, String itemName, String receiver)
+    public static String getTransferedMessage(String amount, String itemName, String receiver)
     {
         String msg = TRANSFERED_TO_USER.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.AMOUNT, amount);
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.RECEIVER, receiver);
         return msg;
@@ -48,47 +50,47 @@ public class BankSystemTextMessages {
 
 
     private static final Component RECEIVED_FROM_USER = Component.translatable(prefix+"received_from_user");
-    public static String getReceivedMessage(long amount, String itemName, String sender)
+    public static String getReceivedMessage(String amount, String itemName, String sender)
     {
         String msg = RECEIVED_FROM_USER.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.AMOUNT, amount);
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.SENDER, sender);
         return msg;
     }
 
     private static final Component REMOVED_FROM_USER = Component.translatable(prefix+"removed_from_user");
-    public static String getRemovedMessage(long amount, String itemName, String user)
+    public static String getRemovedMessage(String amount, String itemName, String user)
     {
         String msg = REMOVED_FROM_USER.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.AMOUNT, amount);
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.USER, user);
         return msg;
     }
     private static final Component BANK_BALANCE_LOST = Component.translatable(prefix+"bank_balance_lost");
-    public static String getBankBalanceLostMessage(long amount, String itemName)
+    public static String getBankBalanceLostMessage(String amount, String itemName)
     {
         String msg = BANK_BALANCE_LOST.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.AMOUNT, amount);
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
 
     private static final Component ADDED_TO_USER = Component.translatable(prefix+"added_to_user");
-    public static String getAddedMessage(long amount, String itemName, String user)
+    public static String getAddedMessage(String amountStr, String itemName, String user)
     {
         String msg = ADDED_TO_USER.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.AMOUNT, amountStr);
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.USER, user);
         return msg;
     }
     private static final Component CANT_ADD_TO_USER = Component.translatable(prefix+"cant_add_to_user");
-    public static String getCantAddMessage(long amount, String itemName, String user, String reason)
+    public static String getCantAddMessage(String amountStr, String itemName, String user, String reason)
     {
         String msg = CANT_ADD_TO_USER.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.AMOUNT, amountStr);
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.USER, user);
         msg = replaceVariable(msg, Variables.REASON, reason);
@@ -96,34 +98,34 @@ public class BankSystemTextMessages {
     }
 
     private static final Component SET_BALANCE_TO = Component.translatable(prefix+"set_balance_to");
-    public static String getSetBalanceMessage(long amount, String itemName, String user)
+    public static String getSetBalanceMessage(String amountStr, String itemName, String user)
     {
         String msg = SET_BALANCE_TO.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.AMOUNT, amountStr);
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.USER, user);
         return msg;
     }
 
     private static final Component PROBLEM_WHILE_TRYING_SET_BALANCE = Component.translatable(prefix+"problem_while_trying_set_balance");
-    public static String getProblemWhileTryingSetBalanceMessage(String itemName, long currentBalance, long targetBalance, long lockedBalance, long newLockedBalance)
+    public static String getProblemWhileTryingSetBalanceMessage(String itemName, String currentBalance, String targetBalance, String lockedBalance, String newLockedBalance)
     {
         String msg = PROBLEM_WHILE_TRYING_SET_BALANCE.getString();
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(targetBalance));
-        msg = replaceVariable(msg, Variables.LOCKED_BALANCE, String.valueOf(lockedBalance));
-        msg = replaceVariable(msg, Variables.BALANCE, String.valueOf(currentBalance));
-        msg = replaceVariable(msg, Variables.LOCKED_BALANCE, String.valueOf(newLockedBalance));
+        msg = replaceVariable(msg, Variables.AMOUNT, targetBalance);
+        msg = replaceVariable(msg, Variables.LOCKED_BALANCE, lockedBalance);
+        msg = replaceVariable(msg, Variables.BALANCE, currentBalance);
+        msg = replaceVariable(msg, Variables.LOCKED_BALANCE, newLockedBalance);
         return msg;
     }
 
     private static final Component NOT_ENOUGH_TO_TRANSFER = Component.translatable(prefix+"not_enough_to_transfer");
-    public static String getNotEnoughMoneyForTransfer(String sender, String receiver, long amount, String itemName)
+    public static String getNotEnoughMoneyForTransfer(String sender, String receiver, String amount, String itemName)
     {
         String msg = NOT_ENOUGH_TO_TRANSFER.getString();
         msg = replaceVariable(msg, Variables.SENDER, sender);
         msg = replaceVariable(msg, Variables.RECEIVER, receiver);
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.AMOUNT, amount);
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
@@ -139,10 +141,10 @@ public class BankSystemTextMessages {
 
 
     private static final Component TRANSFER_FAILED = Component.translatable(prefix+"transfer_failed");
-    public static String getTransferFailedMessage(String sender, String receiver, long amount, String itemName, String reason)
+    public static String getTransferFailedMessage(String sender, String receiver, String amount, String itemName, String reason)
     {
         String msg = TRANSFER_FAILED.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.AMOUNT, amount);
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.SENDER, sender);
         msg = replaceVariable(msg, Variables.RECEIVER, receiver);
@@ -159,7 +161,7 @@ public class BankSystemTextMessages {
 
 
     private static final Component YOUR_BALANCE = Component.translatable(prefix+"your_balance");
-    public static String getYourBalanceMessage(long amount)
+    public static String getYourBalanceMessage(String amount)
     {
         String msg = YOUR_BALANCE.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
@@ -167,18 +169,20 @@ public class BankSystemTextMessages {
     }
 
     private static final Component BALANCE = Component.translatable(prefix+"balance");
-    public static String getBalanceMessage(long amount)
+    public static String getBalanceMessage(String amount)
     {
         String msg = BALANCE.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
         return msg;
     }
     private static final Component BALANCE_DETAILED = Component.translatable(prefix+"balance_detailed");
-    public static String getBalanceDetailedMessage(long balance, long lockedBalance)
+
+    // (1000 means 10.00 currency units)
+    public static String getBalanceDetailedMessage(String balance, String lockedBalance)
     {
         String msg = BALANCE_DETAILED.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(balance));
-        msg = replaceVariable(msg, Variables.LOCKED_BALANCE, String.valueOf(lockedBalance));
+        msg = replaceVariable(msg, Variables.AMOUNT, balance);
+        msg = replaceVariable(msg, Variables.LOCKED_BALANCE, lockedBalance);
         return msg;
     }
 
@@ -319,10 +323,10 @@ public class BankSystemTextMessages {
 
 
     private static final Component CIRCULATION = Component.translatable(prefix+"circulation");
-    public static String getCirculationMessage(long amount, String itemName)
+    public static String getCirculationMessage(String amount, String itemName)
     {
         String msg = CIRCULATION.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.AMOUNT, amount);
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
@@ -336,12 +340,6 @@ public class BankSystemTextMessages {
 
 
     private static final Component ITEMINFO_WIDGET_TOTAL_SUPLY = Component.translatable("gui."+BankSystemMod.MOD_ID+".iteminfo_widget.total_supply");
-    public static String getItemInfoWidgetTotalSuplyMessage(long suply)
-    {
-        String msg = ITEMINFO_WIDGET_TOTAL_SUPLY.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(suply));
-        return msg;
-    }
     public static String getItemInfoWidgetTotalSuplyMessage(String suply)
     {
         String msg = ITEMINFO_WIDGET_TOTAL_SUPLY.getString();
@@ -349,12 +347,6 @@ public class BankSystemTextMessages {
         return msg;
     }
     private static final Component ITEMINFO_WIDGET_TOTAL_LOCKED = Component.translatable("gui."+BankSystemMod.MOD_ID+".iteminfo_widget.total_locked");
-    public static String getItemInfoWidgetTotalLockedMessage(long locked)
-    {
-        String msg = ITEMINFO_WIDGET_TOTAL_LOCKED.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(locked));
-        return msg;
-    }
     public static String getItemInfoWidgetTotalLockedMessage(String locked)
     {
         String msg = ITEMINFO_WIDGET_TOTAL_LOCKED.getString();
@@ -390,7 +382,7 @@ public class BankSystemTextMessages {
     }
 
     private static final Component BANK_SETTING_START_BALANCE_SET = Component.translatable(prefix+"bank_setting_start_balance_set");
-    public static String getBankSettingStartBalanceSetMessage(long amount)
+    public static String getBankSettingStartBalanceSetMessage(String amount)
     {
         String msg = BANK_SETTING_START_BALANCE_SET.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
@@ -441,7 +433,8 @@ public class BankSystemTextMessages {
     public static String getATMSumTextMessage(long sum)
     {
         String msg = ATM_SUM_TEXT.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(sum));
+        String normalized = Bank.getFormattedAmount(sum, MoneyBank.getCentScaleFactorStatic());
+        msg = replaceVariable(msg, Variables.AMOUNT, normalized);
         return msg;
     }
 
@@ -449,7 +442,8 @@ public class BankSystemTextMessages {
     public static String getATMAvailableTextMessage(long sum)
     {
         String msg = ATM_AVAILABLE_TEXT.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(sum));
+        String normalized = Bank.getFormattedAmount(sum, MoneyBank.getCentScaleFactorStatic());
+        msg = replaceVariable(msg, Variables.AMOUNT, normalized);
         return msg;
     }
 
@@ -457,7 +451,8 @@ public class BankSystemTextMessages {
     public static String getATMNotEnoughBalance(long sum)
     {
         String msg = ATM_NOT_ENOUGH_BALANCE_TEXT.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(sum));
+        String normalized = Bank.getFormattedAmount(sum, MoneyBank.getCentScaleFactorStatic());
+        msg = replaceVariable(msg, Variables.AMOUNT, normalized);
         return msg;
     }
 

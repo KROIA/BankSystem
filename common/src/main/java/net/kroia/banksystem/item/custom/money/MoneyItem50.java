@@ -8,7 +8,7 @@ public class MoneyItem50 extends MoneyItem {
     }
 
     @Override
-    public int worth() {
-        return 50;
+    public long worth() {
+        return 5000;
     }
 }

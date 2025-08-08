@@ -16,14 +16,16 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
-public class Bank implements ServerSaveable, IBank {
+public abstract class Bank implements ServerSaveable, IBank {
     private static final Component WARNING = Component.translatable("message."+ BankSystemMod.MOD_ID+".bank.warning");
     private static final Component INFO = Component.translatable("message."+BankSystemMod.MOD_ID+".bank.info");
 
 
     private final BankUser owner;
+
     protected long balance;
     protected long lockedBalance;
+   // protected long centScaleFactor = 1;
     private ItemID itemID;
 
 
@@ -87,7 +89,11 @@ public class Bank implements ServerSaveable, IBank {
         long newBalance = balance - this.lockedBalance;
         if(newBalance < 0)
         {
-            warnUser(BankSystemTextMessages.getProblemWhileTryingSetBalanceMessage(getItemName(), this.balance, balance, lockedBalance, balance));
+            warnUser(BankSystemTextMessages.getProblemWhileTryingSetBalanceMessage(getItemName(),
+                    getFormattedAmount(this.balance, getCentScaleFactor()),
+                    getFormattedAmount(balance, getCentScaleFactor()),
+                    getFormattedAmount(lockedBalance, getCentScaleFactor()),
+                    getFormattedAmount(balance, getCentScaleFactor())));
 
             lockedBalance = balance;
             setBalanceInternal(0);
@@ -96,7 +102,7 @@ public class Bank implements ServerSaveable, IBank {
 
         setBalanceInternal(newBalance);
         if(owner.isBankNotificationEnabled())
-            notifyUser(BankSystemTextMessages.getSetBalanceMessage(getBalance(), getItemName(), owner.getPlayerName()));
+            notifyUser(BankSystemTextMessages.getSetBalanceMessage(getFormattedAmount(getBalance(), getCentScaleFactor()), getItemName(), owner.getPlayerName()));
         return true;
     }
 
@@ -118,6 +124,8 @@ public class Bank implements ServerSaveable, IBank {
     }
 
 
+
+
     @Override
     public Status deposit(long amount) {
         if(amount < 0)
@@ -126,7 +134,7 @@ public class Bank implements ServerSaveable, IBank {
             return Status.FAILED_OVERFLOW;
         addBalanceInternal(amount);
         if(owner.isBankNotificationEnabled())
-            notifyUser(BankSystemTextMessages.getAddedMessage(amount, getItemName(), owner.getPlayerName()));
+            notifyUser(BankSystemTextMessages.getAddedMessage(getFormattedAmount(amount,getCentScaleFactor()), getItemName(), owner.getPlayerName()));
         return Status.SUCCESS;
     }
 
@@ -145,7 +153,7 @@ public class Bank implements ServerSaveable, IBank {
         }
         addBalanceInternal(-amount);
         if(owner.isBankNotificationEnabled())
-            notifyUser(BankSystemTextMessages.getRemovedMessage(amount, getItemName(), owner.getPlayerName()));
+            notifyUser(BankSystemTextMessages.getRemovedMessage(getFormattedAmount(amount, getCentScaleFactor()), getItemName(), owner.getPlayerName()));
         return Status.SUCCESS;
     }
 
@@ -332,9 +340,12 @@ public class Bank implements ServerSaveable, IBank {
     @Override
     public String toStringNoOwner()
     {
-        StringBuilder content = new StringBuilder(getItemName() +BankSystemTextMessages.getBalanceMessage(balance+lockedBalance));
-        if(lockedBalance > 0)
-            content.append("(").append(BankSystemTextMessages.getBalanceDetailedMessage(balance, lockedBalance)).append(")");
+        StringBuilder content = new StringBuilder(getItemName() +BankSystemTextMessages.getBalanceMessage(getFormattedAmount(balance+lockedBalance, getCentScaleFactor())));
+        if(lockedBalance > 0) {
+            content.append("(").append(BankSystemTextMessages.getBalanceDetailedMessage(
+                    getFormattedAmount(balance, getCentScaleFactor()),
+                    getFormattedAmount(lockedBalance, getCentScaleFactor()))).append(")");
+        }
 
         return content.toString();
     }
@@ -343,6 +354,7 @@ public class Bank implements ServerSaveable, IBank {
     public boolean save(CompoundTag tag) {
         CompoundTag itemTag = new CompoundTag();
         itemID.save(itemTag);
+        //tag.putInt("centScaleFactor", (int)centScaleFactor); // Marker for backwards compatibility, to check if this value exists or not.
         tag.put("itemID", itemTag);
         tag.putLong("balance", balance);
         tag.putLong("lockedBalance", lockedBalance);
@@ -366,8 +378,14 @@ public class Bank implements ServerSaveable, IBank {
         }
 
 
-        setBalanceInternal(tag.getLong("balance"));
+        long balance = tag.getLong("balance");
         lockedBalance = tag.getLong("lockedBalance");
+
+        /*if(!tag.contains("centScaleFactor"))
+        {
+            centScaleFactor = (long)tag.getInt("centScaleFactor");
+        }*/
+        setBalanceInternal(balance);
         return balance >= 0 && lockedBalance >= 0;
     }
 
@@ -375,14 +393,15 @@ public class Bank implements ServerSaveable, IBank {
         setBalanceInternal(this.balance + balance);
     }
     private void setBalanceInternal(long balance) {
-        if(balance < 0)
-            dbg_invalid_balance(balance);
+        if(balance < 0) {
+            dbg_invalid_balance(balance, getCentScaleFactor());
+        }
 
         this.balance = balance;
     }
 
-    private static void dbg_invalid_balance(long balance) {
-        throw new IllegalArgumentException("Balance is negative: "+balance);
+    private static void dbg_invalid_balance(long balance, long centScaleFactor) {
+        throw new IllegalArgumentException("Balance is negative: "+getFormattedAmount(balance, centScaleFactor));
     }
 
     protected void notifyUser_transfer(long amount, IBank other) {
@@ -390,10 +409,10 @@ public class Bank implements ServerSaveable, IBank {
             return;
 
         if (owner.isBankNotificationEnabled())
-            notifyUser(BankSystemTextMessages.getTransferedMessage(amount, getItemName(), other.getPlayerName()));
+            notifyUser(BankSystemTextMessages.getTransferedMessage(getFormattedAmount(amount, getCentScaleFactor()), getItemName(), other.getPlayerName()));
         if (other instanceof  Bank casted){
             if (casted.owner.isBankNotificationEnabled())
-                casted.notifyUser(BankSystemTextMessages.getReceivedMessage(amount, getItemName(), owner.getPlayerName()));
+                casted.notifyUser(BankSystemTextMessages.getReceivedMessage(getFormattedAmount(amount,getCentScaleFactor()), getItemName(), owner.getPlayerName()));
         }
     }
 
@@ -407,7 +426,8 @@ public class Bank implements ServerSaveable, IBank {
 
 
 
-    public static String getNormalizedAmount(long amount)
+    // (1000 means 10.00 currency units)
+    public static String getNormalizedAmount(long amount, long centScaleFactor)
     {
         // depending on the exponent of the amount add a "k", "M", "G", "T", "P", "E", "Z", "Y"
         // 1.0e3 = 1k
@@ -418,8 +438,17 @@ public class Bank implements ServerSaveable, IBank {
         // 1.0e18 = 1E
         String exponents = "kMGTPEZY";
 
-        String amountString = String.valueOf(amount);
-        int exponent = (int)(Math.log((double)amount)/Math.log(10));
+        long wholeUnits = amount / centScaleFactor;
+        long cents = amount % centScaleFactor;
+        StringBuilder centsString = new StringBuilder(String.valueOf(cents)); // Ensure cents are always two digits
+        // Fill leading zeros if necessary
+        while (centsString.length() < Math.log10(centScaleFactor)) {
+            centsString.insert(0, "0");
+        }
+
+
+        String amountString = String.valueOf(wholeUnits);
+        int exponent = (int)(Math.log((double)wholeUnits)/Math.log(10));
         int exponent3 = exponent/3;
         if(exponent3 > 0)
         {
@@ -429,13 +458,18 @@ public class Bank implements ServerSaveable, IBank {
                 firstPart = "0";
             String secondPart = amountString.substring(modValue, modValue+2);
 
-            amountString = firstPart+"."+secondPart+exponents.charAt(exponent3-1);
+            amountString = firstPart+"."+secondPart + exponents.charAt(exponent3-1);
+        }
+        else
+        {
+            if(centScaleFactor > 1)
+                amountString = amountString + "." + centsString;
         }
         return amountString;
     }
-    public static String getFormattedAmount(long amount)
+    public static String getFormattedAmount(long amount, long centScaleFactor)
     {
-        String nr = String.valueOf(amount);
+        String nr = String.valueOf(amount/centScaleFactor);
         // add ' for every 3 digits
         StringBuilder sb = new StringBuilder();
         int i = 0;
@@ -446,7 +480,20 @@ public class Bank implements ServerSaveable, IBank {
             if(i % 3 == 0 && j > 0)
                 sb.append('\'');
         }
-        return sb.reverse().toString();
+        sb.reverse();
+        if(amount % centScaleFactor != 0)
+        {
+            sb.append('.');
+            int cents = (int)(amount % centScaleFactor);
+            // Add leading zeors if necessary
+            int exponent = (int)Math.log10(centScaleFactor);
+            while (cents < Math.pow(10, exponent - 2)) {
+                sb.append('0');
+                exponent--;
+            }
+            sb.append(cents);
+        }
+        return sb.toString();
     }
 
     private boolean willOverflow(long tryToAddAmount)

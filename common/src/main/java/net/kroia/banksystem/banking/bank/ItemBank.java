@@ -13,6 +13,13 @@ public class ItemBank extends Bank {
         super(owner, tag);
     }
 
+
+    @Override
+    public long getCentScaleFactor()
+    {
+        return 1L;
+    }
+
     @Override
     public boolean save(CompoundTag tag) {
         tag.putString("BankType", BankType.ITEM.name());

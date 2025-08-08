@@ -9,7 +9,6 @@ import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.layout.LayoutHorizontal;
@@ -43,6 +42,8 @@ public class ATMScreen extends BankSystemGuiScreen {
             itemView = new ItemView(this.itemStack);
             amountTextBox = new TextBox();
             amountTextBox.setAllowLetters(false);
+            amountTextBox.setAllowNumbers(true, false);
+            amountTextBox.setAllowNegativeNumbers(false);
 
             amountTextBox.setOnTextChanged((text -> {
                 // Send signal to root GuiElement
@@ -269,13 +270,13 @@ public class ATMScreen extends BankSystemGuiScreen {
             return;
         }
 
-        HashMap<String, Long> requestedBankNoteIDs = new HashMap<>();
+        HashMap<ItemID, Long> requestedBankNoteIDs = new HashMap<>();
 
         for (MoneyElement moneyElement : moneyElements) {
             long amount = moneyElement.getAmount();
             if(amount > 0)
             {
-                String itemID = ItemUtilities.getItemIDStr(moneyElement.getItemStack().getItem());
+                ItemID itemID = new ItemID(moneyElement.getItemStack());
                 requestedBankNoteIDs.put(itemID, amount);
             }
         }
@@ -301,10 +302,8 @@ public class ATMScreen extends BankSystemGuiScreen {
             long amount = moneyElement.getAmount();
             ItemStack itemStack = moneyElement.getItemStack();
             MoneyItem moneyItem = (MoneyItem) itemStack.getItem();
-            if (moneyItem != null) {
-                amount *= moneyItem.worth(); // Assuming getValue() returns the value of the money item
-                sum += amount;
-            }
+            amount *= moneyItem.worth(); // Assuming getValue() returns the value of the money item
+            sum += amount;
         }
         balanceView.updateSum(sum);
         balanceView.enableWarning(currentBalanceWeekVar < sum);

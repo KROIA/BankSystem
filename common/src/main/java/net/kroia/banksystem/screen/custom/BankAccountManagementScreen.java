@@ -196,7 +196,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                 MinimalBankData bankData = pair.getSecond();
                 if(item == null)
                 {
-                    item = new BankAccountManagementItem(pair.getFirst(), playerName);
+                    item = new BankAccountManagementItem(pair.getFirst(), playerName, bankData.centScaleFactor);
                     item.setBalance(bankData.balance);
                     bankAccountManagementItems.put(pair.getFirst(), item);
                     bankElementListView.addChild(item);
