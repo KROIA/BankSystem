@@ -335,10 +335,44 @@ public abstract class Bank implements ServerSaveable, IBank {
         return Status.SUCCESS;
     }
 
+    @Override
     public void unlockAll()
     {
         addBalanceInternal(lockedBalance);
         lockedBalance = 0;
+    }
+
+    @Override
+    public long convertToRawAmount(float realAmount)
+    {
+        return (long)(realAmount * getItemFractionScaleFactor());
+    }
+
+    @Override
+    public float convertToRealAmount(long rawAmount)
+    {
+        return (float)rawAmount / getItemFractionScaleFactor();
+    }
+
+    @Override
+    public String getNormalizedAmount(float realAmount)
+    {
+        return getNormalizedAmount(realAmount, getItemFractionScaleFactor());
+    }
+    @Override
+    public String getNormalizedAmount(long rawAmount)
+    {
+        return getNormalizedAmount(rawAmount, getItemFractionScaleFactor());
+    }
+    @Override
+    public String getFormattedAmount(float realAmount)
+    {
+        return getFormattedAmount(realAmount, getItemFractionScaleFactor());
+    }
+    @Override
+    public String getFormattedAmount(long rawAmount)
+    {
+        return getFormattedAmount(rawAmount, getItemFractionScaleFactor());
     }
 
     @Override
@@ -433,6 +467,7 @@ public abstract class Bank implements ServerSaveable, IBank {
     protected void notifyUser(String msg) {
         ServerPlayerUtilities.printToClientConsole(getPlayerUUID(), INFO.getString()+msg);
     }
+
 
 
 

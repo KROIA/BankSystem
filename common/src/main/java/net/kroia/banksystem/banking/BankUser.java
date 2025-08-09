@@ -88,12 +88,13 @@ public class BankUser implements ServerSaveable, IBankUser {
         return userName;
     }
     @Override
-    public IBank createMoneyBank(long startBalance)
+    public IBank createMoneyBank(float startBalance)
     {
         IBank bank = getBank(MoneyBank.ITEM_ID);
         if(bank != null)
             return bank;
-        MoneyBank moneyBank = new MoneyBank(this, startBalance);
+        long startBalanceRaw = MoneyBank.convertToRawAmountStatic(startBalance);
+        MoneyBank moneyBank = new MoneyBank(this, startBalanceRaw);
         bankMap.put(MoneyBank.ITEM_ID, moneyBank);
         return moneyBank;
     }

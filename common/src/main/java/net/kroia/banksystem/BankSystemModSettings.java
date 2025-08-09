@@ -46,7 +46,7 @@ public final class BankSystemModSettings extends ModSettings {
     }
     public static final class Player extends SettingsGroup
     {
-        public final Setting<Long> STARTING_BALANCE = registerSetting("STARTING_BALANCE", 0L, Long.class); // Starting balance for new players
+        public final Setting<Float> STARTING_BALANCE = registerSetting("STARTING_BALANCE", 0.f, Float.class); // Starting balance for new players
 
         public Player() { super("Player"); }
     }

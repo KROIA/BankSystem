@@ -11,8 +11,9 @@ import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.*;
+import net.kroia.modutilities.gui.elements.base.ListView;
+import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.kroia.modutilities.gui.layout.LayoutHorizontal;
-import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
@@ -58,6 +59,7 @@ public class ATMScreen extends BankSystemGuiScreen {
             addChild(amountTextBox);
 
             setAmount(0); // Initialize with 0 amount
+            setHeight(20);
         }
 
         @Override
@@ -109,7 +111,9 @@ public class ATMScreen extends BankSystemGuiScreen {
             super();
             coinItemView = new ItemView(BankSystemItems.MONEY.get().getDefaultInstance());
             balanceLabel = new Label();
+            balanceLabel.setAlignment(Alignment.CENTER);
             sumLabel = new Label();
+            sumLabel.setAlignment(Alignment.CENTER);
 
             layout = new LayoutHorizontal();
             this.setLayout(layout);
@@ -129,8 +133,8 @@ public class ATMScreen extends BankSystemGuiScreen {
         @Override
         protected void layoutChanged() {
             coinItemView.setBounds(0, 0, this.getHeight(), this.getHeight());
-            balanceLabel.setBounds(coinItemView.getWidth(), 0, this.getWidth()/2 - coinItemView.getWidth(), this.getHeight());
-            sumLabel.setBounds(balanceLabel.getX() + balanceLabel.getWidth(), 0, this.getWidth()/2 - coinItemView.getWidth(), this.getHeight());
+            balanceLabel.setBounds(coinItemView.getWidth(), 0, (this.getWidth()-coinItemView.getWidth())/2, this.getHeight());
+            sumLabel.setBounds(balanceLabel.getRight(), 0, balanceLabel.getWidth(), this.getHeight());
         }
 
         public void updateBalance(long amount)
@@ -161,8 +165,8 @@ public class ATMScreen extends BankSystemGuiScreen {
     private final ArrayList<MoneyElement> moneyElements = new ArrayList<>();
     private final Button receiveButton;
 
-    private final LayoutVertical layout;
     private final Frame rootElement;
+    private final ListView moneyListView;
 
     private static ATMScreen instance = null;
     private static long lastTickCount = 0;
@@ -173,28 +177,37 @@ public class ATMScreen extends BankSystemGuiScreen {
     {
         super(TITLE);
         //super(pMenu, pPlayerInventory, pTitle);
-
-        layout = new LayoutVertical();
-        layout.stretchX = true;
-        layout.stretchY = true;
         rootElement = new Frame();
-        rootElement.setLayout(layout);
         addElement(rootElement);
 
+        LayoutGrid layout = new LayoutGrid();
+        layout.stretchX = true;
+        layout.columns = 2;
+        layout.padding = 5;
+        layout.spacing = 5;
+        moneyListView = new VerticalListView();
+        moneyListView.setLayout(layout);
+
+
+
         balanceView = new BalanceView();
-        rootElement.addChild(balanceView);
+        balanceView.setHeight(20);
+
 
         ArrayList<ItemStack> moneyItems = BankSystemItems.getMoneyItems();
         for(ItemStack moneyItem : moneyItems)
         {
             MoneyElement moneyElement = new MoneyElement(moneyItem);
             moneyElements.add(moneyElement);
-            rootElement.addChild(moneyElement);
+            moneyListView.addChild(moneyElement);
         }
 
         receiveButton = new Button(RECEIVE_BUTTON_TEXT.getString(), this::onReceiveButtonPressed);
-        rootElement.addChild(receiveButton);
+        receiveButton.setHeight(20);
 
+        rootElement.addChild(balanceView);
+        rootElement.addChild(moneyListView);
+        rootElement.addChild(receiveButton);
 
         lastTickCount = System.currentTimeMillis();
         TickEvent.PLAYER_POST.register(ATMScreen::onClientTick);
@@ -222,9 +235,19 @@ public class ATMScreen extends BankSystemGuiScreen {
         int width = this.width;
         int height = this.height;
 
-        int padding = 20;
+        int padding = 10;
+
 
         rootElement.setBounds(padding, padding, width-2*padding, height-2*padding);
+        padding = 5;
+        width = rootElement.getWidth() - 2*padding;
+        height = rootElement.getHeight()-2*padding;
+
+        balanceView.setBounds(padding, padding, width, 20);
+        receiveButton.setBounds(padding, height+padding-20, width, 20);
+        moneyListView.setBounds(padding, balanceView.getBottom() + padding, width, receiveButton.getTop() - balanceView.getBottom() - padding*2);
+
+        //receiveButton.setBounds(rootElement.getLeft(), rootElement.getBottom()+5,rootElement.getWidth(), 20);
     }
 
 

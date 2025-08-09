@@ -68,7 +68,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     }
 
     @Override
-    public IBankUser createUser(UUID userUUID, String userName, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney)
+    public IBankUser createUser(UUID userUUID, String userName, ArrayList<ItemID> itemIDs, boolean createMoneyBank, float startMoney)
     {
         BankUser user = userMap.get(userUUID);
         if(user != null)
@@ -85,7 +85,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     }
 
     @Override
-    public IBankUser createUser(ServerPlayer player, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney)
+    public IBankUser createUser(ServerPlayer player, ArrayList<ItemID> itemIDs, boolean createMoneyBank, float startMoney)
     {
         String userName = player.getName().getString();
         UUID uuid = player.getUUID();

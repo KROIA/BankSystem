@@ -29,6 +29,17 @@ public class MoneyBank extends Bank {
         return 100;
     }
 
+    public static long convertToRawAmountStatic(float realAmount)
+    {
+        return (long)(realAmount * getItemFractionScaleFactorStatic());
+    }
+
+
+    public static float convertToRealAmountStatic(long rawAmount)
+    {
+        return (float)rawAmount / getItemFractionScaleFactorStatic();
+    }
+
     public MoneyBank(BankUser owner, long balance) {
         super(owner, ITEM_ID, balance);
     }

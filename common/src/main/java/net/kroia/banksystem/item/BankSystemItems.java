@@ -49,6 +49,11 @@ public class BankSystemItems {
     public static final Supplier<Item> ATM_SOFTWARE = registerItem(ATMSoftware.NAME, ATMSoftware::new);
 
     // Money
+    public static final Supplier<Item> MONEY_CENT1     = registerItem(MoneyItemCent1.NAME, MoneyItemCent1::new);
+    public static final Supplier<Item> MONEY_CENT5     = registerItem(MoneyItemCent5.NAME, MoneyItemCent5::new);
+    public static final Supplier<Item> MONEY_CENT10     = registerItem(MoneyItemCent10.NAME, MoneyItemCent10::new);
+    public static final Supplier<Item> MONEY_CENT20     = registerItem(MoneyItemCent20.NAME, MoneyItemCent20::new);
+    public static final Supplier<Item> MONEY_CENT50     = registerItem(MoneyItemCent50.NAME, MoneyItemCent50::new);
     public static final Supplier<Item> MONEY     = registerItem(MoneyItem.NAME, MoneyItem::new);
     public static final Supplier<Item> MONEY5    = registerItem(MoneyItem5.NAME, MoneyItem5::new);
     public static final Supplier<Item> MONEY10   = registerItem(MoneyItem10.NAME, MoneyItem10::new);
@@ -63,6 +68,11 @@ public class BankSystemItems {
 
     public static ArrayList<ItemStack> getMoneyItems() {
         ArrayList<ItemStack> moneyItems = new ArrayList<>();
+        moneyItems.add(new ItemStack(MONEY_CENT1.get()));
+        moneyItems.add(new ItemStack(MONEY_CENT5.get()));
+        moneyItems.add(new ItemStack(MONEY_CENT10.get()));
+        moneyItems.add(new ItemStack(MONEY_CENT20.get()));
+        moneyItems.add(new ItemStack(MONEY_CENT50.get()));
         moneyItems.add(new ItemStack(MONEY.get()));
         moneyItems.add(new ItemStack(MONEY5.get()));
         moneyItems.add(new ItemStack(MONEY10.get()));

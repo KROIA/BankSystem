@@ -237,6 +237,89 @@ public interface IBank {
      */
     void unlockAll();
 
+
+    /**
+     * Converts the given amount to the raw amount the bank uses internally as "balance".
+     * Items can be scaled by a factor. The bank does not store item counts as float/double values,
+     * instead a fixed point representation is used.
+     * @param realAmount The real amount is that amount a user sees in the bank GUI.
+     * @return The raw amount that the bank uses internally.
+     */
+    long convertToRawAmount(float realAmount);
+
+    /**
+     * Converts the given raw amount to the real amount the user sees in the bank GUI.
+     * Items can be scaled by a factor. The bank does not store item counts as float/double values,
+     * instead a fixed point representation is used.
+     * @param rawAmount The raw amount is that amount the bank uses internally as "balance".
+     * @return The real amount that the user sees in the bank GUI.
+     */
+    float convertToRealAmount(long rawAmount);
+
+
+
+    /**
+     * Normalizes the given amount to a string representation.
+     * This is used for display purposes in the bank GUI.
+     * The amount is normalized to a fixed point representation.
+     *
+     *  depending on the exponent of the amount add a "k", "M", "G", "T", "P", "E", "Z", "Y"
+     *  1.0e3 = 1k
+     *  1.0e6 = 1M
+     *  1.0e9 = 1G
+     *  1.0e12 = 1T
+     *  1.0e15 = 1P
+     *  1.0e18 = 1E
+     *
+     * @param realAmount The real amount to normalize.
+     * @return A string representation of the normalized amount.
+     */
+    String getNormalizedAmount(float realAmount);
+
+    /**
+     * Normalizes the given raw amount to a string representation.
+     * This is used for display purposes in the bank GUI.
+     * The amount is normalized to a fixed point representation.
+     *
+     *  depending on the exponent of the amount add a "k", "M", "G", "T", "P", "E", "Z", "Y"
+     *  1.0e3 = 1k
+     *  1.0e6 = 1M
+     *  1.0e9 = 1G
+     *  1.0e12 = 1T
+     *  1.0e15 = 1P
+     *  1.0e18 = 1E
+     *
+     * @param rawAmount The raw amount to normalize.
+     * @return A string representation of the normalized amount.
+     */
+    String getNormalizedAmount(long rawAmount);
+
+
+    /**
+     * Formats the given amount to a string representation.
+     * This is used for display purposes in the bank GUI.
+     * The amount is formatted to a fixed point representation.
+     *
+     * A value of 15649864 will be formatted to "15'649'864"
+     *
+     * @param realAmount The real amount to format.
+     * @return A string representation of the formatted amount.
+     */
+    String getFormattedAmount(float realAmount);
+
+    /**
+     * Formats the given raw amount to a string representation.
+     * This is used for display purposes in the bank GUI.
+     * The amount is formatted to a fixed point representation.
+     *
+     * A value of 15649864 will be formatted to "15'649'864"
+     *
+     * @param rawAmount The raw amount to format.
+     * @return A string representation of the formatted amount.
+     */
+    String getFormattedAmount(long rawAmount);
+
+
     /**
      * Stringifies bank data.
      * @return A string representation of the bank data, including the owner and item ID.

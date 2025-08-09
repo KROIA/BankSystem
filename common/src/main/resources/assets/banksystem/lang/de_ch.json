@@ -26,6 +26,11 @@
   "item.banksystem.money200": "200 Fr.",
   "item.banksystem.money500": "500 Fr.",
   "item.banksystem.money1000": "1000 Fr.",
+  "item.banksystem.money_cent50": "50 Rp.",
+  "item.banksystem.money_cent20": "20 Rp.",
+  "item.banksystem.money_cent10": "10 Rp.",
+  "item.banksystem.money_cent5": "5 Rp.",
+  "item.banksystem.money_cent1": "1 Rp.",
 
   "gui.banksystem.bank_terminal_screen.remove_empty_banks_button": "Leere Banken entferne",
   "gui.banksystem.bank_terminal_screen.send_items_to_bank_button": "Schigg Items zu dä Bank",

@@ -26,6 +26,11 @@
   "item.banksystem.money200": "200 Euro",
   "item.banksystem.money500": "500 Euro",
   "item.banksystem.money1000": "1000 Euro",
+  "item.banksystem.money_cent50": "50 Cent",
+  "item.banksystem.money_cent20": "20 Cent",
+  "item.banksystem.money_cent10": "10 Cent",
+  "item.banksystem.money_cent5": "5 Cent",
+  "item.banksystem.money_cent1": "1 Cent",
 
   "gui.banksystem.bank_terminal_screen.remove_empty_banks_button": "Leere Banken entfernen",
   "gui.banksystem.bank_terminal_screen.send_items_to_bank_button": "Sende Items zur Bank",

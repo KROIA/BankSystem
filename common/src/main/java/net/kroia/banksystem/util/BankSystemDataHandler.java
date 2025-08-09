@@ -26,9 +26,12 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         super(JsonFormat.PRETTY, NbtFormat.UNCOMPRESSED, Paths.get("Finance/BankSystem"));
         bankDataLoaded = false;
         globalSettingsLoaded = false;
+        setLogger(this::error, this::error, this::info, this::warn);
     }
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BankSystemDataHandler.BACKEND_INSTANCES = backend;
+
+
     }
 
     public static boolean isGlobalSettingsLoaded() {
@@ -68,15 +71,14 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     @Override
     public boolean saveAll()
     {
-        info("Saving BankSystem Mod data...");
+        debug("Saving BankSystem Mod data...");
         boolean success = true;
         success &= save_globalSettings();
         success &= save_bank();
 
 
         if(success) {
-            info("BankSystem Mod data saved successfully.");
-
+            debug("BankSystem Mod data saved successfully.");
         }
         else
             error("Failed to save BankSystem Mod data.");
@@ -86,7 +88,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     @Override
     public boolean loadAll()
     {
-        info("Loading BankSystem Mod data...");
+        debug("Loading BankSystem Mod data...");
         boolean success = true;
         Path settingsFilePath = getGlobalSettingsFilePath();
         if(!fileExists(settingsFilePath)) {
@@ -99,7 +101,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
 
         if(success) {
-            info("BankSystem Mod data loaded successfully.");
+            debug("BankSystem Mod data loaded successfully.");
         }
         else
             error("Failed to load BankSystem Mod data.");

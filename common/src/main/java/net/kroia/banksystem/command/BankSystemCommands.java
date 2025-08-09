@@ -2,6 +2,7 @@ package net.kroia.banksystem.command;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -54,14 +55,14 @@ public class BankSystemCommands {
                         })
                         .then(Commands.literal("add")
                                 .requires(source -> source.hasPermission(2)) // Admin-only for adding money
-                                .then(Commands.argument("amount", IntegerArgumentType.integer(1))
+                                .then(Commands.argument("amount", FloatArgumentType.floatArg(0, Long.MAX_VALUE))
                                         .executes(context -> {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
 
                                             // Get arguments
                                             String username = player.getName().getString();
-                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                            float amount = FloatArgumentType.getFloat(context, "amount");
 
                                             // Execute the command on the server_sender
                                             return executeAddMoney(player, username, amount);
@@ -75,14 +76,14 @@ public class BankSystemCommands {
                                                     }
                                                     return builder.buildFuture();
                                                 })
-                                                .then(Commands.argument("amount", IntegerArgumentType.integer(1))
+                                                .then(Commands.argument("amount", FloatArgumentType.floatArg(0, Long.MAX_VALUE))
                                                         .executes(context -> {
                                                             CommandSourceStack source = context.getSource();
                                                             ServerPlayer player = source.getPlayerOrException();
 
                                                             // Get arguments
                                                             String username = StringArgumentType.getString(context, "username");
-                                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                                            float amount = FloatArgumentType.getFloat(context, "amount");
 
                                                             // Execute the command on the server_sender
                                                             return executeAddMoney(player, username, amount);
@@ -92,14 +93,14 @@ public class BankSystemCommands {
                         )
                         .then(Commands.literal("set")
                                 .requires(source -> source.hasPermission(2)) // Admin-only for adding money
-                                .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                .then(Commands.argument("amount", FloatArgumentType.floatArg(0, Long.MAX_VALUE))
                                         .executes(context -> {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
 
                                             // Get arguments
                                             String username = player.getName().getString();
-                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                            float amount = FloatArgumentType.getFloat(context, "amount");
 
                                             // Execute the command on the server_sender
                                             return executeSetMoney(player, username, amount);
@@ -113,14 +114,14 @@ public class BankSystemCommands {
                                                     }
                                                     return builder.buildFuture();
                                                 })
-                                                .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                                .then(Commands.argument("amount", FloatArgumentType.floatArg(0, Long.MAX_VALUE))
                                                         .executes(context -> {
                                                             CommandSourceStack source = context.getSource();
                                                             ServerPlayer player = source.getPlayerOrException();
 
                                                             // Get arguments
                                                             String username = StringArgumentType.getString(context, "username");
-                                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                                            float amount = FloatArgumentType.getFloat(context, "amount");
 
                                                             // Execute the command on the server_sender
                                                             return executeSetMoney(player, username, amount);
@@ -130,14 +131,14 @@ public class BankSystemCommands {
                         )
                         .then(Commands.literal("remove")
                                 .requires(source -> source.hasPermission(2)) // Admin-only for adding money
-                                .then(Commands.argument("amount", IntegerArgumentType.integer(1))
+                                .then(Commands.argument("amount", FloatArgumentType.floatArg(0, Long.MAX_VALUE))
                                         .executes(context -> {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
 
                                             // Get arguments
                                             String username = player.getName().getString();
-                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                            float amount = FloatArgumentType.getFloat(context, "amount");
 
                                             // Execute the command on the server_sender
                                             return executeRemoveMoney(player, username, amount);
@@ -151,14 +152,14 @@ public class BankSystemCommands {
                                                     }
                                                     return builder.buildFuture();
                                                 })
-                                                .then(Commands.argument("amount", IntegerArgumentType.integer(1))
+                                                .then(Commands.argument("amount", FloatArgumentType.floatArg(0, Long.MAX_VALUE))
                                                         .executes(context -> {
                                                             CommandSourceStack source = context.getSource();
                                                             ServerPlayer player = source.getPlayerOrException();
 
                                                             // Get arguments
                                                             String username = StringArgumentType.getString(context, "username");
-                                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                                            float amount = FloatArgumentType.getFloat(context, "amount");
 
                                                             // Execute the command on the server_sender
                                                             return executeRemoveMoney(player, username, amount);
@@ -176,7 +177,7 @@ public class BankSystemCommands {
                                                     }
                                                     return builder.buildFuture();
                                                 })
-                                                .then(Commands.argument("amount", IntegerArgumentType.integer(1))
+                                                .then(Commands.argument("amount", FloatArgumentType.floatArg(0, Long.MAX_VALUE))
                                                         .executes(context -> {
                                                             CommandSourceStack source = context.getSource();
                                                             ServerPlayer player = source.getPlayerOrException();
@@ -184,7 +185,7 @@ public class BankSystemCommands {
                                                             // Get arguments
                                                             String fromPlayer = player.getName().getString();
                                                             String toPlayer = StringArgumentType.getString(context, "username");
-                                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                                            float amount = FloatArgumentType.getFloat(context, "amount");
 
                                                             // Execute the command on the server_sender
                                                             return executeSendMoney(player,fromPlayer, toPlayer, amount);
@@ -196,7 +197,7 @@ public class BankSystemCommands {
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-                                    long circulation = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyCirculation();
+                                    float circulation = MoneyBank.convertToRealAmountStatic(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyCirculation());
                                     ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getCirculationMessage(Bank.getFormattedAmount(circulation, MoneyBank.getItemFractionScaleFactorStatic()), MoneyItem.getName()));
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -345,14 +346,14 @@ public class BankSystemCommands {
                                                                     }
                                                                     return builder.buildFuture();
                                                                 })*/
-                                                                .then(Commands.argument("balance", LongArgumentType.longArg(0))
+                                                                .then(Commands.argument("balance", FloatArgumentType.floatArg(0, Long.MAX_VALUE))
                                                                         .executes(context -> {
                                                                             CommandSourceStack source = context.getSource();
                                                                             ServerPlayer player = source.getPlayerOrException();
 
                                                                             // Get arguments
                                                                             String itemID = StringArgumentType.getString(context, "itemID");
-                                                                            long balance = LongArgumentType.getLong(context, "balance");
+                                                                            float balance = FloatArgumentType.getFloat(context, "balance");
                                                                             String username = StringArgumentType.getString(context, "username");
 
 
@@ -515,15 +516,15 @@ public class BankSystemCommands {
                         )
                         .then(Commands.literal("setStartingBalance")
                                 .requires(source -> source.hasPermission(2))
-                                .then(Commands.argument("amount", LongArgumentType.longArg(0))
+                                .then(Commands.argument("amount", FloatArgumentType.floatArg(0))
                                         .executes(context -> {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
 
                                             // Get arguments
-                                            long amount = LongArgumentType.getLong(context, "amount");
+                                            float amount = FloatArgumentType.getFloat(context, "amount");
                                             BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.set(amount);
-                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(Bank.getFormattedAmount(amount, 1)));
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(Bank.getFormattedAmount(amount, MoneyBank.getItemFractionScaleFactorStatic())));
                                             return Command.SINGLE_SUCCESS;
                                         })
                                 )
@@ -618,14 +619,14 @@ public class BankSystemCommands {
     }
 
 
-    private static int executeAddMoney(ServerPlayer executor, String username, int amount) {
+    private static int executeAddMoney(ServerPlayer executor, String username, float amount) {
         Bank bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyBank(username);
         if(bank == null)
         {
             ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getBankNotFoundMessage(username, MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;
         }
-        Bank.Status status = bank.deposit(amount);
+        Bank.Status status = bank.deposit(bank.convertToRawAmount(amount));
         if(status != Bank.Status.SUCCESS){
             ServerPlayerUtilities.printToClientConsole(executor,
                     BankSystemTextMessages.getCantAddMessage(
@@ -636,19 +637,19 @@ public class BankSystemCommands {
         }
         return Command.SINGLE_SUCCESS;
     }
-    private static int executeSetMoney(ServerPlayer executor, String username, int amount) {
+    private static int executeSetMoney(ServerPlayer executor, String username, float amount) {
         Bank bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyBank(username);
         if(bank == null)
         {
             ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getBankNotFoundMessage(username, MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;
         }
-        bank.setBalance(amount);
+        bank.setBalance(bank.convertToRawAmount(amount));
         if(!executor.getName().getString().equals(username))
             ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getSetBalanceMessage(Bank.getFormattedAmount(amount, bank.getItemFractionScaleFactor()), MoneyItem.getName(), username));
         return Command.SINGLE_SUCCESS;
     }
-    private static int executeRemoveMoney(ServerPlayer executor, String username, int amount) {
+    private static int executeRemoveMoney(ServerPlayer executor, String username, float amount) {
         Bank bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyBank(username);
         if(bank == null)
         {
@@ -656,7 +657,7 @@ public class BankSystemCommands {
             return Command.SINGLE_SUCCESS;
         }
         if(bank.getBalance() >= amount) {
-            bank.withdraw(amount);
+            bank.withdraw(bank.convertToRawAmount(amount));
         }
         else {
             ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getNotEnoughInAccountMessage(username, MoneyItem.getName()));
@@ -664,7 +665,7 @@ public class BankSystemCommands {
         return Command.SINGLE_SUCCESS;
     }
 
-    private static int executeSendMoney(ServerPlayer executor, String fromUser, String toUser, int amount) {
+    private static int executeSendMoney(ServerPlayer executor, String fromUser, String toUser, float amount) {
         Bank fromBank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyBank(fromUser);
         Bank toBank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyBank(toUser);
 
@@ -683,7 +684,7 @@ public class BankSystemCommands {
             ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getTransferToSameAccountMessage(MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;
         }
-        Bank.Status status = fromBank.transfer(amount, toBank);
+        Bank.Status status = fromBank.transfer(fromBank.convertToRawAmount(amount), toBank);
         if(status != Bank.Status.SUCCESS) {
             if (fromBank.getBalance() < amount)
                ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getNotEnoughMoneyForTransfer(fromUser, toUser, Bank.getFormattedAmount(amount,fromBank.getItemFractionScaleFactor()), MoneyItem.getName()));
@@ -740,7 +741,7 @@ public class BankSystemCommands {
             ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankAlreadyExistsMessage(player.getName().getString(), itemID.getName())+"\n"+bank.toStringNoOwner());
         return Command.SINGLE_SUCCESS;
     }
-    private static int bank_setBalance(ServerPlayer player,String targetPlayer, ItemID itemID, long balance) {
+    private static int bank_setBalance(ServerPlayer player,String targetPlayer, ItemID itemID, float balance) {
         //String orgItemID = MoneyBank.compatibilityMoneyItemIDConvert(itemID);
         //itemID = ItemUtilities.getNormalizedItemID(orgItemID);
         if(itemID == null)
@@ -758,7 +759,7 @@ public class BankSystemCommands {
             ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID.getName()));
             return Command.SINGLE_SUCCESS;
         }
-        bank.setBalance(balance);
+        bank.setBalance(bank.convertToRawAmount(balance));
         //ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getSetBalanceMessage(balance, player.getName().getString(), itemID) + "\n"+bank.toStringNoOwner());
         return Command.SINGLE_SUCCESS;
     }

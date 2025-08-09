@@ -58,7 +58,7 @@ public interface IServerBankManager {
      * @param startMoney Initial amount of money to start with in the money bank.
      * @return The created bank user.
      */
-    IBankUser createUser(UUID userUUID, String userName, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney);
+    IBankUser createUser(UUID userUUID, String userName, ArrayList<ItemID> itemIDs, boolean createMoneyBank, float startMoney);
 
     /**
      * Creates a new bank user for the given player.
@@ -69,7 +69,7 @@ public interface IServerBankManager {
      * @param startMoney Initial amount of money to start with in the money bank.
      * @return The created bank user.
      */
-    IBankUser createUser(ServerPlayer player, ArrayList<ItemID> itemIDs, boolean createMoneyBank, long startMoney);
+    IBankUser createUser(ServerPlayer player, ArrayList<ItemID> itemIDs, boolean createMoneyBank, float startMoney);
 
 
     /**

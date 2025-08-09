@@ -58,7 +58,7 @@ public interface IBankUser {
      * @param startBalance The starting balance for the new money bank.
      * @return The created money bank.
      */
-    IBank createMoneyBank(long startBalance);
+    IBank createMoneyBank(float startBalance);
 
     /**
      * Creates a new item bank for this user with the given item ID and starting balance.
