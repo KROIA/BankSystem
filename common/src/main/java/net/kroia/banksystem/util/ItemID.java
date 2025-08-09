@@ -29,6 +29,11 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
         this.stack = stack.copy(); // Ensure immutability
         this.stack.setCount(1); // Ensure count is 1
     }
+
+    public static ItemID of(ItemStack stack)
+    {
+        return new ItemID(stack);
+    }
     public ItemID(CompoundTag tag) {
         load(tag);
     }

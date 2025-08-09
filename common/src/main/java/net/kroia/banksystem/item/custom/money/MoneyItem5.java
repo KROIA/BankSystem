@@ -8,6 +8,11 @@ public class MoneyItem5 extends MoneyItem{
     }
 
     @Override
+    public boolean isBankNote()
+    {
+        return true;
+    }
+
     public long worth() {
         return 500;
     }

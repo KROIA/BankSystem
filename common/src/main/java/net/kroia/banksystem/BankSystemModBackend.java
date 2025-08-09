@@ -85,6 +85,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemGuiScreen.setBackend(INSTANCES);
         BankSystemGuiContainerScreen.setBackend(INSTANCES);
         BankSystemGuiElement.setBackend(INSTANCES);
+        BankSystemEntities.registerRenderers();
     }
 
     // Called from the server side
