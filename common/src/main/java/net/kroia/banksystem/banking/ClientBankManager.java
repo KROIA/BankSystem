@@ -78,4 +78,10 @@ public class ClientBankManager implements IClientBankManager {
         UUID thisPlayer = Minecraft.getInstance().player.getUUID();
         BankSystemNetworking.REMOVE_EMPTY_BANKS_REQUEST.sendRequestToServer(thisPlayer, callback);
     }
+
+    @Override
+    public void requestItemFractionScaleFactor(ItemID itemID, Consumer<Integer> callback)
+    {
+        BankSystemNetworking.ITEM_FRACTION_SCALE_FACTOR_REQUEST.sendRequestToServer(itemID, callback);
+    }
 }

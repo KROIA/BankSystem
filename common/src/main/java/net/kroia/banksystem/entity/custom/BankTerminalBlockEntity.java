@@ -200,7 +200,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             if(bankAccount.withdraw(addedAmount*100) != Bank.Status.SUCCESS)
                             {
                                 // error
-                                error("Failed to withdraw " + Bank.getNormalizedAmount(addedAmount,bankAccount.getCentScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
+                                error("Failed to withdraw " + Bank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
                                 inventory.removeItem(itemID, addedAmount);
                                 cancelTask(itemID);
                                 continue;
@@ -225,7 +225,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             if(bankAccount.withdraw(addedAmount) != Bank.Status.SUCCESS)
                             {
                                 // error
-                                error("Failed to withdraw " + Bank.getNormalizedAmount(addedAmount,bankAccount.getCentScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
+                                error("Failed to withdraw " + Bank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
                                 inventory.removeItem(itemID, addedAmount);
                                 cancelTask(itemID);
                                 continue;

@@ -22,6 +22,7 @@ public class BankSystemNetworking extends NetworkManager {
     public static AllowItemRequest ALLOW_ITEM_REQUEST = (AllowItemRequest) AsynchronousRequestResponseSystem.register(new AllowItemRequest());
     public static DisallowItemRequest DISALLOW_ITEM_REQUEST = (DisallowItemRequest) AsynchronousRequestResponseSystem.register(new DisallowItemRequest());
     public static RemoveEmptyBanksRequest REMOVE_EMPTY_BANKS_REQUEST = (RemoveEmptyBanksRequest) AsynchronousRequestResponseSystem.register(new RemoveEmptyBanksRequest());
+    public static itemFractionScaleFactorRequest ITEM_FRACTION_SCALE_FACTOR_REQUEST = (itemFractionScaleFactorRequest) AsynchronousRequestResponseSystem.register(new itemFractionScaleFactorRequest());
     public BankSystemNetworking() {
         super(BankSystemMod.MOD_ID, "bank_system_channel");
 

@@ -146,7 +146,7 @@ public class BankUser implements ServerSaveable, IBankUser {
             return false;
 
         ServerPlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getBankDeletedMessage(getPlayerName(), bank.getItemName())+"\n"+
-                BankSystemTextMessages.getBankBalanceLostMessage(Bank.getFormattedAmount(bank.getTotalBalance(), bank.getCentScaleFactor()), bank.getItemName()));
+                BankSystemTextMessages.getBankBalanceLostMessage(Bank.getFormattedAmount(bank.getTotalBalance(), bank.getItemFractionScaleFactor()), bank.getItemName()));
         return true;
     }
 

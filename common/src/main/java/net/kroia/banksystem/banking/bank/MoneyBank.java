@@ -24,14 +24,9 @@ public class MoneyBank extends Bank {
         return new ItemID(itemStack);
     }
 
-    public static int getCentScaleFactorStatic()
+    public static int getItemFractionScaleFactorStatic()
     {
         return 100;
-    }
-    @Override
-    public int getCentScaleFactor()
-    {
-        return getCentScaleFactorStatic();
     }
 
     public MoneyBank(BankUser owner, long balance) {
@@ -52,8 +47,8 @@ public class MoneyBank extends Bank {
     public boolean load(CompoundTag tag) {
         boolean result = super.load(tag);
         if(!tag.contains("useCents")) {
-            balance *= getCentScaleFactor(); // Convert to cents if not already in cents
-            lockedBalance *= getCentScaleFactor(); // Convert locked balance to cents as well
+            balance *= getItemFractionScaleFactor(); // Convert to cents if not already in cents
+            lockedBalance *= getItemFractionScaleFactor(); // Convert locked balance to cents as well
         }
         return result;
     }

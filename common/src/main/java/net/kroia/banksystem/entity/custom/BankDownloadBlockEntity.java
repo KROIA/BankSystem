@@ -292,7 +292,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         if(exampleStack == null)
             return;
         boolean isMoney = MoneyItem.isMoney(itemID);
-        long centScaleFactor = itemBank.getCentScaleFactor();
+        long centScaleFactor = itemBank.getItemFractionScaleFactor();
         int stackSize = exampleStack.getMaxStackSize();
         long currentItemCount = countItems();
         long targetItemCount = targetAmount;

@@ -25,7 +25,7 @@ public class MinimalBankData implements INetworkPayloadEncoder {
         this.itemID = bank.getItemID();
         this.balance = bank.getBalance();
         this.lockedBalance = bank.getLockedBalance();
-        this.centScaleFactor = bank.getCentScaleFactor();
+        this.centScaleFactor = bank.getItemFractionScaleFactor();
     }
     public MinimalBankData(UUID playerUUID,
                            String playerName,

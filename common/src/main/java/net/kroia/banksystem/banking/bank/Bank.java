@@ -1,6 +1,7 @@
 package net.kroia.banksystem.banking.bank;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
@@ -17,6 +18,10 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 public abstract class Bank implements ServerSaveable, IBank {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        Bank.BACKEND_INSTANCES = backend;
+    }
     private static final Component WARNING = Component.translatable("message."+ BankSystemMod.MOD_ID+".bank.warning");
     private static final Component INFO = Component.translatable("message."+BankSystemMod.MOD_ID+".bank.info");
 
@@ -53,6 +58,11 @@ public abstract class Bank implements ServerSaveable, IBank {
         };
     }
 
+    @Override
+    public final int getItemFractionScaleFactor()
+    {
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(itemID);
+    }
 
     @Override
     public long getBalance() {
@@ -90,10 +100,10 @@ public abstract class Bank implements ServerSaveable, IBank {
         if(newBalance < 0)
         {
             warnUser(BankSystemTextMessages.getProblemWhileTryingSetBalanceMessage(getItemName(),
-                    getFormattedAmount(this.balance, getCentScaleFactor()),
-                    getFormattedAmount(balance, getCentScaleFactor()),
-                    getFormattedAmount(lockedBalance, getCentScaleFactor()),
-                    getFormattedAmount(balance, getCentScaleFactor())));
+                    getFormattedAmount(this.balance, getItemFractionScaleFactor()),
+                    getFormattedAmount(balance, getItemFractionScaleFactor()),
+                    getFormattedAmount(lockedBalance, getItemFractionScaleFactor()),
+                    getFormattedAmount(balance, getItemFractionScaleFactor())));
 
             lockedBalance = balance;
             setBalanceInternal(0);
@@ -102,7 +112,7 @@ public abstract class Bank implements ServerSaveable, IBank {
 
         setBalanceInternal(newBalance);
         if(owner.isBankNotificationEnabled())
-            notifyUser(BankSystemTextMessages.getSetBalanceMessage(getFormattedAmount(getBalance(), getCentScaleFactor()), getItemName(), owner.getPlayerName()));
+            notifyUser(BankSystemTextMessages.getSetBalanceMessage(getFormattedAmount(getBalance(), getItemFractionScaleFactor()), getItemName(), owner.getPlayerName()));
         return true;
     }
 
@@ -134,7 +144,7 @@ public abstract class Bank implements ServerSaveable, IBank {
             return Status.FAILED_OVERFLOW;
         addBalanceInternal(amount);
         if(owner.isBankNotificationEnabled())
-            notifyUser(BankSystemTextMessages.getAddedMessage(getFormattedAmount(amount,getCentScaleFactor()), getItemName(), owner.getPlayerName()));
+            notifyUser(BankSystemTextMessages.getAddedMessage(getFormattedAmount(amount, getItemFractionScaleFactor()), getItemName(), owner.getPlayerName()));
         return Status.SUCCESS;
     }
 
@@ -153,7 +163,7 @@ public abstract class Bank implements ServerSaveable, IBank {
         }
         addBalanceInternal(-amount);
         if(owner.isBankNotificationEnabled())
-            notifyUser(BankSystemTextMessages.getRemovedMessage(getFormattedAmount(amount, getCentScaleFactor()), getItemName(), owner.getPlayerName()));
+            notifyUser(BankSystemTextMessages.getRemovedMessage(getFormattedAmount(amount, getItemFractionScaleFactor()), getItemName(), owner.getPlayerName()));
         return Status.SUCCESS;
     }
 
@@ -340,11 +350,11 @@ public abstract class Bank implements ServerSaveable, IBank {
     @Override
     public String toStringNoOwner()
     {
-        StringBuilder content = new StringBuilder(getItemName() +BankSystemTextMessages.getBalanceMessage(getFormattedAmount(balance+lockedBalance, getCentScaleFactor())));
+        StringBuilder content = new StringBuilder(getItemName() +BankSystemTextMessages.getBalanceMessage(getFormattedAmount(balance+lockedBalance, getItemFractionScaleFactor())));
         if(lockedBalance > 0) {
             content.append("(").append(BankSystemTextMessages.getBalanceDetailedMessage(
-                    getFormattedAmount(balance, getCentScaleFactor()),
-                    getFormattedAmount(lockedBalance, getCentScaleFactor()))).append(")");
+                    getFormattedAmount(balance, getItemFractionScaleFactor()),
+                    getFormattedAmount(lockedBalance, getItemFractionScaleFactor()))).append(")");
         }
 
         return content.toString();
@@ -394,7 +404,7 @@ public abstract class Bank implements ServerSaveable, IBank {
     }
     private void setBalanceInternal(long balance) {
         if(balance < 0) {
-            dbg_invalid_balance(balance, getCentScaleFactor());
+            dbg_invalid_balance(balance, getItemFractionScaleFactor());
         }
 
         this.balance = balance;
@@ -409,10 +419,10 @@ public abstract class Bank implements ServerSaveable, IBank {
             return;
 
         if (owner.isBankNotificationEnabled())
-            notifyUser(BankSystemTextMessages.getTransferedMessage(getFormattedAmount(amount, getCentScaleFactor()), getItemName(), other.getPlayerName()));
+            notifyUser(BankSystemTextMessages.getTransferedMessage(getFormattedAmount(amount, getItemFractionScaleFactor()), getItemName(), other.getPlayerName()));
         if (other instanceof  Bank casted){
             if (casted.owner.isBankNotificationEnabled())
-                casted.notifyUser(BankSystemTextMessages.getReceivedMessage(getFormattedAmount(amount,getCentScaleFactor()), getItemName(), owner.getPlayerName()));
+                casted.notifyUser(BankSystemTextMessages.getReceivedMessage(getFormattedAmount(amount, getItemFractionScaleFactor()), getItemName(), owner.getPlayerName()));
         }
     }
 
@@ -427,7 +437,7 @@ public abstract class Bank implements ServerSaveable, IBank {
 
 
     // (1000 means 10.00 currency units)
-    public static String getNormalizedAmount(long amount, int centScaleFactor)
+    public static String getNormalizedAmount(long amount, int itemFractionScaleFactor)
     {
         // depending on the exponent of the amount add a "k", "M", "G", "T", "P", "E", "Z", "Y"
         // 1.0e3 = 1k
@@ -438,11 +448,18 @@ public abstract class Bank implements ServerSaveable, IBank {
         // 1.0e18 = 1E
         String exponents = "kMGTPEZY";
 
-        long wholeUnits = amount / centScaleFactor;
-        long cents = amount % centScaleFactor;
+        long wholeUnits = amount / itemFractionScaleFactor;
+        long cents = amount % itemFractionScaleFactor;
+
+        // Remove trailing zeros from cents
+        int leadingZeros = (int)Math.log10(itemFractionScaleFactor);
+        while(cents % 10 == 0 && cents > 0) {
+            cents /= 10;
+            leadingZeros--;
+        }
         StringBuilder centsString = new StringBuilder(String.valueOf(cents)); // Ensure cents are always two digits
         // Fill leading zeros if necessary
-        while (centsString.length() < Math.log10(centScaleFactor)) {
+        while (centsString.length() < leadingZeros) {
             centsString.insert(0, "0");
         }
 
@@ -462,7 +479,7 @@ public abstract class Bank implements ServerSaveable, IBank {
         }
         else
         {
-            if(centScaleFactor > 1)
+            if(itemFractionScaleFactor > 1)
                 amountString = amountString + "." + centsString;
         }
         return amountString;
@@ -472,9 +489,9 @@ public abstract class Bank implements ServerSaveable, IBank {
         long amount = (long)(realAmount * centScaleFactor);
         return getFormattedAmount(amount, centScaleFactor);
     }
-    public static String getFormattedAmount(long amount, int centScaleFactor)
+    public static String getFormattedAmount(long amount, int itemFractionScaleFactor)
     {
-        String nr = String.valueOf(amount/centScaleFactor);
+        String nr = String.valueOf(amount/itemFractionScaleFactor);
         // add ' for every 3 digits
         StringBuilder sb = new StringBuilder();
         int i = 0;
@@ -486,15 +503,24 @@ public abstract class Bank implements ServerSaveable, IBank {
                 sb.append('\'');
         }
         sb.reverse();
-        if(amount % centScaleFactor != 0)
+        if(amount % itemFractionScaleFactor != 0)
         {
             sb.append('.');
-            long cents = amount % centScaleFactor;
+            long cents = amount % itemFractionScaleFactor;
+
+            // remove trailing zeros
+            int leadingZeros = (int)Math.log10(itemFractionScaleFactor);
+            while(cents % 10 == 0 && cents > 0) {
+                cents /= 10;
+                leadingZeros--;
+            }
+
             StringBuilder centsString = new StringBuilder(String.valueOf(cents)); // Ensure cents are always two digits
             // Fill leading zeros if necessary
-            while (centsString.length() < Math.log10(centScaleFactor)) {
+            while (centsString.length() < leadingZeros) {
                 centsString.insert(0, "0");
             }
+
             sb.append(centsString);
         }
         return sb.toString();

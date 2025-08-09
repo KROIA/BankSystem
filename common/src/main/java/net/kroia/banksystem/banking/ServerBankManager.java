@@ -5,6 +5,7 @@ import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.api.IServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankManagerData;
@@ -26,6 +27,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private final Map<UUID, BankUser> userMap = new HashMap<>();
+    private final Map<ItemID, Integer> itemFractionScaleFactor = new HashMap<>();
 
     public static void setBackend(BankSystemModBackend.Instances backend) {
         ServerBankManager.BACKEND_INSTANCES = backend;
@@ -178,6 +180,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         itemIDs.add(itemID);
         CloseItemBankEventData event = new CloseItemBankEventData(lostItems, itemIDs);
         BACKEND_INSTANCES.SERVER_EVENTS.CLOSE_ITEM_BANK_EVENT.notifyListeners(event);
+
     }
 
     @Override
@@ -335,6 +338,23 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         return total;
     }
 
+
+    public int getItemFractionScaleFactor(ItemID itemID)
+    {
+        if(itemID == null)
+            return 1;
+        Integer scaleFactor = itemFractionScaleFactor.get(itemID);
+        if(scaleFactor == null || scaleFactor <= 0) {
+            // If the item is not registered, use the default scale factor
+            if(MoneyItem.isMoney(itemID))
+                scaleFactor = MoneyBank.getItemFractionScaleFactorStatic();
+            else
+                scaleFactor = 1;
+            itemFractionScaleFactor.put(itemID, scaleFactor);
+        }
+        return scaleFactor;
+    }
+
     @Override
     public List<ItemID> getAllowedItemIDs()
     {
@@ -383,6 +403,11 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         List<ItemID> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
         if(!allowed.contains(itemID)) {
             allowed.add(itemID);
+            // Remove all factors
+            if(MoneyItem.isMoney(itemID))
+                itemFractionScaleFactor.put(itemID, MoneyBank.getItemFractionScaleFactorStatic());
+            else
+                itemFractionScaleFactor.put(itemID, 1);
             BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.set(allowed);
         }
         return true;
@@ -403,6 +428,8 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             // Remove banks by item ID string to make sure banks for special items like Enchanted Books, potions, etc.
             // are closed for all variants of the item.
             closeBankAccount(itemID);
+            // Remove all factors
+            itemFractionScaleFactor.keySet().removeIf(existingItemID -> existingItemID.equals(itemID));
         }
 
 
@@ -418,6 +445,18 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             bankElements.add(bankTag);
         }
         tag.put("users", bankElements);
+
+        // Save item cent scale factors
+        ListTag itemScaleFactors = new ListTag();
+        for (Map.Entry<ItemID, Integer> entry : itemFractionScaleFactor.entrySet()) {
+            CompoundTag pairTag = new CompoundTag();
+            CompoundTag itemTag = new CompoundTag();
+            entry.getKey().save(itemTag);
+            pairTag.put("itemID", itemTag);
+            pairTag.putInt("scaleFactor", entry.getValue());
+            itemScaleFactors.add(pairTag);
+        }
+        tag.put("itemCentScaleFactors", itemScaleFactors);
         return true;
     }
 
@@ -436,6 +475,30 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
                 continue;
             }
             userMap.put(user.getPlayerUUID(), user);
+        }
+
+        // Load item cent scale factors
+        if(tag.contains("itemCentScaleFactors")) {
+            ListTag itemScaleFactors = tag.getList("itemCentScaleFactors", 10);
+            itemFractionScaleFactor.clear();
+            for (int i = 0; i < itemScaleFactors.size(); i++) {
+                CompoundTag pairTag = itemScaleFactors.getCompound(i);
+                ItemID itemID = new ItemID(pairTag.getCompound("itemID"));
+                int scaleFactor = pairTag.getInt("scaleFactor");
+                itemFractionScaleFactor.put(itemID, scaleFactor);
+            }
+        }
+        else
+        {
+            // Create scale factors for all allowed items
+            List<ItemID> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
+            for (ItemID itemID : allowedItems) {
+                if(MoneyItem.isMoney(itemID)) {
+                    itemFractionScaleFactor.put(itemID, MoneyBank.getItemFractionScaleFactorStatic());
+                } else {
+                    itemFractionScaleFactor.put(itemID, 1);
+                }
+            }
         }
         return success;
     }

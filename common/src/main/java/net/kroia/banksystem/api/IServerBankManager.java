@@ -215,6 +215,15 @@ public interface IServerBankManager {
     long getLockedItemCirculation(ItemID itemID);
 
     /**
+     * Gets the scale factor for item fractions for the given item ID.
+     * This is used to determine how to scale the real bank balance amount to its displayed value.
+     *
+     * @param itemID The item ID to get the scale factor for.
+     * @return The scale factor for item fractions, or 1 if no specific scale factor is defined.
+     */
+    int getItemFractionScaleFactor(ItemID itemID);
+
+    /**
      * @return A list of all item IDs that are allowed to be stored in a bank account.
      */
     List<ItemID>  getAllowedItemIDs();

@@ -433,7 +433,7 @@ public class BankSystemTextMessages {
     public static String getATMSumTextMessage(long sum)
     {
         String msg = ATM_SUM_TEXT.getString();
-        String normalized = Bank.getFormattedAmount(sum, MoneyBank.getCentScaleFactorStatic());
+        String normalized = Bank.getFormattedAmount(sum, MoneyBank.getItemFractionScaleFactorStatic());
         msg = replaceVariable(msg, Variables.AMOUNT, normalized);
         return msg;
     }
@@ -442,7 +442,7 @@ public class BankSystemTextMessages {
     public static String getATMAvailableTextMessage(long sum)
     {
         String msg = ATM_AVAILABLE_TEXT.getString();
-        String normalized = Bank.getFormattedAmount(sum, MoneyBank.getCentScaleFactorStatic());
+        String normalized = Bank.getFormattedAmount(sum, MoneyBank.getItemFractionScaleFactorStatic());
         msg = replaceVariable(msg, Variables.AMOUNT, normalized);
         return msg;
     }
@@ -451,7 +451,7 @@ public class BankSystemTextMessages {
     public static String getATMNotEnoughBalance(long sum)
     {
         String msg = ATM_NOT_ENOUGH_BALANCE_TEXT.getString();
-        String normalized = Bank.getFormattedAmount(sum, MoneyBank.getCentScaleFactorStatic());
+        String normalized = Bank.getFormattedAmount(sum, MoneyBank.getItemFractionScaleFactorStatic());
         msg = replaceVariable(msg, Variables.AMOUNT, normalized);
         return msg;
     }

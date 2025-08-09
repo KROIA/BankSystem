@@ -102,4 +102,21 @@ public interface IClientBankManager {
      * @param callback A callback that receives a list of ItemIDs of the removed banks.
      */
     void requestRemoveEmptyBanks(Consumer<List<ItemID>> callback);
+
+
+    /**
+     * Requests the item fraction scale factor for a specific item.
+     * Returns the scale factor through a callback.
+     *
+     * By default the scale is 1 but if a item has a scale of 10 for example, that means
+     * that to store 1 item in the bank, a value of 10 is stored.
+     * That means that a user can have 1/10th of the item in the bank.
+     *
+     * For money the scale factor is 100, meaning that 1 item in the bank
+     * represents 1.00 currency unit, allowing for cents to be stored.
+     *
+     * @param itemID   The ID of the item.
+     * @param callback A callback that receives the scale factor as an Integer.
+     */
+    void requestItemFractionScaleFactor(ItemID itemID, Consumer<Integer> callback);
 }

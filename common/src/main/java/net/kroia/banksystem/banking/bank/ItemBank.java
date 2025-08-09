@@ -14,11 +14,6 @@ public class ItemBank extends Bank {
     }
 
 
-    @Override
-    public int getCentScaleFactor()
-    {
-        return 1;
-    }
 
     @Override
     public boolean save(CompoundTag tag) {

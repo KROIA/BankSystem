@@ -6,6 +6,7 @@ import net.kroia.banksystem.api.*;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.command.BankSystemCommands;
 import net.kroia.banksystem.entity.BankSystemEntities;
@@ -55,6 +56,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemNetworkPacket.setBackend(INSTANCES);
         BankSystemGenericRequest.setBackend(INSTANCES);
         BankSystemTextMessages.setBackend(INSTANCES);
+        Bank.setBackend(INSTANCES);
 
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
             BankSystemCommands.register(dispatcher);
