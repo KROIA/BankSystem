@@ -113,6 +113,7 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
         if (be instanceof MoneyStockpileBlockEntity stockpile) {
             // Return the shape based on the number of items in the stockpile
             int usedGridSpaces = stockpile.getUsedGridSpaces();
+            float height = stockpile.getHighestColumnHeight();
 
 
             int columns = usedGridSpaces % 6;
@@ -121,7 +122,7 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
             int maxColumns = Math.min(6,usedGridSpaces);
 
             //VoxelShape shapeA = Block.box(0,0,0, (double) (16 * columns) /6, 16, (double) (16 * rows) /6);
-            VoxelShape shapeB = Block.box(0,0,0, (double) (16 * maxColumns) /6, 16, (double) (16 * rows) /6);
+            VoxelShape shapeB = Block.box(0,0,0, (double) (16 * maxColumns) /6, height, (double) (16 * rows) /6);
 
             return shapeB;
             //return Shapes.join(shapeA, shapeB, BooleanOp.AND);

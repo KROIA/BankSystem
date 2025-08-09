@@ -197,6 +197,21 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
         }
         return usedSpaces;
     }
+    public float getHighestColumnHeight()
+    {
+        int maxCount = 0;
+        for (ItemData data : items.values()) {
+            if(data.getAmount() > maxCount) {
+                maxCount = data.getAmount();
+                if(maxCount >= 64)
+                {
+                    maxCount = 64;
+                    break;
+                }
+            }
+        }
+        return maxCount*16 / 64f; // Return the height as a fraction of the maximum stack size
+    }
 
     public void setCount(int count) {
         //this.count = count;
