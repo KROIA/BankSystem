@@ -89,15 +89,15 @@ public class ItemInfoUserWidget extends BankSystemGuiElement {
     {
         return nameTextLabel.getText();
     }
-    public void setBalance(long balance, long centScaleFactor)
+    public void setBalance(long balance, int centScaleFactor)
     {
         balanceTextLabel.setText(Bank.getNormalizedAmount(balance, centScaleFactor));
     }
-    public void setLockedBalance(long lockedBalance, long centScaleFactor)
+    public void setLockedBalance(long lockedBalance, int centScaleFactor)
     {
         lockedBalanceTextLabel.setText(Bank.getNormalizedAmount(lockedBalance, centScaleFactor));
     }
-    public void setTotalBalance(long totalBalance, long centScaleFactor)
+    public void setTotalBalance(long totalBalance, int centScaleFactor)
     {
         totalBalanceTextLabel.setText(Bank.getNormalizedAmount(totalBalance, centScaleFactor));
     }

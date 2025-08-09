@@ -31,7 +31,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         private long targetAmount = 0;
         private ItemStack stack;
         public long stackSize;
-        public final long centScaleFactor;
+        public final int centScaleFactor;
         private final Rectangle itemStackHitBox;
         public final ItemID itemID;
 
@@ -40,7 +40,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         BankTerminalScreen parent;
 
-        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long stackSize, long centScaleFactor) {
+        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long stackSize, int centScaleFactor) {
             super(0, 0, 100, HEIGHT);
             this.parent = parent;
             this.stack = stack;

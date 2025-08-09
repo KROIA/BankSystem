@@ -46,10 +46,10 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     private boolean balanceChanged = false;
     private boolean deleteAccount = false;
     private boolean freeLockedBalance = false;
-    private final long centScaleFactor;
+    private final int centScaleFactor;
 
 
-    public BankAccountManagementItem(ItemID itemID, String playerName, long centScaleFactor)
+    public BankAccountManagementItem(ItemID itemID, String playerName, int centScaleFactor)
     {
         super();
         this.itemID = itemID;
@@ -62,7 +62,8 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
         balanceValueTextBox.setAllowLetters(false);
         balanceValueTextBox.setAllowNumbers(true, true);
         balanceValueTextBox.setAllowNegativeNumbers(false);
-        balanceValueTextBox.setMaxDecimalChar((int)centScaleFactor-1);
+        int maxDecimalChar = (int)Math.max(0, Math.log10(centScaleFactor));
+        balanceValueTextBox.setMaxDecimalChar(maxDecimalChar);
         balanceValueTextBox.setOnTextChanged(this::onBalanceTextBoxChanged);
         balanceValueTextBox.setMaxChars(6*3+1); // Max size of a long
         lockedBalanceLabel = new Label(LOCKED_BALANCE.getString());
@@ -162,7 +163,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
         //long value = balanceValueTextBox.getInt();
         balanceChanged = true;
     }
-    public long getCentScaleFactor()
+    public int getCentScaleFactor()
     {
         return centScaleFactor;
     }

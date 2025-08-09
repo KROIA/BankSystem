@@ -24,12 +24,12 @@ public class MoneyBank extends Bank {
         return new ItemID(itemStack);
     }
 
-    public static long getCentScaleFactorStatic()
+    public static int getCentScaleFactorStatic()
     {
-        return 100L;
+        return 100;
     }
     @Override
-    public long getCentScaleFactor()
+    public int getCentScaleFactor()
     {
         return getCentScaleFactorStatic();
     }

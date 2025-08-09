@@ -15,9 +15,9 @@ public class ItemBank extends Bank {
 
 
     @Override
-    public long getCentScaleFactor()
+    public int getCentScaleFactor()
     {
-        return 1L;
+        return 1;
     }
 
     @Override

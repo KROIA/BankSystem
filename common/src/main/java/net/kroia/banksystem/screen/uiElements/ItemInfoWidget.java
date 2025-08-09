@@ -142,7 +142,7 @@ public class ItemInfoWidget extends BankSystemGuiElement {
 
         long totalSupply = info.totalSupply; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalSupply(itemID);
         long totalLocked = info.totalLocked; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
-        long itemFactor = 1;
+        int itemFactor = 1;
         if(this.itemID.getStack().getItem().equals(BankSystemItems.MONEY.get()))
         {
             itemFactor = 100;

@@ -400,7 +400,7 @@ public abstract class Bank implements ServerSaveable, IBank {
         this.balance = balance;
     }
 
-    private static void dbg_invalid_balance(long balance, long centScaleFactor) {
+    private static void dbg_invalid_balance(long balance, int centScaleFactor) {
         throw new IllegalArgumentException("Balance is negative: "+getFormattedAmount(balance, centScaleFactor));
     }
 
@@ -427,7 +427,7 @@ public abstract class Bank implements ServerSaveable, IBank {
 
 
     // (1000 means 10.00 currency units)
-    public static String getNormalizedAmount(long amount, long centScaleFactor)
+    public static String getNormalizedAmount(long amount, int centScaleFactor)
     {
         // depending on the exponent of the amount add a "k", "M", "G", "T", "P", "E", "Z", "Y"
         // 1.0e3 = 1k
@@ -467,7 +467,12 @@ public abstract class Bank implements ServerSaveable, IBank {
         }
         return amountString;
     }
-    public static String getFormattedAmount(long amount, long centScaleFactor)
+    public static String getNormalizedAmount(float realAmount, int centScaleFactor)
+    {
+        long amount = (long)(realAmount * centScaleFactor);
+        return getFormattedAmount(amount, centScaleFactor);
+    }
+    public static String getFormattedAmount(long amount, int centScaleFactor)
     {
         String nr = String.valueOf(amount/centScaleFactor);
         // add ' for every 3 digits
@@ -484,16 +489,20 @@ public abstract class Bank implements ServerSaveable, IBank {
         if(amount % centScaleFactor != 0)
         {
             sb.append('.');
-            int cents = (int)(amount % centScaleFactor);
-            // Add leading zeors if necessary
-            int exponent = (int)Math.log10(centScaleFactor);
-            while (cents < Math.pow(10, exponent - 2)) {
-                sb.append('0');
-                exponent--;
+            long cents = amount % centScaleFactor;
+            StringBuilder centsString = new StringBuilder(String.valueOf(cents)); // Ensure cents are always two digits
+            // Fill leading zeros if necessary
+            while (centsString.length() < Math.log10(centScaleFactor)) {
+                centsString.insert(0, "0");
             }
-            sb.append(cents);
+            sb.append(centsString);
         }
         return sb.toString();
+    }
+    public static String getFormattedAmount(float realAmount, int centScaleFactor)
+    {
+        long amount = (long)(realAmount * centScaleFactor);
+        return getFormattedAmount(amount, centScaleFactor);
     }
 
     private boolean willOverflow(long tryToAddAmount)
