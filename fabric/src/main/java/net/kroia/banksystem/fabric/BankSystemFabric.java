@@ -1,5 +1,6 @@
 package net.kroia.banksystem.fabric;
 
+import dev.architectury.platform.Platform;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -8,6 +9,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
 
 public final class BankSystemFabric implements ModInitializer {
@@ -28,7 +30,14 @@ public final class BankSystemFabric implements ModInitializer {
         });
 
         // Handle world load (start)
-        ServerLifecycleEvents.SERVER_STARTED.register(BankSystemModBackend::onServerStart);
+        ServerLifecycleEvents.SERVER_STARTED.register((server)->
+        {
+            // Check if NEZNAMY/TAB is present and register placeholders
+            if (Platform.isModLoaded("tab")) {
+                NEZNAMY_TAB_Placeholders.register();
+            }
+            BankSystemModBackend.onServerStart(server);
+        });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(BankSystemModBackend::onServerStop);
 
@@ -47,7 +56,7 @@ public final class BankSystemFabric implements ModInitializer {
         BankSystemMod.init();
 
 
-        if (isJeiLoaded()) {
+        if (isJeiLoaded() && Platform.getEnv() == EnvType.CLIENT) {
             BankTerminalScreen.widthPercentage = 70;
         }
     }
