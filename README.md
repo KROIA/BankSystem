@@ -30,6 +30,7 @@ Admins can define which items can be stored in the bank in order to prevent play
 ## Features
 - Adds a banking system to the game for money and items.
 - Adds new [blocks](#blocks) to interact with the bank account.
+- Money can be placed as a block for decorative and storage purposes.
 
 ## Dependencies
 - [Architectury](https://www.curseforge.com/minecraft/mc-mods/architectury-api)
