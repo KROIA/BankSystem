@@ -535,19 +535,6 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     public boolean load(CompoundTag tag) {
         boolean success = true;
 
-        ListTag bankElements = tag.getList("users", 10);
-        userMap.clear();
-        for (int i = 0; i < bankElements.size(); i++) {
-            CompoundTag bankTag = bankElements.getCompound(i);
-            BankUser user = BankUser.loadFromTag(bankTag);
-            if(user == null)
-            {
-                success = false;
-                continue;
-            }
-            userMap.put(user.getPlayerUUID(), user);
-        }
-
         // Load item cent scale factors
         if(tag.contains("itemCentScaleFactors")) {
             ListTag itemScaleFactors = tag.getList("itemCentScaleFactors", 10);
@@ -561,7 +548,6 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
 
 
         }
-
         // Check if all allowed items have a scale factor
         List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
         for (var el : allowedItems) {
@@ -569,6 +555,21 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
                 continue;
             itemFractionScaleFactor.put(el.itemID, el.itemFractionScaleFactor);
         }
+
+        ListTag bankElements = tag.getList("users", 10);
+        userMap.clear();
+        for (int i = 0; i < bankElements.size(); i++) {
+            CompoundTag bankTag = bankElements.getCompound(i);
+            BankUser user = BankUser.loadFromTag(bankTag);
+            if(user == null)
+            {
+                success = false;
+                continue;
+            }
+            userMap.put(user.getPlayerUUID(), user);
+        }
+
+
         return success;
     }
 
