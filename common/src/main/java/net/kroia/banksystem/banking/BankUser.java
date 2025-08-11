@@ -1,5 +1,8 @@
 package net.kroia.banksystem.banking;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankUser;
@@ -11,6 +14,7 @@ import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
@@ -58,11 +62,13 @@ public class BankUser implements ServerSaveable, IBankUser {
     }
 
     @Override
-    public @Nullable MinimalBankData getMinimalBankData(ItemID itemID)
+    public MinimalBankData getMinimalBankData(ItemID itemID)
     {
         IBank bank = getBank(itemID);
         if(bank == null)
-            return null;
+        {
+            return new MinimalBankData(itemID, BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(itemID));
+        }
         return bank.getMinimalData();
     }
 
@@ -99,7 +105,7 @@ public class BankUser implements ServerSaveable, IBankUser {
         return moneyBank;
     }
     @Override
-    public @Nullable IBank createItemBank(ItemID itemID, long startBalance, boolean notifyPlayerOnFail)
+    public @Nullable IBank createItemBank(ItemID itemID, float startBalance, boolean notifyPlayerOnFail)
     {
         IBank bank = getBank(itemID);
         if(bank != null)
@@ -117,7 +123,8 @@ public class BankUser implements ServerSaveable, IBankUser {
                 ServerPlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
             return null;
         }
-        ItemBank itemBank = new ItemBank(this, itemID,  startBalance);
+        long rawStartBalance = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(itemID) * (long) startBalance;
+        ItemBank itemBank = new ItemBank(this, itemID,  rawStartBalance);
         bankMap.put(itemID, itemBank);
         return itemBank;
     }
@@ -252,6 +259,35 @@ public class BankUser implements ServerSaveable, IBankUser {
     }
 
 
+    @Override
+    public JsonElement toJson()
+    {
+        JsonObject userJson = new JsonObject();
+
+        userJson.addProperty("userUUID", userUUID.toString());
+        userJson.addProperty("userName", userName);
+        userJson.addProperty("enableBankNotifications", enableBankNotifications);
+        JsonArray bankMapJson = new JsonArray();
+        for (Map.Entry<ItemID, Bank> entry : bankMap.entrySet()) {
+            ItemID itemID = entry.getKey();
+            Bank bank = entry.getValue();
+            if(bank == null)
+                continue;
+            JsonElement bankJson = bank.toJson();
+            if(bankJson != null) {
+                bankMapJson.add(bankJson);
+            }
+        }
+        userJson.add("banks", bankMapJson);
+        return userJson;
+    }
+
+    @Override
+    public String toJsonString()
+    {
+        return JsonUtilities.toPrettyString(toJson());
+    }
+
 
     @Override
     public String toString()
@@ -263,7 +299,7 @@ public class BankUser implements ServerSaveable, IBankUser {
 
         if(bankMap.containsKey(MoneyBank.ITEM_ID)) {
             itemNames.add(bankMap.get(MoneyBank.ITEM_ID).getItemName());
-            itemBalances.add(String.valueOf(bankMap.get(MoneyBank.ITEM_ID).getBalance()));
+            itemBalances.add(bankMap.get(MoneyBank.ITEM_ID).getFormattedTotalBalance());
         }
 
         for(Bank bank : bankMap.values())
@@ -271,7 +307,7 @@ public class BankUser implements ServerSaveable, IBankUser {
             if(bank.getItemID().equals(MoneyBank.ITEM_ID))
                 continue;
             itemNames.add(bank.getItemName());
-            itemBalances.add(String.valueOf(bank.getTotalBalance()));
+            itemBalances.add(String.valueOf(bank.getFormattedTotalBalance()));
         }
         int maxAmountLength = 0;
         for(String itemName : itemBalances)

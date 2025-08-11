@@ -9,6 +9,7 @@ import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.command.BankSystemCommands;
+import net.kroia.banksystem.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
@@ -104,6 +105,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
         INSTANCES.SERVER_BANK_MANAGER = new ServerBankManager();
 
+        NEZNAMY_TAB_Placeholders.setBackend(INSTANCES);
 
 
         loadDataFromFiles(server);

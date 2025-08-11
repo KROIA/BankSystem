@@ -275,18 +275,25 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                         continue;
                     }
                 }
+
                 ItemID itemID = new ItemID(stack);
+                IBank itemBank = bankUser.getBank(itemID);
+                if(itemBank == null)
+                {
+                    itemBank = bankUser.createItemBank(itemID, 0,false);
+                }
                 long amount = stack.getCount();
                 if(MoneyItem.isMoney(itemID))
                 {
                     itemID = MoneyBank.ITEM_ID;
                     amount *= ((MoneyItem)stack.getItem()).worth();
                 }
-                IBank itemBank = bankUser.getBank(itemID);
-                if(itemBank == null)
+                else
                 {
-                    itemBank = bankUser.createItemBank(itemID, 0,false);
+                    if(itemBank != null)
+                        amount = itemBank.convertToRawAmount(amount);
                 }
+
                 if(itemBank != null) {
                     if(itemBank.deposit(amount) == Bank.Status.SUCCESS)
                         inventory.setItem(i, ItemStack.EMPTY);

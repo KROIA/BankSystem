@@ -1,5 +1,6 @@
 package net.kroia.banksystem.api;
 
+import com.google.gson.JsonElement;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankManagerData;
@@ -214,6 +215,22 @@ public interface IServerBankManager {
      */
     long getLockedItemCirculation(ItemID itemID);
 
+
+    /**
+     * Gets the JSON representation of the circulation data.
+     *
+     * @return A JsonElement containing the circulation data.
+     */
+    JsonElement getCirculationDataJson();
+
+
+    /**
+     * Gets the JSON string representation of the circulation data.
+     *
+     * @return A String containing the circulation data in JSON format.
+     */
+    String getCirculationDataJsonString();
+
     /**
      * Gets the scale factor for item fractions for the given item ID.
      * This is used to determine how to scale the real bank balance amount to its displayed value.
@@ -266,9 +283,11 @@ public interface IServerBankManager {
      * Allows the given item ID to be stored in a bank account.
      *
      * @param itemID The item ID to allow.
+     * @param itemFractionScaleFactor The scale factor for the item, used to convert the item amount to bank system money amount.
+     *                                Allowed values are 1, 10, 100
      * @return True if the item ID was successfully allowed, false otherwise.
      */
-    boolean allowItemID(ItemID itemID);
+    boolean allowItemID(ItemID itemID, int itemFractionScaleFactor);
 
     /**
      * Disallows the given item ID from being stored in a bank account.

@@ -62,7 +62,8 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
         balanceValueTextBox.setAllowLetters(false);
         balanceValueTextBox.setAllowNumbers(true, true);
         balanceValueTextBox.setAllowNegativeNumbers(false);
-        int maxDecimalChar = (int)Math.max(0, Math.log10(centScaleFactor));
+        int maxDecimalChar = Bank.getMaxDecimalDigitsCount(centScaleFactor);
+
         balanceValueTextBox.setMaxDecimalChar(maxDecimalChar);
         balanceValueTextBox.setOnTextChanged(this::onBalanceTextBoxChanged);
         balanceValueTextBox.setMaxChars(6*3+1); // Max size of a long

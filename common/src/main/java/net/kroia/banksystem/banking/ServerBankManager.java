@@ -1,6 +1,10 @@
 package net.kroia.banksystem.banking;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.api.IServerBankManager;
@@ -14,6 +18,7 @@ import net.kroia.banksystem.banking.eventdata.CloseItemBankEventData;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
@@ -338,19 +343,64 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         return total;
     }
 
+    public JsonElement getCirculationDataJson()
+    {
+        class Data
+        {
+            public ItemID itemID;
+            public long lockedBalance = 0;
+            public long freeBalance = 0;
+        }
+        Map<ItemID, Data> sums = new HashMap<>();
+        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
+            HashMap<ItemID, IBank> bankMap = entry.getValue().getAllBanks();
+            for(Map.Entry<ItemID, IBank> bankEntry : bankMap.entrySet())
+            {
+                ItemID itemID = bankEntry.getKey();
+                IBank bank = bankEntry.getValue();
+                if(bank == null)
+                    continue;
 
+                Data data = sums.get(itemID);
+                if(data == null) {
+                    data = new Data();
+                    data.itemID = itemID;
+                    sums.put(itemID, data);
+                }
+
+                data.lockedBalance += bank.getLockedBalance();
+                data.freeBalance += bank.getBalance();
+
+            }
+        }
+
+        JsonArray circulationData = new JsonArray();
+        for(Map.Entry<ItemID, Data> entry : sums.entrySet())
+        {
+            Data data = entry.getValue();
+            JsonObject itemData = new JsonObject();
+            itemData.add("itemID", data.itemID.toJson());
+            itemData.addProperty("lockedBalance", data.lockedBalance);
+            itemData.addProperty("freeBalance", data.freeBalance);
+            circulationData.add(itemData);
+        }
+        return circulationData;
+    }
+    public String getCirculationDataJsonString()
+    {
+        JsonElement circulationData = getCirculationDataJson();
+        return JsonUtilities.toPrettyString(circulationData);
+    }
+
+
+    @Override
     public int getItemFractionScaleFactor(ItemID itemID)
     {
         if(itemID == null)
             return 1;
         Integer scaleFactor = itemFractionScaleFactor.get(itemID);
         if(scaleFactor == null || scaleFactor <= 0) {
-            // If the item is not registered, use the default scale factor
-            if(MoneyItem.isMoney(itemID))
-                scaleFactor = MoneyBank.getItemFractionScaleFactorStatic();
-            else
-                scaleFactor = 1;
-            itemFractionScaleFactor.put(itemID, scaleFactor);
+            return 1;
         }
         return scaleFactor;
     }
@@ -358,7 +408,12 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     @Override
     public List<ItemID> getAllowedItemIDs()
     {
-        return new ArrayList<>(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get());
+        var ids = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
+        List<ItemID> allowedItemIDs = new ArrayList<>(ids.size());
+        for (var el : ids) {
+            allowedItemIDs.add(el.itemID);
+        }
+        return allowedItemIDs;
     }
 
     @Override
@@ -375,8 +430,12 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     @Override
     public boolean isItemIDAllowed(ItemID itemID)
     {
-        List<ItemID> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        return allowed.contains(itemID);
+        var allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
+        for(var allowedItem : allowed) {
+            if(allowedItem.itemID.equals(itemID))
+                return true;
+        }
+        return false;
     }
     @Override
     public boolean isItemIDBlacklisted(ItemID itemID)
@@ -391,7 +450,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         return notRemovable.contains(itemID);
     }
     @Override
-    public boolean allowItemID(ItemID itemID)
+    public boolean allowItemID(ItemID itemID, int itemFractionScaleFactor)
     {
         if(itemID == null)
             return false;
@@ -400,14 +459,26 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             info("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
             return false;
         }
-        List<ItemID> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        if(!allowed.contains(itemID)) {
-            allowed.add(itemID);
+        List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
+        boolean isAlreadyAllowed = false;
+        for(var allowedItem : allowed) {
+            if(allowedItem.itemID.equals(itemID)) {
+                isAlreadyAllowed = true;
+                break;
+            }
+        }
+        if(itemFractionScaleFactor != 1 && itemFractionScaleFactor != 10 && itemFractionScaleFactor != 100)
+            itemFractionScaleFactor = 1;
+
+        if(!isAlreadyAllowed) {
+            BankSystemModSettings.Bank.ItemIDAndScaleFactor itemIDAndScaleFactor = new BankSystemModSettings.Bank.ItemIDAndScaleFactor(itemID, itemFractionScaleFactor);
+            allowed.add(itemIDAndScaleFactor);
             // Remove all factors
             if(MoneyItem.isMoney(itemID))
-                itemFractionScaleFactor.put(itemID, MoneyBank.getItemFractionScaleFactorStatic());
-            else
-                itemFractionScaleFactor.put(itemID, 1);
+                this.itemFractionScaleFactor.put(itemID, MoneyBank.getItemFractionScaleFactorStatic());
+            else {
+                this.itemFractionScaleFactor.put(itemID, itemFractionScaleFactor);
+            }
             BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.set(allowed);
         }
         return true;
@@ -422,18 +493,18 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             info("It is not allowed to remove the itemID: " + itemID);
             return false;
         }
-        List<ItemID> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        if(allowed.remove(itemID)) {
-            BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.set(allowed);
-            // Remove banks by item ID string to make sure banks for special items like Enchanted Books, potions, etc.
-            // are closed for all variants of the item.
-            closeBankAccount(itemID);
-            // Remove all factors
-            itemFractionScaleFactor.keySet().removeIf(existingItemID -> existingItemID.equals(itemID));
+        List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
+        for(var allowedItem : allowed) {
+            if(allowedItem.itemID.equals(itemID)) {
+                allowed.remove(allowedItem);
+                BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.set(allowed);
+                closeBankAccount(itemID);
+                // Remove all factors
+                itemFractionScaleFactor.keySet().removeIf(existingItemID -> existingItemID.equals(itemID));
+                return true;
+            }
         }
-
-
-        return true;
+        return false;
     }
 
     @Override
@@ -487,18 +558,16 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
                 int scaleFactor = pairTag.getInt("scaleFactor");
                 itemFractionScaleFactor.put(itemID, scaleFactor);
             }
+
+
         }
-        else
-        {
-            // Create scale factors for all allowed items
-            List<ItemID> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-            for (ItemID itemID : allowedItems) {
-                if(MoneyItem.isMoney(itemID)) {
-                    itemFractionScaleFactor.put(itemID, MoneyBank.getItemFractionScaleFactorStatic());
-                } else {
-                    itemFractionScaleFactor.put(itemID, 1);
-                }
-            }
+
+        // Check if all allowed items have a scale factor
+        List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
+        for (var el : allowedItems) {
+            if(itemFractionScaleFactor.containsKey(el.itemID))
+                continue;
+            itemFractionScaleFactor.put(el.itemID, el.itemFractionScaleFactor);
         }
         return success;
     }

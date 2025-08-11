@@ -243,7 +243,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
                 BankElement element = getBankElement(pair.getFirst());
                 if (element == null) {
                     ItemStack stack = pair.getFirst().getStack();
-                    element = new BankElement(this, stack, pair.getFirst(), balance, pair.getSecond().centScaleFactor);
+                    element = new BankElement(this, stack, pair.getFirst(), balance, pair.getSecond().itemFractionScaleFactor);
                     bankElements.add(element);
                     itemListView.addChild(element);
                 } else {

@@ -284,10 +284,11 @@ public class BankSystemTextMessages {
         return msg;
     }
     private static final Component ITEM_NOW_ALLOWED = Component.translatable(prefix+"item_now_allowed");
-    public static String getItemNowAllowedMessage(String itemName)
+    public static String getItemNowAllowedMessage(String itemName, String smallestAmount)
     {
         String msg = ITEM_NOW_ALLOWED.getString();
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.AMOUNT, smallestAmount);
         return msg;
     }
     private static final Component ITEM_NOW_ALLOWED_FAILED = Component.translatable(prefix+"item_now_allowed_failed");

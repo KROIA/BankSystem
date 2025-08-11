@@ -376,7 +376,7 @@ The admin is responsible to bring money in to circulation.<br>
 | /bank allowItem [itemID]                     						        | Adds the item to the list of bankable items   | :heavy_check_mark: |
 | /bank settingsGUI                     						            | Opens the [items management window](#managing-items-for-banking)   | :heavy_check_mark: |
 | /bank setStartingBalance                                                  | Set the starting money balance for new players when they join the server as a new player | :heavy_check_mark: |
-| /bank setItemTransferTickInterval                                         | Set the amount of ticks it uses for a item to be transfered in the bank terminal block. If set to 0, it will be instant.  | :heavy_check_mark: |
+| /bank setItemTransferTickInterval                                         | Set the amount of ticks it uses for a item to be transferred in the bank terminal block. If set to 0, it will be instant.  | :heavy_check_mark: |
 | /bank save                                                                | Saves all bank data | :heavy_check_mark: |
 | /bank load                                                                | Loads all bank data | :heavy_check_mark: |
 

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.api;
 
+import com.google.gson.JsonElement;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.server.level.ServerPlayer;
@@ -257,6 +258,41 @@ public interface IBank {
     float convertToRealAmount(long rawAmount);
 
 
+    /**
+     * @return the normalized balance of this bank.
+     *         This is used for display purposes
+     */
+    String getNormalizedBalance();
+
+    /**
+     * @return the normalized locked balance of this bank.
+     *         This is used for display purposes.
+     */
+    String getNormalizedLockedBalance();
+
+    /**
+     * @return the normalized total balance of this bank.
+     *         This is used for display purposes.
+     */
+    String getNormalizedTotalBalance();
+
+    /**
+     * @return the formatted balance of this bank.
+     *         This is used for display purposes.
+     */
+    String getFormattedBalance();
+
+    /**
+     * @return the formatted locked balance of this bank.
+     *         This is used for display purposes.
+     */
+    String getFormattedLockedBalance();
+
+    /**
+     * @return the formatted total balance of this bank.
+     *         This is used for display purposes.
+     */
+    String getFormattedTotalBalance();
 
     /**
      * Normalizes the given amount to a string representation.
@@ -333,4 +369,19 @@ public interface IBank {
      * @return A string representation of the bank data without the owner.
      */
     String toStringNoOwner();
+
+
+    /**
+     * Converts this bank data to a JSON representation.
+     *
+     * @return A JsonElement representing this bank.
+     */
+    JsonElement toJson();
+
+    /**
+     * Converts this bank data to a JSON string representation.
+     *
+     * @return A string representation of the bank data in JSON format.
+     */
+    String toJsonString();
 }

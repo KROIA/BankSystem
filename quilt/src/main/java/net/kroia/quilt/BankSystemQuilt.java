@@ -32,11 +32,11 @@ public final class BankSystemQuilt implements ModInitializer {
         // Handle world load (start)
         ServerLifecycleEvents.READY.register((server)->
         {
+            BankSystemModBackend.onServerStart(server);
             // Check if NEZNAMY/TAB is present and register placeholders
             if (Platform.isModLoaded("tab")) {
                 NEZNAMY_TAB_Placeholders.register();
             }
-            BankSystemModBackend.onServerStart(server);
         });
 
         // Handle world save (stop)

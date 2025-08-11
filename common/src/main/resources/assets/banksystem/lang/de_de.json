@@ -46,6 +46,10 @@
   "gui.banksystem.ask_popup.yes": "JA",
   "gui.banksystem.ask_popup.no": "NEIN",
   "gui.banksystem.setting_screen.ask_remove_message": "Bist du dir sicher, dass du das Item entfernen möchtest?\nDas wird die Items aller Spieler von deren Bankkonto entfernen\nDiese Aktion kann nicht rückgängig gemacht werden!",
+  "gui.banksystem.setting_screen.ask_item_fraction_scale_factor_screen.title": "Ask Item Fraction Scale Factor",
+  "gui.banksystem.setting_screen.ask_item_fraction_scale_factor_screen.label": "Wähle den kelinstmöglichen Betrag für diese Item, der in der Bank gespeichert werden kann.",
+  "gui.banksystem.setting_screen.ask_item_fraction_scale_factor_screen.tooltip": "In der Bank könenn Items in Bruchstücken gespeichert werden.\nGeld wird z.B. in Cents gespeichert.\nDas bedeutet dass die kleinste Mänge von Geld 0.01 beträgt.\nFür andere Items, kann dieser wert selbst bestummen werden.",
+  "gui.banksystem.setting_screen.ask_item_fraction_scale_factor_screen.confirm_button": "Bestätigen",
 
   "gui.banksystem.iteminfo_widget.total_supply": "Gesammte Zirkulation: {amount}",
   "gui.banksystem.iteminfo_widget.total_locked": "Gesammt reserviert:   {amount}",
@@ -113,7 +117,7 @@
 
   "message.banksystem.item_not_allowed": "{item_name} ist nicht für das lagern in der Bank zugelassen",
   "message.banksystem.item_not_allowed_failed": "Das lagern von {item_name} kann nicht verboten werden",
-  "message.banksystem.item_now_allowed": "{item_name} kann nun in der Bank gelagert werden",
+  "message.banksystem.item_now_allowed": "{item_name} kann nun in der Bank gelagert werden.\nDie kleistmögliche Mänge die gelagert werden kann ist {amount}",
   "message.banksystem.item_now_allowed_failed": "{item_name} kann für das lagern in der Bank nicht zugelassen werden",
   "message.banksystem.item_already_allowed": "{item_name} kann bereits in der Bank gelagert werden, du Idiot",
   "message.banksystem.invalid_item_id": "Unbekanntes Item {item_name}",

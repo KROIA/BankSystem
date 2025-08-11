@@ -17,28 +17,36 @@ public class MinimalBankData implements INetworkPayloadEncoder {
     public final ItemID itemID;
     public final long balance;
     public final long lockedBalance;
-    public final int centScaleFactor;
+    public final int itemFractionScaleFactor;
 
+    public MinimalBankData(ItemID itemID, int itemFractionScaleFactor) {
+        this.playerUUID = UUID.randomUUID(); // UUID will be set later
+        this.playerName = ""; // Name will be set later
+        this.itemID = itemID;
+        this.balance = 0; // Default balance
+        this.lockedBalance = 0; // Default locked balance
+        this.itemFractionScaleFactor = itemFractionScaleFactor; // Scale factor for item fractions
+    }
     public MinimalBankData(IBank bank) {
         this.playerUUID = bank.getPlayerUUID();
         this.playerName = bank.getPlayerName();
         this.itemID = bank.getItemID();
         this.balance = bank.getBalance();
         this.lockedBalance = bank.getLockedBalance();
-        this.centScaleFactor = bank.getItemFractionScaleFactor();
+        this.itemFractionScaleFactor = bank.getItemFractionScaleFactor();
     }
     public MinimalBankData(UUID playerUUID,
                            String playerName,
                            ItemID itemID,
                            long balance,
                            long lockedBalance,
-                           int centScaleFactor) {
+                           int itemFractionScaleFactor) {
         this.playerUUID = playerUUID;
         this.playerName = playerName;
         this.itemID = itemID;
         this.balance = balance;
         this.lockedBalance = lockedBalance;
-        this.centScaleFactor = centScaleFactor;
+        this.itemFractionScaleFactor = itemFractionScaleFactor;
     }
 
     @Override
@@ -48,7 +56,7 @@ public class MinimalBankData implements INetworkPayloadEncoder {
         buf.writeItem(itemID.getStack());
         buf.writeLong(balance);
         buf.writeLong(lockedBalance);
-        buf.writeInt(centScaleFactor);
+        buf.writeInt(itemFractionScaleFactor);
     }
     public static MinimalBankData decode(net.minecraft.network.FriendlyByteBuf buf) {
         UUID playerUUID = buf.readUUID();

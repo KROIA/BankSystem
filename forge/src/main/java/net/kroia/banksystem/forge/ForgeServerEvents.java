@@ -15,14 +15,15 @@ public class ForgeServerEvents {
     {
         LifecycleEvent.SERVER_STARTED.register((server)->{
             // Check if NEZNAMY/TAB is present and register placeholders
-            DistExecutor.safeRunWhenOn(Dist.DEDICATED_SERVER, () -> {
+            BankSystemModBackend.onServerStart(server);
+            DistExecutor.unsafeRunWhenOn(Dist.DEDICATED_SERVER, () -> {
                 if (Platform.isModLoaded("tab"))
                 {
                     NEZNAMY_TAB_Placeholders.register();
                 }
                 return () -> {};
             });
-            BankSystemModBackend.onServerStart(server);
+
         });
         LifecycleEvent.SERVER_STOPPING.register(BankSystemModBackend::onServerStop);
     }

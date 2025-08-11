@@ -1,5 +1,7 @@
 package net.kroia.banksystem.banking.bank;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
@@ -7,6 +9,7 @@ import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
@@ -355,6 +358,42 @@ public abstract class Bank implements ServerSaveable, IBank {
     }
 
     @Override
+    public String getNormalizedBalance()
+    {
+        return getNormalizedAmount(balance, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public String getNormalizedLockedBalance()
+    {
+        return getNormalizedAmount(lockedBalance, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public String getNormalizedTotalBalance()
+    {
+        return getNormalizedAmount(balance + lockedBalance, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public String getFormattedBalance()
+    {
+        return getFormattedAmount(balance, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public String getFormattedLockedBalance()
+    {
+        return getFormattedAmount(lockedBalance, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public String getFormattedTotalBalance()
+    {
+        return getFormattedAmount(balance + lockedBalance, getItemFractionScaleFactor());
+    }
+
+    @Override
     public String getNormalizedAmount(float realAmount)
     {
         return getNormalizedAmount(realAmount, getItemFractionScaleFactor());
@@ -384,7 +423,7 @@ public abstract class Bank implements ServerSaveable, IBank {
     @Override
     public String toStringNoOwner()
     {
-        StringBuilder content = new StringBuilder(getItemName() +BankSystemTextMessages.getBalanceMessage(getFormattedAmount(balance+lockedBalance, getItemFractionScaleFactor())));
+        StringBuilder content = new StringBuilder(getItemName() + getFormattedTotalBalance());
         if(lockedBalance > 0) {
             content.append("(").append(BankSystemTextMessages.getBalanceDetailedMessage(
                     getFormattedAmount(balance, getItemFractionScaleFactor()),
@@ -392,6 +431,21 @@ public abstract class Bank implements ServerSaveable, IBank {
         }
 
         return content.toString();
+    }
+
+    @Override
+    public JsonElement toJson()
+    {
+        JsonObject json = new JsonObject();
+        json.add("itemID", itemID.toJson());
+        json.addProperty("balance", balance);
+        json.addProperty("lockedBalance", lockedBalance);
+        return json;
+    }
+    @Override
+    public String toJsonString()
+    {
+        return JsonUtilities.toPrettyString(toJson());
     }
 
     @Override
@@ -484,19 +538,7 @@ public abstract class Bank implements ServerSaveable, IBank {
         String exponents = "kMGTPEZY";
 
         long wholeUnits = amount / itemFractionScaleFactor;
-        long cents = amount % itemFractionScaleFactor;
 
-        // Remove trailing zeros from cents
-        int leadingZeros = (int)Math.log10(itemFractionScaleFactor);
-        while(cents % 10 == 0 && cents > 0) {
-            cents /= 10;
-            leadingZeros--;
-        }
-        StringBuilder centsString = new StringBuilder(String.valueOf(cents)); // Ensure cents are always two digits
-        // Fill leading zeros if necessary
-        while (centsString.length() < leadingZeros) {
-            centsString.insert(0, "0");
-        }
 
 
         String amountString = String.valueOf(wholeUnits);
@@ -514,6 +556,14 @@ public abstract class Bank implements ServerSaveable, IBank {
         }
         else
         {
+            float cents = (amount % itemFractionScaleFactor) / (float)itemFractionScaleFactor; // Convert to cents
+
+            String centsString = String.valueOf((cents));
+
+            // Remove "0." prefix if cents are zero
+            if(centsString.startsWith("0.")) {
+                centsString = centsString.substring(2);
+            }
             if(itemFractionScaleFactor > 1)
                 amountString = amountString + "." + centsString;
         }
@@ -540,22 +590,15 @@ public abstract class Bank implements ServerSaveable, IBank {
         sb.reverse();
         if(amount % itemFractionScaleFactor != 0)
         {
-            sb.append('.');
-            long cents = amount % itemFractionScaleFactor;
 
-            // remove trailing zeros
-            int leadingZeros = (int)Math.log10(itemFractionScaleFactor);
-            while(cents % 10 == 0 && cents > 0) {
-                cents /= 10;
-                leadingZeros--;
+            float cents = (amount % itemFractionScaleFactor) / (float)itemFractionScaleFactor; // Convert to cents
+
+            String centsString = String.valueOf(cents);
+
+            // Remove "0." prefix if cents are zero
+            if(centsString.startsWith("0.")) {
+                centsString = centsString.substring(1);
             }
-
-            StringBuilder centsString = new StringBuilder(String.valueOf(cents)); // Ensure cents are always two digits
-            // Fill leading zeros if necessary
-            while (centsString.length() < leadingZeros) {
-                centsString.insert(0, "0");
-            }
-
             sb.append(centsString);
         }
         return sb.toString();
@@ -564,6 +607,18 @@ public abstract class Bank implements ServerSaveable, IBank {
     {
         long amount = (long)(realAmount * centScaleFactor);
         return getFormattedAmount(amount, centScaleFactor);
+    }
+    public static int getMaxDecimalDigitsCount(int itemFractionScaleFactor)
+    {
+        if(itemFractionScaleFactor == 1)
+            return 0;
+        String centsString = String.valueOf(1.f/itemFractionScaleFactor);
+        // Remove "0." prefix if cents are zero
+        if(centsString.startsWith("0.")) {
+            centsString = centsString.substring(2);
+        }
+        // Count the number of digits after the decimal point
+        return centsString.length();
     }
 
     private boolean willOverflow(long tryToAddAmount)

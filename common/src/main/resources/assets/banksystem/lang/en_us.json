@@ -49,6 +49,10 @@
   "gui.banksystem.ask_popup.yes": "YES",
   "gui.banksystem.ask_popup.no": "NO",
   "gui.banksystem.setting_screen.ask_remove_message": "Are you sure you want to remove this item from the bank?\nThis will remove the item from all players bank accounts!\nThis action cannot be undone!",
+  "gui.banksystem.setting_screen.ask_item_fraction_scale_factor_screen.title": "Ask Item Fraction Scale Factor",
+  "gui.banksystem.setting_screen.ask_item_fraction_scale_factor_screen.label": "Whats the smallest possible unit of this item that can be stored in the bank.",
+  "gui.banksystem.setting_screen.ask_item_fraction_scale_factor_screen.tooltip": "In the bank you can store items in fractions. Money for example gets stored in cents.\nThat means the smallest unit of money that can be stored in the bank is 0.01.\nFor items that are not money, you can set the smallest unit that can be stored in the bank.",
+  "gui.banksystem.setting_screen.ask_item_fraction_scale_factor_screen.confirm_button": "Confirm",
 
   "gui.banksystem.iteminfo_widget.total_supply": "Total supply: {amount}",
   "gui.banksystem.iteminfo_widget.total_locked": "Total locked: {amount}",
@@ -116,7 +120,7 @@
 
   "message.banksystem.item_not_allowed": "{item_name} is not allowed to be stored in the bank",
   "message.banksystem.item_not_allowed_failed": "Failed to disallow {item_name} for banking",
-  "message.banksystem.item_now_allowed": "{item_name} is now allowed to be stored in the bank",
+  "message.banksystem.item_now_allowed": "{item_name} is now allowed to be stored in the bank.\nThe smallest unit of this item that can be stored in the bank is {amount}.",
   "message.banksystem.item_now_allowed_failed": "Failed to allow {item_name} for banking",
   "message.banksystem.item_already_allowed": "{item_name} is already allowed to be stored in the bank, you idiot sandwich",
   "message.banksystem.invalid_item_id": "Unknown item {item_name}",

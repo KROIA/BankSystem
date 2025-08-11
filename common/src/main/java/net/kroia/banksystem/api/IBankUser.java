@@ -1,5 +1,6 @@
 package net.kroia.banksystem.api;
 
+import com.google.gson.JsonElement;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
 import net.kroia.banksystem.util.ItemID;
@@ -26,9 +27,9 @@ public interface IBankUser {
      * Can be requested by the client using the ClientBankManager.
      *
      * @param itemID The item ID of the bank to get minimal data for.
-     * @return Datapacket containing minimal data about the bank, or null if no such bank exists.
+     * @return Datapacket containing minimal data about the bank, or empty packet if the bank does not exist.
      */
-    @Nullable MinimalBankData getMinimalBankData(ItemID itemID);
+    MinimalBankData getMinimalBankData(ItemID itemID);
 
     /**
      * Gets the UUID of the player who owns this bank user.
@@ -69,7 +70,7 @@ public interface IBankUser {
      * @param notifyPlayerOnFail Whether to notify the player who owns the bank account if the creation fails.
      * @return The created or existing item bank, or null if creation failed.
      */
-    @Nullable IBank createItemBank(ItemID itemID, long startBalance, boolean notifyPlayerOnFail);
+    @Nullable IBank createItemBank(ItemID itemID, float startBalance, boolean notifyPlayerOnFail);
 
     /**
      * Returns the bank associated with the given item ID.
@@ -140,10 +141,26 @@ public interface IBankUser {
     void setBankNotificationEnabled(boolean enabled);
 
     /**
+     * Converts this bank user data to a JSON representation.
+     *
+     * @return A JsonElement representing this bank user.
+     */
+    JsonElement toJson();
+
+    /**
+     * Converts this bank user data to a JSON string representation.
+     *
+     * @return A JSON string representing this bank user.
+     */
+    String toJsonString();
+
+    /**
      * Returns a string representation of this bank user.
      * This is used for logging and debugging purposes.
      *
      * @return A string representation of this bank user.
      */
     String toString();
+
+
 }

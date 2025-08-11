@@ -71,7 +71,7 @@ public interface IClientBankManager {
      * @param itemID   The ID of the item to allow.
      * @param callback A callback that receives a Boolean indicating success or failure.
      */
-    void requestAllowItem(ItemID itemID, Consumer<Boolean> callback);
+    void requestAllowItem(ItemID itemID, int centScaleFactor, Consumer<Boolean> callback);
 
     /**
      * Requests to the server to forbid an item to be used in the bank system.

@@ -22,6 +22,7 @@ public class ItemInfoData implements INetworkPayloadEncoder {
     public final long totalSupply;
     public final long totalLocked;
     public final List<MinimalBankData> playerBanks;
+    public final int itemFractionScaleFactor;
 
 
     public ItemInfoData(ServerBankManager manager, ItemID itemID)
@@ -48,15 +49,18 @@ public class ItemInfoData implements INetworkPayloadEncoder {
         this.itemID = itemID;
         this.totalSupply = totalSupply;
         this.totalLocked = totalLocked;
+        this.itemFractionScaleFactor = manager.getItemFractionScaleFactor(itemID);
     }
     public ItemInfoData(ItemID itemID,
                         long totalSupply,
                         long totalLocked,
-                        List<MinimalBankData> playerBanks) {
+                        List<MinimalBankData> playerBanks,
+                        int itemFractionScaleFactor) {
         this.itemID = itemID;
         this.totalSupply = totalSupply;
         this.totalLocked = totalLocked;
         this.playerBanks = playerBanks;
+        this.itemFractionScaleFactor = itemFractionScaleFactor;
     }
 
     @Override
@@ -64,7 +68,8 @@ public class ItemInfoData implements INetworkPayloadEncoder {
         buf.writeItem(itemID.getStack());
         buf.writeLong(totalSupply);
         buf.writeLong(totalLocked);
-        buf.writeVarInt(playerBanks.size());
+        buf.writeInt(itemFractionScaleFactor);
+        buf.writeInt(playerBanks.size());
         for(MinimalBankData bank : playerBanks)
         {
             bank.encode(buf);
@@ -75,12 +80,13 @@ public class ItemInfoData implements INetworkPayloadEncoder {
         ItemID itemID = new ItemID(buf.readItem());
         long totalSupply = buf.readLong();
         long totalLocked = buf.readLong();
-        int size = buf.readVarInt();
+        int itemFractionScaleFactor = buf.readInt();
+        int size = buf.readInt();
         List<MinimalBankData> playerBanks = new ArrayList<>(size);
         for(int i = 0; i < size; i++)
         {
             playerBanks.add(MinimalBankData.decode(buf));
         }
-        return new ItemInfoData(itemID, totalSupply, totalLocked, playerBanks);
+        return new ItemInfoData(itemID, totalSupply, totalLocked, playerBanks, itemFractionScaleFactor);
     }
 }

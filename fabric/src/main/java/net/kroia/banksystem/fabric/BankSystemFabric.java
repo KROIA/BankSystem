@@ -32,11 +32,11 @@ public final class BankSystemFabric implements ModInitializer {
         // Handle world load (start)
         ServerLifecycleEvents.SERVER_STARTED.register((server)->
         {
+            BankSystemModBackend.onServerStart(server);
             // Check if NEZNAMY/TAB is present and register placeholders
             if (Platform.isModLoaded("tab")) {
                 NEZNAMY_TAB_Placeholders.register();
             }
-            BankSystemModBackend.onServerStart(server);
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(BankSystemModBackend::onServerStop);

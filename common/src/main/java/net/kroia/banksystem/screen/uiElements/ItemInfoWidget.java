@@ -5,7 +5,6 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
-import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
@@ -142,14 +141,10 @@ public class ItemInfoWidget extends BankSystemGuiElement {
 
         long totalSupply = info.totalSupply; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalSupply(itemID);
         long totalLocked = info.totalLocked; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
-        int itemFactor = 1;
-        if(this.itemID.getStack().getItem().equals(BankSystemItems.MONEY.get()))
-        {
-            itemFactor = 100;
-        }
 
-        totalSuplyTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalSuplyMessage(Bank.getNormalizedAmount(totalSupply, itemFactor)));
-        totalLockedTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalLockedMessage(Bank.getNormalizedAmount(totalLocked, itemFactor)));
+
+        totalSuplyTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalSuplyMessage(Bank.getNormalizedAmount(totalSupply, info.itemFractionScaleFactor)));
+        totalLockedTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalLockedMessage(Bank.getNormalizedAmount(totalLocked, info.itemFractionScaleFactor)));
 
 
         List<MinimalBankData> bankData = info.playerBanks;
@@ -172,9 +167,9 @@ public class ItemInfoWidget extends BankSystemGuiElement {
             else
                 toRemoveItems.remove(userBank.playerName);
 
-            userWidget.setBalance(userBank.balance, userBank.centScaleFactor);
-            userWidget.setLockedBalance(userBank.lockedBalance, userBank.centScaleFactor);
-            userWidget.setTotalBalance(userBank.balance + userBank.lockedBalance, userBank.centScaleFactor);
+            userWidget.setBalance(userBank.balance, userBank.itemFractionScaleFactor);
+            userWidget.setLockedBalance(userBank.lockedBalance, userBank.itemFractionScaleFactor);
+            userWidget.setTotalBalance(userBank.balance + userBank.lockedBalance, userBank.itemFractionScaleFactor);
             userWidget.setPlayerName(userBank.playerName);
             userWidget.setPlayerUUID(userBank.playerUUID);
         }

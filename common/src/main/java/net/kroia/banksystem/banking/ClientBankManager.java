@@ -7,6 +7,7 @@ import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankManagerData;
 import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
 import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.request.AllowItemRequest;
 import net.kroia.banksystem.networking.request.MinimalBankDataRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.client.Minecraft;
@@ -55,9 +56,10 @@ public class ClientBankManager implements IClientBankManager {
     }
 
     @Override
-    public void requestAllowItem(ItemID itemID, Consumer<Boolean> callback)
+    public void requestAllowItem(ItemID itemID, int centScaleFactor, Consumer<Boolean> callback)
     {
-        BankSystemNetworking.ALLOW_ITEM_REQUEST.sendRequestToServer(itemID, callback);
+        AllowItemRequest.Data requestData = new AllowItemRequest.Data(itemID, centScaleFactor);
+        BankSystemNetworking.ALLOW_ITEM_REQUEST.sendRequestToServer(requestData, callback);
     }
 
     @Override

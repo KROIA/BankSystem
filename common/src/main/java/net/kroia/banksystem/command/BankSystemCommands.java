@@ -4,7 +4,6 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
@@ -221,7 +220,7 @@ public class BankSystemCommands {
         // /bank disallowItemInHand                             - Makes the item in the player's hand unavailable for bank accounts
         // /bank bankManagementGUI                              - Open bankManagement GUI
         // /bank setStartingBalance                             - Set the starting money balance for new players
-        // /bank setItemTransferTickInterval                    - Set the amount of ticks it uses for a item to be transfered in the bank terminal block. If set to 0, it will be instant.
+        // /bank setItemTransferTickInterval                    - Set the amount of ticks it uses for a item to be transferred in the bank terminal block. If set to 0, it will be instant.
         // /bank save                                           - Save all bank data and settings
         // /bank saveBankaccounts                               - Save all bank data
         // /bank saveSettings                                   - Save BankSystemMod settings to file
@@ -313,14 +312,14 @@ public class BankSystemCommands {
                                                                     }
                                                                     return builder.buildFuture();
                                                                 })*/
-                                                                .then(Commands.argument("balance", LongArgumentType.longArg(0))
+                                                                .then(Commands.argument("balance", FloatArgumentType.floatArg(0))
                                                                         .executes(context -> {
                                                                             CommandSourceStack source = context.getSource();
                                                                             ServerPlayer player = source.getPlayerOrException();
 
                                                                             // Get arguments
                                                                             String itemID = StringArgumentType.getString(context, "itemID");
-                                                                            long balance = LongArgumentType.getLong(context, "balance");
+                                                                            float balance = FloatArgumentType.getFloat(context, "balance");
                                                                             String username = StringArgumentType.getString(context, "username");
 
                                                                             ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
@@ -419,8 +418,11 @@ public class BankSystemCommands {
                                                 return Command.SINGLE_SUCCESS;
                                             }
                                             ItemID itemIDObj = new ItemID(itemStack);
-                                            if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(itemIDObj))
-                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemID));
+                                            int centScaleFactor = 1;
+                                            if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(itemIDObj, centScaleFactor)) {
+                                                centScaleFactor = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(itemIDObj);
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemID, Bank.getFormattedAmount(1, centScaleFactor)));
+                                            }
                                             else
                                                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemID));
                                             return Command.SINGLE_SUCCESS;
@@ -443,8 +445,11 @@ public class BankSystemCommands {
 
 
                                             ItemID itemIDObj = new ItemID(item);
-                                            if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(itemIDObj))
-                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemIDObj.toString()));
+                                            int centScaleFactor = 1;
+                                            if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(itemIDObj, centScaleFactor)) {
+                                                centScaleFactor = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(itemIDObj);
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemIDObj.toString(), Bank.getFormattedAmount(1, centScaleFactor)));
+                                            }
                                             else
                                                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemIDObj.toString()));
                                             return Command.SINGLE_SUCCESS;
@@ -715,7 +720,7 @@ public class BankSystemCommands {
         return Command.SINGLE_SUCCESS;
     }
 
-    private static int bank_create(ServerPlayer player, String targetPlayer, ItemID itemID, long balance) {
+    private static int bank_create(ServerPlayer player, String targetPlayer, ItemID itemID, float balance) {
         if(itemID == null)
         {
             ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));

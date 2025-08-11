@@ -15,7 +15,11 @@ import java.util.Objects;
 import java.util.UUID;
 
 public class ItemID implements ServerSaveable, INetworkPayloadConverter {
+
+    public static final ItemID EMPTY = new ItemID(Items.AIR.getDefaultInstance());
+
     private ItemStack stack;
+
 
     public ItemID(String itemID) {
         this(ItemUtilities.createItemStackFromId(itemID));

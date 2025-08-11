@@ -164,6 +164,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             MoneyItem moneyItem = (MoneyItem) itemID.getStack().getItem();
                             depositAmount *= moneyItem.worth();
                         }
+                        else
+                        {
+                            depositAmount = bankAccount.convertToRawAmount(depositAmount);
+                        }
                         if(bankAccount.deposit(depositAmount) == Bank.Status.SUCCESS) {
                             inventory.removeItem(itemID, availableAmount);
                             setAmount(itemID, getAmount(itemID) + availableAmount);
@@ -179,25 +183,25 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 else
                 {
                     // send to inventory
-
                     if(isMoney)
                     {
                         amount = Math.min(amount, amountToProcess);
                         amount *= ((MoneyItem)BankSystemItems.MONEY.get()).worth();
                         amount = Math.min(amount, bankAccount.getBalance());
-                        if(amount < 100)
+                        int moneyFractionScaleFactor = bankAccount.getItemFractionScaleFactor();
+                        if(amount < moneyFractionScaleFactor)
                             amount = 0; // don't transfer less than 100 cents
-                        if(amount % 100 != 0)
-                            amount = (amount / 100) * 100; // round to whole dollars
+                        if(amount % moneyFractionScaleFactor != 0)
+                            amount = (amount / moneyFractionScaleFactor) * moneyFractionScaleFactor; // round to whole dollars
                         if(amount <= 0) {
                             cancelTask(itemID);
                             continue;
                         }
 
-                        long addedAmount = inventory.addItem(itemID, amount/100);
+                        long addedAmount = inventory.addItem(itemID, (long)bankAccount.convertToRealAmount(amount));
                         if(addedAmount > 0)
                         {
-                            if(bankAccount.withdraw(addedAmount*100) != Bank.Status.SUCCESS)
+                            if(bankAccount.withdraw(bankAccount.convertToRawAmount(addedAmount)) != Bank.Status.SUCCESS)
                             {
                                 // error
                                 error("Failed to withdraw " + Bank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
@@ -214,7 +218,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     else
                     {
                         amount = Math.min(amount, amountToProcess);
-                        amount = Math.min(amount, bankAccount.getBalance());
+                        amount = Math.min(amount, (long)bankAccount.convertToRealAmount(bankAccount.getBalance()));
                         if(amount <= 0) {
                             cancelTask(itemID);
                             continue;
@@ -222,7 +226,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         long addedAmount = inventory.addItem(itemID, amount);
                         if(addedAmount > 0)
                         {
-                            if(bankAccount.withdraw(addedAmount) != Bank.Status.SUCCESS)
+                            if(bankAccount.withdraw(bankAccount.convertToRawAmount(addedAmount)) != Bank.Status.SUCCESS)
                             {
                                 // error
                                 error("Failed to withdraw " + Bank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
