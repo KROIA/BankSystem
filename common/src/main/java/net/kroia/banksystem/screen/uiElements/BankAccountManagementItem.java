@@ -26,7 +26,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     private static final Component TOTAL_LABEL_TOOLTIP = Component.translatable(PREFIX+"total_label.tooltip");
 
 
-    private final String playerName;
+    private final int accountNumber;
     private final ItemID itemID;
     private final ItemView itemView;
     private final Button closeAccountButton;
@@ -49,11 +49,11 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     private final int centScaleFactor;
 
 
-    public BankAccountManagementItem(ItemID itemID, String playerName, int centScaleFactor)
+    public BankAccountManagementItem(ItemID itemID, int accountNumber, int centScaleFactor)
     {
         super();
         this.itemID = itemID;
-        this.playerName = playerName;
+        this.accountNumber = accountNumber;
         this.centScaleFactor = centScaleFactor;
         itemView = new ItemView(itemID.getStack());
         balanceLabel = new Label(BALANCE.getString());
@@ -74,7 +74,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
 
         closeAccountButton = new Button(CLOSE_ACCOUNT_BUTTON.getString(), () -> {
             String askTitle = BankSystemTextMessages.getBankAccountManagementItemAskRemoveTitleMessage(itemID.getName());
-            String askMessage = BankSystemTextMessages.getBankAccountManagementItemAskRemoveMessage(itemID.getName(), playerName);
+            String askMessage = BankSystemTextMessages.getBankAccountManagementItemAskRemoveMessage(itemID.getName(), accountNumber);
             AskPopupScreen popup = new AskPopupScreen((GuiScreen)getRoot().getScreen(), this::onCloseAccountButtonClicked, () -> {}, askTitle, askMessage);
             popup.setSize(400,100);
             popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
@@ -185,9 +185,9 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     {
         return itemID;
     }
-    public String getPlayerName()
+    public int getAccountNumber()
     {
-        return playerName;
+        return accountNumber;
     }
 
     public long getBalance()

@@ -23,9 +23,18 @@ import java.util.ArrayList;
 
 public class MoneyItem extends Item{
     public static final String NAME = "money";
+    public static int ITEM_FRACTION_SCALE_FACTOR = 100; // Scale factor for item fractions, e.g., 100 means 1.00 currency units
     private static final Component ITEM_NAME = Component.translatable("item."+ BankSystemMod.MOD_ID+".money_name");
     private static final Component CURRENCY_NAME = Component.translatable("item."+ BankSystemMod.MOD_ID+".currency");
+    private static ItemID itemID = null;
 
+    public static ItemID getItemID() {
+        if(itemID != null) {
+            return itemID;
+        }
+        itemID  = new ItemID(new ItemStack(BankSystemItems.MONEY.get()));
+        return itemID;
+    }
     public static String getCurrencyName() {
         return CURRENCY_NAME.getString();
     }
@@ -62,7 +71,7 @@ public class MoneyItem extends Item{
 
 
     public long worth() {
-        return 100; // 100 represents 1.00 currency units
+        return ITEM_FRACTION_SCALE_FACTOR; // 100 represents 1.00 currency units
     }
 
     public static boolean isMoney(ItemID itemID)

@@ -3,7 +3,7 @@ package net.kroia.banksystem.entity.custom;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankUser;
+import net.kroia.banksystem.banking.BankAccount;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.block.custom.BankUploadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
@@ -253,8 +253,8 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             return;
         if(playerOwner == null)
             return;
-        IBankUser bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerOwner);
-        if(bankUser == null)
+        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerOwner);
+        if(account == null)
             return;
 
 
@@ -276,10 +276,10 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                 }
 
                 ItemID itemID = new ItemID(stack);
-                IBank itemBank = bankUser.getBank(itemID);
+                IBank itemBank = account.getBank(itemID);
                 if(itemBank == null)
                 {
-                    itemBank = bankUser.createItemBank(itemID, 0,false);
+                    itemBank = account.createBank(itemID, 0);
                 }
                 long amount = stack.getCount();
                 if(MoneyItem.isMoney(itemID))

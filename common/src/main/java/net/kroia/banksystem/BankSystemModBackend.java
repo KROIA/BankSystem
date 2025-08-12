@@ -4,7 +4,6 @@ import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.api.*;
-import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
@@ -17,6 +16,7 @@ import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.item.BankSystemItems;
+import net.kroia.banksystem.item.custom.software.Software;
 import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.*;
@@ -27,7 +27,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 
 public class BankSystemModBackend implements BankSystemAPI {
     public static class Instances
@@ -51,11 +50,12 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemDataHandler.setBackend(INSTANCES);
         BankTerminalBlockEntity.setBackend(INSTANCES);
         ServerBankManager.setBackend(INSTANCES);
-        BankUser.setBackend(INSTANCES);
+        //BankUserOld.setBackend(INSTANCES);
         BankSystemModSettings.setBackend(INSTANCES);
         BankSystemCommands.setBackend(INSTANCES);
         BankDownloadBlockEntity.setBackend(INSTANCES);
         BankUploadBlockEntity.setBackend(INSTANCES);
+        Software.setBackend(INSTANCES);
 
         BankSystemNetworkPacket.setBackend(INSTANCES);
         BankSystemGenericRequest.setBackend(INSTANCES);
@@ -137,12 +137,18 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the server side
     public static void onPlayerJoin(ServerPlayer player)
     {
+        if(!INSTANCES.SERVER_BANK_MANAGER.userExists(player.getUUID()))
+        {
+            INSTANCES.SERVER_BANK_MANAGER.addUser(player);
+            INSTANCES.SERVER_BANK_MANAGER.createPersonalBank(player.getUUID());
+        }
+        /*
         INSTANCES.SERVER_BANK_MANAGER.createUser(
                 player,
                 new ArrayList<>(),
                 true,
                 INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.get()
-        );
+        );*/
     }
 
     // Called from the server side

@@ -17,6 +17,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloadContainerMenu> {
     private static final String prefix = "gui." + BankSystemMod.MOD_ID + ".bank_download_screen.";
@@ -182,13 +183,13 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     }
     private void onSelectItemButtonClicked() {
         BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankManagerData((minimalBankManagerData) -> {
-            ArrayList<ItemStack> allowedItemStacks;
+            List<ItemStack> allowedItemStacks;
             if(minimalBankManagerData == null)
             {
                 allowedItemStacks = new ArrayList<>();
             }
             else {
-                allowedItemStacks = minimalBankManagerData.createAllowedItemStacks();
+                allowedItemStacks = minimalBankManagerData.getAllowedItemStacks();
             }
             ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(
                     this,

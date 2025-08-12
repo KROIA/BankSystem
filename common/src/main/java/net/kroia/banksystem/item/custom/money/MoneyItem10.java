@@ -14,6 +14,6 @@ public class MoneyItem10 extends MoneyItem {
     }
     @Override
     public long worth() {
-        return 1000;
+        return 10L*ITEM_FRACTION_SCALE_FACTOR;
     }
 }

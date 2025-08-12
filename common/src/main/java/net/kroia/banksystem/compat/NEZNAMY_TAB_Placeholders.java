@@ -6,8 +6,9 @@ import me.neznamy.tab.api.placeholder.PlaceholderManager;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.api.IServerBankManager;
+import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.modutilities.setting.Setting;
 
 import java.util.UUID;
@@ -49,33 +50,46 @@ public class NEZNAMY_TAB_Placeholders {
 
         registerPlayerPlaceholder(settings.PLAYER_BALANCE, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
-            IBank bank = sbm.getMoneyBank(playerUUID);
-            if(bank != null)
-                return bank.getNormalizedBalance();
+            BankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
+            if(bankAccount != null)
+            {
+                IBank bank = bankAccount.getBank(MoneyItem.getItemID());
+                if(bank != null)
+                    return bank.getNormalizedBalance();
+            }
             return "0";
         });
 
         registerPlayerPlaceholder(settings.PLAYER_LOCKED_BALANCE, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
-            IBank bank = sbm.getMoneyBank(playerUUID);
-            if(bank != null)
-                return bank.getNormalizedLockedBalance();
+            BankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
+            if(bankAccount != null)
+            {
+                IBank bank = bankAccount.getBank(MoneyItem.getItemID());
+                if(bank != null)
+                    return bank.getNormalizedLockedBalance();
+            }
             return "0";
         });
 
         registerPlayerPlaceholder(settings.PLAYER_TOTAL_BALANCE, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
-            IBank bank = sbm.getMoneyBank(playerUUID);
-            if(bank != null)
-                return bank.getNormalizedTotalBalance();
+            BankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
+            if(bankAccount != null)
+            {
+                IBank bank = bankAccount.getBank(MoneyItem.getItemID());
+                if(bank != null)
+                    return bank.getNormalizedTotalBalance();
+            }
             return "0";
         });
 
         registerPlayerPlaceholder(settings.PLAYER_BANKUSER_JSON, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
-            IBankUser bankUser = sbm.getUser(playerUUID);
-            if(bankUser != null) {
-                return bankUser.toJsonString();
+            BankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
+            if(bankAccount != null)
+            {
+                return bankAccount.toJsonString();
             }
             return "0";
         });

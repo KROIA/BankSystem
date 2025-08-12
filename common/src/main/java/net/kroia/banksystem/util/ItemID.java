@@ -33,6 +33,10 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
         this.stack = stack.copy(); // Ensure immutability
         this.stack.setCount(1); // Ensure count is 1
     }
+    private ItemID()
+    {
+
+    }
 
     public static ItemID of(ItemStack stack)
     {
@@ -46,6 +50,19 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
     }
     public ItemID(FriendlyByteBuf buf) {
         decode(buf);
+    }
+
+    public static ItemID createFromTag(CompoundTag tag) {
+        ItemID itemID = new ItemID();
+        if (!itemID.load(tag)) {
+            return null; // Invalid data
+        }
+        return itemID;
+    }
+    public static ItemID createFomBytes(FriendlyByteBuf buf) {
+        ItemID itemID = new ItemID();
+        itemID.decode(buf);
+        return itemID;
     }
 
     @Override

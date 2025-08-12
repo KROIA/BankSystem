@@ -1,0 +1,749 @@
+package net.kroia.banksystem.banking;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.banking.clientdata.BankData;
+import net.kroia.banksystem.banking.clientdata.BankUserData;
+import net.kroia.banksystem.banking.clientdata.UserData;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.JsonUtilities;
+import net.kroia.modutilities.ServerSaveable;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.*;
+
+public class BankAccount implements ServerSaveable {
+
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankAccount.BACKEND_INSTANCES = backend;
+        User.setBackend(backend);
+    }
+
+
+
+    private int accountNumber;
+    private @Nullable User personalBankOwner;
+    private final Map<UUID, BankUser> users = new HashMap<>();
+    private final Map<ItemID, Bank> banks = new HashMap<>();
+
+    private BankAccount(int accountNumber) {
+        this.accountNumber = accountNumber;
+    }
+    private BankAccount(int accountNumber, @Nullable User personalBankOwnerData, List<BankUser> users, Map<ItemID, Bank> banks) {
+        this.accountNumber = accountNumber;
+        this.personalBankOwner = personalBankOwnerData;
+        this.banks.putAll(banks);
+        for (BankUser user : users) {
+            this.users.put(user.getUUID(), user);
+        }
+    }
+    private BankAccount()
+    {
+
+    }
+
+    public static @Nullable BankAccount create(int accountNumber)
+    {
+        if (accountNumber <= 0) {
+            return null; // Invalid account number
+        }
+        return new BankAccount(accountNumber);
+    }
+    public static @Nullable BankAccount create(int accountNumber, List<BankUser> users, Map<ItemID, Bank> banks) {
+        if (accountNumber <= 0 || users == null || banks == null) {
+            return null; // Invalid account number or data
+        }
+        return new BankAccount(accountNumber, null, users, banks);
+    }
+    public static @Nullable BankAccount createPersonal(int accountNumber, User user, float startMoneyBalance) {
+        if (user == null || accountNumber <= 0) {
+            return null; // Invalid user or account number
+        }
+
+        Bank moneyBank = Bank.create(MoneyItem.getItemID(), startMoneyBalance);
+        if (moneyBank == null) {
+            return null; // Failed to create money bank
+        }
+        Map<ItemID, Bank> banks = new HashMap<>();
+        banks.put(MoneyItem.getItemID(), moneyBank); // Add money bank to the account
+        return new BankAccount(accountNumber, user, new ArrayList<>(), banks);
+    }
+    public static @Nullable BankAccount createFromTag(CompoundTag tag) {
+        BankAccount account = new BankAccount();
+        if (!account.load(tag)) {
+            return null; // Invalid data
+        }
+        return account;
+    }
+
+
+
+
+    public BankAccountData getAccountData()
+    {
+        UserData personalBankOwnerData = null;
+        if (this.personalBankOwner != null) {
+            personalBankOwnerData = this.personalBankOwner.getUserData(); // Convert User to UserData
+        }
+        Map<UUID, BankUserData> users = new HashMap<>();
+        Map<ItemID, BankData> bankData = new HashMap<>();
+
+        for(Map.Entry<UUID, BankUser> entry : this.users.entrySet()) {
+            UUID userUUID = entry.getKey();
+            BankUser user = entry.getValue();
+            users.put(userUUID, user.toBankUserData()); // Convert BankUser to BankUserData
+        }
+
+        for(Map.Entry<ItemID, Bank> entry : this.banks.entrySet()) {
+            ItemID itemID = entry.getKey();
+            Bank bank = entry.getValue();
+            bankData.put(itemID, bank.getMinimalData()); // Convert Bank to BankData
+        }
+
+        return new BankAccountData(accountNumber, personalBankOwnerData, users, bankData);
+    }
+
+
+    /**
+     * Only contains the bank data for the given item ID.
+     * @param itemID The item ID of the bank to get data for.
+     * @return BankAccountData containing only the bank data for the given item ID, or null if the item ID is invalid.
+     */
+    public BankAccountData getAccountData(ItemID itemID)
+    {
+        if (itemID == null) {
+            return null; // Invalid item ID
+        }
+        UserData personalBankOwnerData = null;
+        if (this.personalBankOwner != null) {
+            personalBankOwnerData = this.personalBankOwner.getUserData(); // Convert User to UserData
+        }
+        Map<UUID, BankUserData> users = new HashMap<>();
+        Map<ItemID, BankData> bankData = new HashMap<>();
+
+        for(Map.Entry<UUID, BankUser> entry : this.users.entrySet()) {
+            UUID userUUID = entry.getKey();
+            BankUser user = entry.getValue();
+            users.put(userUUID, user.toBankUserData()); // Convert BankUser to BankUserData
+        }
+
+        Bank bank = this.banks.get(itemID);
+        if (bank != null) {
+            bankData.put(itemID, bank.getMinimalData()); // Convert Bank to BankData
+        }
+
+        return new BankAccountData(accountNumber, personalBankOwnerData, users, bankData);
+    }
+    public @Nullable BankData getBankData(ItemID itemID)
+    {
+        if (itemID == null) {
+            return null; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getMinimalData(); // Get minimal data for the bank with the given item ID
+        }
+        return null; // No bank found for the item ID
+    }
+    public List<BankData> getBankData()
+    {
+        return banks.values().stream()
+                .map(Bank::getMinimalData)
+                .toList(); // Get minimal data for all banks in the account
+    }
+    public @Nullable BankUserData getUserData(UUID userUUID) {
+        if (userUUID == null) {
+            return null; // Invalid user UUID
+        }
+        BankUser user = users.get(userUUID);
+        if (user != null) {
+            return user.toBankUserData(); // Convert BankUser to BankUserData
+        }
+        return null; // No user found with the given UUID
+    }
+    public List<BankUserData> getUserData() {
+        return users.values().stream()
+                .map(BankUser::toBankUserData)
+                .toList(); // Get data for all users in the account
+    }
+
+
+    public int getAccountNumber() {
+        return accountNumber;
+    }
+    public int getPermission(UUID userUUID) {
+        BankUser user = users.get(userUUID);
+        if (user != null) {
+            return user.getPermission();
+        }
+        if(personalBankOwner != null && personalBankOwner.getUUID().equals(userUUID)) {
+            return BankPermission.getSelfOwnerPermissions(); // Return owner permissions if the user is the personalBankOwnerData
+        }
+        return 0; // Default to no permission if user not found
+    }
+    public boolean hasPermission(UUID userUUID, int permission)
+    {
+        if (userUUID == null || permission < 0) {
+            return false; // Invalid user UUID or permission
+        }
+        BankUser user = users.get(userUUID);
+        if (user != null) {
+            return BankPermission.hasPermission(user.getPermission(), permission); // Check user's permissions
+        }
+        if(personalBankOwner != null && personalBankOwner.getUUID().equals(userUUID)) {
+            return true; // Personal bank owner has all permissions
+        }
+        return false; // User not found, no permission
+    }
+    public void setPermission(UUID userUUID, int permission)
+    {
+        if (userUUID == null || permission < 0) {
+            return;
+        }
+        BankUser user = users.get(userUUID);
+        if (user == null) {
+            return;
+        }
+        user.setPermission(permission); // Update existing user's permission
+    }
+    public void addUser(User user, int permission)
+    {
+        if (user == null || permission < 0) {
+            return;
+        }
+        if(personalBankOwner != null && personalBankOwner.getUUID().equals(user.getUUID())) {
+            return; // Do not add the personalBankOwnerData as a user again
+        }
+        BankUser existingUser = users.get(user.getUUID());
+        if (existingUser != null) {
+            return;
+        }
+        users.put(user.getUUID(), new BankUser(user, permission)); // Add new user
+    }
+    public void removeUser(UUID userUUID) {
+        if (userUUID == null) {
+            return;
+        }
+        users.remove(userUUID); // Remove user by UUID
+        if(personalBankOwner != null && personalBankOwner.getUUID().equals(userUUID)) {
+            personalBankOwner = null; // If the removed user is the personalBankOwnerData, set personalBankOwnerData to null
+        }
+    }
+    public boolean hasAnyUser() {
+        return (!users.isEmpty() || personalBankOwner != null); // Check if there are any users
+    }
+    public boolean hasUser(UUID userUUID) {
+        return userUUID != null && (users.containsKey(userUUID) ||
+                (personalBankOwner != null && personalBankOwner.getUUID().equals(userUUID))); // Check if user exists
+    }
+    public @Nullable User getPersonalBankOwner() {
+        return personalBankOwner; // Get the personalBankOwnerData of the bank account
+    }
+    public void addBank(ItemID itemID, float startBalance) {
+        if (itemID == null || startBalance < 0) {
+            return; // Invalid item ID or balance
+        }
+        if (banks.containsKey(itemID)) {
+            return; // Bank already exists
+        }
+        Bank bank = Bank.create(itemID, startBalance);
+        if (bank != null) {
+            banks.put(itemID, bank); // Add new item bank
+        }
+    }
+    public void removeBank(ItemID itemID) {
+        if (itemID == null) {
+            return; // Invalid item ID
+        }
+        banks.remove(itemID); // Remove bank by item ID
+    }
+    public List<ItemID> removeEmptyBanks()
+    {
+        List<ItemID> emptyBanks = new ArrayList<>();
+        for (Map.Entry<ItemID, Bank> entry : banks.entrySet()) {
+            Bank bank = entry.getValue();
+            if (bank.getTotalBalance() <= 0) {
+                emptyBanks.add(entry.getKey()); // Collect empty banks
+            }
+        }
+        for (ItemID itemID : emptyBanks) {
+            banks.remove(itemID); // Remove empty banks from the account
+        }
+        return emptyBanks; // Return list of removed empty banks
+    }
+    public void removeAllBanks() {
+        banks.clear(); // Clear all banks in the account
+    }
+    public boolean hasAnyBank() {
+        return !banks.isEmpty(); // Check if there are any banks
+    }
+    public boolean hasBank(ItemID itemID) {
+        return itemID != null && banks.containsKey(itemID); // Check if bank exists for the item ID
+    }
+
+    public IBank createBank(ItemID itemID, float startBalance)
+    {
+        if (itemID == null) {
+            return null; // Invalid item ID
+        }
+        if (banks.containsKey(itemID)) {
+            return banks.get(itemID); // Return existing bank if it already exists
+        }
+        Bank bank = Bank.create(itemID, startBalance); // Create a new bank with 0 balance
+        if (bank != null) {
+            banks.put(itemID, bank); // Add new bank to the account
+            return bank;
+        }
+        return null; // Failed to create bank
+    }
+
+    public @Nullable IBank getBank(ItemID itemID) {
+        if (itemID == null) {
+            return null; // Invalid item ID
+        }
+        return banks.get(itemID); // Get bank by item ID
+    }
+    public Map<ItemID, IBank> getAllBanks() {
+        return new HashMap<>(banks); // Return a copy of all banks in the account
+    }
+
+    /*
+    public long getRawBalance(ItemID itemID)
+    {
+        if (itemID == null) {
+            return 0; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getBalance(); // Get balance from the bank
+        }
+        return 0; // No bank found for the item ID
+    }
+    public long getRawLockedBalance(ItemID itemID)
+    {
+        if (itemID == null) {
+            return 0; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getLockedBalance(); // Get locked balance from the bank
+        }
+        return 0; // No bank found for the item ID
+    }
+    public long getRawTotalBalance(ItemID itemID)
+    {
+        if (itemID == null) {
+            return 0; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getTotalBalance(); // Get total balance from the bank
+        }
+        return 0; // No bank found for the item ID
+    }
+    public float getRealBalance(ItemID itemID) {
+        if (itemID == null) {
+            return 0; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getRealBalance(); // Get real balance from the bank
+        }
+        return 0; // No bank found for the item ID
+    }
+    public float getRealLockedBalance(ItemID itemID) {
+        if (itemID == null) {
+            return 0; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getRealLockedBalance(); // Get real locked balance from the bank
+        }
+        return 0; // No bank found for the item ID
+    }
+    public float getRealTotalBalance(ItemID itemID) {
+        if (itemID == null) {
+            return 0; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getRealTotalBalance(); // Get real total balance from the bank
+        }
+        return 0; // No bank found for the item ID
+    }
+
+
+
+
+    public IBank.Status setRawBalance(ItemID item, long amount)
+    {
+        if (item == null)
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
+        if(amount < 0)
+            return IBank.Status.FAILED_NEGATIVE_VALUE; // Invalid amount
+        Bank bank = banks.get(item);
+        if (bank != null)
+        {
+            bank.setBalance(amount);
+            return IBank.Status.SUCCESS;
+        }
+        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
+    }
+    public IBank.Status setRealBalance(ItemID item, float amount)
+    {
+        if (item == null)
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
+        if(amount < 0)
+            return IBank.Status.FAILED_NEGATIVE_VALUE; // Invalid amount
+        Bank bank = banks.get(item);
+        if (bank != null) {
+            bank.setRealBalance(amount); // Set balance in the bank
+            return IBank.Status.SUCCESS;
+        }
+        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
+    }
+
+
+    public IBank.Status depositRaw(ItemID itemID, long amount)
+    {
+        if (itemID == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.deposit(amount); // Deposit raw amount into the bank
+        }
+        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
+    }
+    public IBank.Status depositReal(ItemID itemID, float amount)
+    {
+        if (itemID == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.depositReal(amount); // Deposit raw amount into the bank
+        }
+        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
+    }
+
+
+    public IBank.Status withdrawRaw(ItemID itemID, long amount)
+    {
+        if (itemID == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.withdraw(amount); // Withdraw raw amount from the bank
+        }
+        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
+    }
+    public IBank.Status withdrawReal(ItemID itemID, float amount)
+    {
+        if (itemID == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.withdrawReal(amount); // Withdraw real amount from the bank
+        }
+        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
+    }
+
+
+    public IBank.Status transferRaw(ItemID itemID, long amount, BankAccount targetAccount) {
+        if (itemID == null || targetAccount == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID or target account
+        }
+        Bank bank = banks.get(itemID);
+        Bank targetBank = targetAccount.banks.get(itemID);
+        if(bank == null || targetBank == null) {
+            return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID in either account
+        }
+        return bank.transfer(amount, targetBank);
+    }
+    public IBank.Status transferReal(ItemID itemID, float amount, BankAccount targetAccount) {
+        if (itemID == null || targetAccount == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID or target account
+        }
+        Bank bank = banks.get(itemID);
+        Bank targetBank = targetAccount.banks.get(itemID);
+        if(bank == null || targetBank == null) {
+            return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID in either account
+        }
+        return bank.transferReal(amount, targetBank);
+    }
+    
+    public IBank.Status transferRawFromLocked(ItemID itemID, long amount, BankAccount targetAccount) {
+        if (itemID == null || targetAccount == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID or target account
+        }
+        Bank bank = banks.get(itemID);
+        Bank targetBank = targetAccount.banks.get(itemID);
+        if(bank == null || targetBank == null) {
+            return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID in either account
+        }
+        return bank.transferFromLocked(amount, targetBank);
+    }
+    public IBank.Status transferRealFromLocked(ItemID itemID, float amount, BankAccount targetAccount) {
+        if (itemID == null || targetAccount == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID or target account
+        }
+        Bank bank = banks.get(itemID);
+        Bank targetBank = targetAccount.banks.get(itemID);
+        if(bank == null || targetBank == null) {
+            return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID in either account
+        }
+        return bank.transferFromLockedReal(amount, targetBank);
+    }
+    public IBank.Status transferRawFromLockedPrefered(ItemID itemID, long amount, BankAccount targetAccount) {
+        if (itemID == null || targetAccount == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID or target account
+        }
+        Bank bank = banks.get(itemID);
+        Bank targetBank = targetAccount.banks.get(itemID);
+        if(bank == null || targetBank == null) {
+            return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID in either account
+        }
+        return bank.transferFromLockedPrefered(amount, targetBank);
+    }
+    public IBank.Status transferRealFromLockedPrefered(ItemID itemID, float amount, BankAccount targetAccount) {
+        if (itemID == null || targetAccount == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID or target account
+        }
+        Bank bank = banks.get(itemID);
+        Bank targetBank = targetAccount.banks.get(itemID);
+        if(bank == null || targetBank == null) {
+            return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID in either account
+        }
+        return bank.transferFromLockedPreferedReal(amount, targetBank);
+    }
+
+
+    public IBank.Status lockRawAmount(ItemID itemID, long amount) {
+        if (itemID == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.lockAmount(amount); // Lock raw amount in the bank
+        }
+        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
+    }
+    public IBank.Status lockRealAmount(ItemID itemID, float amount) {
+        if (itemID == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.lockAmountReal(amount); // Lock real amount in the bank
+        }
+        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
+    }
+
+
+
+    public IBank.Status unlockRawAmount(ItemID itemID, long amount) {
+        if (itemID == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.unlockAmount(amount); // Unlock raw amount in the bank
+        }
+        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
+    }
+    public IBank.Status unlockRealAmount(ItemID itemID, float amount) {
+        if (itemID == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.unlockAmountReal(amount); // Unlock real amount in the bank
+        }
+        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
+    }
+    public IBank.Status unlockAll(ItemID itemID) {
+        if (itemID == null) {
+            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            bank.unlockAll(); // Unlock all amounts in the bank
+            return IBank.Status.SUCCESS; // Successfully unlocked all amounts
+        }
+        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
+    }
+
+    public String getNormalizedBalance(ItemID itemID) {
+        if (itemID == null) {
+            return "0"; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getNormalizedBalance(); // Get normalized balance from the bank
+        }
+        return "0"; // No bank found for the item ID
+    }
+    public String getNormalizedLockedBalance(ItemID itemID) {
+        if (itemID == null) {
+            return "0"; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getNormalizedLockedBalance(); // Get normalized locked balance from the bank
+        }
+        return "0"; // No bank found for the item ID
+    }
+    public String getNormalizedTotalBalance(ItemID itemID) {
+        if (itemID == null) {
+            return "0"; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getNormalizedTotalBalance(); // Get normalized total balance from the bank
+        }
+        return "0"; // No bank found for the item ID
+    }
+    public String getFormattedBalance(ItemID itemID) {
+        if (itemID == null) {
+            return "0"; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getFormattedBalance(); // Get formatted balance from the bank
+        }
+        return "0"; // No bank found for the item ID
+    }
+    public String getFormattedLockedBalance(ItemID itemID) {
+        if (itemID == null) {
+            return "0"; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getFormattedLockedBalance(); // Get formatted locked balance from the bank
+        }
+        return "0"; // No bank found for the item ID
+    }
+    public String getFormattedTotalBalance(ItemID itemID) {
+        if (itemID == null) {
+            return "0"; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank != null) {
+            return bank.getFormattedTotalBalance(); // Get formatted total balance from the bank
+        }
+        return "0"; // No bank found for the item ID
+    }
+*/
+
+
+
+
+
+    @Override
+    public boolean save(CompoundTag tag) {
+        tag.putInt("accountNumber", accountNumber);
+
+        if(personalBankOwner != null)
+            tag.putUUID("personalBankOwnerDataUUID", personalBankOwner.getUUID());
+
+        ListTag usersTag = new ListTag();
+        for (BankUser user : users.values()) {
+            UUID userUUID = user.getUser().getUUID();
+            int permissions = user.getPermission();
+            CompoundTag userTag = new CompoundTag();
+            userTag.putUUID("userUUID", userUUID);
+            userTag.putInt("permissions", permissions);
+            usersTag.add(userTag);
+        }
+        tag.put("users", usersTag);
+
+        ListTag banksTag = new ListTag();
+        for (Map.Entry<ItemID, Bank> entry : banks.entrySet()) {
+            Bank bank = entry.getValue();
+            CompoundTag bankTag = new CompoundTag();
+            bank.save(bankTag);
+            banksTag.add(bankTag);
+        }
+        tag.put("banks", banksTag);
+        return true;
+    }
+
+    @Override
+    public boolean load(CompoundTag tag) {
+        if (    !tag.contains("accountNumber") ||
+                !tag.contains("users") ||
+                !tag.contains("banks")) {
+            return false; // Invalid data
+        }
+        this.accountNumber = tag.getInt("accountNumber");
+
+        if(tag.contains("personalBankOwnerDataUUID")) {
+            UUID personalBankOwnerDataUUID = tag.getUUID("personalBankOwnerDataUUID");
+            this.personalBankOwner = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(personalBankOwnerDataUUID);
+        } else {
+            this.personalBankOwner = null; // No personalBankOwnerData set
+        }
+
+
+
+        ListTag usersTag = tag.getList("users", 10);
+        for (int i = 0; i < usersTag.size(); i++) {
+            CompoundTag userTag = usersTag.getCompound(i);
+            UUID userUUID = userTag.getUUID("userUUID");
+            int permissions = userTag.getInt("permissions");
+            User user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(userUUID);
+            if (user != null) {
+                users.put(user.getUUID(), new BankUser(user, permissions));
+            }
+        }
+
+        ListTag banksTag = tag.getList("banks", 10);
+        for (int i = 0; i < banksTag.size(); i++) {
+            CompoundTag bankTag = banksTag.getCompound(i);
+            Bank bank = Bank.createFromTag(bankTag);
+            if (bank != null) {
+                banks.put(bank.getItemID(), bank);
+            }
+        }
+        return true;
+    }
+
+    public JsonElement toJson()
+    {
+        JsonObject jsonObject = new JsonObject();
+        jsonObject.addProperty("accountNumber", accountNumber);
+        JsonArray usersJson = new JsonArray();
+        for (BankUser user : users.values()) {
+            usersJson.add(user.toJson());
+        }
+        jsonObject.add("users", usersJson);
+
+        JsonArray banksJson = new JsonArray();
+        for (Map.Entry<ItemID, Bank> entry : banks.entrySet()) {
+            banksJson.add(entry.getValue().toJson());
+        }
+        jsonObject.add("banks", banksJson);
+        return jsonObject;
+    }
+    public String toJsonString()
+    {
+        return JsonUtilities.toPrettyString(toJson());
+    }
+
+    @Override
+    public String toString() {
+        return toJsonString();
+    }
+}

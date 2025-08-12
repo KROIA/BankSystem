@@ -1,5 +1,6 @@
 package net.kroia.banksystem.item.custom.software;
 
+import net.kroia.banksystem.banking.BankAccount;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.block.custom.TerminalBlock;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
@@ -16,6 +17,8 @@ import org.jetbrains.annotations.NotNull;
 import java.util.UUID;
 
 public class BankingSoftware extends Software {
+
+
     public static final String NAME = "banking_software";
     public BankingSoftware() {
         super();
@@ -31,8 +34,11 @@ public class BankingSoftware extends Software {
     @Override
     protected void onRightClickedServerSide(ServerPlayer player)
     {
-        if(player.gameMode.getGameModeForPlayer() == GameType.CREATIVE)
-            SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID());
+        if(player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
+            BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(player.getUUID());
+            if(bankAccount != null)
+                SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), bankAccount.getAccountNumber());
+        }
     }
 
 
@@ -45,7 +51,9 @@ public class BankingSoftware extends Software {
 
                 if(serverPlayer.hasPermissions(2) && serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
                     UUID targetUUID = target.getUUID();
-                    SyncOpenGUIPacket.send_openBankAccountScreen(serverPlayer, targetUUID);
+                    BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(targetUUID);
+                    if(bankAccount != null)
+                        SyncOpenGUIPacket.send_openBankAccountScreen(serverPlayer, targetUUID, bankAccount.getAccountNumber());
                 }
             }
             return InteractionResult.SUCCESS;

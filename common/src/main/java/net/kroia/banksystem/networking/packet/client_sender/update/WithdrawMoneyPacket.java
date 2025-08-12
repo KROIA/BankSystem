@@ -1,6 +1,7 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
 import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.banking.BankAccount;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
@@ -57,7 +58,12 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender) {
         UUID playerUUID = sender.getUUID();
-        IBank moneyBank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyBank(playerUUID);
+
+        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerUUID);
+        if(account == null)
+            return;
+
+        IBank moneyBank = account.getBank(MoneyItem.getItemID());
         if(moneyBank == null) {
             return; // No money bank found for the player
         }

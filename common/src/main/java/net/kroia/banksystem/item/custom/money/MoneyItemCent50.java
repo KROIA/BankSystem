@@ -9,6 +9,6 @@ public class MoneyItemCent50 extends MoneyItem{
 
     @Override
     public long worth() {
-        return 50;
+        return 5000L/ITEM_FRACTION_SCALE_FACTOR; // 50 cents is 5000 in the scale factor
     }
 }

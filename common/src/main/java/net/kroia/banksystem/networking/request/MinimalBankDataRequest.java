@@ -1,15 +1,7 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.banking.clientdata.MinimalBankData;
-import net.kroia.banksystem.util.BankSystemGenericRequest;
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.INetworkPayloadEncoder;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
-
-import java.util.UUID;
-
-public class MinimalBankDataRequest extends BankSystemGenericRequest<MinimalBankDataRequest.InputType, MinimalBankData> {
+/*
+public class MinimalBankDataRequest extends BankSystemGenericRequest<MinimalBankDataRequest.InputType, BankData> {
 
     public static class InputType implements INetworkPayloadEncoder
     {
@@ -42,12 +34,12 @@ public class MinimalBankDataRequest extends BankSystemGenericRequest<MinimalBank
     }
 
     @Override
-    public MinimalBankData handleOnClient(InputType input) {
+    public BankData handleOnClient(InputType input) {
         return null;
     }
 
     @Override
-    public MinimalBankData handleOnServer(InputType input, ServerPlayer sender) {
+    public BankData handleOnServer(InputType input, ServerPlayer sender) {
         if(input.userUUID.compareTo(sender.getUUID()) == 0) {
             // If the request is for the sender's own data, check if they are an admin
             if(!playerIsAdmin(sender)) {
@@ -63,10 +55,10 @@ public class MinimalBankDataRequest extends BankSystemGenericRequest<MinimalBank
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, MinimalBankData output) {
+    public void encodeOutput(FriendlyByteBuf buf, BankData output) {
         buf.writeBoolean(output != null);
         if(output != null) {
-            output.encode(buf); // Encode the MinimalBankData
+            output.encode(buf); // Encode the BankData
         }
     }
 
@@ -76,10 +68,11 @@ public class MinimalBankDataRequest extends BankSystemGenericRequest<MinimalBank
     }
 
     @Override
-    public MinimalBankData decodeOutput(FriendlyByteBuf buf) {
+    public BankData decodeOutput(FriendlyByteBuf buf) {
         if(buf.readBoolean()) {
-            return MinimalBankData.decode(buf); // Decode the MinimalBankData
+            return BankData.decode(buf); // Decode the BankData
         }
         return null; // If no data was encoded, return null
     }
 }
+*/

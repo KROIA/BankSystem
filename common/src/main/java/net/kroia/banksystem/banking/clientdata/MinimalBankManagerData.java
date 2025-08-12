@@ -1,19 +1,10 @@
 package net.kroia.banksystem.banking.clientdata;
 
-import net.kroia.banksystem.banking.ServerBankManager;
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.INetworkPayloadEncoder;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.world.item.ItemStack;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-
 /**
  * Represents minimal data for the server bank manager.
  * This class is used to transfer user bank data from the server to the client.
  */
+/*
 public class MinimalBankManagerData implements INetworkPayloadEncoder {
     public final List<UUID> bankUsers;
     public final List<ItemID> allowedItems;
@@ -78,3 +69,4 @@ public class MinimalBankManagerData implements INetworkPayloadEncoder {
     }
 
 }
+*/

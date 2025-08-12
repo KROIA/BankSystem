@@ -1,40 +1,89 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
+import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-public class MinimalBankUserDataRequest extends BankSystemGenericRequest<UUID, MinimalBankUserData> {
+public class MinimalBankUserDataRequest extends BankSystemGenericRequest<MinimalBankUserDataRequest.InputData, BankAccountData> {
+
+
+    public static class InputData
+    {
+        public final int accountNumber;
+        public final UUID userUUID;
+
+        public InputData(int accountNumber) {
+            this.accountNumber = accountNumber;
+            this.userUUID = null;
+        }
+        public InputData(UUID userUUID) {
+            this.accountNumber = -1;
+            this.userUUID = userUUID;
+        }
+    }
+
     @Override
     public String getRequestTypeID() {
         return MinimalBankUserDataRequest.class.getName();
     }
 
     @Override
-    public MinimalBankUserData handleOnClient(UUID input) {
+    public BankAccountData handleOnClient(InputData input) {
         return null;
     }
 
     @Override
-    public MinimalBankUserData handleOnServer(UUID input, ServerPlayer sender) {
-        if(input.compareTo(sender.getUUID()) == 0) {
-            if(!playerIsAdmin(sender)) {
-                return null; // If the player is not an admin, return null
+    public BankAccountData handleOnServer(InputData inputData, ServerPlayer sender) {
+
+        boolean isAdmin = playerIsAdmin(sender);
+        if(inputData.userUUID == null) {
+            BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(inputData.accountNumber);
+            if (account == null) {
+                return null; // If the account does not exist, return null
+            }
+            UUID senderUUID = sender.getUUID();
+            if (account.hasUser(senderUUID) || playerIsAdmin(sender)) {
+                return account.getAccountData(); // If the sender is a user of the account, return the account data
             }
         }
-        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMinimalBankUserData(input);
+        else
+        {
+            BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(inputData.userUUID);
+            if(account == null) {
+                return null; // If the personal bank account does not exist, return null
+            }
+            User owner = account.getPersonalBankOwner();
+            if(owner != null)
+            {
+                if(!owner.getUUID().equals(inputData.userUUID) && !isAdmin) {
+                    return null; // If the user UUID does not match the account owner, return null
+                }
+            }
+            else if(isAdmin)
+            {
+                return account.getAccountData();
+            }
+        }
+        return null; // If the sender is not a user of the account, return null
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, UUID input) {
-        buf.writeUUID(input); // Encode the UUID of the bank user
+    public void encodeInput(FriendlyByteBuf buf, InputData input) {
+        if(input.userUUID != null) {
+            buf.writeInt(-1); // Use -1 to indicate that the input is a user UUID
+            buf.writeUUID(input.userUUID);
+        } else {
+            buf.writeInt(input.accountNumber); // Encode the account number
+        }
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, MinimalBankUserData output) {
+    public void encodeOutput(FriendlyByteBuf buf, BankAccountData output) {
         buf.writeBoolean(output != null);
         if(output != null) {
             output.encode(buf); // Encode the MinimalBankUserData
@@ -42,14 +91,19 @@ public class MinimalBankUserDataRequest extends BankSystemGenericRequest<UUID, M
     }
 
     @Override
-    public UUID decodeInput(FriendlyByteBuf buf) {
-        return buf.readUUID(); // Decode the UUID of the bank user
+    public InputData decodeInput(FriendlyByteBuf buf) {
+        int accountNumber = buf.readInt();
+        if(accountNumber == -1) {
+            UUID userUUID = buf.readUUID(); // If the input is a user UUID, read it
+            return new InputData(userUUID);
+        }
+        return new InputData(accountNumber); // Otherwise, return the account number
     }
 
     @Override
-    public MinimalBankUserData decodeOutput(FriendlyByteBuf buf) {
+    public BankAccountData decodeOutput(FriendlyByteBuf buf) {
         if(buf.readBoolean()) {
-            return MinimalBankUserData.decode(buf); // Decode the MinimalBankUserData
+            return BankAccountData.decode(buf); // Decode the MinimalBankUserData
         }
         return null; // If no data was encoded, return null
     }

@@ -3,7 +3,7 @@ package net.kroia.banksystem.screen.custom;
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.banking.clientdata.MinimalBankData;
+import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
@@ -21,6 +21,7 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTerminalContainerMenu>
@@ -134,6 +135,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private final UUID playerUUID;
     private final String playerName;
     private static boolean screenIsOpen = false;
+    private int personalBankAccountNumber = -1;
 
 
 
@@ -147,9 +149,11 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         removeEmptyBankAccountsButton = new Button(REMOVE_EMPTY_BANKS_BUTTON_TEXT.getString());
         removeEmptyBankAccountsButton.setOnFallingEdge(() -> {
-            getBankManager().requestRemoveEmptyBanks(playerUUID, (removed) -> {
-                updateBankList();
-            });
+            if(personalBankAccountNumber != -1) {
+                getBankManager().requestRemoveEmptyBanks(personalBankAccountNumber, (removed) -> {
+                    updateBankList();
+                });
+            }
         });
         sendItemsToBankButton = new Button(SEND_ITEMS_TO_BANK_BUTTON_TEXT.getString());
         sendItemsToBankButton.setOnFallingEdge(this::onTransmittItemsToBank);
@@ -212,7 +216,8 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
     private void updateBankList()
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankUserData(playerUUID, (minimalBankUserData) -> {
+
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestPersonalMinimalBankUserData(playerUUID, (minimalBankUserData) -> {
             if(!screenIsOpen)
                 return;
             if(minimalBankUserData == null)
@@ -221,14 +226,15 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
                 return;
             }
 
-            HashMap<ItemID, MinimalBankData> bankMap = minimalBankUserData.bankMap;
-            ArrayList<Pair<ItemID, MinimalBankData>> sortedBankAccounts = new ArrayList<>();
+            personalBankAccountNumber = minimalBankUserData.accountNumber;
+            Map<ItemID, BankData> bankMap = minimalBankUserData.bankData;
+            ArrayList<Pair<ItemID, BankData>> sortedBankAccounts = new ArrayList<>();
             for(var entry : bankMap.entrySet())
             {
                 ItemID itemID = entry.getKey();
-                MinimalBankData minimalBankData = entry.getValue();
-                if(minimalBankData != null)
-                    sortedBankAccounts.add(new Pair<>(itemID, minimalBankData));
+                BankData bankData = entry.getValue();
+                if(bankData != null)
+                    sortedBankAccounts.add(new Pair<>(itemID, bankData));
             }
             sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance, a.getSecond().balance));
 
@@ -237,7 +243,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
             boolean needsResize = sortedBankAccounts.size() != bankElements.size();
             HashMap<ItemID,ItemID> availableItems = new HashMap<>();
-            for (Pair<ItemID, MinimalBankData> pair : sortedBankAccounts)
+            for (Pair<ItemID, BankData> pair : sortedBankAccounts)
             {
                 long balance = pair.getSecond().balance;
                 BankElement element = getBankElement(pair.getFirst());

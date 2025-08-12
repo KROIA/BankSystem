@@ -2,7 +2,7 @@ package net.kroia.banksystem.screen.custom;
 
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.clientdata.MinimalBankData;
+import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.networking.packet.client_sender.update.UpdateBankAccountPacket;
 import net.kroia.banksystem.screen.uiElements.BankAccountManagementItem;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
@@ -24,7 +24,8 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.UUID;
+import java.util.List;
+import java.util.Map;
 
 public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final String PREFIX = "gui."+ BankSystemMod.MOD_ID+".bank_account_management_screen.";
@@ -33,11 +34,11 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final Component SAVE_CHANGES = Component.translatable(PREFIX+"save_changes");
     private static final Component CREATE_NEW_BANK = Component.translatable(PREFIX+"create_new_bank");
 
-    private final UUID playerUUID;
-    private String playerName;
+    private final int accountNumber;
+    //private String playerName;
     private final GuiScreen parent;
 
-    private final Label playerNameLabel;
+    private final Label accountNumberLabel;
     private final CloseButton closeButton;
     private final Button saveChangesButton;
     private final Button createNewBankButton;
@@ -48,13 +49,13 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static boolean screenIsOpen = false;
 
 
-    public BankAccountManagementScreen(GuiScreen parent, UUID playerUUID) {
+    public BankAccountManagementScreen(GuiScreen parent, int accountNumber) {
         super(TITLE);
         this.parent = parent;
-        this.playerUUID = playerUUID;
+        this.accountNumber = accountNumber;
 
 
-        playerNameLabel = new Label();
+        accountNumberLabel = new Label();
 
         closeButton = new CloseButton(this::onClose);
         closeButton.setIdleColor(0xFFf55a42);
@@ -78,13 +79,13 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankManagerData((minimalBankManagerData) -> {
                 if(!screenIsOpen)
                     return;
-                ArrayList<ItemStack> allowedItemStacks;
+                List<ItemStack> allowedItemStacks;
                 if(minimalBankManagerData == null)
                 {
                     allowedItemStacks = new ArrayList<>();
                 }
                 else {
-                    allowedItemStacks = minimalBankManagerData.createAllowedItemStacks();
+                    allowedItemStacks = minimalBankManagerData.getAllowedItemStacks();
                 }
                 ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(
                         this,
@@ -95,7 +96,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             });
         });
 
-        addElement(playerNameLabel);
+        addElement(accountNumberLabel);
         addElement(closeButton);
         addElement(saveChangesButton);
         addElement(createNewBankButton);
@@ -103,20 +104,20 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
         updateBankData();
     }
-    public BankAccountManagementScreen(UUID playerUUID)
+    public BankAccountManagementScreen(int accountNumber)
     {
-        this(null, playerUUID);
+        this(null, accountNumber);
     }
 
-    public static void openScreen(UUID playerUUID, GuiScreen parent)
+    public static void openScreen(int accountNumber, GuiScreen parent)
     {
-        BankAccountManagementScreen screen = new BankAccountManagementScreen(parent, playerUUID);
+        BankAccountManagementScreen screen = new BankAccountManagementScreen(parent, accountNumber);
         Minecraft.getInstance().setScreen(screen);
         screenIsOpen = true;
     }
-    public static void openScreen(UUID playerUUID)
+    public static void openScreen(int accountNumber)
     {
-        BankAccountManagementScreen screen = new BankAccountManagementScreen(playerUUID);
+        BankAccountManagementScreen screen = new BankAccountManagementScreen(accountNumber);
         Minecraft.getInstance().setScreen(screen);
         screenIsOpen = true;
     }
@@ -133,7 +134,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         saveChangesButton.setBounds(closeButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
         textWidth = getGui().getFont().width(CREATE_NEW_BANK.getString())+10;
         createNewBankButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
-        playerNameLabel.setBounds(padding, padding, createNewBankButton.getLeft()-padding-spacing, 20);
+        accountNumberLabel.setBounds(padding, padding, createNewBankButton.getLeft()-padding-spacing, 20);
 
         bankElementListView.setBounds(padding, closeButton.getBottom()+spacing, width, height-(closeButton.getBottom()+spacing)+padding);
 
@@ -163,40 +164,40 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             data.itemID = item.getItemID();
             bankData.add(data);
         }
-        UpdateBankAccountPacket.sendPacket(playerUUID, bankData);
+        UpdateBankAccountPacket.sendPacket(accountNumber, bankData);
     }
     private void updateBankData()
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankUserData(playerUUID, (minimalBankUserData) -> {
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankUserData(accountNumber, (minimalBankUserData) -> {
             if(!screenIsOpen)
                 return;
             if(minimalBankUserData == null)
             {
-                error("Failed to update bank data for player: " + playerUUID + ". MinimalBankUserData is null.");
+                error("Failed to update bank data for bankaccount: " + accountNumber + ". MinimalBankUserData is null.");
                 return;
             }
 
-            HashMap<ItemID, MinimalBankData> bankMap = minimalBankUserData.bankMap;
-            ArrayList<Pair<ItemID, MinimalBankData>> sortedBankAccounts = new ArrayList<>();
+            Map<ItemID, BankData> bankMap = minimalBankUserData.bankData;
+            ArrayList<Pair<ItemID, BankData>> sortedBankAccounts = new ArrayList<>();
             for(var entry : bankMap.entrySet())
             {
                 ItemID itemID = entry.getKey();
-                MinimalBankData minimalBankData = entry.getValue();
-                if(minimalBankData != null)
-                    sortedBankAccounts.add(new Pair<>(itemID, minimalBankData));
+                BankData bankData = entry.getValue();
+                if(bankData != null)
+                    sortedBankAccounts.add(new Pair<>(itemID, bankData));
             }
             sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance, a.getSecond().balance));
 
-            playerName = minimalBankUserData.userName;
-            playerNameLabel.setText(BankSystemTextMessages.getBankAccountManagementBankOwnerMessage(playerName));
+           // playerName = minimalBankUserData.userName;
+            accountNumberLabel.setText(BankSystemTextMessages.getBankAccountManagementBankOwnerMessage(accountNumber));
             HashMap<ItemID, BankAccountManagementItem> toRemove = new HashMap<>(bankAccountManagementItems);
-            for(Pair<ItemID, MinimalBankData> pair : sortedBankAccounts)
+            for(Pair<ItemID, BankData> pair : sortedBankAccounts)
             {
                 BankAccountManagementItem item = bankAccountManagementItems.get(pair.getFirst());
-                MinimalBankData bankData = pair.getSecond();
+                BankData bankData = pair.getSecond();
                 if(item == null)
                 {
-                    item = new BankAccountManagementItem(pair.getFirst(), playerName, bankData.itemFractionScaleFactor);
+                    item = new BankAccountManagementItem(pair.getFirst(), accountNumber, bankData.itemFractionScaleFactor);
                     item.setBalance(bankData.balance);
                     bankAccountManagementItems.put(pair.getFirst(), item);
                     bankElementListView.addChild(item);
@@ -255,7 +256,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         data.itemID = itemID;
         data.createBank = true;
         bankData.add(data);
-        UpdateBankAccountPacket.sendPacket(playerUUID, bankData);
+        UpdateBankAccountPacket.sendPacket(accountNumber, bankData);
     }
 
     @Override

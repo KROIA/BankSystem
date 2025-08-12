@@ -2,6 +2,7 @@ package net.kroia.banksystem.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
@@ -268,13 +269,17 @@ public class ATMScreen extends BankSystemGuiScreen {
 
     private void updateBalanceView()
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankData(Minecraft.getInstance().player.getUUID(),
-                new ItemID(BankSystemItems.MONEY.get().getDefaultInstance()), (minimalBankData) ->
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestPersonalMinimalBankUserData(Minecraft.getInstance().player.getUUID(), (accountData) ->
         {
-            if(instance == null || minimalBankData == null)
+            if(instance == null || accountData == null)
                 return;
-            currentBalanceWeekVar = minimalBankData.balance;
-            balanceView.updateBalance(currentBalanceWeekVar);
+
+            if(accountData.bankData.containsKey(MoneyItem.getItemID()))
+            {
+                BankData minimalBankData = accountData.bankData.get(MoneyItem.getItemID());
+                currentBalanceWeekVar = minimalBankData.balance;
+                balanceView.updateBalance(currentBalanceWeekVar);
+            }
         });
     }
 

@@ -18,11 +18,12 @@ public class BankSystemNetworking extends NetworkManager {
     public static ItemInfoRequest ITEM_INFO_REQUEST = (ItemInfoRequest) AsynchronousRequestResponseSystem.register(new ItemInfoRequest());
     public static MinimalBankManagerDataRequest MINIMAL_BANK_MANAGER_DATA_REQUEST = (MinimalBankManagerDataRequest) AsynchronousRequestResponseSystem.register(new MinimalBankManagerDataRequest());
     public static MinimalBankUserDataRequest MINIMAL_BANK_USER_DATA_REQUEST = (MinimalBankUserDataRequest) AsynchronousRequestResponseSystem.register(new MinimalBankUserDataRequest());
-    public static MinimalBankDataRequest MINIMAL_BANK_DATA_REQUEST = (MinimalBankDataRequest) AsynchronousRequestResponseSystem.register(new MinimalBankDataRequest());
+    //public static MinimalBankDataRequest MINIMAL_BANK_DATA_REQUEST = (MinimalBankDataRequest) AsynchronousRequestResponseSystem.register(new MinimalBankDataRequest());
     public static AllowItemRequest ALLOW_ITEM_REQUEST = (AllowItemRequest) AsynchronousRequestResponseSystem.register(new AllowItemRequest());
     public static DisallowItemRequest DISALLOW_ITEM_REQUEST = (DisallowItemRequest) AsynchronousRequestResponseSystem.register(new DisallowItemRequest());
     public static RemoveEmptyBanksRequest REMOVE_EMPTY_BANKS_REQUEST = (RemoveEmptyBanksRequest) AsynchronousRequestResponseSystem.register(new RemoveEmptyBanksRequest());
     public static itemFractionScaleFactorRequest ITEM_FRACTION_SCALE_FACTOR_REQUEST = (itemFractionScaleFactorRequest) AsynchronousRequestResponseSystem.register(new itemFractionScaleFactorRequest());
+    public static BankAccountNumbersRequest BANK_ACCOUNT_NUMBERS_REQUEST = (BankAccountNumbersRequest) AsynchronousRequestResponseSystem.register(new BankAccountNumbersRequest());
     public BankSystemNetworking() {
         super(BankSystemMod.MOD_ID, "bank_system_channel");
 

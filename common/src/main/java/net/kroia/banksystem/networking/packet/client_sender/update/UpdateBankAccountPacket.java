@@ -1,14 +1,13 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
 import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankUser;
+import net.kroia.banksystem.banking.BankAccount;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
-import java.util.UUID;
 
 public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
 
@@ -45,12 +44,12 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
             createBank = buf.readBoolean();
         }
     }
-    UUID playerUUID;
+    int accountNumber;
     ArrayList<BankData> bankData;
 
-    public UpdateBankAccountPacket(UUID playerUUID, ArrayList<BankData> bankData) {
+    public UpdateBankAccountPacket(int accountNumber, ArrayList<BankData> bankData) {
         super();
-        this.playerUUID = playerUUID;
+        this.accountNumber = accountNumber;
         this.bankData = bankData;
     }
 
@@ -58,15 +57,15 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
         super(buf);
     }
 
-    public static void sendPacket(UUID playerUUID, ArrayList<BankData> bankData) {
-        UpdateBankAccountPacket packet = new UpdateBankAccountPacket(playerUUID, bankData);
+    public static void sendPacket(int accountNumber, ArrayList<BankData> bankData) {
+        UpdateBankAccountPacket packet = new UpdateBankAccountPacket(accountNumber, bankData);
         packet.sendToServer();
     }
 
 
     @Override
     public void encode(FriendlyByteBuf buf) {
-        buf.writeUUID(playerUUID);
+        buf.writeInt(accountNumber);
         buf.writeInt(bankData.size());
         for (BankData data : bankData) {
             data.toBytes(buf);
@@ -76,7 +75,7 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
 
     @Override
     public void decode(FriendlyByteBuf buf) {
-        playerUUID = buf.readUUID();
+        accountNumber = buf.readInt();
         int size = buf.readInt();
         bankData = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
@@ -91,15 +90,15 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
         if (!isAdmin) {
             return;
         }
-        IBankUser bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerUUID);
-        if(bankUser == null)
+        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNumber);
+        if(account == null)
             return;
         for (BankData data : bankData) {
             if (data.removeBank) {
-                bankUser.removeBank(data.itemID);
+                account.removeBank(data.itemID);
                 continue;
             }
-            IBank bank = bankUser.getBank(data.itemID);
+            IBank bank = account.getBank(data.itemID);
             if(bank != null) {
                 if (data.resetLockedBalance)
                     bank.unlockAll();
@@ -110,7 +109,7 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
             {
                 if(data.createBank)
                 {
-                    bankUser.createItemBank(data.itemID, data.balance, true);
+                    account.createBank(data.itemID, data.balance);
                 }
             }
         }

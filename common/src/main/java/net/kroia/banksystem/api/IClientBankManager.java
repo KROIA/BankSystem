@@ -1,9 +1,8 @@
 package net.kroia.banksystem.api;
 
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
-import net.kroia.banksystem.banking.clientdata.MinimalBankData;
-import net.kroia.banksystem.banking.clientdata.MinimalBankManagerData;
-import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
 import net.kroia.banksystem.util.ItemID;
 import org.jetbrains.annotations.Nullable;
 
@@ -21,13 +20,13 @@ public interface IClientBankManager {
      * Bank data for another player will only be returned if the player is allowed to view it. (Admin)
      *
      * @warning
-     * The resulting MinimalBankData may be null if the player is not allowed to view the bank data of the specified player.
+     * The resulting BankData may be null if the player is not allowed to view the bank data of the specified player.
      *
      * @param playerUUID The UUID of the player.
      * @param itemID     The ID of the item.
-     * @param callback   A callback that receives the MinimalBankData.
+     * @param callback   A callback that receives the BankData.
      */
-    void requestMinimalBankData(UUID playerUUID, ItemID itemID, Consumer<@Nullable MinimalBankData> callback);
+    //void requestMinimalBankData(UUID playerUUID, ItemID itemID, Consumer<@Nullable BankData> callback);
 
     /**
      * Requests minimal bank user data for a specific player.
@@ -36,10 +35,12 @@ public interface IClientBankManager {
      * @warning
      * The resulting MinimalBankUserData may be null if the player is not allowed to view the bank data of the specified player.
      *
-     * @param playerUUID The UUID of the player.
+     * @param accountNumber The account number of the bank account.
      * @param callback   A callback that receives the MinimalBankUserData.
      */
-    void requestMinimalBankUserData(UUID playerUUID, Consumer<@Nullable  MinimalBankUserData> callback);
+    void requestMinimalBankUserData(int accountNumber, Consumer<@Nullable BankAccountData> callback);
+
+    void requestPersonalMinimalBankUserData(UUID playerUUID, Consumer<@Nullable BankAccountData> callback);
 
     /**
      * Requests minimal bank manager data.
@@ -50,7 +51,7 @@ public interface IClientBankManager {
      *
      * @param callback A callback that receives the MinimalBankManagerData.
      */
-    void requestMinimalBankManagerData(Consumer<@Nullable MinimalBankManagerData> callback);
+    void requestMinimalBankManagerData(Consumer<@Nullable BankManagerData> callback);
 
     /**
      * Requests item information data for a specific item.
@@ -88,10 +89,10 @@ public interface IClientBankManager {
      * Returns a list of ItemIDs of the removed banks through a callback.
      * Only admins can remove banks of other players.
      *
-     * @param player The UUID of the player whose empty banks should be removed.
+     * @param accountNumber The account number of the bank account to remove empty banks from.
      * @param callback A callback that receives a list of ItemIDs of the removed banks.
      */
-    void requestRemoveEmptyBanks(UUID player, Consumer<List<ItemID>> callback);
+    void requestRemoveEmptyBanks(int accountNumber, Consumer<List<ItemID>> callback);
 
     /**
      * Requests to the server to remove empty banks for the current player.
@@ -99,7 +100,7 @@ public interface IClientBankManager {
      *
      * @param callback A callback that receives a list of ItemIDs of the removed banks.
      */
-    void requestRemoveEmptyBanks(Consumer<List<ItemID>> callback);
+     //void requestRemoveEmptyBanks(Consumer<List<ItemID>> callback);
 
 
     /**
@@ -117,4 +118,9 @@ public interface IClientBankManager {
      * @param callback A callback that receives the scale factor as an Integer.
      */
     void requestItemFractionScaleFactor(ItemID itemID, Consumer<Integer> callback);
+
+
+
+    void requestBankAccountNumbers(UUID playerUUID, Consumer<List<Integer>> callback);
+    void requestBankAccountNumbers(List<UUID> playerUUIDs, Consumer<List<Integer>> callback);
 }
