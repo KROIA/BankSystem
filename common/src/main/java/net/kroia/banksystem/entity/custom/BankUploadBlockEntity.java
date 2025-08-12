@@ -5,7 +5,6 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.block.custom.BankUploadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
@@ -285,7 +284,6 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                 long amount = stack.getCount();
                 if(MoneyItem.isMoney(itemID))
                 {
-                    itemID = MoneyBank.ITEM_ID;
                     amount *= ((MoneyItem)stack.getItem()).worth();
                 }
                 else

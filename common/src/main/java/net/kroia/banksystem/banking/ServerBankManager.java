@@ -545,8 +545,6 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
                 int scaleFactor = pairTag.getInt("scaleFactor");
                 itemFractionScaleFactor.put(itemID, scaleFactor);
             }
-
-
         }
         // Check if all allowed items have a scale factor
         List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();

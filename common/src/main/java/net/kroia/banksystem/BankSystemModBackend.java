@@ -1,6 +1,7 @@
 package net.kroia.banksystem;
 
 import dev.architectury.event.events.common.CommandRegistrationEvent;
+import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.api.*;
 import net.kroia.banksystem.banking.BankUser;
@@ -20,7 +21,9 @@ import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.*;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 
 import java.nio.file.Path;
@@ -110,6 +113,13 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         loadDataFromFiles(server);
         TickEvent.SERVER_POST.register(BankSystemModBackend::onServerTick);
+
+        // Save the data when the game saves the world
+        LifecycleEvent.SERVER_LEVEL_SAVE.register((ServerLevel level) -> {
+            if (level.dimension() == Level.OVERWORLD) {
+                INSTANCES.SERVER_DATA_HANDLER.saveAll();
+            }
+        });
     }
 
     // Called from the server side
