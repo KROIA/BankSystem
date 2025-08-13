@@ -31,6 +31,7 @@ public class BankAccount implements ServerSaveable {
 
 
     private int accountNumber;
+    private String accountName = ""; // Optional account name, can be empty
     private @Nullable User personalBankOwner;
     private final Map<UUID, BankUser> users = new HashMap<>();
     private final Map<ItemID, Bank> banks = new HashMap<>();
@@ -38,9 +39,12 @@ public class BankAccount implements ServerSaveable {
     private BankAccount(int accountNumber) {
         this.accountNumber = accountNumber;
     }
-    private BankAccount(int accountNumber, @Nullable User personalBankOwnerData, List<BankUser> users, Map<ItemID, Bank> banks) {
+    private BankAccount(int accountNumber, @Nullable User personalBankOwner, List<BankUser> users, Map<ItemID, Bank> banks) {
         this.accountNumber = accountNumber;
-        this.personalBankOwner = personalBankOwnerData;
+        this.personalBankOwner = personalBankOwner;
+        if( personalBankOwner != null) {
+            this.accountName = personalBankOwner.getName()+"'s Bank Account";
+        }
         this.banks.putAll(banks);
         for (BankUser user : users) {
             this.users.put(user.getUUID(), user);
@@ -109,7 +113,7 @@ public class BankAccount implements ServerSaveable {
             bankData.put(itemID, bank.getMinimalData()); // Convert Bank to BankData
         }
 
-        return new BankAccountData(accountNumber, personalBankOwnerData, users, bankData);
+        return new BankAccountData(accountNumber, accountName, personalBankOwnerData, users, bankData);
     }
 
 
@@ -141,7 +145,7 @@ public class BankAccount implements ServerSaveable {
             bankData.put(itemID, bank.getMinimalData()); // Convert Bank to BankData
         }
 
-        return new BankAccountData(accountNumber, personalBankOwnerData, users, bankData);
+        return new BankAccountData(accountNumber, accountName, personalBankOwnerData, users, bankData);
     }
     public @Nullable BankData getBankData(ItemID itemID)
     {
@@ -179,6 +183,15 @@ public class BankAccount implements ServerSaveable {
 
     public int getAccountNumber() {
         return accountNumber;
+    }
+    public String getAccountName() {
+        return accountName; // Get the name of the bank account
+    }
+    public void setAccountName(String accountName) {
+        if (accountName == null || accountName.isEmpty()) {
+            accountName = "";
+        }
+        this.accountName = accountName; // Set the name of the bank account
     }
     public int getPermission(UUID userUUID) {
         BankUser user = users.get(userUUID);
@@ -654,6 +667,7 @@ public class BankAccount implements ServerSaveable {
     @Override
     public boolean save(CompoundTag tag) {
         tag.putInt("accountNumber", accountNumber);
+        tag.putString("accountName", accountName); // Save the account name
 
         if(personalBankOwner != null)
             tag.putUUID("personalBankOwnerDataUUID", personalBankOwner.getUUID());
@@ -688,6 +702,11 @@ public class BankAccount implements ServerSaveable {
             return false; // Invalid data
         }
         this.accountNumber = tag.getInt("accountNumber");
+        if(tag.contains("accountName")) {
+            this.accountName = tag.getString("accountName");
+        } else {
+            this.accountName = ""; // Default to empty if not set
+        }
 
         if(tag.contains("personalBankOwnerDataUUID")) {
             UUID personalBankOwnerDataUUID = tag.getUUID("personalBankOwnerDataUUID");

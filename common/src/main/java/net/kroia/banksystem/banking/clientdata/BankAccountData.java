@@ -13,16 +13,19 @@ public class BankAccountData implements INetworkPayloadEncoder {
 
 
     public final int accountNumber;
+    public final String accountName;
     public final @Nullable UserData personalBankOwnerData; // The creator of the bank account, usually the owner of the bank
     public final Map<UUID, BankUserData> users = new HashMap<>();
     public final Map<ItemID, BankData> bankData = new HashMap<>();
 
 
     public BankAccountData(int accountNumber,
+                           String accountName,
                            @Nullable UserData personalBankOwnerData,
                            Map<UUID, BankUserData> users,
                            Map<ItemID, BankData> bankData) {
         this.accountNumber = accountNumber;
+        this.accountName = accountName;
         this.personalBankOwnerData = personalBankOwnerData;
         this.users.putAll(users);
         this.bankData.putAll(bankData);
