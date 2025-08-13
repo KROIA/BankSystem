@@ -713,7 +713,7 @@ public class BankSystemCommands {
         }
         if(toBankAccount == null)
         {
-            ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getBankNotFoundMessage(fromUserName, MoneyItem.getName()));
+            ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getBankNotFoundMessage(toUserName, MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;
         }
 
@@ -764,10 +764,16 @@ public class BankSystemCommands {
     }
 
     private static int bank_show(ServerPlayer player, String targetPlayer) {
-        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(player.getUUID());
+        User user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByName(targetPlayer);
+        if(user == null)
+        {
+            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(targetPlayer));
+            return Command.SINGLE_SUCCESS;
+        }
+        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(user);
         if(bankAccount == null)
         {
-            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(), MoneyItem.getName()));
+            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(targetPlayer, MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;
         }
         ServerPlayerUtilities.printToClientConsole(player,bankAccount.toString());
@@ -780,7 +786,14 @@ public class BankSystemCommands {
             ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
-        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(player.getUUID());
+
+        User user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByName(targetPlayer);
+        if(user == null)
+        {
+            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(targetPlayer));
+            return Command.SINGLE_SUCCESS;
+        }
+        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(user);
         if(bankAccount == null)
         {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(), MoneyItem.getName()));
@@ -804,7 +817,7 @@ public class BankSystemCommands {
             return Command.SINGLE_SUCCESS;
         }
         else
-            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankCreatedMessage(player.getName().getString(), itemID.getName())+"\n"+bank.toStringNoOwner());
+            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankCreatedMessage(targetPlayer, itemID.getName())+"\n"+bank.toStringNoOwner());
         return Command.SINGLE_SUCCESS;
     }
     private static int bank_setBalance(ServerPlayer player,String targetPlayer, ItemID itemID, float balance) {
@@ -815,15 +828,21 @@ public class BankSystemCommands {
             ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
-        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(player.getUUID());
+        User user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByName(targetPlayer);
+        if(user == null)
+        {
+            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(targetPlayer));
+            return Command.SINGLE_SUCCESS;
+        }
+        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(user);
         if(bankAccount == null)
         {
-            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(), MoneyItem.getName()));
+            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(targetPlayer, MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;
         }
         IBank bank = bankAccount.getBank(itemID);
         if(bank == null) {
-            ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID.getName()));
+            ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankNotFoundMessage(targetPlayer,itemID.getName()));
             return Command.SINGLE_SUCCESS;
         }
         bank.setBalance(bank.convertToRawAmount(balance));
@@ -840,19 +859,25 @@ public class BankSystemCommands {
             ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
-        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(player.getUUID());
+        User user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByName(targetPlayer);
+        if(user == null)
+        {
+            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(targetPlayer));
+            return Command.SINGLE_SUCCESS;
+        }
+        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(user);
         if(bankAccount == null)
         {
-            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(), MoneyItem.getName()));
+            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(targetPlayer, MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;
         }
         if(!bankAccount.hasBank(itemID)) {
-            ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID.getName()));
+            ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankNotFoundMessage(targetPlayer,itemID.getName()));
             return Command.SINGLE_SUCCESS;
         }
 
         bankAccount.removeBank(itemID);
-        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDeletedMessage(player.getName().getString(), itemID.getName()));
+        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDeletedMessage(targetPlayer, itemID.getName()));
         return Command.SINGLE_SUCCESS;
     }
 }

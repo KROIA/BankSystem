@@ -63,6 +63,7 @@ public class MinimalBankUserDataRequest extends BankSystemGenericRequest<Minimal
                 if(!owner.getUUID().equals(inputData.userUUID) && !isAdmin) {
                     return null; // If the user UUID does not match the account owner, return null
                 }
+                return account.getAccountData();
             }
             else if(isAdmin)
             {

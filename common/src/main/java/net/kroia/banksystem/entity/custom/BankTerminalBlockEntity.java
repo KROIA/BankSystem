@@ -840,9 +840,15 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 continue;
 
             IBank bank;
+            boolean isMoney = MoneyItem.isMoney(itemID);
             if(!bankAccount.hasBank(itemID))
             {
-                bank = bankAccount.createBank(itemID, 0);
+                if(isMoney) {
+                    bank = bankAccount.getBank(MoneyItem.getItemID());
+                }
+                else {
+                    bank = bankAccount.createBank(itemID, 0);
+                }
             }
             else
                 bank = bankAccount.getBank(itemID);
@@ -851,8 +857,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
                 continue;
             }
-            long amountToDeposit = amount;
-            if(MoneyItem.isMoney(itemID))
+            int itemFractionScaleFactor = bank.getItemFractionScaleFactor();
+            long amountToDeposit = amount * itemFractionScaleFactor;
+            if(isMoney)
             {
                 amountToDeposit = amount * ((MoneyItem)itemID.getStack().getItem()).worth();
             }
@@ -901,17 +908,16 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 continue;
             }
 
-            long withdrawAmount = amount;
-            if(MoneyItem.isMoney(itemID))
-            {
-                withdrawAmount = amount * ((MoneyItem)itemID.getStack().getItem()).worth();
-            }
+            //long withdrawAmount = amount;
+            long itemFractionScaleFactor = bank.getItemFractionScaleFactor();
+            long withdrawAmount = amount * itemFractionScaleFactor;
 
             withdrawAmount = Math.min(withdrawAmount, bank.getBalance());
             if(withdrawAmount > 0) {
-                long addedAmount = inventory.addItem(itemID, withdrawAmount);
+                long addedAmount = inventory.addItem(itemID, amount);
                 if(addedAmount > 0) {
-                    if (bank.withdraw(addedAmount) != Bank.Status.SUCCESS) {
+
+                    if (bank.withdraw(addedAmount * itemFractionScaleFactor) != Bank.Status.SUCCESS) {
                         // error
                         error("Failed to withdraw " + Bank.getNormalizedAmount(addedAmount, bank.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
                         inventory.removeItem(itemID, addedAmount);

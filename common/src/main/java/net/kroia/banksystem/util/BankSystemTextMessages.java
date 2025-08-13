@@ -227,6 +227,7 @@ public class BankSystemTextMessages {
         return msg;
     }
 
+
     private static final Component BANK_OF = Component.translatable(prefix+"bank_of");
     public static String getBankOfMessage(String user)
     {
