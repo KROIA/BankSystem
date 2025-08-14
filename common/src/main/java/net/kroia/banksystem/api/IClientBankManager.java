@@ -38,9 +38,9 @@ public interface IClientBankManager {
      * @param accountNumber The account number of the bank account.
      * @param callback   A callback that receives the MinimalBankUserData.
      */
-    void requestMinimalBankUserData(int accountNumber, Consumer<@Nullable BankAccountData> callback);
+    void requestBankAccountData(int accountNumber, Consumer<@Nullable BankAccountData> callback);
 
-    void requestPersonalMinimalBankUserData(UUID playerUUID, Consumer<@Nullable BankAccountData> callback);
+    void requestPersonalBankAccountData(UUID playerUUID, Consumer<@Nullable BankAccountData> callback);
 
     /**
      * Requests minimal bank manager data.
@@ -51,7 +51,7 @@ public interface IClientBankManager {
      *
      * @param callback A callback that receives the MinimalBankManagerData.
      */
-    void requestMinimalBankManagerData(Consumer<@Nullable BankManagerData> callback);
+    void requestBankManagerData(Consumer<@Nullable BankManagerData> callback);
 
     /**
      * Requests item information data for a specific item.

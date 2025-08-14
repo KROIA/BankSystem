@@ -38,7 +38,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     //private String playerName;
     private final GuiScreen parent;
 
-    private final Label accountNumberLabel;
+    private final Label accountNameLabel;
     private final CloseButton closeButton;
     private final Button saveChangesButton;
     private final Button createNewBankButton;
@@ -55,7 +55,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         this.accountNumber = accountNumber;
 
 
-        accountNumberLabel = new Label();
+        accountNameLabel = new Label();
 
         closeButton = new CloseButton(this::onClose);
         closeButton.setIdleColor(0xFFf55a42);
@@ -76,7 +76,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
         createNewBankButton = new Button(CREATE_NEW_BANK.getString());
         createNewBankButton.setOnFallingEdge(() -> {
-            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankManagerData((minimalBankManagerData) -> {
+            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData((minimalBankManagerData) -> {
                 if(!screenIsOpen)
                     return;
                 List<ItemStack> allowedItemStacks;
@@ -96,7 +96,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             });
         });
 
-        addElement(accountNumberLabel);
+        addElement(accountNameLabel);
         addElement(closeButton);
         addElement(saveChangesButton);
         addElement(createNewBankButton);
@@ -134,7 +134,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         saveChangesButton.setBounds(closeButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
         textWidth = getGui().getFont().width(CREATE_NEW_BANK.getString())+10;
         createNewBankButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
-        accountNumberLabel.setBounds(padding, padding, createNewBankButton.getLeft()-padding-spacing, 20);
+        accountNameLabel.setBounds(padding, padding, createNewBankButton.getLeft()-padding-spacing, 20);
 
         bankElementListView.setBounds(padding, closeButton.getBottom()+spacing, width, height-(closeButton.getBottom()+spacing)+padding);
 
@@ -168,16 +168,16 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     }
     private void updateBankData()
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankUserData(accountNumber, (minimalBankUserData) -> {
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber, (bankAccountData) -> {
             if(!screenIsOpen)
                 return;
-            if(minimalBankUserData == null)
+            if(bankAccountData == null)
             {
                 error("Failed to update bank data for bankaccount: " + accountNumber + ". MinimalBankUserData is null.");
                 return;
             }
 
-            Map<ItemID, BankData> bankMap = minimalBankUserData.bankData;
+            Map<ItemID, BankData> bankMap = bankAccountData.bankData;
             ArrayList<Pair<ItemID, BankData>> sortedBankAccounts = new ArrayList<>();
             for(var entry : bankMap.entrySet())
             {
@@ -189,7 +189,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance, a.getSecond().balance));
 
            // playerName = minimalBankUserData.userName;
-            accountNumberLabel.setText(BankSystemTextMessages.getBankAccountManagementBankOwnerMessage(accountNumber));
+            accountNameLabel.setText(bankAccountData.accountName);
+            //accountNameLabel.setText(BankSystemTextMessages.getBankAccountManagementBankOwnerMessage(accountNumber));
             HashMap<ItemID, BankAccountManagementItem> toRemove = new HashMap<>(bankAccountManagementItems);
             for(Pair<ItemID, BankData> pair : sortedBankAccounts)
             {

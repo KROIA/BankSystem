@@ -57,8 +57,8 @@ public interface IServerBankManager {
     BankAccount getPersonalBankAccount(User user);
 
 
-    boolean userHasPersonalBank(UUID userUUID);
-    void createPersonalBank(UUID user);
+    boolean userHasPersonalBankAccount(UUID userUUID);
+    BankAccount createPersonalBankAccount(UUID user);
 
 
     /**

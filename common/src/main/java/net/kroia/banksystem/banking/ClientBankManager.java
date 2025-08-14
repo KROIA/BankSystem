@@ -7,9 +7,8 @@ import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.request.AllowItemRequest;
-import net.kroia.banksystem.networking.request.MinimalBankUserDataRequest;
+import net.kroia.banksystem.networking.request.BankAccountDataRequest;
 import net.kroia.banksystem.util.ItemID;
-import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -39,22 +38,22 @@ public class ClientBankManager implements IClientBankManager {
     }*/
 
     @Override
-    public void requestMinimalBankUserData(int accountNumber, Consumer<@Nullable BankAccountData> callback)
+    public void requestBankAccountData(int accountNumber, Consumer<@Nullable BankAccountData> callback)
     {
-        MinimalBankUserDataRequest.InputData input = new MinimalBankUserDataRequest.InputData(accountNumber);
-        BankSystemNetworking.MINIMAL_BANK_USER_DATA_REQUEST.sendRequestToServer(input, callback);
+        BankAccountDataRequest.InputData input = new BankAccountDataRequest.InputData(accountNumber);
+        BankSystemNetworking.BANK_ACCOUNT_DATA_REQUEST.sendRequestToServer(input, callback);
     }
     @Override
-    public void requestPersonalMinimalBankUserData(UUID playerUUID, Consumer<@Nullable BankAccountData> callback)
+    public void requestPersonalBankAccountData(UUID playerUUID, Consumer<@Nullable BankAccountData> callback)
     {
-        MinimalBankUserDataRequest.InputData input = new MinimalBankUserDataRequest.InputData(playerUUID);
-        BankSystemNetworking.MINIMAL_BANK_USER_DATA_REQUEST.sendRequestToServer(input, callback);
+        BankAccountDataRequest.InputData input = new BankAccountDataRequest.InputData(playerUUID);
+        BankSystemNetworking.BANK_ACCOUNT_DATA_REQUEST.sendRequestToServer(input, callback);
     }
 
     @Override
-    public void requestMinimalBankManagerData(Consumer<@Nullable BankManagerData> callback)
+    public void requestBankManagerData(Consumer<@Nullable BankManagerData> callback)
     {
-        BankSystemNetworking.MINIMAL_BANK_MANAGER_DATA_REQUEST.sendRequestToServer(0, callback);
+        BankSystemNetworking.BANK_MANAGER_DATA_REQUEST.sendRequestToServer(0, callback);
     }
 
     @Override

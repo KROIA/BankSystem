@@ -12,13 +12,13 @@ import net.minecraft.network.chat.Component;
 public class BankAccountManagementItem extends BankSystemGuiElement {
 
     private static final String PREFIX = "gui."+ BankSystemMod.MOD_ID+".bank_account_management_item.";
-    private static final Component CLOSE_ACCOUNT_BUTTON = Component.translatable(PREFIX+"close_account_button");
+    private static final Component CLOSE_BANK_BUTTON = Component.translatable(PREFIX+"close_bank_button");
     private static final Component FREE_LOCKED_BALANCE_CHECKBOX = Component.translatable(PREFIX+"free_locked_balance_checkbox");
     private static final Component BALANCE = Component.translatable(PREFIX+"balance");
     private static final Component LOCKED_BALANCE = Component.translatable(PREFIX+"locked_balance");
     private static final Component TOTAL_BALANCE = Component.translatable(PREFIX+"total_balance");
 
-    private static final Component CLOSE_ACCOUNT_BUTTON_TOOLTIP = Component.translatable(PREFIX+"close_account_button.tooltip");
+    private static final Component CLOSE_BANK_BUTTON_TOOLTIP = Component.translatable(PREFIX+"close_bank_button.tooltip");
     private static final Component FREE_LOCKED_BALANCE_CHECKBOX_TOOLTIP = Component.translatable(PREFIX+"free_locked_balance_checkbox.tooltip");
     private static final Component BALANCE_TEXTBOX_TOOLTIP = Component.translatable(PREFIX+"balance_textbox.tooltip");
     private static final Component BALANCE_LABEL_TOOLTIP = Component.translatable(PREFIX+"balance_label.tooltip");
@@ -29,7 +29,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     private final int accountNumber;
     private final ItemID itemID;
     private final ItemView itemView;
-    private final Button closeAccountButton;
+    private final Button closeBankButton;
     private final CheckBox freeLockedBalanceCheckBox;
 
 
@@ -72,7 +72,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
         totalBalanceLabel = new Label(TOTAL_BALANCE.getString());
         totalBalanceValueLabel = new Label();
 
-        closeAccountButton = new Button(CLOSE_ACCOUNT_BUTTON.getString(), () -> {
+        closeBankButton = new Button(CLOSE_BANK_BUTTON.getString(), () -> {
             String askTitle = BankSystemTextMessages.getBankAccountManagementItemAskRemoveTitleMessage(itemID.getName());
             String askMessage = BankSystemTextMessages.getBankAccountManagementItemAskRemoveMessage(itemID.getName(), accountNumber);
             AskPopupScreen popup = new AskPopupScreen((GuiScreen)getRoot().getScreen(), this::onCloseAccountButtonClicked, () -> {}, askTitle, askMessage);
@@ -83,21 +83,21 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
 
         freeLockedBalanceCheckBox = new CheckBox(FREE_LOCKED_BALANCE_CHECKBOX.getString(), this::onFreeLockedBalanceCheckBoxClicked);
 
-        closeAccountButton.setHoverTooltipSupplier(CLOSE_ACCOUNT_BUTTON_TOOLTIP::getString);
+        closeBankButton.setHoverTooltipSupplier(CLOSE_BANK_BUTTON_TOOLTIP::getString);
         balanceValueTextBox.setHoverTooltipSupplier(BALANCE_TEXTBOX_TOOLTIP::getString);
         freeLockedBalanceCheckBox.setHoverTooltipSupplier(FREE_LOCKED_BALANCE_CHECKBOX_TOOLTIP::getString);
         balanceValueLabel.setHoverTooltipSupplier(BALANCE_LABEL_TOOLTIP::getString);
         lockedBalanceValueLabel.setHoverTooltipSupplier(LOCKED_LABEL_TOOLTIP::getString);
         totalBalanceValueLabel.setHoverTooltipSupplier(TOTAL_LABEL_TOOLTIP::getString);
 
-        closeAccountButton.setHoverTooltipFontScale(0.8f);
+        closeBankButton.setHoverTooltipFontScale(0.8f);
         balanceValueTextBox.setHoverTooltipFontScale(0.8f);
         freeLockedBalanceCheckBox.setHoverTooltipFontScale(0.8f);
         balanceValueLabel.setHoverTooltipFontScale(0.8f);
         lockedBalanceValueLabel.setHoverTooltipFontScale(0.8f);
         totalBalanceValueLabel.setHoverTooltipFontScale(0.8f);
 
-        closeAccountButton.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+        closeBankButton.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
         freeLockedBalanceCheckBox.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
         balanceValueTextBox.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
         balanceValueLabel.setHoverTooltipMousePositionAlignment(Alignment.LEFT);
@@ -106,7 +106,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
 
 
         addChild(itemView);
-        addChild(closeAccountButton);
+        addChild(closeBankButton);
         addChild(freeLockedBalanceCheckBox);
 
         addChild(balanceLabel);
@@ -138,7 +138,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
         balanceValueLabel.setBounds(balanceLabel.getRight(), balanceLabel.getTop(), (width-balanceLabel.getWidth())/2, elementHeight);
         balanceValueTextBox.setBounds(balanceValueLabel.getRight(), balanceLabel.getTop(), width-balanceValueLabel.getRight()+padding, elementHeight);
 
-        closeAccountButton.setBounds(balanceValueTextBox.getLeft(), padding, balanceValueTextBox.getWidth(), elementHeight);
+        closeBankButton.setBounds(balanceValueTextBox.getLeft(), padding, balanceValueTextBox.getWidth(), elementHeight);
 
         lockedBalanceLabel.setBounds(padding, balanceLabel.getBottom()+vSpacing, balanceLabel.getWidth(), elementHeight);
         lockedBalanceValueLabel.setBounds(lockedBalanceLabel.getRight(), lockedBalanceLabel.getTop(), balanceValueTextBox.getLeft()-lockedBalanceLabel.getRight(), elementHeight);

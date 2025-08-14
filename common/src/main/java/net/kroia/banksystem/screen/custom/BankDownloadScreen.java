@@ -182,7 +182,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         applySettigns();
     }
     private void onSelectItemButtonClicked() {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankManagerData((minimalBankManagerData) -> {
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData((minimalBankManagerData) -> {
             List<ItemStack> allowedItemStacks;
             if(minimalBankManagerData == null)
             {

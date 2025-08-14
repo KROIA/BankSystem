@@ -284,7 +284,8 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
 
     public void updateCurrentBankingItemsView()
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankManagerData((minimalBankManagerData) -> {
+        currentBankingItemsView.clearItems();
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData((minimalBankManagerData) -> {
             if(!screenIsOpen)
                 return; // Do not update if the screen is not open
             List<ItemStack> allowedItemStacks;

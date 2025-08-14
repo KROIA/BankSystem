@@ -22,12 +22,8 @@ public class BankAccountNumbersRequest extends BankSystemGenericRequest<List<UUI
 
     @Override
     public List<Integer> handleOnServer(List<UUID> input, ServerPlayer sender) {
-        if(input.size() == 1)
-        {
-            if(input.get(0).compareTo(sender.getUUID()) != 0 && !playerIsAdmin(sender)) {
-                new ArrayList<>();
-            }
-        }
+        if(input.isEmpty())
+            input.add(sender.getUUID());
 
 
         List<Integer> accountNumbers = new ArrayList<>();

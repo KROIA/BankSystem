@@ -140,7 +140,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         if(!INSTANCES.SERVER_BANK_MANAGER.userExists(player.getUUID()))
         {
             INSTANCES.SERVER_BANK_MANAGER.addUser(player);
-            INSTANCES.SERVER_BANK_MANAGER.createPersonalBank(player.getUUID());
+            INSTANCES.SERVER_BANK_MANAGER.createPersonalBankAccount(player.getUUID());
         }
         /*
         INSTANCES.SERVER_BANK_MANAGER.createUser(

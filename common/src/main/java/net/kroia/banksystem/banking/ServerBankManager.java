@@ -20,6 +20,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
@@ -184,6 +185,75 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         }
         return getPersonalBankAccount(user.getUUID());
     }
+    public BankAccount getPersonalBankAccount(String userName)
+    {
+        User user = getUserByName(userName);
+        return getPersonalBankAccount(user.getUUID());
+    }
+    public @Nullable BankAccount getOrCreatePersonalBankAccount(UUID userUUID)
+    {
+        BankAccount account = getPersonalBankAccount(userUUID);
+        if(account != null)
+            return account;
+        account = createPersonalBankAccount(userUUID);
+        return account;
+    }
+    public BankAccount getOrCreatePersonalBankAccount(@NotNull User user)
+    {
+        return getOrCreatePersonalBankAccount(user.getUUID());
+    }
+    public @Nullable BankAccount getOrCreatePersonalBankAccount(@NotNull String userName)
+    {
+        User user = getUserByName(userName);
+        if(user == null)
+            return null;
+        return getOrCreatePersonalBankAccount(user.getUUID());
+    }
+
+
+
+
+    public @Nullable IBank getPersonalBank(UUID owner, ItemID itemID)
+    {
+        BankAccount account = getPersonalBankAccount(owner);
+        if(account == null)
+            return null;
+        return account.getBank(itemID);
+    }
+    public @Nullable IBank getPersonalBank(String ownerName, ItemID itemID)
+    {
+        User owner = getUserByName(ownerName);
+        BankAccount account = getPersonalBankAccount(owner.getUUID());
+        if(account == null)
+            return null;
+        return account.getBank(itemID);
+    }
+    public @Nullable IBank getPersonalBank(User owner, ItemID itemID)
+    {
+        BankAccount account = getPersonalBankAccount(owner.getUUID());
+        if(account == null)
+            return null;
+        return account.getBank(itemID);
+    }
+    public @Nullable IBank getOrCreatePersonalBank(UUID owner, ItemID itemID)
+    {
+        BankAccount account = getOrCreatePersonalBankAccount(owner);
+        if(account == null)
+            return null;
+        IBank bank = account.getBank(itemID);
+        if(bank != null)
+            return bank;
+        return account.createBank(itemID, 0);
+    }
+    public @Nullable IBank getOrCreatePersonalBank(String ownerName, ItemID itemID)
+    {
+        User owner = getUserByName(ownerName);
+        return getOrCreatePersonalBank(owner.getUUID(), itemID);
+    }
+    public @Nullable IBank getOrCreatePersonalBank(User owner, ItemID itemID)
+    {
+        return getOrCreatePersonalBank(owner.getUUID(), itemID);
+    }
 
 
     public void addUser(@NotNull ServerPlayer player)
@@ -240,7 +310,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
 
 
 
-    public boolean userHasPersonalBank(UUID userUUID)
+    public boolean userHasPersonalBankAccount(UUID userUUID)
     {
         for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
             BankAccount account = entry.getValue();
@@ -251,22 +321,23 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         }
         return false;
     }
-    public void createPersonalBank(UUID user)
+    @Override
+    public BankAccount createPersonalBankAccount(UUID user)
     {
         User creator = userMap.get(user);
         if(creator == null) {
             warn("No user found with UUID: " + user);
-            return;
+            return null;
         }
-        if(userHasPersonalBank(user)) {
+        if(userHasPersonalBankAccount(user)) {
             warn("User with UUID: " + user + " already has a personal bank account.");
-            return;
+            return null;
         }
 
         BankAccount existingAccount = getPersonalBankAccount(user);
         if(existingAccount != null) {
             warn("User with UUID: " + user + " already has a personal bank account with number: " + existingAccount.getAccountNumber());
-            return;
+            return null;
         }
 
         int accountNumber = generateNewAccountNumber();
@@ -274,9 +345,10 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         BankAccount account = BankAccount.createPersonal(accountNumber, creator, startBalance);
         if(account == null) {
             warn("Failed to create personal bank account for user with UUID: " + user);
-            return;
+            return null;
         }
         bankAccounts.put(accountNumber, account);
+        return account;
     }
 
 

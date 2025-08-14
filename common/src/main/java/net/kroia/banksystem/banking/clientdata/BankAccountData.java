@@ -5,9 +5,7 @@ import net.kroia.modutilities.networking.INetworkPayloadEncoder;
 import net.minecraft.network.FriendlyByteBuf;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 public class BankAccountData implements INetworkPayloadEncoder {
 
@@ -33,6 +31,7 @@ public class BankAccountData implements INetworkPayloadEncoder {
     @Override
     public void encode(FriendlyByteBuf buf) {
         buf.writeInt(accountNumber);
+        buf.writeUtf(accountName);
         buf.writeBoolean(personalBankOwnerData != null);
         if(personalBankOwnerData != null)
             personalBankOwnerData.encode(buf);
@@ -46,9 +45,28 @@ public class BankAccountData implements INetworkPayloadEncoder {
         }
     }
 
+    public List<String> getAllUserNames()
+    {
+        List<String> names = new ArrayList<>();
+        if(personalBankOwnerData != null)
+            names.add(personalBankOwnerData.userName);
+        for(BankUserData data : this.users.values())
+        {
+            names.add(data.userName);
+        }
+        return names;
+    }
+    public List<String> getSearchTexts()
+    {
+        List<String> texts = getAllUserNames();
+        texts.add(accountName);
+        texts.add(String.valueOf(accountNumber));
+        return texts;
+    }
 
     public static BankAccountData decode(FriendlyByteBuf buf) {
         int accountNumber = buf.readInt();
+        String accountName = buf.readUtf();
         UserData creator = null;
         if(buf.readBoolean()) {
             creator = UserData.decode(buf);
@@ -66,6 +84,6 @@ public class BankAccountData implements INetworkPayloadEncoder {
             BankData data = BankData.decode(buf);
             bankData.put(data.itemID, data);
         }
-        return new BankAccountData(accountNumber, creator, users, bankData);
+        return new BankAccountData(accountNumber, accountName, creator, users, bankData);
     }
 }

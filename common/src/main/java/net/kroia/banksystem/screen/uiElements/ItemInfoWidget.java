@@ -23,7 +23,7 @@ public class ItemInfoWidget extends BankSystemGuiElement {
 
     private static final String PREFIX = "gui."+BankSystemMod.MOD_ID+".iteminfo_widget.";
 
-    private static final Component USER_NAME = Component.translatable(PREFIX+"player_name");
+    private static final Component ACCOUNT_NAME = Component.translatable(PREFIX+"account_name");
     private static final Component BALANCE = Component.translatable(PREFIX+"balance");
     private static final Component LOCKED_BALANCE = Component.translatable(PREFIX+"locked_balance");
     private static final Component TOTAL_BALANCE = Component.translatable(PREFIX+"total_balance");
@@ -38,7 +38,7 @@ public class ItemInfoWidget extends BankSystemGuiElement {
     final Label totalLockedTextLabel;
 
 
-    final Label playerNameLabel;
+    final Label accountNameLabel;
     final Label balanceLabel;
     final Label lockedBalanceLabel;
     final Label totalBalanceLabel;
@@ -57,11 +57,11 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         totalSuplyTextLabel = new Label();
         totalLockedTextLabel = new Label();
 
-        playerNameLabel = new Label(USER_NAME.getString());
+        accountNameLabel = new Label(ACCOUNT_NAME.getString());
         balanceLabel = new Label(BALANCE.getString());
         lockedBalanceLabel = new Label(LOCKED_BALANCE.getString());
         totalBalanceLabel = new Label(TOTAL_BALANCE.getString());
-        playerNameLabel.setAlignment(Alignment.CENTER);
+        accountNameLabel.setAlignment(Alignment.CENTER);
         balanceLabel.setAlignment(Alignment.CENTER);
         lockedBalanceLabel.setAlignment(Alignment.CENTER);
         totalBalanceLabel.setAlignment(Alignment.CENTER);
@@ -85,7 +85,7 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         addChild(searchLabel);
         addChild(searchTextBox);
 
-        addChild(playerNameLabel);
+        addChild(accountNameLabel);
         addChild(balanceLabel);
         addChild(lockedBalanceLabel);
         addChild(totalBalanceLabel);
@@ -118,11 +118,11 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         int _balanceRatio = ItemInfoUserWidget.balanceRatio * reducedWidth / ItemInfoUserWidget.sumRatio;
         int _lockedBalanceRatio = ItemInfoUserWidget.lockedBalanceRatio * reducedWidth / ItemInfoUserWidget.sumRatio;
         int _totalBalanceRatio = ItemInfoUserWidget.totalBalanceRatio * reducedWidth / ItemInfoUserWidget.sumRatio;
-        playerNameLabel.setBounds(padding, totalLockedTextLabel.getBottom(), _nameRatio, elementHeight);
-        balanceLabel.setBounds(playerNameLabel.getRight(), totalLockedTextLabel.getBottom(), _balanceRatio, elementHeight);
+        accountNameLabel.setBounds(padding, totalLockedTextLabel.getBottom(), _nameRatio, elementHeight);
+        balanceLabel.setBounds(accountNameLabel.getRight(), totalLockedTextLabel.getBottom(), _balanceRatio, elementHeight);
         lockedBalanceLabel.setBounds(balanceLabel.getRight(), totalLockedTextLabel.getBottom(), _lockedBalanceRatio, elementHeight);
         totalBalanceLabel.setBounds(lockedBalanceLabel.getRight(), totalLockedTextLabel.getBottom(), _totalBalanceRatio, elementHeight);
-        playerDataView.setBounds(padding, playerNameLabel.getBottom(), width, height-playerNameLabel.getBottom()+padding);
+        playerDataView.setBounds(padding, accountNameLabel.getBottom(), width, height- accountNameLabel.getBottom()+padding);
     }
 
 
@@ -171,9 +171,8 @@ public class ItemInfoWidget extends BankSystemGuiElement {
             userWidget.setLockedBalance(bankDataItem.lockedBalance, bankDataItem.itemFractionScaleFactor);
             userWidget.setTotalBalance(bankDataItem.balance + bankDataItem.lockedBalance, bankDataItem.itemFractionScaleFactor);
             userWidget.setAccountNumber(account.accountNumber);
-            userWidget.setUserNames(account.users.values().stream()
-                    .map(user -> user.userName)
-                    .toList());
+            userWidget.setAccountName(account.accountName);
+            userWidget.setUserNames(account.getSearchTexts());
 
         }
         for(ItemInfoUserWidget item : toRemoveItems.values())

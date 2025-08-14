@@ -823,7 +823,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerID);
         if(bankAccount == null)
         {
-            BACKEND_INSTANCES.SERVER_BANK_MANAGER.createPersonalBank(playerID);
+            BACKEND_INSTANCES.SERVER_BANK_MANAGER.createPersonalBankAccount(playerID);
             bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerID);
             if(bankAccount == null)
             {
@@ -878,7 +878,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerID);
         if(bankAccount == null)
         {
-            BACKEND_INSTANCES.SERVER_BANK_MANAGER.createPersonalBank(playerID);
+            BACKEND_INSTANCES.SERVER_BANK_MANAGER.createPersonalBankAccount(playerID);
             bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerID);
             if(bankAccount == null)
             {

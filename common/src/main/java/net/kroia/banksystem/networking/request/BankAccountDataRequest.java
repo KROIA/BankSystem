@@ -9,27 +9,27 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-public class MinimalBankUserDataRequest extends BankSystemGenericRequest<MinimalBankUserDataRequest.InputData, BankAccountData> {
+public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccountDataRequest.InputData, BankAccountData> {
 
 
     public static class InputData
     {
         public final int accountNumber;
-        public final UUID userUUID;
+        public final UUID personalUserUUID;
 
         public InputData(int accountNumber) {
             this.accountNumber = accountNumber;
-            this.userUUID = null;
+            this.personalUserUUID = null;
         }
-        public InputData(UUID userUUID) {
+        public InputData(UUID personalUserUUID) {
             this.accountNumber = -1;
-            this.userUUID = userUUID;
+            this.personalUserUUID = personalUserUUID;
         }
     }
 
     @Override
     public String getRequestTypeID() {
-        return MinimalBankUserDataRequest.class.getName();
+        return BankAccountDataRequest.class.getName();
     }
 
     @Override
@@ -41,7 +41,7 @@ public class MinimalBankUserDataRequest extends BankSystemGenericRequest<Minimal
     public BankAccountData handleOnServer(InputData inputData, ServerPlayer sender) {
 
         boolean isAdmin = playerIsAdmin(sender);
-        if(inputData.userUUID == null) {
+        if(inputData.personalUserUUID == null) {
             BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(inputData.accountNumber);
             if (account == null) {
                 return null; // If the account does not exist, return null
@@ -53,14 +53,14 @@ public class MinimalBankUserDataRequest extends BankSystemGenericRequest<Minimal
         }
         else
         {
-            BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(inputData.userUUID);
+            BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(inputData.personalUserUUID);
             if(account == null) {
                 return null; // If the personal bank account does not exist, return null
             }
             User owner = account.getPersonalBankOwner();
             if(owner != null)
             {
-                if(!owner.getUUID().equals(inputData.userUUID) && !isAdmin) {
+                if(!owner.getUUID().equals(inputData.personalUserUUID) && !isAdmin) {
                     return null; // If the user UUID does not match the account owner, return null
                 }
                 return account.getAccountData();
@@ -75,9 +75,9 @@ public class MinimalBankUserDataRequest extends BankSystemGenericRequest<Minimal
 
     @Override
     public void encodeInput(FriendlyByteBuf buf, InputData input) {
-        if(input.userUUID != null) {
+        if(input.personalUserUUID != null) {
             buf.writeInt(-1); // Use -1 to indicate that the input is a user UUID
-            buf.writeUUID(input.userUUID);
+            buf.writeUUID(input.personalUserUUID);
         } else {
             buf.writeInt(input.accountNumber); // Encode the account number
         }

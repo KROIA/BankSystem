@@ -217,7 +217,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private void updateBankList()
     {
 
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestPersonalMinimalBankUserData(playerUUID, (minimalBankUserData) -> {
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestPersonalBankAccountData(playerUUID, (minimalBankUserData) -> {
             if(!screenIsOpen)
                 return;
             if(minimalBankUserData == null)

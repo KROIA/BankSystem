@@ -24,7 +24,7 @@ public class ItemInfoUserWidget extends BankSystemGuiElement {
     public static final int manageButtonRatio = 10;
     public static final int sumRatio = nameRatio+balanceRatio+lockedBalanceRatio+totalBalanceRatio+manageButtonRatio;
 
-    final Label accountNumberLabel;
+    final Label accountNameLabel;
     final Label balanceTextLabel;
     final Label lockedBalanceTextLabel;
     final Label totalBalanceTextLabel;
@@ -38,7 +38,7 @@ public class ItemInfoUserWidget extends BankSystemGuiElement {
         super();
         setHeight(20);
 
-        accountNumberLabel = new Label();
+        accountNameLabel = new Label();
         balanceTextLabel = new Label();
         lockedBalanceTextLabel = new Label();
         totalBalanceTextLabel = new Label();
@@ -48,7 +48,7 @@ public class ItemInfoUserWidget extends BankSystemGuiElement {
         manageButton = new Button(MANAGE_BUTTON.getString(), this::onManageButtonClicked);
 
 
-        addChild(accountNumberLabel);
+        addChild(accountNameLabel);
         addChild(balanceTextLabel);
         addChild(lockedBalanceTextLabel);
         addChild(totalBalanceTextLabel);
@@ -77,8 +77,8 @@ public class ItemInfoUserWidget extends BankSystemGuiElement {
         int _manageButtonRatio = manageButtonRatio * width / sumRatio;
 
 
-        accountNumberLabel.setBounds(padding, padding, _nameRatio, height);
-        balanceTextLabel.setBounds(accountNumberLabel.getRight(), padding, _balanceRatio, height);
+        accountNameLabel.setBounds(padding, padding, _nameRatio, height);
+        balanceTextLabel.setBounds(accountNameLabel.getRight(), padding, _balanceRatio, height);
         lockedBalanceTextLabel.setBounds(balanceTextLabel.getRight(), padding, _lockedBalanceRatio, height);
         totalBalanceTextLabel.setBounds(lockedBalanceTextLabel.getRight(), padding, _totalBalanceRatio, height);
         manageButton.setBounds(totalBalanceTextLabel.getRight(), padding, _manageButtonRatio, height);
@@ -87,11 +87,15 @@ public class ItemInfoUserWidget extends BankSystemGuiElement {
     public void setAccountNumber(int number)
     {
         accountNumber = number;
-        accountNumberLabel.setText(String.valueOf(number));
+
     }
     public int getAccountNumber()
     {
         return accountNumber;
+    }
+    public void setAccountName(String name)
+    {
+        accountNameLabel.setText(name);
     }
     public void setBalance(long balance, int itemFractionScaleFactor)
     {

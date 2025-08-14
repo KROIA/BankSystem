@@ -285,6 +285,10 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                 if(MoneyItem.isMoney(itemID))
                 {
                     amount *= ((MoneyItem)stack.getItem()).worth();
+                    itemBank = account.getBank(MoneyItem.getItemID());
+                    if(itemBank == null)
+                        itemBank = account.createBank(MoneyItem.getItemID(), 0);
+
                 }
                 else
                 {

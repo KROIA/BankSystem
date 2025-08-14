@@ -5,10 +5,10 @@ import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class MinimalBankManagerDataRequest extends BankSystemGenericRequest<Integer, BankManagerData> {
+public class BankManagerDataRequest extends BankSystemGenericRequest<Integer, BankManagerData> {
     @Override
     public String getRequestTypeID() {
-        return MinimalBankManagerDataRequest.class.getName();
+        return BankManagerDataRequest.class.getName();
     }
 
     @Override

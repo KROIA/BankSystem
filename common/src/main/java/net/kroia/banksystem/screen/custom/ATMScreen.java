@@ -269,7 +269,7 @@ public class ATMScreen extends BankSystemGuiScreen {
 
     private void updateBalanceView()
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestPersonalMinimalBankUserData(Minecraft.getInstance().player.getUUID(), (accountData) ->
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), (accountData) ->
         {
             if(instance == null || accountData == null)
                 return;
