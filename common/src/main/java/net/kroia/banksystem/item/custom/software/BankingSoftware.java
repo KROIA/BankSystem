@@ -37,7 +37,7 @@ public class BankingSoftware extends Software {
         if(player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
             BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(player.getUUID());
             if(bankAccount != null)
-                SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), bankAccount.getAccountNumber());
+                SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), bankAccount.getAccountNumber(), true);
         }
     }
 
@@ -53,7 +53,7 @@ public class BankingSoftware extends Software {
                     UUID targetUUID = target.getUUID();
                     BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(targetUUID);
                     if(bankAccount != null)
-                        SyncOpenGUIPacket.send_openBankAccountScreen(serverPlayer, targetUUID, bankAccount.getAccountNumber());
+                        SyncOpenGUIPacket.send_openBankAccountScreen(serverPlayer, targetUUID, bankAccount.getAccountNumber(), true);
                 }
             }
             return InteractionResult.SUCCESS;

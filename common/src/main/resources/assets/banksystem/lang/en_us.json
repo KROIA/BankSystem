@@ -78,6 +78,7 @@
   "gui.banksystem.bank_account_management_item.ask_remove_message": "Are you sure you want to remove this account for {item_name}?\nThe bankaccount {account_number} will lose all {item_name} in the account!\nThis action cannot be undone!",
   "gui.banksystem.bank_account_management_screen.save_changes": "Save changes",
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Create new bank",
+  "gui.banksystem.bank_account_management_screen.add_user": "Add user",
 
   "gui.banksystem.bank_upload_screen.inventory_name": "Bank Upload Inventory",
   "gui.banksystem.bank_upload_screen.connect_button": "Connect to Bank",
@@ -139,5 +140,16 @@
   "gui.banksystem.atm_screen.receive_button": "Withdraw money",
   "gui.banksystem.atm_screen.sum_text": "Current withdrawal sum: {amount}",
   "gui.banksystem.atm_screen.available_text": "Available for withdrawal: {amount}",
-  "gui.banksystem.atm_screen.not_enough_money_in_bank": "You do not have enough money in the bank to withdraw {amount}"
+  "gui.banksystem.atm_screen.not_enough_money_in_bank": "You do not have enough money in the bank to withdraw {amount}",
+
+  "gui.banksystem.bank_user_widget.permission_edit_button": "Edit Permissions",
+  "gui.banksystem.bank_user_widget.remove_button": "X",
+  "gui.banksystem.bank_user_widget.permission_screen": "Permissions",
+  "gui.banksystem.bank_user_widget.permission_deposit": "Allowed to deposit",
+  "gui.banksystem.bank_user_widget.permission_withdraw": "Allowed to withdraw",
+  "gui.banksystem.bank_user_widget.permission_manage": "Allowed to manage",
+  "gui.banksystem.bank_user_widget.permission_save": "Save",
+  "gui.banksystem.bank_user_widget.permission_cancel": "Cancel",
+
+  "gui.banksystem.bank_user_widget.user_selection_screen": "User selection screen"
 }

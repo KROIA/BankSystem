@@ -220,7 +220,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     {
         totalBalanceValueLabel.setText(Bank.getFormattedAmount(totalBalance, centScaleFactor));
         if(!balanceChanged)
-            balanceValueTextBox.setText(Bank.getFormattedAmount(totalBalance, centScaleFactor));
+            balanceValueTextBox.setText(Bank.convertToRealAmountStatic(totalBalance, centScaleFactor));
     }
     private void onFreeLockedBalanceCheckBoxClicked(Boolean checked)
     {

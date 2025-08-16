@@ -292,7 +292,7 @@ public class BankSystemCommands {
                                                     UUID playerUUID = bankUser.getUUID();
                                                     BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerUUID);
                                                     if(bankAccount != null)
-                                                        SyncOpenGUIPacket.send_openBankAccountScreen(player, playerUUID, bankAccount.getAccountNumber());
+                                                        SyncOpenGUIPacket.send_openBankAccountScreen(player, playerUUID, bankAccount.getAccountNumber(), true);
 
 
                                                     // Execute the balance command on the server_sender

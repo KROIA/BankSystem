@@ -242,6 +242,23 @@ public class BankAccount implements ServerSaveable {
         }
         users.put(user.getUUID(), new BankUser(user, permission)); // Add new user
     }
+    public void setUsers(Map<User, Integer> userList)
+    {
+        if (userList == null || userList.isEmpty()) {
+            return; // Invalid user list
+        }
+        users.clear(); // Clear existing users
+        for (Map.Entry<User, Integer> entry : userList.entrySet()) {
+            User user = entry.getKey();
+            int permission = entry.getValue();
+            if (user != null && permission >= 0) {
+                if(personalBankOwner != null && personalBankOwner.getUUID().equals(user.getUUID())) {
+                    continue; // Do not add the personalBankOwnerData as a user again
+                }
+                users.put(user.getUUID(), new BankUser(user, permission)); // Add new user
+            }
+        }
+    }
     public void removeUser(UUID userUUID) {
         if (userUUID == null) {
             return;

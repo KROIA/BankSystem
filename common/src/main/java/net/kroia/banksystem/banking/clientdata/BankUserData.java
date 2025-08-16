@@ -9,8 +9,8 @@ public class BankUserData implements INetworkPayloadEncoder {
 
     public final UUID userUUID;
     public final String userName;
-    public final boolean enableBankNotifications;
-    public final int permissions;
+    public boolean enableBankNotifications;
+    public int permissions;
 
     public BankUserData(UUID userUUID, String userName, boolean enableBankNotifications, int permissions) {
         this.userUUID = userUUID;

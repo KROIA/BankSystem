@@ -19,11 +19,11 @@ public class BankSystemClientHooks {
         Minecraft.getInstance().submit(ATMScreen::openScreen);
     }
 
-    public static void openBankAccountScreen(int accountNumber)
+    public static void openBankAccountScreen(int accountNumber, boolean isAdminMode)
     {
         // Ensuring the code runs on the main thread
         Minecraft.getInstance().submit(() -> {
-            BankAccountManagementScreen.openScreen(accountNumber);
+            BankAccountManagementScreen.openScreen(accountNumber, isAdminMode);
         });
     }
 }

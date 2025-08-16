@@ -47,6 +47,12 @@ public class BankSystemModBackend implements BankSystemAPI {
     BankSystemModBackend()
     {
         INSTANCES.LOGGER = new BankSystemLogger(INSTANCES);
+        INSTANCES.SERVER_SETTINGS = null;
+        INSTANCES.SERVER_DATA_HANDLER = null;
+        INSTANCES.SERVER_BANK_MANAGER = null;
+        INSTANCES.CLIENT_BANK_MANAGER = null;
+        INSTANCES.SERVER_EVENTS = null;
+        INSTANCES.NETWORKING = null;
         BankSystemDataHandler.setBackend(INSTANCES);
         BankTerminalBlockEntity.setBackend(INSTANCES);
         ServerBankManager.setBackend(INSTANCES);
@@ -126,11 +132,10 @@ public class BankSystemModBackend implements BankSystemAPI {
     public static void onServerStop(MinecraftServer server) {
         TickEvent.SERVER_POST.unregister(BankSystemModBackend::onServerTick);
         saveDataToFiles(server);
-        INSTANCES.SERVER_SETTINGS = null;
+
         BankSystemDataHandler.resetBankDataLoaded();
         BankSystemDataHandler.resetGlobalDataLoaded();
-        INSTANCES.SERVER_DATA_HANDLER = null;
-        INSTANCES.SERVER_BANK_MANAGER = null;
+
         INSTANCES.SERVER_EVENTS.removeListeners();
     }
 

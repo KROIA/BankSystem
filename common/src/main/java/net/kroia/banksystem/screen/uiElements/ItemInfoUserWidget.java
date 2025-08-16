@@ -133,7 +133,7 @@ public class ItemInfoUserWidget extends BankSystemGuiElement {
 
     private void onManageButtonClicked()
     {
-        BankAccountManagementScreen.openScreen(accountNumber, (GuiScreen)getRoot().getScreen());
+        BankAccountManagementScreen.openScreen(accountNumber, (GuiScreen)getRoot().getScreen(), true);
     }
 
 }
