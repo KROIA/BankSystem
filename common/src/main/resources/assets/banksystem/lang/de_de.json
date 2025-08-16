@@ -75,6 +75,7 @@
   "gui.banksystem.bank_account_management_item.ask_remove_message": "Bist du sicher, dass du die Bank für {item_name} entfernen möchtest?\nDer Bankaccount {account_number} wird alle {item_name} in der Bank verlieren!\nDiese Aktion kann nicht rückgängig gemacht werden!",
   "gui.banksystem.bank_account_management_screen.save_changes": "Änderingen speichern",
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Bankkonto eröffnen",
+  "gui.banksystem.bank_account_management_screen.add_user": "Benutzer hinzufügen",
 
   "gui.banksystem.bank_upload_screen.inventory_name": "Bank Upload Inventar",
   "gui.banksystem.bank_upload_screen.connect_button": "Mit Bank verbinden",
@@ -105,10 +106,13 @@
   "message.banksystem.balance": "Kontostand: {amount}",
   "message.banksystem.balance_detailed": "Frei: {amount}, Reserviert: {locked_balance}",
   "message.banksystem.user_not_found": "Spieler {user_name} konnte nicht gefunden werde",
+  "message.banksystem.bankaccount_not_found": "Bankaccount für {user_name} nicht gefunden",
+  "message.banksystem.no_permission_deposit": "Du hast keine Berechtigung um Items auf das Konto \"{account_number}\" zu speichern.",
+  "message.banksystem.no_permission_withdraw": "Du hast keine Berechtigung um Items von dem Konto \"{account_number}\" ab zuheben.",
+  "message.banksystem.no_permission_manage": "Du hast keine Berechtigung um das Konto \"{account_number}\" zu verwalten.",
   "message.banksystem.bank_user_notification_enabled": "Du erhälst nun Benachrichtigungen, wenn eine Banküberweisung stattfindet",
   "message.banksystem.bank_user_notification_disabled": "Du erhälst keine Benachrichtigungen mehr, wenn eine Banküberweisung stattfindet",
   "message.banksystem.bank_of": "Bank von {user_name}",
-  "message.banksystem.bankaccount_not_found": "Bankaccount für {user_name} nicht gefunden",
   "message.banksystem.bank_not_found": "{user_name}'s Bankkonto für {item_name} konnte nicht gefunden werden",
   "message.banksystem.cant_create_bank": "Bankkonto für Spieler {user_name} mit Item {item_name} konnte nicht erstellt werden",
   "message.banksystem.bank_created": "Bankkonto für Spieler {user_name} mit Item {item_name} erstellt",
@@ -136,5 +140,20 @@
   "gui.banksystem.atm_screen.receive_button": "Geld abheben",
   "gui.banksystem.atm_screen.sum_text": "{amount} wird ausbezahlt",
   "gui.banksystem.atm_screen.available_text": "Zum abheben verfügbar: {amount}",
-  "gui.banksystem.atm_screen.not_enough_money_in_bank": "Du hast nicht genügend Geld auf der Bank um {amount} abzuheben"
+  "gui.banksystem.atm_screen.not_enough_money_in_bank": "Du hast nicht genügend Geld auf der Bank um {amount} abzuheben",
+
+  "gui.banksystem.bank_user_widget.permission_edit_button": "Berechtigung bearbeiten",
+  "gui.banksystem.bank_user_widget.remove_button": "X",
+  "gui.banksystem.bank_user_widget.permission_screen": "Berechtigungen",
+  "gui.banksystem.bank_user_widget.permission_deposit": "Erlaubt einzuzahlen",
+  "gui.banksystem.bank_user_widget.permission_withdraw": "Erlaubt abzuheben",
+  "gui.banksystem.bank_user_widget.permission_manage": "Erlaubt zu verwalten",
+  "gui.banksystem.bank_user_widget.permission_save": "Speichern",
+  "gui.banksystem.bank_user_widget.permission_cancel": "Abbrechen",
+
+  "gui.banksystem.bank_user_widget.user_selection_screen": "Benutzerauswahl",
+
+  "gui.banksystem.bank_account_selection_screen.title": "Bankkonto Auswahl",
+  "gui.banksystem.bank_account_selection_screen.title_label": "Wähle ein Bankkonto aus",
+  "gui.banksystem.bank_account_selection_screen.select_account_button": "Wähle Bankkonto"
 }

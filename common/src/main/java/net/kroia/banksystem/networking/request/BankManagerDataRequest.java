@@ -19,11 +19,11 @@ public class BankManagerDataRequest extends BankSystemGenericRequest<Integer, Ba
     @Override
     public BankManagerData handleOnServer(Integer input, ServerPlayer sender) {
         // Check if sender has admin permissions
-        if(playerIsAdmin(sender)) {
+        //if(playerIsAdmin(sender)) {
             // If the player has admin permissions, return the minimal data
-            return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankManagerData();
-        }
-        return null; // If not, return null or handle accordingly
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankManagerData();
+        //}
+        //return null; // If not, return null or handle accordingly
     }
 
     @Override

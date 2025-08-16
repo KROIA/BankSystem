@@ -1,16 +1,6 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.banking.BankAccount;
-import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.User;
-import net.kroia.banksystem.util.BankSystemNetworkPacket;
-import net.kroia.banksystem.util.ItemID;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
-
-import java.util.*;
-
+/*
 public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
 
     public static class BankData{
@@ -176,4 +166,4 @@ public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
             account.setUsers(userList);
         }
     }
-}
+}*/

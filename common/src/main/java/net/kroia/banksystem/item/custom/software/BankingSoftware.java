@@ -20,6 +20,7 @@ public class BankingSoftware extends Software {
 
 
     public static final String NAME = "banking_software";
+    //private long cooldownTimer;
     public BankingSoftware() {
         super();
     }
@@ -36,8 +37,16 @@ public class BankingSoftware extends Software {
     {
         if(player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
             BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(player.getUUID());
-            if(bankAccount != null)
+            if(bankAccount != null) {
+                /*long currentTime = System.currentTimeMillis();
+                if(currentTime - cooldownTimer < 500)
+                {
+                    return;
+                }
+                cooldownTimer = System.currentTimeMillis();*/
                 SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), bankAccount.getAccountNumber(), true);
+
+            }
         }
     }
 
@@ -52,11 +61,20 @@ public class BankingSoftware extends Software {
                 if(serverPlayer.hasPermissions(2) && serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
                     UUID targetUUID = target.getUUID();
                     BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(targetUUID);
-                    if(bankAccount != null)
+                    if(bankAccount != null) {
+                        /*long currentTime = System.currentTimeMillis();
+                        if(currentTime - cooldownTimer < 500)
+                        {
+                            return InteractionResult.CONSUME;
+                        }
+                        cooldownTimer = System.currentTimeMillis();*/
                         SyncOpenGUIPacket.send_openBankAccountScreen(serverPlayer, targetUUID, bankAccount.getAccountNumber(), true);
+                        // Prevent block interaction from firing after entity interaction
+                        return InteractionResult.CONSUME;
+                    }
                 }
             }
-            return InteractionResult.SUCCESS;
+            return InteractionResult.CONSUME;
         }
 
         return super.interactLivingEntity(stack, player, target, hand);

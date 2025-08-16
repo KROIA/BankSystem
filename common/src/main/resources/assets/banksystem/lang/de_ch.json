@@ -75,6 +75,7 @@
   "gui.banksystem.bank_account_management_item.ask_remove_message": "Bisch du sicher, dass du d Bank für {item_name} entferne wötsch?\nDe Bankacount {account_number} wird alli {item_name} i de Bank verlüre!\nDas cha nöd rückgängig gmacht werde!",
   "gui.banksystem.bank_account_management_screen.save_changes": "Änderige speichere",
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Bankkonto eröffne",
+  "gui.banksystem.bank_account_management_screen.add_user": "Benutzer hinzuefüege",
 
   "gui.banksystem.bank_upload_screen.inventory_name": "Bank Upload Inventar",
   "gui.banksystem.bank_upload_screen.connect_button": "Mit Bank verbindä",
@@ -105,10 +106,13 @@
   "message.banksystem.balance": "Kontostand: {amount}",
   "message.banksystem.balance_detailed": "Frei: {amount}, Reserviert: {locked_balance}",
   "message.banksystem.user_not_found": "Dä Spieler {user_name} isch nöd gfunde worde",
+  "message.banksystem.bankaccount_not_found": "Bankaccount für {user_name} nöd gfunde",
+  "message.banksystem.no_permission_deposit": "Du hesch kei Berechtigung um Items uf s Konto \"{account_number}\" z speichere.",
+  "message.banksystem.no_permission_withdraw": "Du hesch kei Berechtigung um Items vom Konto \"{account_number}\" ab zhebä.",
+  "message.banksystem.no_permission_manage": "Du hesch keine Berechtigung um s Konto \"{account_number}\" z verwaltä.",
   "message.banksystem.bank_user_notification_enabled": "Du erhaltisch ab ez Benachrichtigunge, wenn e Banküberwisig stattfindet",
   "message.banksystem.bank_user_notification_disabled": "Du erhaltisch kei Benachrichtigunge meh, wenn e Banküberwisig stattfindet",
   "message.banksystem.bank_of": "Bank vo {user_name}",
-  "message.banksystem.bankaccount_not_found": "Bankaccount für {user_name} nöd gfunde",
   "message.banksystem.bank_not_found": "{user_name}'s Bankkonto für {item_name} isch nöd gfunde worde",
   "message.banksystem.cant_create_bank": "Bankkonto für dä Spieler {user_name} mit Item {item_name} het nöd chönne erstellt werde",
   "message.banksystem.bank_created": "Bankkonto für dä Spieler {user_name} mit Item {item_name} erstellt",
@@ -136,5 +140,20 @@
   "gui.banksystem.atm_screen.receive_button": "Geld abhebä",
   "gui.banksystem.atm_screen.sum_text": "{amount} wird uszahlt",
   "gui.banksystem.atm_screen.available_text": "Zum abhebä verfügbar: {amount}",
-  "gui.banksystem.atm_screen.not_enough_money_in_bank": "Du hesch nöd gnueg Geld um {amount} abzhebä"
+  "gui.banksystem.atm_screen.not_enough_money_in_bank": "Du hesch nöd gnueg Geld um {amount} abzhebä",
+
+  "gui.banksystem.bank_user_widget.permission_edit_button": "Berechtigung bearbeitä",
+  "gui.banksystem.bank_user_widget.remove_button": "X",
+  "gui.banksystem.bank_user_widget.permission_screen": "Berechtigungä",
+  "gui.banksystem.bank_user_widget.permission_deposit": "Erlaubt izahlig",
+  "gui.banksystem.bank_user_widget.permission_withdraw": "Erlaubt abhebä",
+  "gui.banksystem.bank_user_widget.permission_manage": "Erlaubt z verwaltä",
+  "gui.banksystem.bank_user_widget.permission_save": "Speichere",
+  "gui.banksystem.bank_user_widget.permission_cancel": "Abbreche",
+
+  "gui.banksystem.bank_user_widget.user_selection_screen": "Benutzeruswahl",
+
+  "gui.banksystem.bank_account_selection_screen.title": "Bankkonto Uswahl",
+  "gui.banksystem.bank_account_selection_screen.title_label": "Wähl ä Bankkonto us",
+  "gui.banksystem.bank_account_selection_screen.select_account_button": "Wähl ä Konto"
 }

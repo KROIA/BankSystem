@@ -244,7 +244,7 @@ public class BankAccount implements ServerSaveable {
     }
     public void setUsers(Map<User, Integer> userList)
     {
-        if (userList == null || userList.isEmpty()) {
+        if (userList == null) {
             return; // Invalid user list
         }
         users.clear(); // Clear existing users
@@ -341,6 +341,20 @@ public class BankAccount implements ServerSaveable {
             return null; // Invalid item ID
         }
         return banks.get(itemID); // Get bank by item ID
+    }
+    public @Nullable IBank getOrCreateBank(ItemID itemID)
+    {
+        if (itemID == null) {
+            return null; // Invalid item ID
+        }
+        Bank bank = banks.get(itemID);
+        if (bank == null) {
+            bank = Bank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
+            if (bank != null) {
+                banks.put(itemID, bank); // Add new bank to the account
+            }
+        }
+        return bank; // Return the existing or newly created bank
     }
     public Map<ItemID, IBank> getAllBanks() {
         return new HashMap<>(banks); // Return a copy of all banks in the account
@@ -759,7 +773,14 @@ public class BankAccount implements ServerSaveable {
     public JsonElement toJson()
     {
         JsonObject jsonObject = new JsonObject();
+
+        if(personalBankOwner != null)
+        {
+            jsonObject.add("personalBankOwner", personalBankOwner.toJson());
+        }
+
         jsonObject.addProperty("accountNumber", accountNumber);
+        jsonObject.addProperty("accountName", accountName);
         JsonArray usersJson = new JsonArray();
         for (BankUser user : users.values()) {
             usersJson.add(user.toJson());

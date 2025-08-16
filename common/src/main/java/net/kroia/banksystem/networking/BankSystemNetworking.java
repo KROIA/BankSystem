@@ -1,7 +1,6 @@
 package net.kroia.banksystem.networking;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.networking.packet.client_sender.update.UpdateBankAccountPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
@@ -24,6 +23,9 @@ public class BankSystemNetworking extends NetworkManager {
     public static RemoveEmptyBanksRequest REMOVE_EMPTY_BANKS_REQUEST = (RemoveEmptyBanksRequest) AsynchronousRequestResponseSystem.register(new RemoveEmptyBanksRequest());
     public static itemFractionScaleFactorRequest ITEM_FRACTION_SCALE_FACTOR_REQUEST = (itemFractionScaleFactorRequest) AsynchronousRequestResponseSystem.register(new itemFractionScaleFactorRequest());
     public static BankAccountNumbersRequest BANK_ACCOUNT_NUMBERS_REQUEST = (BankAccountNumbersRequest) AsynchronousRequestResponseSystem.register(new BankAccountNumbersRequest());
+    public static UpdateBankAccountRequest UPDATE_BANK_ACCOUNT_REQUEST = (UpdateBankAccountRequest) AsynchronousRequestResponseSystem.register(new UpdateBankAccountRequest());
+    public static BankTerminalBlockDataRequest BANK_TERMINAL_BLOCK_DATA_REQUEST = (BankTerminalBlockDataRequest) AsynchronousRequestResponseSystem.register(new BankTerminalBlockDataRequest());
+    public static BankSelectionScreenDataRequest BANK_SELECTION_SCREEN_DATA_REQUEST = (BankSelectionScreenDataRequest) AsynchronousRequestResponseSystem.register(new BankSelectionScreenDataRequest());
     public BankSystemNetworking() {
         super(BankSystemMod.MOD_ID, "bank_system_channel");
 
@@ -52,7 +54,7 @@ public class BankSystemNetworking extends NetworkManager {
         //register(RequestDisallowBankingItemIDPacket.class, RequestDisallowBankingItemIDPacket::encode, RequestDisallowBankingItemIDPacket::new, RequestDisallowBankingItemIDPacket::receive);
         register(UpdateBankTerminalBlockEntityPacket.class, UpdateBankTerminalBlockEntityPacket::encode, UpdateBankTerminalBlockEntityPacket::new, UpdateBankTerminalBlockEntityPacket::receive);
         //register(RequestItemInfoPacket.class, RequestItemInfoPacket::encode, RequestItemInfoPacket::new, RequestItemInfoPacket::receive);
-        register(UpdateBankAccountPacket.class, UpdateBankAccountPacket::encode, UpdateBankAccountPacket::new, UpdateBankAccountPacket::receive);
+        //register(UpdateBankAccountPacket.class, UpdateBankAccountPacket::encode, UpdateBankAccountPacket::new, UpdateBankAccountPacket::receive);
         register(UpdateBankUploadBlockEntityPacket.class, UpdateBankUploadBlockEntityPacket::encode, UpdateBankUploadBlockEntityPacket::new, UpdateBankUploadBlockEntityPacket::receive);
         register(UpdateBankDownloadBlockEntityPacket.class, UpdateBankDownloadBlockEntityPacket::encode, UpdateBankDownloadBlockEntityPacket::new, UpdateBankDownloadBlockEntityPacket::receive);
         register(WithdrawMoneyPacket.class, WithdrawMoneyPacket::encode, WithdrawMoneyPacket::new, WithdrawMoneyPacket::receive);

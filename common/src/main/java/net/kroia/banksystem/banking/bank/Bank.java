@@ -552,8 +552,8 @@ public class Bank implements ServerSaveable, IBank {
     {
         JsonObject json = new JsonObject();
         json.add("itemID", itemID.toJson());
-        json.addProperty("balance", balance);
-        json.addProperty("lockedBalance", lockedBalance);
+        json.addProperty("balance", getNormalizedBalance());
+        json.addProperty("lockedBalance", getNormalizedLockedBalance());
         return json;
     }
     @Override

@@ -2,6 +2,7 @@ package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.screen.custom.ATMScreen;
@@ -198,8 +199,22 @@ public class BankSystemTextMessages {
     private static final Component BANKACCOUNT_NOT_FOUND = Component.translatable(prefix+"bankaccount_not_found");
     public static String getBankAccountNotFoundMessage(String user)
     {
-        String msg = USER_NOT_FOUND.getString();
+        String msg = BANKACCOUNT_NOT_FOUND.getString();
         msg = replaceVariable(msg, Variables.USER, user);
+        return msg;
+    }
+
+    private static final Component NO_PERMISSION_DEPOSIT = Component.translatable(prefix+"no_permission_deposit");
+    private static final Component NO_PERMISSION_WITHDRAW = Component.translatable(prefix+"no_permission_withdraw");
+    private static final Component NO_PERMISSION_MANAGE = Component.translatable(prefix+"no_permission_manage");
+    public static String getNoBankPermissionMessage(String accountName, BankPermission permission)
+    {
+        String msg = switch (permission) {
+            case DEPOSIT -> NO_PERMISSION_DEPOSIT.getString();
+            case WITHDRAW -> NO_PERMISSION_WITHDRAW.getString();
+            case MANAGE -> NO_PERMISSION_MANAGE.getString();
+        };
+        msg = replaceVariable(msg, Variables.ACCOUNT, accountName);
         return msg;
     }
 

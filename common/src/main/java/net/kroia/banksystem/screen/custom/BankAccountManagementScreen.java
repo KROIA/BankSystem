@@ -7,18 +7,14 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.banking.clientdata.UserData;
-import net.kroia.banksystem.networking.packet.client_sender.update.UpdateBankAccountPacket;
+import net.kroia.banksystem.networking.request.UpdateBankAccountRequest;
 import net.kroia.banksystem.screen.uiElements.BankAccountManagementItem;
 import net.kroia.banksystem.screen.uiElements.BankUserWidget;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
-import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
-import net.kroia.modutilities.gui.elements.Button;
-import net.kroia.modutilities.gui.elements.CloseButton;
-import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.VerticalListView;
+import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
@@ -33,16 +29,20 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final String PREFIX = "gui."+ BankSystemMod.MOD_ID+".bank_account_management_screen.";
     private static final Component TITLE = Component.translatable(PREFIX+"title");
 
+
     private static final Component SAVE_CHANGES = Component.translatable(PREFIX+"save_changes");
     private static final Component CREATE_NEW_BANK = Component.translatable(PREFIX+"create_new_bank");
     private static final Component ADD_USER = Component.translatable(PREFIX+"add_user");
 
-    private final int accountNumber;
+    private int accountNumber;
     private UserData personalBankOwnerData;
     //private String playerName;
     private final GuiScreen parent;
 
+
+    private Button selectAccountButton;
     private Label accountNameLabel;
+    private TextBox accountNameTextBox;
     private CloseButton closeButton;
     private Button saveChangesButton;
     private Button createNewBankButton;
@@ -56,6 +56,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private final Map<UUID, BankUserWidget> bankUserWidgets = new HashMap<>();
     private final List<BankUserWidget> toRemoveUserWidgets = new ArrayList<>();
     private final boolean isAdminMode;
+    private boolean canManage = false;
     private static boolean screenIsOpen = false;
 
 
@@ -65,33 +66,79 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         this.parent = parent;
         this.accountNumber = accountNumber;
 
-        if(this.isAdminMode)
-            setupAdminWindow();
-        else
-            setupUserWindow();
 
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber, (bankAccountData) -> {
-            updateBankData(bankAccountData);
-            updateAccountData(bankAccountData);
-        });
+
+        setupGui(this.accountNumber);
     }
     public BankAccountManagementScreen(int accountNumber, boolean isAdminMode)
     {
         this(null, accountNumber, isAdminMode);
     }
-    private void setupAdminWindow()
+
+    private void setupGui(int accountNumber)
     {
-        accountNameLabel = new Label();
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber, (bankAccountData) -> {
+
+            boolean isEditingPlayer = false;
+            UUID thisPlayerUUID = minecraft.player.getUUID();
+            for(BankUserData userData : bankAccountData.users.values())
+            {
+                if(userData.userUUID.equals(thisPlayerUUID))
+                {
+                    isEditingPlayer = BankPermission.hasPermission(userData.permissions, BankPermission.MANAGE.getValue());
+                    break;
+                }
+            }
+            personalBankOwnerData = bankAccountData.personalBankOwnerData;
+            this.canManage = (personalBankOwnerData != null && personalBankOwnerData.userUUID.equals(thisPlayerUUID)) || isAdminMode || isEditingPlayer;
+
+            bankAccountManagementItems.clear();
+            createBankData.clear();
+            removeAllElements();
+            setupCommon(bankAccountData);
+            if(this.isAdminMode)
+                setupAdminWindow();
+            else
+                setupUserWindow();
+
+
+            updateBankData(bankAccountData);
+            updateAccountData(bankAccountData);
+            updateLayout(getGui());
+
+        });
+    }
+    private void setupCommon(BankAccountData data)
+    {
+        if(canManage) {
+            accountNameTextBox = new TextBox();
+            accountNameTextBox.setText(data.accountName);
+            addElement(accountNameTextBox);
+        }
+        else {
+            accountNameLabel = new Label();
+            accountNameLabel.setText(data.accountName);
+            addElement(accountNameLabel);
+        }
+
+        selectAccountButton = new Button(BankAccountSelectionScreen.TEXT.SELECT_ACCOUNT_BUTTON.getString());
+        selectAccountButton.setOnFallingEdge(() -> {
+            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, minecraft.player.getUUID(), (accountNumber) -> {
+                if(!screenIsOpen)
+                    return;
+                this.accountNumber = accountNumber;
+                setupGui(accountNumber);
+            });
+            minecraft.setScreen(selectionScreen);
+        });
+        saveChangesButton = new Button(SAVE_CHANGES.getString(), this::onSaveChangesButtonClicked);
+        addUserButton = new Button(ADD_USER.getString(), this::onAddUserButtonClicked);
 
         closeButton = new CloseButton(this::onClose);
         closeButton.setIdleColor(0xFFf55a42);
         closeButton.setHoverColor(0xFFe03d24);
         closeButton.setPressedColor(0xFFde2b10);
         closeButton.setOutlineColor(0xFFde2510);
-
-        saveChangesButton = new Button(SAVE_CHANGES.getString(), this::onSaveChangesButtonClicked);
-
-        addUserButton = new Button(ADD_USER.getString(), this::onAddUserButtonClicked);
 
         userElementListView = new VerticalListView();
         LayoutGrid userLayout = new LayoutGrid();
@@ -114,6 +161,18 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         layout.alignment = GuiElement.Alignment.TOP;
         bankElementListView.setLayout(layout);
 
+
+
+        addElement(selectAccountButton);
+        addElement(closeButton);
+        addElement(userElementListView);
+        addElement(bankElementListView);
+        addElement(saveChangesButton);
+        addElement(addUserButton);
+
+    }
+    private void setupAdminWindow()
+    {
         createNewBankButton = new Button(CREATE_NEW_BANK.getString());
         createNewBankButton.setOnFallingEdge(() -> {
             BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData((minimalBankManagerData) -> {
@@ -136,13 +195,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             });
         });
 
-        addElement(accountNameLabel);
-        addElement(closeButton);
-        addElement(saveChangesButton);
         addElement(createNewBankButton);
-        addElement(addUserButton);
-        addElement(userElementListView);
-        addElement(bankElementListView);
+
+
     }
     private void setupUserWindow()
     {
@@ -151,15 +206,15 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     public static void openScreen(int accountNumber, GuiScreen parent, boolean isAdminMode)
     {
+        screenIsOpen = true;
         BankAccountManagementScreen screen = new BankAccountManagementScreen(parent, accountNumber, isAdminMode);
         Minecraft.getInstance().setScreen(screen);
-        screenIsOpen = true;
     }
     public static void openScreen(int accountNumber, boolean isAdminMode)
     {
+        screenIsOpen = true;
         BankAccountManagementScreen screen = new BankAccountManagementScreen(accountNumber, isAdminMode);
         Minecraft.getInstance().setScreen(screen);
-        screenIsOpen = true;
     }
 
     @Override
@@ -169,17 +224,34 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         int width = getWidth()-2*padding;
         int height = getHeight()-2*padding;
 
+        if(getElements().isEmpty())
+            return; // Not initialized yet
+
+
+
         closeButton.setBounds(getWidth() - 20-padding, padding,20,20);
         int textWidth = getGui().getFont().width(SAVE_CHANGES.getString())+10;
         saveChangesButton.setBounds(closeButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
         textWidth = getGui().getFont().width(CREATE_NEW_BANK.getString())+10;
-        createNewBankButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
-        accountNameLabel.setBounds(padding, padding, createNewBankButton.getLeft()-padding-spacing, 20);
 
-        addUserButton.setBounds(padding, closeButton.getBottom()+spacing, (width-spacing)/2, closeButton.getHeight());
-        userElementListView.setBounds(padding, addUserButton.getBottom()+spacing, (width-spacing)/2, height-(addUserButton.getBottom()+spacing)+padding);
+        int nameWidth = (width-spacing)/2;
+        selectAccountButton.setBounds(padding, padding, nameWidth, 20);
+        int accountNameY = selectAccountButton.getBottom()+spacing;
+        if(canManage) {
+            accountNameTextBox.setBounds(padding, accountNameY, nameWidth, 20);
+        }else {
+            accountNameLabel.setBounds(padding, accountNameY, nameWidth, 20);
+        }
+
+        addUserButton.setBounds(padding, selectAccountButton.getBottom()+accountNameY, nameWidth, closeButton.getHeight());
+        userElementListView.setBounds(padding, addUserButton.getBottom()+spacing, nameWidth, height-(addUserButton.getBottom()+spacing)+padding);
         bankElementListView.setBounds(userElementListView.getRight()+spacing, closeButton.getBottom()+spacing, userElementListView.getWidth(), height-(closeButton.getBottom()+spacing)+padding);
 
+
+        if(isAdminMode)
+        {
+            createNewBankButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
+        }
     }
 
     @Override
@@ -195,29 +267,33 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private void onSaveChangesButtonClicked()
     {
-        List<UpdateBankAccountPacket.BankData> bankData = new ArrayList<>();
-        for(BankAccountManagementItem item : bankAccountManagementItems.values())
-        {
-            UpdateBankAccountPacket.BankData data = new UpdateBankAccountPacket.BankData();
-            data.resetLockedBalance = item.freeLockedBalance();
-            data.removeBank = item.deleteAccount();
-            data.setBalance = item.balanceHasChanged();
-            data.balance = item.getBalance();
-            data.itemID = item.getItemID();
-            bankData.add(data);
+        List<UpdateBankAccountRequest.InputData.BankData> bankData = new ArrayList<>();
+        if(canManage) {
+            for (BankAccountManagementItem item : bankAccountManagementItems.values()) {
+                UpdateBankAccountRequest.InputData.BankData data = new UpdateBankAccountRequest.InputData.BankData();
+                data.removeBank = item.deleteAccount();
+                if(isAdminMode) {
+                    data.resetLockedBalance = item.freeLockedBalance();
+                    data.setBalance = item.balanceHasChanged();
+                    data.balance = item.getBalance();
+                }
+                data.itemID = item.getItemID();
+                bankData.add(data);
+            }
         }
-        for(BankAccountManagementItem item : createBankData.values())
-        {
-            UpdateBankAccountPacket.BankData data = new UpdateBankAccountPacket.BankData();
-            data.resetLockedBalance = item.freeLockedBalance();
-            data.removeBank = item.deleteAccount();
-            data.createBank = true;
-            data.setBalance = item.balanceHasChanged();
-            data.balance = item.getBalance();
-            data.itemID = item.getItemID();
-            bankElementListView.removeChild(item);
-            bankData.add(data);
-
+        if(isAdminMode) {
+            for (BankAccountManagementItem item : createBankData.values()) {
+                UpdateBankAccountRequest.InputData.BankData data = new UpdateBankAccountRequest.InputData.BankData();
+                data.resetLockedBalance = item.freeLockedBalance();
+                data.removeBank = item.deleteAccount();
+                data.createBank = true;
+                data.setBalance = item.balanceHasChanged();
+                data.balance = item.getBalance();
+                data.itemID = item.getItemID();
+                bankElementListView.removeChild(item);
+                bankData.add(data);
+            }
+            createBankData.clear();
         }
         Map<UUID, Integer> setUsers = new HashMap<>();
         for(BankUserWidget userWidget : bankUserWidgets.values())
@@ -225,8 +301,19 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             BankUserData userData = userWidget.getUserData();
             setUsers.put(userData.userUUID, userData.permissions);
         }
-        UpdateBankAccountPacket.sendPacket(accountNumber, bankData, setUsers);
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber, (bankAccountData) -> {
+
+        String accountName = null;
+        if(accountNameTextBox != null)
+        {
+            accountName = accountNameTextBox.getText();
+        }
+        else if(accountNameLabel != null)
+        {
+            accountName = accountNameLabel.getText();
+        }
+
+        UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, bankData, setUsers);
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input, (bankAccountData) -> {
             updateBankData(bankAccountData);
             updateAccountData(bankAccountData);
         });
@@ -243,6 +330,10 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         }
 
         personalBankOwnerData = bankAccountData.personalBankOwnerData;
+        if(!this.canManage)
+        {
+            accountNameLabel.setText(bankAccountData.accountName);
+        }
 
         Map<ItemID, BankData> bankMap = bankAccountData.bankData;
         ArrayList<Pair<ItemID, BankData>> sortedBankAccounts = new ArrayList<>();
@@ -255,9 +346,6 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         }
         sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance, a.getSecond().balance));
 
-        // playerName = minimalBankUserData.userName;
-        accountNameLabel.setText(bankAccountData.accountName);
-        //accountNameLabel.setText(BankSystemTextMessages.getBankAccountManagementBankOwnerMessage(accountNumber));
         Map<ItemID, BankAccountManagementItem> toRemove = new HashMap<>(bankAccountManagementItems);
         for(Pair<ItemID, BankData> pair : sortedBankAccounts)
         {
@@ -265,7 +353,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             BankData bankData = pair.getSecond();
             if(item == null)
             {
-                item = new BankAccountManagementItem(pair.getFirst(), accountNumber, bankData.itemFractionScaleFactor);
+                item = new BankAccountManagementItem(pair.getFirst(), accountNumber, bankData.itemFractionScaleFactor, isAdminMode, canManage);
                 item.setBalance(bankData.balance);
                 bankAccountManagementItems.put(pair.getFirst(), item);
                 bankElementListView.addChild(item);
@@ -326,12 +414,12 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             return;
         }
 
-        boolean canChange = isAdminMode;
+        this.canManage = isAdminMode;
         if(bankAccountData.personalBankOwnerData != null)
         {
             if(bankAccountData.personalBankOwnerData.userUUID.equals(minecraft.player.getUUID()))
             {
-                canChange = true;
+                canManage = true;
             }
         }
         Map<UUID, BankUserWidget> toRemoveUsers = new HashMap<>(bankUserWidgets);
@@ -342,7 +430,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             if(userWidget == null)
             {
 
-                userWidget = new BankUserWidget(userData, toRemoveUserWidgets::add, canChange, this);
+                userWidget = new BankUserWidget(userData, toRemoveUserWidgets::add, canManage, this);
                 bankUserWidgets.put(userUUID, userWidget);
                 userElementListView.addChild(userWidget);
             }
@@ -371,7 +459,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         data.createBank = true;*/
         BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestItemFractionScaleFactor(itemID, (scaleFac)->
         {
-            BankAccountManagementItem accountItem = new BankAccountManagementItem(itemID, accountNumber, scaleFac);
+            BankAccountManagementItem accountItem = new BankAccountManagementItem(itemID, accountNumber, scaleFac, isAdminMode, canManage);
             accountItem.setBalance(0);
             createBankData.put(itemID, accountItem);
             bankElementListView.addChild(accountItem);
@@ -396,7 +484,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                         if(bankUserWidgets.containsKey(userData.userUUID))
                             return;
                         BankUserData bankUserData = new BankUserData(userData.userUUID, userData.userName, false, BankPermission.DEPOSIT.getValue());
-                        BankUserWidget userWidget = new BankUserWidget(bankUserData, toRemoveUserWidgets::add, isAdminMode, this);
+                        BankUserWidget userWidget = new BankUserWidget(bankUserData, toRemoveUserWidgets::add, canManage, this);
                         bankUserWidgets.put(userData.userUUID, userWidget);
                         userElementListView.addChild(userWidget);
                     });

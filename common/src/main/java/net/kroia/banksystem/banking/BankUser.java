@@ -39,7 +39,7 @@ public class BankUser {
     {
         JsonObject jsonObject = new JsonObject();
         jsonObject.add("user", user.toJson());
-        jsonObject.addProperty("permission", permission);
+        jsonObject.addProperty("permission", BankPermission.toString(permission));
         return jsonObject;
     }
     public String toJsonString()

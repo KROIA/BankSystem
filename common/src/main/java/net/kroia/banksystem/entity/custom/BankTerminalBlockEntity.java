@@ -4,6 +4,7 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.entity.BankSystemEntities;
@@ -594,6 +595,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     {
         private UUID playerID;
         private TerminalInventory inventory;
+        private int selectedBankAccount = 0;
         //private TransferTask transferTask;
 
         private final BankTerminalBlockEntity blockEntity;
@@ -636,10 +638,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             if(!inventory.save(inventoryTag))
                 return false;
             tag.put("Inventory",inventoryTag);
-            CompoundTag transferTaskTag = new CompoundTag();
-           /* if(!transferTask.save(transferTaskTag))
-                return false;*/
-            tag.put("TransferTask", transferTaskTag);
+            //CompoundTag transferTaskTag = new CompoundTag();
+            //tag.put("TransferTask", transferTaskTag);
+            tag.putInt("SelectedBankAccount", selectedBankAccount);
             return true;
         }
 
@@ -652,7 +653,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             playerID = tag.getUUID("PlayerID");
             CompoundTag inventoryTag = tag.getCompound("Inventory");
             inventory.load(inventoryTag);
-            CompoundTag transferTaskTag = tag.getCompound("TransferTask");
+            //CompoundTag transferTaskTag = tag.getCompound("TransferTask");
+            if(tag.contains("SelectedBankAccount"))
+                selectedBankAccount = tag.getInt("SelectedBankAccount");
+
            // transferTask = TransferTask.createFromTag(blockEntity,transferTaskTag);
             //return transferTask != null;
             return true;
@@ -727,6 +731,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         }
         return playerInventories;
     }
+    public int getSelectedBankAccount(UUID playerID) {
+        PlayerData playerData = getPlayerData(playerID);
+        return playerData.selectedBankAccount;
+    }
 
     @Override
     public @NotNull Component getDisplayName() {
@@ -763,7 +771,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         //int sendToMarketSign = 1;
         if(packet.isSendItemsToBank())
         {
-            sendItemsToBank(player.getUUID());
+            sendItemsToBank(player.getUUID(), packet.getSelectedBankAccount());
             //items = inventory.getItemCount();
             //sendToMarketSign = -1;
         }
@@ -773,7 +781,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             if(items == null || items.isEmpty()) {
                 return;
             }
-            sendToBlock(player.getUUID(), items);
+            sendToBlock(player.getUUID(), packet.getSelectedBankAccount(), items);
 
             // Send to inventory
             //items = packet.getItemTransferFromMarket();
@@ -814,25 +822,35 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     }
 
 
-    private void sendItemsToBank(UUID playerID)
+    private void sendItemsToBank(UUID playerID, int accountNr)
     {
         PlayerData playerData = getPlayerData(playerID);
         TerminalInventory inventory = playerData.getInventory();
         HashMap<ItemID, Long> items = inventory.getItemCount();
 
-        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerID);
+        BankAccount bankAccount;
+        if(accountNr > 0)
+        {
+            bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);
+        }
+        else
+        {
+            return;
+            //bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getOrCreatePersonalBankAccount(playerID);
+        }
         if(bankAccount == null)
         {
-            BACKEND_INSTANCES.SERVER_BANK_MANAGER.createPersonalBankAccount(playerID);
-            bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerID);
-            if(bankAccount == null)
-            {
-                User user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(playerID);
-                String userName = user != null ? user.getName() : "Unknown User";
-                ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getBankAccountNotFoundMessage(userName));
-                return;
-            }
+            User user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(playerID);
+            String userName = user != null ? user.getName() : "Unknown User";
+            ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getBankAccountNotFoundMessage(userName));
+            return;
         }
+        if(!bankAccount.hasPermission(playerID, BankPermission.DEPOSIT.getValue()))
+        {
+            ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(bankAccount.getAccountName(), BankPermission.DEPOSIT));
+            return;
+        }
+        playerData.selectedBankAccount = bankAccount.getAccountNumber();
 
         for(ItemID itemID : items.keySet()) {
             long amount = items.get(itemID);
@@ -841,17 +859,13 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
             IBank bank;
             boolean isMoney = MoneyItem.isMoney(itemID);
-            if(!bankAccount.hasBank(itemID))
-            {
-                if(isMoney) {
-                    bank = bankAccount.getBank(MoneyItem.getItemID());
-                }
-                else {
-                    bank = bankAccount.createBank(itemID, 0);
-                }
+            if(isMoney) {
+                bank = bankAccount.getOrCreateBank(MoneyItem.getItemID());
             }
-            else
-                bank = bankAccount.getBank(itemID);
+            else {
+                bank = bankAccount.getOrCreateBank(itemID);
+            }
+
             if(bank == null)
             {
                 ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
@@ -871,23 +885,33 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         // mark the block entity for saving
         setChanged();
     }
-    private void sendToBlock(UUID playerID, HashMap<ItemID, Long> items)
+    private void sendToBlock(UUID playerID, int accountNr, HashMap<ItemID, Long> items)
     {
         PlayerData playerData = getPlayerData(playerID);
         TerminalInventory inventory = playerData.getInventory();
-        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerID);
+        BankAccount bankAccount;
+        if(accountNr > 0)
+        {
+            bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);
+        }
+        else
+        {
+            return;
+            //bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getOrCreatePersonalBankAccount(playerID);
+        }
         if(bankAccount == null)
         {
-            BACKEND_INSTANCES.SERVER_BANK_MANAGER.createPersonalBankAccount(playerID);
-            bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerID);
-            if(bankAccount == null)
-            {
-                User user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(playerID);
-                String userName = user != null ? user.getName() : "Unknown User";
-                ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getBankAccountNotFoundMessage(userName));
-                return;
-            }
+            User user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(playerID);
+            String userName = user != null ? user.getName() : "Unknown User";
+            ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getBankAccountNotFoundMessage(userName));
+            return;
         }
+        if(!bankAccount.hasPermission(playerID, BankPermission.DEPOSIT.getValue()))
+        {
+            ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(bankAccount.getAccountName(), BankPermission.DEPOSIT));
+            return;
+        }
+        playerData.selectedBankAccount = bankAccount.getAccountNumber();
 
         for(ItemID itemID : items.keySet()) {
             long amount = items.get(itemID);
@@ -895,12 +919,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 continue;
 
             IBank bank = null;
-            if(!bankAccount.hasBank(itemID))
-            {
-                bank = bankAccount.createBank(itemID, 0);
-            }
-            else
-                bank = bankAccount.getBank(itemID);
+
+            bank = bankAccount.getOrCreateBank(itemID);
+
 
             if(bank == null)
             {

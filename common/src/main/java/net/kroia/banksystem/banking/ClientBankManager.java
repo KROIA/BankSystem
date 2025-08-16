@@ -6,9 +6,9 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.banksystem.networking.request.AllowItemRequest;
-import net.kroia.banksystem.networking.request.BankAccountDataRequest;
+import net.kroia.banksystem.networking.request.*;
 import net.kroia.banksystem.util.ItemID;
+import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -102,5 +102,18 @@ public class ClientBankManager implements IClientBankManager {
     public void requestBankAccountNumbers(List<UUID> playerUUIDs, Consumer<List<Integer>> callback)
     {
         BankSystemNetworking.BANK_ACCOUNT_NUMBERS_REQUEST.sendRequestToServer(playerUUIDs, callback);
+    }
+
+    public void requestUpdateBankAccount(UpdateBankAccountRequest.InputData inputData, Consumer<BankAccountData> callback)
+    {
+        BankSystemNetworking.UPDATE_BANK_ACCOUNT_REQUEST.sendRequestToServer(inputData, callback);
+    }
+
+    public void requestBankTerminalData(BlockPos pos, Consumer<BankTerminalBlockDataRequest.Output> callback) {
+        BankSystemNetworking.BANK_TERMINAL_BLOCK_DATA_REQUEST.sendRequestToServer(pos, callback);
+    }
+
+    public void requestBankAccounts(UUID playerUUID, Consumer<BankSelectionScreenDataRequest.Output> callback) {
+        BankSystemNetworking.BANK_SELECTION_SCREEN_DATA_REQUEST.sendRequestToServer(playerUUID, callback);
     }
 }

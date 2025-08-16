@@ -268,6 +268,44 @@ public class BankSystemCommands {
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
+                        .then(Commands.literal("managementGUI")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+                                    BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getOrCreatePersonalBankAccount(player.getUUID());
+                                    if(account == null)
+                                    {
+                                        //ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(player.getName().getString()));
+                                        return Command.SINGLE_SUCCESS;
+                                    }
+                                    SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), account.getAccountNumber(), false);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                                .then(Commands.argument("accountname", StringArgumentType.string()).suggests((context, builder) -> {
+                                                    BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccounts(context.getSource().getPlayerOrException().getUUID())
+                                                            .forEach(account -> builder.suggest("\"" + account.getAccountName() + "\""));
+                                                    return builder.buildFuture();
+                                                })
+                                                .executes(context -> {
+                                                    CommandSourceStack source = context.getSource();
+                                                    ServerPlayer player = source.getPlayerOrException();
+                                                    String accountName = StringArgumentType.getString(context, "accountname");
+                                                    var accounts = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccounts(context.getSource().getPlayerOrException().getUUID());
+                                                    BankAccount account = accounts.stream()
+                                                            .filter(acc -> acc.getAccountName().equalsIgnoreCase(accountName))
+                                                            .findFirst()
+                                                            .orElse(null);
+                                                    if(account == null)
+                                                    {
+                                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankAccountNotFoundMessage(accountName));
+                                                        return Command.SINGLE_SUCCESS;
+                                                    }
+                                                    SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), account.getAccountNumber(), false);
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                )
+                        )
+
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
                                             //builder.suggest("\""+ BACKEND_INSTANCESSettings.MarketBot.USER_NAME +"\"");
                                             Map<UUID, String> uuidToNameMap = ServerPlayerUtilities.getUUIDToNameMap();
@@ -278,7 +316,7 @@ public class BankSystemCommands {
                                             return builder.buildFuture();
                                         })
                                         .requires(source -> source.hasPermission(2))
-                                        .then(Commands.literal("bankManagementGUI")
+                                        .then(Commands.literal("managementGUI")
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
