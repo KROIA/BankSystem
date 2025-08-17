@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -28,8 +28,8 @@ public class BankAccountNumbersRequest extends BankSystemGenericRequest<List<UUI
 
         List<Integer> accountNumbers = new ArrayList<>();
         for(UUID uuid : input) {
-            List<BankAccount> accounts = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccounts(uuid);
-            for(BankAccount account : accounts) {
+            List<IBankAccount> accounts = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccounts(uuid);
+            for(IBankAccount account : accounts) {
                 int accountNumber = account.getAccountNumber();
                 if(accountNumbers.contains(accountNumber)) {
                     continue; // Skip if the account number is already in the list

@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
@@ -20,7 +21,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-public class BankAccount implements ServerSaveable {
+public class BankAccount implements ServerSaveable, IBankAccount {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
@@ -33,6 +34,12 @@ public class BankAccount implements ServerSaveable {
     private int accountNumber;
     private String accountName = ""; // Optional account name, can be empty
     private @Nullable ItemID accountIcon;
+
+    /**
+     * The owner of the personal bank account, if this is a personal bank account.
+     * If this is not a personal bank account, this will be null.
+     * A personal bank account can still have multiple users, but only one personal bank owner.
+     */
     private @Nullable User personalBankOwner;
     private final Map<UUID, BankUser> users = new HashMap<>();
     private final Map<ItemID, Bank> banks = new HashMap<>();
@@ -93,6 +100,7 @@ public class BankAccount implements ServerSaveable {
 
 
 
+    @Override
     public BankAccountData getAccountData()
     {
         UserData personalBankOwnerData = null;
@@ -123,7 +131,8 @@ public class BankAccount implements ServerSaveable {
      * @param itemID The item ID of the bank to get data for.
      * @return BankAccountData containing only the bank data for the given item ID, or null if the item ID is invalid.
      */
-    public BankAccountData getAccountData(ItemID itemID)
+    @Override
+    public @Nullable BankAccountData getAccountData(ItemID itemID)
     {
         if (itemID == null) {
             return null; // Invalid item ID
@@ -144,10 +153,13 @@ public class BankAccount implements ServerSaveable {
         Bank bank = this.banks.get(itemID);
         if (bank != null) {
             bankData.put(itemID, bank.getMinimalData()); // Convert Bank to BankData
+            return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
         }
-
-        return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
+        else {
+            return null; // No bank found for the item ID
+        }
     }
+    @Override
     public @Nullable BankData getBankData(ItemID itemID)
     {
         if (itemID == null) {
@@ -159,12 +171,14 @@ public class BankAccount implements ServerSaveable {
         }
         return null; // No bank found for the item ID
     }
+    @Override
     public List<BankData> getBankData()
     {
         return banks.values().stream()
                 .map(Bank::getMinimalData)
                 .toList(); // Get minimal data for all banks in the account
     }
+    @Override
     public @Nullable BankUserData getUserData(UUID userUUID) {
         if (userUUID == null) {
             return null; // Invalid user UUID
@@ -175,31 +189,54 @@ public class BankAccount implements ServerSaveable {
         }
         return null; // No user found with the given UUID
     }
+    @Override
     public List<BankUserData> getUserData() {
         return users.values().stream()
                 .map(BankUser::toBankUserData)
                 .toList(); // Get data for all users in the account
     }
+    @Override
+    public @Nullable UserData getPersonalBankOwnerData() {
+        if (personalBankOwner != null) {
+            return personalBankOwner.getUserData(); // Convert User to UserData
+        }
+        return null; // No personal bank owner
+    }
 
 
+
+
+
+    @Override
     public int getAccountNumber() {
         return accountNumber;
     }
-    public String getAccountName() {
-        return accountName; // Get the name of the bank account
-    }
+    @Override
     public void setAccountName(String accountName) {
         if (accountName == null || accountName.isEmpty()) {
             accountName = "";
         }
         this.accountName = accountName; // Set the name of the bank account
     }
+    @Override
+    public String getAccountName() {
+        return accountName; // Get the name of the bank account
+    }
+    @Override
     public void setAccountIcon(@Nullable ItemID accountIcon) {
         this.accountIcon = accountIcon; // Set the icon for the bank account
     }
+    @Override
     public @Nullable ItemID getAccountIcon() {
         return accountIcon; // Get the icon of the bank account
     }
+
+
+
+
+
+
+    @Override
     public int getPermission(UUID userUUID) {
         BankUser user = users.get(userUUID);
         if (user != null) {
@@ -210,6 +247,7 @@ public class BankAccount implements ServerSaveable {
         }
         return 0; // Default to no permission if user not found
     }
+    @Override
     public boolean hasPermission(UUID userUUID, int permission)
     {
         if (userUUID == null || permission < 0) {
@@ -219,11 +257,10 @@ public class BankAccount implements ServerSaveable {
         if (user != null) {
             return BankPermission.hasPermission(user.getPermission(), permission); // Check user's permissions
         }
-        if(personalBankOwner != null && personalBankOwner.getUUID().equals(userUUID)) {
-            return true; // Personal bank owner has all permissions
-        }
-        return false; // User not found, no permission
+        return personalBankOwner != null && personalBankOwner.getUUID().equals(userUUID); // Personal bank owner has all permissions
+// User not found, no permission
     }
+    @Override
     public void setPermission(UUID userUUID, int permission)
     {
         if (userUUID == null || permission < 0) {
@@ -235,6 +272,7 @@ public class BankAccount implements ServerSaveable {
         }
         user.setPermission(permission); // Update existing user's permission
     }
+    @Override
     public void addUser(User user, int permission)
     {
         if (user == null || permission < 0) {
@@ -245,10 +283,12 @@ public class BankAccount implements ServerSaveable {
         }
         BankUser existingUser = users.get(user.getUUID());
         if (existingUser != null) {
+            existingUser.setPermission(permission); // Update existing user's permission
             return;
         }
         users.put(user.getUUID(), new BankUser(user, permission)); // Add new user
     }
+    @Override
     public void setUsers(Map<User, Integer> userList)
     {
         if (userList == null) {
@@ -266,6 +306,7 @@ public class BankAccount implements ServerSaveable {
             }
         }
     }
+    @Override
     public void removeUser(UUID userUUID) {
         if (userUUID == null) {
             return;
@@ -275,59 +316,27 @@ public class BankAccount implements ServerSaveable {
             personalBankOwner = null; // If the removed user is the personalBankOwnerData, set personalBankOwnerData to null
         }
     }
+    @Override
     public boolean hasAnyUser() {
         return (!users.isEmpty() || personalBankOwner != null); // Check if there are any users
     }
+    @Override
     public boolean hasUser(UUID userUUID) {
         return userUUID != null && (users.containsKey(userUUID) ||
                 (personalBankOwner != null && personalBankOwner.getUUID().equals(userUUID))); // Check if user exists
     }
+    @Override
     public @Nullable User getPersonalBankOwner() {
         return personalBankOwner; // Get the personalBankOwnerData of the bank account
     }
-    public void addBank(ItemID itemID, float startBalance) {
-        if (itemID == null || startBalance < 0) {
-            return; // Invalid item ID or balance
-        }
-        if (banks.containsKey(itemID)) {
-            return; // Bank already exists
-        }
-        Bank bank = Bank.create(itemID, startBalance);
-        if (bank != null) {
-            banks.put(itemID, bank); // Add new item bank
-        }
-    }
-    public void removeBank(ItemID itemID) {
-        if (itemID == null) {
-            return; // Invalid item ID
-        }
-        banks.remove(itemID); // Remove bank by item ID
-    }
-    public List<ItemID> removeEmptyBanks()
-    {
-        List<ItemID> emptyBanks = new ArrayList<>();
-        for (Map.Entry<ItemID, Bank> entry : banks.entrySet()) {
-            Bank bank = entry.getValue();
-            if (bank.getTotalBalance() <= 0) {
-                emptyBanks.add(entry.getKey()); // Collect empty banks
-            }
-        }
-        for (ItemID itemID : emptyBanks) {
-            banks.remove(itemID); // Remove empty banks from the account
-        }
-        return emptyBanks; // Return list of removed empty banks
-    }
-    public void removeAllBanks() {
-        banks.clear(); // Clear all banks in the account
-    }
-    public boolean hasAnyBank() {
-        return !banks.isEmpty(); // Check if there are any banks
-    }
-    public boolean hasBank(ItemID itemID) {
-        return itemID != null && banks.containsKey(itemID); // Check if bank exists for the item ID
-    }
 
-    public IBank createBank(ItemID itemID, float startBalance)
+
+
+
+
+
+    @Override
+    public @Nullable IBank createBank(ItemID itemID, float startBalance)
     {
         if (itemID == null) {
             return null; // Invalid item ID
@@ -342,13 +351,48 @@ public class BankAccount implements ServerSaveable {
         }
         return null; // Failed to create bank
     }
-
+    @Override
+    public void removeBank(ItemID itemID) {
+        if (itemID == null) {
+            return; // Invalid item ID
+        }
+        banks.remove(itemID); // Remove bank by item ID
+    }
+    @Override
+    public List<ItemID> removeEmptyBanks()
+    {
+        List<ItemID> emptyBanks = new ArrayList<>();
+        for (Map.Entry<ItemID, Bank> entry : banks.entrySet()) {
+            Bank bank = entry.getValue();
+            if (bank.getTotalBalance() <= 0) {
+                emptyBanks.add(entry.getKey()); // Collect empty banks
+            }
+        }
+        for (ItemID itemID : emptyBanks) {
+            banks.remove(itemID); // Remove empty banks from the account
+        }
+        return emptyBanks; // Return list of removed empty banks
+    }
+    @Override
+    public void removeAllBanks() {
+        banks.clear(); // Clear all banks in the account
+    }
+    @Override
+    public boolean hasAnyBank() {
+        return !banks.isEmpty(); // Check if there are any banks
+    }
+    @Override
+    public boolean hasBank(ItemID itemID) {
+        return itemID != null && banks.containsKey(itemID); // Check if bank exists for the item ID
+    }
+    @Override
     public @Nullable IBank getBank(ItemID itemID) {
         if (itemID == null) {
             return null; // Invalid item ID
         }
         return banks.get(itemID); // Get bank by item ID
     }
+    @Override
     public @Nullable IBank getOrCreateBank(ItemID itemID)
     {
         if (itemID == null) {
@@ -363,6 +407,7 @@ public class BankAccount implements ServerSaveable {
         }
         return bank; // Return the existing or newly created bank
     }
+    @Override
     public Map<ItemID, IBank> getAllBanks() {
         return new HashMap<>(banks); // Return a copy of all banks in the account
     }

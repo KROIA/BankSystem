@@ -67,6 +67,10 @@ public class BankManagerData implements INetworkPayloadEncoder {
     }
     public static class BankAccountsData implements INetworkPayloadEncoder
     {
+        /**
+         * Map of bank account numbers to their data.
+         * The key is the account number, and the value is the BankAccountData.
+         */
         public final Map<Integer, BankAccountData> bankAccountMap;
         public BankAccountsData(Map<Integer, BankAccountData> bankAccountMap)
         {

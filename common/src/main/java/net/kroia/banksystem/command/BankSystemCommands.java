@@ -7,7 +7,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.Bank;
@@ -275,7 +275,7 @@ public class BankSystemCommands {
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-                                    BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getOrCreatePersonalBankAccount(player.getUUID());
+                                    IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getOrCreatePersonalBankAccount(player.getUUID());
                                     if(account == null)
                                     {
                                         //ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(player.getName().getString()));
@@ -294,7 +294,7 @@ public class BankSystemCommands {
                                                     ServerPlayer player = source.getPlayerOrException();
                                                     String accountName = StringArgumentType.getString(context, "accountname");
                                                     var accounts = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccounts(context.getSource().getPlayerOrException().getUUID());
-                                                    BankAccount account = accounts.stream()
+                                                    IBankAccount account = accounts.stream()
                                                             .filter(acc -> acc.getAccountName().equalsIgnoreCase(accountName))
                                                             .findFirst()
                                                             .orElse(null);
@@ -355,7 +355,7 @@ public class BankSystemCommands {
                                                         return Command.SINGLE_SUCCESS;
                                                     }
                                                     UUID playerUUID = bankUser.getUUID();
-                                                    BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerUUID);
+                                                    IBankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerUUID);
                                                     if(bankAccount != null)
                                                         SyncOpenGUIPacket.send_openBankAccountScreen(player, playerUUID, bankAccount.getAccountNumber(), true);
 
@@ -783,7 +783,7 @@ public class BankSystemCommands {
     }
 
     private static int bank_show(ServerPlayer player, String targetPlayer) {
-        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getOrCreatePersonalBankAccount(targetPlayer);
+        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getOrCreatePersonalBankAccount(targetPlayer);
         if(account == null)
         {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(targetPlayer, MoneyItem.getName()));
@@ -800,7 +800,7 @@ public class BankSystemCommands {
             return Command.SINGLE_SUCCESS;
         }
 
-        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getOrCreatePersonalBankAccount(targetPlayer);
+        IBankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getOrCreatePersonalBankAccount(targetPlayer);
         if(bankAccount == null)
         {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(), MoneyItem.getName()));
@@ -834,7 +834,7 @@ public class BankSystemCommands {
             return Command.SINGLE_SUCCESS;
         }
 
-        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getOrCreatePersonalBankAccount(targetPlayer);
+        IBankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getOrCreatePersonalBankAccount(targetPlayer);
         if(bankAccount == null)
         {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(targetPlayer, MoneyItem.getName()));
@@ -859,7 +859,7 @@ public class BankSystemCommands {
             ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
-        BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(targetPlayer);
+        IBankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(targetPlayer);
         if(bankAccount == null)
         {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(targetPlayer, MoneyItem.getName()));

@@ -1,6 +1,6 @@
 package net.kroia.banksystem.item.custom.software;
 
-import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.block.custom.TerminalBlock;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
@@ -36,7 +36,7 @@ public class BankingSoftware extends Software {
     protected void onRightClickedServerSide(ServerPlayer player)
     {
         if(player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
-            BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(player.getUUID());
+            IBankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(player.getUUID());
             if(bankAccount != null) {
                 /*long currentTime = System.currentTimeMillis();
                 if(currentTime - cooldownTimer < 500)
@@ -60,7 +60,7 @@ public class BankingSoftware extends Software {
 
                 if(serverPlayer.hasPermissions(2) && serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
                     UUID targetUUID = target.getUUID();
-                    BankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(targetUUID);
+                    IBankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(targetUUID);
                     if(bankAccount != null) {
                         /*long currentTime = System.currentTimeMillis();
                         if(currentTime - cooldownTimer < 500)

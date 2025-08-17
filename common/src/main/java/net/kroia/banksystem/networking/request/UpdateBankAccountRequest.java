@@ -193,6 +193,12 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 account.setUsers(userList);
             }
             account.setAccountIcon(input.accountIcon);
+            if(!account.hasAnyUser())
+            {
+                // If the account has no users, we remove it
+                BACKEND_INSTANCES.SERVER_BANK_MANAGER.deleteBankAccount(input.accountNumber);
+                return null; // The account was deleted
+            }
         }
         return account.getAccountData();
     }

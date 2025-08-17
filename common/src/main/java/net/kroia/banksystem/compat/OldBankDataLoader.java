@@ -2,7 +2,7 @@ package net.kroia.banksystem.compat;
 
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
@@ -135,7 +135,7 @@ public class OldBankDataLoader {
         // Create personal banks for each user
         ItemID icon = ItemID.of(Items.CHEST.getDefaultInstance());
         for (AccountData accountData : accountDataList) {
-            BankAccount account = manager.createPersonalBankAccount(accountData.playerUUID);
+            IBankAccount account = manager.createPersonalBankAccount(accountData.playerUUID);
             if (account == null) {
                 BACKEND_INSTANCES.LOGGER.error("Failed to create personal bank account for user: " + accountData.playerName);
                 success = false;

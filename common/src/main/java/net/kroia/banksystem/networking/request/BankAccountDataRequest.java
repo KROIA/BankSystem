@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.request;
 
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankAccount;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
@@ -53,7 +54,7 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
         }
         else
         {
-            BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(inputData.personalUserUUID);
+            IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(inputData.personalUserUUID);
             if(account == null) {
                 return null; // If the personal bank account does not exist, return null
             }

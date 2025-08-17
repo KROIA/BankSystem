@@ -6,8 +6,8 @@ import me.neznamy.tab.api.placeholder.PlaceholderManager;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.api.IServerBankManager;
-import net.kroia.banksystem.banking.BankAccount;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.modutilities.setting.Setting;
 
@@ -50,7 +50,7 @@ public class NEZNAMY_TAB_Placeholders {
 
         registerPlayerPlaceholder(settings.PLAYER_BALANCE, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
-            BankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
+            IBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
             if(bankAccount != null)
             {
                 IBank bank = bankAccount.getBank(MoneyItem.getItemID());
@@ -62,7 +62,7 @@ public class NEZNAMY_TAB_Placeholders {
 
         registerPlayerPlaceholder(settings.PLAYER_LOCKED_BALANCE, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
-            BankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
+            IBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
             if(bankAccount != null)
             {
                 IBank bank = bankAccount.getBank(MoneyItem.getItemID());
@@ -74,7 +74,7 @@ public class NEZNAMY_TAB_Placeholders {
 
         registerPlayerPlaceholder(settings.PLAYER_TOTAL_BALANCE, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
-            BankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
+            IBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
             if(bankAccount != null)
             {
                 IBank bank = bankAccount.getBank(MoneyItem.getItemID());
@@ -86,7 +86,7 @@ public class NEZNAMY_TAB_Placeholders {
 
         registerPlayerPlaceholder(settings.PLAYER_BANKUSER_JSON, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
-            BankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
+            IBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
             if(bankAccount != null)
             {
                 return bankAccount.toJsonString();
