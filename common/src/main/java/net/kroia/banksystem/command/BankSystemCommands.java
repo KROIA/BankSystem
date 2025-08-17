@@ -8,6 +8,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
@@ -212,6 +213,8 @@ public class BankSystemCommands {
         // /bank                                                - Show bank balance (money and items)
         // /bank enableNotifications                            - Enables bank notifications on transactions
         // /bank disableNotifications                           - Disables bank notifications on transactions
+        // /bank managementGUI                                  - Opens the management window to manage own ban accounts
+        // /bank create <accountname>                           - Create a new bank account with the given name
         // /bank settingsGUI                                    - Open bank settings GUI to manage the bankable items
         // /bank <username> show                                - Show bank balance of a player
         // /bank <username> create <itemID> <amount>            - Create a bank for another player
@@ -305,7 +308,31 @@ public class BankSystemCommands {
                                                 })
                                 )
                         )
+                        .then(Commands.literal("create")
+                                .then(Commands.argument("accountname", StringArgumentType.string())
+                                                .executes(context -> {
+                                                    CommandSourceStack source = context.getSource();
+                                                    ServerPlayer player = source.getPlayerOrException();
+                                                    String accountName = StringArgumentType.getString(context, "accountname");
+                                                    var user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(player.getUUID());
+                                                    if(user == null)
+                                                    {
+                                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(player.getName().getString()));
+                                                        return Command.SINGLE_SUCCESS;
+                                                    }
+                                                    var account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.createBankAccount(accountName);
+                                                    if(account == null)
+                                                    {
+                                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getCantCreateBankAccountMessage());
+                                                        return Command.SINGLE_SUCCESS;
+                                                    }
+                                                    account.addUser(user, BankPermission.getAllPermissions());
+                                                    SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), account.getAccountNumber(), false);
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                )
 
+                        )
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
                                             //builder.suggest("\""+ BACKEND_INSTANCESSettings.MarketBot.USER_NAME +"\"");
                                             Map<UUID, String> uuidToNameMap = ServerPlayerUtilities.getUUIDToNameMap();

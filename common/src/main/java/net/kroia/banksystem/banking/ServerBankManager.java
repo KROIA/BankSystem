@@ -19,6 +19,7 @@ import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -46,6 +47,8 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
      * Using the account number as key.
      */
     private final Map<Integer, BankAccount> bankAccounts = new HashMap<>();
+
+    private int nextAccountNumber = 1; // Start with account number 1
 
 
     public ServerBankManager()
@@ -365,6 +368,25 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         return account;
     }
 
+    public BankAccount createBankAccount(String accountName)
+    {
+        if(accountName == null || accountName.isEmpty()) {
+            accountName = "Unnamed Account";
+        }
+        int accountNumber = generateNewAccountNumber();
+        BankAccount account = BankAccount.create(accountNumber);
+        if(account == null)
+        {
+            warn("Failed to create bank account with number: " + accountNumber);
+            return null;
+        }
+        account.setAccountName(accountName);
+        account.setAccountIcon(ItemID.of(Items.CHEST.getDefaultInstance()));
+        bankAccounts.put(accountNumber, account);
+        info("Created new bank account with number: " + accountNumber + " and name: " + accountName);
+        return account;
+    }
+
 
 
 
@@ -578,16 +600,18 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
 
     private int generateNewAccountNumber()
     {
-        int newBankNumber = 1;
+        int newBankNumber = nextAccountNumber;
         while(bankAccounts.containsKey(newBankNumber)) {
             newBankNumber++;
         }
+        nextAccountNumber = newBankNumber+1; // Increment for the next account number
         return newBankNumber;
     }
 
     @Override
     public boolean save(CompoundTag tag) {
         tag.putInt("version", 1); // Versioning for future changes
+        tag.putInt("nextAccountNumber", nextAccountNumber);
 
         ListTag userList = new ListTag();
         for (Map.Entry<UUID, User> entry : userMap.entrySet()) {
@@ -632,6 +656,8 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             error("Unsupported version of bank data: " + tag.getInt("version"));
             return false;
         }
+
+        nextAccountNumber = tag.getInt("nextAccountNumber");
 
         // Load item cent scale factors
         if(tag.contains("itemCentScaleFactors")) {

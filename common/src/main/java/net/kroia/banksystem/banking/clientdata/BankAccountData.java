@@ -111,4 +111,15 @@ public class BankAccountData implements INetworkPayloadEncoder {
         }
         return personalBankOwnerData != null && personalBankOwnerData.userUUID.equals(userUUID); // Personal bank owner has all permissions
     }
+    public boolean hasAnyPermission(UUID userUUID, int permission)
+    {
+        if (userUUID == null || permission < 0) {
+            return false; // Invalid user UUID or permission
+        }
+        BankUserData user = users.get(userUUID);
+        if (user != null) {
+            return BankPermission.hasAnyPermission(user.permissions, permission); // Check user's permissions
+        }
+        return personalBankOwnerData != null && personalBankOwnerData.userUUID.equals(userUUID); // Personal bank owner has all permissions
+    }
 }

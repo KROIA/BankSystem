@@ -12,6 +12,7 @@ import net.kroia.banksystem.screen.uiElements.BankAccountManagementItem;
 import net.kroia.banksystem.screen.uiElements.BankUserWidget;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.*;
@@ -116,35 +117,38 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private void setupGui(int accountNumber)
     {
         BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber, (bankAccountData) -> {
-
-            boolean isEditingPlayer = false;
-            UUID thisPlayerUUID = minecraft.player.getUUID();
-            for(BankUserData userData : bankAccountData.users.values())
-            {
-                if(userData.userUUID.equals(thisPlayerUUID))
-                {
-                    isEditingPlayer = BankPermission.hasPermission(userData.permissions, BankPermission.MANAGE.getValue());
-                    break;
-                }
-            }
-            personalBankOwnerData = bankAccountData.personalBankOwnerData;
-            this.canManage = (personalBankOwnerData != null && personalBankOwnerData.userUUID.equals(thisPlayerUUID)) || isAdminMode || isEditingPlayer;
-
-            bankAccountManagementItems.clear();
-            createBankData.clear();
-            removeAllElements();
-            setupCommon(bankAccountData);
-            if(this.isAdminMode)
-                setupAdminWindow();
-            else
-                setupUserWindow();
-
-
-            updateBankData(bankAccountData);
-            updateAccountData(bankAccountData);
-            updateLayout(getGui());
-
+            setupGui(bankAccountData);
         });
+    }
+    private void setupGui(BankAccountData bankAccountData)
+    {
+        boolean isEditingPlayer = false;
+        UUID thisPlayerUUID = minecraft.player.getUUID();
+        for(BankUserData userData : bankAccountData.users.values())
+        {
+            if(userData.userUUID.equals(thisPlayerUUID))
+            {
+                isEditingPlayer = BankPermission.hasPermission(userData.permissions, BankPermission.MANAGE.getValue());
+                break;
+            }
+        }
+        personalBankOwnerData = bankAccountData.personalBankOwnerData;
+        this.canManage = (personalBankOwnerData != null && personalBankOwnerData.userUUID.equals(thisPlayerUUID)) || isAdminMode || isEditingPlayer;
+
+        bankAccountManagementItems.clear();
+        createBankData.clear();
+        bankUserWidgets.clear();
+        removeAllElements();
+        setupCommon(bankAccountData);
+        if(this.isAdminMode)
+            setupAdminWindow();
+        else
+            setupUserWindow();
+
+
+        updateBankData(bankAccountData);
+        updateAccountData(bankAccountData);
+        updateLayout(getGui());
     }
     private void setupCommon(BankAccountData data)
     {
@@ -280,9 +284,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         int accountNameY = selectAccountButton.getBottom()+spacing;
         accountIconButton.setBounds(padding, accountNameY, 20, 20);
         if(canManage) {
-            accountNameTextBox.setBounds(accountIconButton.getRight()+spacing, accountNameY, nameWidth-(accountIconButton.getRight()+spacing), 20);
+            accountNameTextBox.setBounds(accountIconButton.getRight()+spacing, accountNameY, nameWidth-(accountIconButton.getRight()), 20);
         }else {
-            accountNameLabel.setBounds(accountIconButton.getRight()+spacing, accountNameY, nameWidth-(accountIconButton.getRight()+spacing), 20);
+            accountNameLabel.setBounds(accountIconButton.getRight()+spacing, accountNameY, nameWidth-(accountIconButton.getRight()), 20);
         }
 
         addUserButton.setBounds(padding, selectAccountButton.getBottom()+accountNameY, nameWidth, closeButton.getHeight());
@@ -355,10 +359,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         }
 
         UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.getItemID(), bankData, setUsers);
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input, (bankAccountData) -> {
-            updateBankData(bankAccountData);
-            updateAccountData(bankAccountData);
-        });
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input, this::setupGui);
     }
     private void updateBankData(BankAccountData bankAccountData)
     {
@@ -456,14 +457,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             return;
         }
 
-        this.canManage = isAdminMode;
-        if(bankAccountData.personalBankOwnerData != null)
-        {
-            if(bankAccountData.personalBankOwnerData.userUUID.equals(minecraft.player.getUUID()))
-            {
-                canManage = true;
-            }
-        }
+        this.canManage = isAdminMode || bankAccountData.hasPermission(minecraft.player.getUUID(),BankPermission.MANAGE.getValue());
         Map<UUID, BankUserWidget> toRemoveUsers = new HashMap<>(bankUserWidgets);
         for(BankUserData userData : bankAccountData.users.values())
         {
@@ -544,20 +538,39 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         });
     }
 
-    private void onIconButtonClicked()
-    {
+    private void onIconButtonClicked() {
         FeatureFlagSet enabledFeatures = minecraft.player.level().enabledFeatures();
         boolean showOperatorTab = false; // Set this to `true` if you need the operator tab
 
-        CreativeModeItemSelectionScreen creativeModeItemSelectionScreen = new CreativeModeItemSelectionScreen((itemStack)->
+        boolean isPlayerInCreativeMode = minecraft.player.isCreative();
+
+        if (isPlayerInCreativeMode)
         {
-            accountIconButton.setItem(itemStack);
-            minecraft.setScreen(this);
-        },()->
+            CreativeModeItemSelectionScreen creativeModeItemSelectionScreen = new CreativeModeItemSelectionScreen((itemStack) ->
+            {
+                accountIconButton.setItem(itemStack);
+                minecraft.setScreen(this);
+            }, () ->
+            {
+                minecraft.setScreen(this);
+            });
+            Minecraft.getInstance().setScreen(creativeModeItemSelectionScreen);
+        }
+        else
         {
-            minecraft.setScreen(this);
-        });
-        Minecraft.getInstance().setScreen(creativeModeItemSelectionScreen);
+            List<ItemStack> allItems = ItemUtilities.getSearchCreativeItems("");
+            ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(
+                    this,
+                    allItems,
+                    (itemStack)->{
+                        accountIconButton.setItem(itemStack);
+                        minecraft.setScreen(this);
+                    }
+            );
+            itemSelectionScreen.sortItems();
+            Minecraft.getInstance().setScreen(itemSelectionScreen);
+        }
+
     }
 
     @Override

@@ -107,6 +107,7 @@
   "message.banksystem.balance_detailed": "Frei: {amount}, Reserviert: {locked_balance}",
   "message.banksystem.user_not_found": "Dä Spieler {user_name} isch nöd gfunde worde",
   "message.banksystem.bankaccount_not_found": "Bankaccount für {user_name} nöd gfunde",
+  "message.banksystem.cant_create_bank_account": "Bankkonto cha nöd erstellt werde.",
   "message.banksystem.no_permission_deposit": "Du hesch kei Berechtigung um Items uf s Konto \"{account_number}\" z speichere.",
   "message.banksystem.no_permission_withdraw": "Du hesch kei Berechtigung um Items vom Konto \"{account_number}\" ab zhebä.",
   "message.banksystem.no_permission_manage": "Du hesch keine Berechtigung um s Konto \"{account_number}\" z verwaltä.",

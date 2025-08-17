@@ -204,6 +204,12 @@ public class BankSystemTextMessages {
         return msg;
     }
 
+    private static final Component CANT_CREATE_BANK_ACCOUNT = Component.translatable(prefix+"cant_create_bank_account");
+    public static String getCantCreateBankAccountMessage()
+    {
+        return CANT_CREATE_BANK_ACCOUNT.getString();
+    }
+
     private static final Component NO_PERMISSION_DEPOSIT = Component.translatable(prefix+"no_permission_deposit");
     private static final Component NO_PERMISSION_WITHDRAW = Component.translatable(prefix+"no_permission_withdraw");
     private static final Component NO_PERMISSION_MANAGE = Component.translatable(prefix+"no_permission_manage");

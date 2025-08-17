@@ -107,6 +107,7 @@
   "message.banksystem.balance_detailed": "Frei: {amount}, Reserviert: {locked_balance}",
   "message.banksystem.user_not_found": "Spieler {user_name} konnte nicht gefunden werde",
   "message.banksystem.bankaccount_not_found": "Bankaccount für {user_name} nicht gefunden",
+  "message.banksystem.cant_create_bank_account": "Bankkonto kann nicht erstellt werden.",
   "message.banksystem.no_permission_deposit": "Du hast keine Berechtigung um Items auf das Konto \"{account_number}\" zu speichern.",
   "message.banksystem.no_permission_withdraw": "Du hast keine Berechtigung um Items von dem Konto \"{account_number}\" ab zuheben.",
   "message.banksystem.no_permission_manage": "Du hast keine Berechtigung um das Konto \"{account_number}\" zu verwalten.",

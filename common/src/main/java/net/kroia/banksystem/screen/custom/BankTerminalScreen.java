@@ -4,6 +4,7 @@ import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
@@ -126,7 +127,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     BankTerminalContainerMenu menu;
 
     // Gui elements
-    private final Button selectAccountButton;
+    private final BankAccountSelectionScreen.AccountButton selectAccountButton;
     private final Button removeEmptyBankAccountsButton;
     private final Button sendItemsToBankButton;
     private final Button receiveItemsFromBankButton;
@@ -138,7 +139,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private final String playerName;
     private static boolean screenIsOpen = false;
     private int selectedBankAccountNr = -1;
-    private int userPermission = 0;
+    //private int userPermission = 0;
 
 
 
@@ -151,7 +152,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         playerUUID = Minecraft.getInstance().player.getUUID();
         playerName = Minecraft.getInstance().player.getName().getString();
 
-        selectAccountButton = new Button(BankAccountSelectionScreen.TEXT.SELECT_ACCOUNT_BUTTON.getString());
+        selectAccountButton = new BankAccountSelectionScreen.AccountButton();
         selectAccountButton.setOnFallingEdge(() -> {
             BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, playerUUID, (accountNumber) -> {
                 if(!screenIsOpen)
@@ -189,40 +190,16 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         getBankManager().requestBankTerminalData(pMenu.getBlockPos(), (bankTerminalData) -> {
             selectedBankAccountNr = bankTerminalData.selectedBankAccount;
-            userPermission = bankTerminalData.userPermission;
-            if(!BankPermission.hasPermission(userPermission, BankPermission.WITHDRAW))
-            {
-                receiveItemsFromBankButton.setEnabled(false);
-            }
-            else
-            {
-                receiveItemsFromBankButton.setEnabled(true);
-            }
-            if(!BankPermission.hasPermission(userPermission, BankPermission.DEPOSIT))
-            {
-                sendItemsToBankButton.setEnabled(false);
-            }
-            else
-            {
-                sendItemsToBankButton.setEnabled(true);
-            }
+
+            //userPermission = bankTerminalData.userPermission;
+
             if(selectedBankAccountNr > 0)
             {
                 updateBankList();
             }
             else
             {
-                getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), (personalBankAccountData) -> {
-                    if(personalBankAccountData != null)
-                    {
-                        selectedBankAccountNr = personalBankAccountData.accountNumber;
-                        updateBankList();
-                    }
-                    else
-                    {
-                        error("Failed to retrieve personal bank account data for player: " + Minecraft.getInstance().player.getName().getString());
-                    }
-                });
+                getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), this::updateBankList);
             }
         });
 
@@ -273,63 +250,84 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     {
         if(selectedBankAccountNr <= 0)
             return;
-        getBankManager().requestBankAccountData(selectedBankAccountNr, (minimalBankUserData) -> {
-            if(!screenIsOpen)
-                return;
-            if(minimalBankUserData == null)
-            {
-                error("Failed to update bank data for player: " + playerName + ". MinimalBankUserData is null.");
-                return;
-            }
+        getBankManager().requestBankAccountData(selectedBankAccountNr, this::updateBankList);
+    }
+    private void updateBankList(BankAccountData minimalBankUserData)
+    {
+        if(!screenIsOpen)
+            return;
+        if(minimalBankUserData == null)
+        {
+            error("Failed to update bank data for player: " + playerName + ". MinimalBankUserData is null.");
+            return;
+        }
+        selectAccountButton.setAccountData(minimalBankUserData);
+        selectedBankAccountNr = minimalBankUserData.accountNumber;
+        UUID thisPlayer = Minecraft.getInstance().player.getUUID();
 
-            selectedBankAccountNr = minimalBankUserData.accountNumber;
-            Map<ItemID, BankData> bankMap = minimalBankUserData.bankData;
-            ArrayList<Pair<ItemID, BankData>> sortedBankAccounts = new ArrayList<>();
-            for(var entry : bankMap.entrySet())
-            {
-                ItemID itemID = entry.getKey();
-                BankData bankData = entry.getValue();
-                if(bankData != null)
-                    sortedBankAccounts.add(new Pair<>(itemID, bankData));
-            }
-            sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance, a.getSecond().balance));
+        if(!minimalBankUserData.hasPermission(thisPlayer, BankPermission.WITHDRAW.getValue()))
+        {
+            receiveItemsFromBankButton.setEnabled(false);
+        }
+        else
+        {
+            receiveItemsFromBankButton.setEnabled(true);
+        }
+        if(!minimalBankUserData.hasPermission(thisPlayer, BankPermission.DEPOSIT.getValue()))
+        {
+            sendItemsToBankButton.setEnabled(false);
+        }
+        else
+        {
+            sendItemsToBankButton.setEnabled(true);
+        }
 
-            int x = 0;
-            int y = 0;
+        Map<ItemID, BankData> bankMap = minimalBankUserData.bankData;
+        ArrayList<Pair<ItemID, BankData>> sortedBankAccounts = new ArrayList<>();
+        for(var entry : bankMap.entrySet())
+        {
+            ItemID itemID = entry.getKey();
+            BankData bankData = entry.getValue();
+            if(bankData != null)
+                sortedBankAccounts.add(new Pair<>(itemID, bankData));
+        }
+        sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance, a.getSecond().balance));
 
-            boolean needsResize = sortedBankAccounts.size() != bankElements.size();
-            HashMap<ItemID,ItemID> availableItems = new HashMap<>();
-            for (Pair<ItemID, BankData> pair : sortedBankAccounts)
-            {
-                long balance = pair.getSecond().balance;
-                BankElement element = getBankElement(pair.getFirst());
-                if (element == null) {
-                    ItemStack stack = pair.getFirst().getStack();
-                    element = new BankElement(this, stack, pair.getFirst(), balance, pair.getSecond().itemFractionScaleFactor);
-                    bankElements.add(element);
-                    itemListView.addChild(element);
-                } else {
-                    element.stackSize = balance;
-                }
-                if (needsResize)
-                    availableItems.put(pair.getFirst(), pair.getFirst());
-            }
+        int x = 0;
+        int y = 0;
 
-            if(needsResize)
-            {
-                // Remove the buttons that are not in the list
-                ArrayList<BankElement> toRemove = new ArrayList<>();
-                for (BankElement bankElement : bankElements) {
-                    if(!availableItems.containsKey(bankElement.itemID))
-                        toRemove.add(bankElement);
-                }
-                bankElements.removeAll(toRemove);
-                for(BankElement element : toRemove)
-                {
-                    itemListView.removeChild(element);
-                }
+        boolean needsResize = sortedBankAccounts.size() != bankElements.size();
+        HashMap<ItemID,ItemID> availableItems = new HashMap<>();
+        for (Pair<ItemID, BankData> pair : sortedBankAccounts)
+        {
+            long balance = pair.getSecond().balance;
+            BankElement element = getBankElement(pair.getFirst());
+            if (element == null) {
+                ItemStack stack = pair.getFirst().getStack();
+                element = new BankElement(this, stack, pair.getFirst(), balance, pair.getSecond().itemFractionScaleFactor);
+                bankElements.add(element);
+                itemListView.addChild(element);
+            } else {
+                element.stackSize = balance;
             }
-        });
+            if (needsResize)
+                availableItems.put(pair.getFirst(), pair.getFirst());
+        }
+
+        if(needsResize)
+        {
+            // Remove the buttons that are not in the list
+            ArrayList<BankElement> toRemove = new ArrayList<>();
+            for (BankElement bankElement : bankElements) {
+                if(!availableItems.containsKey(bankElement.itemID))
+                    toRemove.add(bankElement);
+            }
+            bankElements.removeAll(toRemove);
+            for(BankElement element : toRemove)
+            {
+                itemListView.removeChild(element);
+            }
+        }
     }
 
     private BankElement getBankElement(ItemID itemID)

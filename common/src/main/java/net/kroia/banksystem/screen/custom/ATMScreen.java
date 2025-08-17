@@ -161,7 +161,7 @@ public class ATMScreen extends BankSystemGuiScreen {
     }
 
 
-    private final Button selectAccountButton;
+    private final BankAccountSelectionScreen.AccountButton selectAccountButton;
     private final BalanceView balanceView;
 
     private final ArrayList<MoneyElement> moneyElements = new ArrayList<>();
@@ -183,7 +183,7 @@ public class ATMScreen extends BankSystemGuiScreen {
         rootElement = new Frame();
         addElement(rootElement);
 
-        selectAccountButton = new Button(BankAccountSelectionScreen.TEXT.SELECT_ACCOUNT_BUTTON.getString());
+        selectAccountButton = new BankAccountSelectionScreen.AccountButton();
         selectAccountButton.setOnFallingEdge(() -> {
             BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, minecraft.player.getUUID(), (accountNumber) -> {
                 this.currentSelectedAccountNumber = accountNumber;
@@ -231,6 +231,7 @@ public class ATMScreen extends BankSystemGuiScreen {
             if(accountData != null && !accountData.bankData.isEmpty())
             {
                 currentSelectedAccountNumber = accountData.accountNumber;
+                selectAccountButton.setAccountData(accountData);
                 updateBalanceView();
             }
         });
@@ -296,6 +297,7 @@ public class ATMScreen extends BankSystemGuiScreen {
             if(instance == null || accountData == null)
                 return;
 
+            selectAccountButton.setAccountData(accountData);
             if(accountData.bankData.containsKey(MoneyItem.getItemID()))
             {
                 BankData minimalBankData = accountData.bankData.get(MoneyItem.getItemID());

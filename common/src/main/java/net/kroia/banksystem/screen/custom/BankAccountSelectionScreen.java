@@ -26,18 +26,27 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
         public static final Component TITLE_LABEL = Component.translatable(PREFIX + "title_label");
         public static final Component SELECT_ACCOUNT_BUTTON = Component.translatable(PREFIX+"select_account_button");
     }
-    public static class AccountElement extends Button
+    public static class AccountButton extends Button
     {
-        private final BankAccountData accountData;
+        private BankAccountData accountData;
         private final ItemView iconView;
         private final Label accountNameLabel;
-        public AccountElement(BankAccountData accountData) {
+        public AccountButton() {
+            this(null);
+        }
+        public AccountButton(BankAccountData accountData) {
             super("");
             this.accountData = accountData;
 
-            iconView = new ItemView(accountData.accountIcon != null ? accountData.accountIcon.getStack() : null);
-            accountNameLabel = new Label(accountData.accountName);
+            iconView = new ItemView();
+            accountNameLabel = new Label();
             accountNameLabel.setAlignment(GuiElement.Alignment.CENTER);
+
+            if(this.accountData != null)
+            {
+                iconView.setItemStack(accountData.accountIcon != null ? accountData.accountIcon.getStack() : null);
+                accountNameLabel.setText(accountData.accountName);
+            }
 
             addChild(iconView);
             addChild(accountNameLabel);
@@ -53,6 +62,18 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
             accountNameLabel.setBounds(iconView.getRight(), 0, width - iconView.getRight(), height);
         }
 
+        public void setAccountData(BankAccountData accountData) {
+            this.accountData = accountData;
+            if(accountData != null)
+            {
+                iconView.setItemStack(accountData.accountIcon != null ? accountData.accountIcon.getStack() : null);
+                accountNameLabel.setText(accountData.accountName);
+            }
+            else {
+                iconView.setItemStack(null);
+                accountNameLabel.setText("");
+            }
+        }
         public BankAccountData getAccountData() {
             return accountData;
         }
@@ -120,11 +141,11 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
         accountsListView.removeChilds();
         for(BankAccountData accountData : output.bankAccounts) {
 
-            if(!accountData.hasPermission(playerUUID, permissionFilter)) {
+            if(!accountData.hasAnyPermission(playerUUID, permissionFilter)) {
                 continue; // Skip accounts that do not match the permission filter
             }
 
-            AccountElement element = new AccountElement(accountData);
+            AccountButton element = new AccountButton(accountData);
             element.setOnRisingEdge(() -> {
                 onAccountSelected.accept(accountData.accountNumber);
                 this.onClose();

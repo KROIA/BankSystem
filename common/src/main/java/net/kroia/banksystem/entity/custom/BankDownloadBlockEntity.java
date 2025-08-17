@@ -393,12 +393,6 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             setPlayerOwner(packet.isOwned() ? sender.getUUID() : null);
             sendUpdate = true;
         }
-        /*if(receivingEnabled && getPlayerOwner() != null)
-        {
-            receiveItemsFromBank();
-        }
-        receiveItemsFromBank();*/
-
         if(sendUpdate)
         {
             SyncBankDownloadDataPacket.sendPacket(sender, this);
