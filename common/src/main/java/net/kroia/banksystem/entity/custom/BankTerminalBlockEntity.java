@@ -3,7 +3,7 @@ package net.kroia.banksystem.entity.custom;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.Bank;
@@ -828,7 +828,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         TerminalInventory inventory = playerData.getInventory();
         HashMap<ItemID, Long> items = inventory.getItemCount();
 
-        BankAccount bankAccount;
+        IBankAccount bankAccount;
         if(accountNr > 0)
         {
             bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);
@@ -889,7 +889,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     {
         PlayerData playerData = getPlayerData(playerID);
         TerminalInventory inventory = playerData.getInventory();
-        BankAccount bankAccount;
+        IBankAccount bankAccount;
         if(accountNr > 0)
         {
             bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);

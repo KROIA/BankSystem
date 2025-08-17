@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.minecraft.network.FriendlyByteBuf;
@@ -20,7 +20,7 @@ public class BankAccountDeleteRequest extends BankSystemGenericRequest<Integer, 
     @Override
     public Boolean handleOnServer(Integer input, ServerPlayer sender) {
         boolean isAdmin = playerIsAdmin(sender);
-        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(input);
+        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(input);
         if(account == null)
             return false;
         boolean canManage = account.hasPermission(sender.getUUID(), BankPermission.MANAGE.getValue()) || isAdmin;

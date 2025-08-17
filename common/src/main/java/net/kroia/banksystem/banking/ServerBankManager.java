@@ -268,7 +268,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         return account;
     }
     @Override
-    public @Nullable BankAccount getBankAccount(int accountNumber)
+    public @Nullable IBankAccount getBankAccount(int accountNumber)
     {
         return bankAccounts.get(accountNumber);
     }

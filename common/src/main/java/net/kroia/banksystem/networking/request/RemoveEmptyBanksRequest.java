@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
@@ -23,7 +23,7 @@ public class RemoveEmptyBanksRequest extends BankSystemGenericRequest<Integer, L
 
     @Override
     public List<ItemID> handleOnServer(Integer input, ServerPlayer sender) {
-        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(input);
+        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(input);
         if(account == null)
             return List.of();
 

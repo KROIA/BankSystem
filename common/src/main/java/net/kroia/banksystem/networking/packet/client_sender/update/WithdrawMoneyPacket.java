@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
 import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
@@ -62,7 +62,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {
-        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(currentSelectedAccountNumber);
+        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(currentSelectedAccountNumber);
         if(account == null)
             return;
 

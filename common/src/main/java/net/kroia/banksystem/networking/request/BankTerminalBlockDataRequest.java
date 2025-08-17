@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.modutilities.networking.INetworkPayloadEncoder;
@@ -50,7 +50,7 @@ public class BankTerminalBlockDataRequest extends BankSystemGenericRequest<Block
             return output; // or handle the error appropriately
         }
         output.selectedBankAccount = blockEntity.getSelectedBankAccount(sender.getUUID());
-        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(output.selectedBankAccount);
+        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(output.selectedBankAccount);
         /*if(account != null) {
             output.userPermission = account.getPermission(sender.getUUID());
         } else {

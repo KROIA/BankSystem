@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
@@ -146,7 +146,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         // Check if the player is a admin
         boolean isAdmin = playerIsAdmin(sender);
 
-        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(input.accountNumber);
+        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(input.accountNumber);
         if(account == null) {
             // If the account does not exist, we cannot update it
             return null;

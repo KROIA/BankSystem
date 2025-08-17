@@ -1,7 +1,6 @@
 package net.kroia.banksystem.api;
 
 import com.google.gson.JsonElement;
-import net.kroia.banksystem.banking.BankAccount;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
@@ -150,7 +149,7 @@ public interface IServerBankManager {
      * @param accountNumber The account number of the bank account to get.
      * @return The BankAccount object if found, null otherwise.
      */
-    @Nullable BankAccount getBankAccount(int accountNumber);
+    @Nullable IBankAccount getBankAccount(int accountNumber);
 
 
     /**
