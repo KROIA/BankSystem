@@ -15,20 +15,22 @@ public class UpdateBankDownloadBlockEntityPacket extends BankSystemNetworkPacket
     boolean isOwned;
     @Nullable ItemID itemID;
     int targetAmount;
+    int accountNr;
 
-    public UpdateBankDownloadBlockEntityPacket(BlockPos pos, boolean isOwned, ItemID itemID, int targetAmount) {
+    public UpdateBankDownloadBlockEntityPacket(BlockPos pos, boolean isOwned, ItemID itemID, int targetAmount, int accountNr) {
         this.pos = pos;
         this.isOwned = isOwned;
         this.itemID = itemID;
         this.targetAmount = targetAmount;
+        this.accountNr = accountNr;
     }
 
     public UpdateBankDownloadBlockEntityPacket(FriendlyByteBuf buf) {
         super(buf);
     }
 
-    public static void sendPacket(BlockPos pos, boolean isOwned, ItemID itemID, int targetAmount) {
-        new UpdateBankDownloadBlockEntityPacket(pos, isOwned, itemID, targetAmount).sendToServer();
+    public static void sendPacket(BlockPos pos, boolean isOwned, ItemID itemID, int targetAmount, int accountNr) {
+        new UpdateBankDownloadBlockEntityPacket(pos, isOwned, itemID, targetAmount, accountNr).sendToServer();
     }
 
     @Override
@@ -39,6 +41,7 @@ public class UpdateBankDownloadBlockEntityPacket extends BankSystemNetworkPacket
         if(itemID != null)
             buf.writeItem(itemID.getStack());
         buf.writeInt(targetAmount);
+        buf.writeInt(accountNr);
     }
 
     @Override
@@ -52,6 +55,7 @@ public class UpdateBankDownloadBlockEntityPacket extends BankSystemNetworkPacket
         }
 
         targetAmount = buf.readInt();
+        accountNr = buf.readInt();
     }
 
     @Override
@@ -73,5 +77,8 @@ public class UpdateBankDownloadBlockEntityPacket extends BankSystemNetworkPacket
     }
     public int getTargetAmount() {
         return targetAmount;
+    }
+    public int getAccountNr() {
+        return accountNr;
     }
 }

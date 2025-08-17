@@ -1,29 +1,29 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.banking.clientdata.MinimalBankManagerData;
+import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class MinimalBankManagerDataRequest extends BankSystemGenericRequest<Integer, MinimalBankManagerData> {
+public class BankManagerDataRequest extends BankSystemGenericRequest<Integer, BankManagerData> {
     @Override
     public String getRequestTypeID() {
-        return MinimalBankManagerDataRequest.class.getName();
+        return BankManagerDataRequest.class.getName();
     }
 
     @Override
-    public MinimalBankManagerData handleOnClient(Integer input) {
+    public BankManagerData handleOnClient(Integer input) {
         return null;
     }
 
     @Override
-    public MinimalBankManagerData handleOnServer(Integer input, ServerPlayer sender) {
+    public BankManagerData handleOnServer(Integer input, ServerPlayer sender) {
         // Check if sender has admin permissions
-        if(playerIsAdmin(sender)) {
+        //if(playerIsAdmin(sender)) {
             // If the player has admin permissions, return the minimal data
-            return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMinimalData();
-        }
-        return null; // If not, return null or handle accordingly
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankManagerData();
+        //}
+        //return null; // If not, return null or handle accordingly
     }
 
     @Override
@@ -33,7 +33,7 @@ public class MinimalBankManagerDataRequest extends BankSystemGenericRequest<Inte
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, MinimalBankManagerData output) {
+    public void encodeOutput(FriendlyByteBuf buf, BankManagerData output) {
         buf.writeBoolean(output != null);
         if(output != null) {
             output.encode(buf); // Encode the MinimalBankManagerData
@@ -46,9 +46,9 @@ public class MinimalBankManagerDataRequest extends BankSystemGenericRequest<Inte
     }
 
     @Override
-    public MinimalBankManagerData decodeOutput(FriendlyByteBuf buf) {
+    public BankManagerData decodeOutput(FriendlyByteBuf buf) {
         if(buf.readBoolean()) {
-            return MinimalBankManagerData.decode(buf); // Decode the MinimalBankManagerData
+            return BankManagerData.decode(buf); // Decode the MinimalBankManagerData
         }
         return null; // If no data was encoded, return null
     }

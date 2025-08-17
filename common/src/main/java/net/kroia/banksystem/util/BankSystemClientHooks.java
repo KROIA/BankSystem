@@ -4,7 +4,6 @@ import net.kroia.banksystem.screen.custom.ATMScreen;
 import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
 import net.kroia.banksystem.screen.custom.BankSystemSettingScreen;
 import net.minecraft.client.Minecraft;
-import java.util.UUID;
 
 
 public class BankSystemClientHooks {
@@ -20,11 +19,11 @@ public class BankSystemClientHooks {
         Minecraft.getInstance().submit(ATMScreen::openScreen);
     }
 
-    public static void openBankAccountScreen(UUID playerUUID)
+    public static void openBankAccountScreen(int accountNumber, boolean isAdminMode)
     {
         // Ensuring the code runs on the main thread
         Minecraft.getInstance().submit(() -> {
-            BankAccountManagementScreen.openScreen(playerUUID);
+            BankAccountManagementScreen.openScreen(accountNumber, isAdminMode);
         });
     }
 }

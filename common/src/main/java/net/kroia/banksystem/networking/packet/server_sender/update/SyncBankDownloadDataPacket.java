@@ -15,11 +15,13 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
     ItemID itemID;
     int targetAmount;
     int maxTargetAmount;
-    public SyncBankDownloadDataPacket(boolean isOwned, ItemID itemID, int targetAmount, int maxTargetAmount) {
+    int accountNr;
+    public SyncBankDownloadDataPacket(boolean isOwned, ItemID itemID, int targetAmount, int maxTargetAmount, int accountNr) {
         this.isOwned = isOwned;
         this.itemID = itemID;
         this.targetAmount = targetAmount;
         this.maxTargetAmount = maxTargetAmount;
+        this.accountNr = accountNr;
     }
 
     public SyncBankDownloadDataPacket(FriendlyByteBuf buf) {
@@ -31,8 +33,9 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
         ItemID itemID = blockEntity.getItemID();
         int targetAmount = blockEntity.getTargetAmount();
         int maxTargetAmount = blockEntity.getMaxTargetAmount();
+        int accountNr = blockEntity.getBankAccountNumber();
         boolean isOwned = playerOwner != null && playerOwner.equals(receiver.getUUID());
-        new SyncBankDownloadDataPacket(isOwned, itemID, targetAmount, maxTargetAmount).sendToClient(receiver);
+        new SyncBankDownloadDataPacket(isOwned, itemID, targetAmount, maxTargetAmount, accountNr).sendToClient(receiver);
     }
 
 
@@ -44,6 +47,7 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
             buf.writeItem(itemID.getStack());
         buf.writeInt(targetAmount);
         buf.writeInt(maxTargetAmount);
+        buf.writeInt(accountNr);
     }
 
     @Override
@@ -57,6 +61,7 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
 
         targetAmount = buf.readInt();
         maxTargetAmount = buf.readInt();
+        accountNr = buf.readInt();
     }
 
     protected void handleOnClient() {
@@ -74,5 +79,8 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
     }
     public int getMaxTargetAmount() {
         return maxTargetAmount;
+    }
+    public int getAccountNr() {
+        return accountNr;
     }
 }

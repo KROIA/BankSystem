@@ -1,6 +1,7 @@
 package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
@@ -17,6 +18,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloadContainerMenu> {
     private static final String prefix = "gui." + BankSystemMod.MOD_ID + ".bank_download_screen.";
@@ -37,11 +39,12 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         public final Label targetAmountLabel;
         public final Button applyButton;
         public static final int elementHeight = 16;
-
+        private final BankDownloadScreen parent;
 
         public SettingsMenu(BankDownloadScreen parent)
         {
-            connectDisconnectButton = new Button((isOwned?DISCONNECT_BUTTON.getString():CONNECT_BUTTON.getString()), parent::onConnectDisconnectButtonClicked);
+            this.parent = parent;
+            connectDisconnectButton = new Button((isOwned?DISCONNECT_BUTTON.getString():CONNECT_BUTTON.getString()), this::onSelectBankAccountButtonClicked);
             selectItemButton = new Button(SELECT_ITEM.getString(), parent::onSelectItemButtonClicked);
             itemView = new ItemView();
             targetAmountTextBox = new TextBox();
@@ -79,6 +82,16 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             applyButton.setBounds(targetAmountTextBox.getRight()+padding, targetAmountTextBox.getTop(), width/3, targetAmountTextBox.getHeight());
             this.setHeight(targetAmountTextBox.getBottom()+padding);
         }
+        private void onSelectBankAccountButtonClicked()
+        {
+            if(isOwned)
+            {
+                parent.onConnectDisconnectButtonClicked(0); // Disconnect
+                return;
+            }
+            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(parent, minecraft.player.getUUID(), parent::onConnectDisconnectButtonClicked, BankPermission.DEPOSIT.getValue());
+            minecraft.setScreen(selectionScreen);
+        }
     }
 
 
@@ -92,6 +105,8 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     public static ItemID itemID;
     public static int targetAmount;
     public static int maxTargetAmount;
+    public static int accountNr = 0; // 0 means no account selected
+
 
 
     private static BankDownloadScreen instance;
@@ -143,6 +158,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         itemID = packet.getItemID();
         targetAmount = packet.getTargetAmount();
         maxTargetAmount = packet.getMaxTargetAmount();
+        accountNr = packet.getAccountNr();
 
         if(instance != null) {
             if (isOwned) {
@@ -168,6 +184,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         isOwned = false;
         itemID = null;
         targetAmount = 0;
+        accountNr = 0; // Reset account number when closing the screen
     }
     @Override
     public void onClose() {
@@ -175,20 +192,21 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         super.onClose();
     }
 
-    private void onConnectDisconnectButtonClicked()
+    private void onConnectDisconnectButtonClicked(int accountNr)
     {
+        this.accountNr = accountNr;
         isOwned = !isOwned;
         applySettigns();
     }
     private void onSelectItemButtonClicked() {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankManagerData((minimalBankManagerData) -> {
-            ArrayList<ItemStack> allowedItemStacks;
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData((minimalBankManagerData) -> {
+            List<ItemStack> allowedItemStacks;
             if(minimalBankManagerData == null)
             {
                 allowedItemStacks = new ArrayList<>();
             }
             else {
-                allowedItemStacks = minimalBankManagerData.createAllowedItemStacks();
+                allowedItemStacks = minimalBankManagerData.getAllowedItemStacks();
             }
             ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(
                     this,
@@ -218,6 +236,6 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
 
     private void sendUpdatePacket()
     {
-        UpdateBankDownloadBlockEntityPacket.sendPacket(pos, isOwned, itemID, targetAmount);
+        UpdateBankDownloadBlockEntityPacket.sendPacket(pos, isOwned, itemID, targetAmount, accountNr);
     }
 }

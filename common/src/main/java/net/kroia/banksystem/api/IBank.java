@@ -1,13 +1,9 @@
 package net.kroia.banksystem.api;
 
 import com.google.gson.JsonElement;
-import net.kroia.banksystem.banking.clientdata.MinimalBankData;
+import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.util.ItemID;
-import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.UUID;
 
 /**
  * Represents a bank that can hold money or items for a player.
@@ -28,7 +24,10 @@ public interface IBank {
         FAILED_NOT_ENOUGH_FUNDS,
         FAILED_OVERFLOW,
         FAILED_NEGATIVE_VALUE,
-        FAILED_WRONG_INSTANCE_TYPE
+        FAILED_WRONG_INSTANCE_TYPE,
+        FAILED_INVALID_ITEM_ID,
+        FAILED_NO_BANK
+
     }
 
     /**
@@ -45,7 +44,7 @@ public interface IBank {
      *
      * @return Datapacket containing minimal data about this bank.
      */
-    MinimalBankData getMinimalData();
+    BankData getMinimalData();
 
     /**
      * Gets the currently free available balance of this bank.
@@ -73,6 +72,13 @@ public interface IBank {
      * @return The total balance of this bank.
      */
     long getTotalBalance();
+
+
+    float getRealBalance();
+
+    float getRealLockedBalance();
+
+    float getRealTotalBalance();
 
     /**
      * Gets the type of this bank.
@@ -104,26 +110,29 @@ public interface IBank {
      */
     boolean setBalance(long balance);
 
+
+    boolean setRealBalance(float balance);
+
     /**
      * Gets the UUID of the player who owns this bank.
      *
      * @return The UUID of the player who owns this bank.
      */
-    UUID getPlayerUUID();
+    //UUID getPlayerUUID();
 
     /**
      * Gets the ServerPlayer who owns this bank.
      *
      * @return The player who owns this bank, or null if the player is not online.
      */
-    @Nullable ServerPlayer getUser();
+    //@Nullable ServerPlayer getUser();
 
     /**
      * Gets the name of the player who owns this bank.
      *
      * @return The name of the player who owns this bank.
      */
-    String getPlayerName();
+    //String getPlayerName();
 
     /**
      * Deposits an amount of money or items into this bank.
@@ -133,6 +142,9 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
     Status deposit(long amount);
+
+
+    Status depositReal(float amount);
 
 
     /**
@@ -153,6 +165,8 @@ public interface IBank {
      */
     Status withdraw(long amount);
 
+    Status withdrawReal(float amount);
+
     /**
      * Withdraws an amount of money or items from this bank, but only if the amount is locked.
      * This is useful for transactions that require the amount to be locked before the withdrawal.
@@ -162,6 +176,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
     Status withdrawLocked(long amount);
+    Status withdrawLockedReal(float amount);
 
     /**
      * Withdraws an amount of money or items from this bank, but first uses the locked balance and only
@@ -175,6 +190,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
     Status withdrawLockedPrefered(long amount);
+    Status withdrawLockedPreferedReal(float amount);
 
     /**
      * Transfers an amount of money or items from this bank to another bank.
@@ -185,6 +201,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in both banks.
      */
     Status transfer(long amount, IBank other);
+    Status transferReal(float amount, @NotNull IBank other);
 
     /**
      * Transfers an amount of money or items from this bank to another bank, but only if the amount is locked.
@@ -196,6 +213,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in both banks.
      */
     Status transferFromLocked(long amount, @NotNull IBank other);
+    Status transferFromLockedReal(float amount, @NotNull IBank other);
 
     /**
      * Transfers an amount of money or items from this bank to another bank, but first uses the locked balance and only
@@ -210,6 +228,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in both banks.
      */
     Status transferFromLockedPrefered(long amount, @NotNull IBank other);
+    Status transferFromLockedPreferedReal(float amount, @NotNull IBank other);
 
     /**
      * Locks an amount of money or items in this bank.
@@ -220,6 +239,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
     Status lockAmount(long amount);
+    Status lockAmountReal(float amount);
 
     /**
      * Unlocks an amount of money or items in this bank.
@@ -230,7 +250,8 @@ public interface IBank {
      * @return Status indicating the result of the unlock operation.
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
-    Status unlockAmount(long amount) ;
+    Status unlockAmount(long amount);
+    Status unlockAmountReal(float amount);
 
     /**
      * Unlocks all locked amounts in this bank.
@@ -311,6 +332,7 @@ public interface IBank {
      * @return A string representation of the normalized amount.
      */
     String getNormalizedAmount(float realAmount);
+    String getNormalizedAmount(double realAmount);
 
     /**
      * Normalizes the given raw amount to a string representation.
@@ -342,6 +364,7 @@ public interface IBank {
      * @return A string representation of the formatted amount.
      */
     String getFormattedAmount(float realAmount);
+    String getFormattedAmount(double realAmount);
 
     /**
      * Formats the given raw amount to a string representation.

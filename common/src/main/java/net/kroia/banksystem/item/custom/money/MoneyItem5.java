@@ -14,6 +14,6 @@ public class MoneyItem5 extends MoneyItem{
     }
 
     public long worth() {
-        return 500;
+        return 5L * ITEM_FRACTION_SCALE_FACTOR; // 5.00 currency units
     }
 }

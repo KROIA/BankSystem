@@ -2,15 +2,13 @@ package net.kroia.banksystem.banking;
 
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IClientBankManager;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
-import net.kroia.banksystem.banking.clientdata.MinimalBankData;
-import net.kroia.banksystem.banking.clientdata.MinimalBankManagerData;
-import net.kroia.banksystem.banking.clientdata.MinimalBankUserData;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.banksystem.networking.request.AllowItemRequest;
-import net.kroia.banksystem.networking.request.MinimalBankDataRequest;
+import net.kroia.banksystem.networking.request.*;
 import net.kroia.banksystem.util.ItemID;
-import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -26,27 +24,36 @@ public class ClientBankManager implements IClientBankManager {
         this.BACKEND_INSTANCES = backendInstances;
     }
 
+    //private final int bankAccountNumber; // This is a placeholder, as the client does not have a bank account number
 
 
 
 
-    @Override
-    public void requestMinimalBankData(UUID playerUUID, ItemID itemID, Consumer<@Nullable MinimalBankData> callback)
+
+    /*@Override
+    public void requestMinimalBankData(UUID playerUUID, ItemID itemID, Consumer<@Nullable BankData> callback)
     {
         MinimalBankDataRequest.InputType input = new MinimalBankDataRequest.InputType(playerUUID, itemID);
         BankSystemNetworking.MINIMAL_BANK_DATA_REQUEST.sendRequestToServer(input, callback);
+    }*/
+
+    @Override
+    public void requestBankAccountData(int accountNumber, Consumer<@Nullable BankAccountData> callback)
+    {
+        BankAccountDataRequest.InputData input = new BankAccountDataRequest.InputData(accountNumber);
+        BankSystemNetworking.BANK_ACCOUNT_DATA_REQUEST.sendRequestToServer(input, callback);
+    }
+    @Override
+    public void requestPersonalBankAccountData(UUID playerUUID, Consumer<@Nullable BankAccountData> callback)
+    {
+        BankAccountDataRequest.InputData input = new BankAccountDataRequest.InputData(playerUUID);
+        BankSystemNetworking.BANK_ACCOUNT_DATA_REQUEST.sendRequestToServer(input, callback);
     }
 
     @Override
-    public void requestMinimalBankUserData(UUID playerUUID, Consumer<@Nullable MinimalBankUserData> callback)
+    public void requestBankManagerData(Consumer<@Nullable BankManagerData> callback)
     {
-        BankSystemNetworking.MINIMAL_BANK_USER_DATA_REQUEST.sendRequestToServer(playerUUID, callback);
-    }
-
-    @Override
-    public void requestMinimalBankManagerData(Consumer<@Nullable MinimalBankManagerData> callback)
-    {
-        BankSystemNetworking.MINIMAL_BANK_MANAGER_DATA_REQUEST.sendRequestToServer(0, callback);
+        BankSystemNetworking.BANK_MANAGER_DATA_REQUEST.sendRequestToServer(0, callback);
     }
 
     @Override
@@ -69,21 +76,49 @@ public class ClientBankManager implements IClientBankManager {
     }
 
     @Override
-    public void requestRemoveEmptyBanks(UUID player, Consumer<List<ItemID>> callback)
+    public void requestRemoveEmptyBanks(int accountNumber, Consumer<List<ItemID>> callback)
     {
-        BankSystemNetworking.REMOVE_EMPTY_BANKS_REQUEST.sendRequestToServer(player, callback);
+        BankSystemNetworking.REMOVE_EMPTY_BANKS_REQUEST.sendRequestToServer(accountNumber, callback);
     }
 
-    @Override
+    /*@Override
     public void requestRemoveEmptyBanks(Consumer<List<ItemID>> callback)
     {
         UUID thisPlayer = Minecraft.getInstance().player.getUUID();
         BankSystemNetworking.REMOVE_EMPTY_BANKS_REQUEST.sendRequestToServer(thisPlayer, callback);
-    }
+    }*/
 
     @Override
     public void requestItemFractionScaleFactor(ItemID itemID, Consumer<Integer> callback)
     {
         BankSystemNetworking.ITEM_FRACTION_SCALE_FACTOR_REQUEST.sendRequestToServer(itemID, callback);
+    }
+
+
+    public void requestBankAccountNumbers(UUID playerUUID, Consumer<List<Integer>> callback)
+    {
+        BankSystemNetworking.BANK_ACCOUNT_NUMBERS_REQUEST.sendRequestToServer(List.of(playerUUID), callback);
+    }
+    public void requestBankAccountNumbers(List<UUID> playerUUIDs, Consumer<List<Integer>> callback)
+    {
+        BankSystemNetworking.BANK_ACCOUNT_NUMBERS_REQUEST.sendRequestToServer(playerUUIDs, callback);
+    }
+
+    public void requestUpdateBankAccount(UpdateBankAccountRequest.InputData inputData, Consumer<BankAccountData> callback)
+    {
+        BankSystemNetworking.UPDATE_BANK_ACCOUNT_REQUEST.sendRequestToServer(inputData, callback);
+    }
+
+    public void requestBankTerminalData(BlockPos pos, Consumer<BankTerminalBlockDataRequest.Output> callback) {
+        BankSystemNetworking.BANK_TERMINAL_BLOCK_DATA_REQUEST.sendRequestToServer(pos, callback);
+    }
+
+    public void requestBankAccounts(UUID playerUUID, Consumer<BankSelectionScreenDataRequest.Output> callback) {
+        BankSystemNetworking.BANK_SELECTION_SCREEN_DATA_REQUEST.sendRequestToServer(playerUUID, callback);
+    }
+
+
+    public void requestDeleteBankAccount(int accountNumber, Consumer<Boolean> callback) {
+        BankSystemNetworking.DELETE_BANK_ACCOUNT_REQUEST.sendRequestToServer(accountNumber, callback);
     }
 }

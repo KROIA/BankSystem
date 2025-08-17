@@ -2,6 +2,7 @@ package net.kroia.banksystem.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
@@ -160,6 +161,7 @@ public class ATMScreen extends BankSystemGuiScreen {
     }
 
 
+    private final BankAccountSelectionScreen.AccountButton selectAccountButton;
     private final BalanceView balanceView;
 
     private final ArrayList<MoneyElement> moneyElements = new ArrayList<>();
@@ -171,6 +173,7 @@ public class ATMScreen extends BankSystemGuiScreen {
     private static ATMScreen instance = null;
     private static long lastTickCount = 0;
     private long currentBalanceWeekVar = 0;
+    private int currentSelectedAccountNumber = 0; // This is not used in the ATM screen, but kept for consistency with other screens
 
 
     public ATMScreen()
@@ -179,6 +182,15 @@ public class ATMScreen extends BankSystemGuiScreen {
         //super(pMenu, pPlayerInventory, pTitle);
         rootElement = new Frame();
         addElement(rootElement);
+
+        selectAccountButton = new BankAccountSelectionScreen.AccountButton();
+        selectAccountButton.setOnFallingEdge(() -> {
+            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, minecraft.player.getUUID(), (accountNumber) -> {
+                this.currentSelectedAccountNumber = accountNumber;
+            });
+            minecraft.setScreen(selectionScreen);
+        });
+        rootElement.addChild(selectAccountButton);
 
         LayoutGrid layout = new LayoutGrid();
         layout.stretchX = true;
@@ -214,6 +226,15 @@ public class ATMScreen extends BankSystemGuiScreen {
         instance = this;
         updateBalanceView();
         calculateSum();
+
+        getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), (accountData) -> {
+            if(accountData != null && !accountData.bankData.isEmpty())
+            {
+                currentSelectedAccountNumber = accountData.accountNumber;
+                selectAccountButton.setAccountData(accountData);
+                updateBalanceView();
+            }
+        });
     }
 
     public static void openScreen()
@@ -236,6 +257,7 @@ public class ATMScreen extends BankSystemGuiScreen {
         int height = this.height;
 
         int padding = 10;
+        int spacing = 5;
 
 
         rootElement.setBounds(padding, padding, width-2*padding, height-2*padding);
@@ -243,7 +265,8 @@ public class ATMScreen extends BankSystemGuiScreen {
         width = rootElement.getWidth() - 2*padding;
         height = rootElement.getHeight()-2*padding;
 
-        balanceView.setBounds(padding, padding, width, 20);
+        selectAccountButton.setBounds(padding, padding, width/2, 20);
+        balanceView.setBounds(padding, selectAccountButton.getBottom()+spacing, width, 20);
         receiveButton.setBounds(padding, height+padding-20, width, 20);
         moneyListView.setBounds(padding, balanceView.getBottom() + padding, width, receiveButton.getTop() - balanceView.getBottom() - padding*2);
 
@@ -268,13 +291,19 @@ public class ATMScreen extends BankSystemGuiScreen {
 
     private void updateBalanceView()
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankData(Minecraft.getInstance().player.getUUID(),
-                new ItemID(BankSystemItems.MONEY.get().getDefaultInstance()), (minimalBankData) ->
+        //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), (accountData) ->
+        getBankManager().requestBankAccountData(currentSelectedAccountNumber, (accountData) ->
         {
-            if(instance == null || minimalBankData == null)
+            if(instance == null || accountData == null)
                 return;
-            currentBalanceWeekVar = minimalBankData.balance;
-            balanceView.updateBalance(currentBalanceWeekVar);
+
+            selectAccountButton.setAccountData(accountData);
+            if(accountData.bankData.containsKey(MoneyItem.getItemID()))
+            {
+                BankData minimalBankData = accountData.bankData.get(MoneyItem.getItemID());
+                currentBalanceWeekVar = minimalBankData.balance;
+                balanceView.updateBalance(currentBalanceWeekVar);
+            }
         });
     }
 
@@ -305,7 +334,7 @@ public class ATMScreen extends BankSystemGuiScreen {
         }
         //requestedBankNoteIDs.put(ItemUtilities.getItemID(BankSystemItems.MONEY50.get()), 0);
         //requestedBankNoteIDs.put(ItemUtilities.getItemID(BankSystemItems.MONEY10.get()), 100);
-        WithdrawMoneyPacket.sendPacket(requestedBankNoteIDs);
+        WithdrawMoneyPacket.sendPacket(requestedBankNoteIDs, currentSelectedAccountNumber);
     }
 
     private void onRequestedAmountChanged(MoneyElement moneyElement) {

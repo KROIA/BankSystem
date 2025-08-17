@@ -1,10 +1,10 @@
 package net.kroia.banksystem.screen.uiElements;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
-import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
@@ -20,11 +20,10 @@ import java.util.List;
 
 public class ItemInfoWidget extends BankSystemGuiElement {
 
-    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
     private static final String PREFIX = "gui."+BankSystemMod.MOD_ID+".iteminfo_widget.";
 
-    private static final Component USER_NAME = Component.translatable(PREFIX+"player_name");
+    private static final Component ACCOUNT_NAME = Component.translatable(PREFIX+"account_name");
     private static final Component BALANCE = Component.translatable(PREFIX+"balance");
     private static final Component LOCKED_BALANCE = Component.translatable(PREFIX+"locked_balance");
     private static final Component TOTAL_BALANCE = Component.translatable(PREFIX+"total_balance");
@@ -39,18 +38,15 @@ public class ItemInfoWidget extends BankSystemGuiElement {
     final Label totalLockedTextLabel;
 
 
-    final Label playerNameLabel;
+    final Label accountNameLabel;
     final Label balanceLabel;
     final Label lockedBalanceLabel;
     final Label totalBalanceLabel;
     final Label searchLabel;
     final TextBox searchTextBox;
     final ListView playerDataView;
-    final HashMap<String, ItemInfoUserWidget> playerDataWidgets = new HashMap<>();
+    final HashMap<Integer, ItemInfoUserWidget> playerDataWidgets = new HashMap<>();
 
-    public static void setBackend(BankSystemModBackend.Instances backend) {
-        ItemInfoWidget.BACKEND_INSTANCES = backend;
-    }
 
 
     public ItemInfoWidget()
@@ -61,11 +57,11 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         totalSuplyTextLabel = new Label();
         totalLockedTextLabel = new Label();
 
-        playerNameLabel = new Label(USER_NAME.getString());
+        accountNameLabel = new Label(ACCOUNT_NAME.getString());
         balanceLabel = new Label(BALANCE.getString());
         lockedBalanceLabel = new Label(LOCKED_BALANCE.getString());
         totalBalanceLabel = new Label(TOTAL_BALANCE.getString());
-        playerNameLabel.setAlignment(Alignment.CENTER);
+        accountNameLabel.setAlignment(Alignment.CENTER);
         balanceLabel.setAlignment(Alignment.CENTER);
         lockedBalanceLabel.setAlignment(Alignment.CENTER);
         totalBalanceLabel.setAlignment(Alignment.CENTER);
@@ -89,7 +85,7 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         addChild(searchLabel);
         addChild(searchTextBox);
 
-        addChild(playerNameLabel);
+        addChild(accountNameLabel);
         addChild(balanceLabel);
         addChild(lockedBalanceLabel);
         addChild(totalBalanceLabel);
@@ -122,11 +118,11 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         int _balanceRatio = ItemInfoUserWidget.balanceRatio * reducedWidth / ItemInfoUserWidget.sumRatio;
         int _lockedBalanceRatio = ItemInfoUserWidget.lockedBalanceRatio * reducedWidth / ItemInfoUserWidget.sumRatio;
         int _totalBalanceRatio = ItemInfoUserWidget.totalBalanceRatio * reducedWidth / ItemInfoUserWidget.sumRatio;
-        playerNameLabel.setBounds(padding, totalLockedTextLabel.getBottom(), _nameRatio, elementHeight);
-        balanceLabel.setBounds(playerNameLabel.getRight(), totalLockedTextLabel.getBottom(), _balanceRatio, elementHeight);
+        accountNameLabel.setBounds(padding, totalLockedTextLabel.getBottom(), _nameRatio, elementHeight);
+        balanceLabel.setBounds(accountNameLabel.getRight(), totalLockedTextLabel.getBottom(), _balanceRatio, elementHeight);
         lockedBalanceLabel.setBounds(balanceLabel.getRight(), totalLockedTextLabel.getBottom(), _lockedBalanceRatio, elementHeight);
         totalBalanceLabel.setBounds(lockedBalanceLabel.getRight(), totalLockedTextLabel.getBottom(), _totalBalanceRatio, elementHeight);
-        playerDataView.setBounds(padding, playerNameLabel.getBottom(), width, height-playerNameLabel.getBottom()+padding);
+        playerDataView.setBounds(padding, accountNameLabel.getBottom(), width, height- accountNameLabel.getBottom()+padding);
     }
 
 
@@ -139,44 +135,50 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         if(this.itemID == null)
             return;
 
-        long totalSupply = info.totalSupply; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalSupply(itemID);
-        long totalLocked = info.totalLocked; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
+        double totalSupply = info.totalSupply; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalSupply(itemID);
+        double totalLocked = info.totalLocked; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
 
 
         totalSuplyTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalSuplyMessage(Bank.getNormalizedAmount(totalSupply, info.itemFractionScaleFactor)));
         totalLockedTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalLockedMessage(Bank.getNormalizedAmount(totalLocked, info.itemFractionScaleFactor)));
 
 
-        List<MinimalBankData> bankData = info.playerBanks;
+        List<BankAccountData> bankData = info.bankAccounts;
         if(bankData == null)
             return;
         // sort by total balance
-        bankData = bankData.stream().sorted((a, b) -> Long.compare(b.balance+b.lockedBalance, a.balance+a.lockedBalance)).toList();
-        playerDataView.getLayout().enabled = false;
-        HashMap<String, ItemInfoUserWidget> toRemoveItems = new HashMap<>(playerDataWidgets);
+        bankData = bankData.stream().sorted((a, b) -> Long.compare(
+                b.bankData.get(info.itemID).balance+b.bankData.get(info.itemID).lockedBalance,
+                a.bankData.get(info.itemID).balance+a.bankData.get(info.itemID).lockedBalance)).toList();
 
-        for(MinimalBankData userBank : bankData)
+        playerDataView.getLayout().enabled = false;
+        HashMap<Integer, ItemInfoUserWidget> toRemoveItems = new HashMap<>(playerDataWidgets);
+
+        for(BankAccountData account : bankData)
         {
-            ItemInfoUserWidget userWidget = toRemoveItems.get(userBank.playerName);
+            BankData bankDataItem = account.bankData.get(itemID);
+            ItemInfoUserWidget userWidget = toRemoveItems.get(account.accountNumber);
             if(userWidget == null)
             {
                 userWidget = new ItemInfoUserWidget();
-                playerDataWidgets.put(userBank.playerName, userWidget);
+                playerDataWidgets.put(account.accountNumber, userWidget);
                 playerDataView.addChild(userWidget);
             }
             else
-                toRemoveItems.remove(userBank.playerName);
+                toRemoveItems.remove(account.accountNumber);
 
-            userWidget.setBalance(userBank.balance, userBank.itemFractionScaleFactor);
-            userWidget.setLockedBalance(userBank.lockedBalance, userBank.itemFractionScaleFactor);
-            userWidget.setTotalBalance(userBank.balance + userBank.lockedBalance, userBank.itemFractionScaleFactor);
-            userWidget.setPlayerName(userBank.playerName);
-            userWidget.setPlayerUUID(userBank.playerUUID);
+            userWidget.setBalance(bankDataItem.balance, bankDataItem.itemFractionScaleFactor);
+            userWidget.setLockedBalance(bankDataItem.lockedBalance, bankDataItem.itemFractionScaleFactor);
+            userWidget.setTotalBalance(bankDataItem.balance + bankDataItem.lockedBalance, bankDataItem.itemFractionScaleFactor);
+            userWidget.setAccountNumber(account.accountNumber);
+            userWidget.setAccountName(account.accountName);
+            userWidget.setUserNames(account.getSearchTexts());
+
         }
         for(ItemInfoUserWidget item : toRemoveItems.values())
         {
             playerDataView.removeChild(item);
-            playerDataWidgets.remove(item.getPlayerName());
+            playerDataWidgets.remove(item.getAccountNumber());
         }
         playerDataView.getLayout().enabled = true;
         layoutChangedInternal();
@@ -188,7 +190,7 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         playerDataView.removeChilds();
         for(ItemInfoUserWidget widget : playerDataWidgets.values())
         {
-            if(widget.getPlayerName().toLowerCase().contains(name))
+            if(widget.hasUserName(name))
                 playerDataView.addChild(widget);
         }
     }

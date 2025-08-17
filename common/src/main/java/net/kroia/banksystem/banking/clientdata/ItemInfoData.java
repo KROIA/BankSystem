@@ -1,16 +1,11 @@
 package net.kroia.banksystem.banking.clientdata;
 
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankUser;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.INetworkPayloadEncoder;
 import net.minecraft.network.FriendlyByteBuf;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 /**
  * Represents data about a bank item
@@ -19,74 +14,48 @@ import java.util.UUID;
 public class ItemInfoData implements INetworkPayloadEncoder {
 
     public final ItemID itemID;
-    public final long totalSupply;
-    public final long totalLocked;
-    public final List<MinimalBankData> playerBanks;
+    public final double totalSupply;
+    public final double totalLocked;
+    public final List<BankAccountData> bankAccounts;
     public final int itemFractionScaleFactor;
 
 
-    public ItemInfoData(ServerBankManager manager, ItemID itemID)
-    {
-        Map<UUID, IBankUser> users = manager.getUser();
-        long totalLocked = 0;
-        long totalSupply = 0;
-        this.playerBanks = new ArrayList<>();
-        for(UUID player : users.keySet())
-        {
-            IBankUser user = users.get(player);
-            if(user == null)
-                continue;
-            IBank bankAccount = user.getBank(itemID);
-            if(bankAccount == null)
-                continue;
-            long balance = bankAccount.getBalance();
-            long lockedBalance = bankAccount.getLockedBalance();
-            totalLocked += lockedBalance;
-            totalSupply += balance + lockedBalance;
-            this.playerBanks.add(bankAccount.getMinimalData());
-        }
-
-        this.itemID = itemID;
-        this.totalSupply = totalSupply;
-        this.totalLocked = totalLocked;
-        this.itemFractionScaleFactor = manager.getItemFractionScaleFactor(itemID);
-    }
     public ItemInfoData(ItemID itemID,
-                        long totalSupply,
-                        long totalLocked,
-                        List<MinimalBankData> playerBanks,
+                        double totalSupply,
+                        double totalLocked,
+                        List<BankAccountData> bankAccounts,
                         int itemFractionScaleFactor) {
         this.itemID = itemID;
         this.totalSupply = totalSupply;
         this.totalLocked = totalLocked;
-        this.playerBanks = playerBanks;
+        this.bankAccounts = bankAccounts;
         this.itemFractionScaleFactor = itemFractionScaleFactor;
     }
 
     @Override
     public void encode(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
-        buf.writeLong(totalSupply);
-        buf.writeLong(totalLocked);
+        buf.writeDouble(totalSupply);
+        buf.writeDouble(totalLocked);
         buf.writeInt(itemFractionScaleFactor);
-        buf.writeInt(playerBanks.size());
-        for(MinimalBankData bank : playerBanks)
+        buf.writeInt(bankAccounts.size());
+        for(BankAccountData bankAccount : bankAccounts)
         {
-            bank.encode(buf);
+            bankAccount.encode(buf);
         }
     }
 
     public static ItemInfoData decode(FriendlyByteBuf buf) {
         ItemID itemID = new ItemID(buf.readItem());
-        long totalSupply = buf.readLong();
-        long totalLocked = buf.readLong();
+        double totalSupply = buf.readDouble();
+        double totalLocked = buf.readDouble();
         int itemFractionScaleFactor = buf.readInt();
         int size = buf.readInt();
-        List<MinimalBankData> playerBanks = new ArrayList<>(size);
+        List<BankAccountData> bankAccounts = new ArrayList<>(size);
         for(int i = 0; i < size; i++)
         {
-            playerBanks.add(MinimalBankData.decode(buf));
+            bankAccounts.add(BankAccountData.decode(buf));
         }
-        return new ItemInfoData(itemID, totalSupply, totalLocked, playerBanks, itemFractionScaleFactor);
+        return new ItemInfoData(itemID, totalSupply, totalLocked, bankAccounts, itemFractionScaleFactor);
     }
 }

@@ -17,6 +17,7 @@ import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.function.BiConsumer;
 
 public class BankSystemSettingScreen extends BankSystemGuiScreen {
@@ -283,16 +284,17 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
 
     public void updateCurrentBankingItemsView()
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestMinimalBankManagerData((minimalBankManagerData) -> {
+        currentBankingItemsView.clearItems();
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData((minimalBankManagerData) -> {
             if(!screenIsOpen)
                 return; // Do not update if the screen is not open
-            ArrayList<ItemStack> allowedItemStacks;
+            List<ItemStack> allowedItemStacks;
             if(minimalBankManagerData == null)
             {
                 allowedItemStacks = new ArrayList<>();
             }
             else {
-                allowedItemStacks = minimalBankManagerData.createAllowedItemStacks();
+                allowedItemStacks = minimalBankManagerData.getAllowedItemStacks();
             }
             currentBankingItemsView.setItems(allowedItemStacks);
             currentBankingItemsView.sortItems();

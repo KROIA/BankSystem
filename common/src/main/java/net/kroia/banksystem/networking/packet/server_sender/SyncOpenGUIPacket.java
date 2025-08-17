@@ -20,6 +20,8 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
 
     GUIType guiType;
     UUID targetPlayerUUID;
+    int accountNumber;
+    boolean isAdminMode;
 
 
     public SyncOpenGUIPacket() {
@@ -42,11 +44,13 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         packet.guiType = GUIType.BANK_SYSTEM_SETTING;
         packet.sendToClient(player);
     }
-    public static void send_openBankAccountScreen(ServerPlayer player, UUID targetPlayerUUID)
+    public static void send_openBankAccountScreen(ServerPlayer player, UUID targetPlayerUUID, int accountNumber, boolean isAdminMode)
     {
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
         packet.guiType = GUIType.BANK_ACCOUNT;
         packet.targetPlayerUUID = targetPlayerUUID;
+        packet.accountNumber = accountNumber;
+        packet.isAdminMode = isAdminMode;
         packet.sendToClient(player);
     }
 
@@ -66,7 +70,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
                 BankSystemClientHooks.openBankSystemSettingScreen();
                 break;
             case BANK_ACCOUNT:
-                BankSystemClientHooks.openBankAccountScreen(targetPlayerUUID);
+                BankSystemClientHooks.openBankAccountScreen(accountNumber, isAdminMode);
                 break;
             case ATM_SCREEN:
                 BankSystemClientHooks.openATMScreen();
@@ -81,11 +85,15 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         if(targetPlayerUUID == null)
             targetPlayerUUID = new UUID(0,0);
         buf.writeUUID(targetPlayerUUID);
+        buf.writeInt(accountNumber);
+        buf.writeBoolean(isAdminMode);
     }
 
     @Override
     public void decode(FriendlyByteBuf buf) {
         guiType = buf.readEnum(GUIType.class);
         targetPlayerUUID = buf.readUUID();
+        accountNumber = buf.readInt();
+        isAdminMode = buf.readBoolean();
     }
 }

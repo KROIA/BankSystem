@@ -16,12 +16,14 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
 
     private HashMap<ItemID, Long> itemTransferFromMarket;
     private boolean sendItemsToBank;
+    private int selectedBankAccount; // This can be used to specify which bank account is being updated
 
-    public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<ItemID, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
+    public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<ItemID, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket, int selectedBankAccount) {
         super();
         this.pos = pos;
         this.itemTransferFromMarket = itemTransferToMarketAmounts;
         this.sendItemsToBank = sendItemsToMarket;
+        this.selectedBankAccount = selectedBankAccount;
     }
 
 
@@ -39,10 +41,13 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     public boolean isSendItemsToBank() {
         return sendItemsToBank;
     }
+    public int getSelectedBankAccount() {
+        return selectedBankAccount;
+    }
 
 
-    public static void sendPacketToServer(BlockPos pos, HashMap<ItemID, Long> itemTransferToBankAmounts, boolean sendItemsToMarket) {
-        new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToBankAmounts, sendItemsToMarket).sendToServer();
+    public static void sendPacketToServer(BlockPos pos, HashMap<ItemID, Long> itemTransferToBankAmounts, boolean sendItemsToMarket, int selectedBankAccount) {
+        new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToBankAmounts, sendItemsToMarket, selectedBankAccount).sendToServer();
     }
 
     @Override
@@ -50,6 +55,7 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     {
         buf.writeBlockPos(pos);
         buf.writeBoolean(sendItemsToBank);
+        buf.writeInt(selectedBankAccount);
         buf.writeInt(itemTransferFromMarket.size());
         itemTransferFromMarket.forEach((itemID, amount) -> {
             buf.writeItem(itemID.getStack());
@@ -62,6 +68,7 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
         this.pos = buf.readBlockPos();
         this.itemTransferFromMarket = new HashMap<>();
         this.sendItemsToBank = buf.readBoolean();
+        this.selectedBankAccount = buf.readInt();
         int size = buf.readInt();
         for (int i = 0; i < size; i++) {
             ItemID itemID = new ItemID(buf.readItem());

@@ -5,7 +5,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
-import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.item.custom.money.*;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
@@ -141,7 +140,7 @@ public final class BankSystemModSettings extends ModSettings {
 
         public final Setting<List<ItemIDAndScaleFactor>> ALLOWED_ITEM_IDS = registerSetting("ALLOWED_ITEM_IDS",
                 new ArrayList<>(List.of(
-                        new ItemIDAndScaleFactor(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME), MoneyBank.getItemFractionScaleFactorStatic()),
+                        new ItemIDAndScaleFactor(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME), MoneyItem.ITEM_FRACTION_SCALE_FACTOR),
                         new ItemIDAndScaleFactor(new ItemID("minecraft:iron_ingot")),
                         new ItemIDAndScaleFactor(new ItemID("minecraft:gold_ingot")),
                         new ItemIDAndScaleFactor(new ItemID("minecraft:diamond")),

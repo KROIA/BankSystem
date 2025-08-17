@@ -1,6 +1,7 @@
 package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
@@ -28,10 +29,11 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
         public final CheckBox doDropIfNotBankableCheckBox;
 
         public static final int elementHeight = 16;
-
+        private final BankUploadScreen parent;
         public SettingsMenu(BankUploadScreen parent)
         {
-            connectDisconnectButton = new Button((isOwned?DISCONNECT_BUTTON.getString():CONNECT_BUTTON.getString()), parent::onConnectDisconnectButtonClicked);
+            this.parent = parent;
+            connectDisconnectButton = new Button((isOwned?DISCONNECT_BUTTON.getString():CONNECT_BUTTON.getString()), this::onSelectBankAccountButtonClicked);
             doDropIfNotBankableCheckBox = new CheckBox(DO_DROP_IF_NOT_BANKABLE.getString(), parent::onDoDropIfNotBankableCheckBoxClicked);
             doDropIfNotBankableCheckBox.setChecked(dropIfNotBankable);
 
@@ -53,6 +55,16 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
             doDropIfNotBankableCheckBox.setBounds(connectDisconnectButton.getLeft(), connectDisconnectButton.getBottom()+padding, connectDisconnectButton.getWidth(), elementHeight);
             setHeight(doDropIfNotBankableCheckBox.getBottom()+padding);
         }
+        private void onSelectBankAccountButtonClicked()
+        {
+            if(isOwned)
+            {
+                parent.onConnectDisconnectButtonClicked(0); // Disconnect
+                return;
+            }
+            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(parent, minecraft.player.getUUID(), parent::onConnectDisconnectButtonClicked, BankPermission.DEPOSIT.getValue());
+            minecraft.setScreen(selectionScreen);
+        }
     }
 
     private final BlockPos pos;
@@ -62,6 +74,7 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
 
     public static boolean isOwned = false;
     public static boolean dropIfNotBankable = false;
+    public static int accountNr = 0; // 0 means no account selected
 
 
 
@@ -96,8 +109,10 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
     }
 
     public static void handlePacket(SyncBankUploadDataPacket packet) {
+
         isOwned = packet.isOwned();
         dropIfNotBankable = packet.doesDropIfNotBankable();
+        accountNr = packet.getBankAccountNumber();
         if(instance != null) {
             if (isOwned) {
                 instance.settingsMenu.connectDisconnectButton.setLabel(DISCONNECT_BUTTON.getString());
@@ -112,11 +127,13 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
         instance = null;
         isOwned = false;
         dropIfNotBankable = false;
+        this.accountNr = 0; // Reset account number on close
         super.onClose();
     }
 
-    private void onConnectDisconnectButtonClicked()
+    private void onConnectDisconnectButtonClicked(int accountNr)
     {
+        this.accountNr = accountNr;
         isOwned = !isOwned;
         sendUpdatePacket();
     }
@@ -127,6 +144,6 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
 
     private void sendUpdatePacket()
     {
-        UpdateBankUploadBlockEntityPacket.sendPacket(pos, isOwned, settingsMenu.doDropIfNotBankableCheckBox.isChecked());
+        UpdateBankUploadBlockEntityPacket.sendPacket(pos, isOwned, settingsMenu.doDropIfNotBankableCheckBox.isChecked(), accountNr);
     }
 }

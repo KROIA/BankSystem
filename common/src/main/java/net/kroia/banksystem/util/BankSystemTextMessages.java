@@ -2,8 +2,9 @@ package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.banking.bank.MoneyBank;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.screen.custom.ATMScreen;
 import net.minecraft.network.chat.Component;
 
@@ -29,6 +30,7 @@ public class BankSystemTextMessages {
         public static final String SENDER = "{sender}";
         public static final String PLAYER = "{player_name}";
         public static final String REASON = "{reason}";
+        public static final String ACCOUNT = "{account_number}";
     }
 
     private static final String prefix  = "message."+BankSystemMod.MOD_ID+".";
@@ -194,6 +196,33 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.USER, user);
         return msg;
     }
+    private static final Component BANKACCOUNT_NOT_FOUND = Component.translatable(prefix+"bankaccount_not_found");
+    public static String getBankAccountNotFoundMessage(String user)
+    {
+        String msg = BANKACCOUNT_NOT_FOUND.getString();
+        msg = replaceVariable(msg, Variables.USER, user);
+        return msg;
+    }
+
+    private static final Component CANT_CREATE_BANK_ACCOUNT = Component.translatable(prefix+"cant_create_bank_account");
+    public static String getCantCreateBankAccountMessage()
+    {
+        return CANT_CREATE_BANK_ACCOUNT.getString();
+    }
+
+    private static final Component NO_PERMISSION_DEPOSIT = Component.translatable(prefix+"no_permission_deposit");
+    private static final Component NO_PERMISSION_WITHDRAW = Component.translatable(prefix+"no_permission_withdraw");
+    private static final Component NO_PERMISSION_MANAGE = Component.translatable(prefix+"no_permission_manage");
+    public static String getNoBankPermissionMessage(String accountName, BankPermission permission)
+    {
+        String msg = switch (permission) {
+            case DEPOSIT -> NO_PERMISSION_DEPOSIT.getString();
+            case WITHDRAW -> NO_PERMISSION_WITHDRAW.getString();
+            case MANAGE -> NO_PERMISSION_MANAGE.getString();
+        };
+        msg = replaceVariable(msg, Variables.ACCOUNT, accountName);
+        return msg;
+    }
 
     private static final Component BANK_USER_NOTIFICATION_ENABLED = Component.translatable(prefix+"bank_user_notification_enabled");
     public static String getBankUserNotificationEnabledMessage()
@@ -218,6 +247,7 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
+
 
     private static final Component BANK_OF = Component.translatable(prefix+"bank_of");
     public static String getBankOfMessage(String user)
@@ -365,20 +395,36 @@ public class BankSystemTextMessages {
     }
 
     private static final Component BANK_ACCOUNT_MANAGEMENT_ITEM_ASK_REMOVE_MSG = Component.translatable("gui."+BankSystemMod.MOD_ID+".bank_account_management_item.ask_remove_message");
-    public static String getBankAccountManagementItemAskRemoveMessage(String itemName, String playerName)
+    public static String getBankAccountManagementItemAskRemoveMessage(String itemName, int accountNumber)
     {
         String  msg = BANK_ACCOUNT_MANAGEMENT_ITEM_ASK_REMOVE_MSG.getString();
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
-        msg = replaceVariable(msg, Variables.PLAYER, playerName);
+        msg = replaceVariable(msg, Variables.ACCOUNT, String.valueOf(accountNumber));
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
 
-    private static final Component BANK_ACCOUNT_MANAGEMENT_BANK_OWNER = Component.translatable("gui."+BankSystemMod.MOD_ID+".bank_account_management_item.bank_owner");
-    public static String getBankAccountManagementBankOwnerMessage(String playerName)
+    private static final Component DELETE_ACCOUNT_ASK_POPUP_TITLE = Component.translatable("gui."+BankSystemMod.MOD_ID+".bank_account_management_screen.delete_account_ask_popup_title");
+    public static String getDeleteAccountAskPopupTitleMessage(String accountName)
+    {
+        String msg = DELETE_ACCOUNT_ASK_POPUP_TITLE.getString();
+        msg = replaceVariable(msg, Variables.ACCOUNT, accountName);
+        return msg;
+    }
+    private static final Component DELETE_ACCOUNT_ASK_POPUP_MESSAGE = Component.translatable("gui."+BankSystemMod.MOD_ID+".bank_account_management_screen.delete_account_ask_popup_message");
+    public static String getDeleteAccountAskPopupMessage(String accountName)
+    {
+        String msg = DELETE_ACCOUNT_ASK_POPUP_MESSAGE.getString();
+        msg = replaceVariable(msg, Variables.ACCOUNT, accountName);
+        return msg;
+    }
+
+
+    private static final Component BANK_ACCOUNT_MANAGEMENT_BANK_OWNER = Component.translatable("gui."+BankSystemMod.MOD_ID+".bank_account_management_item.account_number");
+    public static String getBankAccountManagementBankOwnerMessage(int accountNumber)
     {
         String msg = BANK_ACCOUNT_MANAGEMENT_BANK_OWNER.getString();
-        msg = replaceVariable(msg, Variables.PLAYER, playerName);
+        msg = replaceVariable(msg, Variables.ACCOUNT, String.valueOf(accountNumber));
         return msg;
     }
 
@@ -434,7 +480,7 @@ public class BankSystemTextMessages {
     public static String getATMSumTextMessage(long sum)
     {
         String msg = ATM_SUM_TEXT.getString();
-        String normalized = Bank.getFormattedAmount(sum, MoneyBank.getItemFractionScaleFactorStatic());
+        String normalized = Bank.getFormattedAmount(sum, MoneyItem.ITEM_FRACTION_SCALE_FACTOR);
         msg = replaceVariable(msg, Variables.AMOUNT, normalized);
         return msg;
     }
@@ -443,7 +489,7 @@ public class BankSystemTextMessages {
     public static String getATMAvailableTextMessage(long sum)
     {
         String msg = ATM_AVAILABLE_TEXT.getString();
-        String normalized = Bank.getFormattedAmount(sum, MoneyBank.getItemFractionScaleFactorStatic());
+        String normalized = Bank.getFormattedAmount(sum, MoneyItem.ITEM_FRACTION_SCALE_FACTOR);
         msg = replaceVariable(msg, Variables.AMOUNT, normalized);
         return msg;
     }
@@ -452,7 +498,7 @@ public class BankSystemTextMessages {
     public static String getATMNotEnoughBalance(long sum)
     {
         String msg = ATM_NOT_ENOUGH_BALANCE_TEXT.getString();
-        String normalized = Bank.getFormattedAmount(sum, MoneyBank.getItemFractionScaleFactorStatic());
+        String normalized = Bank.getFormattedAmount(sum, MoneyItem.ITEM_FRACTION_SCALE_FACTOR);
         msg = replaceVariable(msg, Variables.AMOUNT, normalized);
         return msg;
     }

@@ -1,6 +1,8 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
 import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
@@ -20,21 +22,24 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
     // Contains the item ID and the requested amount of the bank notes
     HashMap<ItemID, Long> requestedBankNoteIDs;// = new HashMap<>();
+    int currentSelectedAccountNumber;
     public WithdrawMoneyPacket(FriendlyByteBuf buf) {
         super(buf);
     }
-    public WithdrawMoneyPacket(HashMap<ItemID, Long> requestedBankNoteIDs) {
+    public WithdrawMoneyPacket(HashMap<ItemID, Long> requestedBankNoteIDs, int currentSelectedAccountNumber) {
         super();
         this.requestedBankNoteIDs = requestedBankNoteIDs;
+        this.currentSelectedAccountNumber = currentSelectedAccountNumber;
     }
 
-    public static void sendPacket(HashMap<ItemID, Long> requestedBankNoteIDs) {
-        WithdrawMoneyPacket packet = new WithdrawMoneyPacket(requestedBankNoteIDs);
+    public static void sendPacket(HashMap<ItemID, Long> requestedBankNoteIDs, int currentSelectedAccountNumber) {
+        WithdrawMoneyPacket packet = new WithdrawMoneyPacket(requestedBankNoteIDs, currentSelectedAccountNumber);
         packet.sendToServer();
     }
 
     @Override
     public void encode(FriendlyByteBuf buf) {
+        buf.writeVarInt(currentSelectedAccountNumber);
         buf.writeVarInt(requestedBankNoteIDs.size());
         for (ItemID itemID : requestedBankNoteIDs.keySet()) {
             buf.writeItem(itemID.getStack());
@@ -44,6 +49,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
     @Override
     public void decode(FriendlyByteBuf buf) {
+        currentSelectedAccountNumber = buf.readVarInt();
         int size = buf.readVarInt();
         requestedBankNoteIDs = new HashMap<>();
         for (int i = 0; i < size; i++) {
@@ -56,8 +62,18 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {
+        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(currentSelectedAccountNumber);
+        if(account == null)
+            return;
+
         UUID playerUUID = sender.getUUID();
-        IBank moneyBank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getMoneyBank(playerUUID);
+        if(!account.hasPermission(playerUUID, BankPermission.WITHDRAW.getValue()))
+        {
+            ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
+            return;
+        }
+
+        IBank moneyBank = account.getBank(MoneyItem.getItemID());
         if(moneyBank == null) {
             return; // No money bank found for the player
         }

@@ -12,9 +12,11 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
 
     boolean isOwned;
     boolean dropIfNotBankable;
-    public SyncBankUploadDataPacket(boolean isOwned, boolean dropIfNotBankable) {
+    int bankAccountNumber;
+    public SyncBankUploadDataPacket(boolean isOwned, boolean dropIfNotBankable, int bankAccountNumber) {
         this.isOwned = isOwned;
         this.dropIfNotBankable = dropIfNotBankable;
+        this.bankAccountNumber = bankAccountNumber;
     }
 
     public SyncBankUploadDataPacket(FriendlyByteBuf buf) {
@@ -25,7 +27,8 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
         UUID playerOwner = blockEntity.getPlayerOwner();
         boolean dropIfNotBankable = blockEntity.doesDropIfNotBankable();
         boolean isOwned = playerOwner != null && playerOwner.equals(receiver.getUUID());
-        new SyncBankUploadDataPacket(isOwned, dropIfNotBankable).sendToClient(receiver);
+        int bankAccountNumber = blockEntity.getBankAccountNumber();
+        new SyncBankUploadDataPacket(isOwned, dropIfNotBankable, bankAccountNumber).sendToClient(receiver);
     }
 
 
@@ -33,6 +36,7 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
     public void encode(FriendlyByteBuf buf) {
         buf.writeBoolean(isOwned);
         buf.writeBoolean(dropIfNotBankable);
+        buf.writeInt(bankAccountNumber);
 
     }
 
@@ -40,6 +44,7 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
     public void decode(FriendlyByteBuf buf) {
         isOwned = buf.readBoolean();
         dropIfNotBankable = buf.readBoolean();
+        bankAccountNumber = buf.readInt();
     }
 
     protected void handleOnClient() {
@@ -51,5 +56,8 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
     }
     public boolean doesDropIfNotBankable() {
         return dropIfNotBankable;
+    }
+    public int getBankAccountNumber() {
+        return bankAccountNumber;
     }
 }
