@@ -12,6 +12,8 @@ public class BankAccountData implements INetworkPayloadEncoder {
 
     public final int accountNumber;
     public final String accountName;
+
+    public final @Nullable ItemID accountIcon;
     public final @Nullable UserData personalBankOwnerData; // The creator of the bank account, usually the owner of the bank
     public final Map<UUID, BankUserData> users = new HashMap<>();
     public final Map<ItemID, BankData> bankData = new HashMap<>();
@@ -19,11 +21,13 @@ public class BankAccountData implements INetworkPayloadEncoder {
 
     public BankAccountData(int accountNumber,
                            String accountName,
+                           @Nullable ItemID accountIcon,
                            @Nullable UserData personalBankOwnerData,
                            Map<UUID, BankUserData> users,
                            Map<ItemID, BankData> bankData) {
         this.accountNumber = accountNumber;
         this.accountName = accountName;
+        this.accountIcon = accountIcon;
         this.personalBankOwnerData = personalBankOwnerData;
         this.users.putAll(users);
         this.bankData.putAll(bankData);
@@ -32,6 +36,9 @@ public class BankAccountData implements INetworkPayloadEncoder {
     public void encode(FriendlyByteBuf buf) {
         buf.writeInt(accountNumber);
         buf.writeUtf(accountName);
+        buf.writeBoolean(accountIcon != null);
+        if(accountIcon != null)
+            accountIcon.encode(buf);
         buf.writeBoolean(personalBankOwnerData != null);
         if(personalBankOwnerData != null)
             personalBankOwnerData.encode(buf);
@@ -67,6 +74,11 @@ public class BankAccountData implements INetworkPayloadEncoder {
     public static BankAccountData decode(FriendlyByteBuf buf) {
         int accountNumber = buf.readInt();
         String accountName = buf.readUtf();
+        ItemID accountIcon = null;
+        if(buf.readBoolean()) {
+            accountIcon = ItemID.createFomBytes(buf);
+        }
+
         UserData creator = null;
         if(buf.readBoolean()) {
             creator = UserData.decode(buf);
@@ -84,6 +96,6 @@ public class BankAccountData implements INetworkPayloadEncoder {
             BankData data = BankData.decode(buf);
             bankData.put(data.itemID, data);
         }
-        return new BankAccountData(accountNumber, accountName, creator, users, bankData);
+        return new BankAccountData(accountNumber, accountName, accountIcon, creator, users, bankData);
     }
 }

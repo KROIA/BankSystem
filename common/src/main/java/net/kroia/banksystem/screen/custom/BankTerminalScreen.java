@@ -2,6 +2,7 @@ package net.kroia.banksystem.screen.custom;
 
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
@@ -137,6 +138,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private final String playerName;
     private static boolean screenIsOpen = false;
     private int selectedBankAccountNr = -1;
+    private int userPermission = 0;
 
 
 
@@ -144,27 +146,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         super(pMenu, pPlayerInventory, pTitle);
         //super(pTitle);
         menu = pMenu;
-        getBankManager().requestBankTerminalData(pMenu.getBlockPos(), (bankTerminalData) -> {
-            selectedBankAccountNr = bankTerminalData.selectedBankAccount;
-            if(selectedBankAccountNr > 0)
-            {
-                updateBankList();
-            }
-            else
-            {
-                getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), (personalBankAccountData) -> {
-                    if(personalBankAccountData != null)
-                    {
-                        selectedBankAccountNr = personalBankAccountData.accountNumber;
-                        updateBankList();
-                    }
-                    else
-                    {
-                        error("Failed to retrieve personal bank account data for player: " + Minecraft.getInstance().player.getName().getString());
-                    }
-                });
-            }
-        });
+
         screenIsOpen = true;
         playerUUID = Minecraft.getInstance().player.getUUID();
         playerName = Minecraft.getInstance().player.getName().getString();
@@ -205,6 +187,45 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         addElement(inventoryView);
 
 
+        getBankManager().requestBankTerminalData(pMenu.getBlockPos(), (bankTerminalData) -> {
+            selectedBankAccountNr = bankTerminalData.selectedBankAccount;
+            userPermission = bankTerminalData.userPermission;
+            if(!BankPermission.hasPermission(userPermission, BankPermission.WITHDRAW))
+            {
+                receiveItemsFromBankButton.setEnabled(false);
+            }
+            else
+            {
+                receiveItemsFromBankButton.setEnabled(true);
+            }
+            if(!BankPermission.hasPermission(userPermission, BankPermission.DEPOSIT))
+            {
+                sendItemsToBankButton.setEnabled(false);
+            }
+            else
+            {
+                sendItemsToBankButton.setEnabled(true);
+            }
+            if(selectedBankAccountNr > 0)
+            {
+                updateBankList();
+            }
+            else
+            {
+                getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), (personalBankAccountData) -> {
+                    if(personalBankAccountData != null)
+                    {
+                        selectedBankAccountNr = personalBankAccountData.accountNumber;
+                        updateBankList();
+                    }
+                    else
+                    {
+                        error("Failed to retrieve personal bank account data for player: " + Minecraft.getInstance().player.getName().getString());
+                    }
+                });
+            }
+        });
+
     }
 
     @Override
@@ -223,7 +244,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         int itemListViewWidth = inventoryView.getX()-padding*2;
         selectAccountButton.setBounds(padding, padding, itemListViewWidth, 20);
         removeEmptyBankAccountsButton.setBounds(padding, selectAccountButton.getBottom()+spacing, itemListViewWidth/2-spacing, sendItemsToBankButton.getHeight());
-        receiveItemsFromBankButton.setBounds(removeEmptyBankAccountsButton.getRight()+spacing, removeEmptyBankAccountsButton.getTop(), itemListViewWidth - removeEmptyBankAccountsButton.getRight()-spacing, removeEmptyBankAccountsButton.getHeight());
+        receiveItemsFromBankButton.setBounds(removeEmptyBankAccountsButton.getRight()+spacing, removeEmptyBankAccountsButton.getTop(), itemListViewWidth - removeEmptyBankAccountsButton.getRight(), removeEmptyBankAccountsButton.getHeight());
         itemListView.setBounds(padding, receiveItemsFromBankButton.getBottom() + padding,
                 itemListViewWidth, height -receiveItemsFromBankButton.getBottom() - spacing - padding);
     }

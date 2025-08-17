@@ -6,6 +6,7 @@ import net.kroia.banksystem.networking.request.BankSelectionScreenDataRequest;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
+import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
@@ -26,9 +27,33 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
     }
     public static class AccountElement extends Button
     {
-        public AccountElement(String accountName, int accountNumber) {
-            super(accountName + " ("+accountNumber+")");
+        private final BankAccountData accountData;
+        private final ItemView iconView;
+        private final Label accountNameLabel;
+        public AccountElement(BankAccountData accountData) {
+            super("");
+            this.accountData = accountData;
+
+            iconView = new ItemView(accountData.accountIcon != null ? accountData.accountIcon.getStack() : null);
+            accountNameLabel = new Label(accountData.accountName);
+            accountNameLabel.setAlignment(GuiElement.Alignment.CENTER);
+
+            addChild(iconView);
+            addChild(accountNameLabel);
             setHeight(20);
+        }
+
+        @Override
+        protected void layoutChanged()
+        {
+            int width = getWidth();
+            int height = getHeight();
+            iconView.setBounds(0, 0, height, height);
+            accountNameLabel.setBounds(iconView.getRight(), 0, width - iconView.getRight(), height);
+        }
+
+        public BankAccountData getAccountData() {
+            return accountData;
         }
     }
 
@@ -87,7 +112,7 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
     private void onBankAccountsReceived(BankSelectionScreenDataRequest.Output output) {
         accountsListView.removeChilds();
         for(BankAccountData accountData : output.bankAccounts) {
-            AccountElement element = new AccountElement(accountData.accountName, accountData.accountNumber);
+            AccountElement element = new AccountElement(accountData);
             element.setOnRisingEdge(() -> {
                 onAccountSelected.accept(accountData.accountNumber);
                 this.onClose();

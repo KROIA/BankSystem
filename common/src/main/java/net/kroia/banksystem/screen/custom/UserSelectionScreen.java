@@ -12,12 +12,14 @@ import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
-import java.util.UUID;
 import java.util.function.Consumer;
 
 public class UserSelectionScreen extends BankSystemGuiScreen {
     private static final String prefix = "gui." + BankSystemMod.MOD_ID + ".user_selection_screen.";
     private static final Component TITLE = Component.translatable(prefix+"title");
+
+
+
 
     private final ListView userListView;
     private final Consumer<UserData> onUserSelected;

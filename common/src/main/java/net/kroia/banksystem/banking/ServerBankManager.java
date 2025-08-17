@@ -269,6 +269,20 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         userMap.put(userUUID, user);
         info("Added new user: " + userName + " with UUID: " + userUUID);
     }
+    public void addUser(@NotNull User user)
+    {
+        if(user == null) {
+            warn("Cannot add null user.");
+            return;
+        }
+        UUID userUUID = user.getUUID();
+        if(userMap.containsKey(userUUID)) {
+            warn("User with UUID " + userUUID + " already exists. Not adding again.");
+            return;
+        }
+        userMap.put(userUUID, user);
+        info("Added new user: " + user.getName() + " with UUID: " + userUUID);
+    }
     public boolean removeUser(UUID userUUID)
     {
         if(userMap.containsKey(userUUID)) {
@@ -377,19 +391,20 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             warn("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
             return false;
         }
-        List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        for(var allowedItem : allowed) {
-            if(allowedItem.itemID.equals(itemID)) {
-                return true;
-            }
-        }
-
         if(MoneyItem.isMoney(itemID))
             itemFractionScaleFactor = MoneyItem.ITEM_FRACTION_SCALE_FACTOR;
         else if(itemFractionScaleFactor != 1 && itemFractionScaleFactor != 10 && itemFractionScaleFactor != 100)
             itemFractionScaleFactor = 1;
-
         this.itemFractionScaleFactor.put(itemID, itemFractionScaleFactor);
+
+        List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
+        for(var allowedItem : allowed) {
+            if(allowedItem.itemID.equals(itemID)) {
+
+                return true;
+            }
+        }
+
         BankSystemModSettings.Bank.ItemIDAndScaleFactor itemIDAndScaleFactor = new BankSystemModSettings.Bank.ItemIDAndScaleFactor(itemID, itemFractionScaleFactor);
         allowed.add(itemIDAndScaleFactor);
         BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.set(allowed);
@@ -609,6 +624,10 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
 
     @Override
     public boolean load(CompoundTag tag) {
+        if(!tag.contains("version"))
+        {
+            return compatibility_load_old_users(tag);
+        }
         if(tag.getInt("version") > 1) {
             error("Unsupported version of bank data: " + tag.getInt("version"));
             return false;

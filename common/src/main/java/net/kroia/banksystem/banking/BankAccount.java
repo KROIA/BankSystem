@@ -32,6 +32,7 @@ public class BankAccount implements ServerSaveable {
 
     private int accountNumber;
     private String accountName = ""; // Optional account name, can be empty
+    private @Nullable ItemID accountIcon;
     private @Nullable User personalBankOwner;
     private final Map<UUID, BankUser> users = new HashMap<>();
     private final Map<ItemID, Bank> banks = new HashMap<>();
@@ -113,7 +114,7 @@ public class BankAccount implements ServerSaveable {
             bankData.put(itemID, bank.getMinimalData()); // Convert Bank to BankData
         }
 
-        return new BankAccountData(accountNumber, accountName, personalBankOwnerData, users, bankData);
+        return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
     }
 
 
@@ -145,7 +146,7 @@ public class BankAccount implements ServerSaveable {
             bankData.put(itemID, bank.getMinimalData()); // Convert Bank to BankData
         }
 
-        return new BankAccountData(accountNumber, accountName, personalBankOwnerData, users, bankData);
+        return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
     }
     public @Nullable BankData getBankData(ItemID itemID)
     {
@@ -192,6 +193,12 @@ public class BankAccount implements ServerSaveable {
             accountName = "";
         }
         this.accountName = accountName; // Set the name of the bank account
+    }
+    public void setAccountIcon(@Nullable ItemID accountIcon) {
+        this.accountIcon = accountIcon; // Set the icon for the bank account
+    }
+    public @Nullable ItemID getAccountIcon() {
+        return accountIcon; // Get the icon of the bank account
     }
     public int getPermission(UUID userUUID) {
         BankUser user = users.get(userUUID);
@@ -703,6 +710,12 @@ public class BankAccount implements ServerSaveable {
         if(personalBankOwner != null)
             tag.putUUID("personalBankOwnerDataUUID", personalBankOwner.getUUID());
 
+        if (accountIcon != null) {
+            CompoundTag iconTag = new CompoundTag();
+            accountIcon.save(iconTag); // Save the account icon if set
+            tag.put("accountIcon", iconTag);
+        }
+
         ListTag usersTag = new ListTag();
         for (BankUser user : users.values()) {
             UUID userUUID = user.getUser().getUUID();
@@ -746,6 +759,13 @@ public class BankAccount implements ServerSaveable {
             this.personalBankOwner = null; // No personalBankOwnerData set
         }
 
+        if(tag.contains("accountIcon")) {
+            CompoundTag iconTag = tag.getCompound("accountIcon");
+            this.accountIcon = ItemID.createFromTag(iconTag); // Load account icon if set
+        } else {
+            this.accountIcon = null; // No account icon set
+        }
+
 
 
         ListTag usersTag = tag.getList("users", 10);
@@ -777,6 +797,9 @@ public class BankAccount implements ServerSaveable {
         if(personalBankOwner != null)
         {
             jsonObject.add("personalBankOwner", personalBankOwner.toJson());
+        }
+        if(accountIcon != null) {
+            jsonObject.add("accountIcon", accountIcon.toJson()); // Add account icon if set
         }
 
         jsonObject.addProperty("accountNumber", accountNumber);

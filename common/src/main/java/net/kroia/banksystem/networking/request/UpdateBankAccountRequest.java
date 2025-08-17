@@ -10,6 +10,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.INetworkPayloadEncoder;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
@@ -52,19 +53,22 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         }
         public int accountNumber;
         public String accountName;
+        public @Nullable ItemID accountIcon;
         public List<BankData> bankData;
 
         public Map<UUID, Integer> setUsers;
+
 
         public InputData() {
             this.bankData = null;
             this.setUsers = null;
         }
-        public InputData(int accountNumber, String accountName,
+        public InputData(int accountNumber, String accountName, ItemID accountIcon,
                             List<BankData> bankData,
                             Map<UUID, Integer> setUsers) {
             this.accountNumber = accountNumber;
             this.accountName = accountName;
+            this.accountIcon = accountIcon;
             this.bankData = bankData;
             this.setUsers = setUsers;
         }
@@ -73,6 +77,10 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         public void encode(FriendlyByteBuf buf) {
             buf.writeInt(accountNumber);
             buf.writeUtf(accountName);
+            buf.writeBoolean(accountIcon != null);
+            if(accountIcon != null) {
+                accountIcon.encode(buf);
+            }
             buf.writeBoolean(bankData != null);
             if(bankData != null) {
                 buf.writeInt(bankData.size());
@@ -93,7 +101,12 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         public static InputData decode(FriendlyByteBuf buf) {
             InputData input = new InputData();
             input.accountNumber = buf.readInt();
-            input.accountName = buf.readUtf(); // Read the account name, max length 32767 characters
+            input.accountName = buf.readUtf();
+            if(buf.readBoolean()) {
+                input.accountIcon = ItemID.createFomBytes(buf);
+            } else {
+                input.accountIcon = null;
+            }
 
             input.bankData = null;
             if(buf.readBoolean()) {
@@ -166,18 +179,20 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 }
             }
         }
-        if(canManage && input.setUsers != null) {
-            Map<User, Integer> userList = new HashMap<>(input.setUsers.size());
-            for (Map.Entry<UUID, Integer> entry : input.setUsers.entrySet()) {
-                UUID userUUID = entry.getKey();
-                int permissions = entry.getValue();
-                User userToSet = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(userUUID);
-                if(userToSet != null)
-                {
-                    userList.put(userToSet, permissions);
+        if(canManage) {
+            if (input.setUsers != null) {
+                Map<User, Integer> userList = new HashMap<>(input.setUsers.size());
+                for (Map.Entry<UUID, Integer> entry : input.setUsers.entrySet()) {
+                    UUID userUUID = entry.getKey();
+                    int permissions = entry.getValue();
+                    User userToSet = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(userUUID);
+                    if (userToSet != null) {
+                        userList.put(userToSet, permissions);
+                    }
                 }
+                account.setUsers(userList);
             }
-            account.setUsers(userList);
+            account.setAccountIcon(input.accountIcon);
         }
         return account.getAccountData();
     }

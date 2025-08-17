@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.request;
 
+import net.kroia.banksystem.banking.BankAccount;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.modutilities.networking.INetworkPayloadEncoder;
@@ -12,16 +13,19 @@ public class BankTerminalBlockDataRequest extends BankSystemGenericRequest<Block
     public static class Output implements INetworkPayloadEncoder
     {
         public int selectedBankAccount = 0;
+        public int userPermission = 0;
 
 
         @Override
         public void encode(FriendlyByteBuf buf) {
             buf.writeInt(selectedBankAccount);
+            buf.writeInt(userPermission);
         }
 
         public static Output decode(FriendlyByteBuf buf) {
             Output output = new Output();
             output.selectedBankAccount = buf.readInt();
+            output.userPermission = buf.readInt();
             return output;
         }
     }
@@ -46,6 +50,12 @@ public class BankTerminalBlockDataRequest extends BankSystemGenericRequest<Block
             return output; // or handle the error appropriately
         }
         output.selectedBankAccount = blockEntity.getSelectedBankAccount(sender.getUUID());
+        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(output.selectedBankAccount);
+        if(account != null) {
+            output.userPermission = account.getPermission(sender.getUUID());
+        } else {
+            output.userPermission = 0; // Default permission if account is not found
+        }
         return output;
     }
 

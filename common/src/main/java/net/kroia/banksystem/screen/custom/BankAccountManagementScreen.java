@@ -18,9 +18,11 @@ import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
+import net.kroia.modutilities.gui.screens.CreativeModeItemSelectionScreen;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.*;
@@ -34,6 +36,41 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final Component CREATE_NEW_BANK = Component.translatable(PREFIX+"create_new_bank");
     private static final Component ADD_USER = Component.translatable(PREFIX+"add_user");
 
+    private static class ItemViewButton extends Button{
+
+        private final ItemView itemView;
+        public ItemViewButton(ItemID item) {
+            super("");
+
+            itemView = new ItemView();
+            if(item != null)
+                itemView.setItemStack(item.getStack());
+            else
+                itemView.setItemStack(ItemStack.EMPTY);
+            addChild(itemView);
+            setSize(20, 20);
+        }
+
+        @Override
+        protected void layoutChanged() {
+            int width = getWidth();
+            int height = getHeight();
+            itemView.setBounds(0, 0, width, height);
+        }
+        public void setItem(ItemID item) {
+            if(item != null)
+                itemView.setItemStack(item.getStack());
+            else
+                itemView.setItemStack(ItemStack.EMPTY);
+        }
+        public void setItem(ItemStack itemStack) {
+            itemView.setItemStack(itemStack);
+        }
+        public ItemID getItemID() {
+            return new ItemID(itemView.getItemStack());
+        }
+    }
+
     private int accountNumber;
     private UserData personalBankOwnerData;
     //private String playerName;
@@ -41,6 +78,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
 
     private Button selectAccountButton;
+    private ItemViewButton accountIconButton;
     private Label accountNameLabel;
     private TextBox accountNameTextBox;
     private CloseButton closeButton;
@@ -110,7 +148,10 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     }
     private void setupCommon(BankAccountData data)
     {
+        accountIconButton = new ItemViewButton(data.accountIcon);
+        addElement(accountIconButton);
         if(canManage) {
+            accountIconButton.setOnFallingEdge(this::onIconButtonClicked);
             accountNameTextBox = new TextBox();
             accountNameTextBox.setText(data.accountName);
             addElement(accountNameTextBox);
@@ -237,10 +278,11 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         int nameWidth = (width-spacing)/2;
         selectAccountButton.setBounds(padding, padding, nameWidth, 20);
         int accountNameY = selectAccountButton.getBottom()+spacing;
+        accountIconButton.setBounds(padding, accountNameY, 20, 20);
         if(canManage) {
-            accountNameTextBox.setBounds(padding, accountNameY, nameWidth, 20);
+            accountNameTextBox.setBounds(accountIconButton.getRight()+spacing, accountNameY, nameWidth-(accountIconButton.getRight()+spacing), 20);
         }else {
-            accountNameLabel.setBounds(padding, accountNameY, nameWidth, 20);
+            accountNameLabel.setBounds(accountIconButton.getRight()+spacing, accountNameY, nameWidth-(accountIconButton.getRight()+spacing), 20);
         }
 
         addUserButton.setBounds(padding, selectAccountButton.getBottom()+accountNameY, nameWidth, closeButton.getHeight());
@@ -312,7 +354,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             accountName = accountNameLabel.getText();
         }
 
-        UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, bankData, setUsers);
+        UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.getItemID(), bankData, setUsers);
         BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input, (bankAccountData) -> {
             updateBankData(bankAccountData);
             updateAccountData(bankAccountData);
@@ -500,6 +542,22 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             userSelectionScreen.setUsers(userDataList);
             minecraft.setScreen(userSelectionScreen);
         });
+    }
+
+    private void onIconButtonClicked()
+    {
+        FeatureFlagSet enabledFeatures = minecraft.player.level().enabledFeatures();
+        boolean showOperatorTab = false; // Set this to `true` if you need the operator tab
+
+        CreativeModeItemSelectionScreen creativeModeItemSelectionScreen = new CreativeModeItemSelectionScreen((itemStack)->
+        {
+            accountIconButton.setItem(itemStack);
+            minecraft.setScreen(this);
+        },()->
+        {
+            minecraft.setScreen(this);
+        });
+        Minecraft.getInstance().setScreen(creativeModeItemSelectionScreen);
     }
 
     @Override
