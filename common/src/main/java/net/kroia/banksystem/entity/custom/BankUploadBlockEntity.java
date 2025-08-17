@@ -4,6 +4,7 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.block.custom.BankUploadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
@@ -60,6 +61,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
     private final SimpleContainer inventory = new ControlledContainer(27); // 27 slots like a chest
     private boolean sendingEnabled = false;
     private boolean dropIfNotBankable = false;
+    private int bankAccountNumber = 0; // Not used, but kept for compatibility
 
     private UUID playerOwner = null;
 
@@ -76,6 +78,9 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
 
     public Container getInventory() {
         return inventory;
+    }
+    public int getBankAccountNumber() {
+        return bankAccountNumber;
     }
 
     public void update()
@@ -110,6 +115,12 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         inventory.fromTag(tag.getList("Items", 10));
         sendingEnabled = tag.getBoolean("SendingEnabled");
         dropIfNotBankable = tag.getBoolean("DropIfNotBankable");
+        if(tag.contains("BankAccountNumber"))
+        {
+            bankAccountNumber = tag.getInt("BankAccountNumber");
+        }
+        else
+            bankAccountNumber = 0;
         playerOwner = null;
         if(tag.contains("PlayerOwner"))
         {
@@ -123,6 +134,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         tag.put("Items", inventory.createTag());
         tag.putBoolean("SendingEnabled", sendingEnabled);
         tag.putBoolean("DropIfNotBankable", dropIfNotBankable);
+        tag.putInt("BankAccountNumber", bankAccountNumber);
         if(playerOwner != null)
         {
             tag.putUUID("PlayerOwner", playerOwner);
@@ -253,9 +265,14 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             return;
         if(playerOwner == null)
             return;
-        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerOwner);
+        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(bankAccountNumber);
         if(account == null)
             return;
+
+        if(!account.hasPermission(playerOwner, BankPermission.DEPOSIT.getValue()))
+        {
+            return; // Player does not have permission to deposit
+        }
 
 
 
@@ -327,6 +344,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         UUID playerOwner = getPlayerOwner();
         boolean sendUpdate = false;
         dropIfNotBankable = packet.isDropIfNotBankable();
+        bankAccountNumber = packet.getBankAccountNumber();
         if(playerOwner == null || playerOwner.equals(sender.getUUID())) {
             setPlayerOwner(packet.isOwned() ? sender.getUUID() : null);
             sendUpdate = true;

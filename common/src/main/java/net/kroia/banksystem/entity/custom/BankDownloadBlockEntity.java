@@ -4,10 +4,10 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.banking.BankAccount;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.block.custom.BankDownloadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
@@ -66,6 +66,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     private ItemID itemID;
     private int targetAmount;
     private int tickCounter = 0;
+    private int bankAccountNumber = 0;
 
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BankDownloadBlockEntity.BACKEND_INSTANCES = backend;
@@ -109,6 +110,14 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         {
             playerOwner = tag.getUUID("PlayerOwner");
         }
+        if(tag.contains("bankAccountNumber"))
+        {
+            bankAccountNumber = tag.getInt("bankAccountNumber");
+        }
+        else
+        {
+            bankAccountNumber = 0; // Default to no account selected
+        }
     }
 
     @Override
@@ -126,6 +135,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         {
             tag.putUUID("PlayerOwner", playerOwner);
         }
+        tag.putInt("bankAccountNumber", bankAccountNumber);
     }
 
     @Override
@@ -252,6 +262,9 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         }
         return inventory.getContainerSize() * stackSize;
     }
+    public int getBankAccountNumber() {
+        return bankAccountNumber;
+    }
 
     public void update()
     {
@@ -282,16 +295,21 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
 
 
-        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerOwner);
+        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(bankAccountNumber);
         if(account == null)
             return;
+
+        if(!account.hasPermission(playerOwner, BankPermission.WITHDRAW.getValue()))
+        {
+            return; // Player does not have permission to withdraw from this bank account
+        }
+
         IBank itemBank = account.getBank(itemID);
         if(itemBank == null)
             return;
         ItemStack exampleStack = itemID.getStack();
         if(exampleStack == null)
             return;
-        boolean isMoney = MoneyItem.isMoney(itemID);
         long centScaleFactor = itemBank.getItemFractionScaleFactor();
         int stackSize = exampleStack.getMaxStackSize();
         long currentItemCount = countItems();
@@ -358,6 +376,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         UUID playerOwner = getPlayerOwner();
         boolean sendUpdate = false;
         itemID = packet.getItemID();
+        bankAccountNumber = packet.getAccountNr();
 
         if(itemID != null) {
             ItemStack itemStack = itemID.getStack();

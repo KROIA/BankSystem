@@ -55,6 +55,10 @@ public enum BankPermission
     {
         return DEPOSIT.getValue() | WITHDRAW.getValue() | MANAGE.getValue();
     }
+    public static int getAllPermissions()
+    {
+        return getSelfOwnerPermissions();
+    }
     public static String toString(int permissions)
     {
         StringBuilder sb = new StringBuilder();
@@ -69,4 +73,5 @@ public enum BankPermission
         }
         return sb.toString().trim();
     }
+
 }

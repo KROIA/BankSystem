@@ -12,18 +12,20 @@ public class UpdateBankUploadBlockEntityPacket extends BankSystemNetworkPacket {
     BlockPos pos;
     boolean isOwned;
     boolean dropIfNotBankable;
-    public UpdateBankUploadBlockEntityPacket(BlockPos pos, boolean isOwned, boolean dropIfNotBankable) {
+    int bankAccountNumber;
+    public UpdateBankUploadBlockEntityPacket(BlockPos pos, boolean isOwned, boolean dropIfNotBankable, int bankAccountNumber) {
         this.pos = pos;
         this.isOwned = isOwned;
         this.dropIfNotBankable = dropIfNotBankable;
+        this.bankAccountNumber = bankAccountNumber;
     }
 
     public UpdateBankUploadBlockEntityPacket(FriendlyByteBuf buf) {
         super(buf);
     }
 
-    public static void sendPacket(BlockPos pos, boolean isOwned, boolean dropIfNotBankable) {
-        new UpdateBankUploadBlockEntityPacket(pos, isOwned, dropIfNotBankable).sendToServer();
+    public static void sendPacket(BlockPos pos, boolean isOwned, boolean dropIfNotBankable, int bankAccountNumber) {
+        new UpdateBankUploadBlockEntityPacket(pos, isOwned, dropIfNotBankable, bankAccountNumber).sendToServer();
     }
 
     @Override
@@ -31,6 +33,7 @@ public class UpdateBankUploadBlockEntityPacket extends BankSystemNetworkPacket {
         buf.writeBlockPos(pos);
         buf.writeBoolean(isOwned);
         buf.writeBoolean(dropIfNotBankable);
+        buf.writeInt(bankAccountNumber);
     }
 
     @Override
@@ -38,6 +41,7 @@ public class UpdateBankUploadBlockEntityPacket extends BankSystemNetworkPacket {
         pos = buf.readBlockPos();
         isOwned = buf.readBoolean();
         dropIfNotBankable = buf.readBoolean();
+        bankAccountNumber = buf.readInt();
     }
 
     @Override
@@ -56,5 +60,8 @@ public class UpdateBankUploadBlockEntityPacket extends BankSystemNetworkPacket {
     }
     public boolean isDropIfNotBankable() {
         return dropIfNotBankable;
+    }
+    public int getBankAccountNumber() {
+        return bankAccountNumber;
     }
 }

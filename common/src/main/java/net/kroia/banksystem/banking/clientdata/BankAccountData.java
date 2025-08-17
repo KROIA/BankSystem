@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.clientdata;
 
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.INetworkPayloadEncoder;
 import net.minecraft.network.FriendlyByteBuf;
@@ -97,5 +98,17 @@ public class BankAccountData implements INetworkPayloadEncoder {
             bankData.put(data.itemID, data);
         }
         return new BankAccountData(accountNumber, accountName, accountIcon, creator, users, bankData);
+    }
+
+    public boolean hasPermission(UUID userUUID, int permission)
+    {
+        if (userUUID == null || permission < 0) {
+            return false; // Invalid user UUID or permission
+        }
+        BankUserData user = users.get(userUUID);
+        if (user != null) {
+            return BankPermission.hasPermission(user.permissions, permission); // Check user's permissions
+        }
+        return personalBankOwnerData != null && personalBankOwnerData.userUUID.equals(userUUID); // Personal bank owner has all permissions
     }
 }

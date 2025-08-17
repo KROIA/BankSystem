@@ -1,6 +1,7 @@
 package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.networking.request.BankSelectionScreenDataRequest;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
@@ -65,12 +66,18 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
     private final Screen parent;
     private final UUID playerUUID;
     private final Consumer<Integer> onAccountSelected;
+    private final int permissionFilter;
     public BankAccountSelectionScreen(Screen parent, UUID playerUUID, Consumer<Integer> onAccountSelected)
+    {
+        this(parent, playerUUID, onAccountSelected, BankPermission.getAllPermissions());
+    }
+    public BankAccountSelectionScreen(Screen parent, UUID playerUUID, Consumer<Integer> onAccountSelected, int permissionFilter)
     {
         super(TEXT.TITLE);
         this.parent = parent;
         this.playerUUID = playerUUID;
         this.onAccountSelected = onAccountSelected;
+        this.permissionFilter = permissionFilter;
 
 
         titleLabel = new Label(TEXT.TITLE_LABEL.getString());
@@ -112,6 +119,11 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
     private void onBankAccountsReceived(BankSelectionScreenDataRequest.Output output) {
         accountsListView.removeChilds();
         for(BankAccountData accountData : output.bankAccounts) {
+
+            if(!accountData.hasPermission(playerUUID, permissionFilter)) {
+                continue; // Skip accounts that do not match the permission filter
+            }
+
             AccountElement element = new AccountElement(accountData);
             element.setOnRisingEdge(() -> {
                 onAccountSelected.accept(accountData.accountNumber);
