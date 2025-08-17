@@ -48,6 +48,7 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
                 accountNameLabel.setText(accountData.accountName);
             }
 
+            removeChilds();
             addChild(iconView);
             addChild(accountNameLabel);
             setHeight(20);

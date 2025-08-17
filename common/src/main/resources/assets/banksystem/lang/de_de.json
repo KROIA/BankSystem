@@ -74,6 +74,9 @@
   "gui.banksystem.bank_account_management_item.ask_remove_title": "Konto für {item_name} entfernen",
   "gui.banksystem.bank_account_management_item.ask_remove_message": "Bist du sicher, dass du die Bank für {item_name} entfernen möchtest?\nDer Bankaccount {account_number} wird alle {item_name} in der Bank verlieren!\nDiese Aktion kann nicht rückgängig gemacht werden!",
   "gui.banksystem.bank_account_management_screen.save_changes": "Änderingen speichern",
+  "gui.banksystem.bank_account_management_screen.delete_account": "Konto löschen",
+  "gui.banksystem.bank_account_management_screen.delete_account_ask_popup_title": "Konto: \"{account_number}\" löschen?",
+  "gui.banksystem.bank_account_management_screen.delete_account_ask_popup_message": "Willst du wirklich das Konto:\n\"{account_number}\" löschen?\nAlle Items gehen dabei verloren.",
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Bankkonto eröffnen",
   "gui.banksystem.bank_account_management_screen.add_user": "Benutzer hinzufügen",
 

@@ -258,6 +258,23 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         return getOrCreatePersonalBank(owner.getUUID(), itemID);
     }
 
+    public boolean deleteBankAccount(int accountNumber)
+    {
+        if(bankAccounts.containsKey(accountNumber)) {
+            BankAccount account = bankAccounts.get(accountNumber);
+            if(account.getPersonalBankOwner() != null){
+                error("Cannot delete personal bank account with number: " + accountNumber + ".");
+                return false; // Cannot delete personal bank accounts
+            }
+            bankAccounts.remove(accountNumber);
+            info("Deleted bank account with number: " + accountNumber);
+            return true;
+        } else {
+            warn("No bank account found with number: " + accountNumber);
+        }
+        return false;
+    }
+
 
     public void addUser(@NotNull ServerPlayer player)
     {

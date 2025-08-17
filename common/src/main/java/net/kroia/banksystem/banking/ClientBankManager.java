@@ -116,4 +116,9 @@ public class ClientBankManager implements IClientBankManager {
     public void requestBankAccounts(UUID playerUUID, Consumer<BankSelectionScreenDataRequest.Output> callback) {
         BankSystemNetworking.BANK_SELECTION_SCREEN_DATA_REQUEST.sendRequestToServer(playerUUID, callback);
     }
+
+
+    public void requestDeleteBankAccount(int accountNumber, Consumer<Boolean> callback) {
+        BankSystemNetworking.DELETE_BANK_ACCOUNT_REQUEST.sendRequestToServer(accountNumber, callback);
+    }
 }

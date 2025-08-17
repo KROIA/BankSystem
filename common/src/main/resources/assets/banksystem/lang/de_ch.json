@@ -74,6 +74,9 @@
   "gui.banksystem.bank_account_management_item.ask_remove_title": "Konto für {item_name} entferne",
   "gui.banksystem.bank_account_management_item.ask_remove_message": "Bisch du sicher, dass du d Bank für {item_name} entferne wötsch?\nDe Bankacount {account_number} wird alli {item_name} i de Bank verlüre!\nDas cha nöd rückgängig gmacht werde!",
   "gui.banksystem.bank_account_management_screen.save_changes": "Änderige speichere",
+  "gui.banksystem.bank_account_management_screen.delete_account": "Konto löschä",
+  "gui.banksystem.bank_account_management_screen.delete_account_ask_popup_title": "Konto: \"{account_number}\" löschä?",
+  "gui.banksystem.bank_account_management_screen.delete_account_ask_popup_message": "Wötsch du würkli s Konto:\n\"{account_number}\" löschä?\nAlle Items gönd debi verlore.",
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Bankkonto eröffne",
   "gui.banksystem.bank_account_management_screen.add_user": "Benutzer hinzuefüege",
 

@@ -8,9 +8,11 @@ import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.banksystem.networking.request.UpdateBankAccountRequest;
+import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.BankAccountManagementItem;
 import net.kroia.banksystem.screen.uiElements.BankUserWidget;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
+import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
@@ -34,6 +36,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
 
     private static final Component SAVE_CHANGES = Component.translatable(PREFIX+"save_changes");
+    private static final Component DELETE_ACCOUNT = Component.translatable(PREFIX+"delete_account");
+
     private static final Component CREATE_NEW_BANK = Component.translatable(PREFIX+"create_new_bank");
     private static final Component ADD_USER = Component.translatable(PREFIX+"add_user");
 
@@ -74,6 +78,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private int accountNumber;
     private UserData personalBankOwnerData;
+    private String bankAccountName;
     //private String playerName;
     private final GuiScreen parent;
 
@@ -84,6 +89,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private TextBox accountNameTextBox;
     private CloseButton closeButton;
     private Button saveChangesButton;
+    private Button deleteBankAccountButton;
     private Button createNewBankButton;
     private Button addUserButton;
     private ListView userElementListView;
@@ -101,6 +107,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     public BankAccountManagementScreen(GuiScreen parent, int accountNumber, boolean isAdminMode) {
         super(TITLE);
+        super.setGuiScale(0.8f);
         this.isAdminMode = isAdminMode;
         this.parent = parent;
         this.accountNumber = accountNumber;
@@ -117,6 +124,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private void setupGui(int accountNumber)
     {
         BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber, (bankAccountData) -> {
+            assert bankAccountData != null;
             setupGui(bankAccountData);
         });
     }
@@ -133,6 +141,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             }
         }
         personalBankOwnerData = bankAccountData.personalBankOwnerData;
+        bankAccountName = bankAccountData.accountName;
         this.canManage = (personalBankOwnerData != null && personalBankOwnerData.userUUID.equals(thisPlayerUUID)) || isAdminMode || isEditingPlayer;
 
         bankAccountManagementItems.clear();
@@ -159,6 +168,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             accountNameTextBox = new TextBox();
             accountNameTextBox.setText(data.accountName);
             addElement(accountNameTextBox);
+
+            deleteBankAccountButton = new Button(DELETE_ACCOUNT.getString(), this::onDeleteAccountButtonClicked);
+            addElement(deleteBankAccountButton);
         }
         else {
             accountNameLabel = new Label();
@@ -275,15 +287,17 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
 
         closeButton.setBounds(getWidth() - 20-padding, padding,20,20);
-        int textWidth = getGui().getFont().width(SAVE_CHANGES.getString())+10;
+        int textWidth = closeButton.getTextWidth(SAVE_CHANGES.getString())+10;
         saveChangesButton.setBounds(closeButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
-        textWidth = getGui().getFont().width(CREATE_NEW_BANK.getString())+10;
+
 
         int nameWidth = (width-spacing)/2;
         selectAccountButton.setBounds(padding, padding, nameWidth, 20);
         int accountNameY = selectAccountButton.getBottom()+spacing;
         accountIconButton.setBounds(padding, accountNameY, 20, 20);
         if(canManage) {
+            textWidth = deleteBankAccountButton.getTextWidth(DELETE_ACCOUNT.getString())+10;
+            deleteBankAccountButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
             accountNameTextBox.setBounds(accountIconButton.getRight()+spacing, accountNameY, nameWidth-(accountIconButton.getRight()), 20);
         }else {
             accountNameLabel.setBounds(accountIconButton.getRight()+spacing, accountNameY, nameWidth-(accountIconButton.getRight()), 20);
@@ -296,7 +310,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
         if(isAdminMode)
         {
-            createNewBankButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
+            textWidth = createNewBankButton.getTextWidth(CREATE_NEW_BANK.getString())+10;
+            int xOffset = deleteBankAccountButton!=null?deleteBankAccountButton.getWidth()+spacing:0;
+            createNewBankButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth-xOffset, padding, textWidth, closeButton.getHeight());
         }
     }
 
@@ -373,10 +389,15 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         }
 
         personalBankOwnerData = bankAccountData.personalBankOwnerData;
+        if(personalBankOwnerData != null)
+        {
+            deleteBankAccountButton.setEnabled(false);
+        }
         if(!this.canManage)
         {
             accountNameLabel.setText(bankAccountData.accountName);
         }
+
 
         Map<ItemID, BankData> bankMap = bankAccountData.bankData;
         ArrayList<Pair<ItemID, BankData>> sortedBankAccounts = new ArrayList<>();
@@ -458,6 +479,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         }
 
         this.canManage = isAdminMode || bankAccountData.hasPermission(minecraft.player.getUUID(),BankPermission.MANAGE.getValue());
+        this.personalBankOwnerData = bankAccountData.personalBankOwnerData;
+        this.bankAccountName = bankAccountData.accountName;
         Map<UUID, BankUserWidget> toRemoveUsers = new HashMap<>(bankUserWidgets);
         for(BankUserData userData : bankAccountData.users.values())
         {
@@ -570,7 +593,37 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             itemSelectionScreen.sortItems();
             Minecraft.getInstance().setScreen(itemSelectionScreen);
         }
-
+    }
+    private void onDeleteAccountButtonClicked()
+    {
+        if(!canManage)
+        {
+            error("You do not have permission to delete this bank account.");
+            return;
+        }
+        AskPopupScreen askPopupScreen = new AskPopupScreen(
+                this,
+                ()->{
+                    // delete
+                    getBankManager().requestDeleteBankAccount(accountNumber, (success) -> {
+                        if(success)
+                        {
+                            info("Bank account deleted successfully.");
+                            onClose();
+                        }
+                        else
+                        {
+                            error("Failed to delete bank account.");
+                        }
+                    });
+                },
+                ()->{},
+                BankSystemTextMessages.getDeleteAccountAskPopupTitleMessage(bankAccountName),
+                BankSystemTextMessages.getDeleteAccountAskPopupMessage(bankAccountName)
+        );
+        askPopupScreen.setSize(400,100);
+        askPopupScreen.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
+        minecraft.setScreen(askPopupScreen);
     }
 
     @Override

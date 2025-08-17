@@ -404,6 +404,22 @@ public class BankSystemTextMessages {
         return msg;
     }
 
+    private static final Component DELETE_ACCOUNT_ASK_POPUP_TITLE = Component.translatable("gui."+BankSystemMod.MOD_ID+".bank_account_management_screen.delete_account_ask_popup_title");
+    public static String getDeleteAccountAskPopupTitleMessage(String accountName)
+    {
+        String msg = DELETE_ACCOUNT_ASK_POPUP_TITLE.getString();
+        msg = replaceVariable(msg, Variables.ACCOUNT, accountName);
+        return msg;
+    }
+    private static final Component DELETE_ACCOUNT_ASK_POPUP_MESSAGE = Component.translatable("gui."+BankSystemMod.MOD_ID+".bank_account_management_screen.delete_account_ask_popup_message");
+    public static String getDeleteAccountAskPopupMessage(String accountName)
+    {
+        String msg = DELETE_ACCOUNT_ASK_POPUP_MESSAGE.getString();
+        msg = replaceVariable(msg, Variables.ACCOUNT, accountName);
+        return msg;
+    }
+
+
     private static final Component BANK_ACCOUNT_MANAGEMENT_BANK_OWNER = Component.translatable("gui."+BankSystemMod.MOD_ID+".bank_account_management_item.account_number");
     public static String getBankAccountManagementBankOwnerMessage(int accountNumber)
     {
