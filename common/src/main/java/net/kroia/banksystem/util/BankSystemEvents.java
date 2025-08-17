@@ -1,13 +1,24 @@
 package net.kroia.banksystem.util;
 
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.api.IBankSystemEvents;
-import net.kroia.banksystem.banking.eventdata.CloseItemBankEventData;
+import net.kroia.banksystem.banking.User;
 import net.kroia.modutilities.event.DataEvent;
 import net.kroia.modutilities.event.Signal;
 
 public class BankSystemEvents implements IBankSystemEvents {
 
-    public final DataEvent<CloseItemBankEventData> CLOSE_ITEM_BANK_EVENT = new DataEvent<>();
+    public final DataEvent<User> USER_ADDED = new DataEvent<>();
+    public final DataEvent<User> USER_REMOVED = new DataEvent<>();
+
+
+
+
+    public final DataEvent<IBankAccount> BANK_ACCOUNT_CREATED = new DataEvent<>();
+    public final DataEvent<IBankAccount> BANK_ACCOUNT_DELETED = new DataEvent<>();
+
+
+
 
     public final Signal BANK_DATA_SAVED_TO_FILE = new Signal();
     public final Signal BANK_DATA_LOADED_FROM_FILE = new Signal();
@@ -18,16 +29,40 @@ public class BankSystemEvents implements IBankSystemEvents {
 
     @Override
     public void removeListeners() {
-        CLOSE_ITEM_BANK_EVENT.removeListeners();
+        USER_ADDED.removeListeners();
+        USER_REMOVED.removeListeners();
+        BANK_ACCOUNT_CREATED.removeListeners();
+        BANK_ACCOUNT_DELETED.removeListeners();
         BANK_DATA_SAVED_TO_FILE.removeListeners();
         BANK_DATA_LOADED_FROM_FILE.removeListeners();
         SETTINGS_SAVED_TO_FILE.removeListeners();
         SETTINGS_LOADED_FROM_FILE.removeListeners();
     }
 
+
     @Override
-    public DataEvent<CloseItemBankEventData> getCloseItemBankEvent() {
-        return CLOSE_ITEM_BANK_EVENT;
+    public DataEvent<User> getUserAddedEvent()
+    {
+        return USER_ADDED;
+    }
+
+    @Override
+    public DataEvent<User> getUserRemovedEvent()
+    {
+        return USER_REMOVED;
+    }
+
+
+    @Override
+    public DataEvent<IBankAccount> getBankAccountCreatedEvent()
+    {
+        return BANK_ACCOUNT_CREATED;
+    }
+
+    @Override
+    public DataEvent<IBankAccount> getBankAccountDeletedEvent()
+    {
+        return BANK_ACCOUNT_DELETED;
     }
 
     @Override

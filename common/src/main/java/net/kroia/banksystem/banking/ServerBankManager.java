@@ -56,14 +56,6 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     {
 
     }
-    public static ServerBankManager createFromTag(CompoundTag tag)
-    {
-        ServerBankManager manager = new ServerBankManager();
-        if(!manager.load(tag)) {
-            return null; // Invalid data
-        }
-        return manager;
-    }
 
 
     @Override
@@ -149,16 +141,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     @Override
     public void addUser(@NotNull ServerPlayer player)
     {
-        UUID userUUID = player.getUUID();
-        String userName = player.getName().getString();
-        if(userMap.containsKey(userUUID)) {
-            warn("User with UUID " + userUUID + " already exists. Not adding again.");
-            userMap.get(userUUID);
-            return;
-        }
-        User user = new User(userUUID, userName, true);
-        userMap.put(userUUID, user);
-        info("Added new user: " + userName + " with UUID: " + userUUID);
+        addUser(new User(player.getUUID(), player.getName().getString(), true));
     }
     @Override
     public void addUser(@NotNull User user)
@@ -170,22 +153,25 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         }
         userMap.put(userUUID, user);
         info("Added new user: " + user.getName() + " with UUID: " + userUUID);
+        BACKEND_INSTANCES.SERVER_EVENTS.USER_ADDED.notifyListeners(user);
     }
     @Override
     public boolean removeUser(UUID userUUID)
     {
         if(userMap.containsKey(userUUID)) {
-            userMap.remove(userUUID);
+            User user = userMap.remove(userUUID);
             for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
                 BankAccount account = entry.getValue();
                 if(account.hasUser(userUUID)) {
                     account.removeUser(userUUID);
                     if(!account.hasAnyUser()) {
-                        bankAccounts.remove(entry.getKey());
-                        info("Removed empty bank account with number: " + entry.getKey());
+                        int accountNr = entry.getKey();
+                        deleteBankAccount(accountNr); // Remove the account if it has no users left
+                        info("Removed empty bank account with number: " + accountNr);
                     }
                 }
             }
+            BACKEND_INSTANCES.SERVER_EVENTS.USER_REMOVED.notifyListeners(user);
             info("Removed user with UUID: " + userUUID);
             return true;
         } else {
@@ -355,6 +341,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
                 return false; // Cannot delete personal bank accounts
             }
             bankAccounts.remove(accountNumber);
+            BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_DELETED.notifyListeners(account);
             info("Deleted bank account with number: " + accountNumber);
             return true;
         } else {

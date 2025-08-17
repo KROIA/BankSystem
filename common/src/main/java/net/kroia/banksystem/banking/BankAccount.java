@@ -68,13 +68,17 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         if (accountNumber <= 0) {
             return null; // Invalid account number
         }
-        return new BankAccount(accountNumber);
+        BankAccount acc = new BankAccount(accountNumber);
+        BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_CREATED.notifyListeners(acc); // Notify listeners that a new bank account has been created
+        return acc; // Return the newly created bank account
     }
     public static @Nullable BankAccount create(int accountNumber, List<BankUser> users, Map<ItemID, Bank> banks) {
         if (accountNumber <= 0 || users == null || banks == null) {
             return null; // Invalid account number or data
         }
-        return new BankAccount(accountNumber, null, users, banks);
+        BankAccount acc = new BankAccount(accountNumber, null, users, banks);
+        BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_CREATED.notifyListeners(acc); // Notify listeners that a new bank account has been created
+        return acc; // Return the newly created bank account
     }
     public static @Nullable BankAccount createPersonal(int accountNumber, User user, float startMoneyBalance) {
         if (user == null || accountNumber <= 0) {
@@ -87,7 +91,9 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         }
         Map<ItemID, Bank> banks = new HashMap<>();
         banks.put(MoneyItem.getItemID(), moneyBank); // Add money bank to the account
-        return new BankAccount(accountNumber, user, new ArrayList<>(), banks);
+        BankAccount acc = new BankAccount(accountNumber, user, new ArrayList<>(), banks);
+        BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_CREATED.notifyListeners(acc); // Notify listeners that a new bank account has been created
+        return acc; // Return the newly created bank account
     }
     public static @Nullable BankAccount createFromTag(CompoundTag tag) {
         BankAccount account = new BankAccount();

@@ -1,15 +1,36 @@
 package net.kroia.banksystem.api;
 
-import net.kroia.banksystem.banking.eventdata.CloseItemBankEventData;
+import net.kroia.banksystem.banking.User;
 import net.kroia.modutilities.event.DataEvent;
 import net.kroia.modutilities.event.Signal;
 
 public interface IBankSystemEvents {
 
+
     /**
-     * Event triggered when an item bank is closed, providing data about lost items.
+     * Gets the event that is emitted when a user is added to the bank manager
+     * @return The user added event.
      */
-    DataEvent<CloseItemBankEventData> getCloseItemBankEvent();
+    DataEvent<User> getUserAddedEvent();
+
+    /**
+     * Gets the event that is emitted when a user is removed from the bank manager
+     * @return The user removed event.
+     */
+    DataEvent<User> getUserRemovedEvent();
+
+
+    /**
+     * Gets the event that is emitted when a bank account is created.
+     * @return The bank account created event.
+     */
+    DataEvent<IBankAccount> getBankAccountCreatedEvent();
+
+    /**
+     * Gets the event that is emitted when a bank account is removed
+     * @return The bank account updated event.
+     */
+    DataEvent<IBankAccount> getBankAccountDeletedEvent();
 
     /**
      * Signal gets emitted when bank data is saved to a file.
