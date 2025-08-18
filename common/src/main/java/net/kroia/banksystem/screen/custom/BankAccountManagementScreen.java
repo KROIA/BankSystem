@@ -161,6 +161,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     }
     private void setupCommon(BankAccountData data)
     {
+        saveChangesButton = new Button(SAVE_CHANGES.getString(), this::onSaveChangesButtonClicked);
+        addUserButton = new Button(ADD_USER.getString(), this::onAddUserButtonClicked);
+
         accountIconButton = new ItemViewButton(data.accountIcon);
         addElement(accountIconButton);
         if(canManage) {
@@ -176,11 +179,14 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             accountNameLabel = new Label();
             accountNameLabel.setText(data.accountName);
             addElement(accountNameLabel);
+
+            addUserButton.setEnabled(false);
+            saveChangesButton.setEnabled(false);
         }
 
         selectAccountButton = new Button(BankAccountSelectionScreen.TEXT.SELECT_ACCOUNT_BUTTON.getString());
         selectAccountButton.setOnFallingEdge(() -> {
-            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, minecraft.player.getUUID(), (accountNumber) -> {
+            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, Minecraft.getInstance().player.getUUID(), (accountNumber) -> {
                 if(!screenIsOpen)
                     return;
                 this.accountNumber = accountNumber;
@@ -188,8 +194,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             });
             minecraft.setScreen(selectionScreen);
         });
-        saveChangesButton = new Button(SAVE_CHANGES.getString(), this::onSaveChangesButtonClicked);
-        addUserButton = new Button(ADD_USER.getString(), this::onAddUserButtonClicked);
+
 
         closeButton = new CloseButton(this::onClose);
         closeButton.setIdleColor(0xFFf55a42);

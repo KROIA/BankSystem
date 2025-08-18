@@ -21,7 +21,13 @@ Admins can define which items can be stored in the bank in order to prevent play
 * [Blocks](#blocks)
 * [Items](#items)
 * [Usage](#usage)
-    * [For server player / single player](#for-server-player--single-player)
+    * [Bank Terminal Block](#bank-terminal-block)
+    * [ATM Block](#atm-block)
+    * [Interaction for automation systems](#interaction-for-automation-systems)
+      * [Bank Upload Block](#bank-upload-block)
+      * [Bank Download Block](#bank-download-block)
+    * [Shared bank account](#shared-bank-account)
+    * [Creating a new bank account](#creating-a-new-bank-account)
     * [For admins / single player](#for-admins--single-player)
 * [Commands](#commands)
 
@@ -177,7 +183,7 @@ Right click on a <b>Terminal Block</b> using a <b>ATM Software</b> to create thi
 <b>Bank Upload Block</b><br>
 Used to send items to a specified bank account.<br>
 Change its settings by right clicking on it<br>
-Once the block is connected to a bankaccount, other players can't access it any more.<br>
+Once the block is connected to a bank account, other players can't access it any more.<br>
 Can be connected to Pipes and hoppers.<br>
 Needs to be powered by redstone to send items to the bank.<br>
 6 Iron nuggets<br>
@@ -197,7 +203,7 @@ Needs to be powered by redstone to send items to the bank.<br>
 <b>Bank Download Block</b><br>
 Used to receive items from a specified bank account.<br>
 Change its settings by right clicking on it<br>
-Once the block is connected to a bankaccount, other players can't access it any more.<br>
+Once the block is connected to a bank account, other players can't access it any more.<br>
 Can be connected to Pipes and hoppers.<br>
 Needs to be powered by redstone to receive items to the bank.<br>
 6 Iron nuggets<br>
@@ -368,6 +374,8 @@ The admin is responsible to bring money in to circulation.<br>
 | /bank                                                						| Show bank balance (money and items)      		|  |
 | /bank enableNotifications                                                 | Enables bank notifications on transactions    |  |
 | /bank disableNotifications                                                | Disables bank notifications on transactions   |  | 
+| /bank managementGUI                                                       | Opens the management window to manage own bank accounts |  |
+| /bank create [accountname]                                                | Create a new bank account with the given name |  |
 | /bank [username] bankManagementGUI                                		| Open the bank [management window](#managing-players-bank-account) for the specific player	| :heavy_check_mark: |
 | /bank [username] show                                						| Show bank balance of another player      		| :heavy_check_mark: |
 | /bank [username] create [itemID] [amount]            						| Create a bank for another player         		| :heavy_check_mark: |
@@ -474,7 +482,54 @@ Once the block is configured, a redstone signal triggers the block to work<br>
 </tr>
 </table>
 
+---
+### Shared bank account
+<table>
+<tr>
+<td width = 500 valign="top">
+A player can be added to a bank account in the <b>managementGUI</b>.<br>
+Open it using the command:<br>
+<b>/bank managementGUI</b><br>
+Permissions for each player can be changed as shown in the image.<br>
+- <b>Allowed to deposit</b>:<br>If checked, the player is allowed to deposit items to the bank account.<br>
+- <b>Allowed to withdraw</b>:<br>If checked, the player is allowed to use items from that bank account.<br>
+- <b>Allowed to manage</b>:<br>If checked, the player is allowed to:<br>
+   - add or remove other players.<br>
+   - change permissions of other players in that bank account.<br>
+   - change the account name.<br>
+   - change the account icon.<br>
+   - delete the account.<br>
+<br>
+A Bank account can not be deleted if it is a personal bank account. Each player has one personal bank account.<br>
+Only manually create bank accounts can be deleted.
 
+</td>
+<td width = 600>
+<div align="center">
+    <img src="documentation/images/addToOwnBankaccount.gif" width=600> 
+</div>
+</td>
+</tr>
+</table>
+
+---
+
+### Creating a new bank account
+<table>
+<tr>
+<td width = 500 valign="top">
+A player can create a bank account using the command:<br>
+<b>/bank create [accountname]</b><br>
+After the bank has been created, the ManagementGUI opens.<br>
+
+</td>
+<td width = 600>
+<div align="center">
+    <img src="documentation/images/createBankaccount.gif" width=600> 
+</div>
+</td>
+</tr>
+</table>
 
 
 ---

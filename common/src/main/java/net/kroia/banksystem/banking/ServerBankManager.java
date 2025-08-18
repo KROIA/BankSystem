@@ -522,9 +522,10 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     public double getRealMoneyCirculation()
     {
         double total = 0;
+        ItemID moneyItemID = MoneyItem.getItemID();
         for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
             BankAccount account = entry.getValue();
-            IBank moneyBank = account.getBank(MoneyItem.getItemID());
+            IBank moneyBank = account.getBank(moneyItemID);
             if(moneyBank != null) {
                 total += moneyBank.getRealTotalBalance();
             }
@@ -535,9 +536,10 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     public double getRealLockedMoneyCirculation()
     {
         double total = 0;
+        ItemID moneyItemID = MoneyItem.getItemID();
         for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
             BankAccount account = entry.getValue();
-            IBank moneyBank = account.getBank(MoneyItem.getItemID());
+            IBank moneyBank = account.getBank(moneyItemID);
             if(moneyBank != null) {
                 total += moneyBank.getRealLockedBalance();
             }

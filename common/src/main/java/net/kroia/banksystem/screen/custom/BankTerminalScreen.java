@@ -154,11 +154,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         selectAccountButton = new BankAccountSelectionScreen.AccountButton();
         selectAccountButton.setOnFallingEdge(() -> {
-            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, playerUUID, (accountNumber) -> {
-                if(!screenIsOpen)
-                    return;
-                this.selectedBankAccountNr = accountNumber;
-            });
+            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, playerUUID, this::onBankaccountSelected);
             minecraft.setScreen(selectionScreen);
         });
 
@@ -258,7 +254,11 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             return;
         if(minimalBankUserData == null)
         {
-            error("Failed to update bank data for player: " + playerName + ". MinimalBankUserData is null.");
+            error("Failed to update bank data for player: " + playerName + ". BankAccountData is null.");
+            getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), (data)->{
+                if(data != null)
+                    selectedBankAccountNr = data.accountNumber;
+            });
             return;
         }
         selectAccountButton.setAccountData(minimalBankUserData);
@@ -367,5 +367,14 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             }
         }
         UpdateBankTerminalBlockEntityPacket.sendPacketToServer(this.menu.getBlockPos(), itemTransferToMarketAmounts, false, selectedBankAccountNr);
+    }
+    private void onBankaccountSelected(int accountNumber)
+    {
+        if(!screenIsOpen)
+            return;
+        this.selectedBankAccountNr = accountNumber;
+        bankElements.clear();
+        itemListView.removeChilds();
+        updateBankList();
     }
 }

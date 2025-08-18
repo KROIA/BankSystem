@@ -110,7 +110,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the server side
     public static void onServerStart(MinecraftServer server) {
         INSTANCES.SERVER_SETTINGS = new BankSystemModSettings();
-        INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::info);
+        INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
 
         INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
         INSTANCES.SERVER_BANK_MANAGER = new ServerBankManager();

@@ -213,7 +213,7 @@ public class BankSystemCommands {
         // /bank                                                - Show bank balance (money and items)
         // /bank enableNotifications                            - Enables bank notifications on transactions
         // /bank disableNotifications                           - Disables bank notifications on transactions
-        // /bank managementGUI                                  - Opens the management window to manage own ban accounts
+        // /bank managementGUI                                  - Opens the management window to manage own bank accounts
         // /bank create <accountname>                           - Create a new bank account with the given name
         // /bank settingsGUI                                    - Open bank settings GUI to manage the bankable items
         // /bank <username> show                                - Show bank balance of a player
@@ -224,7 +224,6 @@ public class BankSystemCommands {
         // /bank allowItemInHand                                - Makes the item in the player's hand available for bank accounts
         // /bank disallowItem <itemID>                          - Makes the itemID unavailable for bank accounts
         // /bank disallowItemInHand                             - Makes the item in the player's hand unavailable for bank accounts
-        // /bank bankManagementGUI                              - Open bankManagement GUI
         // /bank setStartingBalance                             - Set the starting money balance for new players
         // /bank setItemTransferTickInterval                    - Set the amount of ticks it uses for a item to be transferred in the bank terminal block. If set to 0, it will be instant.
         // /bank save                                           - Save all bank data and settings
