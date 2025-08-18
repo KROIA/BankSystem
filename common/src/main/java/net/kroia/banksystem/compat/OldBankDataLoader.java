@@ -113,6 +113,19 @@ public class OldBankDataLoader {
                 }
             }
         }
+
+        var alsoAdd = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get().stream()
+                .map(item -> item.itemID)
+                .toList();
+
+        for(ItemID itemID : alsoAdd)
+        {
+            if(!items.containsKey(itemID)) {
+                items.put(itemID, 1); // Add the item with a default scale factor of 1
+            }
+        }
+
+
         // Load the items into the new system
         for (Map.Entry<ItemID, Integer> entry : items.entrySet()) {
             ItemID itemID = entry.getKey();
@@ -151,9 +164,11 @@ public class OldBankDataLoader {
                     long lockedBalance = bankData.lockedBalance;
 
                     IBank bank = account.createBank(bankData.itemID, 0);
-                    bank.setBalance(balance);
-                    if(lockedBalance > 0) {
-                        bank.lockAmount(lockedBalance);
+                    if(bank != null) {
+                        bank.setBalance(balance + lockedBalance);
+                        if (lockedBalance > 0) {
+                            bank.lockAmount(lockedBalance);
+                        }
                     }
                 } else {
                     BACKEND_INSTANCES.LOGGER.error("Invalid itemID for user: " + accountData.playerName);
