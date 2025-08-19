@@ -253,8 +253,8 @@ public class ATMScreen extends BankSystemGuiScreen {
 
     @Override
     protected void updateLayout(Gui gui) {
-        int width = this.width;
-        int height = this.height;
+        int width = getWidth();
+        int height = getHeight();
 
         int padding = 10;
         int spacing = 5;
