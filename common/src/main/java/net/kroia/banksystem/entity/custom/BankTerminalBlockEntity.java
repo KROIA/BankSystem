@@ -15,7 +15,7 @@ import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;

@@ -1,8 +1,10 @@
 package net.kroia.banksystem.compat;
 
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.banking.BankAccount;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
@@ -86,6 +88,88 @@ public class OldBankDataLoader {
 
     public boolean load(CompoundTag tag)
     {
+        if(!tag.contains("version"))
+        {
+            return load_vLessThan_1_5_0(tag);
+        }
+        int version = tag.getInt("version");
+        if(version == 1)
+        {
+            return load_vLessThan_1_5_0_ALPHA_3(tag);
+        }
+        return false;
+    }
+
+    public boolean load_vLessThan_1_5_0_ALPHA_3(CompoundTag tag)
+    {
+        Map<ItemID, Integer> itemFractionScaleFactor = new HashMap<>();
+        Map<UUID, User> userMap = new HashMap<>();
+        Map<Integer, BankAccount> bankAccounts = new HashMap<>();
+        int nextAccountNumber = tag.getInt("nextAccountNumber");
+        manager.load_compatibilityMode_setNextAccountNumber(nextAccountNumber);
+
+        // Load item cent scale factors
+        if(tag.contains("itemCentScaleFactors")) {
+            ListTag itemScaleFactors = tag.getList("itemCentScaleFactors", 10);
+            for (int i = 0; i < itemScaleFactors.size(); i++) {
+                CompoundTag pairTag = itemScaleFactors.getCompound(i);
+                if(!pairTag.contains("itemID") || !pairTag.contains("scaleFactor")) {
+                    BACKEND_INSTANCES.LOGGER.warn("Invalid item scale factor tag: " + pairTag);
+                    continue; // Skip invalid entries
+                }
+                ItemID itemID = ItemID.createFromTag(pairTag.getCompound("itemID"));
+                int scaleFactor = pairTag.getInt("scaleFactor");
+                itemFractionScaleFactor.put(itemID, scaleFactor);
+            }
+        }
+        else {
+            // Check if all allowed items have a scale factor
+            List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEM_IDS.get();
+            for (var el : allowedItems) {
+                if(itemFractionScaleFactor.containsKey(el.itemID))
+                    continue;
+                itemFractionScaleFactor.put(el.itemID, el.itemFractionScaleFactor);
+            }
+        }
+        manager.load_compatibilityMode_setItemFractionScaleFactors(itemFractionScaleFactor);
+
+
+
+        // Load users
+        if(tag.contains("users")) {
+            ListTag userList = tag.getList("users", 10);
+            userMap.clear();
+            for (int i = 0; i < userList.size(); i++) {
+                CompoundTag userTag = userList.getCompound(i);
+                User user = User.createFromTag(userTag);
+                if(user != null) {
+                    userMap.put(user.getUUID(), user);
+                } else {
+                    BACKEND_INSTANCES.LOGGER.warn("Failed to load user from tag: " + userTag);
+                }
+            }
+        }
+        manager.load_compatibilityMode_setUsers(userMap);
+
+        // Load bank accounts
+        if(tag.contains("bankAccounts")) {
+            ListTag accountsList = tag.getList("bankAccounts", 10);
+            bankAccounts.clear();
+            for (int i = 0; i < accountsList.size(); i++) {
+                CompoundTag accountTag = accountsList.getCompound(i);
+                BankAccount account = BankAccount.createFromTag(accountTag);
+                if(account != null) {
+                    bankAccounts.put(account.getAccountNumber(), account);
+                } else {
+                    BACKEND_INSTANCES.LOGGER.warn("Failed to load bank account from tag: " + accountTag);
+                }
+            }
+        }
+        return manager.load_compatibilityMode_setBankAccounts(bankAccounts);
+    }
+
+    public boolean load_vLessThan_1_5_0(CompoundTag tag)
+    {
         List<AccountData> accountDataList = new ArrayList<>();
         boolean success = true;
         ListTag bankElements = tag.getList("users", Tag.TAG_COMPOUND);
@@ -114,14 +198,12 @@ public class OldBankDataLoader {
             }
         }
 
-        var alsoAdd = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get().stream()
-                .map(item -> item.itemID)
-                .toList();
+        var alsoAdd = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEM_IDS.get().stream().toList();
 
-        for(ItemID itemID : alsoAdd)
+        for(var item : alsoAdd)
         {
-            if(!items.containsKey(itemID)) {
-                items.put(itemID, 1); // Add the item with a default scale factor of 1
+            if(!items.containsKey(item.itemID)) {
+                items.put(item.itemID, item.itemFractionScaleFactor); // Add the item with a default scale factor of 1
             }
         }
 

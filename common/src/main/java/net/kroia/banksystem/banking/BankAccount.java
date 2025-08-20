@@ -14,7 +14,7 @@ import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.JsonUtilities;
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import org.jetbrains.annotations.Nullable;

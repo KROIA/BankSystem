@@ -139,6 +139,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
     public BankSystemSettingScreen() {
         super(TEXT.TITLE);
         instance = this;
+        setGuiScale(0.5f);
         //RequestPotentialBankItemIDsPacket.sendRequest();
 
 

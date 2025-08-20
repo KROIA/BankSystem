@@ -174,7 +174,8 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         itemListView = new VerticalListView(0, 0, 100, 100);
         itemListView.setLayout(new LayoutVertical(0,0,true, false));
-        inventoryView = new ContainerView<>(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 176, 166));
+        inventoryView = new ContainerView<>(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 256, 256));
+        inventoryView.setSize(176, 166);
 
         addElement(selectAccountButton);
         addElement(removeEmptyBankAccountsButton);

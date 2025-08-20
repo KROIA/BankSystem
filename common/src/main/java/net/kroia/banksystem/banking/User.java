@@ -5,7 +5,7 @@ import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.modutilities.JsonUtilities;
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 

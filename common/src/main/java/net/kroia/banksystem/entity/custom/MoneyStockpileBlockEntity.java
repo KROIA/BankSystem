@@ -3,7 +3,7 @@ package net.kroia.banksystem.entity.custom;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;

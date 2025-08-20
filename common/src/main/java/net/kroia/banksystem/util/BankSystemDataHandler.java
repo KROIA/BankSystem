@@ -4,26 +4,32 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
-import net.kroia.modutilities.DataPersistence;
+import net.kroia.banksystem.compat.OldBankDataLoader;
 import net.kroia.modutilities.ServerPlayerUtilities;
+import net.kroia.modutilities.persistence.DataPersistence;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.io.IOException;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.HashMap;
+import java.util.Map;
 
 
 public class BankSystemDataHandler extends DataPersistence implements IBankSystemDataHandler {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
-    private final String BANK_DATA_FILE_NAME = "Bank_data.dat";
+    private final String BANK_DATA_FOLDER_NAME = "Bank_data";
+    private final String META_DATA_FILE_NAME = "Meta_data.nbt";
     private final String BANK_SETTINGS_FILE_NAME = "settings.json";
     private long tickCounter = 0;
     private int lastPlayerCount = 0;
     private static boolean globalSettingsLoaded = false;
     private static boolean bankDataLoaded = false;
     public BankSystemDataHandler() {
-        super(JsonFormat.PRETTY, NbtFormat.UNCOMPRESSED, Paths.get("Finance/BankSystem"));
+        super(JsonFormat.PRETTY, NbtFormat.COMPRESSED, Paths.get("Finance/BankSystem"));
         bankDataLoaded = false;
         globalSettingsLoaded = false;
         setLogger(this::error, this::error, this::info, this::warn);
@@ -73,6 +79,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     {
         debug("Saving BankSystem Mod data...");
         boolean success = true;
+        success &= save_metadata();
         success &= save_globalSettings();
         success &= save_bank();
 
@@ -90,6 +97,50 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     {
         debug("Loading BankSystem Mod data...");
         boolean success = true;
+        success &= load_metadata();
+        boolean loadInCompatibilityMode = !success;
+
+        // check if file exists
+        loadInCompatibilityMode |= fileExists(getAbsoluteSavePath("Bank_data.dat"));
+
+
+        if(loadInCompatibilityMode)
+        {
+            success = true;
+            // load in compatibility mode
+            info("Loading BankSystem Mod data in compatibility mode. This is only needed if you updated the mod to a newer version and the old data is not compatible with the new version.");
+            success &= load_bank_compatibilityMode();
+
+            // delete old settings file
+            Path oldSettingsFilePath = getAbsoluteSavePath("settings.dat");
+            if(fileExists(oldSettingsFilePath)) {
+                try {
+                    Files.delete(oldSettingsFilePath);
+                    info("Deleted old settings file: " + oldSettingsFilePath);
+                } catch (IOException e) {
+                    error("Failed to delete old settings file: " + oldSettingsFilePath, e);
+                }
+            }
+            Path potentialBankableItemsFile = getAbsoluteSavePath("PotentialBankableItems.json");
+            if(fileExists(potentialBankableItemsFile)) {
+                try {
+                    Files.delete(potentialBankableItemsFile);
+                    info("Deleted old potential bankable items file: " + potentialBankableItemsFile);
+                } catch (IOException e) {
+                    error("Failed to delete old potential bankable items file: " + potentialBankableItemsFile, e);
+                }
+            }
+
+            success &= save_globalSettings(getGlobalSettingsFilePath());
+
+            if(success) {
+                debug("BankSystem Mod data loaded successfully.");
+            }
+            else
+                error("Failed to load BankSystem Mod data.");
+            return success;
+        }
+
         Path settingsFilePath = getGlobalSettingsFilePath();
         if(!fileExists(settingsFilePath)) {
             warn("Bank settings file not found, creating default settings file.");
@@ -98,6 +149,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         else
             success &= load_globalSettings(settingsFilePath);
         success &= load_bank();
+
 
 
         if(success) {
@@ -112,12 +164,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public boolean save_bank()
     {
         boolean success = true;
-        CompoundTag data = new CompoundTag();
-        CompoundTag bankData = new CompoundTag();
+        Map<String, ListTag> bankData = new HashMap<>();
         success = BACKEND_INSTANCES.SERVER_BANK_MANAGER.save(bankData);
-        data.put("banking", bankData);
-        data.putString("version", BankSystemMod.VERSION);
-        saveDataCompound(getAbsoluteSavePath(BANK_DATA_FILE_NAME), data);
+        saveDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME), bankData);
         if(success)
         {
             BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_SAVED_TO_FILE.notifyListeners();
@@ -128,18 +177,47 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     @Override
     public boolean load_bank()
     {
-        CompoundTag data = readDataCompound(getAbsoluteSavePath(BANK_DATA_FILE_NAME));
-        if(data == null)
-            return false;
-        if(!data.contains("banking"))
-            return false;
+        Map<String, ListTag> bankData = readDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME));
+        if(bankData == null || bankData.isEmpty() || !bankData.containsKey("itemCentScaleFactors")) {
+            BACKEND_INSTANCES.SERVER_BANK_MANAGER.setupDefaultItems();
+            //return false;
+        }
 
-        CompoundTag bankData = data.getCompound("banking");
-        String version = data.getString("version");
-        if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.load(bankData))
+        if(bankData != null && BACKEND_INSTANCES.SERVER_BANK_MANAGER.load(bankData))
         {
             bankDataLoaded = true;
             BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.notifyListeners();
+            return true;
+        }
+        bankDataLoaded = false;
+        return false;
+    }
+    public boolean load_bank_compatibilityMode()
+    {
+        CompoundTag data = readDataCompound(getAbsoluteSavePath("Bank_data.dat"));
+        if(data == null) {
+            BACKEND_INSTANCES.SERVER_BANK_MANAGER.setupDefaultItems();
+            return false;
+        }
+        if(!data.contains("banking")) {
+            BACKEND_INSTANCES.SERVER_BANK_MANAGER.setupDefaultItems();
+            return false;
+        }
+
+        CompoundTag bankData = data.getCompound("banking");
+
+        OldBankDataLoader oldBankDataLoader = new OldBankDataLoader(BACKEND_INSTANCES.SERVER_BANK_MANAGER);
+        if(oldBankDataLoader.load(bankData))
+        {
+            bankDataLoaded = true;
+            BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.notifyListeners();
+
+            // delete the file
+            try {
+                Files.deleteIfExists(getAbsoluteSavePath("Bank_data.dat"));
+            } catch (IOException e) {
+                error("Failed to delete old bank data file.", e);
+            }
             return true;
         }
         bankDataLoaded = false;
@@ -180,7 +258,102 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     {
         return getAbsoluteSavePath(BANK_SETTINGS_FILE_NAME);
     }
+    public Path getMetaDataFilePath()
+    {
+        return getAbsoluteSavePath(META_DATA_FILE_NAME);
+    }
 
+    public boolean save_metadata()
+    {
+        CompoundTag data = new CompoundTag();
+        data.putString("version", BankSystemMod.VERSION);
+        // Save metadata to a separate file
+        return saveDataCompound(getMetaDataFilePath(), data);
+    }
+    public boolean load_metadata()
+    {
+        CompoundTag data = readDataCompound(getMetaDataFilePath());
+        if(data == null)
+        {
+            boolean backupSuccess = true;
+            // copy stockmarket folder to a backup folder
+            Path backupPath = getAbsoluteSavePath("../BankSystemBackup_" + System.currentTimeMillis());
+            // create path
+            if(!createFolder(backupPath)) {
+                error("Failed to create backup folder: " + backupPath);
+                backupSuccess = false;
+            }
+            // copy folder
+            Path bankSystemFolder = getAbsoluteSavePath();
+            try{
+                copyFolder(bankSystemFolder, backupPath);
+            }catch (IOException e) {
+                error("Failed to copy BankSystem folder to backup folder: " + backupPath, e);
+                backupSuccess = false;
+            }
+            String msg = "Market data file is missing version information. This means you updated the mod to a newer version.\n";
+            if(backupSuccess)
+                msg += "To prevent losing the save with the old bank data, a copy is created at:\n" + backupPath + "\n";
+            else {
+                msg += "The backup folder could not be created.";
+            }
+            error(msg);
+            if(backupSuccess)
+            {
+                /*// Delete all files and paths in the market data folder recursively
+                try {
+                    deleteFolderContents(getAbsoluteSavePath());
+                } catch (IOException e) {
+                    error("Failed to delete old banksystem data files.", e);
+                }*/
+            }
+            return false;
+        }
+        return true;
+    }
+
+
+
+    public static void copyFolder(Path source, Path target) throws IOException {
+        Files.walkFileTree(source, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                Path targetDir = target.resolve(source.relativize(dir));
+                if (!Files.exists(targetDir)) {
+                    Files.createDirectories(targetDir);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Path targetFile = target.resolve(source.relativize(file));
+                Files.copy(file, targetFile, StandardCopyOption.REPLACE_EXISTING);
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+    public static void deleteFolderContents(Path folder) throws IOException {
+        if (!Files.isDirectory(folder)) {
+            throw new IllegalArgumentException("Provided path is not a directory: " + folder);
+        }
+
+        Files.walkFileTree(folder, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                if (!dir.equals(folder)) {
+                    Files.delete(dir); // delete subdirectory
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
 
 
 

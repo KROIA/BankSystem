@@ -138,7 +138,7 @@ public final class BankSystemModSettings extends ModSettings {
         }
         public final Setting<Integer> ITEM_TRANSFER_TICK_INTERVAL = registerSetting("ITEM_TRANSFER_TICK_INTERVAL", 2, Integer.class); // Interval in ticks for item transfer operations
 
-        public final Setting<List<ItemIDAndScaleFactor>> ALLOWED_ITEM_IDS = registerSetting("ALLOWED_ITEM_IDS",
+        public final Setting<List<ItemIDAndScaleFactor>> INITIAL_ALLOWED_ITEM_IDS = registerSetting("INITIAL_ALLOWED_ITEM_IDS",
                 new ArrayList<>(List.of(
                         new ItemIDAndScaleFactor(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME), MoneyItem.ITEM_FRACTION_SCALE_FACTOR),
                         new ItemIDAndScaleFactor(new ItemID("minecraft:iron_ingot")),

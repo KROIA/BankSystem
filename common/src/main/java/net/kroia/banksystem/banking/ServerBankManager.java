@@ -12,11 +12,10 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.banking.clientdata.UserData;
-import net.kroia.banksystem.compat.OldBankDataLoader;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.JsonUtilities;
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
@@ -26,7 +25,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-public class ServerBankManager implements ServerSaveable, IServerBankManager {
+public class ServerBankManager implements ServerSaveableChunked, IServerBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         ServerBankManager.BACKEND_INSTANCES = backend;
@@ -99,11 +98,14 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     }
 
     @Override
-    public List<ItemID> getAllowedItems()
-    {
-        return BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get().stream()
-                .map(item -> item.itemID)
-                .toList();
+    public List<ItemID> getAllowedItems() {
+        List<ItemID> allowedItemIDs = new ArrayList<>(itemFractionScaleFactor.size());
+        for (Map.Entry<ItemID, Integer> entry : itemFractionScaleFactor.entrySet()) {
+            if (entry.getValue() > 0) {
+                allowedItemIDs.add(entry.getKey());
+            }
+        }
+        return allowedItemIDs;
     }
     @Override
     public List<ItemID> getBlacklistedItems()
@@ -435,18 +437,6 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         else if(itemFractionScaleFactor != 1 && itemFractionScaleFactor != 10 && itemFractionScaleFactor != 100)
             itemFractionScaleFactor = 1;
         this.itemFractionScaleFactor.put(itemID, itemFractionScaleFactor);
-
-        List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        for(var allowedItem : allowed) {
-            if(allowedItem.itemID.equals(itemID)) {
-
-                return true;
-            }
-        }
-
-        BankSystemModSettings.Bank.ItemIDAndScaleFactor itemIDAndScaleFactor = new BankSystemModSettings.Bank.ItemIDAndScaleFactor(itemID, itemFractionScaleFactor);
-        allowed.add(itemIDAndScaleFactor);
-        BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.set(allowed);
         return true;
     }
     @Override
@@ -459,24 +449,16 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             warn("It is not allowed to remove the itemID: " + itemID);
             return false;
         }
-        List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowed = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        for(var allowedItem : allowed) {
-            if(allowedItem.itemID.equals(itemID)) {
-                allowed.remove(allowedItem);
-                BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.set(allowed);
-                for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
-                    BankAccount account = entry.getValue();
-                    if(account.hasBank(itemID)) {
-                        account.removeBank(itemID);
-                        info("Removed item bank for itemID: " + itemID + " from account number: " + entry.getKey());
-                    }
-                }
-                // Remove all factors
-                itemFractionScaleFactor.keySet().removeIf(existingItemID -> existingItemID.equals(itemID));
-                return true;
+
+        for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+            BankAccount account = entry.getValue();
+            if(account.hasBank(itemID)) {
+                account.removeBank(itemID);
+                info("Removed item bank for itemID: " + itemID + " from account number: " + entry.getKey());
             }
         }
-        return false;
+        // Remove all factors
+        return itemFractionScaleFactor.keySet().removeIf(existingItemID -> existingItemID.equals(itemID));
     }
     @Override
     public boolean isItemIDNotRemovable(ItemID itemID)
@@ -489,27 +471,6 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     {
         List<ItemID> blackList = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BLACKLIST_ITEM_IDS.get();
         return blackList.contains(itemID);
-    }
-
-    @Override
-    public List<ItemID> getAllowedItemIDs()
-    {
-        var ids = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        List<ItemID> allowedItemIDs = new ArrayList<>(ids.size());
-        for (var el : ids) {
-            allowedItemIDs.add(el.itemID);
-        }
-        return allowedItemIDs;
-    }
-    @Override
-    public List<ItemID> getBlacklistedItemIDs()
-    {
-        return new ArrayList<>(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BLACKLIST_ITEM_IDS.get());
-    }
-    @Override
-    public List<ItemID> getNotRemovableItemIDs()
-    {
-        return new ArrayList<>(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.NOT_REMOVABLE_ITEM_IDS.get());
     }
 
 
@@ -632,10 +593,26 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         return newBankNumber;
     }
 
+    public void setupDefaultItems()
+    {
+        // Check if all allowed items have a scale factor
+        List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEM_IDS.get();
+        for (var el : allowedItems) {
+            if(itemFractionScaleFactor.containsKey(el.itemID))
+                continue;
+            itemFractionScaleFactor.put(el.itemID, el.itemFractionScaleFactor);
+        }
+    }
+
     @Override
-    public boolean save(CompoundTag tag) {
-        tag.putInt("version", 1); // Versioning for future changes
-        tag.putInt("nextAccountNumber", nextAccountNumber);
+    public boolean save(Map<String, ListTag> listTags) {
+        CompoundTag metaData = new CompoundTag();
+        metaData.putInt("version", 1); // Versioning for future changes
+        metaData.putInt("nextAccountNumber", nextAccountNumber);
+        ListTag metaTagList = new ListTag();
+        metaTagList.add(metaData);
+        listTags.put("meta", metaTagList);
+
 
         ListTag userList = new ListTag();
         for (Map.Entry<UUID, User> entry : userMap.entrySet()) {
@@ -643,7 +620,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             entry.getValue().save(userTag);
             userList.add(userTag);
         }
-        tag.put("users", userList);
+        listTags.put("users", userList);
 
         // Save item cent scale factors
         ListTag itemScaleFactors = new ListTag();
@@ -655,7 +632,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             pairTag.putInt("scaleFactor", entry.getValue());
             itemScaleFactors.add(pairTag);
         }
-        tag.put("itemCentScaleFactors", itemScaleFactors);
+        listTags.put("itemCentScaleFactors", itemScaleFactors);
 
         ListTag accountsList = new ListTag();
         for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
@@ -663,7 +640,7 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
             entry.getValue().save(accountTag);
             accountsList.add(accountTag);
         }
-        tag.put("bankAccounts", accountsList);
+        listTags.put("bankAccounts", accountsList);
 
 
 
@@ -671,21 +648,15 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     }
 
     @Override
-    public boolean load(CompoundTag tag) {
-        if(!tag.contains("version"))
-        {
-            return compatibility_load_old_users(tag);
-        }
-        if(tag.getInt("version") > 1) {
-            error("Unsupported version of bank data: " + tag.getInt("version"));
-            return false;
-        }
+    public boolean load(Map<String, ListTag> listTags) {
+        CompoundTag metaData = listTags.getOrDefault("meta", new ListTag()).getCompound(0);
+        int version = metaData.getInt("version");
+        nextAccountNumber = metaData.getInt("nextAccountNumber");
 
-        nextAccountNumber = tag.getInt("nextAccountNumber");
 
         // Load item cent scale factors
-        if(tag.contains("itemCentScaleFactors")) {
-            ListTag itemScaleFactors = tag.getList("itemCentScaleFactors", 10);
+        if(listTags.containsKey("itemCentScaleFactors")) {
+            ListTag itemScaleFactors = listTags.get("itemCentScaleFactors");
             itemFractionScaleFactor.clear();
             for (int i = 0; i < itemScaleFactors.size(); i++) {
                 CompoundTag pairTag = itemScaleFactors.getCompound(i);
@@ -698,18 +669,15 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
                 itemFractionScaleFactor.put(itemID, scaleFactor);
             }
         }
-
-        // Check if all allowed items have a scale factor
-        List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOWED_ITEM_IDS.get();
-        for (var el : allowedItems) {
-            if(itemFractionScaleFactor.containsKey(el.itemID))
-                continue;
-            itemFractionScaleFactor.put(el.itemID, el.itemFractionScaleFactor);
+        else {
+            setupDefaultItems(); // Setup default items if no scale factors are present
         }
 
+
+
         // Load users
-        if(tag.contains("users")) {
-            ListTag userList = tag.getList("users", 10);
+        if(listTags.containsKey("users")) {
+            ListTag userList = listTags.get("users");
             userMap.clear();
             for (int i = 0; i < userList.size(); i++) {
                 CompoundTag userTag = userList.getCompound(i);
@@ -723,8 +691,8 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
         }
 
         // Load bank accounts
-        if(tag.contains("bankAccounts")) {
-            ListTag accountsList = tag.getList("bankAccounts", 10);
+        if(listTags.containsKey("bankAccounts")) {
+            ListTag accountsList = listTags.get("bankAccounts");
             bankAccounts.clear();
             for (int i = 0; i < accountsList.size(); i++) {
                 CompoundTag accountTag = accountsList.getCompound(i);
@@ -736,6 +704,30 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
                 }
             }
         }
+        return true;
+    }
+
+    public boolean load_compatibilityMode_setNextAccountNumber(int nextAccountNumber)
+    {
+        this.nextAccountNumber = nextAccountNumber;
+        return true;
+    }
+    public boolean load_compatibilityMode_setItemFractionScaleFactors(Map<ItemID, Integer> itemFractionScaleFactor)
+    {
+        this.itemFractionScaleFactor.clear();
+        this.itemFractionScaleFactor.putAll(itemFractionScaleFactor);
+        return true;
+    }
+    public boolean load_compatibilityMode_setUsers(Map<UUID, User> userMap)
+    {
+        this.userMap.clear();
+        this.userMap.putAll(userMap);
+        return true;
+    }
+    public boolean load_compatibilityMode_setBankAccounts(Map<Integer, BankAccount> bankAccounts)
+    {
+        this.bankAccounts.clear();
+        this.bankAccounts.putAll(bankAccounts);
         return true;
     }
 
@@ -774,14 +766,6 @@ public class ServerBankManager implements ServerSaveable, IServerBankManager {
     public String toString() {
         return toJsonString();
     }
-
-
-    private boolean compatibility_load_old_users(CompoundTag tag)
-    {
-        OldBankDataLoader oldBankDataLoader = new OldBankDataLoader(this);
-        return oldBankDataLoader.load(tag);
-    }
-
 
     private void info(String msg)
     {
