@@ -1,7 +1,6 @@
 package net.kroia.banksystem.fabric;
 
 import dev.architectury.platform.Platform;
-import mezz.jei.api.IModPlugin;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.ModInitializer;
 
@@ -10,13 +9,9 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.compat.BankSystemJeiPlugin;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
 import net.kroia.banksystem.util.BankSystemPlayerEvents;
 import net.kroia.banksystem.util.BankSystemServerEvents;
-
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 
 public final class BankSystemFabric implements ModInitializer {
     @Override
