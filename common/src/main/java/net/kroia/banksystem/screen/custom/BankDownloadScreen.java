@@ -2,6 +2,7 @@ package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
@@ -11,6 +12,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.elements.*;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -30,11 +32,11 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     private static final Component APPLY_BUTTON = Component.translatable(prefix+"apply_button");
 
 
-    private  class SettingsMenu extends BankSystemGuiElement {
+    private class SettingsMenu extends BankSystemGuiElement {
 
         public final Button connectDisconnectButton;
         public final Button selectItemButton;
-        public final ItemView itemView;
+        //public final ItemView itemView;
         public final TextBox targetAmountTextBox;
         public final Label targetAmountLabel;
         public final Button applyButton;
@@ -94,17 +96,49 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         }
     }
 
+    private class WithdrawOrderGuiElement extends GuiElement
+    {
+        private final ItemView itemView;
+        private final Label amountLabel;
+        private final DropDownMenu conditionSelectionDropDown;
+
+        public WithdrawOrderGuiElement()
+        {
+            itemView = new ItemView();
+            itemView.setSize(16, 16);
+            amountLabel = new Label("0");
+            conditionSelectionDropDown = new DropDownMenu();
+            conditionSelectionDropDown.setExpanded(true);
+            conditionSelectionDropDown.addOption("Equal to");
+            conditionSelectionDropDown.addOption("Less than");
+            conditionSelectionDropDown.addOption("More than");
+
+            this.addChild(itemView);
+            this.addChild(amountLabel);
+            this.addChild(conditionSelectionDropDown);
+        }
+
+        @Override
+        protected void render() {
+
+        }
+
+        @Override
+        protected void layoutChanged() {
+
+        }
+    }
 
     private final BlockPos pos;
-
     private final ContainerView<BankDownloadContainerMenu> inventoryView;
     private final SettingsMenu settingsMenu;
 
-    public static boolean isOwned = false;
 
-    public static ItemID itemID;
-    public static int targetAmount;
-    public static int maxTargetAmount;
+
+
+
+    public static List<BankDownloadBlockEntity.WithdrawOrder> withdrawOrders = new ArrayList<>();
+    public static int blockInventorySlotCount;
     public static int accountNr = 0; // 0 means no account selected
 
 
@@ -123,7 +157,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         inventoryView.setOnCloseEvent(this::onCloseCleanup);
         settingsMenu = new SettingsMenu(this);
 
-        if (isOwned) {
+        if (accountNr > 0) {
             settingsMenu.connectDisconnectButton.setLabel(DISCONNECT_BUTTON.getString());
         } else {
             settingsMenu.connectDisconnectButton.setLabel(CONNECT_BUTTON.getString());
@@ -132,14 +166,15 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
 
         if(itemID != null)
         {
-        ItemStack itemStack = itemID.getStack();
-        settingsMenu.itemView.setItemStack(itemStack);
+            ItemStack itemStack = itemID.getStack();
+            settingsMenu.itemView.setItemStack(itemStack);
         }
 
 
         addElement(inventoryView);
         addElement(settingsMenu);
     }
+
 
     @Override
     protected void updateLayout(Gui gui) {
@@ -158,7 +193,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         isOwned = packet.isOwned();
         itemID = packet.getItemID();
         targetAmount = packet.getTargetAmount();
-        maxTargetAmount = packet.getMaxTargetAmount();
+        maxTargetAmount = packet.getBlockInventorySlotCount();
         accountNr = packet.getAccountNr();
 
         if(instance != null) {

@@ -1,26 +1,22 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.screen.custom.BankDownloadScreen;
-import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.util.UUID;
+import java.util.List;
 
 public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
 
-    boolean isOwned;
-    ItemID itemID;
-    int targetAmount;
-    int maxTargetAmount;
+    List<BankDownloadBlockEntity.WithdrawOrder> withdrawOrders;
+    int blockInventorySlotCount;
     int accountNr;
-    public SyncBankDownloadDataPacket(boolean isOwned, ItemID itemID, int targetAmount, int maxTargetAmount, int accountNr) {
-        this.isOwned = isOwned;
-        this.itemID = itemID;
-        this.targetAmount = targetAmount;
-        this.maxTargetAmount = maxTargetAmount;
+    public SyncBankDownloadDataPacket(List<BankDownloadBlockEntity.WithdrawOrder> withdrawOrders, int blockInventorySlotCount, int accountNr) {
+        super();
+        this.withdrawOrders = withdrawOrders;
+        this.blockInventorySlotCount = blockInventorySlotCount;
         this.accountNr = accountNr;
     }
 
@@ -29,38 +25,33 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
     }
 
     public static void sendPacket(ServerPlayer receiver, BankDownloadBlockEntity blockEntity) {
-        UUID playerOwner = blockEntity.getPlayerOwner();
-        ItemID itemID = blockEntity.getItemID();
-        int targetAmount = blockEntity.getTargetAmount();
-        int maxTargetAmount = blockEntity.getMaxTargetAmount();
+        List<BankDownloadBlockEntity.WithdrawOrder> withdrawOrders = blockEntity.getWithdrawOrders();
+        int blockInventorySlotCount = blockEntity.getBlockInventorySlotCount();
         int accountNr = blockEntity.getBankAccountNumber();
-        boolean isOwned = playerOwner != null && playerOwner.equals(receiver.getUUID());
-        new SyncBankDownloadDataPacket(isOwned, itemID, targetAmount, maxTargetAmount, accountNr).sendToClient(receiver);
+        new SyncBankDownloadDataPacket(withdrawOrders, blockInventorySlotCount, accountNr).sendToClient(receiver);
     }
 
 
     @Override
     public void encode(FriendlyByteBuf buf) {
-        buf.writeBoolean(isOwned);
-        buf.writeBoolean(itemID != null);
-        if(itemID != null)
-            buf.writeItem(itemID.getStack());
-        buf.writeInt(targetAmount);
-        buf.writeInt(maxTargetAmount);
+        buf.writeInt(withdrawOrders.size());
+        for (BankDownloadBlockEntity.WithdrawOrder order : withdrawOrders) {
+            order.encode(buf);
+        }
+        buf.writeInt(blockInventorySlotCount);
         buf.writeInt(accountNr);
     }
 
     @Override
     public void decode(FriendlyByteBuf buf) {
-        isOwned = buf.readBoolean();
-        itemID = null;
-         // Read itemID only if it exists
-        if(buf.readBoolean()) {
-            itemID = new ItemID(buf.readItem());
+        int size = buf.readInt();
+        withdrawOrders = new java.util.ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            BankDownloadBlockEntity.WithdrawOrder order = BankDownloadBlockEntity.WithdrawOrder.decode(buf);
+            if(order != null)
+                withdrawOrders.add(order);
         }
-
-        targetAmount = buf.readInt();
-        maxTargetAmount = buf.readInt();
+        blockInventorySlotCount = buf.readInt();
         accountNr = buf.readInt();
     }
 
@@ -68,17 +59,12 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
         BankDownloadScreen.handlePacket(this);
     }
 
-    public boolean isOwned() {
-        return isOwned;
+
+    public List<BankDownloadBlockEntity.WithdrawOrder> getWithdrawOrders() {
+        return withdrawOrders;
     }
-    public ItemID getItemID() {
-        return itemID;
-    }
-    public int getTargetAmount() {
-        return targetAmount;
-    }
-    public int getMaxTargetAmount() {
-        return maxTargetAmount;
+    public int getBlockInventorySlotCount() {
+        return blockInventorySlotCount;
     }
     public int getAccountNr() {
         return accountNr;

@@ -29,8 +29,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.UUID;
-
 import static dev.architectury.registry.menu.MenuRegistry.openExtendedMenu;
 
 public class BankDownloadBlock extends Block implements EntityBlock {
@@ -147,8 +145,7 @@ public class BankDownloadBlock extends Block implements EntityBlock {
 
         // open screen
         if (player instanceof ServerPlayer sPlayer) {
-            UUID playerOwner = blockEntity.getPlayerOwner();
-            if(playerOwner == null || playerOwner.equals(player.getUUID())) {
+            if(blockEntity.hasPermissionToOpenBlock(sPlayer)) {
                 MenuProvider menuProvider = blockEntity.getMenuProvider();
                 SyncBankDownloadDataPacket.sendPacket(sPlayer, blockEntity);
                 openExtendedMenu(sPlayer, menuProvider, (menu) -> {
