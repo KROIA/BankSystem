@@ -10,7 +10,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.compat.NEZNAMY_TAB_Placeholders;
-import net.kroia.banksystem.screen.custom.BankTerminalScreen;
+import net.kroia.banksystem.util.BankSystemGuiScreen;
 
 public final class BankSystemFabric implements ModInitializer {
     @Override
@@ -57,7 +57,7 @@ public final class BankSystemFabric implements ModInitializer {
 
 
         if (isJeiLoaded() && Platform.getEnv() == EnvType.CLIENT) {
-            BankTerminalScreen.widthPercentage = 70;
+            BankSystemGuiScreen.setJeiModLoaded(true);
         }
     }
 

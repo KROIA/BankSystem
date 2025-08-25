@@ -391,9 +391,11 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         if(bankAccountNumber <= 0)
             return true; // Block not claimed
         IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(bankAccountNumber);
-        bankAccountNumber = 0;
-        if(account == null)
+
+        if(account == null) {
+            bankAccountNumber = 0;
             return true;
+        }
 
         // Only allow opening if the player has permission to withdraw from the bank account
         return account.hasPermission(player.getUUID(), BankPermission.WITHDRAW.getValue());
@@ -488,7 +490,14 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
         }*/
 
-
+        currentlyReceiving = true;
+        for( WithdrawOrder order : withdrawOrders)
+        {
+            if(order != null) {
+                currentlyReceiving = true;
+                processWithdrawOrder(order, account);
+            }
+        }
 
         setChanged();
         currentlyReceiving = false;
@@ -509,7 +518,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         if(!order.meetsCondition(realBankBalance)) {
             return false; // Condition not met, do not withdraw
         }
-        int amountToFill = Math.max(0, countItemsInInventory(item) - order.targetAmount);
+        int amountToFill = Math.max(0, order.targetAmount - countItemsInInventory(item));
         if(amountToFill <= 0)
             return false; // No need to withdraw, inventory already has enough items
 
@@ -628,22 +637,27 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         // Check if the sender has permission to withdraw from that bank account
         IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);
         if(account == null) {
+            setBockstate_connected(false);
             return;
         }
         if(!account.hasPermission(senderUUID, BankPermission.WITHDRAW.getValue())) {
+            setBockstate_connected(false);
             return; // Player does not have permission to withdraw from this bank account
         }
 
         this.bankAccountNumber = accountNr;
         this.withdrawOrders.clear();
-        List<WithdrawOrder> orders = packet.get();
+        List<WithdrawOrder> orders = packet.getWithdrawOrders();
         for (WithdrawOrder order : orders) {
             if(order != null) {
                 this.withdrawOrders.add(order);
             }
         }
 
-
+        setChanged();
+        setBockstate_connected(true);
         SyncBankDownloadDataPacket.sendPacket(sender, this);
+
+
     }
 }
