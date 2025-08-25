@@ -3,14 +3,23 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.modutilities.gui.GuiScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 public abstract class BankSystemGuiScreen extends GuiScreen {
 
     protected static BankSystemModBackend.Instances BACKEND_INSTANCES;
-    public static final float guiScale = 1.0f;
+
+    private static boolean jeiModLoaded = false;
+    public static void setJeiModLoaded(boolean loaded) { jeiModLoaded = loaded; }
+    public static boolean isJeiModLoaded() { return jeiModLoaded; }
+    public static final float guiScale = 0.8f;
     protected BankSystemGuiScreen(Component pTitle) {
         super(pTitle);
+        setGuiScale(guiScale);
+    }
+    protected BankSystemGuiScreen(Component pTitle, Screen parent) {
+        super(pTitle, parent);
         setGuiScale(guiScale);
     }
 

@@ -15,7 +15,7 @@ import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.geometry.Rectangle;
-import net.kroia.modutilities.gui.layout.LayoutVertical;
+import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -148,6 +148,8 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         //super(pTitle);
         menu = pMenu;
 
+        widthPercentage = (isJeiModLoaded()?70:100);
+
         screenIsOpen = true;
         playerUUID = Minecraft.getInstance().player.getUUID();
         playerName = Minecraft.getInstance().player.getName().getString();
@@ -173,7 +175,10 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         receiveItemsFromBankButton.setOnFallingEdge(this::onReceiveItemsFromBank);
 
         itemListView = new VerticalListView(0, 0, 100, 100);
-        itemListView.setLayout(new LayoutVertical(0,0,true, false));
+        LayoutGrid layoutGrid = new LayoutGrid();
+        layoutGrid.stretchX = true;
+        layoutGrid.columns = 3;
+        itemListView.setLayout(layoutGrid);
         inventoryView = new ContainerView<>(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 256, 256));
         inventoryView.setSize(176, 166);
 
@@ -204,8 +209,8 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
     @Override
     protected void updateLayout(Gui gui) {
-        int width = this.width*widthPercentage/100;
-        int height = this.height;
+        int width = this.getWidth()*widthPercentage/100;
+        int height = this.getHeight();
 
         int padding = 5;
         int spacing = 5;
@@ -292,7 +297,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             if(bankData != null)
                 sortedBankAccounts.add(new Pair<>(itemID, bankData));
         }
-        sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance, a.getSecond().balance));
+        sortedBankAccounts.sort((a, b) -> Float.compare(b.getSecond().getRealBalance(), a.getSecond().getRealBalance()));
 
         int x = 0;
         int y = 0;

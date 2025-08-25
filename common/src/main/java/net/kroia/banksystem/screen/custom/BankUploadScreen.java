@@ -98,8 +98,8 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
 
     @Override
     protected void updateLayout(Gui gui) {
-        int width = this.width;
-        int height = this.height;
+        int width = this.getWidth();
+        int height = this.getHeight();
         int spacing = 5;
 
         int inventoryWidth = inventoryView.getWidth();

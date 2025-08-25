@@ -121,4 +121,8 @@ public class ClientBankManager implements IClientBankManager {
     public void requestDeleteBankAccount(int accountNumber, Consumer<Boolean> callback) {
         BankSystemNetworking.DELETE_BANK_ACCOUNT_REQUEST.sendRequestToServer(accountNumber, callback);
     }
+
+    public void requestAllowdItems(Consumer<List<ItemID>> callback) {
+        BankSystemNetworking.ALLOWED_ITEMS_REQUEST.sendRequestToServer(0, callback);
+    }
 }
