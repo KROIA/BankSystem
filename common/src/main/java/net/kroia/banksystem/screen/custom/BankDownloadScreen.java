@@ -119,6 +119,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
 
 
         inventoryView = new ContainerView<>(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 256, 256));
+        inventoryView.setSize(176, 166);
         inventoryView.setOnCloseEvent(this::onCloseCleanup);
         settingsMenu = new SettingsMenu(this);
 
