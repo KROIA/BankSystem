@@ -1,3 +1,4 @@
+
 plugins {
     id 'com.github.johnrengelman.shadow'
 }
@@ -53,11 +54,11 @@ dependencies {
     common(project(path: ':common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':common', configuration: 'transformProductionForge')
 
-
     modImplementation("net.kroia:modutilities-forge:$rootProject.modutilities_version")
     include("net.kroia:modutilities-forge:$rootProject.modutilities_version")
 
     compileOnly("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}")
+    modImplementation "maven.modrinth:lightmans-currency:${lightmanscurrency_version}"
     //includeInternal("net.kroia:modutilities-forge:1.0.0")
 
     // at runtime, use the full JEI jar for Forge

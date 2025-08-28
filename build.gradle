@@ -1,8 +1,14 @@
+buildscript {
+    dependencies {
+        classpath group: 'org.spongepowered', name: 'mixingradle', version: '0.7-SNAPSHOT'
+    }
+}
 plugins {
     id 'dev.architectury.loom' version '1.7-SNAPSHOT' apply false
     id 'architectury-plugin' version '3.4-SNAPSHOT'
     id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
     id 'maven-publish'
+    id "org.spongepowered.mixin" version "0.7.+" apply false
 }
 
 architectury {
@@ -41,7 +47,23 @@ subprojects {
         // for more information about repositories.
 
         // https://github.com/NEZNAMY/TAB API
+        maven {
+            url = "https://www.cursemaven.com"
+        }
         maven { url 'https://jitpack.io' }
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = "Modrinth"
+                    url = "https://api.modrinth.com/maven"
+                }
+            }
+            filter {
+                includeGroup "maven.modrinth"
+            }
+        }
+
+        maven { url = "https://maven.shedaniel.me/" }
     }
 
     dependencies {
