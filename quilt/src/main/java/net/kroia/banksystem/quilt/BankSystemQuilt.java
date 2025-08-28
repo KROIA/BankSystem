@@ -1,4 +1,4 @@
-package net.kroia.quilt;
+package net.kroia.banksystem.quilt;
 
 import dev.architectury.platform.Platform;
 import net.fabricmc.api.EnvType;

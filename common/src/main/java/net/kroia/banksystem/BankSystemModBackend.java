@@ -11,6 +11,7 @@ import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.command.BankSystemCommands;
 import net.kroia.banksystem.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.banksystem.compat.OldBankDataLoader;
+import net.kroia.banksystem.compat.lightmanscurrency.LightmansCurrencyAPI;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
@@ -40,6 +41,10 @@ public class BankSystemModBackend implements BankSystemAPI {
         public BankSystemNetworking NETWORKING;
 
         public BankSystemLogger LOGGER;
+
+
+        public LightmansCurrencyAPI LIGHTMANS_CURRENCY_API;
+
     }
 
     private static Instances INSTANCES = new Instances();
@@ -105,6 +110,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         if(INSTANCES.SERVER_EVENTS == null)
             INSTANCES.SERVER_EVENTS = new BankSystemEvents();
 
+        INSTANCES.LIGHTMANS_CURRENCY_API = new LightmansCurrencyAPI();
     }
 
     // Called from the server side
@@ -128,6 +134,8 @@ public class BankSystemModBackend implements BankSystemAPI {
                 INSTANCES.SERVER_DATA_HANDLER.saveAll();
             }
         });
+
+
     }
 
     // Called from the server side

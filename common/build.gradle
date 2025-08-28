@@ -17,7 +17,7 @@ repositories {
 
 }
 dependencies {
-    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    //annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     // We depend on Fabric Loader here to use the Fabric @Environment annotations,
     // which get remapped to the correct annotations on each platform.
     // Do NOT use other classes from Fabric Loader.
@@ -33,7 +33,6 @@ dependencies {
     //implementation("net.kroia:modutilities-common:1.0.0")
 
     compileOnly("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
-
 }
 /*
 sourceSets {

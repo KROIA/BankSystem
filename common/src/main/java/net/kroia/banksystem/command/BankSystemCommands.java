@@ -11,6 +11,7 @@ import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.compat.lightmanscurrency.ILightmansBank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -34,6 +35,25 @@ public class BankSystemCommands {
     // Method to register commands
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         //BACKEND_INSTANCES.LOGGER.info("Registering commands");
+
+        if(BACKEND_INSTANCES.LIGHTMANS_CURRENCY_API.isAvailable()) {
+            dispatcher.register(
+                    Commands.literal("banksystem_lightmans")
+                            .executes(context -> {
+                                CommandSourceStack source = context.getSource();
+                                ServerPlayer player = source.getPlayerOrException();
+
+                                if (BACKEND_INSTANCES.LIGHTMANS_CURRENCY_API.isAvailable()) {
+                                    ILightmansBank lightmansBank = BACKEND_INSTANCES.LIGHTMANS_CURRENCY_API.MANAGER.getBank(player.getUUID());
+                                    if (lightmansBank != null) {
+                                        long balance = lightmansBank.getBalance();
+                                        ServerPlayerUtilities.printToClientConsole(player, "Lightmans Currency bank balance: " + balance);
+                                    }
+                                }
+                                return Command.SINGLE_SUCCESS;
+                            })
+            );
+        }
 
         // /money                               - Show balance
         // /money add <amount>                  - Add money to self
@@ -205,8 +225,6 @@ public class BankSystemCommands {
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
-
-
         );
 
 

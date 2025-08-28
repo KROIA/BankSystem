@@ -9,6 +9,7 @@ repositories {
         name = "Jared's maven"
         url = "https://maven.blamejared.com/"
     }
+    maven { url "https://maven.ladysnake.org/releases" }
     flatDir {
         dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/forge/build/libs"
     }
@@ -58,7 +59,24 @@ dependencies {
     include("net.kroia:modutilities-forge:$rootProject.modutilities_version")
 
     compileOnly("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}")
-    modImplementation "maven.modrinth:lightmans-currency:${lightmanscurrency_version}"
+
+
+
+
+
+    //modImplementation "maven.modrinth:lightmans-currency:${lightmanscurrency_version}"
+    compileOnly "maven.modrinth:lightmans-currency:1.20.1-2.2.6.3"
+
+    // Only for dev runtime (so the mod loads in your dev client)
+    modRuntimeOnly  "maven.modrinth:lightmans-currency:1.20.1-2.2.6.3"
+    // Needed for Lightman's Currency (and some other mods)
+    compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:0.5.0"))
+    implementation(include("io.github.llamalad7:mixinextras-forge:0.5.0"))
+
+
+
+
+
     //includeInternal("net.kroia:modutilities-forge:1.0.0")
 
     // at runtime, use the full JEI jar for Forge

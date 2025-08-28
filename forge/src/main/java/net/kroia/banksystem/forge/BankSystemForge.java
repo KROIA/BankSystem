@@ -14,5 +14,4 @@ public final class BankSystemForge {
         // Run our common setup.
         BankSystemMod.init();
     }
-
 }
