@@ -11,6 +11,7 @@ import net.kroia.banksystem.networking.packet.client_sender.update.entity.Update
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ModChecker;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.elements.*;
@@ -43,6 +44,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         BankTerminalScreen parent;
 
+
         public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long stackSize, int centScaleFactor) {
             super(0, 0, 100, HEIGHT);
             this.parent = parent;
@@ -67,6 +69,8 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             });
             amountBox.setText(0);
             //addChild(receiveItemsFromMarketButton);
+
+
         }
 
         @Override
@@ -139,6 +143,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private final String playerName;
     private static boolean screenIsOpen = false;
     private int selectedBankAccountNr = -1;
+    private DropDownMenu linkLightmansAccount;
     //private int userPermission = 0;
 
 
@@ -171,6 +176,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         sendItemsToBankButton = new Button(SEND_ITEMS_TO_BANK_BUTTON_TEXT.getString());
         sendItemsToBankButton.setOnFallingEdge(this::onTransmittItemsToBank);
 
+
         receiveItemsFromBankButton = new Button(RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT.getString());
         receiveItemsFromBankButton.setOnFallingEdge(this::onReceiveItemsFromBank);
 
@@ -188,6 +194,12 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         addElement(receiveItemsFromBankButton);
         addElement(itemListView);
         addElement(inventoryView);
+
+        if(ModChecker.isModLoaded("lightmanscurrency")){
+            linkLightmansAccount = new DropDownMenu("Link Lightman's Account");
+            addElement(linkLightmansAccount);
+
+        }
 
 
         getBankManager().requestBankTerminalData(pMenu.getBlockPos(), (bankTerminalData) -> {
@@ -219,6 +231,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         inventoryView.setPosition(width - inventoryWidth - padding, (height - inventoryHeight) / 2);
 
         sendItemsToBankButton.setBounds(inventoryView.getX(), padding, inventoryView.getWidth(), 20);
+        linkLightmansAccount.setBounds(inventoryView.getX(), sendItemsToBankButton.getHeight() + sendItemsToBankButton.getY() + padding, sendItemsToBankButton.getWidth(), 20);
 
         int itemListViewWidth = inventoryView.getX()-padding*2;
         selectAccountButton.setBounds(padding, padding, itemListViewWidth, 20);

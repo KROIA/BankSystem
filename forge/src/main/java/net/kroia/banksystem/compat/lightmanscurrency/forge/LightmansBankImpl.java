@@ -4,9 +4,15 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.github.lightman314.lightmanscurrency.api.money.bank.BankAPI;
 import io.github.lightman314.lightmanscurrency.api.money.bank.IBankAccount;
+import io.github.lightman314.lightmanscurrency.api.money.bank.reference.BankReference;
+import io.github.lightman314.lightmanscurrency.api.money.bank.reference.builtin.PlayerBankReference;
+import io.github.lightman314.lightmanscurrency.api.money.bank.reference.builtin.TeamBankReference;
 import io.github.lightman314.lightmanscurrency.api.money.value.MoneyStorage;
 import io.github.lightman314.lightmanscurrency.api.money.value.MoneyValue;
+import io.github.lightman314.lightmanscurrency.api.teams.ITeam;
+import io.github.lightman314.lightmanscurrency.api.teams.TeamAPI;
 import io.github.lightman314.lightmanscurrency.common.bank.BankAccount;
+import io.github.lightman314.lightmanscurrency.common.teams.Team;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.banking.User;
@@ -15,10 +21,12 @@ import net.kroia.banksystem.compat.lightmanscurrency.ILightmansBank;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,6 +36,7 @@ public class LightmansBankImpl implements ILightmansBank {
     private static final ItemID DEFAULT_ITEM = ItemID.of(Items.AIR.getDefaultInstance());
 
     private final UUID playerUUID;
+    private BankReference linkedAccount = null;
     /*@Override
     public long getBalance(UUID player) {
 
@@ -81,7 +90,7 @@ public class LightmansBankImpl implements ILightmansBank {
 
     @Override
     public long getBalance() {
-        BankAccount account = this.findAccount();
+        BankAccount account = (BankAccount) this.linkedAccount.get();
         if(account == null)
             return 0;
         MoneyStorage storage = account.getMoneyStorage();
@@ -325,38 +334,26 @@ public class LightmansBankImpl implements ILightmansBank {
         return "{}";
     }
 
+    public void linkAccount(BankReference account){
+        this.linkedAccount = account;
+    }
 
 
 
 
-    private @Nullable BankAccount findAccount()
+
+    public static List<BankReference> fetchAccessibleAccounts(Player player)
     {
-        List<IBankAccount> accounts = BankAPI.API.GetAllBankAccounts(false);
-        for(IBankAccount account : accounts)
-        {
-            String owner = "";
-            BankAccount bankAccount = null;
-            if(account instanceof BankAccount ba)
-            {
-                owner = ba.getOwnersName(); // IBankAccount does not provide the getOwnersName method.
-                bankAccount = ba;
-            }
-            User user = BankSystemMod.getAPI().getServerBankManager().getUserByUUID(playerUUID);
-            String playerName = "";
-            if(user == null)
-            {
-                ServerPlayer sp = ServerPlayerUtilities.getOnlinePlayer(playerUUID);
-                if(sp != null)
-                {
-                    playerName = sp.getName().getString();
-                }
-            }
-            else
-                playerName = user.getName();
-            if(owner.equals(playerName)) {
-                return bankAccount;
+        List<BankReference> accounts = new ArrayList<>();
+        accounts.add(PlayerBankReference.of(player));
+        List<ITeam> playerTeams = TeamAPI.API.GetAllTeamsForPlayer(player);
+
+        for(ITeam team : playerTeams){
+            if(TeamBankReference.of(team).allowedAccess(player)){
+                accounts.add(TeamBankReference.of(team));
             }
         }
-        return null;
+        return accounts;
     }
+
 }
