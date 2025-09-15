@@ -6,13 +6,19 @@ import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class ItemID implements ServerSaveable, INetworkPayloadConverter {
 
@@ -147,6 +153,42 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
 
     public UUID getUUID() {
         return UUID.nameUUIDFromBytes(toString().getBytes());
+    }
+
+    public int compareTo(ItemID other) {
+        Item item1 = stack.getItem();
+        Item item2 = other.stack.getItem();
+
+        // Get the registry keys for both items
+        ResourceKey<Item> key1 = BuiltInRegistries.ITEM.getResourceKey(item1).orElseThrow();
+        ResourceKey<Item> key2 = BuiltInRegistries.ITEM.getResourceKey(item2).orElseThrow();
+
+        // Get all tags for both items
+        Set<TagKey<Item>> tags1 = BuiltInRegistries.ITEM.getHolderOrThrow(key1).tags().collect(Collectors.toSet());
+        Set<TagKey<Item>> tags2 = BuiltInRegistries.ITEM.getHolderOrThrow(key2).tags().collect(Collectors.toSet());
+
+        // Convert tags to sorted string representation for comparison
+        String tagString1 = tags1.stream()
+                .map(tag -> tag.location().toString())
+                .sorted()
+                .collect(Collectors.joining(","));
+
+        String tagString2 = tags2.stream()
+                .map(tag -> tag.location().toString())
+                .sorted()
+                .collect(Collectors.joining(","));
+
+        // First compare by tags
+        int tagComparison = tagString1.compareTo(tagString2);
+        if (tagComparison != 0) {
+            return -tagComparison;
+        }
+
+        // If tags are the same, compare by item name
+        String name1 = item1.getDescriptionId();
+        String name2 = item2.getDescriptionId();
+
+        return name1.compareTo(name2);
     }
 
 
