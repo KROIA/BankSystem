@@ -314,7 +314,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                     }
                 }
 
-                ItemID itemID = new ItemID(stack);
+                ItemID itemID = ItemID.of(stack);
                 IBank itemBank = account.getBank(itemID);
                 if(itemBank == null)
                 {

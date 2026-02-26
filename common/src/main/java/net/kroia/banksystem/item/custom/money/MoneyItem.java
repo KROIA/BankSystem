@@ -32,7 +32,7 @@ public class MoneyItem extends Item{
         if(itemID != null) {
             return itemID;
         }
-        itemID  = new ItemID(new ItemStack(BankSystemItems.MONEY.get()));
+        itemID = ItemID.of(BankSystemItems.MONEY.get().getDefaultInstance());
         return itemID;
     }
     public static String getCurrencyName() {

@@ -16,8 +16,8 @@ public class BankAccountData {
     public static final StreamCodec<RegistryFriendlyByteBuf, BankAccountData> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.INT, p -> p.accountNumber,
             ByteBufCodecs.STRING_UTF8, p -> p.accountName,
-            ItemID.STREAM_CODEC, p -> p.accountIcon,
-            UserData.STREAM_CODEC, p -> p.personalBankOwnerData,
+            ExtraCodecUtils.nullable(ItemID.STREAM_CODEC), p -> p.accountIcon,
+            ExtraCodecUtils.nullable(UserData.STREAM_CODEC), p -> p.personalBankOwnerData,
             ExtraCodecUtils.mapStreamCodec(UUIDUtil.STREAM_CODEC, BankUserData.STREAM_CODEC, HashMap::new), p -> p.users,
             ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, BankData.STREAM_CODEC, HashMap::new), p -> p.bankData,
             BankAccountData::new

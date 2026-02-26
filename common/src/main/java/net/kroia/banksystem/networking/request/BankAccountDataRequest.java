@@ -4,7 +4,7 @@ import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
-import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -21,7 +21,7 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC =
                 StreamCodec.composite(
                         ByteBufCodecs.INT, InputData::accountNumber,
-                        UUIDUtil.STREAM_CODEC, InputData::personalUserUUID,
+                        ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC), InputData::personalUserUUID,
                         InputData::new
                 );
 
@@ -98,7 +98,7 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
 
     @Override
     public void encodeOutput(RegistryFriendlyByteBuf buf, BankAccountData output) {
-        BankAccountData.STREAM_CODEC.encode(buf, output);
+        ExtraCodecUtils.nullable(BankAccountData.STREAM_CODEC).encode(buf, output);
     }
 
     @Override
@@ -108,6 +108,6 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
 
     @Override
     public BankAccountData decodeOutput(RegistryFriendlyByteBuf buf) {
-        return BankAccountData.STREAM_CODEC.decode(buf);
+        return ExtraCodecUtils.nullable(BankAccountData.STREAM_CODEC).decode(buf);
     }
 }

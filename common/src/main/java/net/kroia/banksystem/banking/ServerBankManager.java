@@ -14,11 +14,13 @@ import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -53,6 +55,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     public ServerBankManager()
     {
+        getBlacklistedItems();
+        getAllowedItems();
+        getNotRemovableItems();
+        
+        setupDefaultItems();
 
     }
 
@@ -110,12 +117,24 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public List<ItemID> getBlacklistedItems()
     {
-        return BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BLACKLIST_ITEM_IDS.get();
+        List<ItemID> ids = new ArrayList<>();
+        for(ItemStack stack : BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS)
+        {
+            ItemID id = ItemIDManager.registerItemStack(stack);
+            ids.add(id);
+        }
+        return ids;
     }
     @Override
     public List<ItemID> getNotRemovableItems()
     {
-        return BACKEND_INSTANCES.SERVER_SETTINGS.BANK.NOT_REMOVABLE_ITEM_IDS.get();
+        List<ItemID> ids = new ArrayList<>();
+        for(ItemStack stack : BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS)
+        {
+            ItemID id = ItemIDManager.registerItemStack(stack);
+            ids.add(id);
+        }
+        return ids;
     }
     @Override
     public ItemInfoData getItemInfoData(@NotNull ItemID itemID)
@@ -250,7 +269,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return null;
         }
         account.setAccountName(accountName);
-        account.setAccountIcon(ItemID.of(Items.CHEST.getDefaultInstance()));
+        account.setAccountIcon(ItemIDManager.registerItemStack(Items.CHEST.getDefaultInstance()));
         bankAccounts.put(accountNumber, account);
         info("Created new bank account with number: " + accountNumber + " and name: " + accountName);
         return account;
@@ -420,7 +439,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean isItemIDAllowed(ItemID itemID)
     {
-        return itemFractionScaleFactor.containsKey(itemID) && itemFractionScaleFactor.get(itemID) > 0;
+        Integer scaleFactor = itemFractionScaleFactor.get(itemID);
+        return scaleFactor != null && scaleFactor > 0;
     }
     @Override
     public boolean allowItemID(ItemID itemID, int itemFractionScaleFactor)
@@ -463,14 +483,30 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean isItemIDNotRemovable(ItemID itemID)
     {
-        List<ItemID> notRemovable = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.NOT_REMOVABLE_ITEM_IDS.get();
-        return notRemovable.contains(itemID);
+        List<ItemStack> notRemovable = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_NOT_REMOVABLE_ITEMS;
+        for(ItemStack stack : notRemovable)
+        {
+            ItemID id = ItemIDManager.registerItemStack(stack);
+            if(id.equals(itemID))
+            {
+                return true;
+            }
+        }
+        return false;
     }
     @Override
     public boolean isItemIDBlacklisted(ItemID itemID)
     {
-        List<ItemID> blackList = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BLACKLIST_ITEM_IDS.get();
-        return blackList.contains(itemID);
+        List<ItemStack> blacklistItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS;
+        for(ItemStack stack : blacklistItems)
+        {
+            ItemID id = ItemIDManager.registerItemStack(stack);
+            if(id.equals(itemID))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
 
@@ -596,11 +632,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public void setupDefaultItems()
     {
         // Check if all allowed items have a scale factor
-        List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEM_IDS.get();
+        List<BankSystemModSettings.Bank.ItemStackAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEMS;
         for (var el : allowedItems) {
-            if(itemFractionScaleFactor.containsKey(el.itemID))
+            ItemID itemID = ItemIDManager.registerItemStack(el.stack);
+            if(itemFractionScaleFactor.containsKey(itemID))
                 continue;
-            itemFractionScaleFactor.put(el.itemID, el.itemFractionScaleFactor);
+            itemFractionScaleFactor.put(itemID, el.itemFractionScaleFactor);
         }
     }
 

@@ -1,44 +1,79 @@
 package net.kroia.banksystem.util;
 
 import com.google.gson.JsonElement;
-import io.netty.buffer.ByteBuf;
-import net.kroia.banksystem.BankSystemMod;
+import com.google.gson.JsonObject;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.JsonUtilities;
-import net.kroia.modutilities.ModUtilitiesMod;
-import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.modutilities.networking.arrs.GenericRequestPacket;
 import net.kroia.modutilities.persistence.ServerSaveable;
-import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtOps;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.Objects;
 import java.util.UUID;
 
 public class ItemID implements ServerSaveable {
 
     public static final StreamCodec<RegistryFriendlyByteBuf, ItemID> STREAM_CODEC = StreamCodec.composite(
-            ItemStack.STREAM_CODEC, p -> p.stack,
+            UUIDUtil.STREAM_CODEC, p -> p.uuid,
             ItemID::new
     );
 
 
-    public static final ItemID EMPTY = new ItemID(Items.AIR.getDefaultInstance());
+    //public static final ItemID EMPTY = new ItemID(Items.AIR.getDefaultInstance());
 
-    private ItemStack stack;
+    //private ItemStack stack;
+    private UUID uuid;
 
 
-    public ItemID(String itemID) {
+    public ItemID(UUID uuid) {
+        this.uuid = uuid;
+    }
+    public static @Nullable ItemID fromJson(JsonElement jsonElement)
+    {
+        if(!jsonElement.isJsonObject())
+            return null;
+
+        JsonObject jsonObject = jsonElement.getAsJsonObject();
+        if(!jsonObject.has("uuid"))
+            return null;
+        UUID uuid = UUID.fromString(jsonObject.get("uuid").getAsString());
+        return new ItemID(uuid);
+    }
+
+    public static @Nullable ItemID createFromTag(CompoundTag tag) {
+        ItemID itemID = new ItemID(UUID.randomUUID());
+        if (!itemID.load(tag)) {
+            return null; // Invalid data
+        }
+        return itemID;
+    }
+
+    public static @Nullable ItemID getFromItemStack(ItemStack itemStack)
+    {
+        return ItemIDManager.getItemID(itemStack);
+    }
+
+    /**
+     * Do not call this from the client side!
+     * @param itemStack
+     * @return the itemID associated with the itemStack
+     */
+    public static @NotNull ItemID getOrRegisterFromItemStack(ItemStack itemStack)
+    {
+        return ItemIDManager.registerItemStack(itemStack);
+    }
+
+    public static ItemID of(ItemStack defaultInstance) {
+        return ItemIDManager.getItemID(defaultInstance);
+    }
+
+
+   /* public ItemID(String itemID) {
         this(ItemUtilities.createItemStackFromId(itemID));
     }
     public ItemID(ItemStack stack) {
@@ -65,86 +100,63 @@ public class ItemID implements ServerSaveable {
     public ItemID(JsonElement jsonElement) {
         fromJson(jsonElement);
     }
-   /* public ItemID(FriendlyByteBuf buf) {
-        decode(buf);
-    }*/
+*/
 
-    public static ItemID createFromTag(CompoundTag tag) {
-        ItemID itemID = new ItemID();
-        if (!itemID.load(tag)) {
-            return null; // Invalid data
-        }
-        return itemID;
-    }
-    /*public static ItemID createFomBytes(FriendlyByteBuf buf) {
-        ItemID itemID = new ItemID();
-        itemID.decode(buf);
-        return itemID;
-    }*/
+
 
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
         if (!(obj instanceof ItemID other)) return false;
-        return ItemStack.isSameItemSameComponents(this.stack, other.stack);
+        return uuid.equals(other.uuid);
     }
 
     @Override
     public int hashCode() {
-        if(stack == null || stack.isEmpty()) {
-            return Objects.hash(Items.AIR.getDefaultInstance(), null); // Handle empty stack
+        if(uuid == null) {
+            return 0; // Handle empty stack
         }
-        return stack.hashCode();
+        int hash = uuid.hashCode();
+        return hash;
     }
 
-    public ItemStack getStack() {
-        return stack;
+    public @Nullable ItemStack getStack() {
+        return ItemIDManager.getItemStack(this);
     }
-    public String getName() {
-        return ItemUtilities.getItemIDStr(stack.getItem());
+    public @NotNull String getName() {
+        ItemStack stack = getStack();
+        if(stack == null) {
+            return "?";
+        }
+        String name = ItemUtilities.getItemIDStr(stack.getItem());
+        if(name == null) {
+            return "?";
+        }
+        return name;
     }
     public boolean isAir() {
+        ItemStack stack = getStack();
         return stack == null || stack.isEmpty() || stack.is(Items.AIR);
     }
 
     @Override
     public boolean save(CompoundTag tag) {
-        tag.put("item", ItemStack.CODEC.encodeStart(NbtOps.INSTANCE, stack).getOrThrow());
+        tag.putUUID("uuid", uuid);
         return true;
     }
 
     @Override
     public boolean load(CompoundTag tag) {
-        if(!tag.contains("item"))
+        if(!tag.contains("uuid"))
             return false;
-        stack = ItemStack.CODEC.parse(NbtOps.INSTANCE, tag.get("item")).getOrThrow();
+        uuid = tag.getUUID("uuid");
         return true;
     }
 
-  /*  @Override
-    public void encode(FriendlyByteBuf buf) {
-        buf.writeItem(stack); // Encode the ItemID as an ItemStack
-    }
-
-    @Override
-    public void decode(FriendlyByteBuf buf) {
-        stack = buf.readItem(); // Decode the ItemID from an ItemStack
-    }
-*/
     public JsonElement toJson() {
-        ItemStackJsonParser parser = new ItemStackJsonParser();
-        return parser.toJson(stack);
-    }
-
-    public boolean fromJson(JsonElement json) {
-        ItemStackJsonParser parser = new ItemStackJsonParser();
-        this.stack = parser.fromJson(json);
-        if (this.stack == null || this.stack.isEmpty()) {
-            this.stack = Items.AIR.getDefaultInstance();
-            return false;
-        }
-        this.stack.setCount(1); // Ensure count is 1
-        return true;
+        JsonObject jsonElement = new JsonObject();
+        jsonElement.addProperty("uuid", uuid.toString());
+        return jsonElement;
     }
 
     public String toJsonString()
@@ -154,7 +166,11 @@ public class ItemID implements ServerSaveable {
 
 
     public boolean isValid() {
-        return !stack.isEmpty() && stack != null && !isAir();
+        if(uuid == null) {
+            return false;
+        }
+        ItemStack stack = getStack();
+        return stack != null;
     }
 
     @Override
@@ -163,7 +179,7 @@ public class ItemID implements ServerSaveable {
     }
 
     public UUID getUUID() {
-        return UUID.nameUUIDFromBytes(toString().getBytes());
+        return uuid;
     }
 
 

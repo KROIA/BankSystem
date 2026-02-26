@@ -20,6 +20,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
@@ -309,6 +310,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     public static class TerminalInventory implements ServerSaveable, Container {
         private final BankTerminalBlockEntity blockEntity;
         private final ArrayList<ItemStack> inventory;
+        private HolderLookup.Provider pRegistries = null;
         public TerminalInventory(BankTerminalBlockEntity blockEntity, int size) {
             this.blockEntity = blockEntity;
             inventory = new ArrayList<>(size);
@@ -316,6 +318,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             {
                 inventory.add(ItemStack.EMPTY);
             }
+        }
+
+        public void setRegistryProvider(HolderLookup.Provider pRegistries) {
+            this.pRegistries = pRegistries;
         }
 
         public void setStackInSlot(int slot, ItemStack stack)
@@ -365,7 +371,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
 
                 // Get the item's ResourceLocation
-                ItemID itemID = new ItemID(stack);
+                ItemID itemID = ItemID.getOrRegisterFromItemStack(stack);
 
                 // Compare the ResourceLocation to the provided string
                 // Check if the stack can fit the amount
@@ -390,7 +396,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
 
                 // Get the item's ResourceLocation
-                ItemID _itemID = new ItemID(stack);
+                ItemID _itemID = ItemID.getOrRegisterFromItemStack(stack);
 
                 // Compare the ResourceLocation to the provided string
                 if (_itemID.equals(itemID)) {
@@ -424,7 +430,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     continue;
 
                 // Get the item's ResourceLocation
-                ItemID itemID = new ItemID(stack);
+                ItemID itemID = ItemID.of(stack);
 
                 // Compare the ResourceLocation to the provided string
                 if (itemID != null && itemID.equals(ItemID)) {
@@ -454,7 +460,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
 
                 // Get the item's ResourceLocation
-                ItemID _itemID = new ItemID(stack);
+                ItemID _itemID = ItemID.of(stack);
 
                 // Compare the ResourceLocation to the provided string
                 if (_itemID.equals(itemID)) {
@@ -480,13 +486,14 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 if(stack.isEmpty())
                     continue;
                 itemTag.putInt("Slot", i);
-                CompoundTag stackTag = new CompoundTag();
-                CompoundTag idTag = new CompoundTag();
-                ItemID itemID = new ItemID(stack);
+                Tag stackTag = stack.save(pRegistries);
+                itemTag.put("ItemStack", stackTag);
+                /*CompoundTag idTag = new CompoundTag();
+                ItemID itemID = ItemID.of(stack);
                 itemID.save(idTag);
                 stackTag.put("ItemID", idTag); // todo: Maybe serializing the item ID does not work
                 stackTag.putInt("Count", stack.getCount());
-                itemTag.put("ItemStack", stackTag);
+                itemTag.put("ItemStack", stackTag);*/
                 inventoryTag.add(itemTag);
             }
             tag.put("Slots", inventoryTag);
@@ -507,11 +514,13 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     return false;
                 int slot = itemTag.getInt("Slot");
                 CompoundTag stackTag = itemTag.getCompound("ItemStack");
-                CompoundTag idTag = stackTag.getCompound("ItemID"); // todo: Maybe serializing the item ID does not work
-                ItemID itemID = new ItemID(stackTag);
-                int count = stackTag.getInt("Count");
+                //CompoundTag idTag = stackTag.getCompound("ItemID"); // todo: Maybe serializing the item ID does not work
+                //ItemID itemID = ItemID.createFromTag(idTag);
+                //int count = stackTag.getInt("Count");
                 //ItemStack stack = ItemUtilities.createItemStackFromId(itemID, count);
-                ItemStack stack = itemID.getStack();
+                ItemStack stack = ItemStack.parse(pRegistries,
+                                stackTag)
+                        .orElse(ItemStack.EMPTY);
                 if(stack.isEmpty())
                     return false;
                 inventory.set(slot, stack);
@@ -605,6 +614,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         private UUID playerID;
         private TerminalInventory inventory;
         private int selectedBankAccount = 0;
+
+        private HolderLookup.Provider pRegistries = null;
         //private TransferTask transferTask;
 
         private final BankTerminalBlockEntity blockEntity;
@@ -632,9 +643,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             return transferTask;
         }*/
 
-        public static PlayerData createFromTag(BankTerminalBlockEntity blockEntity, CompoundTag tag)
+        public static PlayerData createFromTag(BankTerminalBlockEntity blockEntity, CompoundTag tag, HolderLookup.Provider pRegistries)
         {
             PlayerData playerData = new PlayerData(blockEntity);
+            playerData.pRegistries = pRegistries;
             if(playerData.load(tag))
                 return playerData;
             return null;
@@ -644,6 +656,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         public boolean save(CompoundTag tag) {
             tag.putUUID("PlayerID", playerID);
             CompoundTag inventoryTag = new CompoundTag();
+            inventory.setRegistryProvider(pRegistries);
             if(!inventory.save(inventoryTag))
                 return false;
             tag.put("Inventory",inventoryTag);
@@ -657,11 +670,14 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         public boolean load(CompoundTag tag) {
             if(tag == null)
                 return false;
-            if(!tag.contains("PlayerID") || !tag.contains("Inventory") || !tag.contains("TransferTask"))
-                return false;
-            playerID = tag.getUUID("PlayerID");
-            CompoundTag inventoryTag = tag.getCompound("Inventory");
-            inventory.load(inventoryTag);
+            if(tag.contains("PlayerID"))
+                playerID = tag.getUUID("PlayerID");
+
+            if(tag.contains("Inventory")) {
+                CompoundTag inventoryTag = tag.getCompound("Inventory");
+                inventory.setRegistryProvider(pRegistries);
+                inventory.load(inventoryTag);
+            }
             //CompoundTag transferTaskTag = tag.getCompound("TransferTask");
             if(tag.contains("SelectedBankAccount"))
                 selectedBankAccount = tag.getInt("SelectedBankAccount");
@@ -699,7 +715,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         for(int i = 0; i < playerDataTag.size(); i++)
         {
             CompoundTag playerDataCompound = playerDataTag.getCompound(i);
-            PlayerData playerData = PlayerData.createFromTag(this, playerDataCompound);
+            PlayerData playerData = PlayerData.createFromTag(this, playerDataCompound, pRegistries);
             if(playerData != null)
             {
                 playerDataTable.put(playerData.getPlayerID(), playerData);
@@ -717,7 +733,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         for(UUID playerID : playerDataTable.keySet())
         {
             CompoundTag dataTag = new CompoundTag();
-            if(playerDataTable.get(playerID).save(dataTag))
+            PlayerData playerData = playerDataTable.get(playerID);
+            playerData.pRegistries = pRegistries;
+            if(playerData.save(dataTag))
             {
                 playerInventoriesTag.add(dataTag);
             }

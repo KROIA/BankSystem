@@ -235,7 +235,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         AskItemFractionScaleFactorScreen askItemFractionScaleFactorScreen = new AskItemFractionScaleFactorScreen(creativeModeItemSelectionScreen, itemStack, (stack, item_fractionScaleFactor) -> {
             if(item_fractionScaleFactor <= 0)
                 item_fractionScaleFactor = 1; // Default to 1 if the scale factor is not set or invalid
-            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestAllowItem(new ItemID(stack), item_fractionScaleFactor, (result) ->
+            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestAllowItem(ItemID.of(stack), item_fractionScaleFactor, (result) ->
             {
                 if(!screenIsOpen)
                     return; // Do not update if the screen is not open
@@ -269,7 +269,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         }
         currentBankingItemView.setItemStack(null);
         currentBankingItemView.setItemStack(itemStack);
-        currentBankingItemID = new ItemID(itemStack);
+        currentBankingItemID = ItemID.of(itemStack);
         updateItemInfoData();
 
         /*for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs()) {

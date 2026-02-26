@@ -9,9 +9,11 @@ import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.*;
@@ -36,7 +38,8 @@ public class OldBankDataLoader {
 
                 // Check if "itemID" tag is a string or a compound
                 if (!tag.contains("itemID", Tag.TAG_COMPOUND)) {
-                    data.itemID = new ItemID(tag.getString("itemID"));
+                    ItemStack itemStack = ItemUtilities.createItemStackFromId(tag.getString("itemID"));
+                    data.itemID = ItemID.getFromItemStack(itemStack);
                 }else if (tag.get("itemID") instanceof CompoundTag itemTag) {
                     data.itemID = ItemID.createFromTag(itemTag);
                 } else {
@@ -46,10 +49,12 @@ public class OldBankDataLoader {
                 data.balance = tag.getLong("balance");
                 data.lockedBalance = tag.getLong("lockedBalance");
 
-                if(!tag.contains("useCents") && MoneyItem.isMoney(data.itemID))
-                {
-                    data.balance *= 100; // Convert to cents if useCents is true
-                    data.lockedBalance *= 100; // Convert to cents if useCents is true
+                if(!tag.contains("useCents")) {
+                    assert data.itemID != null;
+                    if (MoneyItem.isMoney(data.itemID)) {
+                        data.balance *= 100; // Convert to cents if useCents is true
+                        data.lockedBalance *= 100; // Convert to cents if useCents is true
+                    }
                 }
                 return data;
             }
@@ -124,11 +129,12 @@ public class OldBankDataLoader {
         }
         else {
             // Check if all allowed items have a scale factor
-            List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEM_IDS.get();
+            List<BankSystemModSettings.Bank.ItemStackAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEMS;
             for (var el : allowedItems) {
-                if(itemFractionScaleFactor.containsKey(el.itemID))
+                ItemID id = ItemID.getFromItemStack(el.stack);
+                if(itemFractionScaleFactor.containsKey(id))
                     continue;
-                itemFractionScaleFactor.put(el.itemID, el.itemFractionScaleFactor);
+                itemFractionScaleFactor.put(id, el.itemFractionScaleFactor);
             }
         }
         manager.load_compatibilityMode_setItemFractionScaleFactors(itemFractionScaleFactor);
@@ -198,12 +204,13 @@ public class OldBankDataLoader {
             }
         }
 
-        var alsoAdd = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEM_IDS.get().stream().toList();
+        var alsoAdd = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEMS;
 
         for(var item : alsoAdd)
         {
-            if(!items.containsKey(item.itemID)) {
-                items.put(item.itemID, item.itemFractionScaleFactor); // Add the item with a default scale factor of 1
+            ItemID id = ItemID.getFromItemStack(item.stack);
+            if(!items.containsKey(id)) {
+                items.put(id, item.itemFractionScaleFactor); // Add the item with a default scale factor of 1
             }
         }
 

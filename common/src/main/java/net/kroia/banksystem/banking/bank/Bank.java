@@ -13,6 +13,7 @@ import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
@@ -582,26 +583,30 @@ public class Bank implements ServerSaveable, IBank {
                 !tag.contains("lockedBalance"))
             return false;
 
-        String itemIDStr = tag.getString("itemID");
-        itemID = null; // Reset itemID
-        if(itemIDStr.equals("$"))
-            itemID = ItemID.of(new ItemStack(BankSystemItems.MONEY.get()));
-        else if(itemIDStr.equals("money"))
-            itemID = ItemID.of(new ItemStack(BankSystemItems.MONEY.get()));
-        else {
-            ItemStack itemStack = ItemUtilities.createItemStackFromId(itemIDStr);
-            if (itemStack == ItemStack.EMPTY || itemStack == null || itemStack.is(Items.AIR))
-                itemID = null; // Invalid item ID
-            else
-                itemID = new ItemID(itemStack);
+        if(tag.contains("itemID",Tag.TAG_STRING))
+        {
+            String itemIDStr = tag.getString("itemID");
+            itemID = null; // Reset itemID
+            if(itemIDStr.equals("$") || itemIDStr.equals("money")) {
+                itemID = ItemID.getFromItemStack(BankSystemItems.MONEY.get().getDefaultInstance());
+            }
+            else {
+                ItemStack itemStack = ItemUtilities.createItemStackFromId(itemIDStr);
+                if (itemStack == ItemStack.EMPTY || itemStack == null || itemStack.is(Items.AIR))
+                    itemID = null; // Invalid item ID
+                else {
+                    itemID = ItemID.getFromItemStack(itemStack);
+                }
+            }
         }
+
 
         //itemID = MoneyBank.compatibilityMoneyItemIDConvert(tag.getString("itemID"));
         // Compatibility with old money item ID format
         if(itemID == null)
         {
             CompoundTag itemTag = tag.getCompound("itemID");
-            itemID = new ItemID(itemTag);
+            itemID = ItemID.createFromTag(itemTag);
         }
 
 
@@ -613,7 +618,7 @@ public class Bank implements ServerSaveable, IBank {
             centScaleFactor = (long)tag.getInt("centScaleFactor");
         }*/
         setBalanceInternal(balance);
-        return balance >= 0 && lockedBalance >= 0;
+        return balance >= 0 && lockedBalance >= 0 && itemID != null;
     }
 
     private void addBalanceInternal(long balance) {

@@ -4,18 +4,20 @@ package net.kroia.banksystem;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.reflect.TypeToken;
-import net.kroia.banksystem.item.custom.money.*;
+import net.kroia.banksystem.item.BankSystemItems;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
 import net.kroia.modutilities.setting.parser.CustomJsonParser;
-import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 public final class BankSystemModSettings extends ModSettings {
 
@@ -59,12 +61,12 @@ public final class BankSystemModSettings extends ModSettings {
     {
         public static final class ItemIDArrayParser implements CustomJsonParser<List<ItemID>>
         {
-            private static final ItemStackJsonParser stackParser = new ItemStackJsonParser();
+            //private static final ItemStackJsonParser stackParser = new ItemStackJsonParser();
             @Override
             public JsonElement toJson(List<ItemID> value) {
                 JsonArray jsonArray = new JsonArray();
                 for (ItemID itemID : value) {
-                    jsonArray.add(stackParser.toJson(itemID.getStack()));
+                    jsonArray.add(itemID.toJson());
                 }
                 return jsonArray;
             }
@@ -75,44 +77,65 @@ public final class BankSystemModSettings extends ModSettings {
                 if (json.isJsonArray()) {
                     JsonArray jsonArray = json.getAsJsonArray();
                     for (JsonElement element : jsonArray) {
-                        ItemStack stack = stackParser.fromJson(element);
-                        if (stack != null && !stack.isEmpty()) {
-                            itemIDs.add(new ItemID(stack));
+                        ItemID id = ItemID.fromJson(element);
+                        if (id != null) {
+                           itemIDs.add(id);
                         }
                     }
                 }
                 return itemIDs;
             }
         }
-        public static final class ItemIDAndScaleFactor
+        public static final class ItemStackAndScaleFactor
         {
-            public ItemID itemID;
+            public ItemStack stack;
             public int itemFractionScaleFactor = 1;
-            public ItemIDAndScaleFactor()
+            public ItemStackAndScaleFactor()
             {
 
             }
-            public ItemIDAndScaleFactor(ItemID itemID, int itemFractionScaleFactor)
+            public ItemStackAndScaleFactor(ItemStack stack, int itemFractionScaleFactor)
             {
-                this.itemID = itemID;
+                this.stack = stack;
                 this.itemFractionScaleFactor = itemFractionScaleFactor;
             }
-            public ItemIDAndScaleFactor(ItemID itemID)
+            public ItemStackAndScaleFactor(Item item, int itemFractionScaleFactor)
             {
-                this.itemID = itemID;
+                this.stack = item.getDefaultInstance();
+                this.itemFractionScaleFactor = itemFractionScaleFactor;
+            }
+            public ItemStackAndScaleFactor(Item item)
+            {
+                this.stack = item.getDefaultInstance();
+                this.itemFractionScaleFactor = 1;
+            }
+            public ItemStackAndScaleFactor(Supplier<Item> itemSupplier, int itemFractionScaleFactor)
+            {
+                this.stack = itemSupplier.get().getDefaultInstance();
+                this.itemFractionScaleFactor = itemFractionScaleFactor;
+            }
+            public ItemStackAndScaleFactor(Supplier<Item> itemSupplier)
+            {
+                this.stack = itemSupplier.get().getDefaultInstance();
+                this.itemFractionScaleFactor = itemFractionScaleFactor;
+            }
+
+            public ItemStackAndScaleFactor(ItemStack stack)
+            {
+                this.stack = stack;
                 this.itemFractionScaleFactor = 1;
             }
         }
-        public static final class ItemIDAndScaleFactorListParser implements CustomJsonParser<List<ItemIDAndScaleFactor>>
+        /*public static final class ItemIDAndScaleFactorListParser implements CustomJsonParser<List<ItemIDAndScaleFactor>>
         {
 
-            private static final ItemStackJsonParser stackParser = new ItemStackJsonParser();
+            //private static final ItemStackJsonParser stackParser = new ItemStackJsonParser();
             @Override
             public JsonElement toJson(List<ItemIDAndScaleFactor> value) {
                 JsonArray jsonArray = new JsonArray();
                 for (ItemIDAndScaleFactor item : value) {
                     JsonObject jsonObject = new JsonObject();
-                    jsonObject.add("itemID", stackParser.toJson(item.itemID.getStack()));
+                    jsonObject.add("itemID", item.itemID.toJson());
                     jsonObject.addProperty("itemFractionScaleFactor", item.itemFractionScaleFactor);
                     jsonArray.add(jsonObject);
                 }
@@ -127,7 +150,7 @@ public final class BankSystemModSettings extends ModSettings {
                     for (JsonElement element : jsonArray) {
                         if (element.isJsonObject()) {
                             JsonObject jsonObject = element.getAsJsonObject();
-                            ItemID itemID = new ItemID(stackParser.fromJson(jsonObject.get("itemID")));
+                            ItemID itemID = ItemID.fromJson(jsonObject.get("itemID"));
                             int scaleFactor = jsonObject.has("itemFractionScaleFactor") ? jsonObject.get("itemFractionScaleFactor").getAsInt() : 1;
                             itemList.add(new ItemIDAndScaleFactor(itemID, scaleFactor));
                         }
@@ -135,22 +158,51 @@ public final class BankSystemModSettings extends ModSettings {
                 }
                 return itemList;
             }
-        }
+        }*/
         public final Setting<Integer> ITEM_TRANSFER_TICK_INTERVAL = registerSetting("ITEM_TRANSFER_TICK_INTERVAL", 2, Integer.class); // Interval in ticks for item transfer operations
 
-        public final Setting<List<ItemIDAndScaleFactor>> INITIAL_ALLOWED_ITEM_IDS = registerSetting("INITIAL_ALLOWED_ITEM_IDS",
-                new ArrayList<>(List.of(
-                        new ItemIDAndScaleFactor(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME), MoneyItem.ITEM_FRACTION_SCALE_FACTOR),
-                        new ItemIDAndScaleFactor(new ItemID("minecraft:iron_ingot")),
-                        new ItemIDAndScaleFactor(new ItemID("minecraft:gold_ingot")),
-                        new ItemIDAndScaleFactor(new ItemID("minecraft:diamond")),
-                        new ItemIDAndScaleFactor(new ItemID("minecraft:emerald")),
-                        new ItemIDAndScaleFactor(new ItemID("minecraft:coal"))
-                )), // Default allowed item IDs
-                new TypeToken<List<ItemIDAndScaleFactor>>() {}.getType(),
-                new ItemIDAndScaleFactorListParser()); // List of allowed item IDs for bank transactions
 
-        public final Setting<List<ItemID>> BLACKLIST_ITEM_IDS = registerSetting("BLACKLIST_ITEM_IDS",
+        public final List<ItemStackAndScaleFactor> INITIAL_ALLOWED_ITEMS = List.of(
+                        new ItemStackAndScaleFactor(BankSystemItems.MONEY, MoneyItem.ITEM_FRACTION_SCALE_FACTOR),
+                        new ItemStackAndScaleFactor(Items.IRON_INGOT),
+                        new ItemStackAndScaleFactor(Items.GOLD_INGOT),
+                        new ItemStackAndScaleFactor(Items.DIAMOND),
+                        new ItemStackAndScaleFactor(Items.EMERALD),
+                        new ItemStackAndScaleFactor(Items.COAL));
+
+        //public final Setting<List<ItemIDAndScaleFactor>> INITIAL_ALLOWED_ITEM_IDS = registerSetting("INITIAL_ALLOWED_ITEM_IDS",
+        //        new ArrayList<>(List.of(
+        //                new ItemIDAndScaleFactor(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME), MoneyItem.ITEM_FRACTION_SCALE_FACTOR),
+        //                new ItemIDAndScaleFactor(new ItemID("minecraft:iron_ingot")),
+        //                new ItemIDAndScaleFactor(new ItemID("minecraft:gold_ingot")),
+        //                new ItemIDAndScaleFactor(new ItemID("minecraft:diamond")),
+        //                new ItemIDAndScaleFactor(new ItemID("minecraft:emerald")),
+        //                new ItemIDAndScaleFactor(new ItemID("minecraft:coal"))
+        //        )), // Default allowed item IDs
+        //        new TypeToken<List<ItemIDAndScaleFactor>>() {}.getType(),
+        //        new ItemIDAndScaleFactorListParser()); // List of allowed item IDs for bank transactions
+
+        public final List<ItemStack> INITIAL_BLACKLIST_ITEMS = List.of(
+                Items.AIR.getDefaultInstance(),
+                Items.BEDROCK.getDefaultInstance(),
+                Items.BARRIER.getDefaultInstance(),
+                Items.STRUCTURE_VOID.getDefaultInstance(),
+                Items.COMMAND_BLOCK.getDefaultInstance(),
+                Items.REPEATING_COMMAND_BLOCK.getDefaultInstance(),
+                Items.CHAIN_COMMAND_BLOCK.getDefaultInstance(),
+                Items.DEBUG_STICK.getDefaultInstance(),
+                Items.KNOWLEDGE_BOOK.getDefaultInstance(),
+                BankSystemItems.MONEY5.get().getDefaultInstance(),
+                BankSystemItems.MONEY10.get().getDefaultInstance(),
+                BankSystemItems.MONEY20.get().getDefaultInstance(),
+                BankSystemItems.MONEY50.get().getDefaultInstance(),
+                BankSystemItems.MONEY100.get().getDefaultInstance(),
+                BankSystemItems.MONEY200.get().getDefaultInstance(),
+                BankSystemItems.MONEY500.get().getDefaultInstance(),
+                BankSystemItems.MONEY1000.get().getDefaultInstance()
+        );
+
+       /* public final Setting<List<ItemID>> BLACKLIST_ITEM_IDS = registerSetting("BLACKLIST_ITEM_IDS",
                 new ArrayList<>(List.of(new ItemID("minecraft:air"),
                                 new ItemID("minecraft:bedrock"),
                                 new ItemID("minecraft:barrier"),
@@ -172,12 +224,17 @@ public final class BankSystemModSettings extends ModSettings {
                         )), // Default allowed item IDs
                 new TypeToken<List<ItemID>>() {}.getType(),
                 new ItemIDArrayParser()); // List of allowed item IDs for bank transactions
+*/
 
-        public final Setting<List<ItemID>> NOT_REMOVABLE_ITEM_IDS = registerSetting("NOT_REMOVABLE_ITEM_IDS",
-                new ArrayList<>(List.of(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME)
-                )), // Default allowed item IDs
-                new TypeToken<List<ItemID>>() {}.getType(),
-                new ItemIDArrayParser()); // List of allowed item IDs for bank transactions
+        public final List<ItemStack> INITIAL_NOT_REMOVABLE_ITEMS = List.of(
+                BankSystemItems.MONEY.get().getDefaultInstance()
+        );
+
+        //public final Setting<List<ItemID>> NOT_REMOVABLE_ITEM_IDS = registerSetting("NOT_REMOVABLE_ITEM_IDS",
+        //        new ArrayList<>(List.of(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME)
+        //        )), // Default allowed item IDs
+        //        new TypeToken<List<ItemID>>() {}.getType(),
+        //        new ItemIDArrayParser()); // List of allowed item IDs for bank transactions
 
         public final Setting<Integer> BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL = registerSetting("BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL", 20, Integer.class); // Interval in ticks for bank download block updates
         public final Setting<Integer> BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL = registerSetting("BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL", 20, Integer.class); // Interval in ticks for bank download block updates

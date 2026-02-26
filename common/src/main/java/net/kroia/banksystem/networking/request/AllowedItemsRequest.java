@@ -3,15 +3,10 @@ package net.kroia.banksystem.networking.request;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.modutilities.networking.arrs.GenericRequestPacket;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class AllowedItemsRequest extends BankSystemGenericRequest<Integer, List<ItemID>> {
@@ -26,7 +21,6 @@ public class AllowedItemsRequest extends BankSystemGenericRequest<Integer, List<
     public List<ItemID> handleOnServer(Integer input, ServerPlayer sender)
     {
         return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAllowedItems();
-
     }
 
     @Override

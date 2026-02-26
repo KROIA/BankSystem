@@ -397,7 +397,7 @@ public class BankSystemCommands {
                                                                                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
                                                                                 return Command.SINGLE_SUCCESS;
                                                                             }
-                                                                            ItemID itemIDObj = new ItemID(itemStack);
+                                                                            ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
 
                                                                             // Execute the command on the server_sender
                                                                             return bank_create(player, username,  itemIDObj, balance);
@@ -431,7 +431,7 @@ public class BankSystemCommands {
                                                                                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
                                                                                 return Command.SINGLE_SUCCESS;
                                                                             }
-                                                                            ItemID itemIDObj = new ItemID(itemStack);
+                                                                            ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
 
                                                                             // Execute the command on the server_sender
                                                                             return bank_setBalance(player, username,  itemIDObj, balance);
@@ -463,7 +463,7 @@ public class BankSystemCommands {
                                                                         ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
                                                                         return Command.SINGLE_SUCCESS;
                                                                     }
-                                                                    ItemID itemIDObj = new ItemID(itemStack);
+                                                                    ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
 
                                                                     return bank_delete(player, username, itemIDObj);
                                                                 })
@@ -486,7 +486,7 @@ public class BankSystemCommands {
                                                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
                                                 return Command.SINGLE_SUCCESS;
                                             }
-                                            ItemID itemIDObj = new ItemID(itemStack);
+                                            ItemID itemIDObj = ItemID.getOrRegisterFromItemStack(itemStack);
                                             int centScaleFactor = 1;
                                             if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(itemIDObj, centScaleFactor)) {
                                                 centScaleFactor = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(itemIDObj);
@@ -513,7 +513,7 @@ public class BankSystemCommands {
                                             }
 
 
-                                            ItemID itemIDObj = new ItemID(item);
+                                            ItemID itemIDObj = ItemID.getOrRegisterFromItemStack(item);
                                             int centScaleFactor = 1;
                                             if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(itemIDObj, centScaleFactor)) {
                                                 centScaleFactor = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(itemIDObj);
@@ -541,7 +541,7 @@ public class BankSystemCommands {
                                                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
                                                 return Command.SINGLE_SUCCESS;
                                             }
-                                            ItemID itemIDObj = new ItemID(itemStack);
+                                            ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
                                             if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.disallowItemID(itemIDObj))
                                                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedMessage(itemID));
                                             else
@@ -566,7 +566,7 @@ public class BankSystemCommands {
                                     }
 
 
-                                    ItemID itemIDObj = new ItemID(item);
+                                    ItemID itemIDObj = ItemID.getFromItemStack(item);
                                     if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.disallowItemID(itemIDObj))
                                         ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedMessage(itemIDObj.toString()));
                                     else

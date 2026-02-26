@@ -371,7 +371,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         {
             if(currentAccount == null)
                 return;
-            ItemID itemID = new ItemID(itemStack);
+            ItemID itemID = ItemID.of(itemStack);
             if(orderElements.containsKey(itemID))
                 return;
             WithdrawOrderGuiElement orderElement = new WithdrawOrderGuiElement(itemID, this::onRemoveOrder);

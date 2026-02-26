@@ -3,6 +3,7 @@ package net.kroia.banksystem.networking.request;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -35,9 +36,7 @@ public class ItemInfoRequest extends BankSystemGenericRequest<ItemID, ItemInfoDa
 
     @Override
     public void encodeOutput(RegistryFriendlyByteBuf buf, ItemInfoData output) {
-        if(output == null)
-            return; // Handle null output gracefully
-        ItemInfoData.STREAM_CODEC.encode(buf, output);
+        ExtraCodecUtils.nullable(ItemInfoData.STREAM_CODEC).encode(buf, output);
     }
 
     @Override
@@ -50,6 +49,6 @@ public class ItemInfoRequest extends BankSystemGenericRequest<ItemID, ItemInfoDa
         if(buf.readableBytes() == 0) {
             return null; // Handle empty output
         }
-        return ItemInfoData.STREAM_CODEC.decode(buf); // Decode the ItemInfo
+        return ExtraCodecUtils.nullable(ItemInfoData.STREAM_CODEC).decode(buf); // Decode the ItemInfo
     }
 }

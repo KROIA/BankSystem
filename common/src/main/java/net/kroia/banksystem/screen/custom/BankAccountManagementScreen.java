@@ -72,7 +72,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             itemView.setItemStack(itemStack);
         }
         public ItemID getItemID() {
-            return new ItemID(itemView.getItemStack());
+            return ItemID.of(itemView.getItemStack());
         }
     }
 
@@ -509,7 +509,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     }
     private void onCreateNewBank(ItemStack item)
     {
-        ItemID itemID = new ItemID(item);
+        ItemID itemID = ItemID.of(item);
         if(bankAccountManagementItems.containsKey(itemID) ||
                 createBankData.containsKey(itemID))
             return;
