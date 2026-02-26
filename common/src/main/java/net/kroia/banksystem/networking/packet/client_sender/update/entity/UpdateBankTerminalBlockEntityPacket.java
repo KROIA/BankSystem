@@ -1,9 +1,8 @@
 package net.kroia.banksystem.networking.packet.client_sender.update.entity;
 
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
-import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
+import net.kroia.banksystem.util.ItemID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -11,17 +10,20 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.HashMap;
 
-public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
+public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket {
 
     private BlockPos pos;
 
-    private HashMap<String, Long> itemTransferFromMarket;
-    private boolean sendItemsToMarket;
-    public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<String, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
+    private HashMap<ItemID, Long> itemTransferFromMarket;
+    private boolean sendItemsToBank;
+    private int selectedBankAccount; // This can be used to specify which bank account is being updated
+
+    public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<ItemID, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket, int selectedBankAccount) {
         super();
         this.pos = pos;
         this.itemTransferFromMarket = itemTransferToMarketAmounts;
-        this.sendItemsToMarket = sendItemsToMarket;
+        this.sendItemsToBank = sendItemsToMarket;
+        this.selectedBankAccount = selectedBankAccount;
     }
 
 
@@ -33,38 +35,43 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
         return pos;
     }
 
-    public HashMap<String, Long> getItemTransferFromMarket() {
+    public HashMap<ItemID, Long> getItemTransferFromMarket() {
         return itemTransferFromMarket;
     }
-    public boolean isSendItemsToMarket() {
-        return sendItemsToMarket;
+    public boolean isSendItemsToBank() {
+        return sendItemsToBank;
+    }
+    public int getSelectedBankAccount() {
+        return selectedBankAccount;
     }
 
 
-    public static void sendPacketToServer(BlockPos pos, HashMap<String, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
-        BankSystemNetworking.sendToServer(new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToMarketAmounts, sendItemsToMarket));
+    public static void sendPacketToServer(BlockPos pos, HashMap<ItemID, Long> itemTransferToBankAmounts, boolean sendItemsToMarket, int selectedBankAccount) {
+        new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToBankAmounts, sendItemsToMarket, selectedBankAccount).sendToServer();
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf)
+    public void encode(FriendlyByteBuf buf)
     {
         buf.writeBlockPos(pos);
-        buf.writeBoolean(sendItemsToMarket);
+        buf.writeBoolean(sendItemsToBank);
+        buf.writeInt(selectedBankAccount);
         buf.writeInt(itemTransferFromMarket.size());
         itemTransferFromMarket.forEach((itemID, amount) -> {
-            buf.writeUtf(itemID);
+            buf.writeItem(itemID.getStack());
             buf.writeLong(amount);
         });
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         this.pos = buf.readBlockPos();
         this.itemTransferFromMarket = new HashMap<>();
-        this.sendItemsToMarket = buf.readBoolean();
+        this.sendItemsToBank = buf.readBoolean();
+        this.selectedBankAccount = buf.readInt();
         int size = buf.readInt();
         for (int i = 0; i < size; i++) {
-            String itemID = buf.readUtf();
+            ItemID itemID = new ItemID(buf.readItem());
             long amount = buf.readLong();
             this.itemTransferFromMarket.put(itemID, amount);
         }
@@ -72,13 +79,12 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {
-        Thread t = Thread.currentThread();
         BlockEntity blockEntity = sender.level().getBlockEntity(this.pos);
         if(blockEntity instanceof BankTerminalBlockEntity bankTerminalBlockEntity) {
             bankTerminalBlockEntity.handlePacket(this, sender);
         }else
         {
-            BankSystemMod.LOGGER.error("BankTerminalBlockEntity not found at position "+this.pos);
+            BACKEND_INSTANCES.LOGGER.error("BankTerminalBlockEntity not found at position "+this.pos);
         }
     }
 }

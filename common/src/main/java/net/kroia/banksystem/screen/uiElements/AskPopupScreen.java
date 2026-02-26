@@ -1,6 +1,7 @@
 package net.kroia.banksystem.screen.uiElements;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
@@ -8,7 +9,7 @@ import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.Label;
 import net.minecraft.network.chat.Component;
 
-public class AskPopupScreen extends GuiScreen {
+public class AskPopupScreen extends BankSystemGuiScreen {
 
     public static final Component TITLE = Component.translatable("gui."+BankSystemMod.MOD_ID+".ask_popup.title");
     public static final Component YES = Component.translatable("gui."+BankSystemMod.MOD_ID+".ask_popup.yes");

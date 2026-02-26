@@ -3,16 +3,14 @@ package net.kroia.banksystem.fabric;
 import dev.architectury.platform.Platform;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.ModInitializer;
-
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.screen.custom.BankTerminalScreen;
-import net.kroia.banksystem.util.BankSystemPlayerEvents;
-import net.kroia.banksystem.util.BankSystemServerEvents;
-
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.banksystem.util.BankSystemGuiScreen;
 
 public final class BankSystemFabric implements ModInitializer {
     @Override
@@ -21,36 +19,36 @@ public final class BankSystemFabric implements ModInitializer {
         // Client Events
         if(FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
             ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
-                BankSystemMod.LOGGER.info("[FabricSetup] CLIENT_STARTED");
-                BankSystemMod.onClientSetup();
+                BankSystemModBackend.onClientSetup();
             });
         }
 
 
         // Server Events
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
-            BankSystemMod.LOGGER.info("[FabricSetup] SERVER_STARTING");
-            BankSystemMod.onServerSetup();
+            BankSystemModBackend.onServerSetup();
         });
 
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            BankSystemMod.LOGGER.info("[FabricSetup] SERVER_STARTED");
-            BankSystemServerEvents.onServerStart(server); // Handle world load (start)
+        // Handle world load (start)
+        ServerLifecycleEvents.SERVER_STARTED.register((server)->
+        {
+            BankSystemModBackend.onServerStart(server);
+            // Check if NEZNAMY/TAB is present and register placeholders
+            if (Platform.isModLoaded("tab")) {
+                NEZNAMY_TAB_Placeholders.register();
+            }
         });
 
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            BankSystemMod.LOGGER.info("[FabricSetup] SERVER_STOPPING");
-            BankSystemServerEvents.onServerStop(server);
-        });
+        ServerLifecycleEvents.SERVER_STOPPING.register(BankSystemModBackend::onServerStop);
 
 
         // Player Events
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            BankSystemPlayerEvents.onPlayerJoin(handler.getPlayer());
+            BankSystemModBackend.onPlayerJoin(handler.getPlayer());
         });
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            BankSystemPlayerEvents.onPlayerLeave(handler.getPlayer());
+            BankSystemModBackend.onPlayerLeave(handler.getPlayer());
         });
 
 
@@ -59,7 +57,7 @@ public final class BankSystemFabric implements ModInitializer {
 
 
         if (isJeiLoaded() && Platform.getEnv() == EnvType.CLIENT) {
-            BankTerminalScreen.widthPercentage = 70;
+            BankSystemGuiScreen.setJeiModLoaded(true);
         }
     }
 

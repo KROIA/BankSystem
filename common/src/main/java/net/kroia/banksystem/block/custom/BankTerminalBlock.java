@@ -2,7 +2,6 @@ package net.kroia.banksystem.block.custom;
 
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -52,7 +51,6 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
         if (player instanceof ServerPlayer sPlayer) {
             MenuProvider menuProvider = blockEntity.getMenuProvider();
             // Open the menu
-            SyncBankDataPacket.sendPacket(sPlayer);
             openExtendedMenu(sPlayer, menuProvider, (menu) -> {
                 // Set the block position
                 menu.writeBlockPos(pos);
@@ -63,6 +61,7 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
         if (!level.isClientSide()) {
+            // Drop all items from the terminal inventories that have not been transfered to the bank
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof BankTerminalBlockEntity blockEntity) {
                 HashMap<UUID, BankTerminalBlockEntity.TerminalInventory> inventories = blockEntity.getPlayerInventories();

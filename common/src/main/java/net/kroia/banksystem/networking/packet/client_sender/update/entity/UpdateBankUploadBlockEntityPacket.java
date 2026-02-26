@@ -1,46 +1,47 @@
 package net.kroia.banksystem.networking.packet.client_sender.update.entity;
 
 import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
-import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
-import java.util.UUID;
-
-public class UpdateBankUploadBlockEntityPacket extends NetworkPacket {
+public class UpdateBankUploadBlockEntityPacket extends BankSystemNetworkPacket {
 
     BlockPos pos;
     boolean isOwned;
     boolean dropIfNotBankable;
-    public UpdateBankUploadBlockEntityPacket(BlockPos pos, boolean isOwned, boolean dropIfNotBankable) {
+    int bankAccountNumber;
+    public UpdateBankUploadBlockEntityPacket(BlockPos pos, boolean isOwned, boolean dropIfNotBankable, int bankAccountNumber) {
         this.pos = pos;
         this.isOwned = isOwned;
         this.dropIfNotBankable = dropIfNotBankable;
+        this.bankAccountNumber = bankAccountNumber;
     }
 
     public UpdateBankUploadBlockEntityPacket(FriendlyByteBuf buf) {
         super(buf);
     }
 
-    public static void sendPacket(BlockPos pos, boolean isOwned, boolean dropIfNotBankable) {
-        BankSystemNetworking.sendToServer(new UpdateBankUploadBlockEntityPacket(pos, isOwned, dropIfNotBankable));
+    public static void sendPacket(BlockPos pos, boolean isOwned, boolean dropIfNotBankable, int bankAccountNumber) {
+        new UpdateBankUploadBlockEntityPacket(pos, isOwned, dropIfNotBankable, bankAccountNumber).sendToServer();
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeBlockPos(pos);
         buf.writeBoolean(isOwned);
         buf.writeBoolean(dropIfNotBankable);
+        buf.writeInt(bankAccountNumber);
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         pos = buf.readBlockPos();
         isOwned = buf.readBoolean();
         dropIfNotBankable = buf.readBoolean();
+        bankAccountNumber = buf.readInt();
     }
 
     @Override
@@ -59,5 +60,8 @@ public class UpdateBankUploadBlockEntityPacket extends NetworkPacket {
     }
     public boolean isDropIfNotBankable() {
         return dropIfNotBankable;
+    }
+    public int getBankAccountNumber() {
+        return bankAccountNumber;
     }
 }

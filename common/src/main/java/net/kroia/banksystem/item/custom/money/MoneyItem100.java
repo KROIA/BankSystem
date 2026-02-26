@@ -8,7 +8,12 @@ public class MoneyItem100 extends MoneyItem {
     }
 
     @Override
-    public int worth() {
-        return 100;
+    public boolean isBankNote()
+    {
+        return true;
+    }
+    @Override
+    public long worth() {
+        return 100L*ITEM_FRACTION_SCALE_FACTOR;
     }
 }

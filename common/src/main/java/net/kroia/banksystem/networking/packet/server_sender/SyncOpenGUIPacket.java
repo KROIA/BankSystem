@@ -1,23 +1,27 @@
 package net.kroia.banksystem.networking.packet.server_sender;
 
-import net.kroia.banksystem.BankSystemClientHooks;
-import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.banksystem.util.BankSystemClientHooks;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
+import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-public class SyncOpenGUIPacket extends NetworkPacket {
+public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
 
     enum GUIType
     {
         BANK_SYSTEM_SETTING,
-        BANK_ACCOUNT
+        BANK_ACCOUNT,
+        ATM_SCREEN, // ATM screen is not implemented yet
     }
 
     GUIType guiType;
     UUID targetPlayerUUID;
+    int accountNumber;
+    boolean isAdminMode;
 
 
     public SyncOpenGUIPacket() {
@@ -29,16 +33,32 @@ public class SyncOpenGUIPacket extends NetworkPacket {
 
     public static void send_openBankSystemSettingScreen(ServerPlayer player)
     {
+        // check if player is in creative mode
+        if(!player.isCreative())
+        {
+            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNeedCreativeModeForThisScreenMessage());
+            return;
+        }
+
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
         packet.guiType = GUIType.BANK_SYSTEM_SETTING;
-        BankSystemNetworking.sendToClient(player, packet);
+        packet.sendToClient(player);
     }
-    public static void send_openBankAccountScreen(ServerPlayer player, UUID targetPlayerUUID)
+    public static void send_openBankAccountScreen(ServerPlayer player, UUID targetPlayerUUID, int accountNumber, boolean isAdminMode)
     {
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
         packet.guiType = GUIType.BANK_ACCOUNT;
         packet.targetPlayerUUID = targetPlayerUUID;
-        BankSystemNetworking.sendToClient(player, packet);
+        packet.accountNumber = accountNumber;
+        packet.isAdminMode = isAdminMode;
+        packet.sendToClient(player);
+    }
+
+    public static void send_openATMScreen(ServerPlayer player)
+    {
+        SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
+        packet.guiType = GUIType.ATM_SCREEN;
+        packet.sendToClient(player);
     }
 
     @Override
@@ -50,23 +70,30 @@ public class SyncOpenGUIPacket extends NetworkPacket {
                 BankSystemClientHooks.openBankSystemSettingScreen();
                 break;
             case BANK_ACCOUNT:
-                BankSystemClientHooks.openBankAccountScreen(targetPlayerUUID);
+                BankSystemClientHooks.openBankAccountScreen(accountNumber, isAdminMode);
+                break;
+            case ATM_SCREEN:
+                BankSystemClientHooks.openATMScreen();
                 break;
         }
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeEnum(guiType);
 
         if(targetPlayerUUID == null)
             targetPlayerUUID = new UUID(0,0);
         buf.writeUUID(targetPlayerUUID);
+        buf.writeInt(accountNumber);
+        buf.writeBoolean(isAdminMode);
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         guiType = buf.readEnum(GUIType.class);
         targetPlayerUUID = buf.readUUID();
+        accountNumber = buf.readInt();
+        isAdminMode = buf.readBoolean();
     }
 }

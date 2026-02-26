@@ -3,15 +3,16 @@ package net.kroia.banksystem.screen.uiElements;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
+import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.minecraft.network.chat.Component;
 
-import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
 
-public class ItemInfoUserWidget extends GuiElement {
+public class ItemInfoUserWidget extends BankSystemGuiElement {
 
     private static final String PREFIX = "gui."+ BankSystemMod.MOD_ID+".iteminfo_user_widget.";
     private static final Component MANAGE_BUTTON = Component.translatable(PREFIX+"manage_button");
@@ -23,19 +24,21 @@ public class ItemInfoUserWidget extends GuiElement {
     public static final int manageButtonRatio = 10;
     public static final int sumRatio = nameRatio+balanceRatio+lockedBalanceRatio+totalBalanceRatio+manageButtonRatio;
 
-    final Label nameTextLabel;
+    final Label accountNameLabel;
     final Label balanceTextLabel;
     final Label lockedBalanceTextLabel;
     final Label totalBalanceTextLabel;
     final Button manageButton;
 
-    UUID playerUUID;
+    final List<String> userNames = new ArrayList<>();
+
+    int accountNumber;
 
     public ItemInfoUserWidget() {
         super();
         setHeight(20);
 
-        nameTextLabel = new Label();
+        accountNameLabel = new Label();
         balanceTextLabel = new Label();
         lockedBalanceTextLabel = new Label();
         totalBalanceTextLabel = new Label();
@@ -45,7 +48,7 @@ public class ItemInfoUserWidget extends GuiElement {
         manageButton = new Button(MANAGE_BUTTON.getString(), this::onManageButtonClicked);
 
 
-        addChild(nameTextLabel);
+        addChild(accountNameLabel);
         addChild(balanceTextLabel);
         addChild(lockedBalanceTextLabel);
         addChild(totalBalanceTextLabel);
@@ -74,40 +77,63 @@ public class ItemInfoUserWidget extends GuiElement {
         int _manageButtonRatio = manageButtonRatio * width / sumRatio;
 
 
-        nameTextLabel.setBounds(padding, padding, _nameRatio, height);
-        balanceTextLabel.setBounds(nameTextLabel.getRight(), padding, _balanceRatio, height);
+        accountNameLabel.setBounds(padding, padding, _nameRatio, height);
+        balanceTextLabel.setBounds(accountNameLabel.getRight(), padding, _balanceRatio, height);
         lockedBalanceTextLabel.setBounds(balanceTextLabel.getRight(), padding, _lockedBalanceRatio, height);
         totalBalanceTextLabel.setBounds(lockedBalanceTextLabel.getRight(), padding, _totalBalanceRatio, height);
         manageButton.setBounds(totalBalanceTextLabel.getRight(), padding, _manageButtonRatio, height);
     }
 
-    public void setPlayerName(String name)
+    public void setAccountNumber(int number)
     {
-        nameTextLabel.setText(name);
+        accountNumber = number;
+
     }
-    public String getPlayerName()
+    public int getAccountNumber()
     {
-        return nameTextLabel.getText();
+        return accountNumber;
     }
-    public void setBalance(long balance)
+    public void setAccountName(String name)
     {
-        balanceTextLabel.setText(Bank.getNormalizedAmount(balance));
+        accountNameLabel.setText(name);
     }
-    public void setLockedBalance(long lockedBalance)
+    public void setBalance(long balance, int itemFractionScaleFactor)
     {
-        lockedBalanceTextLabel.setText(Bank.getNormalizedAmount(lockedBalance));
+        balanceTextLabel.setText(Bank.getNormalizedAmount(balance, itemFractionScaleFactor));
     }
-    public void setTotalBalance(long totalBalance)
+    public void setLockedBalance(long lockedBalance, int itemFractionScaleFactor)
     {
-        totalBalanceTextLabel.setText(Bank.getNormalizedAmount(totalBalance));
+        lockedBalanceTextLabel.setText(Bank.getNormalizedAmount(lockedBalance, itemFractionScaleFactor));
     }
-    public void setPlayerUUID(UUID playerUUID)
+    public void setTotalBalance(long totalBalance, int itemFractionScaleFactor)
     {
-        this.playerUUID = playerUUID;
+        totalBalanceTextLabel.setText(Bank.getNormalizedAmount(totalBalance, itemFractionScaleFactor));
+    }
+    public void setUserNames(List<String> names)
+    {
+        userNames.clear();
+        userNames.addAll(names);
+    }
+    public List<String> getUserNames()
+    {
+        return userNames;
+    }
+    public boolean hasUserName(String name)
+    {
+        String nameLower = name.toLowerCase();
+        for(String userName : userNames)
+        {
+            if(userName.toLowerCase().contains(nameLower))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void onManageButtonClicked()
     {
-        BankAccountManagementScreen.openScreen(playerUUID, (GuiScreen)getRoot().getScreen());
+        BankAccountManagementScreen.openScreen(accountNumber, (GuiScreen)getRoot().getScreen(), true);
     }
+
 }

@@ -1,11 +1,11 @@
 package net.kroia.banksystem.forge;
 
 import dev.architectury.event.events.common.LifecycleEvent;
-import net.kroia.banksystem.util.BankSystemServerEvents;
-import net.kroia.modutilities.ModUtilitiesMod;
-import net.minecraftforge.event.level.LevelEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraft.server.level.ServerLevel;
+import dev.architectury.platform.Platform;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.compat.NEZNAMY_TAB_Placeholders;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
 
 @Mod.EventBusSubscriber
@@ -13,20 +13,18 @@ public class ForgeServerEvents {
 
     public static void init()
     {
-        LifecycleEvent.SERVER_STARTED.register(server -> {
-            ModUtilitiesMod.LOGGER.info("[ForgeSetup] SERVER_STARTING");
-            BankSystemServerEvents.onServerStart(server);
+        LifecycleEvent.SERVER_STARTED.register((server)->{
+            // Check if NEZNAMY/TAB is present and register placeholders
+            BankSystemModBackend.onServerStart(server);
+            DistExecutor.unsafeRunWhenOn(Dist.DEDICATED_SERVER, () -> {
+                if (Platform.isModLoaded("tab"))
+                {
+                    NEZNAMY_TAB_Placeholders.register();
+                }
+                return () -> {};
+            });
+
         });
-        LifecycleEvent.SERVER_STOPPING.register(server -> {
-            ModUtilitiesMod.LOGGER.info("[ForgeSetup] SERVER_STOPPED");
-            BankSystemServerEvents.onServerStop(server);
-        });
-    }
-    @SubscribeEvent
-    public static void onWorldSave(LevelEvent.Save event) {
-        if (event.getLevel() instanceof ServerLevel serverLevel) {
-            if (serverLevel.dimension().equals(ServerLevel.OVERWORLD))
-                BankSystemServerEvents.onWorldSave(serverLevel);
-        }
+        LifecycleEvent.SERVER_STOPPING.register(BankSystemModBackend::onServerStop);
     }
 }
