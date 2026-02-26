@@ -32,7 +32,9 @@ public class ItemIDManager {
             return id; // Already registered
 
         id = generateIdFromItemStack(itemStack);
-        itemIDMap.put(id, itemStack);
+        ItemStack cpy = itemStack.copy();
+        cpy.setCount(1);
+        itemIDMap.put(id, cpy);
         return id;
     }
 
