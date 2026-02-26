@@ -1,322 +1,790 @@
 package net.kroia.banksystem.banking;
-import net.kroia.banksystem.BankSystemMod;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.banking.events.ServerBankCloseItemBankEvent;
-import net.kroia.banksystem.banking.events.ServerBankEvent;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.api.IServerBankManager;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.banking.clientdata.BankManagerData;
+import net.kroia.banksystem.banking.clientdata.ItemInfoData;
+import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
-import net.kroia.banksystem.util.BankSystemTextMessages;
-import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.JsonUtilities;
+import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Items;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-import java.util.function.Consumer;
+import java.util.*;
 
-public class ServerBankManager implements ServerSaveable {
-
-    private static Map<UUID, BankUser> userMap = new HashMap<>();
-    private static Map<String, Boolean> allowedItemIDs = BankSystemModSettings.Bank.ALLOWED_ITEM_IDS;
-    private static ArrayList<String> potentialBankItemIDs = new ArrayList<>();
-    private static ArrayList<Consumer<ServerBankEvent>> eventListeners = new ArrayList<>();
-    public static BankUser createUser(UUID userUUID, String userName, ArrayList<String> itemIDs, boolean createMoneyBank, long startMoney)
-    {
-        BankUser user = userMap.get(userUUID);
-        if(user != null)
-            return user;
-        user = new BankUser(userUUID, userName);
-        for(String itemID : itemIDs)
-            user.createItemBank(itemID, 0);
-        if(createMoneyBank)
-            user.createMoneyBank(startMoney);
-        PlayerUtilities.printToClientConsole(userUUID, BankSystemTextMessages.getBankCreatedMessage(userName, MoneyItem.getName())+"\n"+
-                BankSystemTextMessages.getMoneyBankAccessHelpMessage());
-        userMap.put(userUUID, user);
-        return user;
-    }
-    public static BankUser createUser(ServerPlayer player, ArrayList<String> itemIDs, boolean createMoneyBank, long startMoney)
-    {
-        String userName = player.getName().getString();
-        BankUser user = userMap.get(player.getUUID());
-        if(user != null)
-            return user;
-        user = new BankUser(player.getUUID(), userName);
-        for(String itemID : itemIDs)
-            user.createItemBank(itemID, 0);
-        if(createMoneyBank)
-            user.createMoneyBank(startMoney);
-        PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankCreatedMessage(userName, MoneyItem.getName())+"\n"+
-                BankSystemTextMessages.getMoneyBankAccessHelpMessage());
-        userMap.put(player.getUUID(), user);
-        return user;
+public class ServerBankManager implements ServerSaveableChunked, IServerBankManager {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        ServerBankManager.BACKEND_INSTANCES = backend;
+        BankAccount.setBackend(backend);
     }
 
-    public static BankUser getUser(UUID userUUID)
+
+    /**
+     * Using the player UUID as key
+     */
+    private final Map<UUID, User> userMap = new HashMap<>();
+
+    /**
+     * Using the ItemID for which the scale factor belongs to as key.
+     */
+    private final Map<ItemID, Integer> itemFractionScaleFactor = new HashMap<>();
+
+    /**
+     * Using the account number as key.
+     */
+    private final Map<Integer, BankAccount> bankAccounts = new HashMap<>();
+
+    private int nextAccountNumber = 1; // Start with account number 1
+
+
+    public ServerBankManager()
     {
-        return userMap.get(userUUID);
+
     }
-    public static BankUser getUser(String userName)
+
+
+    @Override
+    public BankManagerData getBankManagerData()
     {
-        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
-            if(entry.getValue().getPlayerName().equals(userName))
-                return entry.getValue();
+        return new BankManagerData(
+                getBankManagerUserMapData(),
+                getBankManagerItemFractionScaleFactorData(),
+                getBankManagerBankAccountsData(),
+                getAllowedItems(),
+                getBlacklistedItems(),
+                getNotRemovableItems()
+        );
+    }
+
+    @Override
+    public BankManagerData.UserMapData getBankManagerUserMapData()
+    {
+        Map<UUID, UserData> userDataMap = new HashMap<>();
+        for (Map.Entry<UUID, User> entry : userMap.entrySet()) {
+            userDataMap.put(entry.getKey(), entry.getValue().getUserData());
         }
-        return null;
+        return new BankManagerData.UserMapData(userDataMap);
     }
-    public static Map<UUID, BankUser> getUser()
+
+    @Override
+    public BankManagerData.ItemFractionScaleFactorData getBankManagerItemFractionScaleFactorData()
     {
-        return userMap;
+        Map<ItemID, Integer> itemFractionScaleFactorMap = new HashMap<>(itemFractionScaleFactor);
+        return new BankManagerData.ItemFractionScaleFactorData(itemFractionScaleFactorMap);
     }
-    public static void clear()
+
+    @Override
+    public BankManagerData.BankAccountsData getBankManagerBankAccountsData()
     {
-        HashMap<UUID, ServerBankCloseItemBankEvent.PlayerData> lostItems = new HashMap<>();
-        HashMap<String, Boolean> allRemovedItemIDs = new HashMap<>();
-        for(BankUser user : userMap.values())
-        {
-            HashMap<String, Long> itemAmounts = new HashMap<>();
-            user.getBankMap().forEach((itemID, bank) -> {
-                itemAmounts.put(itemID, bank.getTotalBalance());
-                allRemovedItemIDs.put(itemID, true);
-            });
-            for(var itemID : itemAmounts.keySet())
-            {
-                user.removeBank(itemID);
+        Map<Integer, BankAccountData> bankAccountDataMap = new HashMap<>();
+        for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+            bankAccountDataMap.put(entry.getKey(), entry.getValue().getAccountData());
+        }
+        return new BankManagerData.BankAccountsData(bankAccountDataMap);
+    }
+
+    @Override
+    public List<ItemID> getAllowedItems() {
+        List<ItemID> allowedItemIDs = new ArrayList<>(itemFractionScaleFactor.size());
+        for (Map.Entry<ItemID, Integer> entry : itemFractionScaleFactor.entrySet()) {
+            if (entry.getValue() > 0) {
+                allowedItemIDs.add(entry.getKey());
             }
-            ServerBankCloseItemBankEvent.PlayerData playerData = new ServerBankCloseItemBankEvent.PlayerData(user.getPlayerUUID(), itemAmounts);
-            lostItems.put(user.getPlayerUUID(), playerData);
         }
-        userMap.clear();
-
-        ServerBankCloseItemBankEvent event = new ServerBankCloseItemBankEvent(lostItems, new ArrayList<>(allRemovedItemIDs.keySet()));
-        ServerBankManager.fireEvent(event);
+        return allowedItemIDs;
     }
-    public static boolean closeBankAccount(UUID playerUUID, String itemID)
+    @Override
+    public List<ItemID> getBlacklistedItems()
     {
-        BankUser user = userMap.get(playerUUID);
-        Bank bank = user.getBank(itemID);
-        if(bank == null) {
-            return false;
+        return BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BLACKLIST_ITEM_IDS.get();
+    }
+    @Override
+    public List<ItemID> getNotRemovableItems()
+    {
+        return BACKEND_INSTANCES.SERVER_SETTINGS.BANK.NOT_REMOVABLE_ITEM_IDS.get();
+    }
+    @Override
+    public ItemInfoData getItemInfoData(@NotNull ItemID itemID)
+    {
+        double totalSupply = 0;
+        double totalLocked = 0;
+        List<BankAccountData> bankAccounts = new java.util.ArrayList<>();
+        int itemFractionScaleFactor = getItemFractionScaleFactor(itemID);
+
+        for (Map.Entry<Integer, BankAccount> entry : this.bankAccounts.entrySet()) {
+            BankAccount account = entry.getValue();
+            IBank bank = account.getBank(itemID);
+            if(bank == null)
+                continue;
+            totalSupply += bank.getRealTotalBalance();
+            totalLocked += bank.getRealLockedBalance();
+            bankAccounts.add(account.getAccountData(itemID));
         }
-        HashMap<String, Long> itemAmounts = new HashMap<>();
-        itemAmounts.put(itemID, bank.getTotalBalance());
-        HashMap<UUID, ServerBankCloseItemBankEvent.PlayerData> lostItems = new HashMap<>();
-        lostItems.put(user.getPlayerUUID(), new ServerBankCloseItemBankEvent.PlayerData(user.getPlayerUUID(), itemAmounts));
-        if(user.removeBank(itemID))
-        {
-            ArrayList<String> itemIDs= new ArrayList<>();
-            itemIDs.add(itemID);
-            ServerBankCloseItemBankEvent event = new ServerBankCloseItemBankEvent(lostItems, itemIDs);
-            ServerBankManager.fireEvent(event);
+        return new ItemInfoData(itemID, totalSupply, totalLocked, bankAccounts, itemFractionScaleFactor);
+    }
+
+
+
+
+    @Override
+    public void addUser(@NotNull ServerPlayer player)
+    {
+        addUser(new User(player.getUUID(), player.getName().getString(), true));
+    }
+    @Override
+    public void addUser(@NotNull User user)
+    {
+        UUID userUUID = user.getUUID();
+        if(userMap.containsKey(userUUID)) {
+            warn("User with UUID " + userUUID + " already exists. Not adding again.");
+            return;
+        }
+        userMap.put(userUUID, user);
+        info("Added new user: " + user.getName() + " with UUID: " + userUUID);
+        BACKEND_INSTANCES.SERVER_EVENTS.USER_ADDED.notifyListeners(user);
+    }
+    @Override
+    public boolean removeUser(UUID userUUID)
+    {
+        if(userMap.containsKey(userUUID)) {
+            User user = userMap.remove(userUUID);
+            for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+                BankAccount account = entry.getValue();
+                if(account.hasUser(userUUID)) {
+                    account.removeUser(userUUID);
+                    if(!account.hasAnyUser()) {
+                        int accountNr = entry.getKey();
+                        deleteBankAccount(accountNr); // Remove the account if it has no users left
+                        info("Removed empty bank account with number: " + accountNr);
+                    }
+                }
+            }
+            BACKEND_INSTANCES.SERVER_EVENTS.USER_REMOVED.notifyListeners(user);
+            info("Removed user with UUID: " + userUUID);
             return true;
+        } else {
+            warn("No user found with UUID: " + userUUID);
         }
         return false;
     }
-    public static void closeBankAccount(String itemID)
+    @Override
+    public boolean userExists(UUID userUUID)
     {
-        HashMap<UUID, ServerBankCloseItemBankEvent.PlayerData> lostItems = new HashMap<>();
-        for(BankUser user : userMap.values())
-        {
-            Bank bank = user.getBank(itemID);
-            if(bank == null)
-                continue;
-            HashMap<String, Long> itemAmounts = new HashMap<>();
-            itemAmounts.put(itemID, bank.getTotalBalance());
-            user.removeBank(itemID);
-            lostItems.put(user.getPlayerUUID(), new ServerBankCloseItemBankEvent.PlayerData(user.getPlayerUUID(), itemAmounts));
-        }
-        ArrayList<String> itemIDs= new ArrayList<>();
-        itemIDs.add(itemID);
-        ServerBankCloseItemBankEvent event = new ServerBankCloseItemBankEvent(lostItems, itemIDs);
-        ServerBankManager.fireEvent(event);
+        return userMap.containsKey(userUUID);
     }
-
-    public static void addEventListener(Consumer<ServerBankEvent> listener)
-    {
-        eventListeners.add(listener);
+    @Override
+    public @Nullable User getUserByUUID(UUID userUUID) {
+        return userMap.get(userUUID);
     }
-    public static void removeEventListener(Consumer<ServerBankEvent> listener)
+    @Override
+    public @Nullable User getUserByName(String name)
     {
-        eventListeners.remove(listener);
-    }
-    public static void removeAllEventListeners()
-    {
-        eventListeners.clear();
-    }
-    public static void fireEvent(ServerBankEvent event)
-    {
-        for(Consumer<ServerBankEvent> listener : eventListeners)
-        {
-            listener.accept(event);
-        }
-    }
-
-    public static HashMap<UUID, String> getPlayerNameMap()
-    {
-        HashMap<UUID, String> map = new HashMap<>();
-        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
-            map.put(entry.getKey(), entry.getValue().getPlayerName());
-        }
-        return map;
-    }
-
-    public static Bank getMoneyBank(UUID userUUID)
-    {
-        BankUser user = userMap.get(userUUID);
-        if(user == null)
-            return null;
-        return user.getMoneyBank();
-    }
-    public static Bank getMoneyBank(String userName)
-    {
-        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
-            if(entry.getValue().getPlayerName().equals(userName))
-                return entry.getValue().getMoneyBank();
-        }
-        return null;
-    }
-    public static Bank getBank(UUID userUUID, String itemID)
-    {
-        BankUser user = userMap.get(userUUID);
-        if(user == null)
-            return null;
-        return user.getBank(itemID);
-    }
-    public static Bank getMoneyBank(String userName, String itemID)
-    {
-        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
-            if(entry.getValue().getPlayerName().equals(userName))
-                return entry.getValue().getBank(itemID);
+        String lowerCaseName = name.toLowerCase();
+        for (User user : userMap.values()) {
+            if(user.getName().toLowerCase().equals(lowerCaseName)) {
+                return user;
+            }
         }
         return null;
     }
 
 
-    public static long getMoneyCirculation()
+
+
+
+
+    @Override
+    public @Nullable IBankAccount createPersonalBankAccount(UUID user)
     {
-        long total = 0;
-        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
-            total += entry.getValue().getTotalMoneyBalance();
+        User creator = userMap.get(user);
+        if(creator == null) {
+            warn("No user found with UUID: " + user);
+            return null;
+        }
+        if(userHasPersonalBankAccount(user)) {
+            warn("User with UUID: " + user + " already has a personal bank account.");
+            return getPersonalBankAccount(user); // Return existing account if it exists
+        }
+
+        IBankAccount existingAccount = getPersonalBankAccount(user);
+        if(existingAccount != null) {
+            warn("User with UUID: " + user + " already has a personal bank account with number: " + existingAccount.getAccountNumber());
+            return null;
+        }
+
+        int accountNumber = generateNewAccountNumber();
+        float startBalance = BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.get();
+        BankAccount account = BankAccount.createPersonal(accountNumber, creator, startBalance);
+        if(account == null) {
+            warn("Failed to create personal bank account for user with UUID: " + user);
+            return null;
+        }
+        bankAccounts.put(accountNumber, account);
+        return account;
+    }
+    @Override
+    public BankAccount createBankAccount(String accountName)
+    {
+        if(accountName == null || accountName.isEmpty()) {
+            accountName = "Unnamed Account";
+        }
+        int accountNumber = generateNewAccountNumber();
+        BankAccount account = BankAccount.create(accountNumber);
+        if(account == null)
+        {
+            warn("Failed to create bank account with number: " + accountNumber);
+            return null;
+        }
+        account.setAccountName(accountName);
+        account.setAccountIcon(ItemID.of(Items.CHEST.getDefaultInstance()));
+        bankAccounts.put(accountNumber, account);
+        info("Created new bank account with number: " + accountNumber + " and name: " + accountName);
+        return account;
+    }
+    @Override
+    public @Nullable IBankAccount getBankAccount(int accountNumber)
+    {
+        return bankAccounts.get(accountNumber);
+    }
+    @Override
+    public List<IBankAccount> getBankAccounts(UUID userUUID)
+    {
+        List<IBankAccount> accounts = new ArrayList<>();
+        for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+            BankAccount account = entry.getValue();
+            if(account.hasUser(userUUID)) {
+                accounts.add(account); // Add the account if the user is a member
+            }
+        }
+        return accounts; // Return all accounts the user is a member of
+    }
+    @Override
+    public List<IBankAccount> getBankAccounts(ItemID itemID)
+    {
+        List<IBankAccount> accounts = new ArrayList<>();
+        for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+            BankAccount account = entry.getValue();
+            if(account.hasBank(itemID)) {
+                accounts.add(account); // Add the account if it has the bank for the given itemID
+            }
+        }
+        return accounts; // Return all accounts that have a bank for the given itemID
+    }
+    @Override
+    public @Nullable IBankAccount getPersonalBankAccount(UUID userUUID)
+    {
+        for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+            BankAccount account = entry.getValue();
+            User creator = account.getPersonalBankOwner();
+            if(creator != null && creator.getUUID().equals(userUUID)) {
+                return account; // Found the personal bank account
+            }
+        }
+        return null; // No personal bank account found for this user
+    }
+    @Override
+    public @Nullable IBankAccount getPersonalBankAccount(String userName)
+    {
+        User user = getUserByName(userName);
+        if(user == null)
+            return null; // User not found
+        return getPersonalBankAccount(user.getUUID());
+    }
+    @Override
+    public @Nullable IBankAccount getOrCreatePersonalBankAccount(UUID userUUID)
+    {
+        IBankAccount account = getPersonalBankAccount(userUUID);
+        if(account != null)
+            return account;
+        account = createPersonalBankAccount(userUUID);
+        return account;
+    }
+    @Override
+    public @Nullable IBankAccount getOrCreatePersonalBankAccount(@NotNull String userName)
+    {
+        User user = getUserByName(userName);
+        if(user == null)
+            return null;
+        return getOrCreatePersonalBankAccount(user.getUUID());
+    }
+    @Override
+    public boolean userHasPersonalBankAccount(UUID userUUID)
+    {
+        for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+            BankAccount account = entry.getValue();
+            User creator = account.getPersonalBankOwner();
+            if(creator != null && creator.getUUID().equals(userUUID)) {
+                return true; // User has a personal bank account
+            }
+        }
+        return false;
+    }
+    @Override
+    public boolean deleteBankAccount(int accountNumber)
+    {
+        if(bankAccounts.containsKey(accountNumber)) {
+            BankAccount account = bankAccounts.get(accountNumber);
+            if(account.getPersonalBankOwner() != null){
+                error("Cannot delete personal bank account with number: " + accountNumber + ".");
+                return false; // Cannot delete personal bank accounts
+            }
+            bankAccounts.remove(accountNumber);
+            BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_DELETED.notifyListeners(account);
+            info("Deleted bank account with number: " + accountNumber);
+            return true;
+        } else {
+            warn("No bank account found with number: " + accountNumber);
+        }
+        return false;
+    }
+
+
+
+
+
+
+    @Override
+    public @Nullable IBank getPersonalBank(UUID owner, ItemID itemID)
+    {
+        IBankAccount account = getPersonalBankAccount(owner);
+        if(account == null)
+            return null;
+        return account.getBank(itemID);
+    }
+    @Override
+    public @Nullable IBank getPersonalBank(String ownerName, ItemID itemID)
+    {
+        User owner = getUserByName(ownerName);
+        if(owner == null)
+            return null; // User not found
+        IBankAccount account = getPersonalBankAccount(owner.getUUID());
+        if(account == null)
+            return null;
+        return account.getBank(itemID);
+    }
+    @Override
+    public @Nullable IBank getOrCreatePersonalBank(UUID owner, ItemID itemID)
+    {
+        IBankAccount account = getOrCreatePersonalBankAccount(owner);
+        if(account == null)
+            return null;
+        IBank bank = account.getBank(itemID);
+        if(bank != null)
+            return bank;
+        return account.createBank(itemID, 0);
+    }
+    @Override
+    public @Nullable IBank getOrCreatePersonalBank(String ownerName, ItemID itemID)
+    {
+        User owner = getUserByName(ownerName);
+        if(owner == null)
+            return null; // User not found
+        return getOrCreatePersonalBank(owner.getUUID(), itemID);
+    }
+
+
+
+
+
+
+
+
+
+
+
+    @Override
+    public int getItemFractionScaleFactor(ItemID itemID)
+    {
+        if(itemID == null)
+            return 1;
+        Integer scaleFactor = itemFractionScaleFactor.get(itemID);
+        if(scaleFactor == null || scaleFactor <= 0) {
+            return 1;
+        }
+        return scaleFactor;
+    }
+    @Override
+    public boolean isItemIDAllowed(ItemID itemID)
+    {
+        return itemFractionScaleFactor.containsKey(itemID) && itemFractionScaleFactor.get(itemID) > 0;
+    }
+    @Override
+    public boolean allowItemID(ItemID itemID, int itemFractionScaleFactor)
+    {
+        if(itemID == null)
+            return false;
+        if(isItemIDBlacklisted(itemID))
+        {
+            warn("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
+            return false;
+        }
+        if(MoneyItem.isMoney(itemID))
+            itemFractionScaleFactor = MoneyItem.ITEM_FRACTION_SCALE_FACTOR;
+        else if(itemFractionScaleFactor != 1 && itemFractionScaleFactor != 10 && itemFractionScaleFactor != 100)
+            itemFractionScaleFactor = 1;
+        this.itemFractionScaleFactor.put(itemID, itemFractionScaleFactor);
+        return true;
+    }
+    @Override
+    public boolean disallowItemID(ItemID itemID)
+    {
+        if(itemID == null)
+            return false;
+        if(isItemIDNotRemovable(itemID))
+        {
+            warn("It is not allowed to remove the itemID: " + itemID);
+            return false;
+        }
+
+        for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+            BankAccount account = entry.getValue();
+            if(account.hasBank(itemID)) {
+                account.removeBank(itemID);
+                info("Removed item bank for itemID: " + itemID + " from account number: " + entry.getKey());
+            }
+        }
+        // Remove all factors
+        return itemFractionScaleFactor.keySet().removeIf(existingItemID -> existingItemID.equals(itemID));
+    }
+    @Override
+    public boolean isItemIDNotRemovable(ItemID itemID)
+    {
+        List<ItemID> notRemovable = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.NOT_REMOVABLE_ITEM_IDS.get();
+        return notRemovable.contains(itemID);
+    }
+    @Override
+    public boolean isItemIDBlacklisted(ItemID itemID)
+    {
+        List<ItemID> blackList = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BLACKLIST_ITEM_IDS.get();
+        return blackList.contains(itemID);
+    }
+
+
+
+
+
+
+
+    @Override
+    public double getRealMoneyCirculation()
+    {
+        double total = 0;
+        ItemID moneyItemID = MoneyItem.getItemID();
+        for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+            BankAccount account = entry.getValue();
+            IBank moneyBank = account.getBank(moneyItemID);
+            if(moneyBank != null) {
+                total += moneyBank.getRealTotalBalance();
+            }
+        }
+        return total;
+    }
+    @Override
+    public double getRealLockedMoneyCirculation()
+    {
+        double total = 0;
+        ItemID moneyItemID = MoneyItem.getItemID();
+        for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+            BankAccount account = entry.getValue();
+            IBank moneyBank = account.getBank(moneyItemID);
+            if(moneyBank != null) {
+                total += moneyBank.getRealLockedBalance();
+            }
+        }
+        return total;
+    }
+    @Override
+    public double getRealItemCirculation(ItemID itemID)
+    {
+        double total = 0;
+        for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+            BankAccount account = entry.getValue();
+            IBank bank = account.getBank(itemID);
+            if(bank != null)
+                total += bank.getRealTotalBalance();
+        }
+        return total;
+    }
+    @Override
+    public double getRealLockedItemCirculation(ItemID itemID)
+    {
+        double total = 0;
+        for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+            BankAccount account = entry.getValue();
+            IBank bank = account.getBank(itemID);
+            if(bank != null)
+                total += bank.getRealLockedBalance();
         }
         return total;
     }
 
-    public static boolean isItemIDAllowed(String itemID)
+
+
+
+
+    public JsonElement getCirculationDataJson()
     {
-        return allowedItemIDs.containsKey(itemID);
-    }
-    public static boolean allowItemID(String itemID)
-    {
-        if(itemID == null)
-            return false;
-        ArrayList<String> blackList = BankSystemModSettings.Bank.POTENTIAL_ITEM_BLACKLIST;
-        if(blackList.contains(itemID))
+        class Data
         {
-            BankSystemMod.LOGGER.info("It is not allowed to add the itemID: " + itemID);
-            return false;
+            public ItemID itemID;
+            public double lockedBalance = 0;
+            public double freeBalance = 0;
         }
-        allowedItemIDs.put(itemID, true);
-        return true;
-    }
-    public static void disallowItemID(String itemID)
-    {
-        if(itemID == null)
-            return;
-        ArrayList<String> notRemovable = BankSystemModSettings.Bank.NOT_REMOVABLE_ITEM_IDS;
-        if(notRemovable.contains(itemID))
+        Map<ItemID, Data> sums = new HashMap<>();
+        for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet())
         {
-            BankSystemMod.LOGGER.info("It is not allowed to remove the itemID: " + itemID);
-            return;
-        }
-        allowedItemIDs.remove(itemID);
-        closeBankAccount(itemID);
-    }
-    public static ArrayList<String> getAllowedItemIDs()
-    {
-        return new ArrayList<>(allowedItemIDs.keySet());
-    }
-
-
-    public static void setPotientialBankItemIDs(ArrayList<String> potentialBankItemIDs)
-    {
-        ServerBankManager.potentialBankItemIDs = potentialBankItemIDs;
-
-        ArrayList<String> blackList = BankSystemModSettings.Bank.POTENTIAL_ITEM_BLACKLIST;
-        for(String itemID : blackList)
-        {
-            potentialBankItemIDs.remove(itemID);
-        }
-
-        ArrayList<String> notRemovable = BankSystemModSettings.Bank.NOT_REMOVABLE_ITEM_IDS;
-        for(String itemID : notRemovable)
-        {
-            if(!potentialBankItemIDs.contains(itemID))
-                potentialBankItemIDs.add(itemID);
-        }
-    }
-    public static ArrayList<String> getPotentialBankItemIDs()
-    {
-        return potentialBankItemIDs;
-    }
-
-    public static boolean saveToTag(CompoundTag tag)
-    {
-        ServerBankManager tmp = new ServerBankManager();
-        return tmp.save(tag);
-    }
-    @Override
-    public boolean save(CompoundTag tag) {
-        ListTag bankElements = new ListTag();
-        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
-            CompoundTag bankTag = new CompoundTag();
-            entry.getValue().save(bankTag);
-            bankElements.add(bankTag);
-        }
-        tag.put("users", bankElements);
-
-        ListTag allowedItemIDsTag = new ListTag();
-        for (Map.Entry<String, Boolean> entry : allowedItemIDs.entrySet()) {
-            CompoundTag allowedItemTag = new CompoundTag();
-            allowedItemTag.putString("itemID", entry.getKey());
-            allowedItemIDsTag.add(allowedItemTag);
-        }
-        tag.put("allowedItemIDs", allowedItemIDsTag);
-        return true;
-    }
-
-    public static boolean loadFromTag(CompoundTag tag)
-    {
-        ServerBankManager tmp = new ServerBankManager();
-        return tmp.load(tag);
-    }
-    @Override
-    public boolean load(CompoundTag tag) {
-        boolean success = true;
-
-        ListTag bankElements = tag.getList("users", 10);
-        userMap.clear();
-        for (int i = 0; i < bankElements.size(); i++) {
-            CompoundTag bankTag = bankElements.getCompound(i);
-            BankUser user = BankUser.loadFromTag(bankTag);
-            if(user == null)
+            BankAccount account = entry.getValue();
+            for(Map.Entry<ItemID, IBank> bankEntry : account.getAllBanks().entrySet())
             {
-                success = false;
-                continue;
+                ItemID itemID = bankEntry.getKey();
+                IBank bank = bankEntry.getValue();
+                if(bank == null)
+                    continue;
+                Data data = sums.computeIfAbsent(itemID, k -> new Data());
+                data.itemID = itemID;
+                data.lockedBalance += bank.getRealLockedBalance();
+                data.freeBalance += bank.getRealBalance();
             }
-            userMap.put(user.getPlayerUUID(), user);
         }
 
-        ListTag allowedItemIDsTag = tag.getList("allowedItemIDs", 10);
-        allowedItemIDs.clear();
-        for (int i = 0; i < allowedItemIDsTag.size(); i++) {
-            CompoundTag allowedItemTag = allowedItemIDsTag.getCompound(i);
-            String itemID = allowedItemTag.getString("itemID");
-            allowedItemIDs.put(itemID, true);
+        JsonArray circulationData = new JsonArray();
+        for(Map.Entry<ItemID, Data> entry : sums.entrySet())
+        {
+            Data data = entry.getValue();
+            JsonObject itemData = new JsonObject();
+            itemData.add("itemID", data.itemID.toJson());
+            itemData.addProperty("lockedBalance", data.lockedBalance);
+            itemData.addProperty("freeBalance", data.freeBalance);
+            circulationData.add(itemData);
         }
-        return success;
+        return circulationData;
+    }
+    public String getCirculationDataJsonString()
+    {
+        JsonElement circulationData = getCirculationDataJson();
+        return JsonUtilities.toPrettyString(circulationData);
+    }
+
+
+
+
+
+    private int generateNewAccountNumber()
+    {
+        int newBankNumber = nextAccountNumber;
+        while(bankAccounts.containsKey(newBankNumber)) {
+            newBankNumber++;
+        }
+        nextAccountNumber = newBankNumber+1; // Increment for the next account number
+        return newBankNumber;
+    }
+
+    public void setupDefaultItems()
+    {
+        // Check if all allowed items have a scale factor
+        List<BankSystemModSettings.Bank.ItemIDAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEM_IDS.get();
+        for (var el : allowedItems) {
+            if(itemFractionScaleFactor.containsKey(el.itemID))
+                continue;
+            itemFractionScaleFactor.put(el.itemID, el.itemFractionScaleFactor);
+        }
+    }
+
+    @Override
+    public boolean save(Map<String, ListTag> listTags) {
+        CompoundTag metaData = new CompoundTag();
+        metaData.putInt("version", 1); // Versioning for future changes
+        metaData.putInt("nextAccountNumber", nextAccountNumber);
+        ListTag metaTagList = new ListTag();
+        metaTagList.add(metaData);
+        listTags.put("meta", metaTagList);
+
+
+        ListTag userList = new ListTag();
+        for (Map.Entry<UUID, User> entry : userMap.entrySet()) {
+            CompoundTag userTag = new CompoundTag();
+            entry.getValue().save(userTag);
+            userList.add(userTag);
+        }
+        listTags.put("users", userList);
+
+        // Save item cent scale factors
+        ListTag itemScaleFactors = new ListTag();
+        for (Map.Entry<ItemID, Integer> entry : itemFractionScaleFactor.entrySet()) {
+            CompoundTag pairTag = new CompoundTag();
+            CompoundTag itemTag = new CompoundTag();
+            entry.getKey().save(itemTag);
+            pairTag.put("itemID", itemTag);
+            pairTag.putInt("scaleFactor", entry.getValue());
+            itemScaleFactors.add(pairTag);
+        }
+        listTags.put("itemCentScaleFactors", itemScaleFactors);
+
+        ListTag accountsList = new ListTag();
+        for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
+            CompoundTag accountTag = new CompoundTag();
+            entry.getValue().save(accountTag);
+            accountsList.add(accountTag);
+        }
+        listTags.put("bankAccounts", accountsList);
+
+
+
+        return true;
+    }
+
+    @Override
+    public boolean load(Map<String, ListTag> listTags) {
+        CompoundTag metaData = listTags.getOrDefault("meta", new ListTag()).getCompound(0);
+        int version = metaData.getInt("version");
+        nextAccountNumber = metaData.getInt("nextAccountNumber");
+
+
+        // Load item cent scale factors
+        if(listTags.containsKey("itemCentScaleFactors")) {
+            ListTag itemScaleFactors = listTags.get("itemCentScaleFactors");
+            itemFractionScaleFactor.clear();
+            for (int i = 0; i < itemScaleFactors.size(); i++) {
+                CompoundTag pairTag = itemScaleFactors.getCompound(i);
+                if(!pairTag.contains("itemID") || !pairTag.contains("scaleFactor")) {
+                    warn("Invalid item scale factor tag: " + pairTag);
+                    continue; // Skip invalid entries
+                }
+                ItemID itemID = ItemID.createFromTag(pairTag.getCompound("itemID"));
+                int scaleFactor = pairTag.getInt("scaleFactor");
+                itemFractionScaleFactor.put(itemID, scaleFactor);
+            }
+        }
+        else {
+            setupDefaultItems(); // Setup default items if no scale factors are present
+        }
+
+
+
+        // Load users
+        if(listTags.containsKey("users")) {
+            ListTag userList = listTags.get("users");
+            userMap.clear();
+            for (int i = 0; i < userList.size(); i++) {
+                CompoundTag userTag = userList.getCompound(i);
+                User user = User.createFromTag(userTag);
+                if(user != null) {
+                    userMap.put(user.getUUID(), user);
+                } else {
+                    warn("Failed to load user from tag: " + userTag);
+                }
+            }
+        }
+
+        // Load bank accounts
+        if(listTags.containsKey("bankAccounts")) {
+            ListTag accountsList = listTags.get("bankAccounts");
+            bankAccounts.clear();
+            for (int i = 0; i < accountsList.size(); i++) {
+                CompoundTag accountTag = accountsList.getCompound(i);
+                BankAccount account = BankAccount.createFromTag(accountTag);
+                if(account != null) {
+                    bankAccounts.put(account.getAccountNumber(), account);
+                } else {
+                    warn("Failed to load bank account from tag: " + accountTag);
+                }
+            }
+        }
+        return true;
+    }
+
+    public boolean load_compatibilityMode_setNextAccountNumber(int nextAccountNumber)
+    {
+        this.nextAccountNumber = nextAccountNumber;
+        return true;
+    }
+    public boolean load_compatibilityMode_setItemFractionScaleFactors(Map<ItemID, Integer> itemFractionScaleFactor)
+    {
+        this.itemFractionScaleFactor.clear();
+        this.itemFractionScaleFactor.putAll(itemFractionScaleFactor);
+        return true;
+    }
+    public boolean load_compatibilityMode_setUsers(Map<UUID, User> userMap)
+    {
+        this.userMap.clear();
+        this.userMap.putAll(userMap);
+        return true;
+    }
+    public boolean load_compatibilityMode_setBankAccounts(Map<Integer, BankAccount> bankAccounts)
+    {
+        this.bankAccounts.clear();
+        this.bankAccounts.putAll(bankAccounts);
+        return true;
+    }
+
+
+    public JsonElement toJson()
+    {
+        JsonObject jsonObject = new JsonObject();
+
+        JsonArray usersJson = new JsonArray();
+        for (User user : userMap.values()) {
+            usersJson.add(user.toJson());
+        }
+        jsonObject.add("users", usersJson);
+
+        JsonArray itemScaleFactorsJson = new JsonArray();
+        for (Map.Entry<ItemID, Integer> entry : itemFractionScaleFactor.entrySet()) {
+            JsonObject itemScaleFactorJson = new JsonObject();
+            itemScaleFactorJson.add("itemID", entry.getKey().toJson());
+            itemScaleFactorJson.addProperty("scaleFactor", entry.getValue());
+            itemScaleFactorsJson.add(itemScaleFactorJson);
+        }
+        jsonObject.add("itemCentScaleFactors", itemScaleFactorsJson);
+
+        JsonArray accountsJson = new JsonArray();
+        for (BankAccount account : bankAccounts.values()) {
+            accountsJson.add(account.toJson());
+        }
+        jsonObject.add("bankAccounts", accountsJson);
+        return jsonObject;
+    }
+    public String toJsonString()
+    {
+        return JsonUtilities.toPrettyString(toJson());
+    }
+    @Override
+    public String toString() {
+        return toJsonString();
+    }
+
+    private void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[ServerBankManager] " + msg);
+    }
+    private void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[ServerBankManager] " + msg);
+    }
+    private void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[ServerBankManager] " + msg, e);
+    }
+    private void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[ServerBankManager] " + msg);
+    }
+    private void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[ServerBankManager] " + msg);
     }
 }

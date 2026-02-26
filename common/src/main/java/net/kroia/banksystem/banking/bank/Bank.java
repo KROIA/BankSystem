@@ -1,82 +1,139 @@
 package net.kroia.banksystem.banking.bank;
 
-import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.BankUser;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.banking.clientdata.BankData;
+import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
-import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.JsonUtilities;
+import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.UUID;
-
-public class Bank implements ServerSaveable {
-    private static final Component WARNING = Component.translatable("message."+BankSystemMod.MOD_ID+".bank.warning");
-    private static final Component INFO = Component.translatable("message."+BankSystemMod.MOD_ID+".bank.info");
-
-    public enum BankType
-    {
-        MONEY,
-        ITEM
+public class Bank implements ServerSaveable, IBank {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        Bank.BACKEND_INSTANCES = backend;
     }
-    public enum Status
-    {
-        SUCCESS,
-        FAILED_NOT_ENOUGH_FUNDS,
-        FAILED_OVERFLOW,
-        FAILED_NEGATIVE_VALUE
-    }
+    //private static final Component WARNING = Component.translatable("message."+ BankSystemMod.MOD_ID+".bank.warning");
+    //private static final Component INFO = Component.translatable("message."+BankSystemMod.MOD_ID+".bank.info");
 
-    private final BankUser owner;
+
+    //private BankUserOld owner;
+
     protected long balance;
     protected long lockedBalance;
+   // protected long centScaleFactor = 1;
+    private ItemID itemID;
 
-    String itemID;
 
-
-    public Bank(BankUser owner, String itemID, long balance) {
+   /* public Bank(BankUserOld owner, ItemID itemID, long balance) {
         this.owner = owner;
         this.itemID = itemID;
+        balance = Math.max(balance, 0); // Ensure balance is not negative
         setBalanceInternal(balance);
         this.lockedBalance = 0;
     }
-    public Bank(BankUser owner, CompoundTag tag) {
+    public Bank(BankUserOld owner, CompoundTag tag) {
         this.owner = owner;
         load(tag);
+    }*/
+    private Bank()
+    {
+
+    }
+    private Bank(ItemID itemID, long balance)
+    {
+        this.itemID = itemID;
+        this.balance = Math.max(balance, 0); // Ensure balance is not negative
+        this.lockedBalance = 0;
     }
 
-    public static Bank loadFromTag(BankUser owner, CompoundTag tag) {
-        BankType type = BankType.valueOf(tag.getString("BankType"));
-        switch(type)
-        {
-            case MONEY:
-                return new MoneyBank(owner, tag);
-            case ITEM:
-                return new ItemBank(owner, tag);
-            default:
-                return null;
+    public static @Nullable Bank create(ItemID itemID, float balance) {
+        if (itemID == null || balance < 0) {
+            return null; // Invalid parameters
         }
+        ServerBankManager mgr = BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        if(!mgr.isItemIDAllowed(itemID)) {
+            return null; // Item not allowed in bank
+        }
+        return new Bank(itemID, (long)(balance * mgr.getItemFractionScaleFactor(itemID)));
+    }
+    public static @Nullable Bank createFromTag(CompoundTag tag)
+    {
+        Bank bank = new Bank();
+        if(bank.load(tag)) {
+            return bank;
+        }
+        return null; // Invalid data
     }
 
+    public BankData getMinimalData() {
+        return new BankData(
+                itemID,
+                balance,
+                lockedBalance,
+                getItemFractionScaleFactor()
+        );
+    }
 
+    /*public static Bank loadFromTag(BankUserOld owner, CompoundTag tag) {
+        BankType type = BankType.valueOf(tag.getString("BankType"));
+        return switch (type) {
+            case MONEY -> new MoneyBank(owner, tag);
+            case ITEM -> new ItemBank(owner, tag);
+        };
+    }*/
+
+    @Override
+    public final int getItemFractionScaleFactor()
+    {
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(itemID);
+    }
+
+    @Override
     public long getBalance() {
         return balance;
     }
+    @Override
     public long getLockedBalance() {
         return lockedBalance;
     }
-
+    @Override
     public long getTotalBalance() {
         return balance + lockedBalance;
     }
-    public String getItemID() {
+
+    @Override
+    public float getRealBalance() {
+        return convertToRealAmount(balance);
+    }
+    @Override
+    public float getRealLockedBalance() {
+        return convertToRealAmount(lockedBalance);
+    }
+    @Override
+    public float getRealTotalBalance() {
+        return convertToRealAmount(balance + lockedBalance);
+    }
+
+
+    @Override
+    public ItemID getItemID() {
         return itemID;
     }
+    @Override
     public String getItemName()
     {
-        String name = ItemUtilities.getItemName(itemID);
+        String name = itemID.getName();
         if(name == null)
             return "unknown";
         if(name.contains(":"))
@@ -84,52 +141,82 @@ public class Bank implements ServerSaveable {
         return name;
     }
 
-    public void setBalance(long balance) {
+    @Override
+    public boolean setBalance(long balance) {
         if(balance < 0)
-            return;
+            return false;
         long newBalance = balance - this.lockedBalance;
         if(newBalance < 0)
         {
-            warnUser(BankSystemTextMessages.getProblemWhileTryingSetBalanceMessage(getItemName(), this.balance, balance, lockedBalance, balance));
+            /*warnUser(BankSystemTextMessages.getProblemWhileTryingSetBalanceMessage(getItemName(),
+                    getFormattedAmount(this.balance, getItemFractionScaleFactor()),
+                    getFormattedAmount(balance, getItemFractionScaleFactor()),
+                    getFormattedAmount(lockedBalance, getItemFractionScaleFactor()),
+                    getFormattedAmount(balance, getItemFractionScaleFactor())));
+
+             */
 
             lockedBalance = balance;
             setBalanceInternal(0);
-            return;
+            return false;
         }
 
         setBalanceInternal(newBalance);
-        if(owner.isBankNotificationEbabled())
-            notifyUser(BankSystemTextMessages.getSetBalanceMessage(getBalance(), getItemName(), owner.getPlayerName()));
+        //if(owner.isBankNotificationEnabled())
+        //    notifyUser(BankSystemTextMessages.getSetBalanceMessage(getFormattedAmount(getBalance(), getItemFractionScaleFactor()), getItemName(), owner.getPlayerName()));
+        return true;
     }
 
+    @Override
+    public boolean setRealBalance(float balance)
+    {
+        return setBalance(convertToRawAmount(balance));
+    }
+
+   /* @Override
     public UUID getPlayerUUID() {
         return owner.getPlayerUUID();
     }
-    public ServerPlayer getUser()
+
+    @Override
+    public @Nullable ServerPlayer getUser()
     {
         return owner.getPlayer();
     }
 
+    @Override
     public String getPlayerName()
     {
         return owner.getPlayerName();
-    }
+    }*/
 
 
+
+
+    @Override
     public Status deposit(long amount) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         if(willOverflow(amount))
             return Status.FAILED_OVERFLOW;
         addBalanceInternal(amount);
+        //if(owner.isBankNotificationEnabled())
+        //    notifyUser(BankSystemTextMessages.getAddedMessage(getFormattedAmount(amount, getItemFractionScaleFactor()), getItemName(), owner.getPlayerName()));
         return Status.SUCCESS;
     }
 
+    @Override
+    public Status depositReal(float amount) {
+        return deposit(convertToRawAmount(amount));
+    }
 
+
+    @Override
     public boolean hasSufficientFunds(long amount) {
         return balance >= amount;
     }
 
+    @Override
     public Status withdraw(long amount) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
@@ -137,9 +224,56 @@ public class Bank implements ServerSaveable {
             return Status.FAILED_NOT_ENOUGH_FUNDS;
         }
         addBalanceInternal(-amount);
+        //if(owner.isBankNotificationEnabled())
+        //    notifyUser(BankSystemTextMessages.getRemovedMessage(getFormattedAmount(amount, getItemFractionScaleFactor()), getItemName(), owner.getPlayerName()));
         return Status.SUCCESS;
     }
-    public Status transfer(long amount, Bank other) {
+
+    @Override
+    public Status withdrawReal(float amount) {
+        return withdraw(convertToRawAmount(amount));
+    }
+
+    @Override
+    public Status withdrawLocked(long amount) {
+        if(amount < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
+        if (lockedBalance < amount) {
+            return Status.FAILED_NOT_ENOUGH_FUNDS;
+        }
+        lockedBalance -= amount;
+        return Status.SUCCESS;
+    }
+    @Override
+    public Status withdrawLockedReal(float amount) {
+        return withdrawLocked(convertToRawAmount(amount));
+    }
+
+
+    @Override
+    public Status withdrawLockedPrefered(long amount) {
+        if(amount < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
+        if (lockedBalance < amount) {
+            if (balance+lockedBalance < amount) {
+                return Status.FAILED_NOT_ENOUGH_FUNDS;
+            }
+            amount -= lockedBalance;
+            lockedBalance = 0;
+            addBalanceInternal(-amount);
+            return Status.SUCCESS;
+        }
+
+        lockedBalance -= amount;
+        return Status.SUCCESS;
+    }
+    @Override
+    public Status withdrawLockedPreferedReal(float amount) {
+        return withdrawLockedPrefered(convertToRawAmount(amount));
+    }
+
+    @Override
+    public Status transfer(long amount, @NotNull IBank other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         if (balance < amount) {
@@ -147,18 +281,24 @@ public class Bank implements ServerSaveable {
         }
         if(other == this)
             return Status.SUCCESS;
-        dbg_checkValueIsNegative(amount);
 
         addBalanceInternal(-amount);
         Status otherStatus = other.deposit(amount);
         if(otherStatus == Status.SUCCESS) {
-            notifyUser_transfer(amount, other);
+            //notifyUser_transfer(amount, other);
             return Status.SUCCESS;
         }
         addBalanceInternal(amount);
         return otherStatus;
     }
-    public Status transferFromLocked(long amount, Bank other) {
+    @Override
+    public Status transferReal(float amount, @NotNull IBank other) {
+        return transfer(convertToRawAmount(amount), other);
+    }
+
+
+    @Override
+    public Status transferFromLocked(long amount, @NotNull IBank other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         if (lockedBalance < amount) {
@@ -167,13 +307,19 @@ public class Bank implements ServerSaveable {
         lockedBalance -= amount;
         Status otherStatus = other.deposit(amount);
         if(otherStatus == Status.SUCCESS) {
-            notifyUser_transfer(amount, other);
+            //notifyUser_transfer(amount, other);
             return Status.SUCCESS;
         }
         lockedBalance += amount;
         return otherStatus;
     }
-    public Status transferFromLockedPrefered(long amount, Bank other) {
+    @Override
+    public Status transferFromLockedReal(float amount, @NotNull IBank other) {
+        return transferFromLocked(convertToRawAmount(amount), other);
+    }
+
+    @Override
+    public Status transferFromLockedPrefered(long amount, @NotNull IBank other) {
         if(amount < 0)
             return Status.FAILED_NEGATIVE_VALUE;
         long origAmount = amount;
@@ -187,7 +333,7 @@ public class Bank implements ServerSaveable {
             Status otherStatus = other.deposit(origAmount);
             if(otherStatus == Status.SUCCESS) {
                 addBalanceInternal(-amount);
-                notifyUser_transfer(origAmount, other);
+                //notifyUser_transfer(origAmount, other);
                 return Status.SUCCESS;
             }
             lockedBalance = lastLocked;
@@ -197,63 +343,83 @@ public class Bank implements ServerSaveable {
         lockedBalance -= amount;
         Status otherStatus = other.deposit(amount);
         if(otherStatus == Status.SUCCESS) {
-            notifyUser_transfer(amount, other);
+            //notifyUser_transfer(amount, other);
             return Status.SUCCESS;
         }
         lockedBalance = lastLocked;
         return otherStatus;
     }
-
-    public static Status exchangeFromLockedPrefered(Bank from1, Bank to1, long amount1, Bank from2, Bank to2, long amount2)
-    {
-        dbg_checkValueIsNegative(amount1);
-        dbg_checkValueIsNegative(amount2);
-
-        // Both transactions must be possible, otherwise no transaction is done
-        // Copy original data
-        long origFrom1LockedBalance1 = from1.lockedBalance;
-        long origFrom2LockedBalance2 = from2.lockedBalance;
-        long origFrom1Balance1 = from1.balance;
-        long origFrom2Balance2 = from2.balance;
-        long origTo1LockedBalance1 = to1.lockedBalance;
-        long origTo2LockedBalance2 = to2.lockedBalance;
-        long origTo1Balance1 = to1.balance;
-        long origTo2Balance2 = to2.balance;
-
-
-        // Try to transfer from locked balance
-        Status status1 = from1.transferFromLockedPrefered(amount1, to1);
-        Status status2 = from2.transferFromLockedPrefered(amount2, to2);
-        if(status1 == Status.SUCCESS && status2 == Status.SUCCESS)
-        {
-            return Status.SUCCESS;
-        }
-        // If not possible, revert changes
-        from1.lockedBalance = origFrom1LockedBalance1;
-        from2.lockedBalance = origFrom2LockedBalance2;
-        from1.balance = origFrom1Balance1;
-        from2.balance = origFrom2Balance2;
-        to1.lockedBalance = origTo1LockedBalance1;
-        to2.lockedBalance = origTo2LockedBalance2;
-        to1.balance = origTo1Balance1;
-        to2.balance = origTo2Balance2;
-        if(status1 == Status.SUCCESS)
-            return status2;
-        return status1;
+    @Override
+    public Status transferFromLockedPreferedReal(float amount, @NotNull IBank other) {
+        return transferFromLockedPrefered(convertToRawAmount(amount), other);
     }
 
+    public static Status exchangeFromLockedPrefered(@NotNull IBank from1,@NotNull IBank to1, long amount1,
+                                                    @NotNull IBank from2,@NotNull IBank to2, long amount2)
+    {
+        if(amount1 < 0 || amount2 < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
+
+        if ((from1 instanceof  Bank castedFrom1) &&
+            (to1 instanceof  Bank castedTo1) &&
+            (from2 instanceof  Bank castedFrom2) &&
+            (to2 instanceof  Bank castedTo2))
+        {
+            // Both transactions must be possible, otherwise no transaction is done
+            // Copy original data
+            long origFrom1LockedBalance1 = castedFrom1.lockedBalance;
+            long origFrom2LockedBalance2 = castedFrom2.lockedBalance;
+            long origFrom1Balance1 = castedFrom1.balance;
+            long origFrom2Balance2 = castedFrom2.balance;
+            long origTo1LockedBalance1 = castedTo1.lockedBalance;
+            long origTo2LockedBalance2 = castedTo2.lockedBalance;
+            long origTo1Balance1 = castedTo1.balance;
+            long origTo2Balance2 = castedTo2.balance;
+
+
+            // Try to transfer from locked balance
+            Status status1 = from1.transferFromLockedPrefered(amount1, to1);
+            Status status2 = from2.transferFromLockedPrefered(amount2, to2);
+            if(status1 == Status.SUCCESS && status2 == Status.SUCCESS)
+            {
+                return Status.SUCCESS;
+            }
+            // If not possible, revert changes
+            castedFrom1.lockedBalance = origFrom1LockedBalance1;
+            castedFrom2.lockedBalance = origFrom2LockedBalance2;
+            castedFrom1.balance = origFrom1Balance1;
+            castedFrom2.balance = origFrom2Balance2;
+            castedTo1.lockedBalance = origTo1LockedBalance1;
+            castedTo2.lockedBalance = origTo2LockedBalance2;
+            castedTo1.balance = origTo1Balance1;
+            castedTo2.balance = origTo2Balance2;
+            if(status1 == Status.SUCCESS)
+                return status2;
+            return status1;
+        }
+        return Status.FAILED_WRONG_INSTANCE_TYPE;
+    }
+
+    @Override
     public Status lockAmount(long amount) {
-        dbg_checkValueIsNegative(amount);
+        if(amount < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
         if (balance < amount) {
             return Status.FAILED_NOT_ENOUGH_FUNDS;
         }
         addBalanceInternal(-amount);
         lockedBalance += amount;
-        dbg_checkValueIsNegative(lockedBalance);
         return Status.SUCCESS;
     }
+    @Override
+    public Status lockAmountReal(float amount) {
+        return lockAmount(convertToRawAmount(amount));
+    }
+
+    @Override
     public Status unlockAmount(long amount) {
-        dbg_checkValueIsNegative(amount);
+        if(amount < 0)
+            return Status.FAILED_NEGATIVE_VALUE;
         if (lockedBalance < amount) {
             return Status.FAILED_NOT_ENOUGH_FUNDS;
         }
@@ -261,7 +427,12 @@ public class Bank implements ServerSaveable {
         lockedBalance -= amount;
         return Status.SUCCESS;
     }
+    @Override
+    public Status unlockAmountReal(float amount) {
+        return unlockAmount(convertToRawAmount(amount));
+    }
 
+    @Override
     public void unlockAll()
     {
         addBalanceInternal(lockedBalance);
@@ -269,8 +440,134 @@ public class Bank implements ServerSaveable {
     }
 
     @Override
+    public long convertToRawAmount(float realAmount)
+    {
+        return convertToRawAmountStatic(realAmount, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public float convertToRealAmount(long rawAmount)
+    {
+        return convertToRealAmountStatic(rawAmount, getItemFractionScaleFactor());
+    }
+
+    public static long convertToRawAmountStatic(float realAmount, int itemFractionScaleFactor)
+    {
+        return (long)(realAmount * itemFractionScaleFactor);
+    }
+    public static float convertToRealAmountStatic(long rawAmount, int itemFractionScaleFactor)
+    {
+        return (float)rawAmount / itemFractionScaleFactor;
+    }
+
+    @Override
+    public String getNormalizedBalance()
+    {
+        return getNormalizedAmount(balance, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public String getNormalizedLockedBalance()
+    {
+        return getNormalizedAmount(lockedBalance, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public String getNormalizedTotalBalance()
+    {
+        return getNormalizedAmount(balance + lockedBalance, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public String getFormattedBalance()
+    {
+        return getFormattedAmount(balance, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public String getFormattedLockedBalance()
+    {
+        return getFormattedAmount(lockedBalance, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public String getFormattedTotalBalance()
+    {
+        return getFormattedAmount(balance + lockedBalance, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public String getNormalizedAmount(float realAmount)
+    {
+        return getNormalizedAmount((double)realAmount);
+    }
+    @Override
+    public String getNormalizedAmount(double realAmount)
+    {
+        return getNormalizedAmount(realAmount, getItemFractionScaleFactor());
+    }
+    @Override
+    public String getNormalizedAmount(long rawAmount)
+    {
+        return getNormalizedAmount(rawAmount, getItemFractionScaleFactor());
+    }
+    @Override
+    public String getFormattedAmount(float realAmount)
+    {
+        return getFormattedAmount((double)realAmount);
+    }
+    @Override
+    public String getFormattedAmount(double realAmount)
+    {
+        return getFormattedAmount(realAmount, getItemFractionScaleFactor());
+    }
+    @Override
+    public String getFormattedAmount(long rawAmount)
+    {
+        return getFormattedAmount(rawAmount, getItemFractionScaleFactor());
+    }
+
+    @Override
+    public String toString()
+    {
+        return toJsonString();
+        //return "Owner: "+getPlayerName()+" "+toStringNoOwner();
+    }
+
+    @Override
+    public String toStringNoOwner()
+    {
+        StringBuilder content = new StringBuilder(getItemName() + getFormattedTotalBalance());
+        if(lockedBalance > 0) {
+            content.append("(").append(BankSystemTextMessages.getBalanceDetailedMessage(
+                    getFormattedAmount(balance, getItemFractionScaleFactor()),
+                    getFormattedAmount(lockedBalance, getItemFractionScaleFactor()))).append(")");
+        }
+
+        return content.toString();
+    }
+
+    @Override
+    public JsonElement toJson()
+    {
+        JsonObject json = new JsonObject();
+        json.add("itemID", itemID.toJson());
+        json.addProperty("balance", getNormalizedBalance());
+        json.addProperty("lockedBalance", getNormalizedLockedBalance());
+        return json;
+    }
+    @Override
+    public String toJsonString()
+    {
+        return JsonUtilities.toPrettyString(toJson());
+    }
+
+    @Override
     public boolean save(CompoundTag tag) {
-        tag.putString("itemID", itemID);
+        CompoundTag itemTag = new CompoundTag();
+        itemID.save(itemTag);
+        //tag.putInt("centScaleFactor", (int)centScaleFactor); // Marker for backwards compatibility, to check if this value exists or not.
+        tag.put("itemID", itemTag);
         tag.putLong("balance", balance);
         tag.putLong("lockedBalance", lockedBalance);
         return true;
@@ -284,66 +581,81 @@ public class Bank implements ServerSaveable {
                 !tag.contains("balance") ||
                 !tag.contains("lockedBalance"))
             return false;
-        itemID = MoneyBank.compatibilityMoneyItemIDConvert(tag.getString("itemID"));
 
-        setBalanceInternal(tag.getLong("balance"));
+        String itemIDStr = tag.getString("itemID");
+        itemID = null; // Reset itemID
+        if(itemIDStr.equals("$"))
+            itemID = ItemID.of(new ItemStack(BankSystemItems.MONEY.get()));
+        else if(itemIDStr.equals("money"))
+            itemID = ItemID.of(new ItemStack(BankSystemItems.MONEY.get()));
+        else {
+            ItemStack itemStack = ItemUtilities.createItemStackFromId(itemIDStr);
+            if (itemStack == ItemStack.EMPTY || itemStack == null || itemStack.is(Items.AIR))
+                itemID = null; // Invalid item ID
+            else
+                itemID = new ItemID(itemStack);
+        }
+
+        //itemID = MoneyBank.compatibilityMoneyItemIDConvert(tag.getString("itemID"));
+        // Compatibility with old money item ID format
+        if(itemID == null)
+        {
+            CompoundTag itemTag = tag.getCompound("itemID");
+            itemID = new ItemID(itemTag);
+        }
+
+
+        long balance = tag.getLong("balance");
         lockedBalance = tag.getLong("lockedBalance");
-        return balance >= 0 && lockedBalance >= 0 && !itemID.isEmpty();
+
+        /*if(!tag.contains("centScaleFactor"))
+        {
+            centScaleFactor = (long)tag.getInt("centScaleFactor");
+        }*/
+        setBalanceInternal(balance);
+        return balance >= 0 && lockedBalance >= 0;
     }
 
     private void addBalanceInternal(long balance) {
         setBalanceInternal(this.balance + balance);
     }
     private void setBalanceInternal(long balance) {
-        if(balance < 0)
-            dbg_invalid_balance(balance);
+        /*if(balance < 0) {
+            dbg_invalid_balance(balance, getItemFractionScaleFactor());
+        }*/
 
         this.balance = balance;
     }
 
-    private static void dbg_invalid_balance(long balance) {
-        throw new IllegalArgumentException("Balance is negative: "+balance);
-    }
-    private static void dbg_checkValueIsNegative(long value) {
-        if(value < 0)
-            throw new IllegalArgumentException("Value is negative: "+value);
+    /*private static void dbg_invalid_balance(long balance, int centScaleFactor) {
+        throw new IllegalArgumentException("Balance is negative: "+getFormattedAmount(balance, centScaleFactor));
     }
 
-
-    protected void notifyUser_transfer(long amount, Bank other) {
-        if(amount == 0)
+    protected void notifyUser_transfer(long amount, IBank other) {
+        if (amount == 0)
             return;
 
-        if(owner.isBankNotificationEbabled())
-            notifyUser(BankSystemTextMessages.getTransferedMessage(amount, getItemName(), other.getPlayerName()));
-        if(other.owner.isBankNotificationEbabled())
-            other.notifyUser(BankSystemTextMessages.getReceivedMessage(amount, getItemName(), owner.getPlayerName()));
+        if (owner.isBankNotificationEnabled())
+            notifyUser(BankSystemTextMessages.getTransferedMessage(getFormattedAmount(amount, getItemFractionScaleFactor()), getItemName(), other.getPlayerName()));
+        if (other instanceof  Bank casted){
+            if (casted.owner.isBankNotificationEnabled())
+                casted.notifyUser(BankSystemTextMessages.getReceivedMessage(getFormattedAmount(amount, getItemFractionScaleFactor()), getItemName(), owner.getPlayerName()));
+        }
     }
 
     protected void warnUser(String msg) {
-        PlayerUtilities.printToClientConsole(getPlayerUUID(), WARNING.getString()+msg);
+        ServerPlayerUtilities.printToClientConsole(getPlayerUUID(), WARNING.getString()+msg);
     }
 
     protected void notifyUser(String msg) {
-        PlayerUtilities.printToClientConsole(getPlayerUUID(), INFO.getString()+msg);
-    }
+        ServerPlayerUtilities.printToClientConsole(getPlayerUUID(), INFO.getString()+msg);
+    }*/
 
-    public String toString()
-    {
-        return "Owner: "+getPlayerName()+" "+toStringNoOwner();
-    }
 
-    public String toStringNoOwner()
-    {
-        //StringBuilder content = new StringBuilder(getItemName() +" Balance: "+(balance+lockedBalance));
-        StringBuilder content = new StringBuilder(getItemName() +BankSystemTextMessages.getBalanceMessage(balance+lockedBalance));
-        if(lockedBalance > 0)
-            content.append("("+BankSystemTextMessages.getBalanceDetailedMessage(balance, lockedBalance)+")");
 
-        return content.toString();
-    }
 
-    public static String getNormalizedAmount(long amount)
+    // (1000 means 10.00 currency units)
+    public static String getNormalizedAmount(long amount, int itemFractionScaleFactor)
     {
         // depending on the exponent of the amount add a "k", "M", "G", "T", "P", "E", "Z", "Y"
         // 1.0e3 = 1k
@@ -354,8 +666,12 @@ public class Bank implements ServerSaveable {
         // 1.0e18 = 1E
         String exponents = "kMGTPEZY";
 
-        String amountString = String.valueOf(amount);
-        int exponent = (int)(Math.log((double)amount)/Math.log(10));
+        long wholeUnits = amount / itemFractionScaleFactor;
+
+
+
+        String amountString = String.valueOf(wholeUnits);
+        int exponent = (int)(Math.log((double)wholeUnits)/Math.log(10));
         int exponent3 = exponent/3;
         if(exponent3 > 0)
         {
@@ -365,13 +681,31 @@ public class Bank implements ServerSaveable {
                 firstPart = "0";
             String secondPart = amountString.substring(modValue, modValue+2);
 
-            amountString = firstPart+"."+secondPart+exponents.charAt(exponent3-1);
+            amountString = firstPart+"."+secondPart + exponents.charAt(exponent3-1);
+        }
+        else
+        {
+            float cents = (amount % itemFractionScaleFactor) / (float)itemFractionScaleFactor; // Convert to cents
+
+            String centsString = String.valueOf((cents));
+
+            // Remove "0." prefix if cents are zero
+            if(centsString.startsWith("0.")) {
+                centsString = centsString.substring(2);
+            }
+            if(itemFractionScaleFactor > 1)
+                amountString = amountString + "." + centsString;
         }
         return amountString;
     }
-    public static String getFormattedAmount(long amount)
+    public static String getNormalizedAmount(double realAmount, int centScaleFactor)
     {
-        String nr = String.valueOf(amount);
+        long amount = (long)(realAmount * centScaleFactor);
+        return getFormattedAmount(amount, centScaleFactor);
+    }
+    public static String getFormattedAmount(long amount, int itemFractionScaleFactor)
+    {
+        String nr = String.valueOf(amount/itemFractionScaleFactor);
         // add ' for every 3 digits
         StringBuilder sb = new StringBuilder();
         int i = 0;
@@ -382,12 +716,46 @@ public class Bank implements ServerSaveable {
             if(i % 3 == 0 && j > 0)
                 sb.append('\'');
         }
-        return sb.reverse().toString();
+        sb.reverse();
+        if(amount % itemFractionScaleFactor != 0)
+        {
+
+            float cents = (amount % itemFractionScaleFactor) / (float)itemFractionScaleFactor; // Convert to cents
+
+            String centsString = String.valueOf(cents);
+
+            // Remove "0." prefix if cents are zero
+            if(centsString.startsWith("0.")) {
+                centsString = centsString.substring(1);
+            }
+            sb.append(centsString);
+        }
+        return sb.toString();
+    }
+    public static String getFormattedAmount(double realAmount, int centScaleFactor)
+    {
+        long amount = (long)(realAmount * centScaleFactor);
+        return getFormattedAmount(amount, centScaleFactor);
+    }
+    public static int getMaxDecimalDigitsCount(int itemFractionScaleFactor)
+    {
+        if(itemFractionScaleFactor == 1)
+            return 0;
+        String centsString = String.valueOf(1.f/itemFractionScaleFactor);
+        // Remove "0." prefix if cents are zero
+        if(centsString.startsWith("0.")) {
+            centsString = centsString.substring(2);
+        }
+        // Count the number of digits after the decimal point
+        return centsString.length();
     }
 
     private boolean willOverflow(long tryToAddAmount)
     {
-        return Long.MAX_VALUE - tryToAddAmount < (balance+lockedBalance);
+        return willAdditionOverflow(balance + lockedBalance, tryToAddAmount);
+    }
+    private static boolean willAdditionOverflow(long a, long b) {
+        return Long.MAX_VALUE - a < b;
     }
 
 

@@ -1,222 +1,128 @@
 package net.kroia.banksystem.banking;
 
-import com.mojang.datafixers.util.Pair;
-import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.bank.MoneyBank;
-import net.kroia.banksystem.networking.packet.client_sender.request.*;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemInfoPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncPotentialBankItemIDsPacket;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.IClientBankManager;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.banking.clientdata.BankManagerData;
+import net.kroia.banksystem.banking.clientdata.ItemInfoData;
+import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.request.*;
+import net.kroia.banksystem.util.ItemID;
+import net.minecraft.core.BlockPos;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
+import java.util.UUID;
+import java.util.function.Consumer;
 
-public class ClientBankManager {
-    private static SyncBankDataPacket bankDataPacket;
-    private static SyncItemInfoPacket itemInfoPacket;
-    private static SyncPotentialBankItemIDsPacket potentialBankItemIDsPacket;
-    private static boolean hasUpdatedBankData = false;
-    private static boolean hasUpdatedItemInfo = false;
+public class ClientBankManager implements IClientBankManager {
 
-    public static void clear()
+    protected BankSystemModBackend.Instances BACKEND_INSTANCES;
+
+    public ClientBankManager(BankSystemModBackend.Instances backendInstances)
     {
-        bankDataPacket = null;
-        itemInfoPacket = null;
-    }
-    public static void handlePacket(SyncBankDataPacket packet)
-    {
-        bankDataPacket = packet;
-        hasUpdatedBankData = true;
-    }
-    public static void handlePacket(SyncPotentialBankItemIDsPacket packet)
-    {
-        potentialBankItemIDsPacket = packet;
-    }
-    public static void handlePacket(SyncItemInfoPacket packet)
-    {
-        itemInfoPacket = packet;
-        hasUpdatedItemInfo = true;
+        this.BACKEND_INSTANCES = backendInstances;
     }
 
-    public static boolean hasUpdatedBankData()
+    //private final int bankAccountNumber; // This is a placeholder, as the client does not have a bank account number
+
+
+
+
+
+    /*@Override
+    public void requestMinimalBankData(UUID playerUUID, ItemID itemID, Consumer<@Nullable BankData> callback)
     {
-        boolean has = hasUpdatedBankData;
-        hasUpdatedBankData = false;
-        return has;
+        MinimalBankDataRequest.InputType input = new MinimalBankDataRequest.InputType(playerUUID, itemID);
+        BankSystemNetworking.MINIMAL_BANK_DATA_REQUEST.sendRequestToServer(input, callback);
+    }*/
+
+    @Override
+    public void requestBankAccountData(int accountNumber, Consumer<@Nullable BankAccountData> callback)
+    {
+        BankAccountDataRequest.InputData input = new BankAccountDataRequest.InputData(accountNumber);
+        BankSystemNetworking.BANK_ACCOUNT_DATA_REQUEST.sendRequestToServer(input, callback);
     }
-    public static boolean hasUpdatedItemInfo()
+    @Override
+    public void requestPersonalBankAccountData(UUID playerUUID, Consumer<@Nullable BankAccountData> callback)
     {
-        boolean has = hasUpdatedItemInfo;
-        hasUpdatedItemInfo = false;
-        return has;
+        BankAccountDataRequest.InputData input = new BankAccountDataRequest.InputData(playerUUID);
+        BankSystemNetworking.BANK_ACCOUNT_DATA_REQUEST.sendRequestToServer(input, callback);
     }
 
-    public static long getBalance()
+    @Override
+    public void requestBankManagerData(Consumer<@Nullable BankManagerData> callback)
     {
-        if(bankDataPacket == null)
-        {
-            msgBankDataNotReceived();
-            return 0;
-        }
-        return bankDataPacket.getBalance();
-    }
-    public static long getBalance(String itemID)
-    {
-        if(bankDataPacket == null)
-        {
-            msgBankDataNotReceived();
-            return 0;
-        }
-        return bankDataPacket.getBalance(itemID);
+        BankSystemNetworking.BANK_MANAGER_DATA_REQUEST.sendRequestToServer(0, callback);
     }
 
-    public static long getLockedBalance()
+    @Override
+    public void requestItemInfoData(ItemID itemID, Consumer<@Nullable ItemInfoData> callback)
     {
-        if(bankDataPacket == null)
-        {
-            msgBankDataNotReceived();
-            return 0;
-        }
-        return bankDataPacket.getLockedBalance();
-    }
-    public static long getLockedBalance(String itemID)
-    {
-        if(bankDataPacket == null)
-        {
-            msgBankDataNotReceived();
-            return 0;
-        }
-        return bankDataPacket.getLockedBalance(itemID);
-    }
-    public static boolean hasItemBank(String itemID)
-    {
-        if(bankDataPacket == null)
-        {
-            msgBankDataNotReceived();
-            return false;
-        }
-        return bankDataPacket.hasItemBank(itemID);
+        BankSystemNetworking.ITEM_INFO_REQUEST.sendRequestToServer(itemID, callback);
     }
 
-    public static Map<String, SyncBankDataPacket.BankData> getBankData() {
-        if(bankDataPacket == null)
-        {
-            msgBankDataNotReceived();
-            return new HashMap<>();
-        }
-        return bankDataPacket.getBankData();
-    }
-    public static ArrayList<String> getAllowedItemIDs() {
-        if(bankDataPacket == null)
-        {
-            msgBankDataNotReceived();
-            return new ArrayList<>();
-        }
-        return bankDataPacket.getAllowedItemIDs();
-    }
-    public static String getBankDataPlayerName()
+    @Override
+    public void requestAllowItem(ItemID itemID, int centScaleFactor, Consumer<Boolean> callback)
     {
-        if(bankDataPacket == null)
-        {
-            msgBankDataNotReceived();
-            return "";
-        }
-        return bankDataPacket.getPlayerName();
-    }
-    public static ArrayList<String> getPotentialBankItemIDs() {
-        if(potentialBankItemIDsPacket == null || potentialBankItemIDsPacket.getPotentialBankItemIDs() == null)
-        {
-            BankSystemMod.LOGGER.warn("Potential bank item IDs packet not received yet");
-            RequestPotentialBankItemIDsPacket.sendRequest();
-            return new ArrayList<>();
-        }
-        return potentialBankItemIDsPacket.getPotentialBankItemIDs();
-    }
-    public static ArrayList<Pair<String, SyncBankDataPacket.BankData>> getSortedItemData()
-    {
-        if(bankDataPacket == null)
-        {
-            msgBankDataNotReceived();
-            return new ArrayList<>();
-        }
-        HashMap<String, SyncBankDataPacket.BankData> bankAccounts = bankDataPacket.getBankData();
-        // Sort the bank accounts by itemID
-        ArrayList<Pair<String,SyncBankDataPacket.BankData>> sortedBankAccounts = new ArrayList<>();
-        for (String itemID : bankAccounts.keySet()) {
-            if(itemID.equals(MoneyBank.ITEM_ID))
-                continue; // Skip the money bank
-            sortedBankAccounts.add(new Pair<>(itemID, bankAccounts.get(itemID)));
-        }
-        // Sort by balance
-        sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().getBalance(), a.getSecond().getBalance()));
-        return sortedBankAccounts;
-    }
-    public static ArrayList<Pair<String, SyncBankDataPacket.BankData>> getSortedBankData()
-    {
-        if(bankDataPacket == null)
-        {
-            msgBankDataNotReceived();
-            return new ArrayList<>();
-        }
-        HashMap<String, SyncBankDataPacket.BankData> bankAccounts = bankDataPacket.getBankData();
-        // Sort the bank accounts by itemID
-        ArrayList<Pair<String,SyncBankDataPacket.BankData>> sortedBankAccounts = new ArrayList<>();
-        for (String itemID : bankAccounts.keySet()) {
-            sortedBankAccounts.add(new Pair<>(itemID, bankAccounts.get(itemID)));
-        }
-        // Sort by balance
-        sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().getBalance(), a.getSecond().getBalance()));
-        return sortedBankAccounts;
+        AllowItemRequest.Data requestData = new AllowItemRequest.Data(itemID, centScaleFactor);
+        BankSystemNetworking.ALLOW_ITEM_REQUEST.sendRequestToServer(requestData, callback);
     }
 
-    public static long getTotalSupply(String itemID)
+    @Override
+    public void requestDisallowItem(ItemID itemID, Consumer<Boolean> callback)
     {
-        if(itemInfoPacket == null || !itemInfoPacket.getItemID().equals(itemID))
-        {
-            msgItemInfoNotReceived(itemID);
-            return 0;
-        }
-        return itemInfoPacket.getTotalSupply();
-    }
-    public static long getTotalLocked(String itemID)
-    {
-        if(itemInfoPacket == null || !itemInfoPacket.getItemID().equals(itemID))
-        {
-            msgItemInfoNotReceived(itemID);
-            return 0;
-        }
-        return itemInfoPacket.getTotalLocked();
-    }
-    public static Map<String, SyncItemInfoPacket.BankData> getItemInfoBankData(String itemID)
-    {
-        if(itemInfoPacket == null || !itemInfoPacket.getItemID().equals(itemID))
-        {
-            msgItemInfoNotReceived(itemID);
-            return null;
-        }
-        return itemInfoPacket.getBankData();
+        BankSystemNetworking.DISALLOW_ITEM_REQUEST.sendRequestToServer(itemID, callback);
     }
 
-    private static void msgBankDataNotReceived()
+    @Override
+    public void requestRemoveEmptyBanks(int accountNumber, Consumer<List<ItemID>> callback)
     {
-        RequestBankDataPacket.sendRequest();
-    }
-    private static void msgItemInfoNotReceived(String itemID)
-    {
-        RequestItemInfoPacket.sendRequest(itemID);
+        BankSystemNetworking.REMOVE_EMPTY_BANKS_REQUEST.sendRequestToServer(accountNumber, callback);
     }
 
-    public static void requestAllowNewItemID(String itemID)
+    /*@Override
+    public void requestRemoveEmptyBanks(Consumer<List<ItemID>> callback)
     {
-        RequestAllowNewBankItemIDPacket.sendRequest(itemID);
+        UUID thisPlayer = Minecraft.getInstance().player.getUUID();
+        BankSystemNetworking.REMOVE_EMPTY_BANKS_REQUEST.sendRequestToServer(thisPlayer, callback);
+    }*/
+
+    @Override
+    public void requestItemFractionScaleFactor(ItemID itemID, Consumer<Integer> callback)
+    {
+        BankSystemNetworking.ITEM_FRACTION_SCALE_FACTOR_REQUEST.sendRequestToServer(itemID, callback);
     }
-    public static void requestRemoveItemID(String itemID)
+
+
+    public void requestBankAccountNumbers(UUID playerUUID, Consumer<List<Integer>> callback)
     {
-        RequestDisallowBankingItemIDPacket.sendRequest(itemID);
+        BankSystemNetworking.BANK_ACCOUNT_NUMBERS_REQUEST.sendRequestToServer(List.of(playerUUID), callback);
     }
-    public static void requestItemInfo(String itemID)
+    public void requestBankAccountNumbers(List<UUID> playerUUIDs, Consumer<List<Integer>> callback)
     {
-        RequestItemInfoPacket.sendRequest(itemID);
+        BankSystemNetworking.BANK_ACCOUNT_NUMBERS_REQUEST.sendRequestToServer(playerUUIDs, callback);
+    }
+
+    public void requestUpdateBankAccount(UpdateBankAccountRequest.InputData inputData, Consumer<BankAccountData> callback)
+    {
+        BankSystemNetworking.UPDATE_BANK_ACCOUNT_REQUEST.sendRequestToServer(inputData, callback);
+    }
+
+    public void requestBankTerminalData(BlockPos pos, Consumer<BankTerminalBlockDataRequest.Output> callback) {
+        BankSystemNetworking.BANK_TERMINAL_BLOCK_DATA_REQUEST.sendRequestToServer(pos, callback);
+    }
+
+    public void requestBankAccounts(UUID playerUUID, Consumer<BankSelectionScreenDataRequest.Output> callback) {
+        BankSystemNetworking.BANK_SELECTION_SCREEN_DATA_REQUEST.sendRequestToServer(playerUUID, callback);
+    }
+
+
+    public void requestDeleteBankAccount(int accountNumber, Consumer<Boolean> callback) {
+        BankSystemNetworking.DELETE_BANK_ACCOUNT_REQUEST.sendRequestToServer(accountNumber, callback);
+    }
+
+    public void requestAllowdItems(Consumer<List<ItemID>> callback) {
+        BankSystemNetworking.ALLOWED_ITEMS_REQUEST.sendRequestToServer(0, callback);
     }
 }

@@ -1,48 +1,40 @@
 package net.kroia.banksystem.networking;
 
-import dev.architectury.impl.NetworkAggregator;
-import dev.architectury.networking.simple.*;
-import dev.architectury.platform.Platform;
-import dev.architectury.utils.Env;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.networking.packet.client_sender.request.*;
-import net.kroia.banksystem.networking.packet.client_sender.update.UpdateBankAccountPacket;
+import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.*;
+import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
+import net.kroia.banksystem.networking.request.*;
+import net.kroia.modutilities.networking.PacketManager;
+import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
 
-import java.util.List;
+public class BankSystemNetworking extends PacketManager {
 
+    public static ItemInfoRequest ITEM_INFO_REQUEST = (ItemInfoRequest) AsynchronousRequestResponseSystem.register(new ItemInfoRequest());
+    public static BankManagerDataRequest BANK_MANAGER_DATA_REQUEST = (BankManagerDataRequest) AsynchronousRequestResponseSystem.register(new BankManagerDataRequest());
+    public static BankAccountDataRequest BANK_ACCOUNT_DATA_REQUEST = (BankAccountDataRequest) AsynchronousRequestResponseSystem.register(new BankAccountDataRequest());
+    //public static MinimalBankDataRequest MINIMAL_BANK_DATA_REQUEST = (MinimalBankDataRequest) AsynchronousRequestResponseSystem.register(new MinimalBankDataRequest());
+    public static AllowItemRequest ALLOW_ITEM_REQUEST = (AllowItemRequest) AsynchronousRequestResponseSystem.register(new AllowItemRequest());
+    public static DisallowItemRequest DISALLOW_ITEM_REQUEST = (DisallowItemRequest) AsynchronousRequestResponseSystem.register(new DisallowItemRequest());
+    public static RemoveEmptyBanksRequest REMOVE_EMPTY_BANKS_REQUEST = (RemoveEmptyBanksRequest) AsynchronousRequestResponseSystem.register(new RemoveEmptyBanksRequest());
+    public static itemFractionScaleFactorRequest ITEM_FRACTION_SCALE_FACTOR_REQUEST = (itemFractionScaleFactorRequest) AsynchronousRequestResponseSystem.register(new itemFractionScaleFactorRequest());
+    public static BankAccountNumbersRequest BANK_ACCOUNT_NUMBERS_REQUEST = (BankAccountNumbersRequest) AsynchronousRequestResponseSystem.register(new BankAccountNumbersRequest());
+    public static UpdateBankAccountRequest UPDATE_BANK_ACCOUNT_REQUEST = (UpdateBankAccountRequest) AsynchronousRequestResponseSystem.register(new UpdateBankAccountRequest());
+    public static BankTerminalBlockDataRequest BANK_TERMINAL_BLOCK_DATA_REQUEST = (BankTerminalBlockDataRequest) AsynchronousRequestResponseSystem.register(new BankTerminalBlockDataRequest());
+    public static BankSelectionScreenDataRequest BANK_SELECTION_SCREEN_DATA_REQUEST = (BankSelectionScreenDataRequest) AsynchronousRequestResponseSystem.register(new BankSelectionScreenDataRequest());
+    public static BankAccountDeleteRequest DELETE_BANK_ACCOUNT_REQUEST = (BankAccountDeleteRequest) AsynchronousRequestResponseSystem.register(new BankAccountDeleteRequest());
+    public static AllowedItemsRequest ALLOWED_ITEMS_REQUEST = (AllowedItemsRequest) AsynchronousRequestResponseSystem.register(new AllowedItemsRequest());
+    public BankSystemNetworking() {
+        super(BankSystemMod.MOD_ID, "bank_system_channel");
 
-public class BankSystemNetworking {
+        setupClientReceiverPackets();
+        setupServerReceiverPackets();
 
-    public static final SimpleNetworkManager CHANNEL = SimpleNetworkManager.create(BankSystemMod.MOD_ID);
-
-
-    public static MessageType SYNC_BANK_DATA = registerS2C(getClassName(SyncBankDataPacket.class.getName()), SyncBankDataPacket::new);
-    public static MessageType SYNC_POTENTIAL_BANK_ITEM_IDS = registerS2C(getClassName(SyncPotentialBankItemIDsPacket.class.getName()), SyncPotentialBankItemIDsPacket::new);
-    public static MessageType SYNC_OPEN_GUI = registerS2C(getClassName(SyncOpenGUIPacket.class.getName()), SyncOpenGUIPacket::new);
-    public static MessageType SYNC_ITEM_INFO = registerS2C(getClassName(SyncItemInfoPacket.class.getName()), SyncItemInfoPacket::new);
-    public static MessageType SYNC_BANK_UPLOAD_DATA = registerS2C(getClassName(SyncBankUploadDataPacket.class.getName()), SyncBankUploadDataPacket::new);
-    public static MessageType SYNC_BANK_DOWNLOAD_DATA = registerS2C(getClassName(SyncBankDownloadDataPacket.class.getName()), SyncBankDownloadDataPacket::new);
-
-
-
-    public static MessageType REQUEST_ALLOW_NEW_BANK_ITEM_ID = registerC2S(getClassName(RequestAllowNewBankItemIDPacket.class.getName()), RequestAllowNewBankItemIDPacket::new);
-    public static MessageType REQUEST_BANK_DATA = registerC2S(getClassName(RequestBankDataPacket.class.getName()), RequestBankDataPacket::new);
-    public static MessageType REQUEST_DISALLOW_BANKING_ITEM_ID = registerC2S(getClassName(RequestDisallowBankingItemIDPacket.class.getName()), RequestDisallowBankingItemIDPacket::new);
-    public static MessageType REQUEST_POTENTIAL_BANK_ITEM_IDS = registerC2S(getClassName(RequestPotentialBankItemIDsPacket.class.getName()), RequestPotentialBankItemIDsPacket::new);
-    public static MessageType UPDATE_BANK_ACCOUNT = registerC2S(getClassName(UpdateBankAccountPacket.class.getName()), UpdateBankAccountPacket::new);
-    public static MessageType UPDATE_BANK_TERMINAL_BLOCK_ENTITY = registerC2S(getClassName(UpdateBankTerminalBlockEntityPacket.class.getName()), UpdateBankTerminalBlockEntityPacket::new);
-    public static MessageType REQUEST_ITEM_INFO = registerC2S(getClassName(RequestItemInfoPacket.class.getName()), RequestItemInfoPacket::new);
-    public static MessageType UPDATE_BANK_UPLOAD_BLOCK_ENTITY = registerC2S(getClassName(UpdateBankUploadBlockEntityPacket.class.getName()), UpdateBankUploadBlockEntityPacket::new);
-    public static MessageType UPDATE_BANK_DOWNLOAD_BLOCK_ENTITY = registerC2S(getClassName(UpdateBankDownloadBlockEntityPacket.class.getName()), UpdateBankDownloadBlockEntityPacket::new);
-
-
-
-    public static void init() {
+        this.setupARRS(); // Setup the Asynchronous Request Response System (ARRS)
 
     }
     private static String getClassName(String name) {
@@ -50,18 +42,27 @@ public class BankSystemNetworking {
         return sub;
     }
 
-    public static MessageType registerS2C(String name, MessageDecoder<BaseS2CMessage> decoder)
+    @Override
+    public void setupClientReceiverPackets()
     {
-        MessageType registeredMsg = CHANNEL.registerS2C(name, decoder);
-        if (Platform.getEnvironment() == Env.SERVER)
-        {
-            NetworkAggregator.registerS2CType(registeredMsg.getId(), List.of());
-        }
-        return registeredMsg;
+        //register(SyncBankDataPacket.class, SyncBankDataPacket::encode, SyncBankDataPacket::new, SyncBankDataPacket::receive);
+        register(SyncOpenGUIPacket.class, SyncOpenGUIPacket::encode, SyncOpenGUIPacket::new, SyncOpenGUIPacket::receive);
+        //register(SyncItemInfoPacket.class, SyncItemInfoPacket::encode, SyncItemInfoPacket::new, SyncItemInfoPacket::receive);
+        register(SyncBankUploadDataPacket.class, SyncBankUploadDataPacket::encode, SyncBankUploadDataPacket::new, SyncBankUploadDataPacket::receive);
+        register(SyncBankDownloadDataPacket.class, SyncBankDownloadDataPacket::encode, SyncBankDownloadDataPacket::new, SyncBankDownloadDataPacket::receive);
     }
-    public static MessageType registerC2S(String name, MessageDecoder<BaseC2SMessage> decoder)
+
+    @Override
+    public void setupServerReceiverPackets()
     {
-        MessageType registeredMsg = CHANNEL.registerC2S(name, decoder);
-        return registeredMsg;
+        //register(RequestAllowNewBankItemIDPacket.class, RequestAllowNewBankItemIDPacket::encode, RequestAllowNewBankItemIDPacket::new, RequestAllowNewBankItemIDPacket::receive);
+        //register(RequestBankDataPacket.class, RequestBankDataPacket::encode, RequestBankDataPacket::new, RequestBankDataPacket::receive);
+        //register(RequestDisallowBankingItemIDPacket.class, RequestDisallowBankingItemIDPacket::encode, RequestDisallowBankingItemIDPacket::new, RequestDisallowBankingItemIDPacket::receive);
+        register(UpdateBankTerminalBlockEntityPacket.class, UpdateBankTerminalBlockEntityPacket::encode, UpdateBankTerminalBlockEntityPacket::new, UpdateBankTerminalBlockEntityPacket::receive);
+        //register(RequestItemInfoPacket.class, RequestItemInfoPacket::encode, RequestItemInfoPacket::new, RequestItemInfoPacket::receive);
+        //register(UpdateBankAccountPacket.class, UpdateBankAccountPacket::encode, UpdateBankAccountPacket::new, UpdateBankAccountPacket::receive);
+        register(UpdateBankUploadBlockEntityPacket.class, UpdateBankUploadBlockEntityPacket::encode, UpdateBankUploadBlockEntityPacket::new, UpdateBankUploadBlockEntityPacket::receive);
+        register(UpdateBankDownloadBlockEntityPacket.class, UpdateBankDownloadBlockEntityPacket::encode, UpdateBankDownloadBlockEntityPacket::new, UpdateBankDownloadBlockEntityPacket::receive);
+        register(WithdrawMoneyPacket.class, WithdrawMoneyPacket::encode, WithdrawMoneyPacket::new, WithdrawMoneyPacket::receive);
     }
 }

@@ -2,31 +2,34 @@ package net.kroia.banksystem.screen.uiElements;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemTextMessages;
-import net.kroia.modutilities.ItemUtilities;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.GuiScreen;
-import net.kroia.modutilities.gui.elements.Button;
-import net.kroia.modutilities.gui.elements.CheckBox;
-import net.kroia.modutilities.gui.elements.ItemView;
-import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.TextBox;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.modutilities.gui.elements.*;
 import net.minecraft.network.chat.Component;
 
-public class BankAccountManagementItem extends GuiElement {
+public class BankAccountManagementItem extends BankSystemGuiElement {
 
     private static final String PREFIX = "gui."+ BankSystemMod.MOD_ID+".bank_account_management_item.";
-    private static final Component CLOSE_ACCOUNT_BUTTON = Component.translatable(PREFIX+"close_account_button");
+    private static final Component CLOSE_BANK_BUTTON = Component.translatable(PREFIX+"close_bank_button");
     private static final Component FREE_LOCKED_BALANCE_CHECKBOX = Component.translatable(PREFIX+"free_locked_balance_checkbox");
     private static final Component BALANCE = Component.translatable(PREFIX+"balance");
     private static final Component LOCKED_BALANCE = Component.translatable(PREFIX+"locked_balance");
     private static final Component TOTAL_BALANCE = Component.translatable(PREFIX+"total_balance");
-    private static final Component SAVE_CHANGES = Component.translatable(PREFIX+"save_changes");
 
-    private final String playerName;
-    private final String itemID;
+    private static final Component CLOSE_BANK_BUTTON_TOOLTIP = Component.translatable(PREFIX+"close_bank_button.tooltip");
+    private static final Component FREE_LOCKED_BALANCE_CHECKBOX_TOOLTIP = Component.translatable(PREFIX+"free_locked_balance_checkbox.tooltip");
+    private static final Component BALANCE_TEXTBOX_TOOLTIP = Component.translatable(PREFIX+"balance_textbox.tooltip");
+    private static final Component BALANCE_LABEL_TOOLTIP = Component.translatable(PREFIX+"balance_label.tooltip");
+    private static final Component LOCKED_LABEL_TOOLTIP = Component.translatable(PREFIX+"locked_label.tooltip");
+    private static final Component TOTAL_LABEL_TOOLTIP = Component.translatable(PREFIX+"total_label.tooltip");
+
+
+    private final int accountNumber;
+    private final ItemID itemID;
     private final ItemView itemView;
-    private final Button closeAccountButton;
+    private final Button closeBankButton;
     private final CheckBox freeLockedBalanceCheckBox;
 
 
@@ -43,48 +46,110 @@ public class BankAccountManagementItem extends GuiElement {
     private boolean balanceChanged = false;
     private boolean deleteAccount = false;
     private boolean freeLockedBalance = false;
+    private final int centScaleFactor;
+    private final boolean isAdminMode;
+    private final boolean canManage;
 
 
-    public BankAccountManagementItem(String itemID, String playerName)
+    public BankAccountManagementItem(ItemID itemID, int accountNumber, int centScaleFactor, boolean isAdminMode, boolean canManage)
     {
         super();
+        this.isAdminMode = isAdminMode;
+        this.canManage = canManage || isAdminMode;
         this.itemID = itemID;
-        this.playerName = playerName;
-        itemView = new ItemView(ItemUtilities.createItemStackFromId(itemID));
+        this.accountNumber = accountNumber;
+        this.centScaleFactor = centScaleFactor;
+        itemView = new ItemView(itemID.getStack());
         balanceLabel = new Label(BALANCE.getString());
         balanceValueLabel = new Label();
-        balanceValueTextBox = new TextBox();
-        balanceValueTextBox.setAllowLetters(false);
-        balanceValueTextBox.setOnTextChanged(this::onBalanceTextBoxChanged);
-        balanceValueTextBox.setMaxChars(6*3+1); // Max size of a long
+
+
         lockedBalanceLabel = new Label(LOCKED_BALANCE.getString());
         lockedBalanceValueLabel = new Label();
         totalBalanceLabel = new Label(TOTAL_BALANCE.getString());
         totalBalanceValueLabel = new Label();
 
-        closeAccountButton = new Button(CLOSE_ACCOUNT_BUTTON.getString(), () -> {
-            String askTitle = BankSystemTextMessages.getBankAccountManagementItemAskRemoveTitleMessage(itemID);
-            String askMessage = BankSystemTextMessages.getBankAccountManagementItemAskRemoveMessage(itemID, playerName);
-            AskPopupScreen popup = new AskPopupScreen((GuiScreen)getRoot().getScreen(), this::onCloseAccountButtonClicked, () -> {}, askTitle, askMessage);
-            popup.setSize(400,100);
-            popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
-            getMinecraft().setScreen(popup);
-        });
-        freeLockedBalanceCheckBox = new CheckBox(FREE_LOCKED_BALANCE_CHECKBOX.getString(), this::onFreeLockedBalanceCheckBoxClicked);
 
+
+
+
+
+
+        balanceValueLabel.setHoverTooltipSupplier(BALANCE_LABEL_TOOLTIP::getString);
+        lockedBalanceValueLabel.setHoverTooltipSupplier(LOCKED_LABEL_TOOLTIP::getString);
+        totalBalanceValueLabel.setHoverTooltipSupplier(TOTAL_LABEL_TOOLTIP::getString);
+
+
+
+
+        balanceValueLabel.setHoverTooltipFontScale(0.8f);
+        lockedBalanceValueLabel.setHoverTooltipFontScale(0.8f);
+        totalBalanceValueLabel.setHoverTooltipFontScale(0.8f);
+
+
+
+
+        balanceValueLabel.setHoverTooltipMousePositionAlignment(Alignment.LEFT);
+        lockedBalanceValueLabel.setHoverTooltipMousePositionAlignment(Alignment.LEFT);
+        totalBalanceValueLabel.setHoverTooltipMousePositionAlignment(Alignment.LEFT);
 
 
         addChild(itemView);
-        addChild(closeAccountButton);
-        addChild(freeLockedBalanceCheckBox);
 
         addChild(balanceLabel);
         addChild(balanceValueLabel);
-        addChild(balanceValueTextBox);
         addChild(lockedBalanceLabel);
         addChild(lockedBalanceValueLabel);
         addChild(totalBalanceLabel);
         addChild(totalBalanceValueLabel);
+
+        if(canManage)
+        {
+            closeBankButton = new Button(CLOSE_BANK_BUTTON.getString(), () -> {
+                String askTitle = BankSystemTextMessages.getBankAccountManagementItemAskRemoveTitleMessage(itemID.getName());
+                String askMessage = BankSystemTextMessages.getBankAccountManagementItemAskRemoveMessage(itemID.getName(), accountNumber);
+                AskPopupScreen popup = new AskPopupScreen((GuiScreen)getRoot().getScreen(), this::onCloseAccountButtonClicked, () -> {}, askTitle, askMessage);
+                popup.setSize(400,100);
+                popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
+                getMinecraft().setScreen(popup);
+            });
+            closeBankButton.setHoverTooltipSupplier(CLOSE_BANK_BUTTON_TOOLTIP::getString);
+            closeBankButton.setHoverTooltipFontScale(0.8f);
+            closeBankButton.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+            addChild(closeBankButton);
+
+        }
+        else
+        {
+            closeBankButton = null;
+        }
+        if(isAdminMode)
+        {
+            balanceValueTextBox = new TextBox();
+            balanceValueTextBox.setAllowLetters(false);
+            balanceValueTextBox.setAllowNumbers(true, true);
+            balanceValueTextBox.setAllowNegativeNumbers(false);
+            int maxDecimalChar = Bank.getMaxDecimalDigitsCount(centScaleFactor);
+            balanceValueTextBox.setMaxDecimalChar(maxDecimalChar);
+            balanceValueTextBox.setOnTextChanged(this::onBalanceTextBoxChanged);
+            balanceValueTextBox.setMaxChars(6*3+1); // Max size of a long
+            balanceValueTextBox.setHoverTooltipSupplier(BALANCE_TEXTBOX_TOOLTIP::getString);
+            balanceValueTextBox.setHoverTooltipFontScale(0.8f);
+            balanceValueTextBox.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+
+            freeLockedBalanceCheckBox = new CheckBox(FREE_LOCKED_BALANCE_CHECKBOX.getString(), this::onFreeLockedBalanceCheckBoxClicked);
+            freeLockedBalanceCheckBox.setHoverTooltipSupplier(FREE_LOCKED_BALANCE_CHECKBOX_TOOLTIP::getString);
+            freeLockedBalanceCheckBox.setHoverTooltipFontScale(0.8f);
+            freeLockedBalanceCheckBox.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+
+            addChild(balanceValueTextBox);
+            addChild(freeLockedBalanceCheckBox);
+        }
+        else
+        {
+            balanceValueTextBox = null;
+            freeLockedBalanceCheckBox = null;
+        }
     }
 
     @Override
@@ -95,27 +160,40 @@ public class BankAccountManagementItem extends GuiElement {
     @Override
     protected void layoutChanged() {
         int padding = 5;
-        int spacing = 2;
+        int vSpacing = 0;
         int width = getWidth()-padding*2;
-        int elementHeight = 20;
+        int elementHeight = 15;
 
         itemView.setBounds(padding, padding, 20, elementHeight);
-        int textWidth = getFont().width(CLOSE_ACCOUNT_BUTTON.getString())+10;
-        closeAccountButton.setBounds(width-textWidth, padding, textWidth, elementHeight);
-        textWidth = getFont().width(FREE_LOCKED_BALANCE_CHECKBOX.getString())+10;
-        freeLockedBalanceCheckBox.setBounds(closeAccountButton.getLeft()-spacing-textWidth-elementHeight, padding, textWidth+elementHeight, elementHeight);
+        //int textWidth = Math.max(getTextWidth(CLOSE_ACCOUNT_BUTTON.getString()), getTextWidth(FREE_LOCKED_BALANCE_CHECKBOX.getString())) +10;
 
-        balanceLabel.setBounds(padding, itemView.getBottom()+spacing, width/4, elementHeight);
-        balanceValueLabel.setBounds(balanceLabel.getRight(), balanceLabel.getTop(), (width-balanceLabel.getWidth()-padding)/2, elementHeight);
-        balanceValueTextBox.setBounds(balanceValueLabel.getRight(), balanceLabel.getTop(), balanceValueLabel.getWidth(), elementHeight);
 
-        lockedBalanceLabel.setBounds(padding, balanceLabel.getBottom()+spacing, balanceLabel.getWidth(), elementHeight);
-        lockedBalanceValueLabel.setBounds(lockedBalanceLabel.getRight(), lockedBalanceLabel.getTop(), width-lockedBalanceLabel.getWidth()-padding, elementHeight);
+        balanceLabel.setBounds(padding, itemView.getBottom()+vSpacing, width/4, elementHeight);
+        balanceValueLabel.setBounds(balanceLabel.getRight(), balanceLabel.getTop(), (width-balanceLabel.getWidth())/2, elementHeight);
 
-        totalBalanceLabel.setBounds(padding, lockedBalanceLabel.getBottom()+spacing, balanceLabel.getWidth(), elementHeight);
-        totalBalanceValueLabel.setBounds(totalBalanceLabel.getRight(), totalBalanceLabel.getTop(), width-totalBalanceLabel.getWidth()-padding, elementHeight);
+        int balanceValueTextBoxLeft = balanceValueLabel.getRight();
+        int balanceValueTextBoxWidth = width - balanceValueLabel.getRight() + padding;
+
+
+        lockedBalanceLabel.setBounds(padding, balanceLabel.getBottom()+vSpacing, balanceLabel.getWidth(), elementHeight);
+        lockedBalanceValueLabel.setBounds(lockedBalanceLabel.getRight(), lockedBalanceLabel.getTop(), balanceValueTextBoxLeft-lockedBalanceLabel.getRight(), elementHeight);
+
+
+
+        totalBalanceLabel.setBounds(padding, lockedBalanceLabel.getBottom()+vSpacing, balanceLabel.getWidth(), elementHeight);
+        totalBalanceValueLabel.setBounds(totalBalanceLabel.getRight(), totalBalanceLabel.getTop(), width-totalBalanceLabel.getRight()+padding, elementHeight);
+
+        if(isAdminMode) {
+            balanceValueTextBox.setBounds(balanceValueTextBoxLeft, balanceLabel.getTop(), balanceValueTextBoxWidth, elementHeight);
+            freeLockedBalanceCheckBox.setBounds(lockedBalanceValueLabel.getRight(), lockedBalanceValueLabel.getTop(), width-lockedBalanceValueLabel.getRight()+padding, elementHeight);
+        }
+
+        if(canManage) {
+            closeBankButton.setBounds(balanceValueTextBoxLeft, padding, balanceValueTextBoxWidth, elementHeight);
+        }
 
         setHeight(totalBalanceValueLabel.getBottom()+padding);
+
     }
 
     private void onCloseAccountButtonClicked()
@@ -131,6 +209,10 @@ public class BankAccountManagementItem extends GuiElement {
         //long value = balanceValueTextBox.getInt();
         balanceChanged = true;
     }
+    public int getCentScaleFactor()
+    {
+        return centScaleFactor;
+    }
     public boolean balanceHasChanged()
     {
         return balanceChanged;
@@ -144,22 +226,32 @@ public class BankAccountManagementItem extends GuiElement {
         return freeLockedBalance;
     }
 
-    public String getItemID()
+    public ItemID getItemID()
     {
         return itemID;
     }
-    public String getPlayerName()
+    public int getAccountNumber()
     {
-        return playerName;
+        return accountNumber;
     }
 
     public long getBalance()
     {
+        if(centScaleFactor > 1)
+        {
+            if(balanceValueTextBox.getText().isEmpty())
+                return 0;
+            try {
+                return (long)Math.max(0.0, balanceValueTextBox.getDouble() * (double)centScaleFactor);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
         return Math.max(0,balanceValueTextBox.getLong());
     }
     public void setBalanceLabel(long balance)
     {
-        balanceValueLabel.setText(Bank.getFormattedAmount(balance));
+        balanceValueLabel.setText(Bank.getFormattedAmount(balance, centScaleFactor));
     }
     public void setBalance(long balance)
     {
@@ -167,17 +259,17 @@ public class BankAccountManagementItem extends GuiElement {
     }
     public void setLockedBalance(long lockedBalance)
     {
-        lockedBalanceValueLabel.setText(Bank.getFormattedAmount(lockedBalance));
+        lockedBalanceValueLabel.setText(Bank.getFormattedAmount(lockedBalance, centScaleFactor));
     }
     public void setTotalBalance(long totalBalance)
     {
-        totalBalanceValueLabel.setText(Bank.getFormattedAmount(totalBalance));
-        if(!balanceChanged)
-            balanceValueTextBox.setText(String.valueOf(totalBalance));
+        totalBalanceValueLabel.setText(Bank.getFormattedAmount(totalBalance, centScaleFactor));
+        if(!balanceChanged && isAdminMode)
+            balanceValueTextBox.setText(Bank.convertToRealAmountStatic(totalBalance, centScaleFactor));
     }
-    private void onFreeLockedBalanceCheckBoxClicked()
+    private void onFreeLockedBalanceCheckBoxClicked(Boolean checked)
     {
-        freeLockedBalance = freeLockedBalanceCheckBox.isChecked();
+        freeLockedBalance = checked;
     }
 
 }

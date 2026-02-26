@@ -2,57 +2,55 @@ package net.kroia.banksystem.networking.packet.client_sender.update.entity;
 
 import dev.architectury.networking.simple.MessageType;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.modutilities.networking.NetworkPacketC2S;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
-public class UpdateBankDownloadBlockEntityPacket extends NetworkPacketC2S {
+import java.util.List;
+
+public class UpdateBankDownloadBlockEntityPacket extends BankSystemNetworkPacket {
 
     BlockPos pos;
-    boolean isOwned;
-    String itemID;
-    int targetAmount;
+    List<BankDownloadBlockEntity.WithdrawOrder> withdrawOrders;
+    int accountNr;
 
-    @Override
-    public MessageType getType() {
-        return BankSystemNetworking.UPDATE_BANK_DOWNLOAD_BLOCK_ENTITY;
-    }
-    public UpdateBankDownloadBlockEntityPacket(BlockPos pos, boolean isOwned, String itemID, int targetAmount) {
+    public UpdateBankDownloadBlockEntityPacket(BlockPos pos, List<BankDownloadBlockEntity.WithdrawOrder> withdrawOrders, int accountNr) {
         this.pos = pos;
-        this.isOwned = isOwned;
-        this.itemID = itemID;
-        this.targetAmount = targetAmount;
+        this.withdrawOrders = withdrawOrders;
+        this.accountNr = accountNr;
     }
 
     public UpdateBankDownloadBlockEntityPacket(RegistryFriendlyByteBuf buf) {
         super(buf);
     }
 
-    public static void sendPacket(BlockPos pos, boolean isOwned, String itemID, int targetAmount) {
-        new UpdateBankDownloadBlockEntityPacket(pos, isOwned, itemID, targetAmount).sendToServer();
+    public static void sendPacket(BlockPos pos, List<BankDownloadBlockEntity.WithdrawOrder> withdrawOrders, int accountNr) {
+        new UpdateBankDownloadBlockEntityPacket(pos, withdrawOrders, accountNr).sendToServer();
     }
 
     @Override
-    public void toBytes(RegistryFriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeBlockPos(pos);
-        buf.writeBoolean(isOwned);
-        if(itemID == null)
-            itemID = "";
-        buf.writeUtf(itemID);
-        buf.writeInt(targetAmount);
+        buf.writeInt(withdrawOrders.size());
+        for (BankDownloadBlockEntity.WithdrawOrder order : withdrawOrders) {
+            order.encode(buf);
+        }
+        buf.writeInt(accountNr);
     }
 
     @Override
-    public void fromBytes(RegistryFriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         pos = buf.readBlockPos();
-        isOwned = buf.readBoolean();
-        itemID = buf.readUtf();
-        targetAmount = buf.readInt();
-        if(itemID.isEmpty())
-            itemID = null;
+        int size = buf.readInt();
+        withdrawOrders = new java.util.ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            BankDownloadBlockEntity.WithdrawOrder order = BankDownloadBlockEntity.WithdrawOrder.decode(buf);
+            if(order != null)
+                withdrawOrders.add(order);
+        }
+        accountNr = buf.readInt();
     }
 
     @Override
@@ -66,15 +64,10 @@ public class UpdateBankDownloadBlockEntityPacket extends NetworkPacketC2S {
     public BlockPos getPos() {
         return pos;
     }
-    public boolean isOwned() {
-        return isOwned;
+    public List<BankDownloadBlockEntity.WithdrawOrder> getWithdrawOrders() {
+        return withdrawOrders;
     }
-    public String getItemID() {
-        return itemID;
+    public int getAccountNr() {
+        return accountNr;
     }
-    public int getTargetAmount() {
-        return targetAmount;
-    }
-
-
 }
