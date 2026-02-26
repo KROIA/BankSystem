@@ -12,6 +12,8 @@ Admins can define which items can be stored in the bank in order to prevent play
 </div>
 </td>
 
+You want to support me?<br>
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/alexkrieg)
 ---
 
 
