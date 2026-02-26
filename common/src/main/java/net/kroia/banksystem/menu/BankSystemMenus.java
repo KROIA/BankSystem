@@ -46,9 +46,9 @@ public class BankSystemMenus {
 
 
     public static final RegistrySupplier<MenuType<BankTerminalContainerMenu>> BANK_TERMINAL_CONTAINER_MENU =
-            MENUS.register(new ResourceLocation(BankSystemMod.MOD_ID, "bank_terminal_container_menu"), () -> MenuRegistry.ofExtended(BankTerminalContainerMenu::new));
+            MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_terminal_container_menu"), () -> MenuRegistry.ofExtended(BankTerminalContainerMenu::new));
     public static final RegistrySupplier<MenuType<BankUploadContainerMenu>> BANK_UPLOAD_CONTAINER_MENU =
-            MENUS.register(new ResourceLocation(BankSystemMod.MOD_ID, "bank_upload_container_menu"), () -> MenuRegistry.ofExtended(BankUploadContainerMenu::new));
+            MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_upload_container_menu"), () -> MenuRegistry.ofExtended(BankUploadContainerMenu::new));
     public static final RegistrySupplier<MenuType<BankDownloadContainerMenu>> BANK_DOWNLOAD_CONTAINER_MENU =
             MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_download_container_menu"), () -> MenuRegistry.ofExtended(BankDownloadContainerMenu::new));
 

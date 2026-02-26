@@ -2,13 +2,23 @@ package net.kroia.banksystem.banking.clientdata;
 
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.INetworkPayloadEncoder;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 
 /**
  * Represents minimal bank data for a player.
  * This class is used to transfer bank data from the server to the client.
  */
-public class BankData implements INetworkPayloadEncoder {
+public class BankData {
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, BankData> STREAM_CODEC = StreamCodec.composite(
+            ItemID.STREAM_CODEC, p -> p.itemID,
+            ByteBufCodecs.VAR_LONG, p -> p.balance,
+            ByteBufCodecs.VAR_LONG, p -> p.lockedBalance,
+            ByteBufCodecs.INT, p -> p.itemFractionScaleFactor,
+            BankData::new
+    );
 
     //public final UUID playerUUID;
     //public final String playerName;
@@ -77,7 +87,7 @@ public class BankData implements INetworkPayloadEncoder {
         return Bank.getNormalizedAmount(balance + lockedBalance, itemFractionScaleFactor);
     }
 
-    @Override
+    /*@Override
     public void encode(net.minecraft.network.FriendlyByteBuf buf) {
         //buf.writeUUID(playerUUID);
         //buf.writeUtf(playerName);
@@ -93,6 +103,6 @@ public class BankData implements INetworkPayloadEncoder {
         long balance = buf.readLong();
         long lockedBalance = buf.readLong();
         int centScaleFactor = buf.readInt();
-        return new BankData(/*playerUUID, name, */itemID, balance, lockedBalance, centScaleFactor);
-    }
+        return new BankData(itemID, balance, lockedBalance, centScaleFactor);
+    }*/
 }

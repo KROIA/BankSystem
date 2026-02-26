@@ -26,31 +26,30 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
     public static final PacketHandler<BankSystemNetworkPacket> HANDLER = new PacketHandler<>(){
         @Override
         public void handleServer(BankSystemNetworkPacket packet, NetworkManager.PacketContext context) {
-            BankSystemNetworkPacket packet1 = (BankSystemNetworkPacket) packet;
-            if(packet1 != null) {
-                packet1.handleServer(context);
-            }
+            packet.handleServer(context);
         }
 
         @Override
         public void handleClient(BankSystemNetworkPacket packet, NetworkManager.PacketContext context) {
-            BankSystemNetworkPacket packet1 = (BankSystemNetworkPacket) packet;
-            if(packet1 != null) {
-                packet1.handleClient(context);
-            }
+            packet.handleClient(context);
         }
     };
 
-    public void handleServer(NetworkManager.PacketContext context)
+    protected void handleServer(NetworkManager.PacketContext context)
+    {
+        handleOnServer((ServerPlayer) context.getPlayer());
+    }
+
+    protected void handleClient(NetworkManager.PacketContext context)
     {
 
     }
 
-    public void handleClient(NetworkManager.PacketContext context)
+
+    protected void handleOnServer(ServerPlayer sender)
     {
 
     }
-
 
 
 

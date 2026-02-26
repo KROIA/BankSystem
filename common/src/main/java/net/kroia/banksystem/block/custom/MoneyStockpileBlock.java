@@ -5,7 +5,7 @@ import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
@@ -33,12 +33,18 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
 
 
     @Override
+    protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
+                                              Player player, InteractionHand hand, BlockHitResult hit)
+    /*@Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos,
-                                 Player player, InteractionHand hand, BlockHitResult hit) {
-        if (level.isClientSide) return InteractionResult.SUCCESS;
+                                 Player player, InteractionHand hand, BlockHitResult hit)*/
+    {
+        if (level.isClientSide)
+            return ItemInteractionResult.SUCCESS;
 
         BlockEntity be = level.getBlockEntity(pos);
-        if (!(be instanceof MoneyStockpileBlockEntity stockpile)) return InteractionResult.PASS;
+        if (!(be instanceof MoneyStockpileBlockEntity stockpile))
+            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
 
         ItemStack held = player.getItemInHand(hand);
 
@@ -47,7 +53,7 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
         if (!held.isEmpty() && MoneyItem.isMoney(held)) {
             int added = stockpile.addItems(held);
             held.shrink(added);
-            return InteractionResult.CONSUME;
+            return ItemInteractionResult.CONSUME;
         }
 
         // Remove one item
@@ -56,10 +62,10 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
             if (!player.addItem(extracted)) {
                 player.drop(extracted, false);
             }
-            return InteractionResult.CONSUME;
+            return ItemInteractionResult.CONSUME;
         }
 
-        return InteractionResult.PASS;
+        return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
     }
 
 

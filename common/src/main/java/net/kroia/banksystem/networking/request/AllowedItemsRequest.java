@@ -2,12 +2,21 @@ package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
-import net.minecraft.network.FriendlyByteBuf;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.modutilities.networking.arrs.GenericRequestPacket;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class AllowedItemsRequest extends BankSystemGenericRequest<Integer, List<ItemID>> {
+
+
     @Override
     public String getRequestTypeID() {
         return AllowedItemsRequest.class.getName();
@@ -21,33 +30,22 @@ public class AllowedItemsRequest extends BankSystemGenericRequest<Integer, List<
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, Integer input) {
-        buf.writeInt(input);
+    public void encodeInput(RegistryFriendlyByteBuf buf, Integer input) {
+        ByteBufCodecs.INT.encode(buf, input);
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, List<ItemID> output) {
-        buf.writeInt(output.size());
-        for(ItemID itemID : output)
-        {
-            itemID.encode(buf);
-        }
+    public void encodeOutput(RegistryFriendlyByteBuf buf, List<ItemID> output) {
+        ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC).encode(buf,  output);
     }
 
     @Override
-    public Integer decodeInput(FriendlyByteBuf buf) {
-        return buf.readInt();
+    public Integer decodeInput(RegistryFriendlyByteBuf buf) {
+        return ByteBufCodecs.INT.decode(buf);
     }
 
     @Override
-    public List<ItemID> decodeOutput(FriendlyByteBuf buf) {
-        int size = buf.readInt();
-        List<ItemID> itemIDs = new java.util.ArrayList<>(size);
-        for(int i = 0; i < size; i++)
-        {
-            ItemID itemID = new ItemID(buf);
-            itemIDs.add(itemID);
-        }
-        return itemIDs;
+    public List<ItemID> decodeOutput(RegistryFriendlyByteBuf buf) {
+        return ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC).decode(buf);
     }
 }

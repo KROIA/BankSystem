@@ -191,7 +191,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
 
         getBankManager().requestBankTerminalData(pMenu.getBlockPos(), (bankTerminalData) -> {
-            selectedBankAccountNr = bankTerminalData.selectedBankAccount;
+            selectedBankAccountNr = bankTerminalData.selectedBankAccount();
 
             //userPermission = bankTerminalData.userPermission;
 

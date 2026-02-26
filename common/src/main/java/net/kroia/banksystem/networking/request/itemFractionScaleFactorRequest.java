@@ -2,7 +2,8 @@ package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
 public class itemFractionScaleFactorRequest extends BankSystemGenericRequest<ItemID, Integer> {
@@ -24,22 +25,22 @@ public class itemFractionScaleFactorRequest extends BankSystemGenericRequest<Ite
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, ItemID input) {
-        input.encode(buf);
+    public void encodeInput(RegistryFriendlyByteBuf buf, ItemID input) {
+        ItemID.STREAM_CODEC.encode(buf, input);
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, Integer output) {
-        buf.writeInt(output);
+    public void encodeOutput(RegistryFriendlyByteBuf buf, Integer output) {
+        ByteBufCodecs.INT.encode(buf, output);
     }
 
     @Override
-    public ItemID decodeInput(FriendlyByteBuf buf) {
-        return new ItemID(buf);
+    public ItemID decodeInput(RegistryFriendlyByteBuf buf) {
+        return ItemID.STREAM_CODEC.decode(buf);
     }
 
     @Override
-    public Integer decodeOutput(FriendlyByteBuf buf) {
-        return buf.readInt();
+    public Integer decodeOutput(RegistryFriendlyByteBuf buf) {
+        return ByteBufCodecs.INT.decode(buf);
     }
 }

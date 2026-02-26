@@ -1,22 +1,18 @@
 package net.kroia.banksystem.networking.packet.server_sender;
 
-import com.sun.jna.platform.win32.WinDef;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.BankSystemClientHooks;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.modutilities.networking.arrs.GenericRequestPacket;
 import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import org.apache.commons.lang3.EnumUtils;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.UUID;
@@ -29,7 +25,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         ATM_SCREEN, // ATM screen is not implemented yet
     }
 
-    public static final Type<SyncOpenGUIPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "SyncOpenGUIPacket"));
+    public static final Type<SyncOpenGUIPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "sync_open_gui_packet"));
     public static final StreamCodec<RegistryFriendlyByteBuf, SyncOpenGUIPacket> STREAM_CODEC = StreamCodec.composite(
             ExtraCodecUtils.enumStreamCodec(GUIType.class), p -> p.guiType,
             UUIDUtil.STREAM_CODEC, p -> p.targetPlayerUUID,

@@ -2,7 +2,8 @@ package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
 public class DisallowItemRequest extends BankSystemGenericRequest<ItemID, Boolean> {
@@ -26,22 +27,22 @@ public class DisallowItemRequest extends BankSystemGenericRequest<ItemID, Boolea
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, ItemID input) {
-        buf.writeItem(input.getStack()); // Encode the ItemID as an ItemStack
+    public void encodeInput(RegistryFriendlyByteBuf buf, ItemID input) {
+        ItemID.STREAM_CODEC.encode(buf, input);
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, Boolean output) {
-        buf.writeBoolean(output != null && output); // Encode the Boolean output
+    public void encodeOutput(RegistryFriendlyByteBuf buf, Boolean output) {
+        ByteBufCodecs.BOOL.encode(buf, output);
     }
 
     @Override
-    public ItemID decodeInput(FriendlyByteBuf buf) {
-        return new ItemID(buf.readItem()); // Decode the ItemID from an ItemStack
+    public ItemID decodeInput(RegistryFriendlyByteBuf buf) {
+        return ItemID.STREAM_CODEC.decode(buf);
     }
 
     @Override
-    public Boolean decodeOutput(FriendlyByteBuf buf) {
-        return buf.readBoolean(); // Decode the Boolean output
+    public Boolean decodeOutput(RegistryFriendlyByteBuf buf) {
+        return ByteBufCodecs.BOOL.decode(buf);
     }
 }

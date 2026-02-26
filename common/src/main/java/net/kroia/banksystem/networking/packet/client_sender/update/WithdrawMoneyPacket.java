@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
@@ -10,22 +11,37 @@ import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
-import net.minecraft.network.FriendlyByteBuf;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
 import java.util.UUID;
 
 public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
+    public static final Type<WithdrawMoneyPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "withdraw_money_packet"));
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, WithdrawMoneyPacket> STREAM_CODEC = StreamCodec.composite(
+            ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap::new), p -> p.requestedBankNoteIDs,
+            ByteBufCodecs.INT, p -> p.currentSelectedAccountNumber,
+            WithdrawMoneyPacket::new
+    );
 
     // Contains the item ID and the requested amount of the bank notes
     HashMap<ItemID, Long> requestedBankNoteIDs;// = new HashMap<>();
     int currentSelectedAccountNumber;
-    public WithdrawMoneyPacket(FriendlyByteBuf buf) {
+
+    /*public WithdrawMoneyPacket(FriendlyByteBuf buf) {
         super(buf);
     }
+    */
     public WithdrawMoneyPacket(HashMap<ItemID, Long> requestedBankNoteIDs, int currentSelectedAccountNumber) {
         super();
         this.requestedBankNoteIDs = requestedBankNoteIDs;
@@ -37,7 +53,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         packet.sendToServer();
     }
 
-    @Override
+    /*@Override
     public void encode(FriendlyByteBuf buf) {
         buf.writeVarInt(currentSelectedAccountNumber);
         buf.writeVarInt(requestedBankNoteIDs.size());
@@ -57,7 +73,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             long amount = buf.readVarInt();
             requestedBankNoteIDs.put(itemID, amount);
         }
-    }
+    }*/
 
 
     @Override
@@ -144,6 +160,8 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     }
 
 
-
-
+    @Override
+    public @NotNull Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
 }

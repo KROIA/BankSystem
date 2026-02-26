@@ -5,12 +5,9 @@ import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerPlayerUtilities;
-import net.kroia.modutilities.networking.INetworkPayloadConverter;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
 public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.Data, Boolean> {
@@ -68,25 +65,22 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, AllowItemRequest.Data input) {
+    public void encodeInput(RegistryFriendlyByteBuf buf, AllowItemRequest.Data input) {
         Data.STREAM_CODEC.encode(buf, input);
-        //input.encode(buf); // Encode the ItemID and cent scale factor
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, Boolean output) {
-        buf.writeBoolean(output != null && output); // Encode the Boolean output
+    public void encodeOutput(RegistryFriendlyByteBuf buf, Boolean output) {
+        ByteBufCodecs.BOOL.encode(buf, output);
     }
 
     @Override
-    public AllowItemRequest.Data decodeInput(FriendlyByteBuf buf) {
-        AllowItemRequest.Data data = new AllowItemRequest.Data();
-        data.decode(buf); // Decode the ItemID and cent scale factor
-        return data;
+    public AllowItemRequest.Data decodeInput(RegistryFriendlyByteBuf buf) {
+        return Data.STREAM_CODEC.decode(buf);
     }
 
     @Override
-    public Boolean decodeOutput(FriendlyByteBuf buf) {
-        return buf.readBoolean(); // Decode the Boolean output
+    public Boolean decodeOutput(RegistryFriendlyByteBuf buf) {
+        return ByteBufCodecs.BOOL.decode(buf);
     }
 }

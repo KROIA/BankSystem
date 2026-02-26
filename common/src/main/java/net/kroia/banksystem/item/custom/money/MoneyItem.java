@@ -83,7 +83,7 @@ public class MoneyItem extends Item{
         ArrayList<ItemStack> moneyItems = BankSystemItems.getMoneyItems();
         for (ItemStack moneyStack : moneyItems) {
             if (    itemStack.getItem() instanceof MoneyItem &&
-                    ItemStack.isSameItemSameTags(moneyStack, itemStack))
+                    ItemStack.isSameItemSameComponents(moneyStack, itemStack))
             {
                 return true;
             }

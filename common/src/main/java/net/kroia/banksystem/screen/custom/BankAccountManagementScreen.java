@@ -337,26 +337,24 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         List<UpdateBankAccountRequest.InputData.BankData> bankData = new ArrayList<>();
         if(canManage) {
             for (BankAccountManagementItem item : bankAccountManagementItems.values()) {
-                UpdateBankAccountRequest.InputData.BankData data = new UpdateBankAccountRequest.InputData.BankData();
-                data.removeBank = item.deleteAccount();
+
+                boolean resetLockedBalance = false;
+                boolean setBalance = false;
+                long balance = 0;
                 if(isAdminMode) {
-                    data.resetLockedBalance = item.freeLockedBalance();
-                    data.setBalance = item.balanceHasChanged();
-                    data.balance = item.getBalance();
+                    resetLockedBalance = item.freeLockedBalance();
+                    setBalance = item.balanceHasChanged();
+                    balance = item.getBalance();
                 }
-                data.itemID = item.getItemID();
+                UpdateBankAccountRequest.InputData.BankData data = new UpdateBankAccountRequest.InputData.BankData(
+                        item.getItemID(), balance, setBalance, resetLockedBalance, item.deleteAccount(), false);
                 bankData.add(data);
             }
         }
         if(isAdminMode) {
             for (BankAccountManagementItem item : createBankData.values()) {
-                UpdateBankAccountRequest.InputData.BankData data = new UpdateBankAccountRequest.InputData.BankData();
-                data.resetLockedBalance = item.freeLockedBalance();
-                data.removeBank = item.deleteAccount();
-                data.createBank = true;
-                data.setBalance = item.balanceHasChanged();
-                data.balance = item.getBalance();
-                data.itemID = item.getItemID();
+                UpdateBankAccountRequest.InputData.BankData data = new UpdateBankAccountRequest.InputData.BankData(
+                        item.getItemID(), item.getBalance(), item.balanceHasChanged(), item.freeLockedBalance(), item.deleteAccount(), true);
                 bankElementListView.removeChild(item);
                 bankData.add(data);
             }

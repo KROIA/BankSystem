@@ -2,7 +2,8 @@ package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
 public class BankManagerDataRequest extends BankSystemGenericRequest<Integer, BankManagerData> {
@@ -27,29 +28,24 @@ public class BankManagerDataRequest extends BankSystemGenericRequest<Integer, Ba
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, Integer input) {
+    public void encodeInput(RegistryFriendlyByteBuf buf, Integer input) {
         // No input to encode for this request
         // If needed, you can encode some identifier or parameters here
+        ByteBufCodecs.INT.encode(buf, input);
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, BankManagerData output) {
-        buf.writeBoolean(output != null);
-        if(output != null) {
-            output.encode(buf); // Encode the MinimalBankManagerData
-        }
+    public void encodeOutput(RegistryFriendlyByteBuf buf, BankManagerData output) {
+        BankManagerData.STREAM_CODEC.encode(buf, output);
     }
 
     @Override
-    public Integer decodeInput(FriendlyByteBuf buf) {
-        return 0; // No input to decode for this request, return a default value
+    public Integer decodeInput(RegistryFriendlyByteBuf buf) {
+        return ByteBufCodecs.INT.decode(buf);
     }
 
     @Override
-    public BankManagerData decodeOutput(FriendlyByteBuf buf) {
-        if(buf.readBoolean()) {
-            return BankManagerData.decode(buf); // Decode the MinimalBankManagerData
-        }
-        return null; // If no data was encoded, return null
+    public BankManagerData decodeOutput(RegistryFriendlyByteBuf buf) {
+        return BankManagerData.STREAM_CODEC.decode(buf);
     }
 }

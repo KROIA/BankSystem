@@ -2,15 +2,29 @@ package net.kroia.banksystem.banking.clientdata;
 
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.INetworkPayloadEncoder;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.*;
 
-public class BankManagerData implements INetworkPayloadEncoder {
-    public static class UserMapData implements INetworkPayloadEncoder
+public class BankManagerData {
+
+
+
+
+    public static class UserMapData
     {
+        public static final StreamCodec<RegistryFriendlyByteBuf, UserMapData> STREAM_CODEC = StreamCodec.composite(
+                ExtraCodecUtils.mapStreamCodec(UUIDUtil.STREAM_CODEC, UserData.STREAM_CODEC, HashMap::new), p -> p.userMap,
+                UserMapData::new
+        );
+
+
         public final Map<UUID, UserData> userMap;
 
         public UserMapData(Map<UUID, UserData> userMap)
@@ -18,7 +32,7 @@ public class BankManagerData implements INetworkPayloadEncoder {
             this.userMap = userMap;
         }
 
-        public static UserMapData decode(FriendlyByteBuf buf) {
+        /*public static UserMapData decode(FriendlyByteBuf buf) {
             int size = buf.readInt();
             Map<UUID, UserData> userMap = new HashMap<>(size);
             for (int i = 0; i < size; i++) {
@@ -34,10 +48,15 @@ public class BankManagerData implements INetworkPayloadEncoder {
             for (Map.Entry<UUID, UserData> entry : userMap.entrySet()) {
                 entry.getValue().encode(buf);
             }
-        }
+        }*/
     }
-    public static class ItemFractionScaleFactorData implements INetworkPayloadEncoder
+    public static class ItemFractionScaleFactorData
     {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ItemFractionScaleFactorData> STREAM_CODEC = StreamCodec.composite(
+                ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.INT, HashMap::new), p -> p.itemFractionScaleFactorMap,
+                ItemFractionScaleFactorData::new
+        );
+
         public final Map<ItemID, Integer> itemFractionScaleFactorMap;
 
         public ItemFractionScaleFactorData(Map<ItemID, Integer> itemFractionScaleFactorMap)
@@ -45,7 +64,7 @@ public class BankManagerData implements INetworkPayloadEncoder {
             this.itemFractionScaleFactorMap = itemFractionScaleFactorMap;
         }
 
-        public static ItemFractionScaleFactorData decode(FriendlyByteBuf buf) {
+      /*  public static ItemFractionScaleFactorData decode(FriendlyByteBuf buf) {
             int size = buf.readInt();
             Map<ItemID, Integer> itemFractionScaleFactorMap = new HashMap<>(size);
             for (int i = 0; i < size; i++) {
@@ -63,10 +82,15 @@ public class BankManagerData implements INetworkPayloadEncoder {
                 entry.getKey().encode(buf);
                 buf.writeInt(entry.getValue());
             }
-        }
+        }*/
     }
-    public static class BankAccountsData implements INetworkPayloadEncoder
+    public static class BankAccountsData
     {
+        public static final StreamCodec<RegistryFriendlyByteBuf, BankAccountsData> STREAM_CODEC = StreamCodec.composite(
+                ExtraCodecUtils.mapStreamCodec(ByteBufCodecs.INT, BankAccountData.STREAM_CODEC, HashMap::new), p -> p.bankAccountMap,
+                BankAccountsData::new
+        );
+
         /**
          * Map of bank account numbers to their data.
          * The key is the account number, and the value is the BankAccountData.
@@ -76,7 +100,7 @@ public class BankManagerData implements INetworkPayloadEncoder {
         {
             this.bankAccountMap = bankAccountMap;
         }
-        public static BankAccountsData decode(FriendlyByteBuf buf) {
+       /* public static BankAccountsData decode(FriendlyByteBuf buf) {
             int size = buf.readInt();
             Map<Integer, BankAccountData> bankAccountMap = new HashMap<>(size);
             for (int i = 0; i < size; i++) {
@@ -91,9 +115,19 @@ public class BankManagerData implements INetworkPayloadEncoder {
             for (Map.Entry<Integer, BankAccountData> entry : bankAccountMap.entrySet()) {
                 entry.getValue().encode(buf);
             }
-        }
+        }*/
     }
 
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, BankManagerData> STREAM_CODEC = StreamCodec.composite(
+            UserMapData.STREAM_CODEC, p -> p.userMapData,
+            ItemFractionScaleFactorData.STREAM_CODEC, p -> p.itemFractionScaleFactorData,
+            BankAccountsData.STREAM_CODEC, p -> p.bankAccountsData,
+            ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC), p -> p.allowedItems,
+            ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC), p -> p.blacklistedItems,
+            ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC), p -> p.notRemovableItems,
+            BankManagerData::new
+    );
 
     public final UserMapData userMapData;
     public final ItemFractionScaleFactorData itemFractionScaleFactorData;
@@ -123,7 +157,7 @@ public class BankManagerData implements INetworkPayloadEncoder {
     }
 
 
-    @Override
+    /*@Override
     public void encode(FriendlyByteBuf buf) {
         userMapData.encode(buf);
         itemFractionScaleFactorData.encode(buf);
@@ -169,5 +203,5 @@ public class BankManagerData implements INetworkPayloadEncoder {
                 blacklistedItems,
                 notRemovableItems
         );
-    }
+    }*/
 }

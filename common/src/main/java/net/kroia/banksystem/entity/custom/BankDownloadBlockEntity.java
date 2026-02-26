@@ -12,16 +12,12 @@ import net.kroia.banksystem.networking.packet.client_sender.update.entity.Update
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.modutilities.networking.INetworkPayloadEncoder;
-import net.kroia.modutilities.networking.arrs.GenericRequestPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
-import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -83,7 +79,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     public static class WithdrawOrder
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, WithdrawOrder> STREAM_CODEC = StreamCodec.composite(
-                ItemID.STREAM_CODEC, p -> p.itemID,
+                ExtraCodecUtils.nullable(ItemID.STREAM_CODEC), p -> p.itemID,
                 ByteBufCodecs.INT, p -> p.targetAmount,
                 ExtraCodecUtils.enumStreamCodec(WithdrawCondition.class), p -> p.condition,
                 ByteBufCodecs.VAR_LONG, p -> p.conditionValue,
@@ -122,7 +118,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         }
 
 
-        @Override
+        /*@Override
         public void encode(FriendlyByteBuf buf) {
             buf.writeBoolean(itemID != null);
             if(itemID != null) {
@@ -145,7 +141,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             WithdrawCondition condition = WithdrawCondition.values()[buf.readInt()];
             long conditionValue = buf.readLong();
             return new WithdrawOrder(itemID, targetAmount, condition, conditionValue);
-        }
+        }*/
 
         public CompoundTag toTag() {
             CompoundTag tag = new CompoundTag();
@@ -209,8 +205,8 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     }
 
     @Override
-    public void load(@NotNull CompoundTag tag) {
-        super.load(tag);
+    public void loadAdditional(@NotNull CompoundTag tag, HolderLookup.Provider provider) {
+        super.loadAdditional(tag, provider);
         bankAccountNumber = 0;
         withdrawOrders.clear();
 
@@ -219,7 +215,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             // Compatibility, convert to new Block data
             UUID playerOwner = tag.getUUID("PlayerOwner");
             int targetAmount = tag.getInt("TargetAmount");
-            inventory.fromTag(tag.getList("Items", Tag.TAG_COMPOUND));
+            inventory.fromTag(tag.getList("Items", Tag.TAG_COMPOUND), provider);
             blockIsPowered = tag.getBoolean("RecievingEnabled");
 
             IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerOwner);
@@ -237,7 +233,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         }
 
         if(tag.contains(TAGS.INVENTORY_ITEMS))
-            inventory.fromTag(tag.getList(TAGS.INVENTORY_ITEMS, Tag.TAG_COMPOUND));
+            inventory.fromTag(tag.getList(TAGS.INVENTORY_ITEMS, Tag.TAG_COMPOUND), provider);
 
         if(tag.contains(TAGS.BLOCK_IS_POWERED))
             blockIsPowered = tag.getBoolean(TAGS.BLOCK_IS_POWERED);
@@ -260,9 +256,9 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     }
 
     @Override
-    protected void saveAdditional(@NotNull CompoundTag tag) {
-        super.saveAdditional(tag);
-        tag.put(TAGS.INVENTORY_ITEMS, inventory.createTag());
+    protected void saveAdditional(@NotNull CompoundTag tag, HolderLookup.Provider provider) {
+        super.saveAdditional(tag, provider);
+        tag.put(TAGS.INVENTORY_ITEMS, inventory.createTag(provider));
         tag.putBoolean(TAGS.BLOCK_IS_POWERED, blockIsPowered);
         tag.putInt(TAGS.BANK_ACCOUNT_NUMBER, bankAccountNumber);
         ListTag ordersList = new ListTag();

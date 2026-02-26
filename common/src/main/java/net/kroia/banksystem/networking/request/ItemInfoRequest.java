@@ -3,7 +3,7 @@ package net.kroia.banksystem.networking.request;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 public class ItemInfoRequest extends BankSystemGenericRequest<ItemID, ItemInfoData> {
@@ -25,32 +25,31 @@ public class ItemInfoRequest extends BankSystemGenericRequest<ItemID, ItemInfoDa
         if(!playerIsAdmin(sender)) {
             return null; // If the player is not an admin, return null
         }
-        ItemInfoData data = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemInfoData(itemID);
-        return data;
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemInfoData(itemID);
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, ItemID input) {
-        buf.writeItem(input.getStack()); // Encode the ItemID as an ItemStack
+    public void encodeInput(RegistryFriendlyByteBuf buf, ItemID input) {
+        ItemID.STREAM_CODEC.encode(buf, input);
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, ItemInfoData output) {
+    public void encodeOutput(RegistryFriendlyByteBuf buf, ItemInfoData output) {
         if(output == null)
             return; // Handle null output gracefully
-        output.encode(buf); // Encode the ItemInfo
+        ItemInfoData.STREAM_CODEC.encode(buf, output);
     }
 
     @Override
-    public ItemID decodeInput(FriendlyByteBuf buf) {
-        return new ItemID(buf.readItem()); // Decode the ItemID from an ItemStack
+    public ItemID decodeInput(RegistryFriendlyByteBuf buf) {
+        return ItemID.STREAM_CODEC.decode(buf);
     }
 
     @Override
-    public ItemInfoData decodeOutput(FriendlyByteBuf buf) {
+    public ItemInfoData decodeOutput(RegistryFriendlyByteBuf buf) {
         if(buf.readableBytes() == 0) {
             return null; // Handle empty output
         }
-        return ItemInfoData.decode(buf); // Decode the ItemInfo
+        return ItemInfoData.STREAM_CODEC.decode(buf); // Decode the ItemInfo
     }
 }

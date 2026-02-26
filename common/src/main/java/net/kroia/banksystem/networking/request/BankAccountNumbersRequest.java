@@ -2,7 +2,10 @@ package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
-import net.minecraft.network.FriendlyByteBuf;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
@@ -41,52 +44,22 @@ public class BankAccountNumbersRequest extends BankSystemGenericRequest<List<UUI
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, List<UUID> input) {
-        if (input == null || input.isEmpty()) {
-            buf.writeInt(0); // Write 0 to indicate no UUIDs
-            return;
-        }
-        buf.writeInt(input.size()); // Write the size of the list
-        for (UUID uuid : input) {
-            buf.writeUUID(uuid); // Write each UUID
-        }
+    public void encodeInput(RegistryFriendlyByteBuf buf, List<UUID> input) {
+        ExtraCodecUtils.listStreamCodec(UUIDUtil.STREAM_CODEC).encode(buf, input);
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, List<Integer> output) {
-        if (output == null || output.isEmpty()) {
-            buf.writeInt(0); // Write 0 to indicate no integers
-            return;
-        }
-        buf.writeInt(output.size()); // Write the size of the list
-        for (Integer number : output) {
-            buf.writeInt(number); // Write each integer
-        }
+    public void encodeOutput(RegistryFriendlyByteBuf buf, List<Integer> output) {
+        ExtraCodecUtils.listStreamCodec(ByteBufCodecs.INT).encode(buf, output);
     }
 
     @Override
-    public List<UUID> decodeInput(FriendlyByteBuf buf) {
-        int size = buf.readInt(); // Read the size of the list
-        if (size == 0) {
-            return List.of(); // Return an empty list if size is 0
-        }
-        List<UUID> uuids = new java.util.ArrayList<>(size);
-        for (int i = 0; i < size; i++) {
-            uuids.add(buf.readUUID()); // Read each UUID
-        }
-        return uuids;
+    public List<UUID> decodeInput(RegistryFriendlyByteBuf buf) {
+        return ExtraCodecUtils.listStreamCodec(UUIDUtil.STREAM_CODEC).decode(buf);
     }
 
     @Override
-    public List<Integer> decodeOutput(FriendlyByteBuf buf) {
-        int size = buf.readInt(); // Read the size of the list
-        if (size == 0) {
-            return List.of(); // Return an empty list if size is 0
-        }
-        List<Integer> numbers = new java.util.ArrayList<>(size);
-        for (int i = 0; i < size; i++) {
-            numbers.add(buf.readInt()); // Read each integer
-        }
-        return numbers;
+    public List<Integer> decodeOutput(RegistryFriendlyByteBuf buf) {
+        return ExtraCodecUtils.listStreamCodec(ByteBufCodecs.INT).decode(buf);
     }
 }

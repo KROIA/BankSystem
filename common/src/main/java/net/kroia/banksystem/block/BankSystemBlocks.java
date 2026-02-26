@@ -44,8 +44,15 @@ public class BankSystemBlocks {
         BankSystemItems.registerBlockItem(name, toReturn);
         return toReturn;
     }
+    /*
+    mc < 1.21
     public static <T extends Block> RegistrySupplier<T> registerBlockNoItem(String name, Supplier<T> block)
     {
         return BLOCKS.register(new ResourceLocation(BankSystemMod.MOD_ID, name), block);
+    }
+    */
+    public static <T extends Block> RegistrySupplier<T> registerBlockNoItem(String name, Supplier<T> block)
+    {
+        return BLOCKS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), block);
     }
 }

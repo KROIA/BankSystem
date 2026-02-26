@@ -1,24 +1,23 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
-import dev.architectury.networking.simple.MessageType;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.screen.custom.BankDownloadScreen;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
 
-    public static final Type<SyncBankDownloadDataPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "SyncBankDownloadDataPacket"));
+    public static final Type<SyncBankDownloadDataPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "sync_bank_download_data_packet"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, SyncBankDownloadDataPacket> STREAM_CODEC = StreamCodec.composite(
             ExtraCodecUtils.listStreamCodec(BankDownloadBlockEntity.WithdrawOrder.STREAM_CODEC), p -> p.withdrawOrders,
@@ -89,5 +88,10 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
     }
     public int getAccountNr() {
         return accountNr;
+    }
+
+    @Override
+    public @NotNull Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 }

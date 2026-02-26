@@ -1,8 +1,10 @@
 package net.kroia.banksystem.banking.clientdata;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.INetworkPayloadEncoder;
-import net.minecraft.network.FriendlyByteBuf;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,7 +13,16 @@ import java.util.List;
  * Represents data about a bank item
  * This class is used to transfer user bank data from the server to the client.
  */
-public class ItemInfoData implements INetworkPayloadEncoder {
+public class ItemInfoData  {
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, ItemInfoData> STREAM_CODEC = StreamCodec.composite(
+            ItemID.STREAM_CODEC, p -> p.itemID,
+            ByteBufCodecs.DOUBLE, p -> p.totalSupply,
+            ByteBufCodecs.DOUBLE, p -> p.totalLocked,
+            ExtraCodecUtils.listStreamCodec(BankAccountData.STREAM_CODEC), p -> p.bankAccounts,
+            ByteBufCodecs.INT, p -> p.itemFractionScaleFactor,
+            ItemInfoData::new
+    );
 
     public final ItemID itemID;
     public final double totalSupply;
@@ -32,7 +43,7 @@ public class ItemInfoData implements INetworkPayloadEncoder {
         this.itemFractionScaleFactor = itemFractionScaleFactor;
     }
 
-    @Override
+    /*@Override
     public void encode(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
         buf.writeDouble(totalSupply);
@@ -57,5 +68,5 @@ public class ItemInfoData implements INetworkPayloadEncoder {
             bankAccounts.add(BankAccountData.decode(buf));
         }
         return new ItemInfoData(itemID, totalSupply, totalLocked, bankAccounts, itemFractionScaleFactor);
-    }
+    }*/
 }

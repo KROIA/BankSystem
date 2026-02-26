@@ -4,7 +4,11 @@ import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
-import net.minecraft.network.FriendlyByteBuf;
+import net.kroia.banksystem.util.ItemID;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
@@ -12,9 +16,23 @@ import java.util.UUID;
 public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccountDataRequest.InputData, BankAccountData> {
 
 
-    public static class InputData
+    public record InputData(int accountNumber, UUID personalUserUUID)
     {
-        public final int accountNumber;
+        public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.INT, InputData::accountNumber,
+                        UUIDUtil.STREAM_CODEC, InputData::personalUserUUID,
+                        InputData::new
+                );
+
+        public InputData(int accountNumber) {
+            this(accountNumber, null);
+        }
+
+        public InputData(UUID personalUserUUID) {
+            this(-1, personalUserUUID);
+        }
+        /*public final int accountNumber;
         public final UUID personalUserUUID;
 
         public InputData(int accountNumber) {
@@ -24,7 +42,7 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
         public InputData(UUID personalUserUUID) {
             this.accountNumber = -1;
             this.personalUserUUID = personalUserUUID;
-        }
+        }*/
     }
 
     @Override
@@ -74,38 +92,22 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, InputData input) {
-        if(input.personalUserUUID != null) {
-            buf.writeInt(-1); // Use -1 to indicate that the input is a user UUID
-            buf.writeUUID(input.personalUserUUID);
-        } else {
-            buf.writeInt(input.accountNumber); // Encode the account number
-        }
+    public void encodeInput(RegistryFriendlyByteBuf buf, InputData input) {
+        InputData.STREAM_CODEC.encode(buf, input);
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, BankAccountData output) {
-        buf.writeBoolean(output != null);
-        if(output != null) {
-            output.encode(buf); // Encode the MinimalBankUserData
-        }
+    public void encodeOutput(RegistryFriendlyByteBuf buf, BankAccountData output) {
+        BankAccountData.STREAM_CODEC.encode(buf, output);
     }
 
     @Override
-    public InputData decodeInput(FriendlyByteBuf buf) {
-        int accountNumber = buf.readInt();
-        if(accountNumber == -1) {
-            UUID userUUID = buf.readUUID(); // If the input is a user UUID, read it
-            return new InputData(userUUID);
-        }
-        return new InputData(accountNumber); // Otherwise, return the account number
+    public InputData decodeInput(RegistryFriendlyByteBuf buf) {
+        return InputData.STREAM_CODEC.decode(buf);
     }
 
     @Override
-    public BankAccountData decodeOutput(FriendlyByteBuf buf) {
-        if(buf.readBoolean()) {
-            return BankAccountData.decode(buf); // Decode the MinimalBankUserData
-        }
-        return null; // If no data was encoded, return null
+    public BankAccountData decodeOutput(RegistryFriendlyByteBuf buf) {
+        return BankAccountData.STREAM_CODEC.decode(buf);
     }
 }

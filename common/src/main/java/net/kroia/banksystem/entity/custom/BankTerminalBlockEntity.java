@@ -481,7 +481,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     continue;
                 itemTag.putInt("Slot", i);
                 CompoundTag stackTag = new CompoundTag();
-                stackTag.putString("ItemID", ItemUtilities.getItemID(stack.getItem()));
+                CompoundTag idTag = new CompoundTag();
+                ItemID itemID = new ItemID(stack);
+                itemID.save(idTag);
+                stackTag.put("ItemID", idTag); // todo: Maybe serializing the item ID does not work
                 stackTag.putInt("Count", stack.getCount());
                 itemTag.put("ItemStack", stackTag);
                 inventoryTag.add(itemTag);
@@ -504,9 +507,11 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     return false;
                 int slot = itemTag.getInt("Slot");
                 CompoundTag stackTag = itemTag.getCompound("ItemStack");
-                String itemID = stackTag.getString("ItemID");
+                CompoundTag idTag = stackTag.getCompound("ItemID"); // todo: Maybe serializing the item ID does not work
+                ItemID itemID = new ItemID(stackTag);
                 int count = stackTag.getInt("Count");
-                ItemStack stack = ItemUtilities.createItemStackFromId(itemID, count);
+                //ItemStack stack = ItemUtilities.createItemStackFromId(itemID, count);
+                ItemStack stack = itemID.getStack();
                 if(stack.isEmpty())
                     return false;
                 inventory.set(slot, stack);

@@ -2,14 +2,26 @@ package net.kroia.banksystem.banking.clientdata;
 
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.INetworkPayloadEncoder;
-import net.minecraft.network.FriendlyByteBuf;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-public class BankAccountData implements INetworkPayloadEncoder {
+public class BankAccountData {
 
+    public static final StreamCodec<RegistryFriendlyByteBuf, BankAccountData> STREAM_CODEC = StreamCodec.composite(
+            ByteBufCodecs.INT, p -> p.accountNumber,
+            ByteBufCodecs.STRING_UTF8, p -> p.accountName,
+            ItemID.STREAM_CODEC, p -> p.accountIcon,
+            UserData.STREAM_CODEC, p -> p.personalBankOwnerData,
+            ExtraCodecUtils.mapStreamCodec(UUIDUtil.STREAM_CODEC, BankUserData.STREAM_CODEC, HashMap::new), p -> p.users,
+            ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, BankData.STREAM_CODEC, HashMap::new), p -> p.bankData,
+            BankAccountData::new
+    );
 
     public final int accountNumber;
     public final String accountName;
@@ -33,7 +45,7 @@ public class BankAccountData implements INetworkPayloadEncoder {
         this.users.putAll(users);
         this.bankData.putAll(bankData);
     }
-    @Override
+    /*@Override
     public void encode(FriendlyByteBuf buf) {
         buf.writeInt(accountNumber);
         buf.writeUtf(accountName);
@@ -51,7 +63,7 @@ public class BankAccountData implements INetworkPayloadEncoder {
         for (Map.Entry<ItemID, BankData> entry : bankData.entrySet()) {
             entry.getValue().encode(buf);
         }
-    }
+    }*/
 
     public List<String> getAllUserNames()
     {
@@ -72,7 +84,7 @@ public class BankAccountData implements INetworkPayloadEncoder {
         return texts;
     }
 
-    public static BankAccountData decode(FriendlyByteBuf buf) {
+    /*public static BankAccountData decode(FriendlyByteBuf buf) {
         int accountNumber = buf.readInt();
         String accountName = buf.readUtf();
         ItemID accountIcon = null;
@@ -98,7 +110,7 @@ public class BankAccountData implements INetworkPayloadEncoder {
             bankData.put(data.itemID, data);
         }
         return new BankAccountData(accountNumber, accountName, accountIcon, creator, users, bankData);
-    }
+    }*/
 
     public boolean hasPermission(UUID userUUID, int permission)
     {

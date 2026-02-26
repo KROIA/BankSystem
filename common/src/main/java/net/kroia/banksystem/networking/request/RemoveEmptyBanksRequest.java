@@ -4,7 +4,9 @@ import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
-import net.minecraft.network.FriendlyByteBuf;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
@@ -37,30 +39,22 @@ public class RemoveEmptyBanksRequest extends BankSystemGenericRequest<Integer, L
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, Integer input) {
-        buf.writeInt(input);
+    public void encodeInput(RegistryFriendlyByteBuf buf, Integer input) {
+        ByteBufCodecs.INT.encode(buf, input);
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, List<ItemID> output) {
-        buf.writeInt(output.size());
-        for (ItemID itemID : output) {
-            itemID.encode(buf);
-        }
+    public void encodeOutput(RegistryFriendlyByteBuf buf, List<ItemID> output) {
+        ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC).encode(buf, output);
     }
 
     @Override
-    public Integer decodeInput(FriendlyByteBuf buf) {
-        return buf.readInt();
+    public Integer decodeInput(RegistryFriendlyByteBuf buf) {
+        return ByteBufCodecs.INT.decode(buf);
     }
 
     @Override
-    public List<ItemID> decodeOutput(FriendlyByteBuf buf) {
-        int size = buf.readInt();
-        List<ItemID> itemIDs = new java.util.ArrayList<>(size);
-        for (int i = 0; i < size; i++) {
-            itemIDs.add(new ItemID(buf));
-        }
-        return itemIDs;
+    public List<ItemID> decodeOutput(RegistryFriendlyByteBuf buf) {
+        return ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC).decode(buf);
     }
 }

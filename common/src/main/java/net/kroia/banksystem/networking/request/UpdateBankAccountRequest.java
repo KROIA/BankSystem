@@ -7,8 +7,11 @@ import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.INetworkPayloadEncoder;
-import net.minecraft.network.FriendlyByteBuf;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
@@ -16,23 +19,38 @@ import java.util.*;
 
 public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBankAccountRequest.InputData, BankAccountData> {
 
-    public static class InputData implements INetworkPayloadEncoder
+    public record InputData(int accountNumber,
+                            String accountName,
+                            @Nullable ItemID accountIcon,
+                            List<BankData> bankData,
+                            Map<UUID, Integer> setUsers)
     {
-        public static class BankData{
-            public ItemID itemID;
-            public long balance = 0;
-            public boolean setBalance = false;
-            public boolean resetLockedBalance = false;
-            public boolean removeBank = false;
-            public boolean createBank = false;
 
+        public record BankData(ItemID itemID,
+                               long balance,
+                               boolean setBalance,
+                               boolean resetLockedBalance,
+                               boolean removeBank,
+                               boolean createBank)
+        {
 
-            public BankData(){}
-            public BankData(FriendlyByteBuf buf) {
+            public static final StreamCodec<RegistryFriendlyByteBuf, BankData> STREAM_CODEC = StreamCodec.composite(
+                    ItemID.STREAM_CODEC, BankData::itemID,
+                    ByteBufCodecs.VAR_LONG, BankData::balance,
+                    ByteBufCodecs.BOOL, BankData::setBalance,
+                    ByteBufCodecs.BOOL, BankData::resetLockedBalance,
+                    ByteBufCodecs.BOOL, BankData::removeBank,
+                    ByteBufCodecs.BOOL, BankData::createBank,
+                    BankData::new
+            );
+            /*public BankData(){
+                this(null, 0, false, false, false, false);
+            }*/
+            /*public BankData(RegistryFriendlyByteBuf buf) {
                 fromBytes(buf);
             }
 
-            public void toBytes(FriendlyByteBuf buf) {
+            public void toBytes(RegistryFriendlyByteBuf buf) {
                 buf.writeItem(itemID.getStack());
                 buf.writeLong(balance);
                 buf.writeBoolean(setBalance);
@@ -42,16 +60,29 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
             }
 
 
-            public void fromBytes(FriendlyByteBuf buf) {
+            public void fromBytes(RegistryFriendlyByteBuf buf) {
                 itemID = new ItemID(buf.readItem());
                 balance = buf.readLong();
                 setBalance = buf.readBoolean();
                 resetLockedBalance = buf.readBoolean();
                 removeBank = buf.readBoolean();
                 createBank = buf.readBoolean();
-            }
+            }*/
         }
-        public int accountNumber;
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.INT, InputData::accountNumber,
+                ByteBufCodecs.STRING_UTF8, InputData::accountName,
+                ExtraCodecUtils.nullable(ItemID.STREAM_CODEC), InputData::accountIcon,
+                ExtraCodecUtils.listStreamCodec(BankData.STREAM_CODEC), InputData::bankData,
+                ExtraCodecUtils.mapStreamCodec(UUIDUtil.STREAM_CODEC, ByteBufCodecs.INT, HashMap<UUID, Integer>::new), InputData::setUsers,
+                InputData::new
+        );
+
+
+
+
+        /*public int accountNumber;
         public String accountName;
         public @Nullable ItemID accountIcon;
         public List<BankData> bankData;
@@ -74,7 +105,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         }
 
         @Override
-        public void encode(FriendlyByteBuf buf) {
+        public void encode(RegistryFriendlyByteBuf buf) {
             buf.writeInt(accountNumber);
             buf.writeUtf(accountName);
             buf.writeBoolean(accountIcon != null);
@@ -98,7 +129,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 }
             }
         }
-        public static InputData decode(FriendlyByteBuf buf) {
+        public static InputData decode(RegistryFriendlyByteBuf buf) {
             InputData input = new InputData();
             input.accountNumber = buf.readInt();
             input.accountName = buf.readUtf();
@@ -128,7 +159,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 }
             }
             return input;
-        }
+        }*/
     }
 
     @Override
@@ -204,29 +235,23 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, InputData input) {
-        input.encode(buf);
+    public void encodeInput(RegistryFriendlyByteBuf buf, InputData input) {
+        InputData.STREAM_CODEC.encode(buf, input);
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, BankAccountData output) {
-        buf.writeBoolean(output != null);
-        if(output != null) {
-            output.encode(buf);
-        }
+    public void encodeOutput(RegistryFriendlyByteBuf buf, BankAccountData output) {
+        ExtraCodecUtils.nullable(BankAccountData.STREAM_CODEC).encode(buf, output);
     }
 
     @Override
-    public InputData decodeInput(FriendlyByteBuf buf) {
-        return InputData.decode(buf);
+    public InputData decodeInput(RegistryFriendlyByteBuf buf) {
+        return InputData.STREAM_CODEC.decode(buf);
     }
 
     @Override
-    public BankAccountData decodeOutput(FriendlyByteBuf buf) {
-        if(buf.readBoolean()) {
-            return BankAccountData.decode(buf);
-        }
-        return null;
+    public BankAccountData decodeOutput(RegistryFriendlyByteBuf buf) {
+        return ExtraCodecUtils.nullable(BankAccountData.STREAM_CODEC).decode(buf);
     }
 
 

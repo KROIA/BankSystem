@@ -2,13 +2,8 @@ package net.kroia.banksystem.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
-import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.screen.custom.BankUploadScreen;
-import net.kroia.modutilities.ModUtilitiesMod;
-import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.modutilities.networking.arrs.GenericRequestPacket;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.FriendlyByteBuf;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -21,7 +16,7 @@ import java.util.UUID;
 
 public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
 
-    public static final Type<SyncBankUploadDataPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "SyncBankUploadDataPacket"));
+    public static final Type<SyncBankUploadDataPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "sync_bank_upload_data_packet"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, SyncBankUploadDataPacket> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.BOOL, p -> p.isOwned,

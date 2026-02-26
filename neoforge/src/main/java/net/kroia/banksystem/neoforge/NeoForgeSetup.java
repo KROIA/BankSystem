@@ -1,6 +1,7 @@
 package net.kroia.banksystem.neoforge;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.screen.custom.BankDownloadScreen;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
@@ -17,15 +18,15 @@ public class NeoForgeSetup {
     // Mod setup for common (server)
     @SubscribeEvent
     public static void commonSetup(FMLCommonSetupEvent event) {
-        BankSystemMod.LOGGER.info("[NeoForgeSetup] Common setup for server.");
-        BankSystemMod.onServerSetup();
+       // BankSystemModBackend..LOGGER.info("[NeoForgeSetup] Common setup for server.");
+        BankSystemModBackend.onServerSetup();
     }
 
     // Client setup (for client-side logic)
     @SubscribeEvent
     public static void clientSetup(FMLClientSetupEvent event) {
-        BankSystemMod.LOGGER.info("[NeoForgeSetup] Client setup.");
-        BankSystemMod.onClientSetup();
+        //BankSystemModBackend.LOGGER.info("[NeoForgeSetup] Client setup.");
+        BankSystemModBackend.onClientSetup();
     }
 
     /*

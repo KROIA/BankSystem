@@ -3,7 +3,8 @@ package net.kroia.banksystem.networking.request;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
 public class BankAccountDeleteRequest extends BankSystemGenericRequest<Integer, Boolean> {
@@ -32,22 +33,22 @@ public class BankAccountDeleteRequest extends BankSystemGenericRequest<Integer, 
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, Integer input) {
-        buf.writeInt(input);
+    public void encodeInput(RegistryFriendlyByteBuf buf, Integer input) {
+        ByteBufCodecs.INT.encode(buf, input);
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, Boolean output) {
-        buf.writeBoolean(output);
+    public void encodeOutput(RegistryFriendlyByteBuf buf, Boolean output) {
+        ByteBufCodecs.BOOL.encode(buf, output);
     }
 
     @Override
-    public Integer decodeInput(FriendlyByteBuf buf) {
-        return buf.readInt();
+    public Integer decodeInput(RegistryFriendlyByteBuf buf) {
+        return ByteBufCodecs.INT.decode(buf);
     }
 
     @Override
-    public Boolean decodeOutput(FriendlyByteBuf buf) {
-        return buf.readBoolean();
+    public Boolean decodeOutput(RegistryFriendlyByteBuf buf) {
+        return ByteBufCodecs.BOOL.decode(buf);
     }
 }

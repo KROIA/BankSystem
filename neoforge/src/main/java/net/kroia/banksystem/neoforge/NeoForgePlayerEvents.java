@@ -1,6 +1,6 @@
 package net.kroia.banksystem.neoforge;
 
-import net.kroia.banksystem.util.BankSystemPlayerEvents;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -11,14 +11,14 @@ public class NeoForgePlayerEvents {
     @SubscribeEvent
     public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            BankSystemPlayerEvents.onPlayerJoin(player);
+            BankSystemModBackend.onPlayerJoin(player);
         }
     }
 
     @SubscribeEvent
     public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            BankSystemPlayerEvents.onPlayerLeave(player);
+            BankSystemModBackend.onPlayerLeave(player);
         }
     }
 

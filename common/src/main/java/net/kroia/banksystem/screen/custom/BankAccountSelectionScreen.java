@@ -140,7 +140,7 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
 
     private void onBankAccountsReceived(BankSelectionScreenDataRequest.Output output) {
         accountsListView.removeChilds();
-        for(BankAccountData accountData : output.bankAccounts) {
+        for(BankAccountData accountData : output.bankAccounts()) {
 
             if(!accountData.hasAnyPermission(playerUUID, permissionFilter)) {
                 continue; // Skip accounts that do not match the permission filter
