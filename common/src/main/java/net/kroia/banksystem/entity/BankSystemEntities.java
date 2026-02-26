@@ -1,6 +1,7 @@
 package net.kroia.banksystem.entity;
 
 import com.google.common.base.Suppliers;
+import dev.architectury.registry.client.rendering.BlockEntityRendererRegistry;
 import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
@@ -9,6 +10,8 @@ import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
+import net.kroia.banksystem.entity.custom.MoneyStockpileBlockEntity;
+import net.kroia.banksystem.entity.renderer.MoneyStockpileEntityRenderer;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -33,7 +36,7 @@ public class BankSystemEntities {
 
     public static final RegistrySupplier<BlockEntityType<?>> BANK_TERMINAL_BLOCK_ENTITY =
             registerBlockEntity("bank_terminal_block_entity",
-                    () -> BlockEntityType.Builder.of(BankTerminalBlockEntity::new, BankSystemBlocks.BANK_TERMINAL_BLOCK.get()).build(null));
+                    () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder.of(BankTerminalBlockEntity::new, BankSystemBlocks.BANK_TERMINAL_BLOCK.get()).build(null));
 
     public static final RegistrySupplier<BlockEntityType<?>> BANK_UPLOAD_BLOCK_ENTITY =
             registerBlockEntity("bank_upload_block_entity",
@@ -44,10 +47,23 @@ public class BankSystemEntities {
                     () -> BlockEntityType.Builder.of(BankDownloadBlockEntity::new, BankSystemBlocks.BANK_DOWNLOAD_BLOCK.get()).build(null));
 
 
+    public static final RegistrySupplier<BlockEntityType<?>> MONEY_STOCKPILE_BLOCK_ENTITY =
+            registerBlockEntity("money_stockpile_block_entity",
+                    () -> BlockEntityType.Builder.of(MoneyStockpileBlockEntity::new, BankSystemBlocks.MONEY_STOCKPILE_BLOCK.get()).build(null));
+
+
+
+    public static void registerRenderers()
+    {
+        // Architectury API method to register BlockEntityRenderer in a platform-neutral way
+        BlockEntityRendererRegistry.register((BlockEntityType<MoneyStockpileBlockEntity>) MONEY_STOCKPILE_BLOCK_ENTITY.get(), MoneyStockpileEntityRenderer::new);
+    }
+
 
     public static <T extends BlockEntityType<?>> RegistrySupplier<T> registerBlockEntity(String name, Supplier<T> item)
     {
         //BankSystemMod.LOGGER.info("Registering block entity: " + name);
         return BLOCK_ENTITIES.register(new ResourceLocation(BankSystemMod.MOD_ID, name), item);
     }
+
 }

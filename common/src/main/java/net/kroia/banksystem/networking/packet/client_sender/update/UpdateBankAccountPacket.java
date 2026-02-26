@@ -1,21 +1,10 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
-import net.kroia.banksystem.banking.BankUser;
-import net.kroia.banksystem.banking.ServerBankManager;
-import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
-
-import java.util.ArrayList;
-import java.util.UUID;
-
-public class UpdateBankAccountPacket extends NetworkPacket {
+/*
+public class UpdateBankAccountPacket extends BankSystemNetworkPacket {
 
     public static class BankData{
-        public String itemID;
+        public ItemID itemID;
         public long balance = 0;
         public boolean setBalance = false;
         public boolean resetLockedBalance = false;
@@ -29,7 +18,7 @@ public class UpdateBankAccountPacket extends NetworkPacket {
         }
 
         public void toBytes(FriendlyByteBuf buf) {
-            buf.writeUtf(itemID);
+            buf.writeItem(itemID.getStack());
             buf.writeLong(balance);
             buf.writeBoolean(setBalance);
             buf.writeBoolean(resetLockedBalance);
@@ -39,7 +28,7 @@ public class UpdateBankAccountPacket extends NetworkPacket {
 
 
         public void fromBytes(FriendlyByteBuf buf) {
-            itemID = buf.readUtf();
+            itemID = new ItemID(buf.readItem());
             balance = buf.readLong();
             setBalance = buf.readBoolean();
             resetLockedBalance = buf.readBoolean();
@@ -47,76 +36,134 @@ public class UpdateBankAccountPacket extends NetworkPacket {
             createBank = buf.readBoolean();
         }
     }
-    UUID playerUUID;
-    ArrayList<BankData> bankData;
+    int accountNumber;
+    List<BankData> bankData;
 
+    Map<UUID, Integer> setUsers;
 
-    public UpdateBankAccountPacket(UUID playerUUID, ArrayList<BankData> bankData) {
+    public UpdateBankAccountPacket(int accountNumber, List<BankData> bankData,
+                                   Map<UUID, Integer> setUsers) {
         super();
-        this.playerUUID = playerUUID;
+        this.accountNumber = accountNumber;
         this.bankData = bankData;
+
+        this.setUsers = setUsers;
+
     }
 
+    public UpdateBankAccountPacket(int accountNumber,
+                                   Map<UUID, Integer> setUsers) {
+        super();
+        this.accountNumber = accountNumber;
+        this.bankData = null;
+
+        this.setUsers = setUsers;
+
+
+    }
     public UpdateBankAccountPacket(FriendlyByteBuf buf) {
         super(buf);
     }
 
-    public static void sendPacket(UUID playerUUID, ArrayList<BankData> bankData) {
-        UpdateBankAccountPacket packet = new UpdateBankAccountPacket(playerUUID, bankData);
-        BankSystemNetworking.sendToServer(packet);
+    public static void sendPacket(int accountNumber, List<BankData> bankData,
+                                  Map<UUID, Integer> setUsers) {
+        UpdateBankAccountPacket packet = new UpdateBankAccountPacket(accountNumber, bankData, setUsers);
+        packet.sendToServer();
     }
 
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
-        buf.writeUUID(playerUUID);
-        buf.writeInt(bankData.size());
-        for (BankData data : bankData) {
-            data.toBytes(buf);
+    public void encode(FriendlyByteBuf buf) {
+        buf.writeInt(accountNumber);
+        buf.writeBoolean(bankData != null);
+        if(bankData != null) {
+            buf.writeInt(bankData.size());
+            for (BankData data : bankData) {
+                data.toBytes(buf);
+            }
         }
 
+        buf.writeBoolean(setUsers != null);
+        if(setUsers != null) {
+            buf.writeInt(setUsers.size());
+            for (Map.Entry<UUID, Integer> entry : setUsers.entrySet()) {
+                buf.writeUUID(entry.getKey());
+                buf.writeInt(entry.getValue());
+            }
+        }
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
-        playerUUID = buf.readUUID();
-        int size = buf.readInt();
-        bankData = new ArrayList<>(size);
-        for (int i = 0; i < size; i++) {
-            bankData.add(new BankData(buf));
+    public void decode(FriendlyByteBuf buf) {
+        accountNumber = buf.readInt();
+
+        bankData = null;
+        if(buf.readBoolean()) {
+            int size = buf.readInt();
+            bankData = new ArrayList<>(size);
+            for (int i = 0; i < size; i++) {
+                bankData.add(new BankData(buf));
+            }
+        }
+
+        setUsers = null;
+        if(buf.readBoolean()) {
+            int addUsersSize = buf.readInt();
+            setUsers = new java.util.HashMap<>(addUsersSize);
+            for (int i = 0; i < addUsersSize; i++) {
+                UUID userUUID = buf.readUUID();
+                int permissions = buf.readInt();
+                setUsers.put(userUUID, permissions);
+            }
         }
     }
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {
         // Check if the player is a admin
-        boolean isAdmin = sender.hasPermissions(2);
-        if (!isAdmin) {
+        boolean isAdmin = sender.hasPermissions(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get());
+
+        BankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNumber);
+        if(account == null) {
+            // If the account does not exist, we cannot update it
             return;
         }
-        BankUser bankUser = ServerBankManager.getUser(playerUUID);
-        if(bankUser == null)
+        boolean canManage = account.hasPermission(sender.getUUID(), BankPermission.MANAGE.getValue());
+        if (!isAdmin && !canManage) {
             return;
-        for (BankData data : bankData) {
-            if (data.removeBank) {
-                bankUser.removeBank(data.itemID);
-                continue;
-            }
-            Bank bank = bankUser.getBank(data.itemID);
-            if(bank != null) {
-                if (data.resetLockedBalance)
-                    bank.unlockAll();
-                if (data.setBalance)
-                    bank.setBalance(data.balance);
-            }
-            else
-            {
-                if(data.createBank)
-                {
-                    bankUser.createItemBank(data.itemID, data.balance);
+        }
+
+        if(isAdmin && bankData != null) {
+            for (BankData data : bankData) {
+                if (data.removeBank) {
+                    account.removeBank(data.itemID);
+                    continue;
+                }
+                IBank bank = account.getBank(data.itemID);
+                if (bank != null) {
+                    if (data.resetLockedBalance)
+                        bank.unlockAll();
+                    if (data.setBalance)
+                        bank.setBalance(data.balance);
+                } else {
+                    if (data.createBank) {
+                        account.createBank(data.itemID, data.balance);
+                    }
                 }
             }
         }
-        SyncBankDataPacket.sendPacket(sender, playerUUID);
+        if(setUsers != null && !setUsers.isEmpty()) {
+            Map<User, Integer> userList = new HashMap<>(setUsers.size());
+            for (Map.Entry<UUID, Integer> entry : setUsers.entrySet()) {
+                UUID userUUID = entry.getKey();
+                int permissions = entry.getValue();
+                User userToSet = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(userUUID);
+                if(userToSet != null)
+                {
+                    userList.put(userToSet, permissions);
+                }
+            }
+            account.setUsers(userList);
+        }
     }
-}
+}*/

@@ -2,7 +2,6 @@ package net.kroia.banksystem.block.custom;
 
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -29,8 +28,6 @@ import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.UUID;
 
 import static dev.architectury.registry.menu.MenuRegistry.openExtendedMenu;
 
@@ -61,7 +58,7 @@ public class BankDownloadBlock extends Block implements EntityBlock {
         }
 
         @Override
-        public String getSerializedName() {
+        public @NotNull String getSerializedName() {
             return this.name;
         }
     }
@@ -113,6 +110,7 @@ public class BankDownloadBlock extends Block implements EntityBlock {
         super.neighborChanged(state, level, pos, block, fromPos, isMoving); // Call super to handle other changes
     }
 
+    @Override
     public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         boolean isPowered = level.hasNeighborSignal(pos);
 
@@ -147,10 +145,8 @@ public class BankDownloadBlock extends Block implements EntityBlock {
 
         // open screen
         if (player instanceof ServerPlayer sPlayer) {
-            UUID playerOwner = blockEntity.getPlayerOwner();
-            if(playerOwner == null || playerOwner.equals(player.getUUID())) {
+            if(blockEntity.hasPermissionToOpenBlock(sPlayer)) {
                 MenuProvider menuProvider = blockEntity.getMenuProvider();
-                SyncBankDataPacket.sendPacket(sPlayer, player.getUUID());
                 SyncBankDownloadDataPacket.sendPacket(sPlayer, blockEntity);
                 openExtendedMenu(sPlayer, menuProvider, (menu) -> {
                     menu.writeBlockPos(pos);

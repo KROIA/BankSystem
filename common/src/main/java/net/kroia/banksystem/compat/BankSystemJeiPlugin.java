@@ -15,6 +15,7 @@ import java.util.List;
 @JeiPlugin
 public class BankSystemJeiPlugin implements IModPlugin {
 
+
     public BankSystemJeiPlugin() {
     }
 
@@ -44,6 +45,5 @@ public class BankSystemJeiPlugin implements IModPlugin {
     @Override
     public void onRuntimeAvailable(IJeiRuntime jeiRuntime) {
         // Optional: Interact with JEI runtime if needed
-        BankSystemMod.LOGGER.info("JEI Runtime is available");
     }
 }
