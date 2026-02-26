@@ -11,15 +11,21 @@ import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.INetworkPayloadEncoder;
+import net.kroia.modutilities.networking.arrs.GenericRequestPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.Containers;
@@ -74,8 +80,16 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         HAS_MORE_THEN,
         HAS_LESS_THEN,
     }
-    public static class WithdrawOrder implements INetworkPayloadEncoder
+    public static class WithdrawOrder
     {
+        public static final StreamCodec<RegistryFriendlyByteBuf, WithdrawOrder> STREAM_CODEC = StreamCodec.composite(
+                ItemID.STREAM_CODEC, p -> p.itemID,
+                ByteBufCodecs.INT, p -> p.targetAmount,
+                ExtraCodecUtils.enumStreamCodec(WithdrawCondition.class), p -> p.condition,
+                ByteBufCodecs.VAR_LONG, p -> p.conditionValue,
+                WithdrawOrder::new
+        );
+
         private static final class TAGS
         {
             public static final String ITEM_ID = "I";
@@ -83,6 +97,8 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             public static final String CONDITION = "C";
             public static final String CONDITION_VALUE = "V";
         }
+
+
         public final ItemID itemID;
         public final int targetAmount;
 

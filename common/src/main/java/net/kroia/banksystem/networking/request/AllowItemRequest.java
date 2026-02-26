@@ -7,34 +7,22 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
 public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.Data, Boolean> {
 
-    public static class Data implements INetworkPayloadConverter
+    public record Data(ItemID itemID, int itemFractionScaleFactor)
     {
-        public ItemID itemID;
-        public int itemFractionScaleFactor;
-
-        public Data() {
-
-        }
-        public Data(ItemID itemID, int itemFractionScaleFactor) {
-            this.itemID = itemID;
-            this.itemFractionScaleFactor = itemFractionScaleFactor;
-        }
-
-        @Override
-        public void decode(FriendlyByteBuf buf) {
-            this.itemID = new ItemID(buf.readItem()); // Decode the ItemID from an ItemStack
-            this.itemFractionScaleFactor = buf.readInt(); // Decode the cent scale factor
-        }
-
-        @Override
-        public void encode(FriendlyByteBuf buf) {
-            buf.writeItem(itemID.getStack()); // Encode the ItemID as an ItemStack
-            buf.writeInt(itemFractionScaleFactor); // Encode the cent scale factor
-        }
+        public static final StreamCodec<RegistryFriendlyByteBuf, Data> STREAM_CODEC =
+                StreamCodec.composite(
+                        ItemID.STREAM_CODEC, Data::itemID,
+                        ByteBufCodecs.INT, Data::itemFractionScaleFactor,
+                        Data::new
+                );
     }
 
     @Override
@@ -81,7 +69,8 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
 
     @Override
     public void encodeInput(FriendlyByteBuf buf, AllowItemRequest.Data input) {
-        input.encode(buf); // Encode the ItemID and cent scale factor
+        Data.STREAM_CODEC.encode(buf, input);
+        //input.encode(buf); // Encode the ItemID and cent scale factor
     }
 
     @Override

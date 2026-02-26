@@ -1,20 +1,37 @@
 package net.kroia.banksystem.util;
 
 import com.google.gson.JsonElement;
+import io.netty.buffer.ByteBuf;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.JsonUtilities;
-import net.kroia.modutilities.networking.INetworkPayloadConverter;
+import net.kroia.modutilities.ModUtilitiesMod;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.modutilities.networking.arrs.GenericRequestPacket;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.Objects;
 import java.util.UUID;
 
-public class ItemID implements ServerSaveable, INetworkPayloadConverter {
+public class ItemID implements ServerSaveable {
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, ItemID> STREAM_CODEC = StreamCodec.composite(
+            ItemStack.STREAM_CODEC, p -> p.stack,
+            ItemID::new
+    );
+
 
     public static final ItemID EMPTY = new ItemID(Items.AIR.getDefaultInstance());
 
@@ -48,9 +65,9 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
     public ItemID(JsonElement jsonElement) {
         fromJson(jsonElement);
     }
-    public ItemID(FriendlyByteBuf buf) {
+   /* public ItemID(FriendlyByteBuf buf) {
         decode(buf);
-    }
+    }*/
 
     public static ItemID createFromTag(CompoundTag tag) {
         ItemID itemID = new ItemID();
@@ -59,17 +76,17 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
         }
         return itemID;
     }
-    public static ItemID createFomBytes(FriendlyByteBuf buf) {
+    /*public static ItemID createFomBytes(FriendlyByteBuf buf) {
         ItemID itemID = new ItemID();
         itemID.decode(buf);
         return itemID;
-    }
+    }*/
 
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
         if (!(obj instanceof ItemID other)) return false;
-        return ItemStack.isSameItemSameTags(this.stack, other.stack);
+        return ItemStack.isSameItemSameComponents(this.stack, other.stack);
     }
 
     @Override
@@ -77,7 +94,7 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
         if(stack == null || stack.isEmpty()) {
             return Objects.hash(Items.AIR.getDefaultInstance(), null); // Handle empty stack
         }
-        return Objects.hash(stack.getItem(), stack.getTag()); // Consider NBT
+        return stack.hashCode();
     }
 
     public ItemStack getStack() {
@@ -92,7 +109,7 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
 
     @Override
     public boolean save(CompoundTag tag) {
-        tag.put("item", stack.save(new CompoundTag()));
+        tag.put("item", ItemStack.CODEC.encodeStart(NbtOps.INSTANCE, stack).getOrThrow());
         return true;
     }
 
@@ -100,11 +117,11 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
     public boolean load(CompoundTag tag) {
         if(!tag.contains("item"))
             return false;
-        stack = ItemStack.of(tag.getCompound("item"));
+        stack = ItemStack.CODEC.parse(NbtOps.INSTANCE, tag.get("item")).getOrThrow();
         return true;
     }
 
-    @Override
+  /*  @Override
     public void encode(FriendlyByteBuf buf) {
         buf.writeItem(stack); // Encode the ItemID as an ItemStack
     }
@@ -113,7 +130,7 @@ public class ItemID implements ServerSaveable, INetworkPayloadConverter {
     public void decode(FriendlyByteBuf buf) {
         stack = buf.readItem(); // Decode the ItemID from an ItemStack
     }
-
+*/
     public JsonElement toJson() {
         ItemStackJsonParser parser = new ItemStackJsonParser();
         return parser.toJson(stack);

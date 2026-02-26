@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking;
 
+import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
@@ -9,8 +10,14 @@ import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
 import net.kroia.banksystem.networking.request.*;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
+import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.modutilities.networking.PacketHandler;
 import net.kroia.modutilities.networking.PacketManager;
 import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 public class BankSystemNetworking extends PacketManager {
 
@@ -45,24 +52,25 @@ public class BankSystemNetworking extends PacketManager {
     @Override
     public void setupClientReceiverPackets()
     {
-        //register(SyncBankDataPacket.class, SyncBankDataPacket::encode, SyncBankDataPacket::new, SyncBankDataPacket::receive);
         register(SyncOpenGUIPacket.class, SyncOpenGUIPacket::encode, SyncOpenGUIPacket::new, SyncOpenGUIPacket::receive);
-        //register(SyncItemInfoPacket.class, SyncItemInfoPacket::encode, SyncItemInfoPacket::new, SyncItemInfoPacket::receive);
         register(SyncBankUploadDataPacket.class, SyncBankUploadDataPacket::encode, SyncBankUploadDataPacket::new, SyncBankUploadDataPacket::receive);
-        register(SyncBankDownloadDataPacket.class, SyncBankDownloadDataPacket::encode, SyncBankDownloadDataPacket::new, SyncBankDownloadDataPacket::receive);
+        register(SyncBankDownloadDataPacket.TYPE, SyncBankDownloadDataPacket.STREAM_CODEC, BankSystemNetworkPacket.HANDLER);
     }
 
     @Override
     public void setupServerReceiverPackets()
     {
-        //register(RequestAllowNewBankItemIDPacket.class, RequestAllowNewBankItemIDPacket::encode, RequestAllowNewBankItemIDPacket::new, RequestAllowNewBankItemIDPacket::receive);
-        //register(RequestBankDataPacket.class, RequestBankDataPacket::encode, RequestBankDataPacket::new, RequestBankDataPacket::receive);
-        //register(RequestDisallowBankingItemIDPacket.class, RequestDisallowBankingItemIDPacket::encode, RequestDisallowBankingItemIDPacket::new, RequestDisallowBankingItemIDPacket::receive);
         register(UpdateBankTerminalBlockEntityPacket.class, UpdateBankTerminalBlockEntityPacket::encode, UpdateBankTerminalBlockEntityPacket::new, UpdateBankTerminalBlockEntityPacket::receive);
-        //register(RequestItemInfoPacket.class, RequestItemInfoPacket::encode, RequestItemInfoPacket::new, RequestItemInfoPacket::receive);
-        //register(UpdateBankAccountPacket.class, UpdateBankAccountPacket::encode, UpdateBankAccountPacket::new, UpdateBankAccountPacket::receive);
         register(UpdateBankUploadBlockEntityPacket.class, UpdateBankUploadBlockEntityPacket::encode, UpdateBankUploadBlockEntityPacket::new, UpdateBankUploadBlockEntityPacket::receive);
         register(UpdateBankDownloadBlockEntityPacket.class, UpdateBankDownloadBlockEntityPacket::encode, UpdateBankDownloadBlockEntityPacket::new, UpdateBankDownloadBlockEntityPacket::receive);
         register(WithdrawMoneyPacket.class, WithdrawMoneyPacket::encode, WithdrawMoneyPacket::new, WithdrawMoneyPacket::receive);
+    }
+
+
+
+    public <T extends NetworkPacket> void register(CustomPacketPayload.Type<T> packetType, StreamCodec<RegistryFriendlyByteBuf, T> streamCodec) {
+
+        register(packetType, streamCodec, BankSystemNetworkPacket.HANDLER);
+        NetworkManager.registerReceiver(NetworkManager.Side.C2S, packetType, streamCodec, BankSystemNetworkPacket.HANDLER::handleServer);
     }
 }

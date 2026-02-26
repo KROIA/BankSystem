@@ -1,24 +1,46 @@
 package net.kroia.banksystem.networking.packet.server_sender;
 
-import net.kroia.banksystem.networking.BankSystemNetworking;
+import com.sun.jna.platform.win32.WinDef;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.BankSystemClientHooks;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ServerPlayerUtilities;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.modutilities.networking.arrs.GenericRequestPacket;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import org.apache.commons.lang3.EnumUtils;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.UUID;
 
 public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
-
     enum GUIType
     {
         BANK_SYSTEM_SETTING,
         BANK_ACCOUNT,
         ATM_SCREEN, // ATM screen is not implemented yet
     }
+
+    public static final Type<SyncOpenGUIPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "SyncOpenGUIPacket"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, SyncOpenGUIPacket> STREAM_CODEC = StreamCodec.composite(
+            ExtraCodecUtils.enumStreamCodec(GUIType.class), p -> p.guiType,
+            UUIDUtil.STREAM_CODEC, p -> p.targetPlayerUUID,
+            ByteBufCodecs.INT, p -> p.accountNumber,
+            ByteBufCodecs.BOOL, p -> p.isAdminMode,
+            SyncOpenGUIPacket::new
+    );
+
+
+
+
 
     GUIType guiType;
     UUID targetPlayerUUID;
@@ -30,14 +52,16 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         super();
     }
 
-    @Override
-    public MessageType getType() {
-        return BankSystemNetworking.SYNC_OPEN_GUI;
+    public SyncOpenGUIPacket(GUIType guiType, UUID targetPlayerUUID, int accountNumber, boolean isAdminMode) {
+        super();
+        this.guiType = guiType;
+        this.targetPlayerUUID = targetPlayerUUID;
+        this.accountNumber = accountNumber;
+        this.isAdminMode = isAdminMode;
     }
-
-    public SyncOpenGUIPacket(RegistryFriendlyByteBuf friendlyByteBuf) {
+   /* public SyncOpenGUIPacket(RegistryFriendlyByteBuf friendlyByteBuf) {
         super(friendlyByteBuf);
-    }
+    }*/
 
     public static void send_openBankSystemSettingScreen(ServerPlayer player)
     {
@@ -69,7 +93,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         packet.sendToClient(player);
     }
 
-    @Override
+    //@Override
     protected void handleOnClient()
     {
         switch(guiType)
@@ -86,6 +110,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         }
     }
 
+    /*
     @Override
     public void encode(FriendlyByteBuf buf) {
         buf.writeEnum(guiType);
@@ -104,4 +129,9 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         accountNumber = buf.readInt();
         isAdminMode = buf.readBoolean();
     }*/
+
+    @Override
+    public @NotNull Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
 }

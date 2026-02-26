@@ -1,15 +1,34 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
-import dev.architectury.networking.simple.MessageType;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.screen.custom.BankUploadScreen;
+import net.kroia.modutilities.ModUtilitiesMod;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.modutilities.networking.arrs.GenericRequestPacket;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.UUID;
 
 public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
+
+    public static final Type<SyncBankUploadDataPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "SyncBankUploadDataPacket"));
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, SyncBankUploadDataPacket> STREAM_CODEC = StreamCodec.composite(
+            ByteBufCodecs.BOOL, p -> p.isOwned,
+            ByteBufCodecs.BOOL, p -> p.dropIfNotBankable,
+            ByteBufCodecs.INT, p -> p.bankAccountNumber,
+            SyncBankUploadDataPacket::new
+    );
 
     boolean isOwned;
     boolean dropIfNotBankable;
@@ -20,9 +39,9 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
         this.bankAccountNumber = bankAccountNumber;
     }
 
-    public SyncBankUploadDataPacket(RegistryFriendlyByteBuf buf) {
+    /*public SyncBankUploadDataPacket(RegistryFriendlyByteBuf buf) {
         super(buf);
-    }
+    }*/
 
     public static void sendPacket(ServerPlayer receiver, BankUploadBlockEntity blockEntity) {
         UUID playerOwner = blockEntity.getPlayerOwner();
@@ -32,7 +51,7 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
         new SyncBankUploadDataPacket(isOwned, dropIfNotBankable, bankAccountNumber).sendToClient(receiver);
     }
 
-
+/*
     @Override
     public void encode(FriendlyByteBuf buf) {
         buf.writeBoolean(isOwned);
@@ -46,7 +65,7 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
         isOwned = buf.readBoolean();
         dropIfNotBankable = buf.readBoolean();
         bankAccountNumber = buf.readInt();
-    }
+    }*/
 
     protected void handleOnClient() {
         BankUploadScreen.handlePacket(this);
@@ -60,5 +79,10 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
     }
     public int getBankAccountNumber() {
         return bankAccountNumber;
+    }
+
+    @Override
+    public @NotNull Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 }

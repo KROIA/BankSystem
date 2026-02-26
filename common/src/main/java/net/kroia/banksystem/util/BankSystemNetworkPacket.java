@@ -1,8 +1,15 @@
 package net.kroia.banksystem.util;
 
+import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.modutilities.ModUtilitiesMod;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.modutilities.networking.PacketHandler;
+import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
+import net.kroia.modutilities.networking.arrs.GenericRequestPacket;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 public abstract class BankSystemNetworkPacket extends NetworkPacket {
@@ -15,9 +22,37 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
         super();
     }
 
-    public BankSystemNetworkPacket(FriendlyByteBuf buf) {
-        super(buf);
+
+    public static final PacketHandler<BankSystemNetworkPacket> HANDLER = new PacketHandler<>(){
+        @Override
+        public void handleServer(BankSystemNetworkPacket packet, NetworkManager.PacketContext context) {
+            BankSystemNetworkPacket packet1 = (BankSystemNetworkPacket) packet;
+            if(packet1 != null) {
+                packet1.handleServer(context);
+            }
+        }
+
+        @Override
+        public void handleClient(BankSystemNetworkPacket packet, NetworkManager.PacketContext context) {
+            BankSystemNetworkPacket packet1 = (BankSystemNetworkPacket) packet;
+            if(packet1 != null) {
+                packet1.handleClient(context);
+            }
+        }
+    };
+
+    public void handleServer(NetworkManager.PacketContext context)
+    {
+
     }
+
+    public void handleClient(NetworkManager.PacketContext context)
+    {
+
+    }
+
+
+
 
     protected void sendToServer()
     {
@@ -43,4 +78,10 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
     protected void debug(String message) {
         BACKEND_INSTANCES.LOGGER.debug("[BankSystemNetworkPacket] "+ message);
     }
+
+
+
+
+
+
 }
