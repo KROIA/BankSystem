@@ -183,7 +183,7 @@ public final class BankSystemModSettings extends ModSettings {
         //        new ItemIDAndScaleFactorListParser()); // List of allowed item IDs for bank transactions
 
         public final List<ItemStack> INITIAL_BLACKLIST_ITEMS = List.of(
-                Items.AIR.getDefaultInstance(),
+                //Items.AIR.getDefaultInstance(),
                 Items.BEDROCK.getDefaultInstance(),
                 Items.BARRIER.getDefaultInstance(),
                 Items.STRUCTURE_VOID.getDefaultInstance(),
@@ -192,6 +192,11 @@ public final class BankSystemModSettings extends ModSettings {
                 Items.CHAIN_COMMAND_BLOCK.getDefaultInstance(),
                 Items.DEBUG_STICK.getDefaultInstance(),
                 Items.KNOWLEDGE_BOOK.getDefaultInstance(),
+                BankSystemItems.MONEY_CENT1.get().getDefaultInstance(),
+                BankSystemItems.MONEY_CENT5.get().getDefaultInstance(),
+                BankSystemItems.MONEY_CENT10.get().getDefaultInstance(),
+                BankSystemItems.MONEY_CENT20.get().getDefaultInstance(),
+                BankSystemItems.MONEY_CENT50.get().getDefaultInstance(),
                 BankSystemItems.MONEY5.get().getDefaultInstance(),
                 BankSystemItems.MONEY10.get().getDefaultInstance(),
                 BankSystemItems.MONEY20.get().getDefaultInstance(),

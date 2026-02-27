@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
+import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.screen.custom.BankDownloadScreen;
@@ -75,7 +76,8 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
         accountNr = buf.readInt();
     }*/
 
-    protected void handleOnClient() {
+    @Override
+    protected void handleClient(NetworkManager.PacketContext context) {
         BankDownloadScreen.handlePacket(this);
     }
 

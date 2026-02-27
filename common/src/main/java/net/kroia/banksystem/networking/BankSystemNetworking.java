@@ -8,6 +8,7 @@ import net.kroia.banksystem.networking.packet.client_sender.update.entity.Update
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
+import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.request.*;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.modutilities.networking.PacketManager;
@@ -52,6 +53,7 @@ public class BankSystemNetworking extends PacketManager {
         registerS2C(SyncOpenGUIPacket.TYPE, SyncOpenGUIPacket.STREAM_CODEC);
         registerS2C(SyncBankUploadDataPacket.TYPE, SyncBankUploadDataPacket.STREAM_CODEC);
         registerS2C(SyncBankDownloadDataPacket.TYPE, SyncBankDownloadDataPacket.STREAM_CODEC);
+        registerS2C(SyncItemIDsPacket.TYPE, SyncItemIDsPacket.STREAM_CODEC);
     }
 
     @Override

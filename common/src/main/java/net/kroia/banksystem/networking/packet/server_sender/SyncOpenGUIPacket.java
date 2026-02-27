@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.packet.server_sender;
 
+import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.BankSystemClientHooks;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
@@ -89,8 +90,8 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         packet.sendToClient(player);
     }
 
-    //@Override
-    protected void handleOnClient()
+    @Override
+    protected void handleClient(NetworkManager.PacketContext context)
     {
         switch(guiType)
         {

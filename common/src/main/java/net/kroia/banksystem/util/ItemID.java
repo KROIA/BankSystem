@@ -2,6 +2,7 @@ package net.kroia.banksystem.util;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveable;
@@ -17,6 +18,11 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 public class ItemID implements ServerSaveable {
+
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
     public static final StreamCodec<RegistryFriendlyByteBuf, ItemID> STREAM_CODEC = StreamCodec.composite(
             UUIDUtil.STREAM_CODEC, p -> p.uuid,
@@ -69,7 +75,12 @@ public class ItemID implements ServerSaveable {
     }
 
     public static ItemID of(ItemStack defaultInstance) {
-        return ItemIDManager.getItemID(defaultInstance);
+        ItemID id = ItemIDManager.getItemID(defaultInstance);
+        if(id == null)
+        {
+            warn("Item not registered: "+ defaultInstance);
+        }
+        return id;
     }
 
 
@@ -183,4 +194,25 @@ public class ItemID implements ServerSaveable {
     }
 
 
+
+    private static void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[ItemID] " + msg);
+    }
+    private static void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[ItemID] " + msg);
+    }
+    private static void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[ItemID] " + msg, e);
+    }
+    private static void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[ItemID] " + msg);
+    }
+    private static void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[ItemID] " + msg);
+    }
 }

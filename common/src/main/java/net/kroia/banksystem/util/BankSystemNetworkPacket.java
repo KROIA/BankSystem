@@ -2,15 +2,11 @@ package net.kroia.banksystem.util;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.modutilities.ModUtilitiesMod;
-import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.modutilities.networking.PacketHandler;
-import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
-import net.kroia.modutilities.networking.arrs.GenericRequestPacket;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
+
+import java.util.List;
 
 public abstract class BankSystemNetworkPacket extends NetworkPacket {
     protected static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -60,6 +56,10 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
     protected void sendToClient(ServerPlayer player)
     {
         BACKEND_INSTANCES.NETWORKING.sendToClient(player, this);
+    }
+    protected void sendToClients(List<ServerPlayer> player)
+    {
+        BACKEND_INSTANCES.NETWORKING.sendToClients(player, this);
     }
 
     protected void info(String message) {

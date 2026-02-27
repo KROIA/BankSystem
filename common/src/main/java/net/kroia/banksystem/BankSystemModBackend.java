@@ -1,5 +1,6 @@
 package net.kroia.banksystem;
 
+import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
@@ -21,11 +22,13 @@ import net.kroia.banksystem.item.custom.software.Software;
 import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.*;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
+import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
 
@@ -63,6 +66,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankDownloadBlockEntity.setBackend(INSTANCES);
         BankUploadBlockEntity.setBackend(INSTANCES);
         Software.setBackend(INSTANCES);
+        ItemID.setBackend(INSTANCES);
 
         BankSystemNetworkPacket.setBackend(INSTANCES);
         BankSystemGenericRequest.setBackend(INSTANCES);
@@ -97,6 +101,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemGuiContainerScreen.setBackend(INSTANCES);
         BankSystemGuiElement.setBackend(INSTANCES);
         BankSystemEntities.registerRenderers();
+
+        ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(BankSystemModBackend::onPlayerLeaveClientSide);
     }
 
     // Called from the server side
@@ -144,11 +150,11 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the server side
     public static void onPlayerJoin(ServerPlayer player)
     {
-        if(!INSTANCES.SERVER_BANK_MANAGER.userExists(player.getUUID()))
-        {
+        if(!INSTANCES.SERVER_BANK_MANAGER.userExists(player.getUUID())) {
             INSTANCES.SERVER_BANK_MANAGER.addUser(player);
             INSTANCES.SERVER_BANK_MANAGER.createPersonalBankAccount(player.getUUID());
         }
+        ItemIDManager.onPlayerJoined(player);
         /*
         INSTANCES.SERVER_BANK_MANAGER.createUser(
                 player,
@@ -162,6 +168,12 @@ public class BankSystemModBackend implements BankSystemAPI {
     public static void onPlayerLeave(ServerPlayer player)
     {
 
+    }
+
+    // Called from the client side
+    private static void onPlayerLeaveClientSide(@Nullable LocalPlayer localPlayer)
+    {
+        ItemIDManager.clear();
     }
 
     // Called from the server side

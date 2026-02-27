@@ -52,6 +52,13 @@ public final class BankSystemFabric implements ModInitializer {
         });
 
 
+
+        /*ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            // code to run when leaving a server
+            BankSystemModBackend.onPlayerLeaveClientSide();
+        });*/
+
+
         // Run our common setup.
         BankSystemMod.init();
 

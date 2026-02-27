@@ -377,7 +377,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             accountName = accountNameLabel.getText();
         }
 
-        UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.getItemID(), bankData, setUsers);
+        UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.itemView.getItemStack(), bankData, setUsers);
         BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input, this::setupGui);
     }
     private void updateBankData(BankAccountData bankAccountData)

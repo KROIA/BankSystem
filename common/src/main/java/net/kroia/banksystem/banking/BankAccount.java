@@ -17,6 +17,7 @@ import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -46,10 +47,12 @@ public class BankAccount implements ServerSaveable, IBankAccount {
 
     private BankAccount(int accountNumber) {
         this.accountNumber = accountNumber;
+        this.accountIcon = ItemID.getOrRegisterFromItemStack(Items.CHEST.getDefaultInstance());
     }
     private BankAccount(int accountNumber, @Nullable User personalBankOwner, List<BankUser> users, Map<ItemID, Bank> banks) {
         this.accountNumber = accountNumber;
         this.personalBankOwner = personalBankOwner;
+        this.accountIcon = ItemID.getOrRegisterFromItemStack(Items.CHEST.getDefaultInstance());
         if( personalBankOwner != null) {
             this.accountName = personalBankOwner.getName()+"'s Bank Account";
         }

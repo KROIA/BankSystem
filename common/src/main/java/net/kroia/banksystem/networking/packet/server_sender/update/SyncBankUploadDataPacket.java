@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.packet.server_sender.update;
 
+import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.screen.custom.BankUploadScreen;
@@ -62,7 +63,9 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
         bankAccountNumber = buf.readInt();
     }*/
 
-    protected void handleOnClient() {
+
+    @Override
+    protected void handleClient(NetworkManager.PacketContext context) {
         BankUploadScreen.handlePacket(this);
     }
 

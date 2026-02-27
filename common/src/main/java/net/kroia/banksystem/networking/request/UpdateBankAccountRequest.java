@@ -13,15 +13,19 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBankAccountRequest.InputData, BankAccountData> {
 
     public record InputData(int accountNumber,
                             String accountName,
-                            @Nullable ItemID accountIcon,
+                            @Nullable ItemStack accountIcon,
                             List<BankData> bankData,
                             Map<UUID, Integer> setUsers)
     {
@@ -73,7 +77,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.INT, InputData::accountNumber,
                 ByteBufCodecs.STRING_UTF8, InputData::accountName,
-                ExtraCodecUtils.nullable(ItemID.STREAM_CODEC), InputData::accountIcon,
+                ExtraCodecUtils.nullable(ItemStack.STREAM_CODEC), InputData::accountIcon,
                 ExtraCodecUtils.listStreamCodec(BankData.STREAM_CODEC), InputData::bankData,
                 ExtraCodecUtils.mapStreamCodec(UUIDUtil.STREAM_CODEC, ByteBufCodecs.INT, HashMap<UUID, Integer>::new), InputData::setUsers,
                 InputData::new
@@ -223,7 +227,8 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 }
                 account.setUsers(userList);
             }
-            account.setAccountIcon(input.accountIcon);
+            ItemID iconID = ItemID.getOrRegisterFromItemStack(input.accountIcon);
+            account.setAccountIcon(iconID);
             if(!account.hasAnyUser())
             {
                 // If the account has no users, we remove it
