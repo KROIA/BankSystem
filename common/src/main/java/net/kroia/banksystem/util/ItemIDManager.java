@@ -2,8 +2,6 @@ package net.kroia.banksystem.util;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemIDsPacket;
-import net.minecraft.nbt.NbtOps;
-import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -11,7 +9,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ItemIDManager {
@@ -39,7 +36,13 @@ public class ItemIDManager {
         if(id != null)
             return id; // Already registered
 
-        id = generateIdFromItemStack(itemStack);
+        if(itemStack.isEmpty())
+        {
+            return ItemID.INVALID_ID;
+        }
+
+        short newID = (short)(itemIDMap.size()+1);
+        id = new ItemID(newID);
         ItemStack cpy = itemStack.copy();
         cpy.setCount(1);
         itemIDMap.put(id, cpy);
@@ -65,7 +68,7 @@ public class ItemIDManager {
         return null;
     }
 
-    private static @NotNull ItemID generateIdFromItemStack(@NotNull ItemStack itemStack)
+    /*private static @NotNull ItemID generateIdFromItemStack(@NotNull ItemStack itemStack)
     {
         if(itemStack.isEmpty())
         {
@@ -79,7 +82,7 @@ public class ItemIDManager {
         UUID uuid = UUID.nameUUIDFromBytes(tagStr.getBytes());
         itemStack.setCount(oldAmount);
         return new ItemID(uuid);
-    }
+    }*/
 
 
 

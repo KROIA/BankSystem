@@ -14,7 +14,7 @@
   ],
   "result": {
     "count": 1,
-    "item": "banksystem:atm_software"
+    "id": "banksystem:atm_software"
   },
   "show_notification": true
 }

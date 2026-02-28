@@ -17,7 +17,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 public class MoneyStockpileBlockEntity extends BlockEntity {
 
@@ -30,7 +29,7 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
 
         public ItemData()
         {
-            itemID = new ItemID(UUID.randomUUID());// Dummy
+            itemID = ItemID.INVALID_ID;// Dummy
         }
         public ItemData(ItemID itemID, int amount) {
             this.itemID = itemID;

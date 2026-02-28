@@ -6,16 +6,14 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveable;
-import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.UUID;
 
 public class ItemID implements ServerSaveable {
 
@@ -25,19 +23,26 @@ public class ItemID implements ServerSaveable {
     }
 
     public static final StreamCodec<RegistryFriendlyByteBuf, ItemID> STREAM_CODEC = StreamCodec.composite(
-            UUIDUtil.STREAM_CODEC, p -> p.uuid,
+            ByteBufCodecs.SHORT, p -> p.id,
             ItemID::new
     );
 
+    private static final String compoundTagKey_ID = "id";
+
+    public static final ItemID INVALID_ID = new ItemID((short)0);
 
     //public static final ItemID EMPTY = new ItemID(Items.AIR.getDefaultInstance());
 
     //private ItemStack stack;
-    private UUID uuid;
+    //private UUID uuid;
+    private short id;
 
-
-    public ItemID(UUID uuid) {
+    /*public ItemID(UUID uuid) {
         this.uuid = uuid;
+    }*/
+    public ItemID(short id)
+    {
+        this.id = id;
     }
     public static @Nullable ItemID fromJson(JsonElement jsonElement)
     {
@@ -45,14 +50,14 @@ public class ItemID implements ServerSaveable {
             return null;
 
         JsonObject jsonObject = jsonElement.getAsJsonObject();
-        if(!jsonObject.has("uuid"))
+        if(!jsonObject.has(compoundTagKey_ID))
             return null;
-        UUID uuid = UUID.fromString(jsonObject.get("uuid").getAsString());
-        return new ItemID(uuid);
+        short id = jsonObject.get(compoundTagKey_ID).getAsShort();
+        return new ItemID(id);
     }
 
     public static @Nullable ItemID createFromTag(CompoundTag tag) {
-        ItemID itemID = new ItemID(UUID.randomUUID());
+        ItemID itemID = new ItemID((short) 0);
         if (!itemID.load(tag)) {
             return null; // Invalid data
         }
@@ -119,16 +124,12 @@ public class ItemID implements ServerSaveable {
     public boolean equals(Object obj) {
         if (this == obj) return true;
         if (!(obj instanceof ItemID other)) return false;
-        return uuid.equals(other.uuid);
+        return id == other.id;
     }
 
     @Override
     public int hashCode() {
-        if(uuid == null) {
-            return 0; // Handle empty stack
-        }
-        int hash = uuid.hashCode();
-        return hash;
+        return id;
     }
 
     public @Nullable ItemStack getStack() {
@@ -152,21 +153,21 @@ public class ItemID implements ServerSaveable {
 
     @Override
     public boolean save(CompoundTag tag) {
-        tag.putUUID("uuid", uuid);
+        tag.putShort(compoundTagKey_ID, id);
         return true;
     }
 
     @Override
     public boolean load(CompoundTag tag) {
-        if(!tag.contains("uuid"))
+        if(!tag.contains(compoundTagKey_ID))
             return false;
-        uuid = tag.getUUID("uuid");
+        id = tag.getShort(compoundTagKey_ID);
         return true;
     }
 
     public JsonElement toJson() {
         JsonObject jsonElement = new JsonObject();
-        jsonElement.addProperty("uuid", uuid.toString());
+        jsonElement.addProperty(compoundTagKey_ID, id);
         return jsonElement;
     }
 
@@ -177,23 +178,21 @@ public class ItemID implements ServerSaveable {
 
 
     public boolean isValid() {
-        if(uuid == null) {
+        if(id == INVALID_ID.id)
             return false;
-        }
         ItemStack stack = getStack();
         return stack != null;
     }
 
     @Override
     public String toString() {
-        return toJsonString();
+        //return toJsonString();
+        return "ID = '"+id+"'";
     }
 
-    public UUID getUUID() {
-        return uuid;
+    public short getShort() {
+        return id;
     }
-
-
 
     private static void info(String msg)
     {
