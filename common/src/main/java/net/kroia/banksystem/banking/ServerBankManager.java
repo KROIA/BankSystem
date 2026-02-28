@@ -4,7 +4,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.api.IServerBankManager;
@@ -43,7 +42,15 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     /**
      * Using the ItemID for which the scale factor belongs to as key.
      */
-    private final Map<ItemID, Integer> itemFractionScaleFactor = new HashMap<>();
+    //private final Map<ItemID, Integer> itemFractionScaleFactor = new HashMap<>();
+
+
+
+    /**
+     * List of all items that are allowed to be stored inside a bank account
+     */
+    private final Set<ItemID> allowedItemIDs = new HashSet<>();
+
 
     /**
      * Using the account number as key.
@@ -60,7 +67,6 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         getNotRemovableItems();
         
         setupDefaultItems();
-
     }
 
 
@@ -69,7 +75,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     {
         return new BankManagerData(
                 getBankManagerUserMapData(),
-                getBankManagerItemFractionScaleFactorData(),
+                //getBankManagerItemFractionScaleFactorData(),
                 getBankManagerBankAccountsData(),
                 getAllowedItems(),
                 getBlacklistedItems(),
@@ -87,12 +93,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         return new BankManagerData.UserMapData(userDataMap);
     }
 
-    @Override
+    /*@Override
     public BankManagerData.ItemFractionScaleFactorData getBankManagerItemFractionScaleFactorData()
     {
         Map<ItemID, Integer> itemFractionScaleFactorMap = new HashMap<>(itemFractionScaleFactor);
         return new BankManagerData.ItemFractionScaleFactorData(itemFractionScaleFactorMap);
-    }
+    }*/
 
     @Override
     public BankManagerData.BankAccountsData getBankManagerBankAccountsData()
@@ -106,13 +112,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public List<ItemID> getAllowedItems() {
-        List<ItemID> allowedItemIDs = new ArrayList<>(itemFractionScaleFactor.size());
-        for (Map.Entry<ItemID, Integer> entry : itemFractionScaleFactor.entrySet()) {
-            if (entry.getValue() > 0) {
-                allowedItemIDs.add(entry.getKey());
-            }
-        }
-        return allowedItemIDs;
+        return allowedItemIDs.stream().toList();
     }
     @Override
     public List<ItemID> getBlacklistedItems()
@@ -142,7 +142,6 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         double totalSupply = 0;
         double totalLocked = 0;
         List<BankAccountData> bankAccounts = new java.util.ArrayList<>();
-        int itemFractionScaleFactor = getItemFractionScaleFactor(itemID);
 
         for (Map.Entry<Integer, BankAccount> entry : this.bankAccounts.entrySet()) {
             BankAccount account = entry.getValue();
@@ -153,7 +152,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             totalLocked += bank.getRealLockedBalance();
             bankAccounts.add(account.getAccountData(itemID));
         }
-        return new ItemInfoData(itemID, totalSupply, totalLocked, bankAccounts, itemFractionScaleFactor);
+        return new ItemInfoData(itemID, totalSupply, totalLocked, bankAccounts);
     }
 
 
@@ -425,7 +424,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
 
 
-    @Override
+    /*@Override
     public int getItemFractionScaleFactor(ItemID itemID)
     {
         if(itemID == null)
@@ -435,15 +434,14 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return 1;
         }
         return scaleFactor;
-    }
+    }*/
     @Override
     public boolean isItemIDAllowed(ItemID itemID)
     {
-        Integer scaleFactor = itemFractionScaleFactor.get(itemID);
-        return scaleFactor != null && scaleFactor > 0;
+        return allowedItemIDs.contains(itemID);
     }
     @Override
-    public boolean allowItemID(ItemID itemID, int itemFractionScaleFactor)
+    public boolean allowItemID(ItemID itemID)
     {
         if(itemID == null)
             return false;
@@ -452,11 +450,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             warn("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
             return false;
         }
-        if(MoneyItem.isMoney(itemID))
-            itemFractionScaleFactor = MoneyItem.ITEM_FRACTION_SCALE_FACTOR;
-        else if(itemFractionScaleFactor != 1 && itemFractionScaleFactor != 10 && itemFractionScaleFactor != 100)
-            itemFractionScaleFactor = 1;
-        this.itemFractionScaleFactor.put(itemID, itemFractionScaleFactor);
+
+        this.allowedItemIDs.add(itemID);
         return true;
     }
     @Override
@@ -477,8 +472,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 info("Removed item bank for itemID: " + itemID + " from account number: " + entry.getKey());
             }
         }
-        // Remove all factors
-        return itemFractionScaleFactor.keySet().removeIf(existingItemID -> existingItemID.equals(itemID));
+        return allowedItemIDs.remove(itemID);
     }
     @Override
     public boolean isItemIDNotRemovable(ItemID itemID)
@@ -632,12 +626,10 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public void setupDefaultItems()
     {
         // Check if all allowed items have a scale factor
-        List<BankSystemModSettings.Bank.ItemStackAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEMS;
+        List<ItemStack> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEMS;
         for (var el : allowedItems) {
-            ItemID itemID = ItemIDManager.registerItemStack(el.stack);
-            if(itemFractionScaleFactor.containsKey(itemID))
-                continue;
-            itemFractionScaleFactor.put(itemID, el.itemFractionScaleFactor);
+            ItemID itemID = ItemIDManager.registerItemStack(el);
+            allowedItemIDs.add(itemID);
         }
     }
 
@@ -660,16 +652,15 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         listTags.put("users", userList);
 
         // Save item cent scale factors
-        ListTag itemScaleFactors = new ListTag();
-        for (Map.Entry<ItemID, Integer> entry : itemFractionScaleFactor.entrySet()) {
+        ListTag allowedItems = new ListTag();
+        for (ItemID itemID : allowedItemIDs) {
             CompoundTag pairTag = new CompoundTag();
             CompoundTag itemTag = new CompoundTag();
-            entry.getKey().save(itemTag);
+            itemID.save(itemTag);
             pairTag.put("itemID", itemTag);
-            pairTag.putInt("scaleFactor", entry.getValue());
-            itemScaleFactors.add(pairTag);
+            allowedItems.add(pairTag);
         }
-        listTags.put("itemCentScaleFactors", itemScaleFactors);
+        listTags.put("allowedItems", allowedItems);
 
         ListTag accountsList = new ListTag();
         for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
@@ -692,18 +683,17 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
 
         // Load item cent scale factors
-        if(listTags.containsKey("itemCentScaleFactors")) {
-            ListTag itemScaleFactors = listTags.get("itemCentScaleFactors");
-            itemFractionScaleFactor.clear();
-            for (int i = 0; i < itemScaleFactors.size(); i++) {
-                CompoundTag pairTag = itemScaleFactors.getCompound(i);
-                if(!pairTag.contains("itemID") || !pairTag.contains("scaleFactor")) {
-                    warn("Invalid item scale factor tag: " + pairTag);
+        if(listTags.containsKey("allowedItems")) {
+            ListTag allowedItems = listTags.get("allowedItems");
+            allowedItemIDs.clear();
+            for (int i = 0; i < allowedItems.size(); i++) {
+                CompoundTag idTag = allowedItems.getCompound(i);
+                if(!idTag.contains("itemID")) {
                     continue; // Skip invalid entries
                 }
-                ItemID itemID = ItemID.createFromTag(pairTag.getCompound("itemID"));
-                int scaleFactor = pairTag.getInt("scaleFactor");
-                itemFractionScaleFactor.put(itemID, scaleFactor);
+
+                ItemID itemID = ItemID.createFromTag(idTag.getCompound("itemID"));
+                allowedItemIDs.add(itemID);
             }
         }
         else {
@@ -749,12 +739,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         this.nextAccountNumber = nextAccountNumber;
         return true;
     }
-    public boolean load_compatibilityMode_setItemFractionScaleFactors(Map<ItemID, Integer> itemFractionScaleFactor)
+    /*public boolean load_compatibilityMode_setItemFractionScaleFactors(Map<ItemID, Integer> itemFractionScaleFactor)
     {
         this.itemFractionScaleFactor.clear();
         this.itemFractionScaleFactor.putAll(itemFractionScaleFactor);
         return true;
-    }
+    }*/
     public boolean load_compatibilityMode_setUsers(Map<UUID, User> userMap)
     {
         this.userMap.clear();
@@ -780,10 +770,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         jsonObject.add("users", usersJson);
 
         JsonArray itemScaleFactorsJson = new JsonArray();
-        for (Map.Entry<ItemID, Integer> entry : itemFractionScaleFactor.entrySet()) {
+        for (ItemID itemID : allowedItemIDs) {
             JsonObject itemScaleFactorJson = new JsonObject();
-            itemScaleFactorJson.add("itemID", entry.getKey().toJson());
-            itemScaleFactorJson.addProperty("scaleFactor", entry.getValue());
+            itemScaleFactorJson.add("itemID", itemID.toJson());
             itemScaleFactorsJson.add(itemScaleFactorJson);
         }
         jsonObject.add("itemCentScaleFactors", itemScaleFactorsJson);

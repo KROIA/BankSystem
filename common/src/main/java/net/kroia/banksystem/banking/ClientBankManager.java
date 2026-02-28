@@ -63,9 +63,9 @@ public class ClientBankManager implements IClientBankManager {
     }
 
     @Override
-    public void requestAllowItem(ItemID itemID, int centScaleFactor, Consumer<Boolean> callback)
+    public void requestAllowItem(ItemID itemID, Consumer<Boolean> callback)
     {
-        AllowItemRequest.Data requestData = new AllowItemRequest.Data(itemID, centScaleFactor);
+        AllowItemRequest.Data requestData = new AllowItemRequest.Data(itemID);
         BankSystemNetworking.ALLOW_ITEM_REQUEST.sendRequestToServer(requestData, callback);
     }
 
@@ -81,18 +81,6 @@ public class ClientBankManager implements IClientBankManager {
         BankSystemNetworking.REMOVE_EMPTY_BANKS_REQUEST.sendRequestToServer(accountNumber, callback);
     }
 
-    /*@Override
-    public void requestRemoveEmptyBanks(Consumer<List<ItemID>> callback)
-    {
-        UUID thisPlayer = Minecraft.getInstance().player.getUUID();
-        BankSystemNetworking.REMOVE_EMPTY_BANKS_REQUEST.sendRequestToServer(thisPlayer, callback);
-    }*/
-
-    @Override
-    public void requestItemFractionScaleFactor(ItemID itemID, Consumer<Integer> callback)
-    {
-        BankSystemNetworking.ITEM_FRACTION_SCALE_FACTOR_REQUEST.sendRequestToServer(itemID, callback);
-    }
 
 
     public void requestBankAccountNumbers(UUID playerUUID, Consumer<List<Integer>> callback)

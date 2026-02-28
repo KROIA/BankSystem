@@ -21,6 +21,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
+    private final String ITEM_IDS_FOLDER_NAME = "ItemIDs";
     private final String BANK_DATA_FOLDER_NAME = "Bank_data";
     private final String META_DATA_FILE_NAME = "Meta_data.nbt";
     private final String BANK_SETTINGS_FILE_NAME = "settings.json";
@@ -82,6 +83,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         success &= save_metadata();
         success &= save_globalSettings();
         success &= save_bank();
+        success &= save_itemIDs();
 
 
         if(success) {
@@ -99,6 +101,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         boolean success = true;
         success &= load_metadata();
         boolean loadInCompatibilityMode = !success;
+        success &= load_itemIDs();
 
         // check if file exists
         loadInCompatibilityMode |= fileExists(getAbsoluteSavePath("Bank_data.dat"));
@@ -158,6 +161,26 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         else
             error("Failed to load BankSystem Mod data.");
         return success;
+    }
+
+    public boolean save_itemIDs()
+    {
+        boolean success = true;
+        Map<String, ListTag> idData = new HashMap<>();
+        success = BACKEND_INSTANCES.ITEM_ID_MANAGER.save(idData);
+        if(!idData.isEmpty()) {
+            saveDataCompoundListMap(getAbsoluteSavePath(ITEM_IDS_FOLDER_NAME), idData);
+        }
+        if(success)
+        {
+           // BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_SAVED_TO_FILE.notifyListeners();
+        }
+        return success;
+    }
+    public boolean load_itemIDs()
+    {
+        Map<String, ListTag> idData = readDataCompoundListMap(getAbsoluteSavePath(ITEM_IDS_FOLDER_NAME));
+        return idData != null && BACKEND_INSTANCES.ITEM_ID_MANAGER.load(idData);
     }
 
     @Override

@@ -12,12 +12,11 @@ import net.minecraft.server.level.ServerPlayer;
 
 public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.Data, Boolean> {
 
-    public record Data(ItemID itemID, int itemFractionScaleFactor)
+    public record Data(ItemID itemID)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, Data> STREAM_CODEC =
                 StreamCodec.composite(
                         ItemID.STREAM_CODEC, Data::itemID,
-                        ByteBufCodecs.INT, Data::itemFractionScaleFactor,
                         Data::new
                 );
     }
@@ -44,10 +43,9 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
                     return true;
                 }
 
-                if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(data.itemID, data.itemFractionScaleFactor))
+                if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(data.itemID))
                 {
-                    int centScaleFactor = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(data.itemID);
-                    String smallestAmountStr = Bank.getFormattedAmount(1, centScaleFactor);
+                    String smallestAmountStr = Bank.getFormattedAmountStatic(1);
                     ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedMessage(data.itemID.getName(), smallestAmountStr));
                     return true;
                 }

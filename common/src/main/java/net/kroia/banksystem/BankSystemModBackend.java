@@ -41,6 +41,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         public ClientBankManager CLIENT_BANK_MANAGER;
         public BankSystemEvents SERVER_EVENTS;
         public BankSystemNetworking NETWORKING;
+        public ItemIDManager ITEM_ID_MANAGER;
 
         public BankSystemLogger LOGGER;
     }
@@ -57,6 +58,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.CLIENT_BANK_MANAGER = null;
         INSTANCES.SERVER_EVENTS = null;
         INSTANCES.NETWORKING = null;
+        INSTANCES.ITEM_ID_MANAGER = new ItemIDManager();
         BankSystemDataHandler.setBackend(INSTANCES);
         BankTerminalBlockEntity.setBackend(INSTANCES);
         ServerBankManager.setBackend(INSTANCES);
@@ -103,6 +105,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemEntities.registerRenderers();
 
         ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(BankSystemModBackend::onPlayerLeaveClientSide);
+        ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(BankSystemModBackend::onPlayerJoinClientSide);
     }
 
     // Called from the server side
@@ -174,6 +177,11 @@ public class BankSystemModBackend implements BankSystemAPI {
     private static void onPlayerLeaveClientSide(@Nullable LocalPlayer localPlayer)
     {
         ItemIDManager.clear();
+    }
+    // Called from the client side
+    private static void onPlayerJoinClientSide(@Nullable LocalPlayer localPlayer)
+    {
+        //ItemIDManager.clear();
     }
 
     // Called from the server side

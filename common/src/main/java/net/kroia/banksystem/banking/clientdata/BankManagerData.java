@@ -4,13 +4,15 @@ package net.kroia.banksystem.banking.clientdata;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 public class BankManagerData {
 
@@ -121,7 +123,7 @@ public class BankManagerData {
 
     public static final StreamCodec<RegistryFriendlyByteBuf, BankManagerData> STREAM_CODEC = StreamCodec.composite(
             UserMapData.STREAM_CODEC, p -> p.userMapData,
-            ItemFractionScaleFactorData.STREAM_CODEC, p -> p.itemFractionScaleFactorData,
+           // ItemFractionScaleFactorData.STREAM_CODEC, p -> p.itemFractionScaleFactorData,
             BankAccountsData.STREAM_CODEC, p -> p.bankAccountsData,
             ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC), p -> p.allowedItems,
             ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC), p -> p.blacklistedItems,
@@ -130,20 +132,20 @@ public class BankManagerData {
     );
 
     public final UserMapData userMapData;
-    public final ItemFractionScaleFactorData itemFractionScaleFactorData;
+    //public final ItemFractionScaleFactorData itemFractionScaleFactorData;
     public final BankAccountsData bankAccountsData;
     public final List<ItemID> allowedItems;
     public final List<ItemID> blacklistedItems;
     public final List<ItemID> notRemovableItems;
 
     public BankManagerData(UserMapData userMapData,
-                           ItemFractionScaleFactorData itemFractionScaleFactorData,
+                           //ItemFractionScaleFactorData itemFractionScaleFactorData,
                            BankAccountsData bankAccountsData,
                            List<ItemID> allowedItems,
                            List<ItemID> blacklistedItems,
                            List<ItemID> notRemovableItems) {
         this.userMapData = userMapData;
-        this.itemFractionScaleFactorData = itemFractionScaleFactorData;
+       // this.itemFractionScaleFactorData = itemFractionScaleFactorData;
         this.bankAccountsData = bankAccountsData;
         this.allowedItems = allowedItems;
         this.blacklistedItems = blacklistedItems;

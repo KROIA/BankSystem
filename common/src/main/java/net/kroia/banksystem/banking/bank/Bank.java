@@ -3,6 +3,7 @@ package net.kroia.banksystem.banking.bank;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.clientdata.BankData;
@@ -66,7 +67,8 @@ public class Bank implements ServerSaveable, IBank {
         if(!mgr.isItemIDAllowed(itemID)) {
             return null; // Item not allowed in bank
         }
-        return new Bank(itemID, (long)(balance * mgr.getItemFractionScaleFactor(itemID)));
+
+        return new Bank(itemID, convertToRawAmountStatic(balance));
     }
     public static @Nullable Bank createFromTag(CompoundTag tag)
     {
@@ -81,8 +83,7 @@ public class Bank implements ServerSaveable, IBank {
         return new BankData(
                 itemID,
                 balance,
-                lockedBalance,
-                getItemFractionScaleFactor()
+                lockedBalance
         );
     }
 
@@ -94,11 +95,6 @@ public class Bank implements ServerSaveable, IBank {
         };
     }*/
 
-    @Override
-    public final int getItemFractionScaleFactor()
-    {
-        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(itemID);
-    }
 
     @Override
     public long getBalance() {
@@ -443,89 +439,101 @@ public class Bank implements ServerSaveable, IBank {
     @Override
     public long convertToRawAmount(float realAmount)
     {
-        return convertToRawAmountStatic(realAmount, getItemFractionScaleFactor());
+        return convertToRawAmountStatic(realAmount);
     }
 
     @Override
     public float convertToRealAmount(long rawAmount)
     {
-        return convertToRealAmountStatic(rawAmount, getItemFractionScaleFactor());
+        return convertToRealAmountStatic(rawAmount);
     }
 
-    public static long convertToRawAmountStatic(float realAmount, int itemFractionScaleFactor)
+    public static long convertToRawAmountStatic(float realAmount)
     {
-        return (long)(realAmount * itemFractionScaleFactor);
+        return (long)(realAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
     }
-    public static float convertToRealAmountStatic(long rawAmount, int itemFractionScaleFactor)
+    public static long convertToRawAmountStatic(double realAmount)
     {
-        return (float)rawAmount / itemFractionScaleFactor;
+        return (long)(realAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+    }
+    public static float convertToRealAmountStatic(long rawAmount)
+    {
+        return (float)rawAmount / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+    }
+    public static float convertToRealAmountStatic(double rawAmount)
+    {
+        return (float)rawAmount / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
     }
 
     @Override
     public String getNormalizedBalance()
     {
-        return getNormalizedAmount(balance, getItemFractionScaleFactor());
+        return getNormalizedAmount(balance);
     }
 
     @Override
     public String getNormalizedLockedBalance()
     {
-        return getNormalizedAmount(lockedBalance, getItemFractionScaleFactor());
+        return getNormalizedAmount(lockedBalance);
     }
 
     @Override
     public String getNormalizedTotalBalance()
     {
-        return getNormalizedAmount(balance + lockedBalance, getItemFractionScaleFactor());
+        return getNormalizedAmount(balance + lockedBalance);
     }
 
     @Override
     public String getFormattedBalance()
     {
-        return getFormattedAmount(balance, getItemFractionScaleFactor());
+        return getFormattedAmount(balance);
     }
 
     @Override
     public String getFormattedLockedBalance()
     {
-        return getFormattedAmount(lockedBalance, getItemFractionScaleFactor());
+        return getFormattedAmount(lockedBalance);
     }
 
     @Override
     public String getFormattedTotalBalance()
     {
-        return getFormattedAmount(balance + lockedBalance, getItemFractionScaleFactor());
+        return getFormattedAmount(balance + lockedBalance);
     }
 
     @Override
     public String getNormalizedAmount(float realAmount)
     {
-        return getNormalizedAmount((double)realAmount);
+        long amount = convertToRawAmountStatic(realAmount);
+        return getNormalizedAmountStatic(amount);
     }
     @Override
     public String getNormalizedAmount(double realAmount)
     {
-        return getNormalizedAmount(realAmount, getItemFractionScaleFactor());
+        long amount = convertToRawAmountStatic(realAmount);
+        return getNormalizedAmountStatic(amount);
     }
     @Override
     public String getNormalizedAmount(long rawAmount)
     {
-        return getNormalizedAmount(rawAmount, getItemFractionScaleFactor());
+        return getNormalizedAmountStatic(rawAmount);
     }
     @Override
     public String getFormattedAmount(float realAmount)
     {
-        return getFormattedAmount((double)realAmount);
+        long amount = convertToRawAmountStatic(realAmount);
+        return getFormattedAmountStatic(amount);
     }
     @Override
     public String getFormattedAmount(double realAmount)
     {
-        return getFormattedAmount(realAmount, getItemFractionScaleFactor());
+        long amount = convertToRawAmountStatic(realAmount);
+        return getFormattedAmountStatic(amount);
     }
     @Override
     public String getFormattedAmount(long rawAmount)
     {
-        return getFormattedAmount(rawAmount, getItemFractionScaleFactor());
+        return getFormattedAmountStatic(rawAmount);
     }
 
     @Override
@@ -541,8 +549,8 @@ public class Bank implements ServerSaveable, IBank {
         StringBuilder content = new StringBuilder(getItemName() + getFormattedTotalBalance());
         if(lockedBalance > 0) {
             content.append("(").append(BankSystemTextMessages.getBalanceDetailedMessage(
-                    getFormattedAmount(balance, getItemFractionScaleFactor()),
-                    getFormattedAmount(lockedBalance, getItemFractionScaleFactor()))).append(")");
+                    getFormattedAmount(balance),
+                    getFormattedAmount(lockedBalance))).append(")");
         }
 
         return content.toString();
@@ -660,7 +668,7 @@ public class Bank implements ServerSaveable, IBank {
 
 
     // (1000 means 10.00 currency units)
-    public static String getNormalizedAmount(long amount, int itemFractionScaleFactor)
+    public static String getNormalizedAmountStatic(long amount)
     {
         // depending on the exponent of the amount add a "k", "M", "G", "T", "P", "E", "Z", "Y"
         // 1.0e3 = 1k
@@ -671,7 +679,7 @@ public class Bank implements ServerSaveable, IBank {
         // 1.0e18 = 1E
         String exponents = "kMGTPEZY";
 
-        long wholeUnits = amount / itemFractionScaleFactor;
+        long wholeUnits = amount / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
 
 
@@ -690,7 +698,7 @@ public class Bank implements ServerSaveable, IBank {
         }
         else
         {
-            float cents = (amount % itemFractionScaleFactor) / (float)itemFractionScaleFactor; // Convert to cents
+            float cents = (amount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR; // Convert to cents
 
             String centsString = String.valueOf((cents));
 
@@ -698,19 +706,26 @@ public class Bank implements ServerSaveable, IBank {
             if(centsString.startsWith("0.")) {
                 centsString = centsString.substring(2);
             }
-            if(itemFractionScaleFactor > 1)
+            if(BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR > 1)
                 amountString = amountString + "." + centsString;
         }
         return amountString;
     }
-    public static String getNormalizedAmount(double realAmount, int centScaleFactor)
+    public static String getNormalizedAmountStatic(double realAmount)
     {
-        long amount = (long)(realAmount * centScaleFactor);
-        return getFormattedAmount(amount, centScaleFactor);
+        long amount = convertToRawAmountStatic(realAmount);
+        return getNormalizedAmountStatic(amount);
     }
-    public static String getFormattedAmount(long amount, int itemFractionScaleFactor)
+
+    public static String getFormattedAmountStatic(double realAmount)
     {
-        String nr = String.valueOf(amount/itemFractionScaleFactor);
+        long amount = convertToRawAmountStatic(realAmount);
+        return getFormattedAmountStatic(amount);
+    }
+
+    public static String getFormattedAmountStatic(long rawAmount)
+    {
+        String nr = String.valueOf(rawAmount/ BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
         // add ' for every 3 digits
         StringBuilder sb = new StringBuilder();
         int i = 0;
@@ -722,10 +737,10 @@ public class Bank implements ServerSaveable, IBank {
                 sb.append('\'');
         }
         sb.reverse();
-        if(amount % itemFractionScaleFactor != 0)
+        if(rawAmount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR != 0)
         {
 
-            float cents = (amount % itemFractionScaleFactor) / (float)itemFractionScaleFactor; // Convert to cents
+            float cents = (rawAmount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR; // Convert to cents
 
             String centsString = String.valueOf(cents);
 
@@ -737,20 +752,14 @@ public class Bank implements ServerSaveable, IBank {
         }
         return sb.toString();
     }
-    public static String getFormattedAmount(double realAmount, int centScaleFactor)
+
+    public static int getMaxDecimalDigitsCount()
     {
-        long amount = (long)(realAmount * centScaleFactor);
-        return getFormattedAmount(amount, centScaleFactor);
-    }
-    public static int getMaxDecimalDigitsCount(int itemFractionScaleFactor)
-    {
-        if(itemFractionScaleFactor == 1)
+        if(BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR == 1)
             return 0;
-        String centsString = String.valueOf(1.f/itemFractionScaleFactor);
+        String centsString = String.valueOf(1.f/BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
         // Remove "0." prefix if cents are zero
-        if(centsString.startsWith("0.")) {
-            centsString = centsString.substring(2);
-        }
+        centsString = centsString.substring(2);
         // Count the number of digits after the decimal point
         return centsString.length();
     }

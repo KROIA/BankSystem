@@ -1,6 +1,7 @@
 package net.kroia.banksystem.item.custom.money;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.entity.custom.MoneyStockpileBlockEntity;
 import net.kroia.banksystem.item.BankSystemCreativeModeTab;
@@ -23,7 +24,7 @@ import java.util.ArrayList;
 
 public class MoneyItem extends Item{
     public static final String NAME = "money";
-    public static int ITEM_FRACTION_SCALE_FACTOR = 100; // Scale factor for item fractions, e.g., 100 means 1.00 currency units
+    //public static int ITEM_FRACTION_SCALE_FACTOR = 100; // Scale factor for item fractions, e.g., 100 means 1.00 currency units
     private static final Component ITEM_NAME = Component.translatable("item."+ BankSystemMod.MOD_ID+".money_name");
     private static final Component CURRENCY_NAME = Component.translatable("item."+ BankSystemMod.MOD_ID+".currency");
     private static ItemID itemID = null;
@@ -71,7 +72,7 @@ public class MoneyItem extends Item{
 
 
     public long worth() {
-        return ITEM_FRACTION_SCALE_FACTOR; // 100 represents 1.00 currency units
+        return BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR; // 100 represents 1.00 currency units
     }
 
     public static boolean isMoney(ItemID itemID)

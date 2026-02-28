@@ -26,7 +26,6 @@ public class BankSystemNetworking extends PacketManager {
     public static AllowItemRequest ALLOW_ITEM_REQUEST = (AllowItemRequest) AsynchronousRequestResponseSystem.register(new AllowItemRequest());
     public static DisallowItemRequest DISALLOW_ITEM_REQUEST = (DisallowItemRequest) AsynchronousRequestResponseSystem.register(new DisallowItemRequest());
     public static RemoveEmptyBanksRequest REMOVE_EMPTY_BANKS_REQUEST = (RemoveEmptyBanksRequest) AsynchronousRequestResponseSystem.register(new RemoveEmptyBanksRequest());
-    public static itemFractionScaleFactorRequest ITEM_FRACTION_SCALE_FACTOR_REQUEST = (itemFractionScaleFactorRequest) AsynchronousRequestResponseSystem.register(new itemFractionScaleFactorRequest());
     public static BankAccountNumbersRequest BANK_ACCOUNT_NUMBERS_REQUEST = (BankAccountNumbersRequest) AsynchronousRequestResponseSystem.register(new BankAccountNumbersRequest());
     public static UpdateBankAccountRequest UPDATE_BANK_ACCOUNT_REQUEST = (UpdateBankAccountRequest) AsynchronousRequestResponseSystem.register(new UpdateBankAccountRequest());
     public static BankTerminalBlockDataRequest BANK_TERMINAL_BLOCK_DATA_REQUEST = (BankTerminalBlockDataRequest) AsynchronousRequestResponseSystem.register(new BankTerminalBlockDataRequest());

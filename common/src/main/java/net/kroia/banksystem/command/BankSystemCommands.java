@@ -199,8 +199,7 @@ public class BankSystemCommands {
                                     ServerPlayer player = source.getPlayerOrException();
                                     double circulation = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getRealMoneyCirculation();
                                     ServerPlayerUtilities.printToClientConsole(player,
-                                            BankSystemTextMessages.getCirculationMessage(Bank.getFormattedAmount(circulation,
-                                            BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(MoneyItem.getItemID())),
+                                            BankSystemTextMessages.getCirculationMessage(Bank.getFormattedAmountStatic(circulation),
                                                     MoneyItem.getName()));
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -487,10 +486,9 @@ public class BankSystemCommands {
                                                 return Command.SINGLE_SUCCESS;
                                             }
                                             ItemID itemIDObj = ItemID.getOrRegisterFromItemStack(itemStack);
-                                            int centScaleFactor = 1;
-                                            if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(itemIDObj, centScaleFactor)) {
-                                                centScaleFactor = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(itemIDObj);
-                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemID, Bank.getFormattedAmount(1, centScaleFactor)));
+
+                                            if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(itemIDObj)) {
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemID, Bank.getFormattedAmountStatic(1)));
                                             }
                                             else
                                                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemID));
@@ -514,10 +512,8 @@ public class BankSystemCommands {
 
 
                                             ItemID itemIDObj = ItemID.getOrRegisterFromItemStack(item);
-                                            int centScaleFactor = 1;
-                                            if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(itemIDObj, centScaleFactor)) {
-                                                centScaleFactor = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(itemIDObj);
-                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemIDObj.toString(), Bank.getFormattedAmount(1, centScaleFactor)));
+                                            if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(itemIDObj)) {
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemIDObj.toString(), Bank.getFormattedAmountStatic(1)));
                                             }
                                             else
                                                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemIDObj.toString()));
@@ -598,7 +594,7 @@ public class BankSystemCommands {
                                             // Get arguments
                                             float amount = FloatArgumentType.getFloat(context, "amount");
                                             BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.set(amount);
-                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(Bank.getFormattedAmount(amount, BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemFractionScaleFactor(MoneyItem.getItemID()))));
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(Bank.getFormattedAmountStatic(amount)));
                                             return Command.SINGLE_SUCCESS;
                                         })
                                 )
@@ -777,7 +773,7 @@ public class BankSystemCommands {
             return Command.SINGLE_SUCCESS;
         }
         long balance = bank.getBalance();
-        ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getYourBalanceMessage(Bank.getFormattedAmount(balance, bank.getItemFractionScaleFactor())));
+        ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getYourBalanceMessage(Bank.getFormattedAmountStatic(balance)));
         return Command.SINGLE_SUCCESS;
     }
 

@@ -5,23 +5,23 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.item.BankSystemItems;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
 import net.kroia.modutilities.setting.parser.CustomJsonParser;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Supplier;
 
 public final class BankSystemModSettings extends ModSettings {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+
+
+    public static final int ITEM_FRACTION_SCALE_FACTOR = 100;
 
     public final Utilities UTILITIES = createGroup(new Utilities());
     public final Player PLAYER = createGroup(new Player());
@@ -86,46 +86,6 @@ public final class BankSystemModSettings extends ModSettings {
                 return itemIDs;
             }
         }
-        public static final class ItemStackAndScaleFactor
-        {
-            public ItemStack stack;
-            public int itemFractionScaleFactor = 1;
-            public ItemStackAndScaleFactor()
-            {
-
-            }
-            public ItemStackAndScaleFactor(ItemStack stack, int itemFractionScaleFactor)
-            {
-                this.stack = stack;
-                this.itemFractionScaleFactor = itemFractionScaleFactor;
-            }
-            public ItemStackAndScaleFactor(Item item, int itemFractionScaleFactor)
-            {
-                this.stack = item.getDefaultInstance();
-                this.itemFractionScaleFactor = itemFractionScaleFactor;
-            }
-            public ItemStackAndScaleFactor(Item item)
-            {
-                this.stack = item.getDefaultInstance();
-                this.itemFractionScaleFactor = 1;
-            }
-            public ItemStackAndScaleFactor(Supplier<Item> itemSupplier, int itemFractionScaleFactor)
-            {
-                this.stack = itemSupplier.get().getDefaultInstance();
-                this.itemFractionScaleFactor = itemFractionScaleFactor;
-            }
-            public ItemStackAndScaleFactor(Supplier<Item> itemSupplier)
-            {
-                this.stack = itemSupplier.get().getDefaultInstance();
-                this.itemFractionScaleFactor = itemFractionScaleFactor;
-            }
-
-            public ItemStackAndScaleFactor(ItemStack stack)
-            {
-                this.stack = stack;
-                this.itemFractionScaleFactor = 1;
-            }
-        }
         /*public static final class ItemIDAndScaleFactorListParser implements CustomJsonParser<List<ItemIDAndScaleFactor>>
         {
 
@@ -162,13 +122,13 @@ public final class BankSystemModSettings extends ModSettings {
         public final Setting<Integer> ITEM_TRANSFER_TICK_INTERVAL = registerSetting("ITEM_TRANSFER_TICK_INTERVAL", 2, Integer.class); // Interval in ticks for item transfer operations
 
 
-        public final List<ItemStackAndScaleFactor> INITIAL_ALLOWED_ITEMS = List.of(
-                        new ItemStackAndScaleFactor(BankSystemItems.MONEY, MoneyItem.ITEM_FRACTION_SCALE_FACTOR),
-                        new ItemStackAndScaleFactor(Items.IRON_INGOT),
-                        new ItemStackAndScaleFactor(Items.GOLD_INGOT),
-                        new ItemStackAndScaleFactor(Items.DIAMOND),
-                        new ItemStackAndScaleFactor(Items.EMERALD),
-                        new ItemStackAndScaleFactor(Items.COAL));
+        public final List<ItemStack> INITIAL_ALLOWED_ITEMS = List.of(
+                        BankSystemItems.MONEY.get().getDefaultInstance(),
+                        Items.IRON_INGOT.getDefaultInstance(),
+                        Items.GOLD_INGOT.getDefaultInstance(),
+                        Items.DIAMOND.getDefaultInstance(),
+                        Items.EMERALD.getDefaultInstance(),
+                        Items.COAL.getDefaultInstance());
 
         //public final Setting<List<ItemIDAndScaleFactor>> INITIAL_ALLOWED_ITEM_IDS = registerSetting("INITIAL_ALLOWED_ITEM_IDS",
         //        new ArrayList<>(List.of(

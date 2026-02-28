@@ -2,6 +2,12 @@ package net.kroia.banksystem.util;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemIDsPacket;
+import net.kroia.modutilities.UtilitiesPlatform;
+import net.kroia.modutilities.persistence.ServerSaveableChunked;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -9,14 +15,18 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class ItemIDManager {
+public class ItemIDManager implements ServerSaveableChunked {
 
     private static final ConcurrentHashMap<ItemID, ItemStack> itemIDMap = new ConcurrentHashMap<>();
 
+    private static ConcurrentHashMap<ItemID, ItemStack> singlePlayerServerBackupOnPlayerLeave = null;
+
     public static void clear()
     {
+        singlePlayerServerBackupOnPlayerLeave = new ConcurrentHashMap<>(itemIDMap);
         itemIDMap.clear();
     }
 
@@ -117,4 +127,69 @@ public class ItemIDManager {
         }
     }
 
+    @Override
+    public boolean save(Map<String, ListTag> listTags) {
+        ListTag listTag = new ListTag();
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if(access == null)
+            return false;
+
+        ConcurrentHashMap<ItemID, ItemStack> usedMap = itemIDMap;
+        if(usedMap.isEmpty())
+        {
+            if(singlePlayerServerBackupOnPlayerLeave != null)
+                usedMap = singlePlayerServerBackupOnPlayerLeave;
+        }
+        for(Map.Entry<ItemID, ItemStack> entry : usedMap.entrySet())
+        {
+            ItemStack itemStack = entry.getValue();
+            ItemID itemID = entry.getKey();
+            CompoundTag tag = new CompoundTag();
+            CompoundTag idTag = new CompoundTag();
+            itemID.save(idTag);
+            tag.put("itemID", idTag);
+            CompoundTag itemStackTag = new CompoundTag();
+            Tag stackTag = itemStack.save(access, itemStackTag);
+            tag.put("itemStack", stackTag);
+
+            listTag.add(tag);
+        }
+        listTags.put("items", listTag);
+
+        return true;
+    }
+
+    @Override
+    public boolean load(Map<String, ListTag> listTags) {
+        if(!listTags.containsKey("items"))
+            return false;
+
+        ListTag listTag = listTags.get("items");
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if(access == null)
+            return false;
+
+        //itemIDMap.clear();
+        for(Tag tag : listTag)
+        {
+            CompoundTag compoundTag = (CompoundTag)tag;
+            if(compoundTag==null || !compoundTag.contains("itemID") || !compoundTag.contains("itemStack"))
+                continue;
+
+            CompoundTag itemStackTag = compoundTag.getCompound("itemStack");
+            CompoundTag itemIDTag = compoundTag.getCompound("itemID");
+
+            ItemID id = new ItemID(ItemID.INVALID_ID);
+            if(!id.load(itemIDTag))
+                continue;
+
+            Optional<ItemStack> itemStack = ItemStack.parse(access, itemStackTag);
+            if(itemStack.isEmpty())
+                continue;
+
+            itemIDMap.put(id, itemStack.get());
+        }
+        singlePlayerServerBackupOnPlayerLeave = null;
+        return true;
+    }
 }

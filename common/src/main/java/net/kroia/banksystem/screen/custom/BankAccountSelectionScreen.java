@@ -85,7 +85,6 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
     private final ListView accountsListView;
 
 
-    private final Screen parent;
     private final UUID playerUUID;
     private final Consumer<Integer> onAccountSelected;
     private final int permissionFilter;
@@ -95,8 +94,7 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
     }
     public BankAccountSelectionScreen(Screen parent, UUID playerUUID, Consumer<Integer> onAccountSelected, int permissionFilter)
     {
-        super(TEXT.TITLE);
-        this.parent = parent;
+        super(TEXT.TITLE, parent);
         this.playerUUID = playerUUID;
         this.onAccountSelected = onAccountSelected;
         this.permissionFilter = permissionFilter;
@@ -115,15 +113,6 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
 
         getBankManager().requestBankAccounts(this.playerUUID, this::onBankAccountsReceived);
 
-    }
-    @Override
-    public void onClose()
-    {
-        super.onClose();
-        if(parent != null)
-        {
-            minecraft.setScreen(parent);
-        }
     }
 
 

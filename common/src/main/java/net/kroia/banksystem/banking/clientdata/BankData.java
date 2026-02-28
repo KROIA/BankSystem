@@ -16,7 +16,6 @@ public class BankData {
             ItemID.STREAM_CODEC, p -> p.itemID,
             ByteBufCodecs.VAR_LONG, p -> p.balance,
             ByteBufCodecs.VAR_LONG, p -> p.lockedBalance,
-            ByteBufCodecs.INT, p -> p.itemFractionScaleFactor,
             BankData::new
     );
 
@@ -25,15 +24,13 @@ public class BankData {
     public final ItemID itemID;
     public final long balance;
     public final long lockedBalance;
-    public final int itemFractionScaleFactor;
 
-    public BankData(ItemID itemID, int itemFractionScaleFactor) {
+    public BankData(ItemID itemID) {
         //this.playerUUID = UUID.randomUUID(); // UUID will be set later
         //this.playerName = ""; // Name will be set later
         this.itemID = itemID;
         this.balance = 0; // Default balance
         this.lockedBalance = 0; // Default locked balance
-        this.itemFractionScaleFactor = itemFractionScaleFactor; // Scale factor for item fractions
     }
     /*public BankData(IBank bank) {
         this.playerUUID = bank.getPlayerUUID();
@@ -47,44 +44,42 @@ public class BankData {
                     //String playerName,
                     ItemID itemID,
                     long balance,
-                    long lockedBalance,
-                    int itemFractionScaleFactor) {
+                    long lockedBalance) {
         //this.playerUUID = playerUUID;
         //this.playerName = playerName;
         this.itemID = itemID;
         this.balance = balance;
         this.lockedBalance = lockedBalance;
-        this.itemFractionScaleFactor = itemFractionScaleFactor;
     }
 
     public float getRealBalance() {
-        return balance / (float) itemFractionScaleFactor;
+        return Bank.convertToRealAmountStatic(balance);
     }
     public float getRealLockedBalance() {
-        return lockedBalance / (float) itemFractionScaleFactor;
+        return Bank.convertToRealAmountStatic(lockedBalance);
     }
     public float getRealTotalBalance() {
-        return (balance + lockedBalance) / (float) itemFractionScaleFactor;
+        return Bank.convertToRealAmountStatic(balance + lockedBalance);
     }
 
     public String getFormattedBalance(){
-        return Bank.getFormattedAmount(balance, itemFractionScaleFactor);
+        return Bank.getFormattedAmountStatic(balance);
     }
     public String getFormattedLockedBalance(){
-        return Bank.getFormattedAmount(lockedBalance, itemFractionScaleFactor);
+        return Bank.getFormattedAmountStatic(lockedBalance);
     }
     public String getFormattedTotalBalance(){
-        return Bank.getFormattedAmount(balance + lockedBalance, itemFractionScaleFactor);
+        return Bank.getFormattedAmountStatic(balance + lockedBalance);
     }
 
     public String getNormalizedBalance() {
-        return Bank.getNormalizedAmount(balance, itemFractionScaleFactor);
+        return Bank.getNormalizedAmountStatic(balance);
     }
     public String getNormalizedLockedBalance() {
-        return Bank.getNormalizedAmount(lockedBalance, itemFractionScaleFactor);
+        return Bank.getNormalizedAmountStatic(lockedBalance);
     }
     public String getNormalizedTotalBalance() {
-        return Bank.getNormalizedAmount(balance + lockedBalance, itemFractionScaleFactor);
+        return Bank.getNormalizedAmountStatic(balance + lockedBalance);
     }
 
     /*@Override

@@ -35,7 +35,8 @@ public interface IBank {
      * For item banks its always 1, for money banks its 100.
      * @return The scale factor for this bank.
      */
-    int getItemFractionScaleFactor();
+    // Removed, use: BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR
+    //int getItemFractionScaleFactor();
 
 
     /**

@@ -44,6 +44,10 @@ public class ItemID implements ServerSaveable {
     {
         this.id = id;
     }
+    public ItemID(ItemID other)
+    {
+        this.id = other.id;
+    }
     public static @Nullable ItemID fromJson(JsonElement jsonElement)
     {
         if(!jsonElement.isJsonObject())

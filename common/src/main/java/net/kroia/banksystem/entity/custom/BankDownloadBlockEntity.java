@@ -2,6 +2,7 @@ package net.kroia.banksystem.entity.custom;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
@@ -560,11 +561,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     private int withdrawAndFillInventory(ItemID item, int amountToFill, IBank itemBank)
     {
-        int itemFractionScaleFactor = itemBank.getItemFractionScaleFactor();
         long amountToReserve = itemBank.convertToRawAmount(amountToFill);
         long currentBalance = itemBank.getBalance();
         if(amountToReserve > currentBalance) {
-            amountToFill = (int) (currentBalance / itemFractionScaleFactor);
+            amountToFill = (int) (currentBalance / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
             amountToReserve = itemBank.convertToRawAmount(amountToFill);
         }
         if(amountToReserve <= 0)

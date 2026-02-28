@@ -139,8 +139,8 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         double totalLocked = info.totalLocked; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
 
 
-        totalSuplyTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalSuplyMessage(Bank.getNormalizedAmount(totalSupply, info.itemFractionScaleFactor)));
-        totalLockedTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalLockedMessage(Bank.getNormalizedAmount(totalLocked, info.itemFractionScaleFactor)));
+        totalSuplyTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalSuplyMessage(Bank.getNormalizedAmountStatic(totalSupply)));
+        totalLockedTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalLockedMessage(Bank.getNormalizedAmountStatic(totalLocked)));
 
 
         List<BankAccountData> bankData = info.bankAccounts;
@@ -167,9 +167,9 @@ public class ItemInfoWidget extends BankSystemGuiElement {
             else
                 toRemoveItems.remove(account.accountNumber);
 
-            userWidget.setBalance(bankDataItem.balance, bankDataItem.itemFractionScaleFactor);
-            userWidget.setLockedBalance(bankDataItem.lockedBalance, bankDataItem.itemFractionScaleFactor);
-            userWidget.setTotalBalance(bankDataItem.balance + bankDataItem.lockedBalance, bankDataItem.itemFractionScaleFactor);
+            userWidget.setBalance(bankDataItem.balance);
+            userWidget.setLockedBalance(bankDataItem.lockedBalance);
+            userWidget.setTotalBalance(bankDataItem.balance + bankDataItem.lockedBalance);
             userWidget.setAccountNumber(account.accountNumber);
             userWidget.setAccountName(account.accountName);
             userWidget.setUserNames(account.getSearchTexts());

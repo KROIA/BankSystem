@@ -6,7 +6,6 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -20,7 +19,6 @@ public class ItemInfoData  {
             ByteBufCodecs.DOUBLE, p -> p.totalSupply,
             ByteBufCodecs.DOUBLE, p -> p.totalLocked,
             ExtraCodecUtils.listStreamCodec(BankAccountData.STREAM_CODEC), p -> p.bankAccounts,
-            ByteBufCodecs.INT, p -> p.itemFractionScaleFactor,
             ItemInfoData::new
     );
 
@@ -28,19 +26,16 @@ public class ItemInfoData  {
     public final double totalSupply;
     public final double totalLocked;
     public final List<BankAccountData> bankAccounts;
-    public final int itemFractionScaleFactor;
 
 
     public ItemInfoData(ItemID itemID,
                         double totalSupply,
                         double totalLocked,
-                        List<BankAccountData> bankAccounts,
-                        int itemFractionScaleFactor) {
+                        List<BankAccountData> bankAccounts) {
         this.itemID = itemID;
         this.totalSupply = totalSupply;
         this.totalLocked = totalLocked;
         this.bankAccounts = bankAccounts;
-        this.itemFractionScaleFactor = itemFractionScaleFactor;
     }
 
     /*@Override

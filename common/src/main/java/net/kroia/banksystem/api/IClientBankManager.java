@@ -72,7 +72,7 @@ public interface IClientBankManager {
      * @param itemID   The ID of the item to allow.
      * @param callback A callback that receives a Boolean indicating success or failure.
      */
-    void requestAllowItem(ItemID itemID, int centScaleFactor, Consumer<Boolean> callback);
+    void requestAllowItem(ItemID itemID, Consumer<Boolean> callback);
 
     /**
      * Requests to the server to forbid an item to be used in the bank system.
@@ -117,7 +117,8 @@ public interface IClientBankManager {
      * @param itemID   The ID of the item.
      * @param callback A callback that receives the scale factor as an Integer.
      */
-    void requestItemFractionScaleFactor(ItemID itemID, Consumer<Integer> callback);
+    // Removed, Use: BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR
+    //void requestItemFractionScaleFactor(ItemID itemID, Consumer<Integer> callback);
 
 
 

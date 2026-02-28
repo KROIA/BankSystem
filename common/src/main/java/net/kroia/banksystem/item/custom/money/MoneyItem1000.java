@@ -1,5 +1,7 @@
 package net.kroia.banksystem.item.custom.money;
 
+import net.kroia.banksystem.BankSystemModSettings;
+
 public class MoneyItem1000 extends MoneyItem {
     public static final String NAME = "money1000";
 
@@ -14,6 +16,6 @@ public class MoneyItem1000 extends MoneyItem {
     }
     @Override
     public long worth() {
-        return 1000L*ITEM_FRACTION_SCALE_FACTOR;
+        return 1000L* BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
     }
 }

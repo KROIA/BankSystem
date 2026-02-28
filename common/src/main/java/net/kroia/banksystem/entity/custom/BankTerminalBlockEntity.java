@@ -2,6 +2,7 @@ package net.kroia.banksystem.entity.custom;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
@@ -36,6 +37,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Objects;
 import java.util.UUID;
 
 public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvider {
@@ -898,11 +900,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
                 continue;
             }
-            int itemFractionScaleFactor = bank.getItemFractionScaleFactor();
-            long amountToDeposit = amount * itemFractionScaleFactor;
+            long amountToDeposit = amount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
             if(isMoney)
             {
-                amountToDeposit = amount * ((MoneyItem)itemID.getStack().getItem()).worth();
+                amountToDeposit = amount * ((MoneyItem) Objects.requireNonNull(itemID.getStack()).getItem()).worth();
             }
             if(bank.deposit(amountToDeposit) == Bank.Status.SUCCESS)
             {
@@ -957,17 +958,16 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             }
 
             //long withdrawAmount = amount;
-            long itemFractionScaleFactor = bank.getItemFractionScaleFactor();
-            long withdrawAmount = amount * itemFractionScaleFactor;
+            long withdrawAmount = amount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
             withdrawAmount = Math.min(withdrawAmount, bank.getBalance());
             if(withdrawAmount > 0) {
                 long addedAmount = inventory.addItem(itemID, amount);
                 if(addedAmount > 0) {
 
-                    if (bank.withdraw(addedAmount * itemFractionScaleFactor) != Bank.Status.SUCCESS) {
+                    if (bank.withdraw(addedAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) != Bank.Status.SUCCESS) {
                         // error
-                        error("Failed to withdraw " + Bank.getNormalizedAmount(addedAmount, bank.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
+                        error("Failed to withdraw " + Bank.getNormalizedAmountStatic(addedAmount) + " " + itemID + " from bank account of user " + playerID);
                         inventory.removeItem(itemID, addedAmount);
                     }
                 }

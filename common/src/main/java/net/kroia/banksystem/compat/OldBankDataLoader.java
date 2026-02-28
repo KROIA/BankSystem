@@ -7,7 +7,6 @@ import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankAccount;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.User;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.nbt.CompoundTag;
@@ -46,16 +45,10 @@ public class OldBankDataLoader {
                     BACKEND_INSTANCES.LOGGER.error("Invalid itemID format in bank data: "+ Objects.requireNonNull(tag.get("itemID")));
                     return null; // Invalid itemID format
                 }
-                data.balance = tag.getLong("balance");
-                data.lockedBalance = tag.getLong("lockedBalance");
 
-                if(!tag.contains("useCents")) {
-                    assert data.itemID != null;
-                    if (MoneyItem.isMoney(data.itemID)) {
-                        data.balance *= 100; // Convert to cents if useCents is true
-                        data.lockedBalance *= 100; // Convert to cents if useCents is true
-                    }
-                }
+                // Convert to cent system
+                data.balance = tag.getLong("balance") * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                data.lockedBalance = tag.getLong("lockedBalance") * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
                 return data;
             }
         }
@@ -107,12 +100,12 @@ public class OldBankDataLoader {
 
     public boolean load_vLessThan_1_5_0_ALPHA_3(CompoundTag tag)
     {
-        Map<ItemID, Integer> itemFractionScaleFactor = new HashMap<>();
         Map<UUID, User> userMap = new HashMap<>();
         Map<Integer, BankAccount> bankAccounts = new HashMap<>();
         int nextAccountNumber = tag.getInt("nextAccountNumber");
         manager.load_compatibilityMode_setNextAccountNumber(nextAccountNumber);
 
+        Set<ItemID> usedItems = new HashSet<>();
         // Load item cent scale factors
         if(tag.contains("itemCentScaleFactors")) {
             ListTag itemScaleFactors = tag.getList("itemCentScaleFactors", 10);
@@ -123,21 +116,21 @@ public class OldBankDataLoader {
                     continue; // Skip invalid entries
                 }
                 ItemID itemID = ItemID.createFromTag(pairTag.getCompound("itemID"));
-                int scaleFactor = pairTag.getInt("scaleFactor");
-                itemFractionScaleFactor.put(itemID, scaleFactor);
+               // int scaleFactor = pairTag.getInt("scaleFactor");
+                usedItems.add(itemID);
             }
         }
         else {
             // Check if all allowed items have a scale factor
-            List<BankSystemModSettings.Bank.ItemStackAndScaleFactor> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEMS;
+            List<ItemStack> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEMS;
             for (var el : allowedItems) {
-                ItemID id = ItemID.getFromItemStack(el.stack);
-                if(itemFractionScaleFactor.containsKey(id))
+                ItemID id = ItemID.getFromItemStack(el);
+                if(usedItems.contains(id))
                     continue;
-                itemFractionScaleFactor.put(id, el.itemFractionScaleFactor);
+                usedItems.add(id);
             }
         }
-        manager.load_compatibilityMode_setItemFractionScaleFactors(itemFractionScaleFactor);
+        //manager.load_compatibilityMode_setItemFractionScaleFactors(itemFractionScaleFactor);
 
 
 
@@ -192,14 +185,14 @@ public class OldBankDataLoader {
         }
 
         // Allow the items that occured in the old bank data to be loaded into the new system
-        Map<ItemID, Integer> items = new HashMap<>();
+        Set<ItemID> items = new HashSet<>();
         for(AccountData accountData : accountDataList)
         {
             for(AccountData.BankData bankData : accountData.banks)
             {
                 if(bankData.itemID != null)
                 {
-                    items.put(bankData.itemID, 1);
+                    items.add(bankData.itemID);
                 }
             }
         }
@@ -208,18 +201,14 @@ public class OldBankDataLoader {
 
         for(var item : alsoAdd)
         {
-            ItemID id = ItemID.getFromItemStack(item.stack);
-            if(!items.containsKey(id)) {
-                items.put(id, item.itemFractionScaleFactor); // Add the item with a default scale factor of 1
-            }
+            ItemID id = ItemID.getFromItemStack(item);
+            items.add(id); // Add the item with a default scale factor of 1
         }
 
 
         // Load the items into the new system
-        for (Map.Entry<ItemID, Integer> entry : items.entrySet()) {
-            ItemID itemID = entry.getKey();
-            int itemFractionScaleFactor = entry.getValue();
-            manager.allowItemID(itemID, itemFractionScaleFactor);
+        for (ItemID itemID : items) {
+            manager.allowItemID(itemID);
         }
 
 

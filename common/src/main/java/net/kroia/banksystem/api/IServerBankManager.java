@@ -36,7 +36,8 @@ public interface IServerBankManager {
      * 1.75 will be displayed as 1.75, but the real value is 175 and the scale factor is 100.
      * @return Data packet containing all item fraction scale factors for the bank manager.
      */
-    BankManagerData.ItemFractionScaleFactorData getBankManagerItemFractionScaleFactorData();
+    // Removed: Use BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR
+    //BankManagerData.ItemFractionScaleFactorData getBankManagerItemFractionScaleFactorData();
 
     /**
      * Contains a list of all bank accounts and their banks.
@@ -277,7 +278,8 @@ public interface IServerBankManager {
      * @param itemID The item ID to get the scale factor for.
      * @return The scale factor for item fractions, or 1 if no specific scale factor is defined.
      */
-    int getItemFractionScaleFactor(ItemID itemID);
+    // Removed: Use BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR
+    //int getItemFractionScaleFactor(ItemID itemID);
 
 
     /**
@@ -293,11 +295,9 @@ public interface IServerBankManager {
      * Allows the given item ID to be stored in a bank account.
      *
      * @param itemID The item ID to allow.
-     * @param itemFractionScaleFactor The scale factor for the item, used to convert the item amount to bank system money amount.
-     *                                Allowed values are 1, 10, 100
      * @return True if the item ID was successfully allowed, false otherwise.
      */
-    boolean allowItemID(ItemID itemID, int itemFractionScaleFactor);
+    boolean allowItemID(ItemID itemID);
 
     /**
      * Disallows the given item ID from being stored in a bank account.

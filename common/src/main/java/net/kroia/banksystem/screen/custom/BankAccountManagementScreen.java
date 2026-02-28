@@ -420,7 +420,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             BankData bankData = pair.getSecond();
             if(item == null)
             {
-                item = new BankAccountManagementItem(pair.getFirst(), accountNumber, bankData.itemFractionScaleFactor, isAdminMode, canManage);
+                item = new BankAccountManagementItem(pair.getFirst(), accountNumber, isAdminMode, canManage);
                 item.setBalance(bankData.balance);
                 bankAccountManagementItems.put(pair.getFirst(), item);
                 bankElementListView.addChild(item);
@@ -519,16 +519,14 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         List<UpdateBankAccountPacket.BankData> bankData = new ArrayList<>();
         data.itemID = itemID;
         data.createBank = true;*/
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestItemFractionScaleFactor(itemID, (scaleFac)->
-        {
-            BankAccountManagementItem accountItem = new BankAccountManagementItem(itemID, accountNumber, scaleFac, isAdminMode, canManage);
-            accountItem.setBalance(0);
-            createBankData.put(itemID, accountItem);
-            bankElementListView.addChild(accountItem);
-            accountItem.setBalanceLabel(0);
-            accountItem.setLockedBalance(0);
-            accountItem.setTotalBalance(0);
-        });
+
+        BankAccountManagementItem accountItem = new BankAccountManagementItem(itemID, accountNumber, isAdminMode, canManage);
+        accountItem.setBalance(0);
+        createBankData.put(itemID, accountItem);
+        bankElementListView.addChild(accountItem);
+        accountItem.setBalanceLabel(0);
+        accountItem.setLockedBalance(0);
+        accountItem.setTotalBalance(0);
 
 
         //UpdateBankAccountPacket.sendPacket(accountNumber, bankData);

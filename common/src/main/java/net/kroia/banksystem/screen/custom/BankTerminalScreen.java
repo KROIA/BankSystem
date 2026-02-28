@@ -34,7 +34,6 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         private long targetAmount = 0;
         private ItemStack stack;
         public long stackSize;
-        public final int centScaleFactor;
         private final Rectangle itemStackHitBox;
         public final ItemID itemID;
 
@@ -43,13 +42,12 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         BankTerminalScreen parent;
 
-        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long stackSize, int centScaleFactor) {
+        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long stackSize) {
             super(0, 0, 100, HEIGHT);
             this.parent = parent;
             this.stack = stack;
             this.itemID = itemID;
             this.stackSize = stackSize;
-            this.centScaleFactor = centScaleFactor;
 
             int boxPadding = 2;
 
@@ -72,7 +70,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         @Override
         protected void render() {
             drawItem(stack, itemStackHitBox.x, itemStackHitBox.y);
-            String amountStr = Bank.getFormattedAmount(stackSize, centScaleFactor);
+            String amountStr = Bank.getFormattedAmountStatic(stackSize);
             balanceLabel.setText(amountStr);
             if(itemStackHitBox.contains(getMousePos().x, getMousePos().y))
                 drawTooltip(stack, getMousePos());
@@ -204,7 +202,6 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
                 getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), this::updateBankList);
             }
         });
-
     }
 
     @Override
@@ -310,7 +307,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             BankElement element = getBankElement(pair.getFirst());
             if (element == null) {
                 ItemStack stack = pair.getFirst().getStack();
-                element = new BankElement(this, stack, pair.getFirst(), balance, pair.getSecond().itemFractionScaleFactor);
+                element = new BankElement(this, stack, pair.getFirst(), balance);
                 bankElements.add(element);
                 itemListView.addChild(element);
             } else {
