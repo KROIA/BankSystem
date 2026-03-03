@@ -2,6 +2,7 @@ package net.kroia.banksystem.util;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemIDsPacket;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.minecraft.core.RegistryAccess;
@@ -52,8 +53,10 @@ public class ItemIDManager implements ServerSaveableChunked {
         }
 
         short newID = (short)(itemIDMap.size()+1);
-        id = new ItemID(newID);
+
         ItemStack cpy = itemStack.copy();
+        String name = ItemUtilities.getItemIDStr(cpy.getItem());
+        id = new ItemID(newID, name);
         cpy.setCount(1);
         itemIDMap.put(id, cpy);
         onNewItemAdded(id, cpy);
@@ -117,12 +120,14 @@ public class ItemIDManager implements ServerSaveableChunked {
         {
             // Search the entire list to check if the same item stack already is registered
             ItemStack itemStack = entry.getValue();
+
             ItemID id = getItemID(itemStack);
             if(id != null)
                 continue;
-
             ItemStack cpy = itemStack.copy();
             cpy.setCount(1);
+            String name = ItemUtilities.getItemIDStr(cpy.getItem());
+            entry.getKey().setNameCache_internal(name);
             itemIDMap.put(entry.getKey(), cpy);
         }
     }
@@ -183,11 +188,14 @@ public class ItemIDManager implements ServerSaveableChunked {
             if(!id.load(itemIDTag))
                 continue;
 
-            Optional<ItemStack> itemStack = ItemStack.parse(access, itemStackTag);
-            if(itemStack.isEmpty())
+            Optional<ItemStack> itemStackOptional = ItemStack.parse(access, itemStackTag);
+            if(itemStackOptional.isEmpty())
                 continue;
 
-            itemIDMap.put(id, itemStack.get());
+            ItemStack itemStack = itemStackOptional.get();
+            String name = ItemUtilities.getItemIDStr(itemStack.getItem());
+            id.setNameCache_internal(name);
+            itemIDMap.put(id, itemStack);
         }
         singlePlayerServerBackupOnPlayerLeave = null;
         return true;

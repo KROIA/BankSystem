@@ -36,6 +36,7 @@ public class ItemID implements ServerSaveable {
     //private ItemStack stack;
     //private UUID uuid;
     private short id;
+    private @Nullable String name_cache = null;
 
     /*public ItemID(UUID uuid) {
         this.uuid = uuid;
@@ -43,10 +44,21 @@ public class ItemID implements ServerSaveable {
     public ItemID(short id)
     {
         this.id = id;
+        this.name_cache = String.valueOf(id);
+    }
+    public ItemID(short id, @Nullable String name_cache)
+    {
+        this.id = id;
+        this.name_cache = name_cache;
     }
     public ItemID(ItemID other)
     {
         this.id = other.id;
+        this.name_cache = other.name_cache;
+    }
+    public void setNameCache_internal(String name_cache)
+    {
+        this.name_cache = name_cache;
     }
     public static @Nullable ItemID fromJson(JsonElement jsonElement)
     {
@@ -140,15 +152,21 @@ public class ItemID implements ServerSaveable {
         return ItemIDManager.getItemStack(this);
     }
     public @NotNull String getName() {
+        if(name_cache != null)
+            return name_cache;
+
         ItemStack stack = getStack();
         if(stack == null) {
-            return "?";
+            name_cache = String.valueOf(id);
+            return name_cache;
         }
         String name = ItemUtilities.getItemIDStr(stack.getItem());
         if(name == null) {
-            return "?";
+            name_cache = String.valueOf(id);
+            return name_cache;
         }
-        return name;
+        name_cache = name;
+        return name_cache;
     }
     public boolean isAir() {
         ItemStack stack = getStack();
@@ -191,7 +209,7 @@ public class ItemID implements ServerSaveable {
     @Override
     public String toString() {
         //return toJsonString();
-        return "ID = '"+id+"'";
+        return getName();
     }
 
     public short getShort() {
