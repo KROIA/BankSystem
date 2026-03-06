@@ -90,7 +90,7 @@ public class ItemID implements ServerSaveable {
      * @param itemStack
      * @return the itemID associated with the itemStack
      */
-    public static @NotNull ItemID getOrRegisterFromItemStack(ItemStack itemStack)
+    public static @NotNull ItemID getOrRegisterFromItemStack(@NotNull ItemStack itemStack)
     {
         return ItemIDManager.registerItemStack(itemStack);
     }
@@ -184,6 +184,7 @@ public class ItemID implements ServerSaveable {
         if(!tag.contains(compoundTagKey_ID))
             return false;
         id = tag.getShort(compoundTagKey_ID);
+        name_cache = String.valueOf(id);
         return true;
     }
 

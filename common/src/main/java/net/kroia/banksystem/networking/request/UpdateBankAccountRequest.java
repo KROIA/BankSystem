@@ -84,6 +84,30 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         );
 
 
+        public InputData(int accountNumber,
+                         String accountName,
+                         @Nullable ItemStack accountIcon,
+                         List<BankData> bankData,
+                         Map<UUID, Integer> setUsers)
+        {
+            this.accountNumber = accountNumber;
+            this.accountName = accountName;
+            if(accountIcon != null)
+            {
+                if(accountIcon.isEmpty())
+                {
+                    this.accountIcon = null;
+                }
+                else
+                {
+                    this.accountIcon = accountIcon;
+                }
+            }
+            else
+                this.accountIcon = null;
+            this.bankData = bankData;
+            this.setUsers = setUsers;
+        }
 
 
         /*public int accountNumber;
@@ -227,8 +251,14 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 }
                 account.setUsers(userList);
             }
-            ItemID iconID = ItemID.getOrRegisterFromItemStack(input.accountIcon);
-            account.setAccountIcon(iconID);
+            if(input.accountIcon == null)
+            {
+                account.setAccountIcon(null);
+            }
+            else {
+                ItemID iconID = ItemID.getOrRegisterFromItemStack(input.accountIcon);
+                account.setAccountIcon(iconID);
+            }
             if(!account.hasAnyUser())
             {
                 // If the account has no users, we remove it

@@ -52,15 +52,15 @@ public class BankData {
         this.lockedBalance = lockedBalance;
     }
 
-    public float getRealBalance() {
-        return Bank.convertToRealAmountStatic(balance);
-    }
-    public float getRealLockedBalance() {
-        return Bank.convertToRealAmountStatic(lockedBalance);
-    }
-    public float getRealTotalBalance() {
-        return Bank.convertToRealAmountStatic(balance + lockedBalance);
-    }
+    //public float getRealBalance() {
+    //    return Bank.convertToRealAmountStatic(balance);
+    //}
+    //public float getRealLockedBalance() {
+    //    return Bank.convertToRealAmountStatic(lockedBalance);
+    //}
+    //public float getRealTotalBalance() {
+    //    return Bank.convertToRealAmountStatic(balance + lockedBalance);
+    //}
 
     public String getFormattedBalance(){
         return Bank.getFormattedAmountStatic(balance);
@@ -82,6 +82,12 @@ public class BankData {
         return Bank.getNormalizedAmountStatic(balance + lockedBalance);
     }
 
+    public long getBalance() {
+        return balance;
+    }
+    public long getLockedBalance() {
+        return lockedBalance;
+    }
     /*@Override
     public void encode(net.minecraft.network.FriendlyByteBuf buf) {
         //buf.writeUUID(playerUUID);

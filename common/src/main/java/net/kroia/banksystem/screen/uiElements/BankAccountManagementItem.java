@@ -234,7 +234,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
         if(balanceValueTextBox.getText().isEmpty())
             return 0;
         try {
-            return (long)Math.max(0.0, Bank.convertToRawAmountStatic(balanceValueTextBox.getDouble()));
+            return (long)Math.max(0.0, Bank.convertToRawAmountStatic(balanceValueTextBox.getText()));
         } catch (NumberFormatException e) {
             return 0;
         }
@@ -255,7 +255,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     {
         totalBalanceValueLabel.setText(Bank.getFormattedAmountStatic(totalBalance));
         if(!balanceChanged && isAdminMode)
-            balanceValueTextBox.setText(Bank.convertToRealAmountStatic(totalBalance));
+            balanceValueTextBox.setText(Bank.getTextFieldString(totalBalance));
     }
     private void onFreeLockedBalanceCheckBoxClicked(Boolean checked)
     {

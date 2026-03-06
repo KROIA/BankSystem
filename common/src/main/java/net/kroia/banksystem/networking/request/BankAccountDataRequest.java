@@ -10,13 +10,14 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
 public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccountDataRequest.InputData, BankAccountData> {
 
 
-    public record InputData(int accountNumber, UUID personalUserUUID)
+    public record InputData(int accountNumber, @Nullable UUID personalUserUUID)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC =
                 StreamCodec.composite(

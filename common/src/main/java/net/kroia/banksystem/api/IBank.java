@@ -75,11 +75,11 @@ public interface IBank {
     long getTotalBalance();
 
 
-    float getRealBalance();
+    double getRealBalance();
 
-    float getRealLockedBalance();
+    double getRealLockedBalance();
 
-    float getRealTotalBalance();
+    double getRealTotalBalance();
 
     /**
      * Gets the type of this bank.
@@ -112,7 +112,7 @@ public interface IBank {
     boolean setBalance(long balance);
 
 
-    boolean setRealBalance(float balance);
+    boolean setRealBalance(double balance);
 
     /**
      * Gets the UUID of the player who owns this bank.
@@ -145,7 +145,7 @@ public interface IBank {
     Status deposit(long amount);
 
 
-    Status depositReal(float amount);
+    Status depositReal(double amount);
 
 
     /**
@@ -166,7 +166,7 @@ public interface IBank {
      */
     Status withdraw(long amount);
 
-    Status withdrawReal(float amount);
+    Status withdrawReal(double amount);
 
     /**
      * Withdraws an amount of money or items from this bank, but only if the amount is locked.
@@ -177,7 +177,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
     Status withdrawLocked(long amount);
-    Status withdrawLockedReal(float amount);
+    Status withdrawLockedReal(double amount);
 
     /**
      * Withdraws an amount of money or items from this bank, but first uses the locked balance and only
@@ -191,7 +191,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
     Status withdrawLockedPrefered(long amount);
-    Status withdrawLockedPreferedReal(float amount);
+    Status withdrawLockedPreferedReal(double amount);
 
     /**
      * Transfers an amount of money or items from this bank to another bank.
@@ -202,7 +202,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in both banks.
      */
     Status transfer(long amount, IBank other);
-    Status transferReal(float amount, @NotNull IBank other);
+    Status transferReal(double amount, @NotNull IBank other);
 
     /**
      * Transfers an amount of money or items from this bank to another bank, but only if the amount is locked.
@@ -214,7 +214,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in both banks.
      */
     Status transferFromLocked(long amount, @NotNull IBank other);
-    Status transferFromLockedReal(float amount, @NotNull IBank other);
+    Status transferFromLockedReal(double amount, @NotNull IBank other);
 
     /**
      * Transfers an amount of money or items from this bank to another bank, but first uses the locked balance and only
@@ -229,7 +229,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in both banks.
      */
     Status transferFromLockedPrefered(long amount, @NotNull IBank other);
-    Status transferFromLockedPreferedReal(float amount, @NotNull IBank other);
+    Status transferFromLockedPreferedReal(double amount, @NotNull IBank other);
 
     /**
      * Locks an amount of money or items in this bank.
@@ -240,7 +240,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
     Status lockAmount(long amount);
-    Status lockAmountReal(float amount);
+    Status lockAmountReal(double amount);
 
     /**
      * Unlocks an amount of money or items in this bank.
@@ -252,7 +252,7 @@ public interface IBank {
      *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
      */
     Status unlockAmount(long amount);
-    Status unlockAmountReal(float amount);
+    Status unlockAmountReal(double amount);
 
     /**
      * Unlocks all locked amounts in this bank.
@@ -268,7 +268,7 @@ public interface IBank {
      * @param realAmount The real amount is that amount a user sees in the bank GUI.
      * @return The raw amount that the bank uses internally.
      */
-    long convertToRawAmount(float realAmount);
+    long convertToRawAmount(double realAmount);
 
     /**
      * Converts the given raw amount to the real amount the user sees in the bank GUI.
@@ -277,7 +277,7 @@ public interface IBank {
      * @param rawAmount The raw amount is that amount the bank uses internally as "balance".
      * @return The real amount that the user sees in the bank GUI.
      */
-    float convertToRealAmount(long rawAmount);
+    double convertToRealAmount(long rawAmount);
 
 
     /**
@@ -332,7 +332,7 @@ public interface IBank {
      * @param realAmount The real amount to normalize.
      * @return A string representation of the normalized amount.
      */
-    String getNormalizedAmount(float realAmount);
+    //String getNormalizedAmount(float realAmount);
     String getNormalizedAmount(double realAmount);
 
     /**
@@ -364,7 +364,7 @@ public interface IBank {
      * @param realAmount The real amount to format.
      * @return A string representation of the formatted amount.
      */
-    String getFormattedAmount(float realAmount);
+    //String getFormattedAmount(float realAmount);
     String getFormattedAmount(double realAmount);
 
     /**

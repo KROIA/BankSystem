@@ -29,7 +29,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
     public static final Type<SyncOpenGUIPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "sync_open_gui_packet"));
     public static final StreamCodec<RegistryFriendlyByteBuf, SyncOpenGUIPacket> STREAM_CODEC = StreamCodec.composite(
             ExtraCodecUtils.enumStreamCodec(GUIType.class), p -> p.guiType,
-            UUIDUtil.STREAM_CODEC, p -> p.targetPlayerUUID,
+            ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC), p -> p.targetPlayerUUID,
             ByteBufCodecs.INT, p -> p.accountNumber,
             ByteBufCodecs.BOOL, p -> p.isAdminMode,
             SyncOpenGUIPacket::new

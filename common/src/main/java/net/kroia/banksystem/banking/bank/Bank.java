@@ -110,15 +110,15 @@ public class Bank implements ServerSaveable, IBank {
     }
 
     @Override
-    public float getRealBalance() {
+    public double getRealBalance() {
         return convertToRealAmount(balance);
     }
     @Override
-    public float getRealLockedBalance() {
+    public double getRealLockedBalance() {
         return convertToRealAmount(lockedBalance);
     }
     @Override
-    public float getRealTotalBalance() {
+    public double getRealTotalBalance() {
         return convertToRealAmount(balance + lockedBalance);
     }
 
@@ -165,7 +165,7 @@ public class Bank implements ServerSaveable, IBank {
     }
 
     @Override
-    public boolean setRealBalance(float balance)
+    public boolean setRealBalance(double balance)
     {
         return setBalance(convertToRawAmount(balance));
     }
@@ -203,7 +203,7 @@ public class Bank implements ServerSaveable, IBank {
     }
 
     @Override
-    public Status depositReal(float amount) {
+    public Status depositReal(double amount) {
         return deposit(convertToRawAmount(amount));
     }
 
@@ -227,7 +227,7 @@ public class Bank implements ServerSaveable, IBank {
     }
 
     @Override
-    public Status withdrawReal(float amount) {
+    public Status withdrawReal(double amount) {
         return withdraw(convertToRawAmount(amount));
     }
 
@@ -242,7 +242,7 @@ public class Bank implements ServerSaveable, IBank {
         return Status.SUCCESS;
     }
     @Override
-    public Status withdrawLockedReal(float amount) {
+    public Status withdrawLockedReal(double amount) {
         return withdrawLocked(convertToRawAmount(amount));
     }
 
@@ -265,7 +265,7 @@ public class Bank implements ServerSaveable, IBank {
         return Status.SUCCESS;
     }
     @Override
-    public Status withdrawLockedPreferedReal(float amount) {
+    public Status withdrawLockedPreferedReal(double amount) {
         return withdrawLockedPrefered(convertToRawAmount(amount));
     }
 
@@ -289,7 +289,7 @@ public class Bank implements ServerSaveable, IBank {
         return otherStatus;
     }
     @Override
-    public Status transferReal(float amount, @NotNull IBank other) {
+    public Status transferReal(double amount, @NotNull IBank other) {
         return transfer(convertToRawAmount(amount), other);
     }
 
@@ -311,7 +311,7 @@ public class Bank implements ServerSaveable, IBank {
         return otherStatus;
     }
     @Override
-    public Status transferFromLockedReal(float amount, @NotNull IBank other) {
+    public Status transferFromLockedReal(double amount, @NotNull IBank other) {
         return transferFromLocked(convertToRawAmount(amount), other);
     }
 
@@ -347,7 +347,7 @@ public class Bank implements ServerSaveable, IBank {
         return otherStatus;
     }
     @Override
-    public Status transferFromLockedPreferedReal(float amount, @NotNull IBank other) {
+    public Status transferFromLockedPreferedReal(double amount, @NotNull IBank other) {
         return transferFromLockedPrefered(convertToRawAmount(amount), other);
     }
 
@@ -409,7 +409,7 @@ public class Bank implements ServerSaveable, IBank {
         return Status.SUCCESS;
     }
     @Override
-    public Status lockAmountReal(float amount) {
+    public Status lockAmountReal(double amount) {
         return lockAmount(convertToRawAmount(amount));
     }
 
@@ -425,7 +425,7 @@ public class Bank implements ServerSaveable, IBank {
         return Status.SUCCESS;
     }
     @Override
-    public Status unlockAmountReal(float amount) {
+    public Status unlockAmountReal(double amount) {
         return unlockAmount(convertToRawAmount(amount));
     }
 
@@ -437,33 +437,62 @@ public class Bank implements ServerSaveable, IBank {
     }
 
     @Override
-    public long convertToRawAmount(float realAmount)
+    public long convertToRawAmount(double realAmount)
     {
         return convertToRawAmountStatic(realAmount);
     }
 
     @Override
-    public float convertToRealAmount(long rawAmount)
+    public double convertToRealAmount(long rawAmount)
     {
         return convertToRealAmountStatic(rawAmount);
     }
 
-    public static long convertToRawAmountStatic(float realAmount)
-    {
-        return (long)(realAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
-    }
+    //public static long convertToRawAmountStatic(double realAmount)
+    //{
+    //    return Math.round(realAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+    //}
     public static long convertToRawAmountStatic(double realAmount)
     {
-        return (long)(realAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+        return Math.round(realAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
     }
-    public static float convertToRealAmountStatic(long rawAmount)
+    public static long convertToRawAmountStatic(String realTextboxText) // 1864165.05
+    {
+        if(realTextboxText == null)
+            return 0;
+        if(realTextboxText.isEmpty())
+            return 0;
+        int decimalPlaces = realTextboxText.lastIndexOf(".");
+        if(decimalPlaces == -1)
+            decimalPlaces =  realTextboxText.lastIndexOf(",");
+        try {
+            if (decimalPlaces == -1)
+                return Long.parseLong(realTextboxText) * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        }catch (NumberFormatException e) {
+            return 0;
+        }
+        long A = 0;
+        long B = 0;
+        try{
+            A = Long.parseLong(realTextboxText.substring(0, decimalPlaces)) * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        }catch (NumberFormatException ignored) {
+
+        }
+        try {
+            B = Long.parseLong(realTextboxText.substring(decimalPlaces + 1));
+        }catch (NumberFormatException ignored) {
+
+        }
+        return A + B;
+    }
+    public static double convertToRealAmountStatic(long rawAmount)
     {
         return (float)rawAmount / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
     }
-    public static float convertToRealAmountStatic(double rawAmount)
-    {
-        return (float)rawAmount / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
-    }
+    //public static float convertToRealAmountStatic(double rawAmount)
+    //{
+    //    return (float)rawAmount / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+    //}
 
     @Override
     public String getNormalizedBalance()
@@ -501,12 +530,12 @@ public class Bank implements ServerSaveable, IBank {
         return getFormattedAmount(balance + lockedBalance);
     }
 
-    @Override
-    public String getNormalizedAmount(float realAmount)
-    {
-        long amount = convertToRawAmountStatic(realAmount);
-        return getNormalizedAmountStatic(amount);
-    }
+    //@Override
+    //public String getNormalizedAmount(float realAmount)
+    //{
+    //    long amount = convertToRawAmountStatic(realAmount);
+    //    return getNormalizedAmountStatic(amount);
+    //}
     @Override
     public String getNormalizedAmount(double realAmount)
     {
@@ -518,12 +547,12 @@ public class Bank implements ServerSaveable, IBank {
     {
         return getNormalizedAmountStatic(rawAmount);
     }
-    @Override
-    public String getFormattedAmount(float realAmount)
-    {
-        long amount = convertToRawAmountStatic(realAmount);
-        return getFormattedAmountStatic(amount);
-    }
+    //@Override
+    //public String getFormattedAmount(float realAmount)
+    //{
+    //    long amount = convertToRawAmountStatic(realAmount);
+    //    return getFormattedAmountStatic(amount);
+    //}
     @Override
     public String getFormattedAmount(double realAmount)
     {
@@ -752,16 +781,34 @@ public class Bank implements ServerSaveable, IBank {
         }
         return sb.toString();
     }
+    public static String getTextFieldString(long amount)
+    {
+        long A = amount / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        long B = amount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(A);
+        sb.append(".");
+
+        // Add filling zeros if needed
+        int digitsCount = (int)Math.log10(BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+        String BStr = String.valueOf(B);
+        int addZeroCount = digitsCount - BStr.length();
+        sb.append("0".repeat(Math.max(0, addZeroCount)));
+        sb.append(BStr);
+        return sb.toString();
+    }
 
     public static int getMaxDecimalDigitsCount()
     {
-        if(BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR == 1)
+        return (int)Math.log10(BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+        /*if(BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR == 1)
             return 0;
         String centsString = String.valueOf(1.f/BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
         // Remove "0." prefix if cents are zero
         centsString = centsString.substring(2);
         // Count the number of digits after the decimal point
-        return centsString.length();
+        return centsString.length();*/
     }
 
     private boolean willOverflow(long tryToAddAmount)

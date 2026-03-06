@@ -294,7 +294,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             if(bankData != null)
                 sortedBankAccounts.add(new Pair<>(itemID, bankData));
         }
-        sortedBankAccounts.sort((a, b) -> Float.compare(b.getSecond().getRealBalance(), a.getSecond().getRealBalance()));
+        sortedBankAccounts.sort((a, b) -> Float.compare(b.getSecond().getBalance(), a.getSecond().getBalance()));
 
         int x = 0;
         int y = 0;
