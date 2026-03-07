@@ -59,7 +59,7 @@ public class Bank implements ServerSaveable, IBank {
         this.lockedBalance = 0;
     }
 
-    public static @Nullable Bank create(ItemID itemID, float balance) {
+    public static @Nullable Bank create(ItemID itemID, long balance) {
         if (itemID == null || balance < 0) {
             return null; // Invalid parameters
         }
@@ -68,7 +68,7 @@ public class Bank implements ServerSaveable, IBank {
             return null; // Item not allowed in bank
         }
 
-        return new Bank(itemID, convertToRawAmountStatic(balance));
+        return new Bank(itemID, balance);
     }
     public static @Nullable Bank createFromTag(CompoundTag tag)
     {

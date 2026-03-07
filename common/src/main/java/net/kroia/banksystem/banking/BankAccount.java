@@ -83,7 +83,7 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_CREATED.notifyListeners(acc); // Notify listeners that a new bank account has been created
         return acc; // Return the newly created bank account
     }
-    public static @Nullable BankAccount createPersonal(int accountNumber, User user, float startMoneyBalance) {
+    public static @Nullable BankAccount createPersonal(int accountNumber, User user, long startMoneyBalance) {
         if (user == null || accountNumber <= 0) {
             return null; // Invalid user or account number
         }
@@ -345,7 +345,7 @@ public class BankAccount implements ServerSaveable, IBankAccount {
 
 
     @Override
-    public @Nullable IBank createBank(ItemID itemID, float startBalance)
+    public @Nullable IBank createBank(ItemID itemID, long startBalance)
     {
         if (itemID == null) {
             return null; // Invalid item ID

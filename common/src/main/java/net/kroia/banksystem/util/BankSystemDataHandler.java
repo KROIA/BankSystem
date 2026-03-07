@@ -157,6 +157,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
         if(success) {
             debug("BankSystem Mod data loaded successfully.");
+            BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.notifyListeners();
         }
         else
             error("Failed to load BankSystem Mod data.");
@@ -209,7 +210,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         if(bankData != null && BACKEND_INSTANCES.SERVER_BANK_MANAGER.load(bankData))
         {
             bankDataLoaded = true;
-            BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.notifyListeners();
+
             return true;
         }
         bankDataLoaded = false;
@@ -233,7 +234,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         if(oldBankDataLoader.load(bankData))
         {
             bankDataLoaded = true;
-            BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.notifyListeners();
+           // BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.notifyListeners();
 
             // delete the file
             try {

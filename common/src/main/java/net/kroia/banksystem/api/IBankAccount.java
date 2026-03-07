@@ -180,10 +180,10 @@ public interface IBankAccount {
      * Creates a new bank for the specified itemID with the given starting balance.
      * If the bank already exists, it will be returned without changing the balance.
      * @param itemID the itemID of the bank to create
-     * @param startBalance the starting balance of the bank, in real amount, it gets converted automatically.
+     * @param startBalance the starting balance of the bank, in raw amount.
      * @return the created or already existing bank, or null if the bank could not be created.
      */
-    @Nullable IBank createBank(ItemID itemID, float startBalance);
+    @Nullable IBank createBank(ItemID itemID, long startBalance);
 
     /**
      * Removes the bank for the specified itemID.

@@ -399,7 +399,8 @@ public class BankSystemCommands {
                                                                             ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
 
                                                                             // Execute the command on the server_sender
-                                                                            return bank_create(player, username,  itemIDObj, balance);
+                                                                            long rawAmount = Bank.convertToRawAmountStatic(balance);
+                                                                            return bank_create(player, username,  itemIDObj, rawAmount);
                                                                         })
                                                                 )
                                                 )
@@ -433,7 +434,8 @@ public class BankSystemCommands {
                                                                             ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
 
                                                                             // Execute the command on the server_sender
-                                                                            return bank_setBalance(player, username,  itemIDObj, balance);
+                                                                            long realBalance = Bank.convertToRawAmountStatic(balance);
+                                                                            return bank_setBalance(player, username,  itemIDObj, realBalance);
                                                                         })
                                                                 )
                                                 )
@@ -593,7 +595,8 @@ public class BankSystemCommands {
 
                                             // Get arguments
                                             float amount = FloatArgumentType.getFloat(context, "amount");
-                                            BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.set(amount);
+                                            long rawAmount = Bank.convertToRawAmountStatic(amount);
+                                            BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.set(rawAmount);
                                             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(Bank.getFormattedAmountStatic(amount)));
                                             return Command.SINGLE_SUCCESS;
                                         })
@@ -788,7 +791,7 @@ public class BankSystemCommands {
         return Command.SINGLE_SUCCESS;
     }
 
-    private static int bank_create(ServerPlayer player, String targetPlayer, ItemID itemID, float balance) {
+    private static int bank_create(ServerPlayer player, String targetPlayer, ItemID itemID, long balance) {
         if(itemID == null)
         {
             ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
@@ -820,7 +823,7 @@ public class BankSystemCommands {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankCreatedMessage(targetPlayer, itemID.getName())+"\n"+bank.toStringNoOwner());
         return Command.SINGLE_SUCCESS;
     }
-    private static int bank_setBalance(ServerPlayer player,String targetPlayer, ItemID itemID, float balance) {
+    private static int bank_setBalance(ServerPlayer player,String targetPlayer, ItemID itemID, long balance) {
         //String orgItemID = MoneyBank.compatibilityMoneyItemIDConvert(itemID);
         //itemID = ItemUtilities.getNormalizedItemID(orgItemID);
         if(itemID == null)
@@ -840,7 +843,7 @@ public class BankSystemCommands {
             ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getBankNotFoundMessage(targetPlayer,itemID.getName()));
             return Command.SINGLE_SUCCESS;
         }
-        bank.setBalance(bank.convertToRawAmount(balance));
+        bank.setBalance(balance);
         //ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getSetBalanceMessage(balance, player.getName().getString(), itemID) + "\n"+bank.toStringNoOwner());
         return Command.SINGLE_SUCCESS;
     }

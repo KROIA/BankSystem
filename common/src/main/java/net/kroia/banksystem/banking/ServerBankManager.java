@@ -245,7 +245,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
 
         int accountNumber = generateNewAccountNumber();
-        float startBalance = BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.get();
+        long startBalance = BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.get();
         BankAccount account = BankAccount.createPersonal(accountNumber, creator, startBalance);
         if(account == null) {
             warn("Failed to create personal bank account for user with UUID: " + user);
