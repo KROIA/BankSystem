@@ -28,23 +28,17 @@ public class ItemID implements ServerSaveable {
     );
 
     private static final String compoundTagKey_ID = "id";
-
     public static final ItemID INVALID_ID = new ItemID((short)0);
 
-    //public static final ItemID EMPTY = new ItemID(Items.AIR.getDefaultInstance());
-
-    //private ItemStack stack;
-    //private UUID uuid;
     private short id;
     private @Nullable String name_cache = null;
 
-    /*public ItemID(UUID uuid) {
-        this.uuid = uuid;
-    }*/
+
     public ItemID(short id)
     {
         this.id = id;
-        this.name_cache = String.valueOf(id);
+        //this.name_cache = String.valueOf(id);
+        tryUpdateNameCahce();
     }
     public ItemID(short id, @Nullable String name_cache)
     {
@@ -59,6 +53,15 @@ public class ItemID implements ServerSaveable {
     public void setNameCache_internal(String name_cache)
     {
         this.name_cache = name_cache;
+    }
+    public void tryUpdateNameCahce()
+    {
+        ItemStack stack = getStack();
+        if(stack == null) {
+            name_cache = String.valueOf(id);
+            return;
+        }
+        name_cache = ItemUtilities.getItemIDStr(stack.getItem());
     }
     public static @Nullable ItemID fromJson(JsonElement jsonElement)
     {
@@ -104,35 +107,6 @@ public class ItemID implements ServerSaveable {
         return id;
     }
 
-
-   /* public ItemID(String itemID) {
-        this(ItemUtilities.createItemStackFromId(itemID));
-    }
-    public ItemID(ItemStack stack) {
-        if(stack == null)
-        {
-            this.stack = Items.AIR.getDefaultInstance();
-            return;
-        }
-        this.stack = stack.copy(); // Ensure immutability
-        this.stack.setCount(1); // Ensure count is 1
-    }
-    private ItemID()
-    {
-
-    }
-
-    public static ItemID of(ItemStack stack)
-    {
-        return new ItemID(stack);
-    }
-    public ItemID(CompoundTag tag) {
-        load(tag);
-    }
-    public ItemID(JsonElement jsonElement) {
-        fromJson(jsonElement);
-    }
-*/
 
 
 
@@ -209,7 +183,6 @@ public class ItemID implements ServerSaveable {
 
     @Override
     public String toString() {
-        //return toJsonString();
         return getName();
     }
 
