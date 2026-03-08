@@ -38,7 +38,7 @@ public class ItemID implements ServerSaveable {
     {
         this.id = id;
         //this.name_cache = String.valueOf(id);
-        tryUpdateNameCahce();
+        tryUpdateNameCache();
     }
     public ItemID(short id, @Nullable String name_cache)
     {
@@ -54,7 +54,7 @@ public class ItemID implements ServerSaveable {
     {
         this.name_cache = name_cache;
     }
-    public void tryUpdateNameCahce()
+    public void tryUpdateNameCache()
     {
         ItemStack stack = getStack();
         if(stack == null) {
