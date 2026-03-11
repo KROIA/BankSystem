@@ -57,7 +57,7 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
     }
 
     @Override
-    public void handleClient(NetworkManager.PacketContext context)
+    public void handleOnClient(NetworkManager.PacketContext context)
     {
         ItemIDManager.receiveSyncPacket(this, context);
     }

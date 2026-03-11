@@ -30,6 +30,10 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         User.setBackend(backend);
     }
 
+    public record BankAccountSQL_Data(int bankAccountNr, String accountName, @Nullable ItemID accountIcon, @Nullable UUID personalBankOwner)
+    {
+
+    }
 
 
     private int accountNumber;

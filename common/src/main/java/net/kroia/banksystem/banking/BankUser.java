@@ -9,6 +9,11 @@ import java.util.UUID;
 
 public class BankUser {
 
+    public record BankUserSQL_Data(int bankAccountNr, UUID userUUID, int permission)
+    {
+
+    }
+
     private final User user;
     private int permission;
 

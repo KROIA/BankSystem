@@ -91,7 +91,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    protected void handleClient(NetworkManager.PacketContext context)
+    protected void handleOnClient(NetworkManager.PacketContext context)
     {
         switch(guiType)
         {

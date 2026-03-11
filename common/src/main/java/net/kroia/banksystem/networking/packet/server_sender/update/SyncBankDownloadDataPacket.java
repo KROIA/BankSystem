@@ -77,7 +77,7 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
     }*/
 
     @Override
-    protected void handleClient(NetworkManager.PacketContext context) {
+    protected void handleOnClient(NetworkManager.PacketContext context) {
         BankDownloadScreen.handlePacket(this);
     }
 

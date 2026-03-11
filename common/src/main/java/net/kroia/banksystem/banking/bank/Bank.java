@@ -25,29 +25,17 @@ public class Bank implements ServerSaveable, IBank {
     public static void setBackend(BankSystemModBackend.Instances backend) {
         Bank.BACKEND_INSTANCES = backend;
     }
-    //private static final Component WARNING = Component.translatable("message."+ BankSystemMod.MOD_ID+".bank.warning");
-    //private static final Component INFO = Component.translatable("message."+BankSystemMod.MOD_ID+".bank.info");
 
 
-    //private BankUserOld owner;
+    public record BankSQL_Data(int bankAccountNr, ItemID itemID, long balance, long lockedBalance)
+    {
+
+    }
 
     protected long balance;
     protected long lockedBalance;
-   // protected long centScaleFactor = 1;
     private ItemID itemID;
 
-
-   /* public Bank(BankUserOld owner, ItemID itemID, long balance) {
-        this.owner = owner;
-        this.itemID = itemID;
-        balance = Math.max(balance, 0); // Ensure balance is not negative
-        setBalanceInternal(balance);
-        this.lockedBalance = 0;
-    }
-    public Bank(BankUserOld owner, CompoundTag tag) {
-        this.owner = owner;
-        load(tag);
-    }*/
     private Bank()
     {
 

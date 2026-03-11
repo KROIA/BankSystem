@@ -27,7 +27,7 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
 
         @Override
         public void handleClient(BankSystemNetworkPacket packet, NetworkManager.PacketContext context) {
-            packet.handleClient(context);
+            packet.handleOnClient(context);
         }
     };
 
@@ -36,7 +36,7 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
         handleOnServer((ServerPlayer) context.getPlayer());
     }
 
-    protected void handleClient(NetworkManager.PacketContext context)
+    protected void handleOnClient(NetworkManager.PacketContext context)
     {
 
     }

@@ -65,7 +65,7 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
 
 
     @Override
-    protected void handleClient(NetworkManager.PacketContext context) {
+    protected void handleOnClient(NetworkManager.PacketContext context) {
         BankUploadScreen.handlePacket(this);
     }
 
