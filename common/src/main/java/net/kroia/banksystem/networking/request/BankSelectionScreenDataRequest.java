@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class BankSelectionScreenDataRequest extends BankSystemGenericRequest<UUID, BankSelectionScreenDataRequest.Output> {
     public record Output(List<BankAccountData> bankAccounts)
@@ -19,27 +20,6 @@ public class BankSelectionScreenDataRequest extends BankSystemGenericRequest<UUI
                 ExtraCodecUtils.listStreamCodec(BankAccountData.STREAM_CODEC), Output::bankAccounts,
                 Output::new
         );
-
-       /* public final List<BankAccountData> bankAccounts = new ArrayList<>();
-
-
-        @Override
-        public void encode(RegistryFriendlyByteBuf buf) {
-            buf.writeInt(bankAccounts.size());
-            for (BankAccountData accountData : bankAccounts) {
-                accountData.encode(buf);
-            }
-        }
-
-        public static Output decode(RegistryFriendlyByteBuf buf) {
-            Output output = new Output();
-            int size = buf.readInt();
-            for (int i = 0; i < size; i++) {
-                BankAccountData accountData = BankAccountData.decode(buf);
-                output.bankAccounts.add(accountData);
-            }
-            return output;
-        }*/
     }
 
 
@@ -48,19 +28,21 @@ public class BankSelectionScreenDataRequest extends BankSystemGenericRequest<UUI
         return BankSelectionScreenDataRequest.class.getSimpleName();
     }
 
-    @Override
-    public Output handleOnClient(UUID input) {
-        return null;
-    }
+    //@Override
+    //public Output handleOnClient(UUID input) {
+    //    return null;
+    //}
 
     @Override
-    public Output handleOnServer(UUID input, ServerPlayer sender) {
+    public CompletableFuture<Output> handleOnServer(UUID input, ServerPlayer sender) {
+        CompletableFuture<Output>  future = new CompletableFuture<>();
         var accounts = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccounts(input);
         Output output = new Output(new ArrayList<>());
         for (var account : accounts) {
             output.bankAccounts.add(account.getAccountData());
         }
-        return output;
+        future.complete(output);
+        return future;
     }
 
     @Override

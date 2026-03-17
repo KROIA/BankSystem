@@ -6,25 +6,24 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.concurrent.CompletableFuture;
+
 public class BankManagerDataRequest extends BankSystemGenericRequest<Integer, BankManagerData> {
     @Override
     public String getRequestTypeID() {
         return BankManagerDataRequest.class.getName();
     }
 
-    @Override
-    public BankManagerData handleOnClient(Integer input) {
-        return null;
-    }
+    //@Override
+    //public BankManagerData handleOnClient(Integer input) {
+    //    return null;
+    //}
 
     @Override
-    public BankManagerData handleOnServer(Integer input, ServerPlayer sender) {
-        // Check if sender has admin permissions
-        //if(playerIsAdmin(sender)) {
-            // If the player has admin permissions, return the minimal data
-        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankManagerData();
-        //}
-        //return null; // If not, return null or handle accordingly
+    public CompletableFuture<BankManagerData> handleOnServer(Integer input, ServerPlayer sender) {
+        CompletableFuture<BankManagerData>  future = new CompletableFuture<>();
+        future.complete(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankManagerData());
+        return future;
     }
 
     @Override

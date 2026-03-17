@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBankAccountRequest.InputData, BankAccountData> {
 
@@ -47,31 +48,6 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                     ByteBufCodecs.BOOL, BankData::createBank,
                     BankData::new
             );
-            /*public BankData(){
-                this(null, 0, false, false, false, false);
-            }*/
-            /*public BankData(RegistryFriendlyByteBuf buf) {
-                fromBytes(buf);
-            }
-
-            public void toBytes(RegistryFriendlyByteBuf buf) {
-                buf.writeItem(itemID.getStack());
-                buf.writeLong(balance);
-                buf.writeBoolean(setBalance);
-                buf.writeBoolean(resetLockedBalance);
-                buf.writeBoolean(removeBank);
-                buf.writeBoolean(createBank);
-            }
-
-
-            public void fromBytes(RegistryFriendlyByteBuf buf) {
-                itemID = new ItemID(buf.readItem());
-                balance = buf.readLong();
-                setBalance = buf.readBoolean();
-                resetLockedBalance = buf.readBoolean();
-                removeBank = buf.readBoolean();
-                createBank = buf.readBoolean();
-            }*/
         }
 
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
@@ -110,84 +86,6 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         }
 
 
-        /*public int accountNumber;
-        public String accountName;
-        public @Nullable ItemID accountIcon;
-        public List<BankData> bankData;
-
-        public Map<UUID, Integer> setUsers;
-
-
-        public InputData() {
-            this.bankData = null;
-            this.setUsers = null;
-        }
-        public InputData(int accountNumber, String accountName, ItemID accountIcon,
-                            List<BankData> bankData,
-                            Map<UUID, Integer> setUsers) {
-            this.accountNumber = accountNumber;
-            this.accountName = accountName;
-            this.accountIcon = accountIcon;
-            this.bankData = bankData;
-            this.setUsers = setUsers;
-        }
-
-        @Override
-        public void encode(RegistryFriendlyByteBuf buf) {
-            buf.writeInt(accountNumber);
-            buf.writeUtf(accountName);
-            buf.writeBoolean(accountIcon != null);
-            if(accountIcon != null) {
-                accountIcon.encode(buf);
-            }
-            buf.writeBoolean(bankData != null);
-            if(bankData != null) {
-                buf.writeInt(bankData.size());
-                for (BankData data : bankData) {
-                    data.toBytes(buf);
-                }
-            }
-
-            buf.writeBoolean(setUsers != null);
-            if(setUsers != null) {
-                buf.writeInt(setUsers.size());
-                for (Map.Entry<UUID, Integer> entry : setUsers.entrySet()) {
-                    buf.writeUUID(entry.getKey());
-                    buf.writeInt(entry.getValue());
-                }
-            }
-        }
-        public static InputData decode(RegistryFriendlyByteBuf buf) {
-            InputData input = new InputData();
-            input.accountNumber = buf.readInt();
-            input.accountName = buf.readUtf();
-            if(buf.readBoolean()) {
-                input.accountIcon = ItemID.createFomBytes(buf);
-            } else {
-                input.accountIcon = null;
-            }
-
-            input.bankData = null;
-            if(buf.readBoolean()) {
-                int size = buf.readInt();
-                input.bankData = new ArrayList<>(size);
-                for (int i = 0; i < size; i++) {
-                    input.bankData.add(new BankData(buf));
-                }
-            }
-
-            input.setUsers = null;
-            if(buf.readBoolean()) {
-                int addUsersSize = buf.readInt();
-                input.setUsers = new java.util.HashMap<>(addUsersSize);
-                for (int i = 0; i < addUsersSize; i++) {
-                    UUID userUUID = buf.readUUID();
-                    int permissions = buf.readInt();
-                    input.setUsers.put(userUUID, permissions);
-                }
-            }
-            return input;
-        }*/
     }
 
     @Override
@@ -195,24 +93,27 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         return UpdateBankAccountRequest.class.getSimpleName();
     }
 
-    @Override
-    public BankAccountData handleOnClient(InputData input) {
-        return null;
-    }
+    //@Override
+    //public BankAccountData handleOnClient(InputData input) {
+    //    return null;
+    //}
 
     @Override
-    public BankAccountData handleOnServer(InputData input, ServerPlayer sender) {
+    public CompletableFuture<BankAccountData> handleOnServer(InputData input, ServerPlayer sender) {
+        CompletableFuture<BankAccountData>  future = new CompletableFuture<>();
         // Check if the player is a admin
         boolean isAdmin = playerIsAdmin(sender);
 
         IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(input.accountNumber);
         if(account == null) {
             // If the account does not exist, we cannot update it
-            return null;
+            future.complete(null);
+            return future;
         }
         boolean canManage = account.hasPermission(sender.getUUID(), BankPermission.MANAGE.getValue());
         if (!isAdmin && !canManage) {
-            return null;
+            future.complete(null);
+            return future;
         }
 
         if(input.accountName != null && !input.accountName.isEmpty()) {
@@ -263,10 +164,12 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
             {
                 // If the account has no users, we remove it
                 BACKEND_INSTANCES.SERVER_BANK_MANAGER.deleteBankAccount(input.accountNumber);
-                return null; // The account was deleted
+                future.complete(null);
+                return future; // The account was deleted
             }
         }
-        return account.getAccountData();
+        future.complete(account.getAccountData());
+        return future;
     }
 
     @Override

@@ -9,6 +9,8 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.concurrent.CompletableFuture;
+
 public class BankTerminalBlockDataRequest extends BankSystemGenericRequest<BlockPos, BankTerminalBlockDataRequest.Output> {
 
     public record Output(int selectedBankAccount)
@@ -17,22 +19,6 @@ public class BankTerminalBlockDataRequest extends BankSystemGenericRequest<Block
                 ByteBufCodecs.INT, Output::selectedBankAccount,
                 Output::new
         );
-        /*public int selectedBankAccount = 0;
-        //public int userPermission = 0;
-
-
-        @Override
-        public void encode(RegistryFriendlyByteBuf buf) {
-            buf.writeInt(selectedBankAccount);
-            //buf.writeInt(userPermission);
-        }
-
-        public static Output decode(RegistryFriendlyByteBuf buf) {
-            Output output = new Output();
-            output.selectedBankAccount = buf.readInt();
-            //output.userPermission = buf.readInt();
-            return output;
-        }*/
     }
 
     @Override
@@ -40,29 +26,24 @@ public class BankTerminalBlockDataRequest extends BankSystemGenericRequest<Block
         return BankTerminalBlockDataRequest.class.getSimpleName();
     }
 
-    @Override
-    public Output handleOnClient(BlockPos input) {
-        return null;
-    }
+    //@Override
+    //public Output handleOnClient(BlockPos input) {
+    //    return null;
+    //}
 
     @Override
-    public Output handleOnServer(BlockPos input, ServerPlayer sender) {
+    public CompletableFuture<Output> handleOnServer(BlockPos input, ServerPlayer sender) {
+        CompletableFuture<Output> future = new CompletableFuture<>();
 
-        // Here you would typically retrieve the selected bank account from the block entity or player data
-        // For example:
         BankTerminalBlockEntity blockEntity = (BankTerminalBlockEntity) sender.level().getBlockEntity(input);
         if(blockEntity == null) {
-            return new Output(0); // or handle the error appropriately
+            future.complete(new Output(0));
+            return future;
         }
 
         Output output = new Output(blockEntity.getSelectedBankAccount(sender.getUUID()));
-        //IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(output.selectedBankAccount);
-        /*if(account != null) {
-            output.userPermission = account.getPermission(sender.getUUID());
-        } else {
-            output.userPermission = 0; // Default permission if account is not found
-        }*/
-        return output;
+        future.complete(output);
+        return future;
     }
 
     @Override

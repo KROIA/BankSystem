@@ -7,6 +7,8 @@ import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.concurrent.CompletableFuture;
+
 public class ItemInfoRequest extends BankSystemGenericRequest<ItemID, ItemInfoData> {
 
 
@@ -16,17 +18,21 @@ public class ItemInfoRequest extends BankSystemGenericRequest<ItemID, ItemInfoDa
         return ItemInfoRequest.class.getName();
     }
 
-    @Override
-    public ItemInfoData handleOnClient(ItemID input) {
-        return null;
-    }
+    //@Override
+    //public CompletableFuture<ItemInfoData> handleOnClient(ItemID input) {
+    //    CompletableFuture<ItemInfoData> future = new CompletableFuture<>();
+    //    future.complete(null);
+    //    return future;
+    //}
 
     @Override
-    public ItemInfoData handleOnServer(ItemID itemID, ServerPlayer sender) {
+    public CompletableFuture<ItemInfoData> handleOnServer(ItemID itemID, ServerPlayer sender) {
         if(!playerIsAdmin(sender)) {
             return null; // If the player is not an admin, return null
         }
-        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemInfoData(itemID);
+        CompletableFuture<ItemInfoData> future = new CompletableFuture<>();
+        future.complete(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemInfoData(itemID));
+        return future;
     }
 
     @Override

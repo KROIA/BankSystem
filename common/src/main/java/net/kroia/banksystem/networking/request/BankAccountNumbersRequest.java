@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class BankAccountNumbersRequest extends BankSystemGenericRequest<List<UUID>, List<Integer>> {
     @Override
@@ -18,13 +19,14 @@ public class BankAccountNumbersRequest extends BankSystemGenericRequest<List<UUI
         return BankAccountNumbersRequest.class.getSimpleName();
     }
 
-    @Override
-    public List<Integer> handleOnClient(List<UUID> input) {
-        return null;
-    }
+    //@Override
+    //public List<Integer> handleOnClient(List<UUID> input) {
+    //    return null;
+    //}
 
     @Override
-    public List<Integer> handleOnServer(List<UUID> input, ServerPlayer sender) {
+    public CompletableFuture<List<Integer>> handleOnServer(List<UUID> input, ServerPlayer sender) {
+        CompletableFuture<List<Integer>>  future = new CompletableFuture<>();
         if(input.isEmpty())
             input.add(sender.getUUID());
 
@@ -40,7 +42,8 @@ public class BankAccountNumbersRequest extends BankSystemGenericRequest<List<UUI
                 accountNumbers.add(accountNumber); // Add the account number to the list
             }
         }
-        return accountNumbers; // Return the list of account numbers
+        future.complete(accountNumbers);
+        return future; // Return the list of account numbers
     }
 
     @Override

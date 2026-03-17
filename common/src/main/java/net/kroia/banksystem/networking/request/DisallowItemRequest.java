@@ -6,24 +6,29 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.concurrent.CompletableFuture;
+
 public class DisallowItemRequest extends BankSystemGenericRequest<ItemID, Boolean> {
     @Override
     public String getRequestTypeID() {
         return DisallowItemRequest.class.getName();
     }
 
-    @Override
-    public Boolean handleOnClient(ItemID input) {
-        return null;
-    }
+    //@Override
+    //public Boolean handleOnClient(ItemID input) {
+    //    return null;
+    //}
 
     @Override
-    public Boolean handleOnServer(ItemID itemID, ServerPlayer sender) {
+    public CompletableFuture<Boolean> handleOnServer(ItemID itemID, ServerPlayer sender) {
+        CompletableFuture<Boolean>  future = new CompletableFuture<>();
         // Check if sender has permission to allow the item
         if(playerIsAdmin(sender)) {
-            return BACKEND_INSTANCES.SERVER_BANK_MANAGER.disallowItemID(itemID);
+            future.complete(BACKEND_INSTANCES.SERVER_BANK_MANAGER.disallowItemID(itemID));
+            return future;
         }
-        return false;
+        future.complete(false);
+        return future;
     }
 
     @Override

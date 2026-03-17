@@ -13,6 +13,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccountDataRequest.InputData, BankAccountData> {
 
@@ -51,45 +52,53 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
         return BankAccountDataRequest.class.getName();
     }
 
-    @Override
-    public BankAccountData handleOnClient(InputData input) {
-        return null;
-    }
+    //@Override
+    //public BankAccountData handleOnClient(InputData input) {
+    //    return null;
+    //}
 
     @Override
-    public BankAccountData handleOnServer(InputData inputData, ServerPlayer sender) {
+    public CompletableFuture<BankAccountData> handleOnServer(InputData inputData, ServerPlayer sender) {
 
+        CompletableFuture<BankAccountData>  future = new CompletableFuture<>();
         boolean isAdmin = playerIsAdmin(sender);
         if(inputData.personalUserUUID == null) {
             IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(inputData.accountNumber);
             if (account == null) {
-                return null; // If the account does not exist, return null
+                future.complete(null);
+                return future; // If the account does not exist, return null
             }
             UUID senderUUID = sender.getUUID();
             if (account.hasUser(senderUUID) || playerIsAdmin(sender)) {
-                return account.getAccountData(); // If the sender is a user of the account, return the account data
+                future.complete(account.getAccountData());
+                return future; // If the sender is a user of the account, return the account data
             }
         }
         else
         {
             IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(inputData.personalUserUUID);
             if(account == null) {
-                return null; // If the personal bank account does not exist, return null
+                future.complete(null);
+                return future; // If the personal bank account does not exist, return null
             }
             User owner = account.getPersonalBankOwner();
             if(owner != null)
             {
                 if(!owner.getUUID().equals(inputData.personalUserUUID) && !isAdmin) {
-                    return null; // If the user UUID does not match the account owner, return null
+                    future.complete(null);
+                    return future; // If the user UUID does not match the account owner, return null
                 }
-                return account.getAccountData();
+                future.complete(account.getAccountData());
+                return future;
             }
             else if(isAdmin)
             {
-                return account.getAccountData();
+                future.complete(account.getAccountData());
+                return future;
             }
         }
-        return null; // If the sender is not a user of the account, return null
+        future.complete(null);
+        return future; // If the sender is not a user of the account, return null
     }
 
     @Override

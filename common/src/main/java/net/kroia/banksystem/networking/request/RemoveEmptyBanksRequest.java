@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class RemoveEmptyBanksRequest extends BankSystemGenericRequest<Integer, List<ItemID>> {
     @Override
@@ -18,24 +19,29 @@ public class RemoveEmptyBanksRequest extends BankSystemGenericRequest<Integer, L
         return RemoveEmptyBanksRequest.class.getSimpleName();
     }
 
-    @Override
-    public List<ItemID> handleOnClient(Integer input) {
-        return null;
-    }
+    //@Override
+    //public List<ItemID> handleOnClient(Integer input) {
+    //    return null;
+    //}
 
     @Override
-    public List<ItemID> handleOnServer(Integer input, ServerPlayer sender) {
+    public CompletableFuture<List<ItemID>> handleOnServer(Integer input, ServerPlayer sender) {
+        CompletableFuture<List<ItemID>>  future = new CompletableFuture<>();
         IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(input);
-        if(account == null)
-            return List.of();
+        if(account == null) {
+            future.complete(List.of());
+            return future;
+        }
 
         UUID senderUUID = sender.getUUID();
         boolean canEdit = playerIsAdmin(sender) || account.hasPermission(senderUUID, BankPermission.MANAGE.getValue());
 
         if(canEdit) {
-            return account.removeEmptyBanks();
+            future.complete(account.removeEmptyBanks());
+            return future;
         }
-        return List.of();
+        future.complete(List.of());
+        return future;
     }
 
     @Override

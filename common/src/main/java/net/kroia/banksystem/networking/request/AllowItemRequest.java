@@ -10,6 +10,8 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.concurrent.CompletableFuture;
+
 public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.Data, Boolean> {
 
     public record Data(ItemID itemID)
@@ -26,28 +28,31 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
         return AllowItemRequest.class.getName();
     }
 
-    @Override
-    public Boolean handleOnClient(AllowItemRequest.Data input) {
-        return null;
-    }
+    //@Override
+    //public Boolean handleOnClient(AllowItemRequest.Data input) {
+    //    return null;
+    //}
 
     @Override
-    public Boolean handleOnServer(AllowItemRequest.Data data, ServerPlayer sender) {
+    public CompletableFuture<Boolean> handleOnServer(AllowItemRequest.Data data, ServerPlayer sender) {
         // Check if sender has permission to allow the item
+        CompletableFuture<Boolean>  future = new CompletableFuture<>();
         if(playerIsAdmin(sender)) {
             if(data != null)
             {
                 if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.isItemIDAllowed(data.itemID))
                 {
                     ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemAlreadyAllowedMessage(data.itemID.getName()));
-                    return true;
+                    future.complete(true);
+                    return future;
                 }
 
                 if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(data.itemID))
                 {
                     String smallestAmountStr = Bank.getFormattedAmountStatic(1);
                     ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedMessage(data.itemID.getName(), smallestAmountStr));
-                    return true;
+                    future.complete(true);
+                    return future;
                 }
                 else
                 {
@@ -59,7 +64,8 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
                 ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getInvalidItemIDMessage("null"));
             }
         }
-        return false;
+        future.complete(false);
+        return future;
     }
 
     @Override

@@ -8,6 +8,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 public class AllowedItemsRequest extends BankSystemGenericRequest<Integer, List<ItemID>> {
 
@@ -18,9 +19,11 @@ public class AllowedItemsRequest extends BankSystemGenericRequest<Integer, List<
     }
 
     @Override
-    public List<ItemID> handleOnServer(Integer input, ServerPlayer sender)
+    public CompletableFuture<List<ItemID>> handleOnServer(Integer input, ServerPlayer sender)
     {
-        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAllowedItems();
+        CompletableFuture<List<ItemID>>  future = new CompletableFuture<>();
+        future.complete(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAllowedItems());
+        return future;
     }
 
     @Override
