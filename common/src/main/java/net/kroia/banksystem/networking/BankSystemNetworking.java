@@ -11,13 +11,13 @@ import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploa
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.request.*;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
-import net.kroia.modutilities.networking.PacketManager;
-import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
+import net.kroia.modutilities.networking.client_server.ClientServerPacketManager;
+import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
-public class BankSystemNetworking extends PacketManager {
+public class BankSystemNetworking extends ClientServerPacketManager {
 
     public static ItemInfoRequest ITEM_INFO_REQUEST = (ItemInfoRequest) AsynchronousRequestResponseSystem.register(new ItemInfoRequest());
     public static BankManagerDataRequest BANK_MANAGER_DATA_REQUEST = (BankManagerDataRequest) AsynchronousRequestResponseSystem.register(new BankManagerDataRequest());

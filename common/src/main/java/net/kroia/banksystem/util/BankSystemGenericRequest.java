@@ -1,7 +1,7 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.modutilities.networking.arrs.GenericRequest;
+import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.minecraft.server.level.ServerPlayer;
 
 public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<IN, OUT> {

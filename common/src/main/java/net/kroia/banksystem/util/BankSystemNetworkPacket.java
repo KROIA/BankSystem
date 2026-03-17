@@ -2,8 +2,8 @@ package net.kroia.banksystem.util;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.modutilities.networking.PacketHandler;
+import net.kroia.modutilities.networking.client_server.NetworkPacket;
+import net.kroia.modutilities.networking.client_server.PacketHandler;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
