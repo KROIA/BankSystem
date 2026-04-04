@@ -10,12 +10,8 @@ import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownl
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.request.*;
-import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.modutilities.networking.client_server.ClientServerPacketManager;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 public class BankSystemNetworking extends ClientServerPacketManager {
 
@@ -62,19 +58,5 @@ public class BankSystemNetworking extends ClientServerPacketManager {
         registerC2S(UpdateBankUploadBlockEntityPacket.TYPE, UpdateBankUploadBlockEntityPacket.STREAM_CODEC);
         registerC2S(UpdateBankDownloadBlockEntityPacket.TYPE, UpdateBankDownloadBlockEntityPacket.STREAM_CODEC);
         registerC2S(WithdrawMoneyPacket.TYPE, WithdrawMoneyPacket.STREAM_CODEC);
-    }
-
-
-
-    // Helper function to reduce code size for registration
-    public <T extends BankSystemNetworkPacket> void registerS2C(CustomPacketPayload.Type<T> packetType, StreamCodec<RegistryFriendlyByteBuf, T> streamCodec)
-    {
-        // All packets use the same handler
-        registerS2C(packetType, streamCodec, BankSystemNetworkPacket.HANDLER);
-    }
-    public <T extends BankSystemNetworkPacket> void registerC2S(CustomPacketPayload.Type<T> packetType, StreamCodec<RegistryFriendlyByteBuf, T> streamCodec)
-    {
-        // All packets use the same handler
-        registerC2S(packetType, streamCodec, BankSystemNetworkPacket.HANDLER);
     }
 }

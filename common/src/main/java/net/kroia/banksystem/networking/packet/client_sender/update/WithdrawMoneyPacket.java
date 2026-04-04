@@ -164,4 +164,6 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     public @NotNull Type<? extends CustomPacketPayload> type() {
         return TYPE;
     }
+
+
 }

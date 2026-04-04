@@ -45,10 +45,6 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     }
 
 
-    /*public UpdateBankTerminalBlockEntityPacket(RegistryFriendlyByteBuf buf) {
-        super(buf);
-    }*/
-
     public BlockPos getPos() {
         return pos;
     }
@@ -68,36 +64,9 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
         new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToBankAmounts, sendItemsToMarket, selectedBankAccount).sendToServer();
     }
 
-    /*@Override
-    public void encode(FriendlyByteBuf buf)
+    @Override
+    protected void handleOnServer(NetworkManager.PacketContext context)
     {
-        buf.writeBlockPos(pos);
-        buf.writeBoolean(sendItemsToBank);
-        buf.writeInt(selectedBankAccount);
-        buf.writeInt(itemTransferFromMarket.size());
-        itemTransferFromMarket.forEach((itemID, amount) -> {
-            buf.writeItem(itemID.getStack());
-            buf.writeLong(amount);
-        });
-    }
-
-    @Override
-    public void decode(FriendlyByteBuf buf) {
-        this.pos = buf.readBlockPos();
-        this.itemTransferFromMarket = new HashMap<>();
-        this.sendItemsToBank = buf.readBoolean();
-        this.selectedBankAccount = buf.readInt();
-        int size = buf.readInt();
-        for (int i = 0; i < size; i++) {
-            ItemID itemID = new ItemID(buf.readItem());
-            long amount = buf.readLong();
-            this.itemTransferFromMarket.put(itemID, amount);
-        }
-    }*/
-
-    @Override
-    protected void handleServer(NetworkManager.PacketContext context) {
-
         BlockEntity blockEntity = context.getPlayer().level().getBlockEntity(this.pos);
         if(blockEntity instanceof BankTerminalBlockEntity bankTerminalBlockEntity) {
             bankTerminalBlockEntity.handlePacket(this, (ServerPlayer) context.getPlayer());

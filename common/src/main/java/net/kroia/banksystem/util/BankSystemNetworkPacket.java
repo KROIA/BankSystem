@@ -3,7 +3,6 @@ package net.kroia.banksystem.util;
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.networking.client_server.NetworkPacket;
-import net.kroia.modutilities.networking.client_server.PacketHandler;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
@@ -18,32 +17,17 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
         super();
     }
 
-
-    public static final PacketHandler<BankSystemNetworkPacket> HANDLER = new PacketHandler<>(){
-        @Override
-        public void handleServer(BankSystemNetworkPacket packet, NetworkManager.PacketContext context) {
-            packet.handleServer(context);
-        }
-
-        @Override
-        public void handleClient(BankSystemNetworkPacket packet, NetworkManager.PacketContext context) {
-            packet.handleOnClient(context);
-        }
-    };
-
-    protected void handleServer(NetworkManager.PacketContext context)
-    {
-        handleOnServer((ServerPlayer) context.getPlayer());
-    }
-
-    protected void handleOnClient(NetworkManager.PacketContext context)
-    {
+    @Override
+    protected void handleOnClient(NetworkManager.PacketContext context) {
 
     }
 
-
-    protected void handleOnServer(ServerPlayer sender)
-    {
+    @Override
+    protected void handleOnServer(NetworkManager.PacketContext context) {
+        ServerPlayer player = (ServerPlayer) context.getPlayer();
+        handleOnServer(player);
+    }
+    protected void handleOnServer(ServerPlayer player) {
 
     }
 

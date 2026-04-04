@@ -37,33 +37,13 @@ public class UpdateBankUploadBlockEntityPacket extends BankSystemNetworkPacket {
         this.dropIfNotBankable = dropIfNotBankable;
         this.bankAccountNumber = bankAccountNumber;
     }
-/*
-    public UpdateBankUploadBlockEntityPacket(RegistryFriendlyByteBuf buf) {
-        super(buf);
-    }*/
 
     public static void sendPacket(BlockPos pos, boolean isOwned, boolean dropIfNotBankable, int bankAccountNumber) {
         new UpdateBankUploadBlockEntityPacket(pos, isOwned, dropIfNotBankable, bankAccountNumber).sendToServer();
     }
 
-    /*@Override
-    public void encode(FriendlyByteBuf buf) {
-        buf.writeBlockPos(pos);
-        buf.writeBoolean(isOwned);
-        buf.writeBoolean(dropIfNotBankable);
-        buf.writeInt(bankAccountNumber);
-    }
-
     @Override
-    public void decode(FriendlyByteBuf buf) {
-        pos = buf.readBlockPos();
-        isOwned = buf.readBoolean();
-        dropIfNotBankable = buf.readBoolean();
-        bankAccountNumber = buf.readInt();
-    }
-*/
-    @Override
-    protected void handleServer(NetworkManager.PacketContext context) {
+    protected void handleOnServer(NetworkManager.PacketContext context) {
         BlockEntity blockEntity = context.getPlayer().level().getBlockEntity(pos);
         if (blockEntity instanceof BankUploadBlockEntity be) {
             be.handlePacket((ServerPlayer) context.getPlayer(),this);
