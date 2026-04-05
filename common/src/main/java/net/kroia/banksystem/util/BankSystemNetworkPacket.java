@@ -3,9 +3,12 @@ package net.kroia.banksystem.util;
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.networking.client_server.NetworkPacket;
+import net.kroia.modutilities.networking.server_server.ForwardPacketContext;
+import net.kroia.modutilities.networking.server_server.ServerServerManager;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
+import java.util.UUID;
 
 public abstract class BankSystemNetworkPacket extends NetworkPacket {
     protected static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -31,7 +34,17 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
 
     }
 
+    @Override
+    protected void handleOnMaster(ForwardPacketContext context) {
+        handleOnMaster(context.senderPlayerUUID);
+    };
+    protected void handleOnMaster(UUID playerUUID) {
 
+    };
+
+
+    @Override
+    protected boolean needsRoutingToMaster() { return BACKEND_INSTANCES.isSlaveServer; }
 
     protected void sendToServer()
     {
@@ -44,6 +57,23 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
     protected void sendToClients(List<ServerPlayer> player)
     {
         BACKEND_INSTANCES.NETWORKING.sendToClients(player, this);
+    }
+
+    protected boolean sendToMaster()
+    {
+        if(ServerServerManager.isRunning() && ServerServerManager.isSlave())
+        {
+            return ServerServerManager.sendToMaster(null, this);
+        }
+        return false;
+    }
+    protected boolean sendToMaster(UUID senderPlayerUUID)
+    {
+        if(ServerServerManager.isRunning() && ServerServerManager.isSlave())
+        {
+            return ServerServerManager.sendToMaster(senderPlayerUUID, this);
+        }
+        return false;
     }
 
     protected void info(String message) {

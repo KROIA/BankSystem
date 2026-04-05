@@ -51,8 +51,8 @@ public class Bank implements ServerSaveable, IBank {
         if (itemID == null || balance < 0) {
             return null; // Invalid parameters
         }
-        ServerBankManager mgr = BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        if(!mgr.isItemIDAllowed(itemID)) {
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        if(!bankManager.isItemIDAllowed_direct(itemID)) {
             return null; // Item not allowed in bank
         }
 

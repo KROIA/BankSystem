@@ -15,6 +15,7 @@ import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class BankingSoftware extends Software {
 
@@ -36,17 +37,12 @@ public class BankingSoftware extends Software {
     protected void onRightClickedServerSide(ServerPlayer player)
     {
         if(player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
-            IBankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(player.getUUID());
-            if(bankAccount != null) {
-                /*long currentTime = System.currentTimeMillis();
-                if(currentTime - cooldownTimer < 500)
-                {
-                    return;
+            CompletableFuture<IBankAccount> bankAccountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(player.getUUID());
+            bankAccountFuture.thenAcceptAsync((bankAccount) -> {
+                if(bankAccount != null) {
+                    SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), bankAccount.getAccountNumber(), true);
                 }
-                cooldownTimer = System.currentTimeMillis();*/
-                SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), bankAccount.getAccountNumber(), true);
-
-            }
+            });
         }
     }
 
@@ -60,18 +56,13 @@ public class BankingSoftware extends Software {
 
                 if(serverPlayer.hasPermissions(2) && serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
                     UUID targetUUID = target.getUUID();
-                    IBankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(targetUUID);
-                    if(bankAccount != null) {
-                        /*long currentTime = System.currentTimeMillis();
-                        if(currentTime - cooldownTimer < 500)
-                        {
-                            return InteractionResult.CONSUME;
+                    CompletableFuture<IBankAccount> bankAccountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(targetUUID);
+                    bankAccountFuture.thenAcceptAsync((bankAccount) -> {
+                        if(bankAccount != null) {
+                            SyncOpenGUIPacket.send_openBankAccountScreen(serverPlayer, targetUUID, bankAccount.getAccountNumber(), true);
                         }
-                        cooldownTimer = System.currentTimeMillis();*/
-                        SyncOpenGUIPacket.send_openBankAccountScreen(serverPlayer, targetUUID, bankAccount.getAccountNumber(), true);
-                        // Prevent block interaction from firing after entity interaction
-                        return InteractionResult.CONSUME;
-                    }
+                    });
+                    return InteractionResult.CONSUME;
                 }
             }
             return InteractionResult.CONSUME;

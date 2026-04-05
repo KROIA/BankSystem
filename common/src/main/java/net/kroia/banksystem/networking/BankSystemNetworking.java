@@ -9,11 +9,12 @@ import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemIDsPacket;
+import net.kroia.banksystem.networking.packet.server_server.PlayerJoinPacket;
 import net.kroia.banksystem.networking.request.*;
-import net.kroia.modutilities.networking.client_server.ClientServerPacketManager;
+import net.kroia.modutilities.networking.NetworkPacketManager;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 
-public class BankSystemNetworking extends ClientServerPacketManager {
+public class BankSystemNetworking extends NetworkPacketManager {
 
     public static ItemInfoRequest ITEM_INFO_REQUEST = (ItemInfoRequest) AsynchronousRequestResponseSystem.register(new ItemInfoRequest());
     public static BankManagerDataRequest BANK_MANAGER_DATA_REQUEST = (BankManagerDataRequest) AsynchronousRequestResponseSystem.register(new BankManagerDataRequest());
@@ -58,5 +59,11 @@ public class BankSystemNetworking extends ClientServerPacketManager {
         registerC2S(UpdateBankUploadBlockEntityPacket.TYPE, UpdateBankUploadBlockEntityPacket.STREAM_CODEC);
         registerC2S(UpdateBankDownloadBlockEntityPacket.TYPE, UpdateBankDownloadBlockEntityPacket.STREAM_CODEC);
         registerC2S(WithdrawMoneyPacket.TYPE, WithdrawMoneyPacket.STREAM_CODEC);
+    }
+
+    @Override
+    public void setupServerServerPackets()
+    {
+        registerS2S(PlayerJoinPacket.TYPE, PlayerJoinPacket.STREAM_CODEC);
     }
 }

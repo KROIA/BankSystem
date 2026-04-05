@@ -7,6 +7,7 @@ import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.api.*;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.banking.ServerBankManagerProxy;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.command.BankSystemCommands;
@@ -22,6 +23,8 @@ import net.kroia.banksystem.item.custom.software.Software;
 import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.*;
+import net.kroia.modutilities.networking.server_server.ServerServerConfig;
+import net.kroia.modutilities.networking.server_server.ServerServerManager;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -35,9 +38,10 @@ import java.nio.file.Path;
 public class BankSystemModBackend implements BankSystemAPI {
     public static class Instances
     {
+        public boolean isSlaveServer = false;
         public BankSystemModSettings SERVER_SETTINGS;
         public BankSystemDataHandler SERVER_DATA_HANDLER;
-        public ServerBankManager SERVER_BANK_MANAGER;
+        public IServerBankManager SERVER_BANK_MANAGER;
         public ClientBankManager CLIENT_BANK_MANAGER;
         public BankSystemEvents SERVER_EVENTS;
         public BankSystemNetworking NETWORKING;
@@ -62,6 +66,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemDataHandler.setBackend(INSTANCES);
         BankTerminalBlockEntity.setBackend(INSTANCES);
         ServerBankManager.setBackend(INSTANCES);
+        ServerBankManagerProxy.setBackend(INSTANCES);
         //BankUserOld.setBackend(INSTANCES);
         BankSystemModSettings.setBackend(INSTANCES);
         BankSystemCommands.setBackend(INSTANCES);
@@ -118,34 +123,60 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     // Called from the server side
     public static void onServerStart(MinecraftServer server) {
-        INSTANCES.SERVER_SETTINGS = new BankSystemModSettings();
-        INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
-
-        INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
-        INSTANCES.SERVER_BANK_MANAGER = new ServerBankManager();
-
+        ServerServerConfig config = ServerServerConfig.get();
+        if(config.enable)
+        {
+            if(config.isMaster)
+            {
+                INSTANCES.isSlaveServer = false;
+                ServerServerManager.createMaster(server, config.sharedSecret, config.masterTcpPort);
+                ServerServerManager.start();
+            }
+            else
+            {
+                INSTANCES.isSlaveServer = true;
+                ServerServerManager.createSlave(server, config.sharedSecret, config.slaveID, config.masterHost, config.masterTcpPort);
+                ServerServerManager.start();
+            }
+        }
         NEZNAMY_TAB_Placeholders.setBackend(INSTANCES);
         OldBankDataLoader.setBackend(INSTANCES);
 
+        if(INSTANCES.isSlaveServer)
+        {
+            INSTANCES.SERVER_BANK_MANAGER = new ServerBankManagerProxy();
+        }
+        else
+        {
+            INSTANCES.SERVER_SETTINGS = new BankSystemModSettings();
+            INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
 
-        loadDataFromFiles(server);
-        TickEvent.SERVER_POST.register(BankSystemModBackend::onServerTick);
+            INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
+            INSTANCES.SERVER_BANK_MANAGER = new ServerBankManager();
 
-        // Save the data when the game saves the world
-        LifecycleEvent.SERVER_LEVEL_SAVE.register((ServerLevel level) -> {
-            if (level.dimension() == Level.OVERWORLD) {
-                INSTANCES.SERVER_DATA_HANDLER.saveAll();
-            }
-        });
+            loadDataFromFiles(server);
+            TickEvent.SERVER_POST.register(BankSystemModBackend::onServerTick);
+
+
+            // Save the data when the game saves the world
+            LifecycleEvent.SERVER_LEVEL_SAVE.register((ServerLevel level) -> {
+                if (level.dimension() == Level.OVERWORLD) {
+                    INSTANCES.SERVER_DATA_HANDLER.saveAll();
+                }
+            });
+        }
+
     }
 
     // Called from the server side
     public static void onServerStop(MinecraftServer server) {
-        TickEvent.SERVER_POST.unregister(BankSystemModBackend::onServerTick);
-        saveDataToFiles(server);
+        if(!INSTANCES.isSlaveServer) {
+            TickEvent.SERVER_POST.unregister(BankSystemModBackend::onServerTick);
+            saveDataToFiles(server);
 
-        BankSystemDataHandler.resetBankDataLoaded();
-        BankSystemDataHandler.resetGlobalDataLoaded();
+            BankSystemDataHandler.resetBankDataLoaded();
+            BankSystemDataHandler.resetGlobalDataLoaded();
+        }
 
         INSTANCES.SERVER_EVENTS.removeListeners();
     }
@@ -153,10 +184,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the server side
     public static void onPlayerJoin(ServerPlayer player)
     {
-        if(!INSTANCES.SERVER_BANK_MANAGER.userExists(player.getUUID())) {
-            INSTANCES.SERVER_BANK_MANAGER.addUser(player);
-            INSTANCES.SERVER_BANK_MANAGER.createPersonalBankAccount(player.getUUID());
-        }
+        INSTANCES.SERVER_BANK_MANAGER.onPlayerJoin(player.getUUID(), player.getName().getString());
         ItemIDManager.onPlayerJoined(player);
         /*
         INSTANCES.SERVER_BANK_MANAGER.createUser(

@@ -11,6 +11,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public interface IServerBankManager {
 
@@ -19,14 +20,14 @@ public interface IServerBankManager {
      * Contains all data about the bank manager.
      * @return Data packet containing all data about the bank manager.
      */
-    BankManagerData getBankManagerData();
+    CompletableFuture<BankManagerData> getBankManagerData();
 
     /**
      * Contains all user information about the bank manager.
      * A user consists of their UUID, name, and other individual settings.
      * @return Data packet containing all user information about the bank manager.
      */
-    BankManagerData.UserMapData getBankManagerUserMapData();
+    CompletableFuture<BankManagerData.UserMapData> getBankManagerUserMapData();
 
     /**
      * Contains a list of all items that can be stored in the bank and the scale factor for item fractions.
@@ -43,27 +44,27 @@ public interface IServerBankManager {
      * Contains a list of all bank accounts and their banks.
      * @return Data packet containing all bank accounts and their banks.
      */
-    BankManagerData.BankAccountsData getBankManagerBankAccountsData();
+    CompletableFuture<BankManagerData.BankAccountsData> getBankManagerBankAccountsData();
 
 
     /**
      * Returns a list of all allowed items that can be stored in the bank.
      * @return A list of allowed items that can be stored in the bank.
      */
-    List<ItemID> getAllowedItems();
+    CompletableFuture<List<ItemID>> getAllowedItems();
 
     /**
      * Returns a list of all blacklisted items that cannot be stored in the bank.
      * @return A list of blacklisted items that cannot be stored in the bank.
      */
-    List<ItemID> getBlacklistedItems();
+    CompletableFuture<List<ItemID>> getBlacklistedItems();
 
     /**
      * Returns a list of all items that cannot be removed from the bank.
      * These items are not allowed to be removed from the bank account.
      * @return A list of items that cannot be removed from the bank.
      */
-    List<ItemID> getNotRemovableItems();
+    CompletableFuture<List<ItemID>> getNotRemovableItems();
 
     /**
      * Returns minimalistic data about the bank manager.
@@ -71,7 +72,7 @@ public interface IServerBankManager {
      *
      * @return Data packet containing minimal data about the bank manager.
      */
-    ItemInfoData getItemInfoData(@NotNull ItemID itemID);
+    CompletableFuture<ItemInfoData> getItemInfoData(@NotNull ItemID itemID);
 
 
     /**
@@ -80,6 +81,7 @@ public interface IServerBankManager {
      * @param player The player to create a user for.
      */
     void addUser(@NotNull ServerPlayer player);
+    void addUser(@NotNull UUID playerUUID, @NotNull String playerName);
 
     /**
      * Adds a new User to the bank manager.
@@ -98,28 +100,28 @@ public interface IServerBankManager {
      * @param userUUID UUID of the user to remove.
      * @return True if the user was successfully removed, false otherwise.
      */
-    boolean removeUser(UUID userUUID);
+    CompletableFuture<Boolean> removeUser(UUID userUUID);
 
     /**
      * Checks if a user with the given UUID exists in the bank manager.
      * @param userUUID UUID of the user to check.
      * @return True if the user exists, false otherwise.
      */
-    boolean userExists(UUID userUUID);
+    CompletableFuture<Boolean> userExists(UUID userUUID);
 
     /**
      * Gets the User object for the given UUID.
      * @param userUUID UUID of the user to get.
      * @return The User object if found, null otherwise.
      */
-    @Nullable User getUserByUUID(UUID userUUID);
+    CompletableFuture<@Nullable User> getUserByUUID(UUID userUUID);
 
     /**
      * Gets the User object for the given name.
      * @param name Name of the user to get.
      * @return The User object if found, null otherwise.
      */
-    @Nullable User getUserByName(String name);
+    CompletableFuture<@Nullable User> getUserByName(String name);
 
 
 
@@ -134,7 +136,7 @@ public interface IServerBankManager {
      * @param user The UUID of the user to create the personal bank account for.
      * @return The created or already existing BankAccount object.
      */
-    IBankAccount createPersonalBankAccount(UUID user);
+    CompletableFuture<IBankAccount> createPersonalBankAccount(UUID user);
 
     /**
      * Creates a new bank account with a given account name.
@@ -143,14 +145,14 @@ public interface IServerBankManager {
      *                    The name must not be unique.
      * @return The created BankAccount object.
      */
-    IBankAccount createBankAccount(String accountName);
+    CompletableFuture<IBankAccount> createBankAccount(String accountName);
 
     /**
      * Gets a bank account with the given account number.
      * @param accountNumber The account number of the bank account to get.
      * @return The BankAccount object if found, null otherwise.
      */
-    @Nullable IBankAccount getBankAccount(int accountNumber);
+    CompletableFuture<@Nullable IBankAccount> getBankAccount(int accountNumber);
 
 
     /**
@@ -158,7 +160,7 @@ public interface IServerBankManager {
      * @param userUUID The UUID of the user to get bank accounts for.
      * @return A list of BankAccount objects associated with the user UUID.
      */
-    List<IBankAccount> getBankAccounts(UUID userUUID);
+    CompletableFuture<List<IBankAccount>> getBankAccounts(UUID userUUID);
 
 
     /**
@@ -166,7 +168,7 @@ public interface IServerBankManager {
      * @param itemID The item ID to get bank accounts for.
      * @return A list of BankAccount objects associated with the item ID.
      */
-    List<IBankAccount> getBankAccounts(ItemID itemID);
+    CompletableFuture<List<IBankAccount>> getBankAccounts(ItemID itemID);
 
     /**
      * Gets the personal bank account for a given user UUID.
@@ -174,7 +176,7 @@ public interface IServerBankManager {
      * @param userUUID The UUID of the user to get the personal bank account for.
      * @return The BankAccount object if found, null otherwise.
      */
-    @Nullable IBankAccount getPersonalBankAccount(UUID userUUID);
+    CompletableFuture<@Nullable IBankAccount> getPersonalBankAccount(UUID userUUID);
 
     /**
      * Gets the personal bank account for a given user name.
@@ -182,7 +184,7 @@ public interface IServerBankManager {
      * @param userName The name of the user to get the personal bank account for.
      * @return The BankAccount object if found, null otherwise.
      */
-    @Nullable IBankAccount getPersonalBankAccount(String userName);
+    CompletableFuture<@Nullable IBankAccount> getPersonalBankAccount(String userName);
 
     /**
      * Trys to get the personal bank account for a given user UUID.
@@ -190,7 +192,7 @@ public interface IServerBankManager {
      * @param userUUID The UUID of the user to get or create the personal bank account for.
      * @return The BankAccount object if found or created, null if an error occurs.
      */
-    @Nullable IBankAccount getOrCreatePersonalBankAccount(UUID userUUID);
+    CompletableFuture<@Nullable IBankAccount> getOrCreatePersonalBankAccount(UUID userUUID);
 
     /**
      * Trys to get the personal bank account for a given user name.
@@ -198,21 +200,21 @@ public interface IServerBankManager {
      * @param userName The name of the user to get or create the personal bank account for.
      * @return The BankAccount object if found or created, null if an error occurs.
      */
-    @Nullable IBankAccount getOrCreatePersonalBankAccount(@NotNull String userName);
+    CompletableFuture<@Nullable IBankAccount> getOrCreatePersonalBankAccount(@NotNull String userName);
 
     /**
      * Checks if a user has a personal bank account.
      * @param userUUID The UUID of the user to check.
      * @return True if the user has a personal bank account, false otherwise.
      */
-    boolean userHasPersonalBankAccount(UUID userUUID);
+    CompletableFuture<Boolean> userHasPersonalBankAccount(UUID userUUID);
 
     /**
      * Deletes a bank account with the given account number.
      * @param accountNumber The account number of the bank account to delete.
      * @return True if the bank account was successfully deleted, false otherwise.
      */
-    boolean deleteBankAccount(int accountNumber);
+    CompletableFuture<Boolean> deleteBankAccount(int accountNumber);
 
 
 
@@ -232,7 +234,7 @@ public interface IServerBankManager {
      * @param itemID The item ID of the personal bank to get.
      * @return The IBank object if found, null otherwise.
      */
-    @Nullable IBank getPersonalBank(UUID owner, ItemID itemID);
+    CompletableFuture<@Nullable IBank> getPersonalBank(UUID owner, ItemID itemID);
 
     /**
      * Gets the personal bank for a given owner name and item ID.
@@ -241,7 +243,7 @@ public interface IServerBankManager {
      * @param itemID The item ID of the personal bank to get.
      * @return The IBank object if found, null otherwise.
      */
-    @Nullable IBank getPersonalBank(String ownerName, ItemID itemID);
+    CompletableFuture<@Nullable IBank> getPersonalBank(String ownerName, ItemID itemID);
 
     /**
      * Gets or creates a personal bank for a given owner UUID and item ID.
@@ -250,7 +252,7 @@ public interface IServerBankManager {
      * @param itemID The item ID of the personal bank to get or create.
      * @return The IBank object if found or created, null if an error occurs.
      */
-    @Nullable IBank getOrCreatePersonalBank(UUID owner, ItemID itemID);
+    CompletableFuture<@Nullable IBank> getOrCreatePersonalBank(UUID owner, ItemID itemID);
 
     /**
      * Gets or creates a personal bank for a given owner name and item ID.
@@ -259,7 +261,7 @@ public interface IServerBankManager {
      * @param itemID The item ID of the personal bank to get or create.
      * @return The IBank object if found or created, null if an error occurs.
      */
-    @Nullable IBank getOrCreatePersonalBank(String ownerName, ItemID itemID);
+    CompletableFuture<@Nullable IBank> getOrCreatePersonalBank(String ownerName, ItemID itemID);
 
 
 
@@ -288,7 +290,7 @@ public interface IServerBankManager {
      * @param itemID The item ID to check.
      * @return True if the item ID is allowed, false otherwise.
      */
-    boolean isItemIDAllowed(ItemID itemID);
+    CompletableFuture<Boolean> isItemIDAllowed(ItemID itemID);
 
 
     /**
@@ -297,7 +299,7 @@ public interface IServerBankManager {
      * @param itemID The item ID to allow.
      * @return True if the item ID was successfully allowed, false otherwise.
      */
-    boolean allowItemID(ItemID itemID);
+    CompletableFuture<Boolean> allowItemID(ItemID itemID);
 
     /**
      * Disallows the given item ID from being stored in a bank account.
@@ -305,7 +307,7 @@ public interface IServerBankManager {
      * @param itemID The item ID to disallow.
      * @return True if the item ID was successfully disallowed, false otherwise.
      */
-    boolean disallowItemID(ItemID itemID);
+    CompletableFuture<Boolean> disallowItemID(ItemID itemID);
 
     /**
      * Checks if the given item ID is not removable and cannot be removed from a bank account.
@@ -313,7 +315,7 @@ public interface IServerBankManager {
      * @param itemID The item ID to check.
      * @return True if the item ID is not removable, false otherwise.
      */
-    boolean isItemIDNotRemovable(ItemID itemID);
+    CompletableFuture<Boolean> isItemIDNotRemovable(ItemID itemID);
 
     /**
      * Checks if the given item ID is blacklisted and cannot be stored in a bank account.
@@ -321,7 +323,7 @@ public interface IServerBankManager {
      * @param itemID The item ID to check.
      * @return True if the item ID is blacklisted, false otherwise.
      */
-    boolean isItemIDBlacklisted(ItemID itemID);
+    CompletableFuture<Boolean> isItemIDBlacklisted(ItemID itemID);
 
 
 
@@ -331,31 +333,31 @@ public interface IServerBankManager {
     /**
      * @return The total amount of money in circulation across all banks.
      */
-    double getRealMoneyCirculation();
+    CompletableFuture<Double> getRealMoneyCirculation();
 
     /**
      * @return The total amount of locked money in circulation across all banks.
      */
-    double getRealLockedMoneyCirculation();
+    CompletableFuture<Double> getRealLockedMoneyCirculation();
 
     /**
      * @param itemID
      * @return The total amount of the specified item in circulation across all banks.
      */
-    double getRealItemCirculation(ItemID itemID);
+    CompletableFuture<Double> getRealItemCirculation(ItemID itemID);
 
     /**
      * @param itemID
      * @return The total amount of the specified item that is locked in circulation across all banks.
      */
-    double getRealLockedItemCirculation(ItemID itemID);
+    CompletableFuture<Double> getRealLockedItemCirculation(ItemID itemID);
 
     /**
      * Gets the JSON representation of the circulation data.
      *
      * @return A JsonElement containing the circulation data.
      */
-    JsonElement getCirculationDataJson();
+    CompletableFuture<JsonElement> getCirculationDataJson();
 
 
     /**
@@ -363,7 +365,7 @@ public interface IServerBankManager {
      *
      * @return A String containing the circulation data in JSON format.
      */
-    String getCirculationDataJsonString();
+    CompletableFuture<String> getCirculationDataJsonString();
 
 
 
@@ -375,7 +377,7 @@ public interface IServerBankManager {
      *
      * @return A JsonElement containing the bank manager data.
      */
-    JsonElement toJson();
+    CompletableFuture<JsonElement> toJson();
 
     /**
      * Converts the bank manager data to a JSON string representation.
@@ -384,9 +386,10 @@ public interface IServerBankManager {
      *
      * @return A String containing the bank manager data in JSON format.
      */
-    String toJsonString();
+    CompletableFuture<String> toJsonString();
 
 
+    void onPlayerJoin(UUID playerUUID, String playerName);
 
 
 

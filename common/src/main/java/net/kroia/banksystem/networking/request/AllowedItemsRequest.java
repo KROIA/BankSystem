@@ -8,6 +8,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class AllowedItemsRequest extends BankSystemGenericRequest<Integer, List<ItemID>> {
@@ -19,11 +20,17 @@ public class AllowedItemsRequest extends BankSystemGenericRequest<Integer, List<
     }
 
     @Override
+    public boolean needsRoutingToMaster() { return true; }
+
+    @Override
     public CompletableFuture<List<ItemID>> handleOnServer(Integer input, ServerPlayer sender)
     {
-        CompletableFuture<List<ItemID>>  future = new CompletableFuture<>();
-        future.complete(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAllowedItems());
-        return future;
+        return handleOnMasterServer(input, sender.getUUID());
+    }
+    @Override
+    public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, UUID sender)
+    {
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAllowedItems();
     }
 
     @Override

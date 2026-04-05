@@ -2,11 +2,13 @@ package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class BankAccountDeleteRequest extends BankSystemGenericRequest<Integer, Boolean> {
@@ -14,26 +16,28 @@ public class BankAccountDeleteRequest extends BankSystemGenericRequest<Integer, 
     public String getRequestTypeID() {
         return BankAccountDeleteRequest.class.getName();
     }
-
-    //@Override
-    //public Boolean handleOnClient(Integer input) {
-    //    return null;
-    //}
+    @Override
+    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<Boolean> handleOnServer(Integer input, ServerPlayer sender) {
+        return handleOnMasterServer(input, sender.getUUID());
+    }
+    @Override
+    public CompletableFuture<Boolean> handleOnMasterServer(Integer input, UUID sender) {
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
         boolean isAdmin = playerIsAdmin(sender);
-        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(input);
+        IBankAccount account = bankManager.getBankAccount_direct(input);
         if(account == null)
         {
             future.complete(false);
             return future;
         }
-        boolean canManage = account.hasPermission(sender.getUUID(), BankPermission.MANAGE.getValue()) || isAdmin;
+        boolean canManage = account.hasPermission(sender, BankPermission.MANAGE.getValue()) || isAdmin;
         if(canManage)
         {
-            future.complete(BACKEND_INSTANCES.SERVER_BANK_MANAGER.deleteBankAccount(input));
+            future.complete(bankManager.deleteBankAccount_direct(input));
             return future;
         }
         future.complete(false);

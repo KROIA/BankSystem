@@ -1,6 +1,7 @@
 package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
@@ -15,7 +16,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccountDataRequest.InputData, BankAccountData> {
+public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccountDataRequest.InputData, @Nullable BankAccountData> {
 
 
     public record InputData(int accountNumber, @Nullable UUID personalUserUUID)
@@ -51,32 +52,39 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
     public String getRequestTypeID() {
         return BankAccountDataRequest.class.getName();
     }
+    @Override
+    public boolean needsRoutingToMaster() { return true; }
 
-    //@Override
-    //public BankAccountData handleOnClient(InputData input) {
-    //    return null;
-    //}
 
     @Override
-    public CompletableFuture<BankAccountData> handleOnServer(InputData inputData, ServerPlayer sender) {
-
+    public CompletableFuture<@Nullable BankAccountData> handleOnServer(InputData inputData, ServerPlayer sender) {
+        return handleOnMasterServer(inputData, sender.getUUID());
+    }
+    @Override
+    public CompletableFuture<@Nullable BankAccountData> handleOnMasterServer(InputData inputData, UUID sender) {
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         CompletableFuture<BankAccountData>  future = new CompletableFuture<>();
+        if(bankManager == null)
+        {
+            future.complete(null);
+            return future;
+        }
+
         boolean isAdmin = playerIsAdmin(sender);
         if(inputData.personalUserUUID == null) {
-            IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(inputData.accountNumber);
+            IBankAccount account = bankManager.getBankAccount_direct(inputData.accountNumber);
             if (account == null) {
                 future.complete(null);
                 return future; // If the account does not exist, return null
             }
-            UUID senderUUID = sender.getUUID();
-            if (account.hasUser(senderUUID) || playerIsAdmin(sender)) {
+            if (account.hasUser(sender) || isAdmin) {
                 future.complete(account.getAccountData());
                 return future; // If the sender is a user of the account, return the account data
             }
         }
         else
         {
-            IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(inputData.personalUserUUID);
+            IBankAccount account = bankManager.getPersonalBankAccount_direct(inputData.personalUserUUID);
             if(account == null) {
                 future.complete(null);
                 return future; // If the personal bank account does not exist, return null
@@ -107,7 +115,7 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
     }
 
     @Override
-    public void encodeOutput(RegistryFriendlyByteBuf buf, BankAccountData output) {
+    public void encodeOutput(RegistryFriendlyByteBuf buf, @Nullable BankAccountData output) {
         ExtraCodecUtils.nullable(BankAccountData.STREAM_CODEC).encode(buf, output);
     }
 
@@ -117,7 +125,7 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
     }
 
     @Override
-    public BankAccountData decodeOutput(RegistryFriendlyByteBuf buf) {
+    public @Nullable BankAccountData decodeOutput(RegistryFriendlyByteBuf buf) {
         return ExtraCodecUtils.nullable(BankAccountData.STREAM_CODEC).decode(buf);
     }
 }

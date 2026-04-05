@@ -21,6 +21,7 @@ public class User implements ServerSaveable {
     private UUID userUUID;
     private String userName;
     private boolean enableBankNotifications = true;
+    private boolean isBankModAdmin = false;
 
     private User()
     {
@@ -56,12 +57,19 @@ public class User implements ServerSaveable {
     public void setEnableBankNotifications(boolean enableBankNotifications) {
         this.enableBankNotifications = enableBankNotifications;
     }
+    public boolean isBankModAdmin() {
+        return isBankModAdmin;
+    }
+    public void setBankModAdmin(boolean isBankModAdmin) {
+        this.isBankModAdmin = isBankModAdmin;
+    }
 
     @Override
     public boolean save(CompoundTag tag) {
         tag.putUUID("userUUID", userUUID);
         tag.putString("userName", userName);
         tag.putBoolean("enableBankNotifications", enableBankNotifications);
+        tag.putBoolean("isBankModAdmin", isBankModAdmin);
         return true;
     }
 
@@ -73,6 +81,10 @@ public class User implements ServerSaveable {
         this.userUUID = tag.getUUID("userUUID");
         this.userName = tag.getString("userName");
         this.enableBankNotifications = tag.getBoolean("enableBankNotifications");
+        if(tag.contains("isBankModAdmin"))
+            this.isBankModAdmin = tag.getBoolean("isBankModAdmin");
+        else
+            this.isBankModAdmin = false;
         return true;
     }
 
@@ -82,6 +94,7 @@ public class User implements ServerSaveable {
         jsonObject.addProperty("userUUID", userUUID.toString());
         jsonObject.addProperty("userName", userName);
         jsonObject.addProperty("enableBankNotifications", enableBankNotifications);
+        jsonObject.addProperty("isBankModAdmin", isBankModAdmin);
         return jsonObject;
     }
     @Override

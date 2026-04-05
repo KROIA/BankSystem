@@ -51,12 +51,12 @@ public class BankAccount implements ServerSaveable, IBankAccount {
 
     private BankAccount(int accountNumber) {
         this.accountNumber = accountNumber;
-        this.accountIcon = ItemID.getOrRegisterFromItemStack(Items.CHEST.getDefaultInstance());
+        this.accountIcon = ItemID.getOrRegisterFromItemStack_direct(Items.CHEST.getDefaultInstance());
     }
     private BankAccount(int accountNumber, @Nullable User personalBankOwner, List<BankUser> users, Map<ItemID, Bank> banks) {
         this.accountNumber = accountNumber;
         this.personalBankOwner = personalBankOwner;
-        this.accountIcon = ItemID.getOrRegisterFromItemStack(Items.CHEST.getDefaultInstance());
+        this.accountIcon = ItemID.getOrRegisterFromItemStack_direct(Items.CHEST.getDefaultInstance());
         if( personalBankOwner != null) {
             this.accountName = personalBankOwner.getName()+"'s Bank Account";
         }
@@ -803,6 +803,7 @@ public class BankAccount implements ServerSaveable, IBankAccount {
                 !tag.contains("banks")) {
             return false; // Invalid data
         }
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         this.accountNumber = tag.getInt("accountNumber");
         if(tag.contains("accountName")) {
             this.accountName = tag.getString("accountName");
@@ -812,7 +813,7 @@ public class BankAccount implements ServerSaveable, IBankAccount {
 
         if(tag.contains("personalBankOwnerDataUUID")) {
             UUID personalBankOwnerDataUUID = tag.getUUID("personalBankOwnerDataUUID");
-            this.personalBankOwner = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(personalBankOwnerDataUUID);
+            this.personalBankOwner = bankManager.getUserByUUID_direct(personalBankOwnerDataUUID);
         } else {
             this.personalBankOwner = null; // No personalBankOwnerData set
         }
@@ -831,7 +832,7 @@ public class BankAccount implements ServerSaveable, IBankAccount {
             CompoundTag userTag = usersTag.getCompound(i);
             UUID userUUID = userTag.getUUID("userUUID");
             int permissions = userTag.getInt("permissions");
-            User user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(userUUID);
+            User user = bankManager.getUserByUUID_direct(userUUID);
             if (user != null) {
                 users.put(user.getUUID(), new BankUser(user, permissions));
             }

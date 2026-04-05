@@ -4,6 +4,7 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
+import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.compat.OldBankDataLoader;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.persistence.DataPersistence;
@@ -189,7 +190,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     {
         boolean success = true;
         Map<String, ListTag> bankData = new HashMap<>();
-        success = BACKEND_INSTANCES.SERVER_BANK_MANAGER.save(bankData);
+        ServerBankManager bankManager = (ServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        if(bankManager != null)
+            success = bankManager.save(bankData);
         saveDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME), bankData);
         if(success)
         {
@@ -202,16 +205,19 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public boolean load_bank()
     {
         Map<String, ListTag> bankData = readDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME));
+        ServerBankManager bankManager = (ServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         if(bankData == null || bankData.isEmpty() || !bankData.containsKey("itemCentScaleFactors")) {
-            BACKEND_INSTANCES.SERVER_BANK_MANAGER.setupDefaultItems();
+
+            if(bankManager != null)
+                bankManager.setupDefaultItems();
             //return false;
         }
 
-        if(bankData != null && BACKEND_INSTANCES.SERVER_BANK_MANAGER.load(bankData))
-        {
-            bankDataLoaded = true;
-
-            return true;
+        if(bankManager != null) {
+            if (bankData != null && bankManager.load(bankData)) {
+                bankDataLoaded = true;
+                return true;
+            }
         }
         bankDataLoaded = false;
         return false;
@@ -219,30 +225,32 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public boolean load_bank_compatibilityMode()
     {
         CompoundTag data = readDataCompound(getAbsoluteSavePath("Bank_data.dat"));
-        if(data == null) {
-            BACKEND_INSTANCES.SERVER_BANK_MANAGER.setupDefaultItems();
-            return false;
-        }
-        if(!data.contains("banking")) {
-            BACKEND_INSTANCES.SERVER_BANK_MANAGER.setupDefaultItems();
-            return false;
-        }
-
-        CompoundTag bankData = data.getCompound("banking");
-
-        OldBankDataLoader oldBankDataLoader = new OldBankDataLoader(BACKEND_INSTANCES.SERVER_BANK_MANAGER);
-        if(oldBankDataLoader.load(bankData))
-        {
-            bankDataLoaded = true;
-           // BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.notifyListeners();
-
-            // delete the file
-            try {
-                Files.deleteIfExists(getAbsoluteSavePath("Bank_data.dat"));
-            } catch (IOException e) {
-                error("Failed to delete old bank data file.", e);
+        ServerBankManager bankManager = (ServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        if(bankManager != null) {
+            if (data == null) {
+                bankManager.setupDefaultItems();
+                return false;
             }
-            return true;
+            if (!data.contains("banking")) {
+                bankManager.setupDefaultItems();
+                return false;
+            }
+
+            CompoundTag bankData = data.getCompound("banking");
+
+            OldBankDataLoader oldBankDataLoader = new OldBankDataLoader(bankManager);
+            if (oldBankDataLoader.load(bankData)) {
+                bankDataLoaded = true;
+                // BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.notifyListeners();
+
+                // delete the file
+                try {
+                    Files.deleteIfExists(getAbsoluteSavePath("Bank_data.dat"));
+                } catch (IOException e) {
+                    error("Failed to delete old bank data file.", e);
+                }
+                return true;
+            }
         }
         bankDataLoaded = false;
         return false;

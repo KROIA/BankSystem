@@ -1,11 +1,13 @@
 package net.kroia.banksystem.networking.request;
 
+import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class DisallowItemRequest extends BankSystemGenericRequest<ItemID, Boolean> {
@@ -13,18 +15,20 @@ public class DisallowItemRequest extends BankSystemGenericRequest<ItemID, Boolea
     public String getRequestTypeID() {
         return DisallowItemRequest.class.getName();
     }
-
-    //@Override
-    //public Boolean handleOnClient(ItemID input) {
-    //    return null;
-    //}
+    @Override
+    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<Boolean> handleOnServer(ItemID itemID, ServerPlayer sender) {
+        return handleOnMasterServer(itemID, sender.getUUID());
+    }
+    @Override
+    public CompletableFuture<Boolean> handleOnMasterServer(ItemID itemID, UUID sender) {
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
         // Check if sender has permission to allow the item
         if(playerIsAdmin(sender)) {
-            future.complete(BACKEND_INSTANCES.SERVER_BANK_MANAGER.disallowItemID(itemID));
+            future.complete(bankManager.disallowItemID_direct(itemID));
             return future;
         }
         future.complete(false);

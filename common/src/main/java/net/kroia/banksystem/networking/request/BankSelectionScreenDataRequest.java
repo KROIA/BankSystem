@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.request;
 
+import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
@@ -27,16 +28,18 @@ public class BankSelectionScreenDataRequest extends BankSystemGenericRequest<UUI
     public String getRequestTypeID() {
         return BankSelectionScreenDataRequest.class.getSimpleName();
     }
-
-    //@Override
-    //public Output handleOnClient(UUID input) {
-    //    return null;
-    //}
+    @Override
+    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<Output> handleOnServer(UUID input, ServerPlayer sender) {
+        return handleOnMasterServer(input, sender.getUUID());
+    }
+    @Override
+    public CompletableFuture<Output> handleOnMasterServer(UUID input, UUID sender) {
         CompletableFuture<Output>  future = new CompletableFuture<>();
-        var accounts = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccounts(input);
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        var accounts = bankManager.getBankAccounts_direct(input);
         Output output = new Output(new ArrayList<>());
         for (var account : accounts) {
             output.bankAccounts.add(account.getAccountData());

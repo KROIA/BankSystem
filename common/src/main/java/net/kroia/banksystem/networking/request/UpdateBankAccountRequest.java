@@ -3,6 +3,7 @@ package net.kroia.banksystem.networking.request;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
@@ -92,25 +93,27 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
     public String getRequestTypeID() {
         return UpdateBankAccountRequest.class.getSimpleName();
     }
-
-    //@Override
-    //public BankAccountData handleOnClient(InputData input) {
-    //    return null;
-    //}
+    @Override
+    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<BankAccountData> handleOnServer(InputData input, ServerPlayer sender) {
+        return handleOnMasterServer(input, sender.getUUID());
+    }
+    @Override
+    public CompletableFuture<BankAccountData> handleOnMasterServer(InputData input, UUID sender) {
         CompletableFuture<BankAccountData>  future = new CompletableFuture<>();
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         // Check if the player is a admin
         boolean isAdmin = playerIsAdmin(sender);
 
-        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(input.accountNumber);
+        IBankAccount account = bankManager.getBankAccount_direct(input.accountNumber);
         if(account == null) {
             // If the account does not exist, we cannot update it
             future.complete(null);
             return future;
         }
-        boolean canManage = account.hasPermission(sender.getUUID(), BankPermission.MANAGE.getValue());
+        boolean canManage = account.hasPermission(sender, BankPermission.MANAGE.getValue());
         if (!isAdmin && !canManage) {
             future.complete(null);
             return future;
@@ -145,7 +148,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 for (Map.Entry<UUID, Integer> entry : input.setUsers.entrySet()) {
                     UUID userUUID = entry.getKey();
                     int permissions = entry.getValue();
-                    User userToSet = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(userUUID);
+                    User userToSet = bankManager.getUserByUUID_direct(userUUID);
                     if (userToSet != null) {
                         userList.put(userToSet, permissions);
                     }
@@ -157,13 +160,13 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 account.setAccountIcon(null);
             }
             else {
-                ItemID iconID = ItemID.getOrRegisterFromItemStack(input.accountIcon);
+                ItemID iconID = ItemID.getOrRegisterFromItemStack_direct(input.accountIcon);
                 account.setAccountIcon(iconID);
             }
             if(!account.hasAnyUser())
             {
                 // If the account has no users, we remove it
-                BACKEND_INSTANCES.SERVER_BANK_MANAGER.deleteBankAccount(input.accountNumber);
+                bankManager.deleteBankAccount_direct(input.accountNumber);
                 future.complete(null);
                 return future; // The account was deleted
             }

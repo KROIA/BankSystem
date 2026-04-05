@@ -2,6 +2,7 @@ package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
@@ -18,23 +19,24 @@ public class RemoveEmptyBanksRequest extends BankSystemGenericRequest<Integer, L
     public String getRequestTypeID() {
         return RemoveEmptyBanksRequest.class.getSimpleName();
     }
-
-    //@Override
-    //public List<ItemID> handleOnClient(Integer input) {
-    //    return null;
-    //}
+    @Override
+    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<List<ItemID>> handleOnServer(Integer input, ServerPlayer sender) {
+        return handleOnMasterServer(input, sender.getUUID());
+    }
+    @Override
+    public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, UUID sender) {
         CompletableFuture<List<ItemID>>  future = new CompletableFuture<>();
-        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(input);
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        IBankAccount account = bankManager.getBankAccount_direct(input);
         if(account == null) {
             future.complete(List.of());
             return future;
         }
 
-        UUID senderUUID = sender.getUUID();
-        boolean canEdit = playerIsAdmin(sender) || account.hasPermission(senderUUID, BankPermission.MANAGE.getValue());
+        boolean canEdit = playerIsAdmin(sender) || account.hasPermission(sender, BankPermission.MANAGE.getValue());
 
         if(canEdit) {
             future.complete(account.removeEmptyBanks());

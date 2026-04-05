@@ -25,6 +25,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 public class ServerBankManager implements ServerSaveableChunked, IServerBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -71,20 +72,32 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
 
     @Override
-    public BankManagerData getBankManagerData()
+    public CompletableFuture<BankManagerData> getBankManagerData()
+    {
+        CompletableFuture<BankManagerData> future = new CompletableFuture<>();
+        future.complete(getBankManagerData_direct());
+        return future;
+    }
+    public BankManagerData getBankManagerData_direct()
     {
         return new BankManagerData(
-                getBankManagerUserMapData(),
+                getBankManagerUserMapData_direct(),
                 //getBankManagerItemFractionScaleFactorData(),
-                getBankManagerBankAccountsData(),
-                getAllowedItems(),
-                getBlacklistedItems(),
-                getNotRemovableItems()
+                getBankManagerBankAccountsData_direct(),
+                getAllowedItems_direct(),
+                getBlacklistedItems_direct(),
+                getNotRemovableItems_direct()
         );
     }
 
     @Override
-    public BankManagerData.UserMapData getBankManagerUserMapData()
+    public CompletableFuture<BankManagerData.UserMapData> getBankManagerUserMapData()
+    {
+        CompletableFuture<BankManagerData.UserMapData> future = new CompletableFuture<>();
+        future.complete(getBankManagerUserMapData_direct());
+        return future;
+    }
+    public BankManagerData.UserMapData getBankManagerUserMapData_direct()
     {
         Map<UUID, UserData> userDataMap = new HashMap<>();
         for (Map.Entry<UUID, User> entry : userMap.entrySet()) {
@@ -101,7 +114,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }*/
 
     @Override
-    public BankManagerData.BankAccountsData getBankManagerBankAccountsData()
+    public CompletableFuture<BankManagerData.BankAccountsData> getBankManagerBankAccountsData()
+    {
+        CompletableFuture<BankManagerData.BankAccountsData> future = new CompletableFuture<>();
+        future.complete(getBankManagerBankAccountsData_direct());
+        return future;
+    }
+    public BankManagerData.BankAccountsData getBankManagerBankAccountsData_direct()
     {
         Map<Integer, BankAccountData> bankAccountDataMap = new HashMap<>();
         for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
@@ -110,34 +129,64 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         return new BankManagerData.BankAccountsData(bankAccountDataMap);
     }
 
+
     @Override
-    public List<ItemID> getAllowedItems() {
+    public CompletableFuture<List<ItemID>> getAllowedItems() {
+        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
+        future.complete(getAllowedItems_direct());
+        return future;
+    }
+    public List<ItemID> getAllowedItems_direct() {
         return allowedItemIDs.stream().toList();
     }
+    
+    
     @Override
-    public List<ItemID> getBlacklistedItems()
+    public CompletableFuture<List<ItemID>> getBlacklistedItems()
+    {
+        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
+        future.complete(getBlacklistedItems_direct());
+        return future;
+    }
+    public List<ItemID> getBlacklistedItems_direct()
     {
         List<ItemID> ids = new ArrayList<>();
         for(ItemStack stack : BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS)
         {
-            ItemID id = ItemIDManager.registerItemStack(stack);
+            ItemID id = ItemIDManager.registerItemStack_direct(stack);
             ids.add(id);
         }
         return ids;
     }
+    
+    
     @Override
-    public List<ItemID> getNotRemovableItems()
+    public CompletableFuture<List<ItemID>> getNotRemovableItems()
+    {
+        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
+        future.complete(getNotRemovableItems_direct());
+        return future;
+    }
+    public List<ItemID> getNotRemovableItems_direct()
     {
         List<ItemID> ids = new ArrayList<>();
         for(ItemStack stack : BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS)
         {
-            ItemID id = ItemIDManager.registerItemStack(stack);
+            ItemID id = ItemIDManager.registerItemStack_direct(stack);
             ids.add(id);
         }
         return ids;
     }
+    
+    
     @Override
-    public ItemInfoData getItemInfoData(@NotNull ItemID itemID)
+    public CompletableFuture<ItemInfoData> getItemInfoData(@NotNull ItemID itemID)
+    {
+        CompletableFuture<ItemInfoData> future = new CompletableFuture<>();
+        future.complete(getItemInfoData_direct(itemID));
+        return future;
+    }
+    public ItemInfoData getItemInfoData_direct(@NotNull ItemID itemID)
     {
         double totalSupply = 0;
         double totalLocked = 0;
@@ -157,11 +206,15 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
 
 
-
     @Override
     public void addUser(@NotNull ServerPlayer player)
     {
         addUser(new User(player.getUUID(), player.getName().getString(), true));
+    }
+    @Override
+    public void addUser(@NotNull UUID playerUUID, @NotNull String playerName)
+    {
+        addUser(new User(playerUUID, playerName, true));
     }
     @Override
     public void addUser(@NotNull User user)
@@ -175,8 +228,17 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         info("Added new user: " + user.getName() + " with UUID: " + userUUID);
         BACKEND_INSTANCES.SERVER_EVENTS.USER_ADDED.notifyListeners(user);
     }
+
+
     @Override
-    public boolean removeUser(UUID userUUID)
+    public CompletableFuture<Boolean> removeUser(UUID userUUID)
+    {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        future.complete(removeUser_direct(userUUID));
+        return future;
+    }
+
+    public boolean removeUser_direct(UUID userUUID)
     {
         if(userMap.containsKey(userUUID)) {
             User user = userMap.remove(userUUID);
@@ -196,24 +258,47 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return true;
         } else {
             warn("No user found with UUID: " + userUUID);
+            return false;
         }
-        return false;
     }
+
+
+
     @Override
-    public boolean userExists(UUID userUUID)
+    public CompletableFuture<Boolean> userExists(UUID userUUID)
+    {
+        CompletableFuture<Boolean>  future = new CompletableFuture<>();
+        future.complete(userExists_direct(userUUID));
+        return future;
+    }
+    public boolean userExists_direct(UUID userUUID)
     {
         return userMap.containsKey(userUUID);
     }
+
     @Override
-    public @Nullable User getUserByUUID(UUID userUUID) {
+    public CompletableFuture<@Nullable User> getUserByUUID(UUID userUUID) {
+        CompletableFuture<User>  future = new CompletableFuture<>();
+        future.complete(getUserByUUID_direct(userUUID));
+        return future;
+    }
+    public @Nullable User getUserByUUID_direct(UUID userUUID) {
         return userMap.get(userUUID);
     }
+
+
     @Override
-    public @Nullable User getUserByName(String name)
+    public CompletableFuture<@Nullable User> getUserByName(String name)
+    {
+        CompletableFuture<User>  future = new CompletableFuture<>();
+        future.complete(getUserByName_direct(name));
+        return future;
+    }
+    public @Nullable User getUserByName_direct(String name)
     {
         String lowerCaseName = name.toLowerCase();
         for (User user : userMap.values()) {
-            if(user.getName().toLowerCase().equals(lowerCaseName)) {
+            if (user.getName().toLowerCase().equals(lowerCaseName)) {
                 return user;
             }
         }
@@ -226,19 +311,25 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
 
     @Override
-    public @Nullable IBankAccount createPersonalBankAccount(UUID user)
+    public CompletableFuture<@Nullable IBankAccount> createPersonalBankAccount(UUID user)
+    {
+        CompletableFuture<@Nullable IBankAccount> future = new CompletableFuture<>();
+        future.complete(createPersonalBankAccount_direct(user));
+        return future;
+    }
+    public @Nullable IBankAccount createPersonalBankAccount_direct(UUID user)
     {
         User creator = userMap.get(user);
         if(creator == null) {
             warn("No user found with UUID: " + user);
-            return null;
+             return null;
         }
-        if(userHasPersonalBankAccount(user)) {
+        if(userHasPersonalBankAccount_direct(user)) {
             warn("User with UUID: " + user + " already has a personal bank account.");
-            return getPersonalBankAccount(user); // Return existing account if it exists
+            return getPersonalBankAccount_direct(user); // Return existing account if it exists
         }
 
-        IBankAccount existingAccount = getPersonalBankAccount(user);
+        IBankAccount existingAccount = getPersonalBankAccount_direct(user);
         if(existingAccount != null) {
             warn("User with UUID: " + user + " already has a personal bank account with number: " + existingAccount.getAccountNumber());
             return null;
@@ -254,8 +345,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         bankAccounts.put(accountNumber, account);
         return account;
     }
+
+
     @Override
-    public BankAccount createBankAccount(String accountName)
+    public CompletableFuture<IBankAccount> createBankAccount(String accountName)
+    {
+        CompletableFuture<IBankAccount> future = new CompletableFuture<>();
+        future.complete(createBankAccount_direct(accountName));
+        return future;
+    }
+    public IBankAccount createBankAccount_direct(String accountName)
     {
         if(accountName == null || accountName.isEmpty()) {
             accountName = "Unnamed Account";
@@ -268,18 +367,34 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return null;
         }
         account.setAccountName(accountName);
-        account.setAccountIcon(ItemIDManager.registerItemStack(Items.CHEST.getDefaultInstance()));
+        account.setAccountIcon(ItemIDManager.registerItemStack_direct(Items.CHEST.getDefaultInstance()));
         bankAccounts.put(accountNumber, account);
         info("Created new bank account with number: " + accountNumber + " and name: " + accountName);
         return account;
     }
+
+
     @Override
-    public @Nullable IBankAccount getBankAccount(int accountNumber)
+    public CompletableFuture<@Nullable IBankAccount> getBankAccount(int accountNumber)
+    {
+        CompletableFuture<@Nullable IBankAccount> future = new CompletableFuture<>();
+        future.complete(getBankAccount_direct(accountNumber));
+        return future;
+    }
+    public @Nullable IBankAccount getBankAccount_direct(int accountNumber)
     {
         return bankAccounts.get(accountNumber);
     }
+
+
     @Override
-    public List<IBankAccount> getBankAccounts(UUID userUUID)
+    public CompletableFuture<List<IBankAccount>>getBankAccounts(UUID userUUID)
+    {
+        CompletableFuture<List<IBankAccount>> future = new CompletableFuture<>();
+        future.complete(getBankAccounts_direct(userUUID));
+        return future; // Return all accounts the user is a member of
+    }
+    public List<IBankAccount> getBankAccounts_direct(UUID userUUID)
     {
         List<IBankAccount> accounts = new ArrayList<>();
         for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
@@ -290,8 +405,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         return accounts; // Return all accounts the user is a member of
     }
+
+
     @Override
-    public List<IBankAccount> getBankAccounts(ItemID itemID)
+    public CompletableFuture<List<IBankAccount>> getBankAccounts(ItemID itemID)
+    {
+        CompletableFuture<List<IBankAccount>> future = new CompletableFuture<>();
+        future.complete(getBankAccounts_direct(itemID));
+        return future; // Return all accounts that have a bank for the given itemID
+    }
+    public List<IBankAccount> getBankAccounts_direct(ItemID itemID)
     {
         List<IBankAccount> accounts = new ArrayList<>();
         for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
@@ -302,8 +425,17 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         return accounts; // Return all accounts that have a bank for the given itemID
     }
+
+
+
     @Override
-    public @Nullable IBankAccount getPersonalBankAccount(UUID userUUID)
+    public CompletableFuture<@Nullable IBankAccount> getPersonalBankAccount(UUID userUUID)
+    {
+        CompletableFuture<@Nullable IBankAccount> future = new CompletableFuture<>();
+        future.complete(getPersonalBankAccount_direct(userUUID));
+        return future; // No personal bank account found for this user
+    }
+    public @Nullable IBankAccount getPersonalBankAccount_direct(UUID userUUID)
     {
         for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
             BankAccount account = entry.getValue();
@@ -314,33 +446,73 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         return null; // No personal bank account found for this user
     }
+
+
+
     @Override
-    public @Nullable IBankAccount getPersonalBankAccount(String userName)
+    public CompletableFuture<@Nullable IBankAccount> getPersonalBankAccount(String userName)
     {
-        User user = getUserByName(userName);
-        if(user == null)
-            return null; // User not found
-        return getPersonalBankAccount(user.getUUID());
+        CompletableFuture<@Nullable IBankAccount> future = new CompletableFuture<>();
+        future.complete(getPersonalBankAccount_direct(userName));
+        return future;
     }
-    @Override
-    public @Nullable IBankAccount getOrCreatePersonalBankAccount(UUID userUUID)
+    public @Nullable IBankAccount getPersonalBankAccount_direct(String userName)
     {
-        IBankAccount account = getPersonalBankAccount(userUUID);
-        if(account != null)
+        User user = getUserByName_direct(userName);
+        if(user == null) {
+            return null;
+        }
+        else
+        {
+            return getPersonalBankAccount_direct(user.getUUID());
+        }
+    }
+
+
+    @Override
+    public CompletableFuture<@Nullable IBankAccount> getOrCreatePersonalBankAccount(UUID userUUID)
+    {
+        CompletableFuture<@Nullable IBankAccount> future = new CompletableFuture<>();
+        future.complete(getOrCreatePersonalBankAccount_direct(userUUID));
+        return future;
+    }
+    public @Nullable IBankAccount getOrCreatePersonalBankAccount_direct(UUID userUUID)
+    {
+        IBankAccount account = getPersonalBankAccount_direct(userUUID);
+        if(account != null) {
             return account;
-        account = createPersonalBankAccount(userUUID);
-        return account;
+        }
+        else {
+            return createPersonalBankAccount_direct(userUUID);
+        }
     }
+
+
     @Override
-    public @Nullable IBankAccount getOrCreatePersonalBankAccount(@NotNull String userName)
+    public CompletableFuture<@Nullable IBankAccount> getOrCreatePersonalBankAccount(@NotNull String userName)
     {
-        User user = getUserByName(userName);
+        CompletableFuture<@Nullable IBankAccount> future = new CompletableFuture<>();
+        future.complete(getOrCreatePersonalBankAccount_direct(userName));
+        return future;
+    }
+    public @Nullable IBankAccount getOrCreatePersonalBankAccount_direct(@NotNull String userName)
+    {
+        User user = getUserByName_direct(userName);
         if(user == null)
             return null;
-        return getOrCreatePersonalBankAccount(user.getUUID());
+        else
+            return getOrCreatePersonalBankAccount_direct(user.getUUID());
     }
+
+
     @Override
-    public boolean userHasPersonalBankAccount(UUID userUUID)
+    public CompletableFuture<Boolean> userHasPersonalBankAccount(UUID userUUID)
+    {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        future.complete(userHasPersonalBankAccount_direct(userUUID));
+        return future;
+    }
+    public boolean userHasPersonalBankAccount_direct(UUID userUUID)
     {
         for(Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
             BankAccount account = entry.getValue();
@@ -351,8 +523,18 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         return false;
     }
+
+
+
+
     @Override
-    public boolean deleteBankAccount(int accountNumber)
+    public CompletableFuture<Boolean> deleteBankAccount(int accountNumber)
+    {
+        CompletableFuture<Boolean>  future = new CompletableFuture<>();
+        future.complete(deleteBankAccount_direct(accountNumber));
+        return future;
+    }
+    public boolean deleteBankAccount_direct(int accountNumber)
     {
         if(bankAccounts.containsKey(accountNumber)) {
             BankAccount account = bankAccounts.get(accountNumber);
@@ -376,42 +558,86 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
 
     @Override
-    public @Nullable IBank getPersonalBank(UUID owner, ItemID itemID)
+    public CompletableFuture<@Nullable IBank> getPersonalBank(UUID owner, ItemID itemID)
     {
-        IBankAccount account = getPersonalBankAccount(owner);
+        CompletableFuture<@Nullable IBank> future = new CompletableFuture<>();
+        future.complete(getPersonalBank_direct(owner, itemID));
+        return future;
+    }
+    public @Nullable IBank getPersonalBank_direct(UUID owner, ItemID itemID)
+    {
+        IBankAccount account = getPersonalBankAccount_direct(owner);
         if(account == null)
             return null;
-        return account.getBank(itemID);
+        else
+            return account.getBank(itemID);
     }
+
+
+
+
     @Override
-    public @Nullable IBank getPersonalBank(String ownerName, ItemID itemID)
+    public CompletableFuture<@Nullable IBank> getPersonalBank(String ownerName, ItemID itemID)
     {
-        User owner = getUserByName(ownerName);
+        CompletableFuture<@Nullable IBank> future = new CompletableFuture<>();
+        future.complete(getPersonalBank_direct(ownerName, itemID));
+        return future;
+    }
+    public @Nullable IBank getPersonalBank_direct(String ownerName, ItemID itemID)
+    {
+        User owner = getUserByName_direct(ownerName);
         if(owner == null)
-            return null; // User not found
-        IBankAccount account = getPersonalBankAccount(owner.getUUID());
+        {
+            return null;
+        }
+        IBankAccount account = getPersonalBankAccount_direct(owner.getUUID());
         if(account == null)
             return null;
-        return account.getBank(itemID);
+        else
+            return account.getBank(itemID);
     }
+
+
+
+
+
     @Override
-    public @Nullable IBank getOrCreatePersonalBank(UUID owner, ItemID itemID)
+    public CompletableFuture<@Nullable IBank> getOrCreatePersonalBank(UUID owner, ItemID itemID)
     {
-        IBankAccount account = getOrCreatePersonalBankAccount(owner);
-        if(account == null)
+        CompletableFuture<@Nullable IBank> future = new CompletableFuture<>();
+        future.complete(getOrCreatePersonalBank_direct(owner, itemID));
+        return future;
+    }
+    public @Nullable IBank getOrCreatePersonalBank_direct(UUID owner, ItemID itemID)
+    {
+        IBankAccount account = getOrCreatePersonalBankAccount_direct(owner);
+        if(account == null) {
             return null;
+        }
         IBank bank = account.getBank(itemID);
         if(bank != null)
             return bank;
-        return account.createBank(itemID, 0);
+        else
+            return account.createBank(itemID, 0);
     }
+
+
+
+
     @Override
-    public @Nullable IBank getOrCreatePersonalBank(String ownerName, ItemID itemID)
+    public CompletableFuture<@Nullable IBank> getOrCreatePersonalBank(String ownerName, ItemID itemID)
     {
-        User owner = getUserByName(ownerName);
+        CompletableFuture<@Nullable IBank> future = new CompletableFuture<>();
+        future.complete(getOrCreatePersonalBank_direct(ownerName, itemID));
+        return future;
+    }
+    public @Nullable IBank getOrCreatePersonalBank_direct(String ownerName, ItemID itemID)
+    {
+        User owner = getUserByName_direct(ownerName);
         if(owner == null)
-            return null; // User not found
-        return getOrCreatePersonalBank(owner.getUUID(), itemID);
+            return null;
+        else
+            return getOrCreatePersonalBank_direct(owner.getUUID(), itemID);
     }
 
 
@@ -436,16 +662,32 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         return scaleFactor;
     }*/
     @Override
-    public boolean isItemIDAllowed(ItemID itemID)
+    public CompletableFuture<Boolean> isItemIDAllowed(ItemID itemID)
+    {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        future.complete(isItemIDAllowed_direct(itemID));
+        return future;
+    }
+    public boolean isItemIDAllowed_direct(ItemID itemID)
     {
         return allowedItemIDs.contains(itemID);
     }
+
+
+
+
     @Override
-    public boolean allowItemID(ItemID itemID)
+    public CompletableFuture<Boolean> allowItemID(ItemID itemID)
+    {
+        CompletableFuture<Boolean>  future = new CompletableFuture<>();
+        future.complete(allowItemID_direct(itemID));
+        return future;
+    }
+    public boolean allowItemID_direct(ItemID itemID)
     {
         if(itemID == null)
             return false;
-        if(isItemIDBlacklisted(itemID))
+        if(isItemIDBlacklisted_direct(itemID))
         {
             warn("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
             return false;
@@ -454,12 +696,23 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         this.allowedItemIDs.add(itemID);
         return true;
     }
+
+
+
+
+
     @Override
-    public boolean disallowItemID(ItemID itemID)
+    public CompletableFuture<Boolean> disallowItemID(ItemID itemID)
+    {
+        CompletableFuture<Boolean>   future = new CompletableFuture<>();
+        future.complete(disallowItemID_direct(itemID));
+        return future;
+    }
+    public boolean disallowItemID_direct(ItemID itemID)
     {
         if(itemID == null)
             return false;
-        if(isItemIDNotRemovable(itemID))
+        if(isItemIDNotRemovable_direct(itemID))
         {
             warn("It is not allowed to remove the itemID: " + itemID);
             return false;
@@ -474,13 +727,24 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         return allowedItemIDs.remove(itemID);
     }
+
+
+
+
+
     @Override
-    public boolean isItemIDNotRemovable(ItemID itemID)
+    public CompletableFuture<Boolean> isItemIDNotRemovable(ItemID itemID)
+    {
+        CompletableFuture<Boolean>  future = new CompletableFuture<>();
+        future.complete(isItemIDNotRemovable_direct(itemID));
+        return future;
+    }
+    public boolean isItemIDNotRemovable_direct(ItemID itemID)
     {
         List<ItemStack> notRemovable = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_NOT_REMOVABLE_ITEMS;
         for(ItemStack stack : notRemovable)
         {
-            ItemID id = ItemIDManager.registerItemStack(stack);
+            ItemID id = ItemIDManager.registerItemStack_direct(stack);
             if(id.equals(itemID))
             {
                 return true;
@@ -488,17 +752,25 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         return false;
     }
+
+
+
+
     @Override
-    public boolean isItemIDBlacklisted(ItemID itemID)
+    public CompletableFuture<Boolean> isItemIDBlacklisted(ItemID itemID)
+    {
+        CompletableFuture<Boolean>  future = new CompletableFuture<>();
+        future.complete(isItemIDBlacklisted_direct(itemID));
+        return future;
+    }
+    public boolean isItemIDBlacklisted_direct(ItemID itemID)
     {
         List<ItemStack> blacklistItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS;
         for(ItemStack stack : blacklistItems)
         {
-            ItemID id = ItemIDManager.registerItemStack(stack);
+            ItemID id = ItemIDManager.registerItemStack_direct(stack);
             if(id.equals(itemID))
-            {
                 return true;
-            }
         }
         return false;
     }
@@ -510,7 +782,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
 
     @Override
-    public double getRealMoneyCirculation()
+    public CompletableFuture<Double> getRealMoneyCirculation()
+    {
+        CompletableFuture<Double>   future = new CompletableFuture<>();
+        future.complete(getRealMoneyCirculation_direct());
+        return future;
+    }
+    public double getRealMoneyCirculation_direct()
     {
         double total = 0;
         ItemID moneyItemID = MoneyItem.getItemID();
@@ -523,8 +801,18 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         return total;
     }
+
+
+
+
     @Override
-    public double getRealLockedMoneyCirculation()
+    public CompletableFuture<Double> getRealLockedMoneyCirculation()
+    {
+        CompletableFuture<Double>    future = new CompletableFuture<>();
+        future.complete(getRealLockedMoneyCirculation_direct());
+        return future;
+    }
+    public double getRealLockedMoneyCirculation_direct()
     {
         double total = 0;
         ItemID moneyItemID = MoneyItem.getItemID();
@@ -537,8 +825,18 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         return total;
     }
+
+
+
+
     @Override
-    public double getRealItemCirculation(ItemID itemID)
+    public CompletableFuture<Double> getRealItemCirculation(ItemID itemID)
+    {
+        CompletableFuture<Double>     future = new CompletableFuture<>();
+        future.complete(getRealItemCirculation_direct(itemID));
+        return future;
+    }
+    public double getRealItemCirculation_direct(ItemID itemID)
     {
         double total = 0;
         for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
@@ -549,8 +847,17 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         return total;
     }
+
+
+
     @Override
-    public double getRealLockedItemCirculation(ItemID itemID)
+    public CompletableFuture<Double> getRealLockedItemCirculation(ItemID itemID)
+    {
+        CompletableFuture<Double>     future = new CompletableFuture<>();
+        future.complete(getRealLockedItemCirculation_direct(itemID));
+        return future;
+    }
+    public double getRealLockedItemCirculation_direct(ItemID itemID)
     {
         double total = 0;
         for (Map.Entry<Integer, BankAccount> entry : bankAccounts.entrySet()) {
@@ -566,7 +873,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
 
 
-    public JsonElement getCirculationDataJson()
+    public CompletableFuture<JsonElement> getCirculationDataJson()
+    {
+        CompletableFuture<JsonElement> future = new CompletableFuture<>();
+        future.complete(getCirculationDataJson_direct());
+        return future;
+    }
+    public JsonElement getCirculationDataJson_direct()
     {
         class Data
         {
@@ -603,10 +916,79 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         return circulationData;
     }
-    public String getCirculationDataJsonString()
+
+
+
+    @Override
+    public CompletableFuture<String> getCirculationDataJsonString()
     {
-        JsonElement circulationData = getCirculationDataJson();
+        CompletableFuture<String> future = new CompletableFuture<>();
+        future.complete(getCirculationDataJsonString_direct());
+        return future;
+    }
+    public String getCirculationDataJsonString_direct()
+    {
+        JsonElement circulationData = getCirculationDataJson_direct();
         return JsonUtilities.toPrettyString(circulationData);
+    }
+
+
+
+    @Override
+    public void onPlayerJoin(UUID playerUUID, String playerName)
+    {
+        if(!userExists_direct(playerUUID)) {
+            addUser(playerUUID, playerName);
+            createPersonalBankAccount_direct(playerUUID);
+        }
+    }
+
+
+    @Override
+    public CompletableFuture<JsonElement> toJson()
+    {
+        CompletableFuture<JsonElement> future = new CompletableFuture<>();
+        future.complete(toJson_direct());
+        return future;
+    }
+    public JsonElement toJson_direct()
+    {
+        JsonObject jsonObject = new JsonObject();
+
+        JsonArray usersJson = new JsonArray();
+        for (User user : userMap.values()) {
+            usersJson.add(user.toJson());
+        }
+        jsonObject.add("users", usersJson);
+
+        JsonArray itemScaleFactorsJson = new JsonArray();
+        for (ItemID itemID : allowedItemIDs) {
+            JsonObject itemScaleFactorJson = new JsonObject();
+            itemScaleFactorJson.add("itemID", itemID.toJson());
+            itemScaleFactorsJson.add(itemScaleFactorJson);
+        }
+        jsonObject.add("itemCentScaleFactors", itemScaleFactorsJson);
+
+        JsonArray accountsJson = new JsonArray();
+        for (BankAccount account : bankAccounts.values()) {
+            accountsJson.add(account.toJson());
+        }
+        jsonObject.add("bankAccounts", accountsJson);
+        return jsonObject;
+    }
+
+
+
+    @Override
+    public CompletableFuture<String> toJsonString()
+    {
+        CompletableFuture<String> future = new CompletableFuture<>();
+        future.complete(toJsonString_direct());
+        return future;
+    }
+    public String toJsonString_direct()
+    {
+        return JsonUtilities.toPrettyString(toJson_direct());
     }
 
 
@@ -628,7 +1010,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         // Check if all allowed items have a scale factor
         List<ItemStack> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEMS;
         for (var el : allowedItems) {
-            ItemID itemID = ItemIDManager.registerItemStack(el);
+            ItemID itemID = ItemIDManager.registerItemStack_direct(el);
             allowedItemIDs.add(itemID);
         }
     }
@@ -759,38 +1141,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
 
 
-    public JsonElement toJson()
-    {
-        JsonObject jsonObject = new JsonObject();
 
-        JsonArray usersJson = new JsonArray();
-        for (User user : userMap.values()) {
-            usersJson.add(user.toJson());
-        }
-        jsonObject.add("users", usersJson);
 
-        JsonArray itemScaleFactorsJson = new JsonArray();
-        for (ItemID itemID : allowedItemIDs) {
-            JsonObject itemScaleFactorJson = new JsonObject();
-            itemScaleFactorJson.add("itemID", itemID.toJson());
-            itemScaleFactorsJson.add(itemScaleFactorJson);
-        }
-        jsonObject.add("itemCentScaleFactors", itemScaleFactorsJson);
-
-        JsonArray accountsJson = new JsonArray();
-        for (BankAccount account : bankAccounts.values()) {
-            accountsJson.add(account.toJson());
-        }
-        jsonObject.add("bankAccounts", accountsJson);
-        return jsonObject;
-    }
-    public String toJsonString()
-    {
-        return JsonUtilities.toPrettyString(toJson());
-    }
     @Override
     public String toString() {
-        return toJsonString();
+        return toJsonString_direct();
     }
 
     private void info(String msg)

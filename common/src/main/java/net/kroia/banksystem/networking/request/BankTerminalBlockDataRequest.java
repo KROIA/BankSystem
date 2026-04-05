@@ -26,10 +26,8 @@ public class BankTerminalBlockDataRequest extends BankSystemGenericRequest<Block
         return BankTerminalBlockDataRequest.class.getSimpleName();
     }
 
-    //@Override
-    //public Output handleOnClient(BlockPos input) {
-    //    return null;
-    //}
+    @Override
+    public boolean needsRoutingToMaster() { return false; }
 
     @Override
     public CompletableFuture<Output> handleOnServer(BlockPos input, ServerPlayer sender) {

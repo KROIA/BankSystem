@@ -6,6 +6,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class BankManagerDataRequest extends BankSystemGenericRequest<Integer, BankManagerData> {
@@ -13,17 +14,16 @@ public class BankManagerDataRequest extends BankSystemGenericRequest<Integer, Ba
     public String getRequestTypeID() {
         return BankManagerDataRequest.class.getName();
     }
-
-    //@Override
-    //public BankManagerData handleOnClient(Integer input) {
-    //    return null;
-    //}
+    @Override
+    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<BankManagerData> handleOnServer(Integer input, ServerPlayer sender) {
-        CompletableFuture<BankManagerData>  future = new CompletableFuture<>();
-        future.complete(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankManagerData());
-        return future;
+        return handleOnMasterServer(input, sender.getUUID());
+    }
+    @Override
+    public CompletableFuture<BankManagerData> handleOnMasterServer(Integer input, UUID sender) {
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankManagerData();
     }
 
     @Override

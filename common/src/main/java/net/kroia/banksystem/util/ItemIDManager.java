@@ -17,6 +17,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ItemIDManager implements ServerSaveableChunked {
@@ -40,7 +41,16 @@ public class ItemIDManager implements ServerSaveableChunked {
         return item;
     }
 
-    public static @NotNull ItemID registerItemStack(@NotNull ItemStack itemStack)
+    public static CompletableFuture<ItemID> registerItemStack(@NotNull ItemStack itemStack)
+    {
+        // todo: sync with master server for item registration
+        CompletableFuture<ItemID> future = new CompletableFuture<>();
+        future.complete(registerItemStack_direct(itemStack));
+        return future;
+    }
+
+
+    public static @NotNull ItemID registerItemStack_direct(@NotNull ItemStack itemStack)
     {
         // Search the entire list to check if the same item stack already is registered
         ItemID id = getItemID(itemStack);

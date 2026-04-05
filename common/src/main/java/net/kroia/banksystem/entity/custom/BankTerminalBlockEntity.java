@@ -6,6 +6,7 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.entity.BankSystemEntities;
@@ -39,6 +40,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvider {
     /*
@@ -363,6 +365,43 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         // Only counts items that are not damaged or enchanted
         public HashMap<ItemID, Long> getItemCount()
         {
+            ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+            if(bankManager == null)
+            {
+                HashMap<ItemID, Long> items = new HashMap<>();
+                for (int i = 0; i < this.getContainerSize(); i++) {
+                    ItemStack stack = this.getItem(i);
+
+                    // If the slot is empty, it has space
+                    if (stack.isEmpty() || stack.isDamaged() || stack.isEnchanted()) {
+                        continue;
+                    }
+
+                    // Get the item's ResourceLocation
+                    ItemID itemID = ItemID.getFromItemStack(stack); // todo: unsafe if the stack is not registred.
+                    if(itemID == null)
+                    {
+                        warn("ItemStack: "+stack+" is not registered for ItemID. Skipping this item");
+                        continue;
+                    }
+
+                    // Compare the ResourceLocation to the provided string
+                    // Check if the stack can fit the amount
+                    if(!items.containsKey(itemID))
+                        items.put(itemID, (long)stack.getCount());
+                    else
+                        items.put(itemID, items.get(itemID) + stack.getCount());
+
+                }
+                return items;
+            }
+            else
+            {
+                return getItemCount_direct();
+            }
+        }
+        public HashMap<ItemID, Long> getItemCount_direct()
+        {
             HashMap<ItemID, Long> items = new HashMap<>();
             for (int i = 0; i < this.getContainerSize(); i++) {
                 ItemStack stack = this.getItem(i);
@@ -373,7 +412,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
 
                 // Get the item's ResourceLocation
-                ItemID itemID = ItemID.getOrRegisterFromItemStack(stack);
+                ItemID itemID = ItemID.getOrRegisterFromItemStack_direct(stack);
 
                 // Compare the ResourceLocation to the provided string
                 // Check if the stack can fit the amount
@@ -388,6 +427,42 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         // Only counts items that are not damaged or enchanted
         public long getItemCount(ItemID itemID)
         {
+            ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+            if(bankManager == null)
+            {
+                long count = 0;
+                for (int i = 0; i < this.getContainerSize(); i++) {
+                    ItemStack stack = this.getItem(i);
+
+                    // If the slot is empty, it has space
+                    if (stack.isEmpty() || stack.isDamaged() || stack.isEnchanted()) {
+                        continue;
+                    }
+
+                    // Get the item's ResourceLocation
+                    ItemID _itemID = ItemID.getFromItemStack(stack); // todo: unsafe if the stack is not registred.
+                    if(itemID == null)
+                    {
+                        warn("ItemStack: "+stack+" is not registered for ItemID. Skipping this item");
+                        continue;
+                    }
+
+                    // Compare the ResourceLocation to the provided string
+                    if (_itemID.equals(itemID)) {
+                        // Check if the stack can fit the amount)
+                        count += stack.getCount();
+                    }
+                }
+                return count;
+
+            }
+            else {
+                return getItemCount_direct(itemID);
+            }
+        }
+        // Only counts items that are not damaged or enchanted
+        public long getItemCount_direct(ItemID itemID)
+        {
             long count = 0;
             for (int i = 0; i < this.getContainerSize(); i++) {
                 ItemStack stack = this.getItem(i);
@@ -398,7 +473,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
 
                 // Get the item's ResourceLocation
-                ItemID _itemID = ItemID.getOrRegisterFromItemStack(stack);
+                ItemID _itemID = ItemID.getOrRegisterFromItemStack_direct(stack);
 
                 // Compare the ResourceLocation to the provided string
                 if (_itemID.equals(itemID)) {
@@ -853,6 +928,69 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
     private void sendItemsToBank(UUID playerID, int accountNr)
     {
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        if(bankManager == null) {
+            PlayerData playerData = getPlayerData(playerID);
+            TerminalInventory inventory = playerData.getInventory();
+            HashMap<ItemID, Long> items = inventory.getItemCount();
+
+
+            if(accountNr <= 0)
+                return;
+            CompletableFuture<IBankAccount> bankAccountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);
+            bankAccountFuture.thenAccept(bankAccount -> {
+                if (bankAccount == null) {
+                    CompletableFuture<User> userFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(playerID);
+                    userFuture.thenAccept(user -> {
+                        String userName = user != null ? user.getName() : "Unknown User";
+                        ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getBankAccountNotFoundMessage(userName));
+                    });
+                    return;
+                }
+                if (!bankAccount.hasPermission(playerID, BankPermission.DEPOSIT.getValue())) {
+                    ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(bankAccount.getAccountName(), BankPermission.DEPOSIT));
+                    return;
+                }
+                playerData.selectedBankAccount = bankAccount.getAccountNumber();
+
+                for (ItemID itemID : items.keySet()) {
+                    long amount = items.get(itemID);
+                    if (amount <= 0)
+                        continue;
+
+                    IBank bank;
+                    boolean isMoney = MoneyItem.isMoney(itemID);
+                    if (isMoney) {
+                        bank = bankAccount.getOrCreateBank(MoneyItem.getItemID());
+                    } else {
+                        bank = bankAccount.getOrCreateBank(itemID);
+                    }
+
+                    if (bank == null) {
+                        ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
+                        continue;
+                    }
+                    long amountToDeposit = amount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                    if (isMoney) {
+                        amountToDeposit = amount * ((MoneyItem) Objects.requireNonNull(itemID.getStack()).getItem()).worth();
+                    }
+                    if (bank.deposit(amountToDeposit) == Bank.Status.SUCCESS) {
+                        inventory.removeItem(itemID, amount);
+                    }
+                }
+                // mark the block entity for saving
+                setChanged();
+            });
+
+        }
+        else
+        {
+            sendItemsToBank_direct(playerID, accountNr);
+        }
+    }
+    private void sendItemsToBank_direct(UUID playerID, int accountNr)
+    {
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         PlayerData playerData = getPlayerData(playerID);
         TerminalInventory inventory = playerData.getInventory();
         HashMap<ItemID, Long> items = inventory.getItemCount();
@@ -860,7 +998,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         IBankAccount bankAccount;
         if(accountNr > 0)
         {
-            bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);
+            bankAccount = bankManager.getBankAccount_direct(accountNr);
         }
         else
         {
@@ -869,7 +1007,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         }
         if(bankAccount == null)
         {
-            User user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(playerID);
+            User user = bankManager.getUserByUUID_direct(playerID);
             String userName = user != null ? user.getName() : "Unknown User";
             ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getBankAccountNotFoundMessage(userName));
             return;
@@ -915,12 +1053,79 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     }
     private void sendToBlock(UUID playerID, int accountNr, HashMap<ItemID, Long> items)
     {
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        if(bankManager == null) {
+            PlayerData playerData = getPlayerData(playerID);
+            TerminalInventory inventory = playerData.getInventory();
+
+            if(accountNr <= 0)
+                return;
+            CompletableFuture<IBankAccount> bankAccountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);
+            bankAccountFuture.thenAccept(bankAccount -> {
+                if (bankAccount == null) {
+                    CompletableFuture<User> userFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(playerID);
+                    userFuture.thenAccept(user -> {
+                        String userName = user != null ? user.getName() : "Unknown User";
+                        ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getBankAccountNotFoundMessage(userName));
+                    });
+                    return;
+                }
+                if (!bankAccount.hasPermission(playerID, BankPermission.DEPOSIT.getValue())) {
+                    ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(bankAccount.getAccountName(), BankPermission.DEPOSIT));
+                    return;
+                }
+                playerData.selectedBankAccount = bankAccount.getAccountNumber();
+
+                for (ItemID itemID : items.keySet()) {
+                    long amount = items.get(itemID);
+                    if (amount <= 0)
+                        continue;
+
+                    IBank bank = null;
+
+                    bank = bankAccount.getOrCreateBank(itemID);
+
+
+                    if (bank == null) {
+                        ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
+                        continue;
+                    }
+
+                    //long withdrawAmount = amount;
+                    long withdrawAmount = amount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+
+                    withdrawAmount = Math.min(withdrawAmount, bank.getBalance());
+                    if (withdrawAmount > 0) {
+                        long addedAmount = inventory.addItem(itemID, amount);
+                        if (addedAmount > 0) {
+
+                            if (bank.withdraw(addedAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) != Bank.Status.SUCCESS) {
+                                // error
+                                error("Failed to withdraw " + Bank.getNormalizedAmountStatic(addedAmount) + " " + itemID + " from bank account of user " + playerID);
+                                inventory.removeItem(itemID, addedAmount);
+                            }
+                        }
+                    }
+                }
+                // mark the block entity for saving
+                setChanged();
+            });
+
+        }
+        else
+        {
+            sendToBlock_direct(playerID, accountNr, items);
+        }
+    }
+    private void sendToBlock_direct(UUID playerID, int accountNr, HashMap<ItemID, Long> items)
+    {
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         PlayerData playerData = getPlayerData(playerID);
         TerminalInventory inventory = playerData.getInventory();
         IBankAccount bankAccount;
         if(accountNr > 0)
         {
-            bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);
+            bankAccount = bankManager.getBankAccount_direct(accountNr);
         }
         else
         {
@@ -929,7 +1134,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         }
         if(bankAccount == null)
         {
-            User user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(playerID);
+            User user = bankManager.getUserByUUID_direct(playerID);
             String userName = user != null ? user.getName() : "Unknown User";
             ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getBankAccountNotFoundMessage(userName));
             return;

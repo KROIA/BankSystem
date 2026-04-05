@@ -35,6 +35,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class BankUploadBlockEntity extends BaseContainerBlockEntity implements MenuProvider {
 
@@ -287,64 +288,66 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             return;
         if(playerOwner == null)
             return;
-        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(bankAccountNumber);
-        if(account == null)
-            return;
+        CompletableFuture<IBankAccount> accountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(bankAccountNumber);
+        accountFuture.thenAcceptAsync(account->{
+            if(account == null)
+                return;
 
-        if(!account.hasPermission(playerOwner, BankPermission.DEPOSIT.getValue()))
-        {
-            return; // Player does not have permission to deposit
-        }
-
-
-
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
-            ItemStack stack = inventory.getItem(i);
-            if(!stack.isEmpty())
+            if(!account.hasPermission(playerOwner, BankPermission.DEPOSIT.getValue()))
             {
-                // Ignore damaged or enchanted items
-                if(stack.isDamaged() || stack.isEnchanted())
+                return; // Player does not have permission to deposit
+            }
+
+
+
+            for (int i = 0; i < inventory.getContainerSize(); i++) {
+                ItemStack stack = inventory.getItem(i);
+                if(!stack.isEmpty())
                 {
-                    if(dropIfNotBankable){
+                    // Ignore damaged or enchanted items
+                    if(stack.isDamaged() || stack.isEnchanted())
+                    {
+                        if(dropIfNotBankable){
+                            dropItem(stack);
+                            inventory.setItem(i, ItemStack.EMPTY);
+                        }
+                        else {
+                            continue;
+                        }
+                    }
+
+                    ItemID itemID = ItemID.of(stack);
+                    IBank itemBank = account.getBank(itemID);
+                    if(itemBank == null)
+                    {
+                        itemBank = account.createBank(itemID, 0);
+                    }
+                    long amount = stack.getCount();
+                    if(MoneyItem.isMoney(itemID))
+                    {
+                        amount *= ((MoneyItem)stack.getItem()).worth();
+                        itemBank = account.getBank(MoneyItem.getItemID());
+                        if(itemBank == null)
+                            itemBank = account.createBank(MoneyItem.getItemID(), 0);
+
+                    }
+                    else
+                    {
+                        if(itemBank != null)
+                            amount = itemBank.convertToRawAmount(amount);
+                    }
+
+                    if(itemBank != null) {
+                        if(itemBank.deposit(amount) == Bank.Status.SUCCESS)
+                            inventory.setItem(i, ItemStack.EMPTY);
+                    }else if(dropIfNotBankable){
                         dropItem(stack);
                         inventory.setItem(i, ItemStack.EMPTY);
                     }
-                    else {
-                        continue;
-                    }
-                }
-
-                ItemID itemID = ItemID.of(stack);
-                IBank itemBank = account.getBank(itemID);
-                if(itemBank == null)
-                {
-                    itemBank = account.createBank(itemID, 0);
-                }
-                long amount = stack.getCount();
-                if(MoneyItem.isMoney(itemID))
-                {
-                    amount *= ((MoneyItem)stack.getItem()).worth();
-                    itemBank = account.getBank(MoneyItem.getItemID());
-                    if(itemBank == null)
-                        itemBank = account.createBank(MoneyItem.getItemID(), 0);
-
-                }
-                else
-                {
-                    if(itemBank != null)
-                        amount = itemBank.convertToRawAmount(amount);
-                }
-
-                if(itemBank != null) {
-                    if(itemBank.deposit(amount) == Bank.Status.SUCCESS)
-                        inventory.setItem(i, ItemStack.EMPTY);
-                }else if(dropIfNotBankable){
-                    dropItem(stack);
-                    inventory.setItem(i, ItemStack.EMPTY);
                 }
             }
-        }
-        setChanged();
+            setChanged();
+        });
     }
 
     public MenuProvider getMenuProvider() {

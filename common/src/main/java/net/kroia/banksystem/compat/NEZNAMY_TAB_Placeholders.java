@@ -5,13 +5,9 @@ import me.neznamy.tab.api.TabPlayer;
 import me.neznamy.tab.api.placeholder.PlaceholderManager;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.api.IServerBankManager;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.modutilities.setting.Setting;
 
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -47,8 +43,8 @@ public class NEZNAMY_TAB_Placeholders {
         IServerBankManager sbm = BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         BankSystemModSettings.Placeholder settings = BACKEND_INSTANCES.SERVER_SETTINGS.PLACEHOLDER;
 
-
-        registerPlayerPlaceholder(settings.PLAYER_BALANCE, (playerTab) -> {
+        // todo: make the placeholde compatible with the master -- slave architecture by using CompletableFuture<> objects to probide the string data
+        /*registerPlayerPlaceholder(settings.PLAYER_BALANCE, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
             IBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
             if(bankAccount != null)
@@ -92,7 +88,7 @@ public class NEZNAMY_TAB_Placeholders {
                 return bankAccount.toJsonString();
             }
             return "0";
-        });
+        });*/
     }
 
     private static void registerServerPlaceholder()
@@ -100,7 +96,8 @@ public class NEZNAMY_TAB_Placeholders {
         IServerBankManager sbm = BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         BankSystemModSettings.Placeholder settings = BACKEND_INSTANCES.SERVER_SETTINGS.PLACEHOLDER;
 
-        registerServerPlaceholder(settings.SERVER_CIRCULATION_JSON, sbm::getCirculationDataJsonString);
+        // todo: make the placeholde compatible with the master -- slave architecture by using CompletableFuture<> objects to probide the string data
+        //registerServerPlaceholder(settings.SERVER_CIRCULATION_JSON, sbm::getCirculationDataJsonString);
     }
 
 

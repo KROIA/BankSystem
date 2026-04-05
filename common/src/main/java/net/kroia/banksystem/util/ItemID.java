@@ -15,6 +15,8 @@ import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.concurrent.CompletableFuture;
+
 public class ItemID implements ServerSaveable {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -93,9 +95,24 @@ public class ItemID implements ServerSaveable {
      * @param itemStack
      * @return the itemID associated with the itemStack
      */
-    public static @NotNull ItemID getOrRegisterFromItemStack(@NotNull ItemStack itemStack)
+    public static @NotNull CompletableFuture<ItemID> getOrRegisterFromItemStack(@NotNull ItemStack itemStack)
     {
         return ItemIDManager.registerItemStack(itemStack);
+    }
+
+    /**
+     * This function is only save to call from the master server
+     * @param itemStack
+     * @return the itemID associated with the itemStack
+     */
+    public static @NotNull ItemID getOrRegisterFromItemStack_direct(@NotNull ItemStack itemStack)
+    {
+        @Nullable ItemID id = getFromItemStack(itemStack);
+        if(id == null)
+        {
+            id = ItemIDManager.registerItemStack_direct(itemStack);
+        }
+        return id;
     }
 
     public static ItemID of(ItemStack defaultInstance) {

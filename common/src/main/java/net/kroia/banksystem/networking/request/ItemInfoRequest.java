@@ -7,6 +7,7 @@ import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class ItemInfoRequest extends BankSystemGenericRequest<ItemID, ItemInfoData> {
@@ -17,22 +18,19 @@ public class ItemInfoRequest extends BankSystemGenericRequest<ItemID, ItemInfoDa
     public String getRequestTypeID() {
         return ItemInfoRequest.class.getName();
     }
-
-    //@Override
-    //public CompletableFuture<ItemInfoData> handleOnClient(ItemID input) {
-    //    CompletableFuture<ItemInfoData> future = new CompletableFuture<>();
-    //    future.complete(null);
-    //    return future;
-    //}
+    @Override
+    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<ItemInfoData> handleOnServer(ItemID itemID, ServerPlayer sender) {
+        return handleOnMasterServer(itemID, sender.getUUID());
+    }
+    @Override
+    public CompletableFuture<ItemInfoData> handleOnMasterServer(ItemID itemID, UUID sender) {
         if(!playerIsAdmin(sender)) {
             return null; // If the player is not an admin, return null
         }
-        CompletableFuture<ItemInfoData> future = new CompletableFuture<>();
-        future.complete(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemInfoData(itemID));
-        return future;
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemInfoData(itemID);
     }
 
     @Override

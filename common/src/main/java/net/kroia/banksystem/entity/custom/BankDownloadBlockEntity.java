@@ -6,6 +6,7 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.block.custom.BankDownloadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
@@ -43,6 +44,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements MenuProvider {
 
@@ -219,17 +221,19 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             inventory.fromTag(tag.getList("Items", Tag.TAG_COMPOUND), provider);
             blockIsPowered = tag.getBoolean("RecievingEnabled");
 
-            IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerOwner);
-            if(account == null)
-                return;
-            bankAccountNumber = account.getAccountNumber();
-            if(tag.contains("ItemID")) {
-                ItemID itemID = ItemID.createFromTag(tag.getCompound("ItemID"));
-                if(itemID != null) {
-                    WithdrawOrder order = new WithdrawOrder(itemID, targetAmount, WithdrawCondition.NONE, 0);
-                    withdrawOrders.add(order);
+            CompletableFuture<IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerOwner);
+            account.thenAccept(bankAccount -> {
+                if(bankAccount == null)
+                    return;
+                bankAccountNumber = bankAccount.getAccountNumber();
+                if(tag.contains("ItemID")) {
+                    ItemID itemID = ItemID.createFromTag(tag.getCompound("ItemID"));
+                    if(itemID != null) {
+                        WithdrawOrder order = new WithdrawOrder(itemID, targetAmount, WithdrawCondition.NONE, 0);
+                        withdrawOrders.add(order);
+                    }
                 }
-            }
+            });
             return;
         }
 
@@ -419,12 +423,41 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     public int getBankAccountNumber() {
         return bankAccountNumber;
     }
-    public boolean hasPermissionToOpenBlock(ServerPlayer player)
+    public CompletableFuture<Boolean> hasPermissionToOpenBlock(ServerPlayer player)
     {
-        if(bankAccountNumber <= 0)
+        CompletableFuture<Boolean> future =  new CompletableFuture<>();
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        if(bankAccountNumber <= 0) {
+            future.complete(true);
+            return future;
+        }
+        if(bankManager == null)
+        {
+            CompletableFuture<IBankAccount> account = bankManager.getBankAccount(bankAccountNumber);
+            account.thenAccept(accountResult -> {
+                if(accountResult == null) {
+                    bankAccountNumber = 0;
+                    future.complete(true);
+                }
+                else
+                {
+                    future.complete(accountResult.hasPermission(player.getUUID(), BankPermission.WITHDRAW.getValue()));
+                }
+            });
+        }
+        else
+        {
+            future.complete(hasPermissionToOpenBlock_direct(player));
+        }
+        return future;
+    }
+    public boolean hasPermissionToOpenBlock_direct(ServerPlayer player)
+    {
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        if(bankAccountNumber <= 0) {
             return true; // Block not claimed
-        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(bankAccountNumber);
-
+        }
+        IBankAccount account = bankManager.getBankAccount_direct(bankAccountNumber);
         if(account == null) {
             bankAccountNumber = 0;
             return true;
@@ -463,65 +496,53 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         if(!blockIsPowered || currentlyReceiving)
             return;
 
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        if(bankManager == null)
+        {
+            CompletableFuture<IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(bankAccountNumber);
+            account.thenAccept(accountResult -> {
+                if(accountResult == null) {
+                    bankAccountNumber = 0; // Reset account number if it does not exist
+                    setBockstate_connected(false);
+                    return;
+                }
+
+                currentlyReceiving = true;
+                for( WithdrawOrder order : withdrawOrders)
+                {
+                    if(order != null) {
+                        currentlyReceiving = true;
+                        processWithdrawOrder(order, accountResult);
+                    }
+                }
+
+                setChanged();
+                currentlyReceiving = false;
+            });
+
+        }
+        else
+        {
+            receiveItemsFromBank_direct();
+        }
 
 
-        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(bankAccountNumber);
+
+
+    }
+    private void receiveItemsFromBank_direct()
+    {
+        if(!blockIsPowered || currentlyReceiving)
+            return;
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+
+
+        IBankAccount account = bankManager.getBankAccount_direct(bankAccountNumber);
         if(account == null) {
             bankAccountNumber = 0; // Reset account number if it does not exist
             setBockstate_connected(false);
             return;
         }
-
-        /*IBank itemBank = account.getBank(itemID);
-        if(itemBank == null)
-            return;
-        ItemStack exampleStack = itemID.getStack();
-        if(exampleStack == null)
-            return;
-        int centScaleFactor = itemBank.getItemFractionScaleFactor();
-        int stackSize = exampleStack.getMaxStackSize();
-        long currentItemCount = countItems();
-        long targetItemCount = targetAmount;
-        if(currentItemCount >= targetItemCount)
-            return;
-        currentlyReceiving = true;
-        long amountToReceive = (targetItemCount - currentItemCount);
-
-        long balance = itemBank.getBalance() / centScaleFactor;
-        if(balance > 0) {
-            for (int i = 0; i < inventory.getContainerSize(); i++) {
-                balance = itemBank.getBalance() / centScaleFactor;
-                if(balance == 0 || amountToReceive <= 0)
-                    break;
-                ItemStack stack = inventory.getItem(i);
-                if (new ItemID(stack).equals(itemID)) {
-                    if (stack.isDamaged() || stack.isEnchanted())
-                        continue;
-                    long fillInStackAmount = stackSize - stack.getCount();
-                    long amountToReceiveFromStack = Math.min(fillInStackAmount, amountToReceive);
-                    if (amountToReceiveFromStack > 0) {
-
-                        amountToReceiveFromStack = Math.min(amountToReceiveFromStack, balance);
-
-                        if (itemBank.withdraw(itemBank.convertToRawAmount(amountToReceiveFromStack)) == Bank.Status.SUCCESS) {
-                            stack.grow((int) amountToReceiveFromStack);
-                            amountToReceive -= amountToReceiveFromStack;
-                        }
-                    }
-                } else if (stack.isEmpty()) {
-                    long amountToReceiveFromStack = Math.min(stackSize, amountToReceive);
-                    if (amountToReceiveFromStack > 0 ) {
-                        amountToReceiveFromStack = Math.min(amountToReceiveFromStack, balance);
-
-                        if (itemBank.withdraw(itemBank.convertToRawAmount(amountToReceiveFromStack)) == Bank.Status.SUCCESS) {
-                            inventory.setItem(i, new ItemStack(exampleStack.getItem(), (int) amountToReceiveFromStack));
-                            amountToReceive -= amountToReceiveFromStack;
-                        }
-                    }
-                }
-            }
-
-        }*/
 
         currentlyReceiving = true;
         for( WithdrawOrder order : withdrawOrders)
@@ -663,11 +684,51 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     public void handlePacket(ServerPlayer sender, UpdateBankDownloadBlockEntityPacket packet)
     {
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        if(bankManager == null)
+        {
+            int accountNr = packet.getAccountNr();
+            UUID senderUUID = sender.getUUID();
+            // Check if the sender has permission to withdraw from that bank account
+            CompletableFuture<@Nullable IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);
+            account.thenAccept(bankAccount -> {
+                if(bankAccount == null) {
+                    setBockstate_connected(false);
+                    return;
+                }
+                if(!bankAccount.hasPermission(senderUUID, BankPermission.WITHDRAW.getValue())) {
+                    setBockstate_connected(false);
+                    return; // Player does not have permission to withdraw from this bank account
+                }
 
+                this.bankAccountNumber = accountNr;
+                this.withdrawOrders.clear();
+                List<WithdrawOrder> orders = packet.getWithdrawOrders();
+                for (WithdrawOrder order : orders) {
+                    if(order != null) {
+                        this.withdrawOrders.add(order);
+                    }
+                }
+
+                setChanged();
+                setBockstate_connected(true);
+                SyncBankDownloadDataPacket.sendPacket(sender, this);
+            });
+
+        }
+        else
+        {
+            handlePacket_direct(sender, packet);
+        }
+
+    }
+    public void handlePacket_direct(ServerPlayer sender, UpdateBankDownloadBlockEntityPacket packet)
+    {
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         int accountNr = packet.getAccountNr();
         UUID senderUUID = sender.getUUID();
         // Check if the sender has permission to withdraw from that bank account
-        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);
+        IBankAccount account = bankManager.getBankAccount_direct(accountNr);
         if(account == null) {
             setBockstate_connected(false);
             return;
@@ -689,7 +750,5 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         setChanged();
         setBockstate_connected(true);
         SyncBankDownloadDataPacket.sendPacket(sender, this);
-
-
     }
 }
