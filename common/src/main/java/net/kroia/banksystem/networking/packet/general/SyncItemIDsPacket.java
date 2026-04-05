@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.packet.server_sender.update;
+package net.kroia.banksystem.networking.packet.general;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
@@ -7,6 +7,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.modutilities.networking.server_server.ForwardPacketContext;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -56,14 +57,38 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
         sendToClients(players);
     }
 
+    public static void broadcastToSlaves(Map<ItemID, ItemStack> items)
+    {
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
+        packet.broadcastToSlaves();
+    }
+    /*public static void sendRegistrationRequestToMaster(Map<ItemID, ItemStack> items)
+    {
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
+        packet.sendToMaster();
+    }*/
+
     @Override
     public void handleOnClient(NetworkManager.PacketContext context)
     {
-        ItemIDManager.receiveSyncPacket(this, context);
+        ItemIDManager.receiveSyncPacket(this);
     }
 
     @Override
-    protected void handleOnServer(NetworkManager.PacketContext context) {
+    protected void handleOnServer(NetworkManager.PacketContext context)
+    {
 
+    }
+
+    //@Override
+    //protected void handleOnMaster(ForwardPacketContext context)
+    //{
+    //    ItemIDManager.receiveSyncPacket(this);
+    //}
+
+    @Override
+    protected void handleOnSlave(ForwardPacketContext context)
+    {
+        ItemIDManager.receiveSyncPacket(this);
     }
 }

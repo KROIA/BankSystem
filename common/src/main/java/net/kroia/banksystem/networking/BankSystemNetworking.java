@@ -5,10 +5,11 @@ import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoney
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
+import net.kroia.banksystem.networking.packet.general.RegisterItemIDPacket;
+import net.kroia.banksystem.networking.packet.general.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.packet.server_server.PlayerJoinPacket;
 import net.kroia.banksystem.networking.request.*;
 import net.kroia.modutilities.networking.NetworkPacketManager;
@@ -59,6 +60,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerC2S(UpdateBankUploadBlockEntityPacket.TYPE, UpdateBankUploadBlockEntityPacket.STREAM_CODEC);
         registerC2S(UpdateBankDownloadBlockEntityPacket.TYPE, UpdateBankDownloadBlockEntityPacket.STREAM_CODEC);
         registerC2S(WithdrawMoneyPacket.TYPE, WithdrawMoneyPacket.STREAM_CODEC);
+        registerC2S(RegisterItemIDPacket.TYPE, RegisterItemIDPacket.STREAM_CODEC);
     }
 
     @Override

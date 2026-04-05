@@ -1,9 +1,10 @@
 package net.kroia.banksystem.util;
 
-import dev.architectury.networking.NetworkManager;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncItemIDsPacket;
+import net.kroia.banksystem.networking.packet.general.RegisterItemIDPacket;
+import net.kroia.banksystem.networking.packet.general.SyncItemIDsPacket;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
+import net.kroia.modutilities.networking.server_server.ServerServerManager;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
@@ -14,9 +15,7 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,6 +24,7 @@ public class ItemIDManager implements ServerSaveableChunked {
     private static final ConcurrentHashMap<ItemID, ItemStack> itemIDMap = new ConcurrentHashMap<>();
 
     private static ConcurrentHashMap<ItemID, ItemStack> singlePlayerServerBackupOnPlayerLeave = null;
+    private static Map<ItemStack, CompletableFuture<ItemID>> pendingItemIDs = new ConcurrentHashMap<>();
 
     public static void clear()
     {
@@ -41,36 +41,73 @@ public class ItemIDManager implements ServerSaveableChunked {
         return item;
     }
 
-    public static CompletableFuture<ItemID> registerItemStack(@NotNull ItemStack itemStack)
+    public static CompletableFuture<ItemID> registerItemStackServerSide(@NotNull ItemStack itemStack)
     {
-        // todo: sync with master server for item registration
-        CompletableFuture<ItemID> future = new CompletableFuture<>();
-        future.complete(registerItemStack_direct(itemStack));
+        ItemStack cpy =  itemStack.copy();
+        cpy.setCount(1);
+        CompletableFuture<ItemID>  future = new CompletableFuture<>();
+        if(ServerServerManager.isRunning() && ServerServerManager.isMaster())
+        {
+            future.complete(registerItemStackServerSide_direct(cpy));
+        }
+        else
+        {
+            RegisterItemIDPacket.sendRegisterItemIDPacketToMaster(cpy);
+            pendingItemIDs.put(cpy, future);
+        }
+        return future;
+    }
+    public static CompletableFuture<ItemID> registerItemStackClientSide(@NotNull ItemStack itemStack)
+    {
+        ItemStack cpy =  itemStack.copy();
+        cpy.setCount(1);
+        CompletableFuture<ItemID>  future = new CompletableFuture<>();
+        RegisterItemIDPacket.sendRegisterItemIDPacketToServer(cpy);
+        pendingItemIDs.put(cpy, future);
         return future;
     }
 
 
-    public static @NotNull ItemID registerItemStack_direct(@NotNull ItemStack itemStack)
+    public static @NotNull ItemID registerItemStackServerSide_direct(@NotNull ItemStack itemStack)
     {
-        // Search the entire list to check if the same item stack already is registered
-        ItemID id = getItemID(itemStack);
-        if(id != null)
-            return id; // Already registered
-
-        if(itemStack.isEmpty())
-        {
+        List<ItemStack> itemStacks  = new ArrayList<>();
+        itemStacks.add(itemStack);
+        List<ItemID> ids = registerItemStackServerSide_direct(itemStacks);
+        if(ids.isEmpty())
             return ItemID.INVALID_ID;
+        return ids.getFirst();
+    }
+    public static List<ItemID> registerItemStackServerSide_direct(List<ItemStack> itemStacks)
+    {
+        List<ItemID> ids = new ArrayList<>();
+        Map<ItemID, ItemStack> newItemIDMap = new ConcurrentHashMap<>();
+        for(ItemStack stack : itemStacks)
+        {
+            // Search the entire list to check if the same item stack already is registered
+            ItemID id = getItemID(stack);
+            if(id != null)
+            {
+                ids.add(id);
+                continue;
+            }
+
+            if(stack.isEmpty())
+            {
+                ids.add(ItemID.INVALID_ID);
+                continue;
+            }
+
+            short newID = (short)(itemIDMap.size()+1);
+
+            ItemStack cpy = stack.copy();
+            String name = ItemUtilities.getItemIDStr(cpy.getItem());
+            id = new ItemID(newID, name);
+            cpy.setCount(1);
+            newItemIDMap.put(id, cpy);
+            itemIDMap.put(id, cpy);
         }
-
-        short newID = (short)(itemIDMap.size()+1);
-
-        ItemStack cpy = itemStack.copy();
-        String name = ItemUtilities.getItemIDStr(cpy.getItem());
-        id = new ItemID(newID, name);
-        cpy.setCount(1);
-        itemIDMap.put(id, cpy);
-        onNewItemAdded(id, cpy);
-        return id;
+        onNewItemAdded(newItemIDMap);
+        return ids;
     }
 
     public static @Nullable ItemID getItemID(@NotNull ItemStack itemStack)
@@ -109,12 +146,14 @@ public class ItemIDManager implements ServerSaveableChunked {
 
 
 
-    private static void onNewItemAdded(@NotNull ItemID itemID, ItemStack stack)
+    private static void onNewItemAdded(Map<ItemID, ItemStack> newItems)
     {
         // Broadcast update to players
-        Map<ItemID, ItemStack> items = new HashMap<>();
-        items.put(itemID, stack);
-        SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(newItems);
+        if(ServerServerManager.isRunning() && ServerServerManager.isMaster())
+        {
+            packet.broadcastToSlaves();
+        }
         packet.broadcastToClients();
     }
     public static void onPlayerJoined(@NotNull ServerPlayer player)
@@ -123,7 +162,7 @@ public class ItemIDManager implements ServerSaveableChunked {
         SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
         packet.sendToClient(player);
     }
-    public static void receiveSyncPacket(SyncItemIDsPacket packet, NetworkManager.PacketContext context)
+    public static void receiveSyncPacket(SyncItemIDsPacket packet)
     {
         Map<ItemID, ItemStack> items = packet.getItems();
         for(Map.Entry<ItemID, ItemStack> entry : items.entrySet())
@@ -134,12 +173,25 @@ public class ItemIDManager implements ServerSaveableChunked {
             ItemID id = getItemID(itemStack);
             if(id != null)
                 continue;
+            id = entry.getKey();
             ItemStack cpy = itemStack.copy();
             cpy.setCount(1);
             String name = ItemUtilities.getItemIDStr(cpy.getItem());
             entry.getKey().setNameCache_internal(name);
-            itemIDMap.put(entry.getKey(), cpy);
+
+            CompletableFuture<ItemID> pendingItemID = pendingItemIDs.get(itemStack);
+            if(pendingItemID != null)
+            {
+                pendingItemID.complete(id);
+                pendingItemIDs.remove(itemStack);
+            }
+
+            itemIDMap.put(id, cpy);
         }
+    }
+    public static void receiveRegisterItemIDPacket(RegisterItemIDPacket packet)
+    {
+        registerItemStackServerSide_direct(packet.getItems());
     }
 
     @Override

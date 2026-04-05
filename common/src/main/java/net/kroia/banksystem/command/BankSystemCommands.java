@@ -551,7 +551,7 @@ public class BankSystemCommands {
                                                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
                                                 return Command.SINGLE_SUCCESS;
                                             }
-                                            CompletableFuture<ItemID> itemIDObj = ItemID.getOrRegisterFromItemStack(itemStack);
+                                            CompletableFuture<ItemID> itemIDObj = ItemID.getOrRegisterFromItemStackServerSide(itemStack);
                                             itemIDObj.thenAccept(id -> {
                                                 CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(id);
                                                 resultFuture.thenAccept(result -> {
@@ -582,7 +582,7 @@ public class BankSystemCommands {
                                     }
 
 
-                                    CompletableFuture<ItemID> itemIDObj = ItemID.getOrRegisterFromItemStack(item);
+                                    CompletableFuture<ItemID> itemIDObj = ItemID.getOrRegisterFromItemStackServerSide(item);
                                     itemIDObj.thenAccept(id -> {
                                         CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(id);
                                         resultFuture.thenAccept(result -> {

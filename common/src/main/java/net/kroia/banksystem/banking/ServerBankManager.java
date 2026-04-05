@@ -150,12 +150,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     public List<ItemID> getBlacklistedItems_direct()
     {
-        List<ItemID> ids = new ArrayList<>();
-        for(ItemStack stack : BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS)
-        {
-            ItemID id = ItemIDManager.registerItemStack_direct(stack);
-            ids.add(id);
-        }
+        List<ItemID> ids = ItemIDManager.registerItemStackServerSide_direct(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS);
         return ids;
     }
     
@@ -169,12 +164,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     public List<ItemID> getNotRemovableItems_direct()
     {
-        List<ItemID> ids = new ArrayList<>();
-        for(ItemStack stack : BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS)
-        {
-            ItemID id = ItemIDManager.registerItemStack_direct(stack);
-            ids.add(id);
-        }
+        List<ItemID> ids = ItemIDManager.registerItemStackServerSide_direct(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS);
         return ids;
     }
     
@@ -367,7 +357,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return null;
         }
         account.setAccountName(accountName);
-        account.setAccountIcon(ItemIDManager.registerItemStack_direct(Items.CHEST.getDefaultInstance()));
+        account.setAccountIcon(ItemIDManager.registerItemStackServerSide_direct(Items.CHEST.getDefaultInstance()));
         bankAccounts.put(accountNumber, account);
         info("Created new bank account with number: " + accountNumber + " and name: " + accountName);
         return account;
@@ -742,9 +732,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public boolean isItemIDNotRemovable_direct(ItemID itemID)
     {
         List<ItemStack> notRemovable = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_NOT_REMOVABLE_ITEMS;
-        for(ItemStack stack : notRemovable)
+        List<ItemID> itemIDs = ItemIDManager.registerItemStackServerSide_direct(notRemovable);
+        for(ItemID id : itemIDs)
         {
-            ItemID id = ItemIDManager.registerItemStack_direct(stack);
             if(id.equals(itemID))
             {
                 return true;
@@ -766,11 +756,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public boolean isItemIDBlacklisted_direct(ItemID itemID)
     {
         List<ItemStack> blacklistItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS;
-        for(ItemStack stack : blacklistItems)
+        List<ItemID> itemIDs = ItemIDManager.registerItemStackServerSide_direct(blacklistItems);
+        for(ItemID id : itemIDs)
         {
-            ItemID id = ItemIDManager.registerItemStack_direct(stack);
             if(id.equals(itemID))
+            {
                 return true;
+            }
         }
         return false;
     }
@@ -1009,10 +1001,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     {
         // Check if all allowed items have a scale factor
         List<ItemStack> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEMS;
-        for (var el : allowedItems) {
-            ItemID itemID = ItemIDManager.registerItemStack_direct(el);
-            allowedItemIDs.add(itemID);
-        }
+        List<ItemID> itemIDs = ItemIDManager.registerItemStackServerSide_direct(allowedItems);
+        allowedItemIDs.addAll(itemIDs);
     }
 
     @Override

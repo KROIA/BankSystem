@@ -95,9 +95,19 @@ public class ItemID implements ServerSaveable {
      * @param itemStack
      * @return the itemID associated with the itemStack
      */
-    public static @NotNull CompletableFuture<ItemID> getOrRegisterFromItemStack(@NotNull ItemStack itemStack)
+    public static @NotNull CompletableFuture<ItemID> getOrRegisterFromItemStackServerSide(@NotNull ItemStack itemStack)
     {
-        return ItemIDManager.registerItemStack(itemStack);
+        return ItemIDManager.registerItemStackServerSide(itemStack);
+    }
+
+    /**
+     * Do not call this from the server side
+     * @param itemStack
+     * @return the itemID associated with the itemStack
+     */
+    public static @NotNull CompletableFuture<ItemID> getOrRegisterFromItemStackClientSide(@NotNull ItemStack itemStack)
+    {
+        return ItemIDManager.registerItemStackClientSide(itemStack);
     }
 
     /**
@@ -110,7 +120,7 @@ public class ItemID implements ServerSaveable {
         @Nullable ItemID id = getFromItemStack(itemStack);
         if(id == null)
         {
-            id = ItemIDManager.registerItemStack_direct(itemStack);
+            id = ItemIDManager.registerItemStackServerSide_direct(itemStack);
         }
         return id;
     }

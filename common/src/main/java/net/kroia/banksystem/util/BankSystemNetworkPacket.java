@@ -75,6 +75,13 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
         }
         return false;
     }
+    protected void broadcastToSlaves()
+    {
+        if(ServerServerManager.isRunning() && ServerServerManager.isMaster())
+        {
+            ServerServerManager.broadcastToSlaves(this);
+        }
+    }
 
     protected void info(String message) {
         BACKEND_INSTANCES.LOGGER.info("[BankSystemNetworkPacket] "+ message);
