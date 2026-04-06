@@ -51,12 +51,12 @@ public class BankAccount implements ServerSaveable, IBankAccount {
 
     private BankAccount(int accountNumber) {
         this.accountNumber = accountNumber;
-        this.accountIcon = ItemID.getOrRegisterFromItemStack_direct(Items.CHEST.getDefaultInstance());
+        this.accountIcon = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.CHEST.getDefaultInstance());
     }
     private BankAccount(int accountNumber, @Nullable User personalBankOwner, List<BankUser> users, Map<ItemID, Bank> banks) {
         this.accountNumber = accountNumber;
         this.personalBankOwner = personalBankOwner;
-        this.accountIcon = ItemID.getOrRegisterFromItemStack_direct(Items.CHEST.getDefaultInstance());
+        this.accountIcon = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.CHEST.getDefaultInstance());
         if( personalBankOwner != null) {
             this.accountName = personalBankOwner.getName()+"'s Bank Account";
         }

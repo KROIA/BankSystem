@@ -115,7 +115,7 @@ public class ItemID implements ServerSaveable {
      * @param itemStack
      * @return the itemID associated with the itemStack
      */
-    public static @NotNull ItemID getOrRegisterFromItemStack_direct(@NotNull ItemStack itemStack)
+    public static @NotNull ItemID getOrRegisterFromItemStackServerSide_direct(@NotNull ItemStack itemStack)
     {
         @Nullable ItemID id = getFromItemStack(itemStack);
         if(id == null)

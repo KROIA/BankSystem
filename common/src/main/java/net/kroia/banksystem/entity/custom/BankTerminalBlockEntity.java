@@ -412,7 +412,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
 
                 // Get the item's ResourceLocation
-                ItemID itemID = ItemID.getOrRegisterFromItemStack_direct(stack);
+                ItemID itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
 
                 // Compare the ResourceLocation to the provided string
                 // Check if the stack can fit the amount
@@ -473,7 +473,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
 
                 // Get the item's ResourceLocation
-                ItemID _itemID = ItemID.getOrRegisterFromItemStack_direct(stack);
+                ItemID _itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
 
                 // Compare the ResourceLocation to the provided string
                 if (_itemID.equals(itemID)) {
