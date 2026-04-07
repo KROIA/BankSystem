@@ -4,7 +4,7 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.banking.SyncServerBankManager;
 import net.kroia.banksystem.compat.OldBankDataLoader;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.persistence.DataPersistence;
@@ -190,7 +190,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     {
         boolean success = true;
         Map<String, ListTag> bankData = new HashMap<>();
-        ServerBankManager bankManager = (ServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        SyncServerBankManager bankManager = (SyncServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(bankManager != null)
             success = bankManager.save(bankData);
         saveDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME), bankData);
@@ -205,7 +205,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public boolean load_bank()
     {
         Map<String, ListTag> bankData = readDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME));
-        ServerBankManager bankManager = (ServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        SyncServerBankManager bankManager = (SyncServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(bankData == null || bankData.isEmpty() || !bankData.containsKey("itemCentScaleFactors")) {
 
             if(bankManager != null)
@@ -225,7 +225,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public boolean load_bank_compatibilityMode()
     {
         CompoundTag data = readDataCompound(getAbsoluteSavePath("Bank_data.dat"));
-        ServerBankManager bankManager = (ServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        SyncServerBankManager bankManager = (SyncServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(bankManager != null) {
             if (data == null) {
                 bankManager.setupDefaultItems();

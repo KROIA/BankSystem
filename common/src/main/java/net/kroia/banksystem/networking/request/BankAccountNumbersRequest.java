@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.api.ISyncServerBankManager;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.core.UUIDUtil;
@@ -29,14 +29,14 @@ public class BankAccountNumbersRequest extends BankSystemGenericRequest<List<UUI
     @Override
     public CompletableFuture<List<Integer>> handleOnMasterServer(List<UUID> input, UUID sender) {
         CompletableFuture<List<Integer>>  future = new CompletableFuture<>();
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        ISyncServerBankManager bankManager = getSyncBankManager();
         if(input.isEmpty())
             input.add(sender);
 
 
         List<Integer> accountNumbers = new ArrayList<>();
         for(UUID uuid : input) {
-            List<IBankAccount> accounts = bankManager.getBankAccounts_direct(uuid);
+            List<IBankAccount> accounts = bankManager.getBankAccounts(uuid);
             for(IBankAccount account : accounts) {
                 int accountNumber = account.getAccountNumber();
                 if(accountNumbers.contains(accountNumber)) {

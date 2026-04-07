@@ -3,8 +3,8 @@ package net.kroia.banksystem.networking.packet.client_sender.update;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.api.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
@@ -78,8 +78,8 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     }*/
     @Override
     protected void handleOnServer(ServerPlayer sender) {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        IBankAccount account = bankManager.getBankAccount_direct(currentSelectedAccountNumber);
+        ISyncServerBankManager bankManager = getSyncBankManager();
+        IBankAccount account = bankManager.getBankAccount(currentSelectedAccountNumber);
         if(account == null)
             return;
 
@@ -161,8 +161,8 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
     @Override
     protected void handleOnMaster(UUID sender) {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        IBankAccount account = bankManager.getBankAccount_direct(currentSelectedAccountNumber);
+        ISyncServerBankManager bankManager = getSyncBankManager();
+        IBankAccount account = bankManager.getBankAccount(currentSelectedAccountNumber);
         if(account == null)
             return;
 

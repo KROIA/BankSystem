@@ -3,10 +3,10 @@ package net.kroia.banksystem.entity.custom;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
+import net.kroia.banksystem.api.IAsyncServerBankManager;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.block.custom.BankDownloadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
@@ -221,7 +221,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             inventory.fromTag(tag.getList("Items", Tag.TAG_COMPOUND), provider);
             blockIsPowered = tag.getBoolean("RecievingEnabled");
 
-            CompletableFuture<IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerOwner);
+            CompletableFuture<IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(playerOwner);
             account.thenAccept(bankAccount -> {
                 if(bankAccount == null)
                     return;
@@ -426,45 +426,22 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     public CompletableFuture<Boolean> hasPermissionToOpenBlock(ServerPlayer player)
     {
         CompletableFuture<Boolean> future =  new CompletableFuture<>();
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         if(bankAccountNumber <= 0) {
             future.complete(true);
             return future;
         }
-        if(bankManager == null)
+        IAsyncServerBankManager asyncBankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
+        CompletableFuture<IBankAccount> account = asyncBankManager.getBankAccountAsync(bankAccountNumber);
+        account.thenAccept((bankAccount) ->
         {
-            CompletableFuture<IBankAccount> account = bankManager.getBankAccount(bankAccountNumber);
-            account.thenAccept(accountResult -> {
-                if(accountResult == null) {
-                    bankAccountNumber = 0;
-                    future.complete(true);
-                }
-                else
-                {
-                    future.complete(accountResult.hasPermission(player.getUUID(), BankPermission.WITHDRAW.getValue()));
-                }
-            });
-        }
-        else
-        {
-            future.complete(hasPermissionToOpenBlock_direct(player));
-        }
+            if(bankAccount == null) {
+                bankAccountNumber = 0;
+                future.complete(true);
+            }
+            else
+                future.complete(bankAccount.hasPermission(player.getUUID(), BankPermission.WITHDRAW.getValue()));
+        });
         return future;
-    }
-    public boolean hasPermissionToOpenBlock_direct(ServerPlayer player)
-    {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        if(bankAccountNumber <= 0) {
-            return true; // Block not claimed
-        }
-        IBankAccount account = bankManager.getBankAccount_direct(bankAccountNumber);
-        if(account == null) {
-            bankAccountNumber = 0;
-            return true;
-        }
-
-        // Only allow opening if the player has permission to withdraw from the bank account
-        return account.hasPermission(player.getUUID(), BankPermission.WITHDRAW.getValue());
     }
 
     public void update()
@@ -496,66 +473,28 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         if(!blockIsPowered || currentlyReceiving)
             return;
 
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        if(bankManager == null)
-        {
-            CompletableFuture<IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(bankAccountNumber);
-            account.thenAccept(accountResult -> {
-                if(accountResult == null) {
-                    bankAccountNumber = 0; // Reset account number if it does not exist
-                    setBockstate_connected(false);
-                    return;
-                }
-
-                currentlyReceiving = true;
-                for( WithdrawOrder order : withdrawOrders)
-                {
-                    if(order != null) {
-                        currentlyReceiving = true;
-                        processWithdrawOrder(order, accountResult);
-                    }
-                }
-
-                setChanged();
-                currentlyReceiving = false;
-            });
-
-        }
-        else
-        {
-            receiveItemsFromBank_direct();
-        }
-
-
-
-
-    }
-    private void receiveItemsFromBank_direct()
-    {
-        if(!blockIsPowered || currentlyReceiving)
-            return;
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-
-
-        IBankAccount account = bankManager.getBankAccount_direct(bankAccountNumber);
-        if(account == null) {
-            bankAccountNumber = 0; // Reset account number if it does not exist
-            setBockstate_connected(false);
-            return;
-        }
-
-        currentlyReceiving = true;
-        for( WithdrawOrder order : withdrawOrders)
-        {
-            if(order != null) {
-                currentlyReceiving = true;
-                processWithdrawOrder(order, account);
+        CompletableFuture<IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(bankAccountNumber);
+        account.thenAccept(accountResult -> {
+            if(accountResult == null) {
+                bankAccountNumber = 0; // Reset account number if it does not exist
+                setBockstate_connected(false);
+                return;
             }
-        }
 
-        setChanged();
-        currentlyReceiving = false;
+            currentlyReceiving = true;
+            for( WithdrawOrder order : withdrawOrders)
+            {
+                if(order != null) {
+                    currentlyReceiving = true;
+                    processWithdrawOrder(order, accountResult);
+                }
+            }
+
+            setChanged();
+            currentlyReceiving = false;
+        });
     }
+
 
 
     private boolean processWithdrawOrder(WithdrawOrder order, IBankAccount account)
@@ -684,71 +623,32 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     public void handlePacket(ServerPlayer sender, UpdateBankDownloadBlockEntityPacket packet)
     {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        if(bankManager == null)
-        {
-            int accountNr = packet.getAccountNr();
-            UUID senderUUID = sender.getUUID();
-            // Check if the sender has permission to withdraw from that bank account
-            CompletableFuture<@Nullable IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);
-            account.thenAccept(bankAccount -> {
-                if(bankAccount == null) {
-                    setBockstate_connected(false);
-                    return;
-                }
-                if(!bankAccount.hasPermission(senderUUID, BankPermission.WITHDRAW.getValue())) {
-                    setBockstate_connected(false);
-                    return; // Player does not have permission to withdraw from this bank account
-                }
-
-                this.bankAccountNumber = accountNr;
-                this.withdrawOrders.clear();
-                List<WithdrawOrder> orders = packet.getWithdrawOrders();
-                for (WithdrawOrder order : orders) {
-                    if(order != null) {
-                        this.withdrawOrders.add(order);
-                    }
-                }
-
-                setChanged();
-                setBockstate_connected(true);
-                SyncBankDownloadDataPacket.sendPacket(sender, this);
-            });
-
-        }
-        else
-        {
-            handlePacket_direct(sender, packet);
-        }
-
-    }
-    public void handlePacket_direct(ServerPlayer sender, UpdateBankDownloadBlockEntityPacket packet)
-    {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
         int accountNr = packet.getAccountNr();
         UUID senderUUID = sender.getUUID();
         // Check if the sender has permission to withdraw from that bank account
-        IBankAccount account = bankManager.getBankAccount_direct(accountNr);
-        if(account == null) {
-            setBockstate_connected(false);
-            return;
-        }
-        if(!account.hasPermission(senderUUID, BankPermission.WITHDRAW.getValue())) {
-            setBockstate_connected(false);
-            return; // Player does not have permission to withdraw from this bank account
-        }
-
-        this.bankAccountNumber = accountNr;
-        this.withdrawOrders.clear();
-        List<WithdrawOrder> orders = packet.getWithdrawOrders();
-        for (WithdrawOrder order : orders) {
-            if(order != null) {
-                this.withdrawOrders.add(order);
+        CompletableFuture<@Nullable IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(accountNr);
+        account.thenAccept(bankAccount -> {
+            if(bankAccount == null) {
+                setBockstate_connected(false);
+                return;
             }
-        }
+            if(!bankAccount.hasPermission(senderUUID, BankPermission.WITHDRAW.getValue())) {
+                setBockstate_connected(false);
+                return; // Player does not have permission to withdraw from this bank account
+            }
 
-        setChanged();
-        setBockstate_connected(true);
-        SyncBankDownloadDataPacket.sendPacket(sender, this);
+            this.bankAccountNumber = accountNr;
+            this.withdrawOrders.clear();
+            List<WithdrawOrder> orders = packet.getWithdrawOrders();
+            for (WithdrawOrder order : orders) {
+                if(order != null) {
+                    this.withdrawOrders.add(order);
+                }
+            }
+
+            setChanged();
+            setBockstate_connected(true);
+            SyncBankDownloadDataPacket.sendPacket(sender, this);
+        });
     }
 }

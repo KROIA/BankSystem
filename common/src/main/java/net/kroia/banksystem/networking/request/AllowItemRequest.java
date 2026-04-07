@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.api.ISyncServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -37,17 +37,17 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
         // Check if sender has permission to allow the item
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
         if(playerIsAdmin(sender)) {
-            ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+            ISyncServerBankManager bankManager = getSyncBankManager();
             if(data != null)
             {
-                if(bankManager.isItemIDAllowed_direct(data.itemID))
+                if(bankManager.isItemIDAllowed(data.itemID))
                 {
                     ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemAlreadyAllowedMessage(data.itemID.getName()));
                     future.complete(true);
                     return future;
                 }
 
-                if(bankManager.allowItemID_direct(data.itemID))
+                if(bankManager.allowItemID(data.itemID))
                 {
                     String smallestAmountStr = Bank.getFormattedAmountStatic(1);
                     ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedMessage(data.itemID.getName(), smallestAmountStr));
@@ -73,10 +73,10 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
 
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
         if(playerIsAdmin(sender)) {
-            ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+            ISyncServerBankManager bankManager = getSyncBankManager();
             if(data != null)
             {
-                if(bankManager.isItemIDAllowed_direct(data.itemID))
+                if(bankManager.isItemIDAllowed(data.itemID))
                 {
                     // todo: replace by sending a custom packet to the slaves client back to print the message
                     ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemAlreadyAllowedMessage(data.itemID.getName()));
@@ -84,7 +84,7 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
                     return future;
                 }
 
-                if(bankManager.allowItemID_direct(data.itemID))
+                if(bankManager.allowItemID(data.itemID))
                 {
                     String smallestAmountStr = Bank.getFormattedAmountStatic(1);
                     // todo: replace by sending a custom packet to the slaves client back to print the message

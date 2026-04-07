@@ -1,7 +1,7 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.api.ISyncServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.minecraft.server.level.ServerPlayer;
@@ -17,10 +17,10 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
 
     protected boolean playerIsAdmin(ServerPlayer player)
     {
-        ServerBankManager manager = (ServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        ISyncServerBankManager manager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(manager != null)
         {
-            User user = manager.getUserByUUID_direct(player.getUUID());
+            User user = manager.getUserByUUID(player.getUUID());
             if(user != null)
             {
                 return user.isBankModAdmin();
@@ -31,10 +31,10 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
     }
     protected boolean playerIsAdmin(UUID playerUUID)
     {
-        ServerBankManager manager = (ServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        ISyncServerBankManager manager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(manager != null)
         {
-            User user = manager.getUserByUUID_direct(playerUUID);
+            User user = manager.getUserByUUID(playerUUID);
             if(user != null)
             {
                 return user.isBankModAdmin();
@@ -42,6 +42,12 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
         }
         return false;
         //return player.hasPermissions(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get());
+    }
+
+
+    protected ISyncServerBankManager getSyncBankManager()
+    {
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
     }
 
 }

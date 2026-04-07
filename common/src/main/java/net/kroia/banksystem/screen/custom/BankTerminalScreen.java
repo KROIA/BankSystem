@@ -161,7 +161,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         removeEmptyBankAccountsButton = new Button(REMOVE_EMPTY_BANKS_BUTTON_TEXT.getString());
         removeEmptyBankAccountsButton.setOnFallingEdge(() -> {
             if(selectedBankAccountNr > 0) {
-                getBankManager().requestRemoveEmptyBanks(selectedBankAccountNr, (removed) -> {
+                getBankManager().requestRemoveEmptyBanks(selectedBankAccountNr).thenAccept((removed) -> {
                     updateBankList();
                 });
             }
@@ -188,7 +188,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         addElement(inventoryView);
 
 
-        getBankManager().requestBankTerminalData(pMenu.getBlockPos(), (bankTerminalData) -> {
+        getBankManager().requestBankTerminalData(pMenu.getBlockPos()).thenAccept((bankTerminalData) -> {
             selectedBankAccountNr = bankTerminalData.selectedBankAccount();
 
             //userPermission = bankTerminalData.userPermission;
@@ -199,7 +199,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             }
             else
             {
-                getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), this::updateBankList);
+                getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID()).thenAccept(this::updateBankList);
             }
         });
     }
@@ -249,7 +249,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     {
         if(selectedBankAccountNr <= 0)
             return;
-        getBankManager().requestBankAccountData(selectedBankAccountNr, this::updateBankList);
+        getBankManager().requestBankAccountData(selectedBankAccountNr).thenAccept(this::updateBankList);
     }
     private void updateBankList(BankAccountData minimalBankUserData)
     {
@@ -258,7 +258,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         if(minimalBankUserData == null)
         {
             error("Failed to update bank data for player: " + playerName + ". BankAccountData is null.");
-            getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), (data)->{
+            getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID()).thenAccept((data)->{
                 if(data != null)
                     selectedBankAccountNr = data.accountNumber;
             });

@@ -3,12 +3,16 @@ package net.kroia.banksystem.api;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
+import net.kroia.banksystem.networking.request.BankSelectionScreenDataRequest;
+import net.kroia.banksystem.networking.request.BankTerminalBlockDataRequest;
+import net.kroia.banksystem.networking.request.UpdateBankAccountRequest;
 import net.kroia.banksystem.util.ItemID;
+import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Consumer;
+import java.util.concurrent.CompletableFuture;
 
 //@Environment(EnvType.CLIENT)
 public interface IClientBankManager {
@@ -36,11 +40,10 @@ public interface IClientBankManager {
      * The resulting MinimalBankUserData may be null if the player is not allowed to view the bank data of the specified player.
      *
      * @param accountNumber The account number of the bank account.
-     * @param callback   A callback that receives the MinimalBankUserData.
      */
-    void requestBankAccountData(int accountNumber, Consumer<@Nullable BankAccountData> callback);
+    CompletableFuture<@Nullable BankAccountData> requestBankAccountData(int accountNumber);
 
-    void requestPersonalBankAccountData(UUID playerUUID, Consumer<@Nullable BankAccountData> callback);
+    CompletableFuture<@Nullable BankAccountData> requestPersonalBankAccountData(UUID playerUUID);
 
     /**
      * Requests minimal bank manager data.
@@ -49,9 +52,8 @@ public interface IClientBankManager {
      * @warning
      * The resulting MinimalBankManagerData may be null if the player is not allowed to view the bank data of the specified player.
      *
-     * @param callback A callback that receives the MinimalBankManagerData.
      */
-    void requestBankManagerData(Consumer<@Nullable BankManagerData> callback);
+    CompletableFuture<@Nullable BankManagerData> requestBankManagerData();
 
     /**
      * Requests item information data for a specific item.
@@ -61,27 +63,24 @@ public interface IClientBankManager {
      * The resulting ItemInfoData may be null if the player is not allowed to view the bank data of the specified player.
      *
      * @param itemID   The ID of the item.
-     * @param callback A callback that receives the ItemInfoData.
      */
-    void requestItemInfoData(ItemID itemID, Consumer<@Nullable ItemInfoData> callback);
+    CompletableFuture<@Nullable ItemInfoData> requestItemInfoData(ItemID itemID);
 
     /**
      * Requests to the server to allow an item to be used in the bank system.
      * Returns a Boolean indicating success or failure.
      *
      * @param itemID   The ID of the item to allow.
-     * @param callback A callback that receives a Boolean indicating success or failure.
      */
-    void requestAllowItem(ItemID itemID, Consumer<Boolean> callback);
+    CompletableFuture<Boolean> requestAllowItem(ItemID itemID);
 
     /**
      * Requests to the server to forbid an item to be used in the bank system.
      * Returns a Boolean indicating success or failure.
      *
      * @param itemID   The ID of the item to disallow.
-     * @param callback A callback that receives a Boolean indicating success or failure.
      */
-    void requestDisallowItem(ItemID itemID, Consumer<Boolean> callback);
+    CompletableFuture<Boolean> requestDisallowItem(ItemID itemID);
 
 
     /**
@@ -90,9 +89,8 @@ public interface IClientBankManager {
      * Only admins can remove banks of other players.
      *
      * @param accountNumber The account number of the bank account to remove empty banks from.
-     * @param callback A callback that receives a list of ItemIDs of the removed banks.
      */
-    void requestRemoveEmptyBanks(int accountNumber, Consumer<List<ItemID>> callback);
+    CompletableFuture<List<ItemID>> requestRemoveEmptyBanks(int accountNumber);
 
     /**
      * Requests to the server to remove empty banks for the current player.
@@ -122,6 +120,15 @@ public interface IClientBankManager {
 
 
 
-    void requestBankAccountNumbers(UUID playerUUID, Consumer<List<Integer>> callback);
-    void requestBankAccountNumbers(List<UUID> playerUUIDs, Consumer<List<Integer>> callback);
+    CompletableFuture<List<Integer>> requestBankAccountNumbers(UUID playerUUID);
+    CompletableFuture<List<Integer>> requestBankAccountNumbers(List<UUID> playerUUIDs);
+
+
+    CompletableFuture<BankAccountData> requestUpdateBankAccount(UpdateBankAccountRequest.InputData inputData);
+
+
+    CompletableFuture<BankTerminalBlockDataRequest.Output> requestBankTerminalData(BlockPos pos);
+    CompletableFuture<BankSelectionScreenDataRequest.Output> requestBankAccounts(UUID playerUUID);
+    CompletableFuture<Boolean> requestDeleteBankAccount(int accountNumber);
+    CompletableFuture<List<ItemID>> requestAllowdItems();
 }

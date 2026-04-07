@@ -88,7 +88,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         removeBankingItemButton = new Button(TEXT.REMOVE_BANKING_ITEM_BUTTON.getString(), () -> {
             if(currentBankingItemID != null) {
                 AskPopupScreen popup = new AskPopupScreen(this, () -> {
-                    BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestDisallowItem(currentBankingItemID, (success)->{
+                    BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestDisallowItem(currentBankingItemID).thenAccept((success)->{
                         if(success)
                             setCurrentBankingItemID(null);
                         updateCurrentBankingItemsView();
@@ -190,7 +190,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
     public void updateCurrentBankingItemsView()
     {
         currentBankingItemsView.clearItems();
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData((minimalBankManagerData) -> {
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData().thenAccept((minimalBankManagerData) -> {
             if(!screenIsOpen)
                 return; // Do not update if the screen is not open
             List<ItemStack> allowedItemStacks;
@@ -209,7 +209,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
     {
         if(currentBankingItemID == null)
             return;
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestItemInfoData(currentBankingItemID, itemInfoWidget::setItemInfo);
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestItemInfoData(currentBankingItemID).thenAccept(itemInfoWidget::setItemInfo);
         //itemInfoWidget.setItemID(currentBankingItemID);
     }
 

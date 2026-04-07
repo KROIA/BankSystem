@@ -13,15 +13,19 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Consumer;
+import java.util.concurrent.CompletableFuture;
 
 public class ClientBankManager implements IClientBankManager {
 
-    protected BankSystemModBackend.Instances BACKEND_INSTANCES;
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+        BankAccount.setBackend(backend);
+    }
 
-    public ClientBankManager(BankSystemModBackend.Instances backendInstances)
+    public ClientBankManager()
     {
-        this.BACKEND_INSTANCES = backendInstances;
+
     }
 
     //private final int bankAccountNumber; // This is a placeholder, as the client does not have a bank account number
@@ -38,79 +42,87 @@ public class ClientBankManager implements IClientBankManager {
     }*/
 
     @Override
-    public void requestBankAccountData(int accountNumber, Consumer<@Nullable BankAccountData> callback)
+    public CompletableFuture<@Nullable BankAccountData> requestBankAccountData(int accountNumber)
     {
         BankAccountDataRequest.InputData input = new BankAccountDataRequest.InputData(accountNumber);
-        BankSystemNetworking.BANK_ACCOUNT_DATA_REQUEST.sendRequestToServer(input, callback);
+        return BankSystemNetworking.BANK_ACCOUNT_DATA_REQUEST.sendRequestToServer(input);
     }
     @Override
-    public void requestPersonalBankAccountData(UUID playerUUID, Consumer<@Nullable BankAccountData> callback)
+    public CompletableFuture<@Nullable BankAccountData> requestPersonalBankAccountData(UUID playerUUID)
     {
         BankAccountDataRequest.InputData input = new BankAccountDataRequest.InputData(playerUUID);
-        BankSystemNetworking.BANK_ACCOUNT_DATA_REQUEST.sendRequestToServer(input, callback);
+        return BankSystemNetworking.BANK_ACCOUNT_DATA_REQUEST.sendRequestToServer(input);
     }
 
     @Override
-    public void requestBankManagerData(Consumer<@Nullable BankManagerData> callback)
+    public CompletableFuture<@Nullable BankManagerData> requestBankManagerData()
     {
-        BankSystemNetworking.BANK_MANAGER_DATA_REQUEST.sendRequestToServer(0, callback);
+        return BankSystemNetworking.BANK_MANAGER_DATA_REQUEST.sendRequestToServer(0);
     }
 
     @Override
-    public void requestItemInfoData(ItemID itemID, Consumer<@Nullable ItemInfoData> callback)
+    public CompletableFuture<@Nullable ItemInfoData> requestItemInfoData(ItemID itemID)
     {
-        BankSystemNetworking.ITEM_INFO_REQUEST.sendRequestToServer(itemID, callback);
+        return BankSystemNetworking.ITEM_INFO_REQUEST.sendRequestToServer(itemID);
     }
 
     @Override
-    public void requestAllowItem(ItemID itemID, Consumer<Boolean> callback)
+    public CompletableFuture<Boolean> requestAllowItem(ItemID itemID)
     {
         AllowItemRequest.Data requestData = new AllowItemRequest.Data(itemID);
-        BankSystemNetworking.ALLOW_ITEM_REQUEST.sendRequestToServer(requestData, callback);
+        return BankSystemNetworking.ALLOW_ITEM_REQUEST.sendRequestToServer(requestData);
     }
 
     @Override
-    public void requestDisallowItem(ItemID itemID, Consumer<Boolean> callback)
+    public CompletableFuture<Boolean> requestDisallowItem(ItemID itemID)
     {
-        BankSystemNetworking.DISALLOW_ITEM_REQUEST.sendRequestToServer(itemID, callback);
+        return BankSystemNetworking.DISALLOW_ITEM_REQUEST.sendRequestToServer(itemID);
     }
 
     @Override
-    public void requestRemoveEmptyBanks(int accountNumber, Consumer<List<ItemID>> callback)
+    public CompletableFuture<List<ItemID>> requestRemoveEmptyBanks(int accountNumber)
     {
-        BankSystemNetworking.REMOVE_EMPTY_BANKS_REQUEST.sendRequestToServer(accountNumber, callback);
+        return BankSystemNetworking.REMOVE_EMPTY_BANKS_REQUEST.sendRequestToServer(accountNumber);
     }
 
 
 
-    public void requestBankAccountNumbers(UUID playerUUID, Consumer<List<Integer>> callback)
+    @Override
+    public CompletableFuture<List<Integer>> requestBankAccountNumbers(UUID playerUUID)
     {
-        BankSystemNetworking.BANK_ACCOUNT_NUMBERS_REQUEST.sendRequestToServer(List.of(playerUUID), callback);
+        return BankSystemNetworking.BANK_ACCOUNT_NUMBERS_REQUEST.sendRequestToServer(List.of(playerUUID));
     }
-    public void requestBankAccountNumbers(List<UUID> playerUUIDs, Consumer<List<Integer>> callback)
+
+    @Override
+    public CompletableFuture<List<Integer>> requestBankAccountNumbers(List<UUID> playerUUIDs)
     {
-        BankSystemNetworking.BANK_ACCOUNT_NUMBERS_REQUEST.sendRequestToServer(playerUUIDs, callback);
+        return BankSystemNetworking.BANK_ACCOUNT_NUMBERS_REQUEST.sendRequestToServer(playerUUIDs);
     }
 
-    public void requestUpdateBankAccount(UpdateBankAccountRequest.InputData inputData, Consumer<BankAccountData> callback)
+    @Override
+    public CompletableFuture<BankAccountData> requestUpdateBankAccount(UpdateBankAccountRequest.InputData inputData)
     {
-        BankSystemNetworking.UPDATE_BANK_ACCOUNT_REQUEST.sendRequestToServer(inputData, callback);
+        return BankSystemNetworking.UPDATE_BANK_ACCOUNT_REQUEST.sendRequestToServer(inputData);
     }
 
-    public void requestBankTerminalData(BlockPos pos, Consumer<BankTerminalBlockDataRequest.Output> callback) {
-        BankSystemNetworking.BANK_TERMINAL_BLOCK_DATA_REQUEST.sendRequestToServer(pos, callback);
+    @Override
+    public CompletableFuture<BankTerminalBlockDataRequest.Output> requestBankTerminalData(BlockPos pos) {
+        return BankSystemNetworking.BANK_TERMINAL_BLOCK_DATA_REQUEST.sendRequestToServer(pos);
     }
 
-    public void requestBankAccounts(UUID playerUUID, Consumer<BankSelectionScreenDataRequest.Output> callback) {
-        BankSystemNetworking.BANK_SELECTION_SCREEN_DATA_REQUEST.sendRequestToServer(playerUUID, callback);
+    @Override
+    public CompletableFuture<BankSelectionScreenDataRequest.Output> requestBankAccounts(UUID playerUUID) {
+        return BankSystemNetworking.BANK_SELECTION_SCREEN_DATA_REQUEST.sendRequestToServer(playerUUID);
     }
 
 
-    public void requestDeleteBankAccount(int accountNumber, Consumer<Boolean> callback) {
-        BankSystemNetworking.DELETE_BANK_ACCOUNT_REQUEST.sendRequestToServer(accountNumber, callback);
+    @Override
+    public CompletableFuture<Boolean> requestDeleteBankAccount(int accountNumber) {
+        return BankSystemNetworking.DELETE_BANK_ACCOUNT_REQUEST.sendRequestToServer(accountNumber);
     }
 
-    public void requestAllowdItems(Consumer<List<ItemID>> callback) {
-        BankSystemNetworking.ALLOWED_ITEMS_REQUEST.sendRequestToServer(0, callback);
+    @Override
+    public CompletableFuture<List<ItemID>> requestAllowdItems() {
+        return BankSystemNetworking.ALLOWED_ITEMS_REQUEST.sendRequestToServer(0);
     }
 }

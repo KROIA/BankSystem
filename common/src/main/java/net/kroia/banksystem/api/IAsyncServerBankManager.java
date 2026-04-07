@@ -13,58 +13,47 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-public interface IServerBankManager {
+public interface IAsyncServerBankManager {
 
 
     /**
      * Contains all data about the bank manager.
      * @return Data packet containing all data about the bank manager.
      */
-    CompletableFuture<BankManagerData> getBankManagerData();
+    CompletableFuture<BankManagerData> getBankManagerDataAsync();
 
     /**
      * Contains all user information about the bank manager.
      * A user consists of their UUID, name, and other individual settings.
      * @return Data packet containing all user information about the bank manager.
      */
-    CompletableFuture<BankManagerData.UserMapData> getBankManagerUserMapData();
-
-    /**
-     * Contains a list of all items that can be stored in the bank and the scale factor for item fractions.
-     * The scale factor defines how to scale the real bank balance amount to its displayed value.
-     * The real value is always a long value but the displayed can have fractions.
-     * This scale factor is used to convert the real amount to the displayed amount.
-     * 1.75 will be displayed as 1.75, but the real value is 175 and the scale factor is 100.
-     * @return Data packet containing all item fraction scale factors for the bank manager.
-     */
-    // Removed: Use BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR
-    //BankManagerData.ItemFractionScaleFactorData getBankManagerItemFractionScaleFactorData();
+    CompletableFuture<BankManagerData.UserMapData> getBankManagerUserMapDataAsync();
 
     /**
      * Contains a list of all bank accounts and their banks.
      * @return Data packet containing all bank accounts and their banks.
      */
-    CompletableFuture<BankManagerData.BankAccountsData> getBankManagerBankAccountsData();
+    CompletableFuture<BankManagerData.BankAccountsData> getBankManagerBankAccountsDataAsync();
 
 
     /**
      * Returns a list of all allowed items that can be stored in the bank.
      * @return A list of allowed items that can be stored in the bank.
      */
-    CompletableFuture<List<ItemID>> getAllowedItems();
+    CompletableFuture<List<ItemID>> getAllowedItemsAsync();
 
     /**
      * Returns a list of all blacklisted items that cannot be stored in the bank.
      * @return A list of blacklisted items that cannot be stored in the bank.
      */
-    CompletableFuture<List<ItemID>> getBlacklistedItems();
+    CompletableFuture<List<ItemID>> getBlacklistedItemsAsync();
 
     /**
      * Returns a list of all items that cannot be removed from the bank.
      * These items are not allowed to be removed from the bank account.
      * @return A list of items that cannot be removed from the bank.
      */
-    CompletableFuture<List<ItemID>> getNotRemovableItems();
+    CompletableFuture<List<ItemID>> getNotRemovableItemsAsync();
 
     /**
      * Returns minimalistic data about the bank manager.
@@ -72,7 +61,7 @@ public interface IServerBankManager {
      *
      * @return Data packet containing minimal data about the bank manager.
      */
-    CompletableFuture<ItemInfoData> getItemInfoData(@NotNull ItemID itemID);
+    CompletableFuture<ItemInfoData> getItemInfoDataAsync(@NotNull ItemID itemID);
 
 
     /**
@@ -80,8 +69,8 @@ public interface IServerBankManager {
      * This must be called once a player joins the server for the first time.
      * @param player The player to create a user for.
      */
-    void addUser(@NotNull ServerPlayer player);
-    void addUser(@NotNull UUID playerUUID, @NotNull String playerName);
+    void addUserAsync(@NotNull ServerPlayer player);
+    void addUserAsync(@NotNull UUID playerUUID, @NotNull String playerName);
 
     /**
      * Adds a new User to the bank manager.
@@ -89,7 +78,7 @@ public interface IServerBankManager {
      * this function can be called to add the user instead of the addUser(ServerPlayer player) method.
      * @param user contains all relevant data about the user to add.
      */
-    void addUser(@NotNull User user);
+    void addUserAsync(@NotNull User user);
 
     /**
      * Removes the user with the given UUID.
@@ -100,28 +89,28 @@ public interface IServerBankManager {
      * @param userUUID UUID of the user to remove.
      * @return True if the user was successfully removed, false otherwise.
      */
-    CompletableFuture<Boolean> removeUser(UUID userUUID);
+    CompletableFuture<Boolean> removeUserAsync(UUID userUUID);
 
     /**
      * Checks if a user with the given UUID exists in the bank manager.
      * @param userUUID UUID of the user to check.
      * @return True if the user exists, false otherwise.
      */
-    CompletableFuture<Boolean> userExists(UUID userUUID);
+    CompletableFuture<Boolean> userExistsAsync(UUID userUUID);
 
     /**
      * Gets the User object for the given UUID.
      * @param userUUID UUID of the user to get.
      * @return The User object if found, null otherwise.
      */
-    CompletableFuture<@Nullable User> getUserByUUID(UUID userUUID);
+    CompletableFuture<@Nullable User> getUserByUUIDAsync(UUID userUUID);
 
     /**
      * Gets the User object for the given name.
      * @param name Name of the user to get.
      * @return The User object if found, null otherwise.
      */
-    CompletableFuture<@Nullable User> getUserByName(String name);
+    CompletableFuture<@Nullable User> getUserByNameAsync(String name);
 
 
 
@@ -136,7 +125,7 @@ public interface IServerBankManager {
      * @param user The UUID of the user to create the personal bank account for.
      * @return The created or already existing BankAccount object.
      */
-    CompletableFuture<IBankAccount> createPersonalBankAccount(UUID user);
+    CompletableFuture<IBankAccount> createPersonalBankAccountAsync(UUID user);
 
     /**
      * Creates a new bank account with a given account name.
@@ -145,14 +134,14 @@ public interface IServerBankManager {
      *                    The name must not be unique.
      * @return The created BankAccount object.
      */
-    CompletableFuture<IBankAccount> createBankAccount(String accountName);
+    CompletableFuture<IBankAccount> createBankAccountAsync(String accountName);
 
     /**
      * Gets a bank account with the given account number.
      * @param accountNumber The account number of the bank account to get.
      * @return The BankAccount object if found, null otherwise.
      */
-    CompletableFuture<@Nullable IBankAccount> getBankAccount(int accountNumber);
+    CompletableFuture<@Nullable IBankAccount> getBankAccountAsync(int accountNumber);
 
 
     /**
@@ -160,7 +149,7 @@ public interface IServerBankManager {
      * @param userUUID The UUID of the user to get bank accounts for.
      * @return A list of BankAccount objects associated with the user UUID.
      */
-    CompletableFuture<List<IBankAccount>> getBankAccounts(UUID userUUID);
+    CompletableFuture<List<IBankAccount>> getBankAccountsAsync(UUID userUUID);
 
 
     /**
@@ -168,7 +157,7 @@ public interface IServerBankManager {
      * @param itemID The item ID to get bank accounts for.
      * @return A list of BankAccount objects associated with the item ID.
      */
-    CompletableFuture<List<IBankAccount>> getBankAccounts(ItemID itemID);
+    CompletableFuture<List<IBankAccount>> getBankAccountsAsync(ItemID itemID);
 
     /**
      * Gets the personal bank account for a given user UUID.
@@ -176,7 +165,7 @@ public interface IServerBankManager {
      * @param userUUID The UUID of the user to get the personal bank account for.
      * @return The BankAccount object if found, null otherwise.
      */
-    CompletableFuture<@Nullable IBankAccount> getPersonalBankAccount(UUID userUUID);
+    CompletableFuture<@Nullable IBankAccount> getPersonalBankAccountAsync(UUID userUUID);
 
     /**
      * Gets the personal bank account for a given user name.
@@ -184,7 +173,7 @@ public interface IServerBankManager {
      * @param userName The name of the user to get the personal bank account for.
      * @return The BankAccount object if found, null otherwise.
      */
-    CompletableFuture<@Nullable IBankAccount> getPersonalBankAccount(String userName);
+    CompletableFuture<@Nullable IBankAccount> getPersonalBankAccountAsync(String userName);
 
     /**
      * Trys to get the personal bank account for a given user UUID.
@@ -192,7 +181,7 @@ public interface IServerBankManager {
      * @param userUUID The UUID of the user to get or create the personal bank account for.
      * @return The BankAccount object if found or created, null if an error occurs.
      */
-    CompletableFuture<@Nullable IBankAccount> getOrCreatePersonalBankAccount(UUID userUUID);
+    CompletableFuture<@Nullable IBankAccount> getOrCreatePersonalBankAccountAsync(UUID userUUID);
 
     /**
      * Trys to get the personal bank account for a given user name.
@@ -200,21 +189,21 @@ public interface IServerBankManager {
      * @param userName The name of the user to get or create the personal bank account for.
      * @return The BankAccount object if found or created, null if an error occurs.
      */
-    CompletableFuture<@Nullable IBankAccount> getOrCreatePersonalBankAccount(@NotNull String userName);
+    CompletableFuture<@Nullable IBankAccount> getOrCreatePersonalBankAccountAsync(@NotNull String userName);
 
     /**
      * Checks if a user has a personal bank account.
      * @param userUUID The UUID of the user to check.
      * @return True if the user has a personal bank account, false otherwise.
      */
-    CompletableFuture<Boolean> userHasPersonalBankAccount(UUID userUUID);
+    CompletableFuture<Boolean> userHasPersonalBankAccountAsync(UUID userUUID);
 
     /**
      * Deletes a bank account with the given account number.
      * @param accountNumber The account number of the bank account to delete.
      * @return True if the bank account was successfully deleted, false otherwise.
      */
-    CompletableFuture<Boolean> deleteBankAccount(int accountNumber);
+    CompletableFuture<Boolean> deleteBankAccountAsync(int accountNumber);
 
 
 
@@ -234,7 +223,7 @@ public interface IServerBankManager {
      * @param itemID The item ID of the personal bank to get.
      * @return The IBank object if found, null otherwise.
      */
-    CompletableFuture<@Nullable IBank> getPersonalBank(UUID owner, ItemID itemID);
+    CompletableFuture<@Nullable IBank> getPersonalBankAsync(UUID owner, ItemID itemID);
 
     /**
      * Gets the personal bank for a given owner name and item ID.
@@ -243,7 +232,7 @@ public interface IServerBankManager {
      * @param itemID The item ID of the personal bank to get.
      * @return The IBank object if found, null otherwise.
      */
-    CompletableFuture<@Nullable IBank> getPersonalBank(String ownerName, ItemID itemID);
+    CompletableFuture<@Nullable IBank> getPersonalBankAsync(String ownerName, ItemID itemID);
 
     /**
      * Gets or creates a personal bank for a given owner UUID and item ID.
@@ -252,7 +241,7 @@ public interface IServerBankManager {
      * @param itemID The item ID of the personal bank to get or create.
      * @return The IBank object if found or created, null if an error occurs.
      */
-    CompletableFuture<@Nullable IBank> getOrCreatePersonalBank(UUID owner, ItemID itemID);
+    CompletableFuture<@Nullable IBank> getOrCreatePersonalBankAsync(UUID owner, ItemID itemID);
 
     /**
      * Gets or creates a personal bank for a given owner name and item ID.
@@ -261,7 +250,7 @@ public interface IServerBankManager {
      * @param itemID The item ID of the personal bank to get or create.
      * @return The IBank object if found or created, null if an error occurs.
      */
-    CompletableFuture<@Nullable IBank> getOrCreatePersonalBank(String ownerName, ItemID itemID);
+    CompletableFuture<@Nullable IBank> getOrCreatePersonalBankAsync(String ownerName, ItemID itemID);
 
 
 
@@ -272,16 +261,6 @@ public interface IServerBankManager {
 
 
 
-
-    /**
-     * Gets the scale factor for item fractions for the given item ID.
-     * This is used to determine how to scale the real bank balance amount to its displayed value.
-     *
-     * @param itemID The item ID to get the scale factor for.
-     * @return The scale factor for item fractions, or 1 if no specific scale factor is defined.
-     */
-    // Removed: Use BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR
-    //int getItemFractionScaleFactor(ItemID itemID);
 
 
     /**
@@ -290,7 +269,7 @@ public interface IServerBankManager {
      * @param itemID The item ID to check.
      * @return True if the item ID is allowed, false otherwise.
      */
-    CompletableFuture<Boolean> isItemIDAllowed(ItemID itemID);
+    CompletableFuture<Boolean> isItemIDAllowedAsync(ItemID itemID);
 
 
     /**
@@ -299,7 +278,7 @@ public interface IServerBankManager {
      * @param itemID The item ID to allow.
      * @return True if the item ID was successfully allowed, false otherwise.
      */
-    CompletableFuture<Boolean> allowItemID(ItemID itemID);
+    CompletableFuture<Boolean> allowItemIDAsync(ItemID itemID);
 
     /**
      * Disallows the given item ID from being stored in a bank account.
@@ -307,7 +286,7 @@ public interface IServerBankManager {
      * @param itemID The item ID to disallow.
      * @return True if the item ID was successfully disallowed, false otherwise.
      */
-    CompletableFuture<Boolean> disallowItemID(ItemID itemID);
+    CompletableFuture<Boolean> disallowItemIDAsync(ItemID itemID);
 
     /**
      * Checks if the given item ID is not removable and cannot be removed from a bank account.
@@ -315,7 +294,7 @@ public interface IServerBankManager {
      * @param itemID The item ID to check.
      * @return True if the item ID is not removable, false otherwise.
      */
-    CompletableFuture<Boolean> isItemIDNotRemovable(ItemID itemID);
+    CompletableFuture<Boolean> isItemIDNotRemovableAsync(ItemID itemID);
 
     /**
      * Checks if the given item ID is blacklisted and cannot be stored in a bank account.
@@ -323,7 +302,7 @@ public interface IServerBankManager {
      * @param itemID The item ID to check.
      * @return True if the item ID is blacklisted, false otherwise.
      */
-    CompletableFuture<Boolean> isItemIDBlacklisted(ItemID itemID);
+    CompletableFuture<Boolean> isItemIDBlacklistedAsync(ItemID itemID);
 
 
 
@@ -333,31 +312,31 @@ public interface IServerBankManager {
     /**
      * @return The total amount of money in circulation across all banks.
      */
-    CompletableFuture<Double> getRealMoneyCirculation();
+    CompletableFuture<Double> getRealMoneyCirculationAsync();
 
     /**
      * @return The total amount of locked money in circulation across all banks.
      */
-    CompletableFuture<Double> getRealLockedMoneyCirculation();
+    CompletableFuture<Double> getRealLockedMoneyCirculationAsync();
 
     /**
      * @param itemID
      * @return The total amount of the specified item in circulation across all banks.
      */
-    CompletableFuture<Double> getRealItemCirculation(ItemID itemID);
+    CompletableFuture<Double> getRealItemCirculationAsync(ItemID itemID);
 
     /**
      * @param itemID
      * @return The total amount of the specified item that is locked in circulation across all banks.
      */
-    CompletableFuture<Double> getRealLockedItemCirculation(ItemID itemID);
+    CompletableFuture<Double> getRealLockedItemCirculationAsync(ItemID itemID);
 
     /**
      * Gets the JSON representation of the circulation data.
      *
      * @return A JsonElement containing the circulation data.
      */
-    CompletableFuture<JsonElement> getCirculationDataJson();
+    CompletableFuture<JsonElement> getCirculationDataJsonAsync();
 
 
     /**
@@ -365,7 +344,7 @@ public interface IServerBankManager {
      *
      * @return A String containing the circulation data in JSON format.
      */
-    CompletableFuture<String> getCirculationDataJsonString();
+    CompletableFuture<String> getCirculationDataJsonStringAsync();
 
 
 
@@ -377,7 +356,7 @@ public interface IServerBankManager {
      *
      * @return A JsonElement containing the bank manager data.
      */
-    CompletableFuture<JsonElement> toJson();
+    CompletableFuture<JsonElement> toJsonAsync();
 
     /**
      * Converts the bank manager data to a JSON string representation.
@@ -386,10 +365,15 @@ public interface IServerBankManager {
      *
      * @return A String containing the bank manager data in JSON format.
      */
-    CompletableFuture<String> toJsonString();
+    CompletableFuture<String> toJsonStringAsync();
 
 
-    void onPlayerJoin(UUID playerUUID, String playerName);
+    /**
+     * Call this function when a player joins the server to setup its bank account
+     * @param playerUUID
+     * @param playerName
+     */
+    void onPlayerJoinAsync(UUID playerUUID, String playerName);
 
 
 

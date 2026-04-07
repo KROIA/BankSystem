@@ -5,7 +5,7 @@ import me.neznamy.tab.api.TabPlayer;
 import me.neznamy.tab.api.placeholder.PlaceholderManager;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.api.IServerBankManager;
+import net.kroia.banksystem.api.IAsyncServerBankManager;
 import net.kroia.modutilities.setting.Setting;
 
 import java.util.function.Function;
@@ -40,7 +40,7 @@ public class NEZNAMY_TAB_Placeholders {
 
     private static void registerPlayerPlaceholder()
     {
-        IServerBankManager sbm = BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        IAsyncServerBankManager sbm = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
         BankSystemModSettings.Placeholder settings = BACKEND_INSTANCES.SERVER_SETTINGS.PLACEHOLDER;
 
         // todo: make the placeholde compatible with the master -- slave architecture by using CompletableFuture<> objects to probide the string data
@@ -93,7 +93,7 @@ public class NEZNAMY_TAB_Placeholders {
 
     private static void registerServerPlaceholder()
     {
-        IServerBankManager sbm = BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        IAsyncServerBankManager sbm = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
         BankSystemModSettings.Placeholder settings = BACKEND_INSTANCES.SERVER_SETTINGS.PLACEHOLDER;
 
         // todo: make the placeholde compatible with the master -- slave architecture by using CompletableFuture<> objects to probide the string data

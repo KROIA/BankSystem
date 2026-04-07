@@ -123,7 +123,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private void setupGui(int accountNumber)
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber, (bankAccountData) -> {
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber).thenAccept((bankAccountData) -> {
             assert bankAccountData != null;
             setupGui(bankAccountData);
         });
@@ -237,7 +237,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     {
         createNewBankButton = new Button(CREATE_NEW_BANK.getString());
         createNewBankButton.setOnFallingEdge(() -> {
-            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData((minimalBankManagerData) -> {
+            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData().thenAccept((minimalBankManagerData) -> {
                 if(!screenIsOpen)
                     return;
                 List<ItemStack> allowedItemStacks;
@@ -378,7 +378,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         }
 
         UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.itemView.getItemStack(), bankData, setUsers);
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input, this::setupGui);
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input).thenAccept(this::setupGui);
     }
     private void updateBankData(BankAccountData bankAccountData)
     {
@@ -534,7 +534,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private void onAddUserButtonClicked()
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData((bankManagerData) -> {
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData().thenAccept((bankManagerData) -> {
             if(!screenIsOpen || bankManagerData == null)
                 return;
 
@@ -606,7 +606,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                 this,
                 ()->{
                     // delete
-                    getBankManager().requestDeleteBankAccount(accountNumber, (success) -> {
+                    getBankManager().requestDeleteBankAccount(accountNumber).thenAccept((success) -> {
                         if(success)
                         {
                             info("Bank account deleted successfully.");
@@ -642,7 +642,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         if(lastTickCount > 20)
         {
             lastTickCount = 0;
-            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber, this::updateBankData);
+            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber).thenAccept(this::updateBankData);
         }
     }
 }

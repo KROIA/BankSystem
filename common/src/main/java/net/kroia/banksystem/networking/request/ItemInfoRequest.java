@@ -30,7 +30,7 @@ public class ItemInfoRequest extends BankSystemGenericRequest<ItemID, ItemInfoDa
         if(!playerIsAdmin(sender)) {
             return null; // If the player is not an admin, return null
         }
-        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getItemInfoData(itemID);
+        return CompletableFuture.completedFuture(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getItemInfoData(itemID));
     }
 
     @Override

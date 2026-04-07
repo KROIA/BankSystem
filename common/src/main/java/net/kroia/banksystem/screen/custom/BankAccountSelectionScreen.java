@@ -111,7 +111,7 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
         addElement(accountsListView);
 
 
-        getBankManager().requestBankAccounts(this.playerUUID, this::onBankAccountsReceived);
+        getBankManager().requestBankAccounts(this.playerUUID).thenAccept(this::onBankAccountsReceived);
 
     }
 

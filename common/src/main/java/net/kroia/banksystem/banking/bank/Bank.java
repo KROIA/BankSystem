@@ -5,7 +5,7 @@ import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.api.ISyncServerBankManager;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -51,8 +51,8 @@ public class Bank implements ServerSaveable, IBank {
         if (itemID == null || balance < 0) {
             return null; // Invalid parameters
         }
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        if(!bankManager.isItemIDAllowed_direct(itemID)) {
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if(!bankManager.isItemIDAllowed(itemID)) {
             return null; // Item not allowed in bank
         }
 

@@ -509,12 +509,12 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         addElement(inventoryView);
         addElement(settingsMenu);
 
-        getBankManager().requestAllowdItems((allowedItems) -> {
+        getBankManager().requestAllowdItems().thenAccept((allowedItems) -> {
             settingsMenu.setBankableItems(allowedItems);
             settingsMenu.setOrders(withdrawOrders);
             settingsMenu.setBankAccountNumber(accountNr);
         });
-        getBankManager().requestBankAccountData(accountNr, settingsMenu::setBankAccountData);
+        getBankManager().requestBankAccountData(accountNr).thenAccept(settingsMenu::setBankAccountData);
     }
     @Override
     public void containerTick() {
@@ -527,7 +527,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         if(tickCount > 10)
         {
             tickCount = 0;
-            getBankManager().requestBankAccountData(accountNr, settingsMenu::setBankAccountData);
+            getBankManager().requestBankAccountData(accountNr).thenAccept(settingsMenu::setBankAccountData);
         }
     }
 
@@ -568,7 +568,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     {
         BankDownloadScreen.accountNr = accountNr;
         settingsMenu.setBankAccountNumber(accountNr);
-        getBankManager().requestBankAccountData(accountNr, settingsMenu::setBankAccountData);
+        getBankManager().requestBankAccountData(accountNr).thenAccept(settingsMenu::setBankAccountData);
     }
     private void applySettigns()
     {

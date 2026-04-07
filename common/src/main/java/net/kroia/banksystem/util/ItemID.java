@@ -15,6 +15,7 @@ import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public class ItemID implements ServerSaveable {
@@ -99,6 +100,10 @@ public class ItemID implements ServerSaveable {
     {
         return ItemIDManager.registerItemStackServerSide(itemStack);
     }
+    public static @NotNull CompletableFuture<List<ItemID>> getOrRegisterFromItemStackServerSide(@NotNull List<ItemStack> itemStacks)
+    {
+        return ItemIDManager.registerItemStackServerSide(itemStacks);
+    }
 
     /**
      * Do not call this from the server side
@@ -109,6 +114,11 @@ public class ItemID implements ServerSaveable {
     {
         return ItemIDManager.registerItemStackClientSide(itemStack);
     }
+    public static @NotNull CompletableFuture<List<ItemID>> getOrRegisterFromItemStackClientSide(@NotNull List<ItemStack> itemStacks)
+    {
+        return ItemIDManager.registerItemStackClientSide(itemStacks);
+    }
+
 
     /**
      * This function is only save to call from the master server

@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.api.ISyncServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
@@ -62,7 +62,7 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
     }
     @Override
     public CompletableFuture<@Nullable BankAccountData> handleOnMasterServer(InputData inputData, UUID sender) {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         CompletableFuture<BankAccountData>  future = new CompletableFuture<>();
         if(bankManager == null)
         {
@@ -72,7 +72,7 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
 
         boolean isAdmin = playerIsAdmin(sender);
         if(inputData.personalUserUUID == null) {
-            IBankAccount account = bankManager.getBankAccount_direct(inputData.accountNumber);
+            IBankAccount account = bankManager.getBankAccount(inputData.accountNumber);
             if (account == null) {
                 future.complete(null);
                 return future; // If the account does not exist, return null
@@ -84,7 +84,7 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
         }
         else
         {
-            IBankAccount account = bankManager.getPersonalBankAccount_direct(inputData.personalUserUUID);
+            IBankAccount account = bankManager.getPersonalBankAccount(inputData.personalUserUUID);
             if(account == null) {
                 future.complete(null);
                 return future; // If the personal bank account does not exist, return null

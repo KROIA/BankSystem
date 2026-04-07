@@ -24,7 +24,7 @@ public interface BankSystemAPI {
     /**
      * @return An instance of IBankUserManager that provides access to bank user management functionalities.
      */
-    IServerBankManager getServerBankManager();
+    IBankManager getServerBankManager();
 
     /**
      * @return An instance of IClientBankManager that provides access to client-side bank management functionalities.

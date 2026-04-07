@@ -35,9 +35,9 @@ public class BankSystemNetworking extends NetworkPacketManager {
 
         setupClientReceiverPackets();
         setupServerReceiverPackets();
+        setupServerServerPackets();
 
         this.setupARRS(); // Setup the Asynchronous Request Response System (ARRS)
-
     }
     private static String getClassName(String name) {
         String sub = name.substring(name.lastIndexOf(".")+1).toLowerCase();

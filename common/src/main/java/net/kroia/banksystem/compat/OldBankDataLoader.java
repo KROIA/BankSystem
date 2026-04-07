@@ -5,7 +5,7 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.BankAccount;
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.banking.SyncServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
@@ -77,8 +77,8 @@ public class OldBankDataLoader {
         }
     }
 
-    private final ServerBankManager manager;
-    public OldBankDataLoader(ServerBankManager serverBankManager)
+    private final SyncServerBankManager manager;
+    public OldBankDataLoader(SyncServerBankManager serverBankManager)
     {
         this.manager = serverBankManager;
     }
@@ -226,7 +226,7 @@ public class OldBankDataLoader {
         // Create personal banks for each user
         ItemID icon = ItemID.of(Items.CHEST.getDefaultInstance());
         for (AccountData accountData : accountDataList) {
-            IBankAccount account = manager.createPersonalBankAccount_direct(accountData.playerUUID);
+            IBankAccount account = manager.createPersonalBankAccount(accountData.playerUUID);
             if (account == null) {
                 BACKEND_INSTANCES.LOGGER.error("Failed to create personal bank account for user: " + accountData.playerName);
                 success = false;

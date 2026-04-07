@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.api.ISyncServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
@@ -803,7 +804,7 @@ public class BankAccount implements ServerSaveable, IBankAccount {
                 !tag.contains("banks")) {
             return false; // Invalid data
         }
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         this.accountNumber = tag.getInt("accountNumber");
         if(tag.contains("accountName")) {
             this.accountName = tag.getString("accountName");
@@ -813,7 +814,7 @@ public class BankAccount implements ServerSaveable, IBankAccount {
 
         if(tag.contains("personalBankOwnerDataUUID")) {
             UUID personalBankOwnerDataUUID = tag.getUUID("personalBankOwnerDataUUID");
-            this.personalBankOwner = bankManager.getUserByUUID_direct(personalBankOwnerDataUUID);
+            this.personalBankOwner = bankManager.getUserByUUID(personalBankOwnerDataUUID);
         } else {
             this.personalBankOwner = null; // No personalBankOwnerData set
         }
@@ -832,7 +833,7 @@ public class BankAccount implements ServerSaveable, IBankAccount {
             CompoundTag userTag = usersTag.getCompound(i);
             UUID userUUID = userTag.getUUID("userUUID");
             int permissions = userTag.getInt("permissions");
-            User user = bankManager.getUserByUUID_direct(userUUID);
+            User user = bankManager.getUserByUUID(userUUID);
             if (user != null) {
                 users.put(user.getUUID(), new BankUser(user, permissions));
             }

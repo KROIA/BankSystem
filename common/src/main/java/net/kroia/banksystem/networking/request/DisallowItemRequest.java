@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.api.ISyncServerBankManager;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -24,11 +24,11 @@ public class DisallowItemRequest extends BankSystemGenericRequest<ItemID, Boolea
     }
     @Override
     public CompletableFuture<Boolean> handleOnMasterServer(ItemID itemID, UUID sender) {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        ISyncServerBankManager bankManager = getSyncBankManager();
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
         // Check if sender has permission to allow the item
         if(playerIsAdmin(sender)) {
-            future.complete(bankManager.disallowItemID_direct(itemID));
+            future.complete(bankManager.disallowItemID(itemID));
             return future;
         }
         future.complete(false);

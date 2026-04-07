@@ -5,9 +5,8 @@ import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.api.*;
+import net.kroia.banksystem.banking.BankManager;
 import net.kroia.banksystem.banking.ClientBankManager;
-import net.kroia.banksystem.banking.ServerBankManager;
-import net.kroia.banksystem.banking.ServerBankManagerProxy;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.command.BankSystemCommands;
@@ -41,8 +40,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         public boolean isSlaveServer = false;
         public BankSystemModSettings SERVER_SETTINGS;
         public BankSystemDataHandler SERVER_DATA_HANDLER;
-        public IServerBankManager SERVER_BANK_MANAGER;
-        public ClientBankManager CLIENT_BANK_MANAGER;
+        public BankManager SERVER_BANK_MANAGER;
+        public IClientBankManager CLIENT_BANK_MANAGER;
         public BankSystemEvents SERVER_EVENTS;
         public BankSystemNetworking NETWORKING;
         public ItemIDManager ITEM_ID_MANAGER;
@@ -65,9 +64,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.ITEM_ID_MANAGER = new ItemIDManager();
         BankSystemDataHandler.setBackend(INSTANCES);
         BankTerminalBlockEntity.setBackend(INSTANCES);
-        ServerBankManager.setBackend(INSTANCES);
-        ServerBankManagerProxy.setBackend(INSTANCES);
-        //BankUserOld.setBackend(INSTANCES);
+
+        BankManager.setBackend(INSTANCES);
         BankSystemModSettings.setBackend(INSTANCES);
         BankSystemCommands.setBackend(INSTANCES);
         BankDownloadBlockEntity.setBackend(INSTANCES);
@@ -102,7 +100,8 @@ public class BankSystemModBackend implements BankSystemAPI {
     public static void onClientSetup()
     {
         BankSystemMenus.setupScreens();
-        INSTANCES.CLIENT_BANK_MANAGER = new ClientBankManager(INSTANCES);
+        ClientBankManager.setBackend(INSTANCES);
+        INSTANCES.CLIENT_BANK_MANAGER = BankManager.createClient();
 
         BankSystemGuiScreen.setBackend(INSTANCES);
         BankSystemGuiContainerScreen.setBackend(INSTANCES);
@@ -144,7 +143,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         if(INSTANCES.isSlaveServer)
         {
-            INSTANCES.SERVER_BANK_MANAGER = new ServerBankManagerProxy();
+            INSTANCES.SERVER_BANK_MANAGER = BankManager.createSlave();
         }
         else
         {
@@ -152,7 +151,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
 
             INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
-            INSTANCES.SERVER_BANK_MANAGER = new ServerBankManager();
+            INSTANCES.SERVER_BANK_MANAGER = BankManager.createMaster();
 
             loadDataFromFiles(server);
             TickEvent.SERVER_POST.register(BankSystemModBackend::onServerTick);
@@ -184,7 +183,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the server side
     public static void onPlayerJoin(ServerPlayer player)
     {
-        INSTANCES.SERVER_BANK_MANAGER.onPlayerJoin(player.getUUID(), player.getName().getString());
+        INSTANCES.SERVER_BANK_MANAGER.getAsync().onPlayerJoinAsync(player.getUUID(), player.getName().getString());
         ItemIDManager.onPlayerJoined(player);
         /*
         INSTANCES.SERVER_BANK_MANAGER.createUser(
@@ -262,7 +261,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
 
     @Override
-    public IServerBankManager getServerBankManager()
+    public IBankManager getServerBankManager()
     {
         return INSTANCES.SERVER_BANK_MANAGER;
     }

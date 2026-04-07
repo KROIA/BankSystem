@@ -2,8 +2,8 @@ package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.api.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
@@ -103,11 +103,11 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
     @Override
     public CompletableFuture<BankAccountData> handleOnMasterServer(InputData input, UUID sender) {
         CompletableFuture<BankAccountData>  future = new CompletableFuture<>();
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         // Check if the player is a admin
         boolean isAdmin = playerIsAdmin(sender);
 
-        IBankAccount account = bankManager.getBankAccount_direct(input.accountNumber);
+        IBankAccount account = bankManager.getBankAccount(input.accountNumber);
         if(account == null) {
             // If the account does not exist, we cannot update it
             future.complete(null);
@@ -148,7 +148,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 for (Map.Entry<UUID, Integer> entry : input.setUsers.entrySet()) {
                     UUID userUUID = entry.getKey();
                     int permissions = entry.getValue();
-                    User userToSet = bankManager.getUserByUUID_direct(userUUID);
+                    User userToSet = bankManager.getUserByUUID(userUUID);
                     if (userToSet != null) {
                         userList.put(userToSet, permissions);
                     }
@@ -166,7 +166,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
             if(!account.hasAnyUser())
             {
                 // If the account has no users, we remove it
-                bankManager.deleteBankAccount_direct(input.accountNumber);
+                bankManager.deleteBankAccount(input.accountNumber);
                 future.complete(null);
                 return future; // The account was deleted
             }

@@ -1,8 +1,8 @@
 package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.api.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
@@ -29,8 +29,8 @@ public class RemoveEmptyBanksRequest extends BankSystemGenericRequest<Integer, L
     @Override
     public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, UUID sender) {
         CompletableFuture<List<ItemID>>  future = new CompletableFuture<>();
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        IBankAccount account = bankManager.getBankAccount_direct(input);
+        ISyncServerBankManager bankManager = getSyncBankManager();
+        IBankAccount account = bankManager.getBankAccount(input);
         if(account == null) {
             future.complete(List.of());
             return future;

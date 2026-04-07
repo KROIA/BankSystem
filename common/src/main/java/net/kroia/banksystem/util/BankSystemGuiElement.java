@@ -1,7 +1,7 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.banking.ClientBankManager;
+import net.kroia.banksystem.api.IClientBankManager;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 
 public abstract class BankSystemGuiElement extends GuiElement {
@@ -23,7 +23,7 @@ public abstract class BankSystemGuiElement extends GuiElement {
         super(x, y, width, height);
     }
 
-    public ClientBankManager getMarketManager() {
+    public IClientBankManager getMarketManager() {
         return BACKEND_INSTANCES.CLIENT_BANK_MANAGER;
     }
 }

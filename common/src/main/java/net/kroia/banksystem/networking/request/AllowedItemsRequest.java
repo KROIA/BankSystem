@@ -30,7 +30,7 @@ public class AllowedItemsRequest extends BankSystemGenericRequest<Integer, List<
     @Override
     public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, UUID sender)
     {
-        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAllowedItems();
+        return CompletableFuture.completedFuture(getSyncBankManager().getAllowedItems());
     }
 
     @Override

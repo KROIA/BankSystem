@@ -1,5 +1,6 @@
 package net.kroia.banksystem.util;
 
+import com.ibm.icu.impl.Pair;
 import net.kroia.banksystem.networking.packet.general.RegisterItemIDPacket;
 import net.kroia.banksystem.networking.packet.general.SyncItemIDsPacket;
 import net.kroia.modutilities.ItemUtilities;
@@ -25,6 +26,7 @@ public class ItemIDManager implements ServerSaveableChunked {
 
     private static ConcurrentHashMap<ItemID, ItemStack> singlePlayerServerBackupOnPlayerLeave = null;
     private static Map<ItemStack, CompletableFuture<ItemID>> pendingItemIDs = new ConcurrentHashMap<>();
+    private static List<Pair<List<ItemStack>, CompletableFuture<List<ItemID>>>> pendingItemIDGroups = new ArrayList<>();
 
     public static void clear()
     {
@@ -57,6 +59,37 @@ public class ItemIDManager implements ServerSaveableChunked {
         }
         return future;
     }
+    public static CompletableFuture<List<ItemID>> registerItemStackServerSide(List<ItemStack> itemStacks) {
+        List<ItemStack> cpyStacks = new ArrayList<>();
+        CompletableFuture<List<ItemID>> groupFuture = new CompletableFuture<>();
+        List<ItemID> foundItemIDs = new ArrayList<>();
+        for (ItemStack itemStack : itemStacks)
+        {
+            ItemID itemID = getItemID(itemStack);
+            if(itemID == null) {
+                ItemStack cpy = itemStack.copy();
+                cpy.setCount(1);
+                cpyStacks.add(cpy);
+                CompletableFuture<ItemID> future = new CompletableFuture<>();
+                pendingItemIDs.put(cpy, future);
+            }
+            else
+            {
+                foundItemIDs.add(itemID);
+            }
+        }
+        if(cpyStacks.isEmpty())
+        {
+            groupFuture.complete(foundItemIDs);
+        }
+        else {
+            pendingItemIDGroups.add(Pair.of(cpyStacks, groupFuture));
+            RegisterItemIDPacket.sendRegisterItemIDPacketToMaster(cpyStacks);
+        }
+        return groupFuture;
+    }
+
+
     public static CompletableFuture<ItemID> registerItemStackClientSide(@NotNull ItemStack itemStack)
     {
         ItemStack cpy =  itemStack.copy();
@@ -65,6 +98,35 @@ public class ItemIDManager implements ServerSaveableChunked {
         RegisterItemIDPacket.sendRegisterItemIDPacketToServer(cpy);
         pendingItemIDs.put(cpy, future);
         return future;
+    }
+    public static CompletableFuture<List<ItemID>> registerItemStackClientSide(List<ItemStack> itemStacks) {
+        List<ItemStack> cpyStacks = new ArrayList<>();
+        CompletableFuture<List<ItemID>> groupFuture = new CompletableFuture<>();
+        List<ItemID> foundItemIDs = new ArrayList<>();
+        for (ItemStack itemStack : itemStacks)
+        {
+            ItemID itemID = getItemID(itemStack);
+            if(itemID == null) {
+                ItemStack cpy = itemStack.copy();
+                cpy.setCount(1);
+                cpyStacks.add(cpy);
+                CompletableFuture<ItemID> future = new CompletableFuture<>();
+                pendingItemIDs.put(cpy, future);
+            }
+            else
+            {
+                foundItemIDs.add(itemID);
+            }
+        }
+        if(cpyStacks.isEmpty())
+        {
+            groupFuture.complete(foundItemIDs);
+        }
+        else {
+            pendingItemIDGroups.add(Pair.of(cpyStacks, groupFuture));
+            RegisterItemIDPacket.sendRegisterItemIDPacketToServer(cpyStacks);
+        }
+        return groupFuture;
     }
 
 
@@ -187,6 +249,28 @@ public class ItemIDManager implements ServerSaveableChunked {
             }
 
             itemIDMap.put(id, cpy);
+        }
+        List<Pair<List<ItemStack>, CompletableFuture<List<ItemID>>>> cpyList = new ArrayList<>(pendingItemIDGroups);
+        for(Pair<List<ItemStack>, CompletableFuture<List<ItemID>>> pair : cpyList)
+        {
+            List<ItemID> completeList = new ArrayList<>();
+            List<ItemStack> stacks = pair.first;
+            boolean isComplete = true;
+            for(ItemStack itemStack : stacks)
+            {
+                ItemID id = getItemID(itemStack);
+                if(id == null)
+                {
+                    isComplete = false;
+                    break;
+                }
+                completeList.add(id);
+            }
+            if(isComplete)
+            {
+                pendingItemIDGroups.remove(pair);
+                pair.second.complete(completeList);
+            }
         }
     }
     public static void receiveRegisterItemIDPacket(RegisterItemIDPacket packet)

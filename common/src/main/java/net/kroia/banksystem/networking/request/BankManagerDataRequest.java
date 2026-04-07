@@ -23,7 +23,7 @@ public class BankManagerDataRequest extends BankSystemGenericRequest<Integer, Ba
     }
     @Override
     public CompletableFuture<BankManagerData> handleOnMasterServer(Integer input, UUID sender) {
-        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankManagerData();
+        return CompletableFuture.completedFuture(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankManagerData());
     }
 
     @Override

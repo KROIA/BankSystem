@@ -1,7 +1,7 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.banking.ClientBankManager;
+import net.kroia.banksystem.api.IClientBankManager;
 import net.kroia.modutilities.gui.GuiContainerScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -28,7 +28,7 @@ public abstract class BankSystemGuiContainerScreen<T extends AbstractContainerMe
         BACKEND_INSTANCES = backend;
     }
 
-    protected ClientBankManager getBankManager() {
+    protected IClientBankManager getBankManager() {
         return BACKEND_INSTANCES.CLIENT_BANK_MANAGER;
     }
 

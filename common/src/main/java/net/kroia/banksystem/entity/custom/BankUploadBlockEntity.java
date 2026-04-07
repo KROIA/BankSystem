@@ -288,7 +288,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             return;
         if(playerOwner == null)
             return;
-        CompletableFuture<IBankAccount> accountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(bankAccountNumber);
+        CompletableFuture<IBankAccount> accountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(bankAccountNumber);
         accountFuture.thenAcceptAsync(account->{
             if(account == null)
                 return;

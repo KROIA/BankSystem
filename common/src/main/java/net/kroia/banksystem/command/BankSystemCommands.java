@@ -8,8 +8,8 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.api.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
@@ -240,7 +240,7 @@ public class BankSystemCommands {
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-                                    CompletableFuture<Double> circulation = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getRealMoneyCirculation();
+                                    CompletableFuture<Double> circulation = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getRealMoneyCirculationAsync();
                                     circulation.thenAccept(result -> {
                                         ServerPlayerUtilities.printToClientConsole(player,
                                                 BankSystemTextMessages.getCirculationMessage(Bank.getFormattedAmountStatic(result),
@@ -289,7 +289,7 @@ public class BankSystemCommands {
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-                                    CompletableFuture<User> bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(player.getUUID());
+                                    CompletableFuture<User> bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getUserByUUIDAsync(player.getUUID());
                                     bankUser.thenAccept(result -> {
                                         if(result == null)
                                         {
@@ -306,7 +306,7 @@ public class BankSystemCommands {
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-                                    CompletableFuture<User> bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(player.getUUID());
+                                    CompletableFuture<User> bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getUserByUUIDAsync(player.getUUID());
                                     bankUser.thenAccept(result -> {
                                         if(result == null)
                                         {
@@ -323,7 +323,7 @@ public class BankSystemCommands {
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-                                    CompletableFuture<IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getOrCreatePersonalBankAccount(player.getUUID());
+                                    CompletableFuture<IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getOrCreatePersonalBankAccountAsync(player.getUUID());
                                     account.thenAccept(result -> {
                                         if(result == null)
                                         {
@@ -344,7 +344,7 @@ public class BankSystemCommands {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
                                             String accountName = StringArgumentType.getString(context, "accountname");
-                                            CompletableFuture<List<IBankAccount>>  accounts = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccounts(context.getSource().getPlayerOrException().getUUID());
+                                            CompletableFuture<List<IBankAccount>>  accounts = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountsAsync(context.getSource().getPlayerOrException().getUUID());
                                             accounts.thenAccept(result -> {
                                                 IBankAccount account = result.stream()
                                                         .filter(acc -> acc.getAccountName().equalsIgnoreCase(accountName))
@@ -367,14 +367,14 @@ public class BankSystemCommands {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
                                             String accountName = StringArgumentType.getString(context, "accountname");
-                                            CompletableFuture<User> user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByUUID(player.getUUID());
+                                            CompletableFuture<User> user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getUserByUUIDAsync(player.getUUID());
                                             user.thenAccept(userResult -> {
                                                 if(userResult == null)
                                                 {
                                                     ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(player.getName().getString()));
                                                     return;
                                                 }
-                                                CompletableFuture<IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.createBankAccount(accountName);
+                                                CompletableFuture<IBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().createBankAccountAsync(accountName);
                                                 account.thenAccept(accountResult -> {
                                                     if(accountResult == null)
                                                     {
@@ -406,7 +406,7 @@ public class BankSystemCommands {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
                                                     String username = StringArgumentType.getString(context, "username");
-                                                    CompletableFuture<User> bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUserByName(username);
+                                                    CompletableFuture<User> bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getUserByNameAsync(username);
                                                     bankUser.thenAccept(userResult -> {
                                                         if(userResult == null)
                                                         {
@@ -414,7 +414,7 @@ public class BankSystemCommands {
                                                             return;
                                                         }
                                                         UUID playerUUID = userResult.getUUID();
-                                                        CompletableFuture<IBankAccount> bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerUUID);
+                                                        CompletableFuture<IBankAccount> bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(playerUUID);
                                                         bankAccount.thenAccept(accountResult -> {
                                                             if(accountResult != null)
                                                                 SyncOpenGUIPacket.send_openBankAccountScreen(player, playerUUID, accountResult.getAccountNumber(), true);
@@ -553,7 +553,7 @@ public class BankSystemCommands {
                                             }
                                             CompletableFuture<ItemID> itemIDObj = ItemID.getOrRegisterFromItemStackServerSide(itemStack);
                                             itemIDObj.thenAccept(id -> {
-                                                CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(id);
+                                                CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().allowItemIDAsync(id);
                                                 resultFuture.thenAccept(result -> {
                                                     if(result)
                                                         ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemID, Bank.getFormattedAmountStatic(1)));
@@ -584,7 +584,7 @@ public class BankSystemCommands {
 
                                     CompletableFuture<ItemID> itemIDObj = ItemID.getOrRegisterFromItemStackServerSide(item);
                                     itemIDObj.thenAccept(id -> {
-                                        CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.allowItemID(id);
+                                        CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().allowItemIDAsync(id);
                                         resultFuture.thenAccept(result -> {
                                             if(result)
                                                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemIDObj.toString(), Bank.getFormattedAmountStatic(1)));
@@ -613,7 +613,7 @@ public class BankSystemCommands {
                                                 return Command.SINGLE_SUCCESS;
                                             }
                                             ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
-                                            CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.disallowItemID(itemIDObj);
+                                            CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().disallowItemIDAsync(itemIDObj);
                                             resultFuture.thenAccept(result -> {
                                                 if(result)
                                                     ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedMessage(itemID));
@@ -647,7 +647,7 @@ public class BankSystemCommands {
                                         ServerPlayerUtilities.printToClientConsole("Unknown ItemID for item: "+item);
                                         return Command.SINGLE_SUCCESS;
                                     }
-                                    CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.disallowItemID(itemIDObj);
+                                    CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().disallowItemIDAsync(itemIDObj);
                                     resultFuture.thenAccept(result -> {
                                         if(result)
                                             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedMessage(itemIDObj.toString()));
@@ -778,8 +778,8 @@ public class BankSystemCommands {
 
 
     private static int executeAddMoney_direct(ServerPlayer executor, String username, float amount) {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        IBank bank = bankManager.getOrCreatePersonalBank_direct(username, MoneyItem.getItemID());
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        IBank bank = bankManager.getOrCreatePersonalBank(username, MoneyItem.getItemID());
         if(bank == null)
         {
             ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getBankNotFoundMessage(username, MoneyItem.getName()));
@@ -798,8 +798,8 @@ public class BankSystemCommands {
         return Command.SINGLE_SUCCESS;
     }
     private static int executeSetMoney_direct(ServerPlayer executor, String username, float amount) {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        IBank bank = bankManager.getOrCreatePersonalBank_direct(username, MoneyItem.getItemID());
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        IBank bank = bankManager.getOrCreatePersonalBank(username, MoneyItem.getItemID());
         if(bank == null)
         {
             ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getBankNotFoundMessage(username, MoneyItem.getName()));
@@ -811,8 +811,8 @@ public class BankSystemCommands {
         return Command.SINGLE_SUCCESS;
     }
     private static int executeRemoveMoney(ServerPlayer executor, String username, float amount) {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        IBank bank = bankManager.getOrCreatePersonalBank_direct(username, MoneyItem.getItemID());
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        IBank bank = bankManager.getOrCreatePersonalBank(username, MoneyItem.getItemID());
         if(bank == null)
         {
             ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getBankNotFoundMessage(username, MoneyItem.getName()));
@@ -828,14 +828,14 @@ public class BankSystemCommands {
     }
 
     private static int executeSendMoney(ServerPlayer executor, String fromUserName, String toUserName, float amount) {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        IBank fromBank = bankManager.getOrCreatePersonalBank_direct(fromUserName, MoneyItem.getItemID());
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        IBank fromBank = bankManager.getOrCreatePersonalBank(fromUserName, MoneyItem.getItemID());
         if(fromBank == null)
         {
             ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getBankNotFoundMessage(fromUserName, MoneyItem.getName()));
             return Command.SINGLE_SUCCESS;
         }
-        IBank toBank = bankManager.getOrCreatePersonalBank_direct(toUserName, MoneyItem.getItemID());
+        IBank toBank = bankManager.getOrCreatePersonalBank(toUserName, MoneyItem.getItemID());
         if(toBank == null)
         {
             ServerPlayerUtilities.printToClientConsole(executor, BankSystemTextMessages.getBankNotFoundMessage(toUserName, MoneyItem.getName()));
@@ -858,8 +858,8 @@ public class BankSystemCommands {
     }
 
     private static int showBalance(ServerPlayer player) {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        IBank bank = bankManager.getOrCreatePersonalBank_direct(player.getUUID(), MoneyItem.getItemID());
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        IBank bank = bankManager.getOrCreatePersonalBank(player.getUUID(), MoneyItem.getItemID());
         if(bank == null)
         {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(), MoneyItem.getName()));
@@ -871,8 +871,8 @@ public class BankSystemCommands {
     }
 
     private static int bank_show(ServerPlayer player, String targetPlayer) {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
-        IBankAccount account = bankManager.getOrCreatePersonalBankAccount_direct(targetPlayer);
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        IBankAccount account = bankManager.getOrCreatePersonalBankAccount(targetPlayer);
         if(account == null)
         {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(targetPlayer, MoneyItem.getName()));
@@ -883,14 +883,14 @@ public class BankSystemCommands {
     }
 
     private static int bank_create(ServerPlayer player, String targetPlayer, ItemID itemID, long balance) {
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(itemID == null)
         {
             ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
 
-        IBankAccount bankAccount = bankManager.getOrCreatePersonalBankAccount_direct(targetPlayer);
+        IBankAccount bankAccount = bankManager.getOrCreatePersonalBankAccount(targetPlayer);
         if(bankAccount == null)
         {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(), MoneyItem.getName()));
@@ -918,14 +918,14 @@ public class BankSystemCommands {
     private static int bank_setBalance(ServerPlayer player,String targetPlayer, ItemID itemID, long balance) {
         //String orgItemID = MoneyBank.compatibilityMoneyItemIDConvert(itemID);
         //itemID = ItemUtilities.getNormalizedItemID(orgItemID);
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(itemID == null)
         {
             ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
 
-        IBankAccount bankAccount = bankManager.getOrCreatePersonalBankAccount_direct(targetPlayer);
+        IBankAccount bankAccount = bankManager.getOrCreatePersonalBankAccount(targetPlayer);
         if(bankAccount == null)
         {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(targetPlayer, MoneyItem.getName()));
@@ -945,13 +945,13 @@ public class BankSystemCommands {
     {
         //String orgItemID = itemID;
         //itemID = ItemUtilities.getNormalizedItemID(itemID);
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(itemID == null)
         {
             ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getInvalidItemIDMessage("null"));
             return Command.SINGLE_SUCCESS;
         }
-        IBankAccount bankAccount = bankManager.getPersonalBankAccount_direct(targetPlayer);
+        IBankAccount bankAccount = bankManager.getPersonalBankAccount(targetPlayer);
         if(bankAccount == null)
         {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(targetPlayer, MoneyItem.getName()));

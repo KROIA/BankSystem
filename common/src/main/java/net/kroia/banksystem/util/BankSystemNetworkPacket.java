@@ -2,6 +2,7 @@ package net.kroia.banksystem.util;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.ISyncServerBankManager;
 import net.kroia.modutilities.networking.client_server.NetworkPacket;
 import net.kroia.modutilities.networking.server_server.ForwardPacketContext;
 import net.kroia.modutilities.networking.server_server.ServerServerManager;
@@ -41,6 +42,11 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
     protected void handleOnMaster(UUID playerUUID) {
 
     };
+
+    protected ISyncServerBankManager getSyncBankManager()
+    {
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+    }
 
 
     @Override
