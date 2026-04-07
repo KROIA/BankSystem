@@ -1,6 +1,7 @@
 package net.kroia.banksystem.networking;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.banking.AsyncServerBankManager;
 import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
@@ -31,7 +32,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public static BankAccountDeleteRequest DELETE_BANK_ACCOUNT_REQUEST = (BankAccountDeleteRequest) AsynchronousRequestResponseSystem.register(new BankAccountDeleteRequest());
     public static AllowedItemsRequest ALLOWED_ITEMS_REQUEST = (AllowedItemsRequest) AsynchronousRequestResponseSystem.register(new AllowedItemsRequest());
 
-    public static AsyncServerBankManagerForwardingRequest ASYNC_SERVER_BANK_MANAGER_FORWARDING_REQUEST = (AsyncServerBankManagerForwardingRequest)AsynchronousRequestResponseSystem.register(new AsyncServerBankManagerForwardingRequest());
+    //public static AsyncServerBankManagerForwardingRequest ASYNC_SERVER_BANK_MANAGER_FORWARDING_REQUEST = (AsyncServerBankManagerForwardingRequest)AsynchronousRequestResponseSystem.register(new AsyncServerBankManagerForwardingRequest());
 
 
     public BankSystemNetworking() {
@@ -40,6 +41,8 @@ public class BankSystemNetworking extends NetworkPacketManager {
         setupClientReceiverPackets();
         setupServerReceiverPackets();
         setupServerServerPackets();
+
+        AsyncServerBankManager.setupNetworkPacket();
 
         this.setupARRS(); // Setup the Asynchronous Request Response System (ARRS)
     }

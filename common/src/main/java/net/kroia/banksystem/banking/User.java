@@ -6,7 +6,11 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveable;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -18,6 +22,14 @@ public class User implements ServerSaveable {
         User.BACKEND_INSTANCES = backend;
     }
 
+    public static final StreamCodec<RegistryFriendlyByteBuf, User> STREAM_CODEC = StreamCodec.composite(
+            UUIDUtil.STREAM_CODEC, p -> p.userUUID,
+            ByteBufCodecs.STRING_UTF8, p -> p.userName,
+            ByteBufCodecs.BOOL, p -> p.enableBankNotifications,
+            ByteBufCodecs.BOOL, p -> p.isBankModAdmin,
+            User::new
+    );
+
     private UUID userUUID;
     private String userName;
     private boolean enableBankNotifications = true;
@@ -26,6 +38,13 @@ public class User implements ServerSaveable {
     private User()
     {
 
+    }
+    private User(UUID userUUID, String userName, boolean enableBankNotifications, boolean isBankModAdmin)
+    {
+        this.userUUID = userUUID;
+        this.userName = userName;
+        this.enableBankNotifications = enableBankNotifications;
+        this.isBankModAdmin = isBankModAdmin;
     }
     public User(UUID userUUID, String userName, boolean enableBankNotifications) {
         this.userUUID = userUUID;

@@ -807,18 +807,7 @@ public class SyncServerBankManager implements ServerSaveableChunked, ISyncServer
         return CompletableFuture.completedFuture(getCirculationDataJsonString());
     }
 
-    @Override
-    public void onPlayerJoin(UUID playerUUID, String playerName)
-    {
-        if(!userExists(playerUUID)) {
-            addUser(playerUUID, playerName);
-            createPersonalBankAccount(playerUUID);
-        }
-    }
-    @Override
-    public void onPlayerJoinAsync(UUID playerUUID, String playerName) {
-        onPlayerJoin(playerUUID, playerName);
-    }
+
 
     @Override
     public JsonElement toJson()
@@ -866,7 +855,18 @@ public class SyncServerBankManager implements ServerSaveableChunked, ISyncServer
     }
 
 
-
+    @Override
+    public void onPlayerJoin(UUID playerUUID, String playerName)
+    {
+        if(!userExists(playerUUID)) {
+            addUser(playerUUID, playerName);
+            createPersonalBankAccount(playerUUID);
+        }
+    }
+    @Override
+    public void onPlayerJoinAsync(UUID playerUUID, String playerName) {
+        onPlayerJoin(playerUUID, playerName);
+    }
 
 
 
