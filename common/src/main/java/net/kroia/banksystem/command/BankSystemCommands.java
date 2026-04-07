@@ -285,6 +285,33 @@ public class BankSystemCommands {
                             // Execute the balance command on the server_sender
                             return bank_show(player, player.getName().getString());
                         })
+                        .then(Commands.literal("setBankSystemAdminMode")
+                                .requires(source -> source.hasPermission(2)) // Admin-only
+                                .then(Commands.argument("mode", StringArgumentType.string()).suggests((context, builder) -> {
+                                                    builder.suggest("ON");
+                                                    builder.suggest("OFF");
+                                                    return builder.buildFuture();
+                                                })
+                                        .executes(context -> {
+                                            CommandSourceStack source = context.getSource();
+                                            ServerPlayer player = source.getPlayerOrException();
+                                            String mode = StringArgumentType.getString(context, "mode");
+                                            if(!mode.equals("ON")&& !mode.equals("OFF"))  {
+                                                ServerPlayerUtilities.printToClientConsole("Unknown mode: "+mode);
+                                                return Command.SINGLE_SUCCESS;
+                                            }
+                                            boolean on = mode.equals("ON");
+
+                                            UUID playerUUID = player.getUUID();
+                                            CompletableFuture<Boolean> futureResult = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().setBanksystemAdminModeAsync(playerUUID, on);
+
+                                            futureResult.thenAccept(result -> {
+                                                ServerPlayerUtilities.printToClientConsole("Banksystem admin mode set to: "+(on?"ON":"OFF"));
+                                            });
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                        )
                         .then(Commands.literal("enableNotifications")
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
@@ -405,21 +432,31 @@ public class BankSystemCommands {
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
-                                                    String username = StringArgumentType.getString(context, "username");
-                                                    CompletableFuture<User> bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getUserByNameAsync(username);
-                                                    bankUser.thenAccept(userResult -> {
-                                                        if(userResult == null)
+                                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                                    isBanksystemAdmin.thenAccept(isAdmin -> {
+                                                        if(!isAdmin)
                                                         {
-                                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(username));
+                                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
                                                             return;
                                                         }
-                                                        UUID playerUUID = userResult.getUUID();
-                                                        CompletableFuture<IBankAccount> bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(playerUUID);
-                                                        bankAccount.thenAccept(accountResult -> {
-                                                            if(accountResult != null)
-                                                                SyncOpenGUIPacket.send_openBankAccountScreen(player, playerUUID, accountResult.getAccountNumber(), true);
+
+                                                        String username = StringArgumentType.getString(context, "username");
+                                                        CompletableFuture<User> bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getUserByNameAsync(username);
+                                                        bankUser.thenAccept(userResult -> {
+                                                            if(userResult == null)
+                                                            {
+                                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getUserNotFoundMessage(username));
+                                                                return;
+                                                            }
+                                                            UUID playerUUID = userResult.getUUID();
+                                                            CompletableFuture<IBankAccount> bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(playerUUID);
+                                                            bankAccount.thenAccept(accountResult -> {
+                                                                if(accountResult != null)
+                                                                    SyncOpenGUIPacket.send_openBankAccountScreen(player, playerUUID, accountResult.getAccountNumber(), true);
+                                                            });
                                                         });
                                                     });
+
 
 
                                                     // Execute the balance command on the server_sender
@@ -430,10 +467,18 @@ public class BankSystemCommands {
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
-                                                    String username = StringArgumentType.getString(context, "username");
+                                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                                    isBanksystemAdmin.thenAccept(isAdmin -> {
+                                                        if (!isAdmin) {
+                                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                                            return;
+                                                        }
+                                                        String username = StringArgumentType.getString(context, "username");
 
-                                                    // Execute the balance command on the server_sender
-                                                    return bank_show(player, username);
+                                                        // Execute the balance command on the server_sender
+                                                        bank_show(player, username);
+                                                    });
+                                                    return Command.SINGLE_SUCCESS;
                                                 })
                                         )
                                         .then(Commands.literal("create")
@@ -454,17 +499,25 @@ public class BankSystemCommands {
                                                                     float balance = FloatArgumentType.getFloat(context, "balance");
                                                                     String username = StringArgumentType.getString(context, "username");
 
-                                                                    ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
-                                                                    if(itemStack == ItemStack.EMPTY)
-                                                                    {
-                                                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
-                                                                        return Command.SINGLE_SUCCESS;
-                                                                    }
-                                                                    ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
+                                                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                                                    isBanksystemAdmin.thenAccept(isAdmin -> {
+                                                                        if (!isAdmin) {
+                                                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                                                            return;
+                                                                        }
 
-                                                                    // Execute the command on the server_sender
-                                                                    long rawAmount = Bank.convertToRawAmountStatic(balance);
-                                                                    return bank_create(player, username,  itemIDObj, rawAmount);
+                                                                        ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+                                                                        if (itemStack == ItemStack.EMPTY) {
+                                                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
+                                                                            return;
+                                                                        }
+                                                                        ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
+
+                                                                        // Execute the command on the server_sender
+                                                                        long rawAmount = Bank.convertToRawAmountStatic(balance);
+                                                                        bank_create(player, username, itemIDObj, rawAmount);
+                                                                    });
+                                                                    return Command.SINGLE_SUCCESS;
                                                                 })
                                                         )
                                                 )
@@ -488,18 +541,26 @@ public class BankSystemCommands {
                                                                     float balance = FloatArgumentType.getFloat(context, "balance");
                                                                     String username = StringArgumentType.getString(context, "username");
 
+                                                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                                                    isBanksystemAdmin.thenAccept(isAdmin -> {
+                                                                        if (!isAdmin) {
+                                                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                                                            return;
+                                                                        }
 
-                                                                    ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
-                                                                    if(itemStack == ItemStack.EMPTY)
-                                                                    {
-                                                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
-                                                                        return Command.SINGLE_SUCCESS;
-                                                                    }
-                                                                    ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
 
-                                                                    // Execute the command on the server_sender
-                                                                    long realBalance = Bank.convertToRawAmountStatic(balance);
-                                                                    return bank_setBalance(player, username,  itemIDObj, realBalance);
+                                                                        ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+                                                                        if (itemStack == ItemStack.EMPTY) {
+                                                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
+                                                                            return;
+                                                                        }
+                                                                        ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
+
+                                                                        // Execute the command on the server_sender
+                                                                        long realBalance = Bank.convertToRawAmountStatic(balance);
+                                                                        bank_setBalance(player, username, itemIDObj, realBalance);
+                                                                    });
+                                                                    return Command.SINGLE_SUCCESS;
                                                                 })
                                                         )
                                                 )
@@ -520,17 +581,24 @@ public class BankSystemCommands {
                                                             String itemID = StringArgumentType.getString(context, "itemID");
                                                             String username = StringArgumentType.getString(context, "username");
 
+                                                            CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                                            isBanksystemAdmin.thenAccept(isAdmin -> {
+                                                                if (!isAdmin) {
+                                                                    ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                                                    return;
+                                                                }
 
-                                                            // Execute the command on the server_sender
-                                                            ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
-                                                            if(itemStack == ItemStack.EMPTY)
-                                                            {
-                                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
-                                                                return Command.SINGLE_SUCCESS;
-                                                            }
-                                                            ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
+                                                                // Execute the command on the server_sender
+                                                                ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+                                                                if (itemStack == ItemStack.EMPTY) {
+                                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
+                                                                    return;
+                                                                }
+                                                                ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
 
-                                                            return bank_delete(player, username, itemIDObj);
+                                                                bank_delete(player, username, itemIDObj);
+                                                            });
+                                                            return Command.SINGLE_SUCCESS;
                                                         })
                                                 )
                                         )
@@ -544,21 +612,27 @@ public class BankSystemCommands {
 
                                             // Get arguments
                                             String itemID = StringArgumentType.getString(context, "itemID");
+                                            CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                            isBanksystemAdmin.thenAccept(isAdmin -> {
+                                                if (!isAdmin) {
+                                                    ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                                    return;
+                                                }
 
-                                            ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
-                                            if(itemStack == ItemStack.EMPTY)
-                                            {
-                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
-                                                return Command.SINGLE_SUCCESS;
-                                            }
-                                            CompletableFuture<ItemID> itemIDObj = ItemID.getOrRegisterFromItemStackServerSide(itemStack);
-                                            itemIDObj.thenAccept(id -> {
-                                                CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().allowItemIDAsync(id);
-                                                resultFuture.thenAccept(result -> {
-                                                    if(result)
-                                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemID, Bank.getFormattedAmountStatic(1)));
-                                                    else
-                                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemID));
+                                                ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+                                                if (itemStack == ItemStack.EMPTY) {
+                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
+                                                    return;
+                                                }
+                                                CompletableFuture<ItemID> itemIDObj = ItemID.getOrRegisterFromItemStackServerSide(itemStack);
+                                                itemIDObj.thenAccept(id -> {
+                                                    CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().allowItemIDAsync(id);
+                                                    resultFuture.thenAccept(result -> {
+                                                        if (result)
+                                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemID, Bank.getFormattedAmountStatic(1)));
+                                                        else
+                                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemID));
+                                                    });
                                                 });
                                             });
 
@@ -573,23 +647,30 @@ public class BankSystemCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    // Get arguments
-                                    ItemStack item = player.getMainHandItem();
-                                    if(item.isEmpty())
-                                    {
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoItemInHandMessage());
-                                        return Command.SINGLE_SUCCESS;
-                                    }
+                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                    isBanksystemAdmin.thenAccept(isAdmin -> {
+                                        if (!isAdmin) {
+                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                            return;
+                                        }
+
+                                        // Get arguments
+                                        ItemStack item = player.getMainHandItem();
+                                        if (item.isEmpty()) {
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoItemInHandMessage());
+                                            return;
+                                        }
 
 
-                                    CompletableFuture<ItemID> itemIDObj = ItemID.getOrRegisterFromItemStackServerSide(item);
-                                    itemIDObj.thenAccept(id -> {
-                                        CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().allowItemIDAsync(id);
-                                        resultFuture.thenAccept(result -> {
-                                            if(result)
-                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemIDObj.toString(), Bank.getFormattedAmountStatic(1)));
-                                            else
-                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemIDObj.toString()));
+                                        CompletableFuture<ItemID> itemIDObj = ItemID.getOrRegisterFromItemStackServerSide(item);
+                                        itemIDObj.thenAccept(id -> {
+                                            CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().allowItemIDAsync(id);
+                                            resultFuture.thenAccept(result -> {
+                                                if (result)
+                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemIDObj.toString(), Bank.getFormattedAmountStatic(1)));
+                                                else
+                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemIDObj.toString()));
+                                            });
                                         });
                                     });
                                     return Command.SINGLE_SUCCESS;
@@ -603,22 +684,29 @@ public class BankSystemCommands {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
 
-                                            // Get arguments
-                                            String itemID = StringArgumentType.getString(context, "itemID");
+                                            CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                            isBanksystemAdmin.thenAccept(isAdmin -> {
+                                                if (!isAdmin) {
+                                                    ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                                    return;
+                                                }
 
-                                            ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
-                                            if(itemStack == ItemStack.EMPTY)
-                                            {
-                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
-                                                return Command.SINGLE_SUCCESS;
-                                            }
-                                            ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
-                                            CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().disallowItemIDAsync(itemIDObj);
-                                            resultFuture.thenAccept(result -> {
-                                                if(result)
-                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedMessage(itemID));
-                                                else
-                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedFailedMessage(itemID));
+                                                // Get arguments
+                                                String itemID = StringArgumentType.getString(context, "itemID");
+
+                                                ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
+                                                if (itemStack == ItemStack.EMPTY) {
+                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
+                                                    return;
+                                                }
+                                                ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
+                                                CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().disallowItemIDAsync(itemIDObj);
+                                                resultFuture.thenAccept(result -> {
+                                                    if (result)
+                                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedMessage(itemID));
+                                                    else
+                                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedFailedMessage(itemID));
+                                                });
                                             });
 
                                             return Command.SINGLE_SUCCESS;
@@ -631,28 +719,32 @@ public class BankSystemCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
+                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                    isBanksystemAdmin.thenAccept(isAdmin -> {
+                                        if (!isAdmin) {
+                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                            return;
+                                        }
+                                        // Get arguments
+                                        ItemStack item = player.getMainHandItem();
+                                        if (item.isEmpty()) {
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoItemInHandMessage());
+                                            return;
+                                        }
 
-                                    // Get arguments
-                                    ItemStack item = player.getMainHandItem();
-                                    if(item.isEmpty())
-                                    {
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoItemInHandMessage());
-                                        return Command.SINGLE_SUCCESS;
-                                    }
 
-
-                                    ItemID itemIDObj = ItemID.getFromItemStack(item);
-                                    if(itemIDObj == null)
-                                    {
-                                        ServerPlayerUtilities.printToClientConsole("Unknown ItemID for item: "+item);
-                                        return Command.SINGLE_SUCCESS;
-                                    }
-                                    CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().disallowItemIDAsync(itemIDObj);
-                                    resultFuture.thenAccept(result -> {
-                                        if(result)
-                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedMessage(itemIDObj.toString()));
-                                        else
-                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedFailedMessage(itemIDObj.toString()));
+                                        ItemID itemIDObj = ItemID.getFromItemStack(item);
+                                        if (itemIDObj == null) {
+                                            ServerPlayerUtilities.printToClientConsole("Unknown ItemID for item: " + item);
+                                            return;
+                                        }
+                                        CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().disallowItemIDAsync(itemIDObj);
+                                        resultFuture.thenAccept(result -> {
+                                            if (result)
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedMessage(itemIDObj.toString()));
+                                            else
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNotAllowedFailedMessage(itemIDObj.toString()));
+                                        });
                                     });
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -664,8 +756,16 @@ public class BankSystemCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    // Open screen for settings GUI
-                                    SyncOpenGUIPacket.send_openBankSystemSettingScreen(player);
+                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                    isBanksystemAdmin.thenAccept(isAdmin -> {
+                                        if (!isAdmin) {
+                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                            return;
+                                        }
+
+                                        // Open screen for settings GUI
+                                        SyncOpenGUIPacket.send_openBankSystemSettingScreen(player);
+                                    });
 
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -677,12 +777,19 @@ public class BankSystemCommands {
                                         .executes(context -> {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
+                                            CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                            isBanksystemAdmin.thenAccept(isAdmin -> {
+                                                if (!isAdmin) {
+                                                    ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                                    return;
+                                                }
 
-                                            // Get arguments
-                                            float amount = FloatArgumentType.getFloat(context, "amount");
-                                            long rawAmount = Bank.convertToRawAmountStatic(amount);
-                                            BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.set(rawAmount);
-                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(Bank.getFormattedAmountStatic(amount)));
+                                                // Get arguments
+                                                float amount = FloatArgumentType.getFloat(context, "amount");
+                                                long rawAmount = Bank.convertToRawAmountStatic(amount);
+                                                BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.set(rawAmount);
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(Bank.getFormattedAmountStatic(amount)));
+                                            });
                                             return Command.SINGLE_SUCCESS;
                                         })
                                 )
@@ -694,10 +801,18 @@ public class BankSystemCommands {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
 
-                                            // Get arguments
-                                            int amount = IntegerArgumentType.getInteger(context, "ticks");
-                                            BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ITEM_TRANSFER_TICK_INTERVAL.set(amount);
-                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingItemTransferTickIntervalMessage(amount));
+                                            CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                            isBanksystemAdmin.thenAccept(isAdmin -> {
+                                                if (!isAdmin) {
+                                                    ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                                    return;
+                                                }
+
+                                                // Get arguments
+                                                int amount = IntegerArgumentType.getInteger(context, "ticks");
+                                                BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ITEM_TRANSFER_TICK_INTERVAL.set(amount);
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingItemTransferTickIntervalMessage(amount));
+                                            });
                                             return Command.SINGLE_SUCCESS;
                                         })
                                 )
@@ -708,11 +823,18 @@ public class BankSystemCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.saveAll())
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
-                                    else
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
+                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                    isBanksystemAdmin.thenAccept(isAdmin -> {
+                                        if (!isAdmin) {
+                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                            return;
+                                        }
 
+                                        if (BACKEND_INSTANCES.SERVER_DATA_HANDLER.saveAll())
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
+                                        else
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
+                                    });
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
@@ -722,11 +844,18 @@ public class BankSystemCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.save_bank())
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
-                                    else
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
+                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                    isBanksystemAdmin.thenAccept(isAdmin -> {
+                                        if (!isAdmin) {
+                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                            return;
+                                        }
 
+                                        if (BACKEND_INSTANCES.SERVER_DATA_HANDLER.save_bank())
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
+                                        else
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
+                                    });
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
@@ -736,11 +865,17 @@ public class BankSystemCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.save_globalSettings())
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
-                                    else
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
-
+                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                    isBanksystemAdmin.thenAccept(isAdmin -> {
+                                        if (!isAdmin) {
+                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                            return;
+                                        }
+                                        if (BACKEND_INSTANCES.SERVER_DATA_HANDLER.save_globalSettings())
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
+                                        else
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
+                                    });
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
@@ -750,11 +885,17 @@ public class BankSystemCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.load_bank())
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadedMessage());
-                                    else
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadFailedMessage());
-
+                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                    isBanksystemAdmin.thenAccept(isAdmin -> {
+                                        if (!isAdmin) {
+                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                            return;
+                                        }
+                                        if (BACKEND_INSTANCES.SERVER_DATA_HANDLER.load_bank())
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadedMessage());
+                                        else
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadFailedMessage());
+                                    });
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
@@ -763,12 +904,17 @@ public class BankSystemCommands {
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-
-                                    if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.load_globalSettings())
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadedMessage());
-                                    else
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadFailedMessage());
-
+                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
+                                    isBanksystemAdmin.thenAccept(isAdmin -> {
+                                        if (!isAdmin) {
+                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
+                                            return;
+                                        }
+                                        if (BACKEND_INSTANCES.SERVER_DATA_HANDLER.load_globalSettings())
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadedMessage());
+                                        else
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadFailedMessage());
+                                    });
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )

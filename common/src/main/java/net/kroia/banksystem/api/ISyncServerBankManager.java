@@ -32,6 +32,8 @@ public interface ISyncServerBankManager {
      */
     BankManagerData.BankAccountsData getBankManagerBankAccountsData();
 
+    boolean setBanksystemAdminMode(UUID playerUUID, boolean isAdmin);
+    boolean isBanksystemAdmin(UUID playerUUID);
 
     /**
      * Returns a list of all allowed items that can be stored in the bank.

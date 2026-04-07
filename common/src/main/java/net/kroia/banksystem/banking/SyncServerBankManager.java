@@ -114,38 +114,41 @@ public class SyncServerBankManager implements ServerSaveableChunked, ISyncServer
         return CompletableFuture.completedFuture(getBankManagerBankAccountsData());
     }
 
-
-   /* public @Nullable BankAccountData getBankAccountData(int accountNumber, @Nullable UUID personalUserUUID)
+    @Override
+    public  boolean setBanksystemAdminMode(UUID playerUUID, boolean isAdmin)
     {
-        if(personalUserUUID == null) {
-            IBankAccount account = getBankAccount(accountNumber);
-            if (account == null) {
-                return null;
-            }
-            return account.getAccountData();
-        }
-        else
-        {
-            IBankAccount account = getPersonalBankAccount(personalUserUUID);
-            if(account == null) {
-                return null;
-            }
-            User owner = account.getPersonalBankOwner();
-            if(owner != null)
-            {
-                if(!owner.getUUID().equals(personalUserUUID) && !isAdmin) {
-                    return null;
-                }
-                future.complete(account.getAccountData());
-                return future;
-            }
-            else if(isAdmin)
-            {
-                future.complete(account.getAccountData());
-                return future;
-            }
-        }
-    }*/
+        User user = userMap.get(playerUUID);
+        if (user == null)
+            return false;
+        user.setBankModAdmin(isAdmin);
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> setBanksystemAdminModeAsync(UUID playerUUID, boolean isAdmin)
+    {
+        User user = userMap.get(playerUUID);
+        if (user == null)
+            return CompletableFuture.completedFuture(false);
+        user.setBankModAdmin(isAdmin);
+        return CompletableFuture.completedFuture(true);
+    }
+    @Override
+    public  boolean isBanksystemAdmin(UUID playerUUID)
+    {
+        User user = userMap.get(playerUUID);
+        if (user == null)
+            return false;
+        return user.isBankModAdmin();
+    }
+    @Override
+    public  CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID)
+    {
+        User user = userMap.get(playerUUID);
+        if (user == null)
+            return CompletableFuture.completedFuture(false);
+        return CompletableFuture.completedFuture(user.isBankModAdmin());
+    }
+
 
 
 

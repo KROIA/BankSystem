@@ -30,6 +30,10 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public static BankSelectionScreenDataRequest BANK_SELECTION_SCREEN_DATA_REQUEST = (BankSelectionScreenDataRequest) AsynchronousRequestResponseSystem.register(new BankSelectionScreenDataRequest());
     public static BankAccountDeleteRequest DELETE_BANK_ACCOUNT_REQUEST = (BankAccountDeleteRequest) AsynchronousRequestResponseSystem.register(new BankAccountDeleteRequest());
     public static AllowedItemsRequest ALLOWED_ITEMS_REQUEST = (AllowedItemsRequest) AsynchronousRequestResponseSystem.register(new AllowedItemsRequest());
+
+    public static AsyncServerBankManagerForwardingRequest ASYNC_SERVER_BANK_MANAGER_FORWARDING_REQUEST = (AsyncServerBankManagerForwardingRequest)AsynchronousRequestResponseSystem.register(new AsyncServerBankManagerForwardingRequest());
+
+
     public BankSystemNetworking() {
         super(BankSystemMod.MOD_ID, "bank_system_channel");
 

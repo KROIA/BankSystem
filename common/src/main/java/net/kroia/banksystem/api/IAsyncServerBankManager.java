@@ -36,6 +36,9 @@ public interface IAsyncServerBankManager {
     CompletableFuture<BankManagerData.BankAccountsData> getBankManagerBankAccountsDataAsync();
 
 
+    CompletableFuture<Boolean> setBanksystemAdminModeAsync(UUID playerUUID, boolean isAdmin);
+    CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID);
+
     /**
      * Returns a list of all allowed items that can be stored in the bank.
      * @return A list of allowed items that can be stored in the bank.

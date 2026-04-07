@@ -23,6 +23,11 @@ public class ClientBankManager implements IClientBankManager {
         BankAccount.setBackend(backend);
     }
 
+    private AsyncServerBankManagerForwardingRequest forwardingRequest()
+    {
+        return BankSystemNetworking.ASYNC_SERVER_BANK_MANAGER_FORWARDING_REQUEST;
+    }
+
     public ClientBankManager()
     {
 
@@ -57,7 +62,12 @@ public class ClientBankManager implements IClientBankManager {
     @Override
     public CompletableFuture<@Nullable BankManagerData> requestBankManagerData()
     {
-        return BankSystemNetworking.BANK_MANAGER_DATA_REQUEST.sendRequestToServer(0);
+        CompletableFuture<BankManagerData> future = new CompletableFuture<>();
+        AsyncServerBankManagerForwardingRequest.InputData inputData = new AsyncServerBankManagerForwardingRequest.InputData(AsyncServerBankManagerForwardingRequest.FunctionType.GetBankManagerDataAsync);
+        CompletableFuture<AsyncServerBankManagerForwardingRequest.OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+        //return BankSystemNetworking.BANK_MANAGER_DATA_REQUEST.sendRequestToServer(0);
     }
 
     @Override

@@ -7,6 +7,8 @@ import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
+import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.request.AsyncServerBankManagerForwardingRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
@@ -23,21 +25,47 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
         BankAccount.setBackend(backend);
     }
 
+    private AsyncServerBankManagerForwardingRequest forwardingRequest()
+    {
+        return BankSystemNetworking.ASYNC_SERVER_BANK_MANAGER_FORWARDING_REQUEST;
+    }
 
 
 
     @Override
     public CompletableFuture<BankManagerData> getBankManagerDataAsync() {
-        return null;
+        CompletableFuture<BankManagerData> future = new CompletableFuture<>();
+        AsyncServerBankManagerForwardingRequest.InputData inputData = new AsyncServerBankManagerForwardingRequest.InputData(AsyncServerBankManagerForwardingRequest.FunctionType.GetBankManagerDataAsync);
+        CompletableFuture<AsyncServerBankManagerForwardingRequest.OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<BankManagerData.UserMapData> getBankManagerUserMapDataAsync() {
-        return null;
+        CompletableFuture<BankManagerData.UserMapData> future = new CompletableFuture<>();
+        AsyncServerBankManagerForwardingRequest.InputData inputData = new AsyncServerBankManagerForwardingRequest.InputData(AsyncServerBankManagerForwardingRequest.FunctionType.GetBankManagerUserMapDataAsync);
+        CompletableFuture<AsyncServerBankManagerForwardingRequest.OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<BankManagerData.BankAccountsData> getBankManagerBankAccountsDataAsync() {
+        CompletableFuture<BankManagerData.BankAccountsData> future = new CompletableFuture<>();
+        AsyncServerBankManagerForwardingRequest.InputData inputData = new AsyncServerBankManagerForwardingRequest.InputData(AsyncServerBankManagerForwardingRequest.FunctionType.GetBankManagerBankAccountsDataAsync);
+        CompletableFuture<AsyncServerBankManagerForwardingRequest.OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> setBanksystemAdminModeAsync(UUID playerUUID, boolean isAdmin) {
+        return null;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID) {
         return null;
     }
 
