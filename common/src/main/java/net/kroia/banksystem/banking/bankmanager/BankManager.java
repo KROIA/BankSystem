@@ -1,34 +1,35 @@
-package net.kroia.banksystem.banking;
+package net.kroia.banksystem.banking.bankmanager;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.IAsyncServerBankManager;
-import net.kroia.banksystem.api.IBankManager;
-import net.kroia.banksystem.api.IClientBankManager;
-import net.kroia.banksystem.api.ISyncServerBankManager;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
+import net.kroia.banksystem.api.bankmanager.IBankManager;
+import net.kroia.banksystem.api.bankmanager.IClientBankManager;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.banking.bankaccount.SyncServerBankAccount;
 
 public class BankManager implements IBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
-        BankAccount.setBackend(backend);
-        SyncServerBankManager.setBackend(BACKEND_INSTANCES);
-        AsyncServerBankManager.setBackend(BACKEND_INSTANCES);
+        SyncServerBankAccount.setBackend(backend);
+        SyncBankManager.setBackend(BACKEND_INSTANCES);
+        AsyncBankManager.setBackend(BACKEND_INSTANCES);
     }
 
 
-    private final IAsyncServerBankManager asyncServerBankManager;
+    private final IAsyncBankManager asyncServerBankManager;
     private final ISyncServerBankManager syncServerBankManager;
 
 
     public static BankManager createMaster()
     {
-        SyncServerBankManager syncManager = new SyncServerBankManager();
+        SyncBankManager syncManager = new SyncBankManager();
         return new BankManager(syncManager, syncManager);
     }
     public static BankManager createSlave()
     {
-        AsyncServerBankManager asyncServerBankManager = AsyncServerBankManager.createSlaveServerManager();
-        return new BankManager(asyncServerBankManager, null);
+        AsyncBankManager asyncBankManager = AsyncBankManager.createSlaveServerManager();
+        return new BankManager(asyncBankManager, null);
     }
     public static IClientBankManager createClient()
     {
@@ -36,7 +37,7 @@ public class BankManager implements IBankManager {
     }
 
 
-    private BankManager(IAsyncServerBankManager asyncManager, ISyncServerBankManager syncManager)
+    private BankManager(IAsyncBankManager asyncManager, ISyncServerBankManager syncManager)
     {
         asyncServerBankManager = asyncManager;
         syncServerBankManager = syncManager;
@@ -53,7 +54,7 @@ public class BankManager implements IBankManager {
         return asyncServerBankManager != null;
     }
     @Override
-    public IAsyncServerBankManager getAsync()
+    public IAsyncBankManager getAsync()
     {
         return asyncServerBankManager;
     }

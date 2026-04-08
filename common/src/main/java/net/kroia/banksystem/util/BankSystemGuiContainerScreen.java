@@ -1,7 +1,7 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.IClientBankManager;
+import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.modutilities.gui.GuiContainerScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;

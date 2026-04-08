@@ -609,7 +609,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     getBankManager().requestDeleteBankAccount(accountNumber).thenAccept((success) -> {
                         if(success)
                         {
-                            info("Bank account deleted successfully.");
+                            info("SyncServerBank account deleted successfully.");
                             onClose();
                         }
                         else

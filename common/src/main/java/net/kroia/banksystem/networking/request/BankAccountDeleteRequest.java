@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.banksystem.api.ISyncServerBankManager;
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -28,7 +28,7 @@ public class BankAccountDeleteRequest extends BankSystemGenericRequest<Integer, 
         ISyncServerBankManager bankManager = getSyncBankManager();
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
         boolean isAdmin = playerIsAdmin(sender);
-        IBankAccount account = bankManager.getBankAccount(input);
+        ISyncServerBankAccount account = bankManager.getBankAccount(input);
         if(account == null)
         {
             future.complete(false);

@@ -1,6 +1,6 @@
 package net.kroia.banksystem.item.custom.software;
 
-import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.block.custom.TerminalBlock;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
@@ -37,10 +37,10 @@ public class BankingSoftware extends Software {
     protected void onRightClickedServerSide(ServerPlayer player)
     {
         if(player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
-            CompletableFuture<IBankAccount> bankAccountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(player.getUUID());
+            CompletableFuture<IAsyncBankAccount> bankAccountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(player.getUUID());
             bankAccountFuture.thenAcceptAsync((bankAccount) -> {
                 if(bankAccount != null) {
-                    SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), bankAccount.getAccountNumber(), true);
+                    SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), bankAccount.getAccountNumberAsync(), true);
                 }
             });
         }
@@ -56,10 +56,10 @@ public class BankingSoftware extends Software {
 
                 if(serverPlayer.hasPermissions(2) && serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
                     UUID targetUUID = target.getUUID();
-                    CompletableFuture<IBankAccount> bankAccountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(targetUUID);
+                    CompletableFuture<IAsyncBankAccount> bankAccountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(targetUUID);
                     bankAccountFuture.thenAcceptAsync((bankAccount) -> {
                         if(bankAccount != null) {
-                            SyncOpenGUIPacket.send_openBankAccountScreen(serverPlayer, targetUUID, bankAccount.getAccountNumber(), true);
+                            SyncOpenGUIPacket.send_openBankAccountScreen(serverPlayer, targetUUID, bankAccount.getAccountNumberAsync(), true);
                         }
                     });
                     return InteractionResult.CONSUME;

@@ -4,7 +4,7 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
-import net.kroia.banksystem.banking.SyncServerBankManager;
+import net.kroia.banksystem.banking.bankmanager.SyncBankManager;
 import net.kroia.banksystem.compat.OldBankDataLoader;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.persistence.DataPersistence;
@@ -147,7 +147,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
         Path settingsFilePath = getGlobalSettingsFilePath();
         if(!fileExists(settingsFilePath)) {
-            warn("Bank settings file not found, creating default settings file.");
+            warn("SyncServerBank settings file not found, creating default settings file.");
             success &= save_globalSettings(settingsFilePath);
         }
         else
@@ -190,7 +190,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     {
         boolean success = true;
         Map<String, ListTag> bankData = new HashMap<>();
-        SyncServerBankManager bankManager = (SyncServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        SyncBankManager bankManager = (SyncBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(bankManager != null)
             success = bankManager.save(bankData);
         saveDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME), bankData);
@@ -205,7 +205,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public boolean load_bank()
     {
         Map<String, ListTag> bankData = readDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME));
-        SyncServerBankManager bankManager = (SyncServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        SyncBankManager bankManager = (SyncBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(bankData == null || bankData.isEmpty() || !bankData.containsKey("itemCentScaleFactors")) {
 
             if(bankManager != null)
@@ -225,7 +225,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public boolean load_bank_compatibilityMode()
     {
         CompoundTag data = readDataCompound(getAbsoluteSavePath("Bank_data.dat"));
-        SyncServerBankManager bankManager = (SyncServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        SyncBankManager bankManager = (SyncBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(bankManager != null) {
             if (data == null) {
                 bankManager.setupDefaultItems();

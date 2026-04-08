@@ -1,7 +1,7 @@
 package net.kroia.banksystem.screen.uiElements;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.SyncServerBank;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
@@ -127,7 +127,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
             balanceValueTextBox.setAllowLetters(false);
             balanceValueTextBox.setAllowNumbers(true, true);
             balanceValueTextBox.setAllowNegativeNumbers(false);
-            int maxDecimalChar = Bank.getMaxDecimalDigitsCount();
+            int maxDecimalChar = SyncServerBank.getMaxDecimalDigitsCount();
             balanceValueTextBox.setMaxDecimalChar(maxDecimalChar);
             balanceValueTextBox.setOnTextChanged(this::onBalanceTextBoxChanged);
             balanceValueTextBox.setMaxChars(6*3+1); // Max size of a long
@@ -234,14 +234,14 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
         if(balanceValueTextBox.getText().isEmpty())
             return 0;
         try {
-            return (long)Math.max(0.0, Bank.convertToRawAmountStatic(balanceValueTextBox.getText()));
+            return (long)Math.max(0.0, SyncServerBank.convertToRawAmountStatic(balanceValueTextBox.getText()));
         } catch (NumberFormatException e) {
             return 0;
         }
     }
     public void setBalanceLabel(long balance)
     {
-        balanceValueLabel.setText(Bank.getFormattedAmountStatic(balance));
+        balanceValueLabel.setText(SyncServerBank.getFormattedAmountStatic(balance));
     }
     public void setBalance(long balance)
     {
@@ -249,13 +249,13 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     }
     public void setLockedBalance(long lockedBalance)
     {
-        lockedBalanceValueLabel.setText(Bank.getFormattedAmountStatic(lockedBalance));
+        lockedBalanceValueLabel.setText(SyncServerBank.getFormattedAmountStatic(lockedBalance));
     }
     public void setTotalBalance(long totalBalance)
     {
-        totalBalanceValueLabel.setText(Bank.getFormattedAmountStatic(totalBalance));
+        totalBalanceValueLabel.setText(SyncServerBank.getFormattedAmountStatic(totalBalance));
         if(!balanceChanged && isAdminMode)
-            balanceValueTextBox.setText(Bank.getTextFieldString(totalBalance));
+            balanceValueTextBox.setText(SyncServerBank.getTextFieldString(totalBalance));
     }
     private void onFreeLockedBalanceCheckBoxClicked(Boolean checked)
     {

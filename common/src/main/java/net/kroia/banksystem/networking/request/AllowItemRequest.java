@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.api.ISyncServerBankManager;
-import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.banking.bank.SyncServerBank;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
@@ -49,7 +49,7 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
 
                 if(bankManager.allowItemID(data.itemID))
                 {
-                    String smallestAmountStr = Bank.getFormattedAmountStatic(1);
+                    String smallestAmountStr = SyncServerBank.getFormattedAmountStatic(1);
                     ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedMessage(data.itemID.getName(), smallestAmountStr));
                     future.complete(true);
                     return future;
@@ -86,7 +86,7 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
 
                 if(bankManager.allowItemID(data.itemID))
                 {
-                    String smallestAmountStr = Bank.getFormattedAmountStatic(1);
+                    String smallestAmountStr = SyncServerBank.getFormattedAmountStatic(1);
                     // todo: replace by sending a custom packet to the slaves client back to print the message
                     ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedMessage(data.itemID.getName(), smallestAmountStr));
                     future.complete(true);

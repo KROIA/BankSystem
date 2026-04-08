@@ -2,7 +2,7 @@ package net.kroia.banksystem.util;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.ISyncServerBankManager;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.modutilities.networking.client_server.NetworkPacket;
 import net.kroia.modutilities.networking.server_server.ForwardPacketContext;
 import net.kroia.modutilities.networking.server_server.ServerServerManager;

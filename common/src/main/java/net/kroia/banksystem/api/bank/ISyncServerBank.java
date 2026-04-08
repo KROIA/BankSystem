@@ -1,4 +1,4 @@
-package net.kroia.banksystem.api;
+package net.kroia.banksystem.api.bank;
 
 import com.google.gson.JsonElement;
 import net.kroia.banksystem.banking.clientdata.BankData;
@@ -10,34 +10,7 @@ import org.jetbrains.annotations.NotNull;
  * Banks can be used to deposit, withdraw, and transfer funds or items.
  * Each bank is associated with a specific player and item type.
  */
-public interface IBank {
-
-
-    enum BankType
-    {
-        MONEY,
-        ITEM
-    }
-    enum Status
-    {
-        SUCCESS,
-        FAILED_NOT_ENOUGH_FUNDS,
-        FAILED_OVERFLOW,
-        FAILED_NEGATIVE_VALUE,
-        FAILED_WRONG_INSTANCE_TYPE,
-        FAILED_INVALID_ITEM_ID,
-        FAILED_NO_BANK
-
-    }
-
-    /**
-     * Returns the scale factor for this bank.
-     * For item banks its always 1, for money banks its 100.
-     * @return The scale factor for this bank.
-     */
-    // Removed, use: BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR
-    //int getItemFractionScaleFactor();
-
+public interface ISyncServerBank {
 
     /**
      * Returns minimalistic data about this bank.
@@ -115,37 +88,16 @@ public interface IBank {
     boolean setRealBalance(double balance);
 
     /**
-     * Gets the UUID of the player who owns this bank.
-     *
-     * @return The UUID of the player who owns this bank.
-     */
-    //UUID getPlayerUUID();
-
-    /**
-     * Gets the ServerPlayer who owns this bank.
-     *
-     * @return The player who owns this bank, or null if the player is not online.
-     */
-    //@Nullable ServerPlayer getUser();
-
-    /**
-     * Gets the name of the player who owns this bank.
-     *
-     * @return The name of the player who owns this bank.
-     */
-    //String getPlayerName();
-
-    /**
      * Deposits an amount of money or items into this bank.
      *
      * @param amount The amount to deposit. 
-     * @return Status indicating the result of the deposit operation.
-     *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
+     * @return BankStatus indicating the result of the deposit operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in the bank.
      */
-    Status deposit(long amount);
+    BankStatus deposit(long amount);
 
 
-    Status depositReal(double amount);
+    BankStatus depositReal(double amount);
 
 
     /**
@@ -161,23 +113,23 @@ public interface IBank {
      * Withdraws an amount of money or items from this bank.
      *
      * @param amount The amount to withdraw. 
-     * @return Status indicating the result of the withdrawal operation.
-     *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
+     * @return BankStatus indicating the result of the withdrawal operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in the bank.
      */
-    Status withdraw(long amount);
+    BankStatus withdraw(long amount);
 
-    Status withdrawReal(double amount);
+    BankStatus withdrawReal(double amount);
 
     /**
      * Withdraws an amount of money or items from this bank, but only if the amount is locked.
      * This is useful for transactions that require the amount to be locked before the withdrawal.
      *
      * @param amount The amount to withdraw. 
-     * @return Status indicating the result of the withdrawal operation.
-     *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
+     * @return BankStatus indicating the result of the withdrawal operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in the bank.
      */
-    Status withdrawLocked(long amount);
-    Status withdrawLockedReal(double amount);
+    BankStatus withdrawLocked(long amount);
+    BankStatus withdrawLockedReal(double amount);
 
     /**
      * Withdraws an amount of money or items from this bank, but first uses the locked balance and only
@@ -187,22 +139,22 @@ public interface IBank {
      * if the amount is not locked. (can happen because of the 'setBalance' function)
      *
      * @param amount The amount to withdraw. 
-     * @return Status indicating the result of the withdrawal operation.
-     *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
+     * @return BankStatus indicating the result of the withdrawal operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in the bank.
      */
-    Status withdrawLockedPrefered(long amount);
-    Status withdrawLockedPreferedReal(double amount);
+    BankStatus withdrawLockedPrefered(long amount);
+    BankStatus withdrawLockedPreferedReal(double amount);
 
     /**
      * Transfers an amount of money or items from this bank to another bank.
      *
      * @param amount The amount to transfer. 
      * @param other  The bank to transfer the amount to.
-     * @return Status indicating the result of the transfer operation.
-     *         If the status is not Status.SUCCESS, then nothing has changed in both banks.
+     * @return BankStatus indicating the result of the transfer operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in both banks.
      */
-    Status transfer(long amount, IBank other);
-    Status transferReal(double amount, @NotNull IBank other);
+    BankStatus transfer(long amount, ISyncServerBank other);
+    BankStatus transferReal(double amount, @NotNull ISyncServerBank other);
 
     /**
      * Transfers an amount of money or items from this bank to another bank, but only if the amount is locked.
@@ -210,11 +162,11 @@ public interface IBank {
      *
      * @param amount The amount to transfer. 
      * @param other  The bank to transfer the amount to.
-     * @return Status indicating the result of the transfer operation.
-     *         If the status is not Status.SUCCESS, then nothing has changed in both banks.
+     * @return BankStatus indicating the result of the transfer operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in both banks.
      */
-    Status transferFromLocked(long amount, @NotNull IBank other);
-    Status transferFromLockedReal(double amount, @NotNull IBank other);
+    BankStatus transferFromLocked(long amount, @NotNull ISyncServerBank other);
+    BankStatus transferFromLockedReal(double amount, @NotNull ISyncServerBank other);
 
     /**
      * Transfers an amount of money or items from this bank to another bank, but first uses the locked balance and only
@@ -225,22 +177,22 @@ public interface IBank {
      *
      * @param amount The amount to transfer. 
      * @param other  The bank to transfer the amount to.
-     * @return Status indicating the result of the transfer operation.
-     *         If the status is not Status.SUCCESS, then nothing has changed in both banks.
+     * @return BankStatus indicating the result of the transfer operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in both banks.
      */
-    Status transferFromLockedPrefered(long amount, @NotNull IBank other);
-    Status transferFromLockedPreferedReal(double amount, @NotNull IBank other);
+    BankStatus transferFromLockedPrefered(long amount, @NotNull ISyncServerBank other);
+    BankStatus transferFromLockedPreferedReal(double amount, @NotNull ISyncServerBank other);
 
     /**
      * Locks an amount of money or items in this bank.
      * This is useful for transactions that require the amount to be locked before the transaction.
      *
      * @param amount The amount to lock. 
-     * @return Status indicating the result of the lock operation.
-     *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
+     * @return BankStatus indicating the result of the lock operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in the bank.
      */
-    Status lockAmount(long amount);
-    Status lockAmountReal(double amount);
+    BankStatus lockAmount(long amount);
+    BankStatus lockAmountReal(double amount);
 
     /**
      * Unlocks an amount of money or items in this bank.
@@ -248,11 +200,11 @@ public interface IBank {
      * then was cancelled.
      *
      * @param amount The amount to unlock. 
-     * @return Status indicating the result of the unlock operation.
-     *         If the status is not Status.SUCCESS, then nothing has changed in the bank.
+     * @return BankStatus indicating the result of the unlock operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in the bank.
      */
-    Status unlockAmount(long amount);
-    Status unlockAmountReal(double amount);
+    BankStatus unlockAmount(long amount);
+    BankStatus unlockAmountReal(double amount);
 
     /**
      * Unlocks all locked amounts in this bank.
@@ -364,7 +316,6 @@ public interface IBank {
      * @param realAmount The real amount to format.
      * @return A string representation of the formatted amount.
      */
-    //String getFormattedAmount(float realAmount);
     String getFormattedAmount(double realAmount);
 
     /**

@@ -4,10 +4,17 @@ import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
-import net.kroia.banksystem.api.*;
-import net.kroia.banksystem.banking.BankManager;
-import net.kroia.banksystem.banking.ClientBankManager;
-import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.api.BankSystemAPI;
+import net.kroia.banksystem.api.IBankSystemDataHandler;
+import net.kroia.banksystem.api.IBankSystemEvents;
+import net.kroia.banksystem.api.bankmanager.IBankManager;
+import net.kroia.banksystem.api.bankmanager.IClientBankManager;
+import net.kroia.banksystem.banking.bank.AsyncBank;
+import net.kroia.banksystem.banking.bank.ClientBank;
+import net.kroia.banksystem.banking.bank.SyncServerBank;
+import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
+import net.kroia.banksystem.banking.bankmanager.BankManager;
+import net.kroia.banksystem.banking.bankmanager.ClientBankManager;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.command.BankSystemCommands;
 import net.kroia.banksystem.compat.NEZNAMY_TAB_Placeholders;
@@ -66,6 +73,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankTerminalBlockEntity.setBackend(INSTANCES);
 
         BankManager.setBackend(INSTANCES);
+        ClientBank.setBackend(INSTANCES);
+        AsyncBank.setBackend(INSTANCES);
         BankSystemModSettings.setBackend(INSTANCES);
         BankSystemCommands.setBackend(INSTANCES);
         BankDownloadBlockEntity.setBackend(INSTANCES);
@@ -76,7 +85,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemNetworkPacket.setBackend(INSTANCES);
         BankSystemGenericRequest.setBackend(INSTANCES);
         BankSystemTextMessages.setBackend(INSTANCES);
-        Bank.setBackend(INSTANCES);
+        SyncServerBank.setBackend(INSTANCES);
+        AsyncBankAccount.setBackend(INSTANCES);
 
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
             BankSystemCommands.register(dispatcher);

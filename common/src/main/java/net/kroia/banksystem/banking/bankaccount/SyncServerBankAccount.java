@@ -1,13 +1,17 @@
-package net.kroia.banksystem.banking;
+package net.kroia.banksystem.banking.bankaccount;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.banksystem.api.ISyncServerBankManager;
-import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.api.bank.IAsyncBank;
+import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.bank.SyncServerBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
@@ -22,12 +26,13 @@ import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
-public class BankAccount implements ServerSaveable, IBankAccount {
+public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAccount, IAsyncBankAccount {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
-        BankAccount.BACKEND_INSTANCES = backend;
+        SyncServerBankAccount.BACKEND_INSTANCES = backend;
         User.setBackend(backend);
     }
 
@@ -48,63 +53,63 @@ public class BankAccount implements ServerSaveable, IBankAccount {
      */
     private @Nullable User personalBankOwner;
     private final Map<UUID, BankUser> users = new HashMap<>();
-    private final Map<ItemID, Bank> banks = new HashMap<>();
+    private final Map<ItemID, SyncServerBank> banks = new HashMap<>();
 
-    private BankAccount(int accountNumber) {
+    private SyncServerBankAccount(int accountNumber) {
         this.accountNumber = accountNumber;
         this.accountIcon = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.CHEST.getDefaultInstance());
     }
-    private BankAccount(int accountNumber, @Nullable User personalBankOwner, List<BankUser> users, Map<ItemID, Bank> banks) {
+    private SyncServerBankAccount(int accountNumber, @Nullable User personalBankOwner, List<BankUser> users, Map<ItemID, SyncServerBank> banks) {
         this.accountNumber = accountNumber;
         this.personalBankOwner = personalBankOwner;
         this.accountIcon = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.CHEST.getDefaultInstance());
         if( personalBankOwner != null) {
-            this.accountName = personalBankOwner.getName()+"'s Bank Account";
+            this.accountName = personalBankOwner.getName()+"'s SyncServerBank Account";
         }
         this.banks.putAll(banks);
         for (BankUser user : users) {
             this.users.put(user.getUUID(), user);
         }
     }
-    private BankAccount()
+    private SyncServerBankAccount()
     {
 
     }
 
-    public static @Nullable BankAccount create(int accountNumber)
+    public static @Nullable SyncServerBankAccount create(int accountNumber)
     {
         if (accountNumber <= 0) {
             return null; // Invalid account number
         }
-        BankAccount acc = new BankAccount(accountNumber);
+        SyncServerBankAccount acc = new SyncServerBankAccount(accountNumber);
         BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_CREATED.notifyListeners(acc); // Notify listeners that a new bank account has been created
         return acc; // Return the newly created bank account
     }
-    public static @Nullable BankAccount create(int accountNumber, List<BankUser> users, Map<ItemID, Bank> banks) {
+    public static @Nullable SyncServerBankAccount create(int accountNumber, List<BankUser> users, Map<ItemID, SyncServerBank> banks) {
         if (accountNumber <= 0 || users == null || banks == null) {
             return null; // Invalid account number or data
         }
-        BankAccount acc = new BankAccount(accountNumber, null, users, banks);
+        SyncServerBankAccount acc = new SyncServerBankAccount(accountNumber, null, users, banks);
         BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_CREATED.notifyListeners(acc); // Notify listeners that a new bank account has been created
         return acc; // Return the newly created bank account
     }
-    public static @Nullable BankAccount createPersonal(int accountNumber, User user, long startMoneyBalance) {
+    public static @Nullable SyncServerBankAccount createPersonal(int accountNumber, User user, long startMoneyBalance) {
         if (user == null || accountNumber <= 0) {
             return null; // Invalid user or account number
         }
 
-        Bank moneyBank = Bank.create(MoneyItem.getItemID(), startMoneyBalance);
+        SyncServerBank moneyBank = SyncServerBank.create(MoneyItem.getItemID(), startMoneyBalance);
         if (moneyBank == null) {
             return null; // Failed to create money bank
         }
-        Map<ItemID, Bank> banks = new HashMap<>();
+        Map<ItemID, SyncServerBank> banks = new HashMap<>();
         banks.put(MoneyItem.getItemID(), moneyBank); // Add money bank to the account
-        BankAccount acc = new BankAccount(accountNumber, user, new ArrayList<>(), banks);
+        SyncServerBankAccount acc = new SyncServerBankAccount(accountNumber, user, new ArrayList<>(), banks);
         BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_CREATED.notifyListeners(acc); // Notify listeners that a new bank account has been created
         return acc; // Return the newly created bank account
     }
-    public static @Nullable BankAccount createFromTag(CompoundTag tag) {
-        BankAccount account = new BankAccount();
+    public static @Nullable SyncServerBankAccount createFromTag(CompoundTag tag) {
+        SyncServerBankAccount account = new SyncServerBankAccount();
         if (!account.load(tag)) {
             return null; // Invalid data
         }
@@ -130,13 +135,18 @@ public class BankAccount implements ServerSaveable, IBankAccount {
             users.put(userUUID, user.toBankUserData()); // Convert BankUser to BankUserData
         }
 
-        for(Map.Entry<ItemID, Bank> entry : this.banks.entrySet()) {
+        for(Map.Entry<ItemID, SyncServerBank> entry : this.banks.entrySet()) {
             ItemID itemID = entry.getKey();
-            Bank bank = entry.getValue();
-            bankData.put(itemID, bank.getMinimalData()); // Convert Bank to BankData
+            SyncServerBank bank = entry.getValue();
+            bankData.put(itemID, bank.getMinimalData()); // Convert SyncServerBank to BankData
         }
 
         return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
+    }
+    @Override
+    public CompletableFuture<BankAccountData> getAccountDataAsync()
+    {
+        return CompletableFuture.completedFuture(getAccountData());
     }
 
 
@@ -164,9 +174,9 @@ public class BankAccount implements ServerSaveable, IBankAccount {
             users.put(userUUID, user.toBankUserData()); // Convert BankUser to BankUserData
         }
 
-        Bank bank = this.banks.get(itemID);
+        SyncServerBank bank = this.banks.get(itemID);
         if (bank != null) {
-            bankData.put(itemID, bank.getMinimalData()); // Convert Bank to BankData
+            bankData.put(itemID, bank.getMinimalData()); // Convert SyncServerBank to BankData
             return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
         }
         else {
@@ -174,24 +184,53 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         }
     }
     @Override
+    public CompletableFuture<@Nullable BankAccountData> getAccountDataAsync(ItemID itemID)
+    {
+        return CompletableFuture.completedFuture(getAccountData(itemID));
+    }
+
+
+
+
+
+    @Override
     public @Nullable BankData getBankData(ItemID itemID)
     {
         if (itemID == null) {
             return null; // Invalid item ID
         }
-        Bank bank = banks.get(itemID);
+        SyncServerBank bank = banks.get(itemID);
         if (bank != null) {
             return bank.getMinimalData(); // Get minimal data for the bank with the given item ID
         }
         return null; // No bank found for the item ID
     }
     @Override
+    public CompletableFuture<@Nullable BankData> getBankDataAsync(ItemID itemID)
+    {
+        return CompletableFuture.completedFuture(getBankData(itemID));
+    }
+
+
+
+
+
+    @Override
     public List<BankData> getBankData()
     {
         return banks.values().stream()
-                .map(Bank::getMinimalData)
+                .map(SyncServerBank::getMinimalData)
                 .toList(); // Get minimal data for all banks in the account
     }
+    @Override
+    public CompletableFuture<List<BankData>> getBankDataAsync()
+    {
+        return CompletableFuture.completedFuture(getBankData());
+    }
+
+
+
+
     @Override
     public @Nullable BankUserData getUserData(UUID userUUID) {
         if (userUUID == null) {
@@ -204,17 +243,37 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         return null; // No user found with the given UUID
     }
     @Override
+    public CompletableFuture<@Nullable BankUserData> getUserDataAsync(UUID userUUID) {
+        return CompletableFuture.completedFuture(getUserData(userUUID));
+    }
+
+
+
+
+    @Override
     public List<BankUserData> getUserData() {
         return users.values().stream()
                 .map(BankUser::toBankUserData)
                 .toList(); // Get data for all users in the account
     }
     @Override
+    public CompletableFuture<List<BankUserData>> getUserDataAsync() {
+        return CompletableFuture.completedFuture(getUserData());
+    }
+
+
+
+
+    @Override
     public @Nullable UserData getPersonalBankOwnerData() {
         if (personalBankOwner != null) {
             return personalBankOwner.getUserData(); // Convert User to UserData
         }
         return null; // No personal bank owner
+    }
+    @Override
+    public CompletableFuture<@Nullable UserData> getPersonalBankOwnerDataAsync() {
+        return CompletableFuture.completedFuture(getPersonalBankOwnerData());
     }
 
 
@@ -226,6 +285,14 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         return accountNumber;
     }
     @Override
+    public int getAccountNumberAsync() {
+        return accountNumber;
+    }
+
+
+
+
+    @Override
     public void setAccountName(String accountName) {
         if (accountName == null || accountName.isEmpty()) {
             accountName = "";
@@ -233,17 +300,44 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         this.accountName = accountName; // Set the name of the bank account
     }
     @Override
+    public void setAccountNameAsync(String accountName) {
+        setAccountName(accountName);
+    }
+
+
+
+    @Override
     public String getAccountName() {
         return accountName; // Get the name of the bank account
     }
+    @Override
+    public CompletableFuture<String> getAccountNameAsync() {
+        return CompletableFuture.completedFuture(accountName);
+    }
+
+
+
     @Override
     public void setAccountIcon(@Nullable ItemID accountIcon) {
         this.accountIcon = accountIcon; // Set the icon for the bank account
     }
     @Override
+    public void setAccountIconAsync(@Nullable ItemID accountIcon) {
+        this.accountIcon = accountIcon; // Set the icon for the bank account
+    }
+
+
+
+
+    @Override
     public @Nullable ItemID getAccountIcon() {
         return accountIcon; // Get the icon of the bank account
     }
+    @Override
+    public CompletableFuture<@Nullable ItemID> getAccountIconAsync() {
+        return CompletableFuture.completedFuture(accountIcon); // Get the icon of the bank account
+    }
+
 
 
 
@@ -262,6 +356,15 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         return 0; // Default to no permission if user not found
     }
     @Override
+    public CompletableFuture<Integer> getPermissionAsync(UUID userUUID) {
+        return CompletableFuture.completedFuture(getPermission(userUUID));
+    }
+
+
+
+
+
+    @Override
     public boolean hasPermission(UUID userUUID, int permission)
     {
         if (userUUID == null || permission < 0) {
@@ -272,8 +375,16 @@ public class BankAccount implements ServerSaveable, IBankAccount {
             return BankPermission.hasPermission(user.getPermission(), permission); // Check user's permissions
         }
         return personalBankOwner != null && personalBankOwner.getUUID().equals(userUUID); // Personal bank owner has all permissions
-// User not found, no permission
     }
+    @Override
+    public CompletableFuture<Boolean> hasPermissionAsync(UUID userUUID, int permission)
+    {
+        return CompletableFuture.completedFuture(hasPermission(userUUID, permission));
+    }
+
+
+
+
     @Override
     public void setPermission(UUID userUUID, int permission)
     {
@@ -286,6 +397,15 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         }
         user.setPermission(permission); // Update existing user's permission
     }
+    @Override
+    public void setPermissionAsync(UUID userUUID, int permission)
+    {
+        setPermission(userUUID, permission);
+    }
+
+
+
+
     @Override
     public void addUser(User user, int permission)
     {
@@ -302,6 +422,15 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         }
         users.put(user.getUUID(), new BankUser(user, permission)); // Add new user
     }
+    @Override
+    public void addUserAsync(User user, int permission)
+    {
+        addUser(user, permission);
+    }
+
+
+
+
     @Override
     public void setUsers(Map<User, Integer> userList)
     {
@@ -321,6 +450,15 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         }
     }
     @Override
+    public void setUsersAsync(Map<User, Integer> userList)
+    {
+        setUsers(userList);
+    }
+
+
+
+
+    @Override
     public void removeUser(UUID userUUID) {
         if (userUUID == null) {
             return;
@@ -331,17 +469,45 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         }
     }
     @Override
+    public void removeUserAsync(UUID userUUID) {
+        removeUser(userUUID);
+    }
+
+
+
+
+    @Override
     public boolean hasAnyUser() {
         return (!users.isEmpty() || personalBankOwner != null); // Check if there are any users
     }
+    @Override
+    public CompletableFuture<Boolean> hasAnyUserAsync() {
+        return CompletableFuture.completedFuture(hasAnyUser());
+    }
+
+
+
+
     @Override
     public boolean hasUser(UUID userUUID) {
         return userUUID != null && (users.containsKey(userUUID) ||
                 (personalBankOwner != null && personalBankOwner.getUUID().equals(userUUID))); // Check if user exists
     }
     @Override
+    public CompletableFuture<Boolean> hasUserAsync(UUID userUUID) {
+        return CompletableFuture.completedFuture(hasAnyUser());
+    }
+
+
+
+
+    @Override
     public @Nullable User getPersonalBankOwner() {
         return personalBankOwner; // Get the personalBankOwnerData of the bank account
+    }
+    @Override
+    public CompletableFuture<@Nullable User> getPersonalBankOwnerAsync() {
+        return CompletableFuture.completedFuture(personalBankOwner); // Get the personalBankOwnerData of the bank account
     }
 
 
@@ -350,7 +516,7 @@ public class BankAccount implements ServerSaveable, IBankAccount {
 
 
     @Override
-    public @Nullable IBank createBank(ItemID itemID, long startBalance)
+    public @Nullable SyncServerBank createBank(ItemID itemID, long startBalance)
     {
         if (itemID == null) {
             return null; // Invalid item ID
@@ -358,13 +524,34 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         if (banks.containsKey(itemID)) {
             return banks.get(itemID); // Return existing bank if it already exists
         }
-        Bank bank = Bank.create(itemID, startBalance); // Create a new bank with 0 balance
+        SyncServerBank bank = SyncServerBank.create(itemID, startBalance); // Create a new bank with 0 balance
         if (bank != null) {
             banks.put(itemID, bank); // Add new bank to the account
             return bank;
         }
         return null; // Failed to create bank
     }
+    @Override
+    public CompletableFuture<@Nullable IAsyncBank> createBankAsync(ItemID itemID, long startBalance)
+    {
+        if (itemID == null) {
+            return CompletableFuture.completedFuture(null); // Invalid item ID
+        }
+        if (banks.containsKey(itemID)) {
+            return CompletableFuture.completedFuture(banks.get(itemID)); // Return existing bank if it already exists
+        }
+        SyncServerBank bank = SyncServerBank.create(itemID, startBalance); // Create a new bank with 0 balance
+        if (bank != null) {
+            banks.put(itemID, bank); // Add new bank to the account
+            return CompletableFuture.completedFuture(bank);
+        }
+        return CompletableFuture.completedFuture(null); // Failed to create bank
+    }
+
+
+
+
+
     @Override
     public void removeBank(ItemID itemID) {
         if (itemID == null) {
@@ -373,11 +560,18 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         banks.remove(itemID); // Remove bank by item ID
     }
     @Override
+    public void removeBankAsync(ItemID itemID) {
+        removeBank(itemID);
+    }
+
+
+
+    @Override
     public List<ItemID> removeEmptyBanks()
     {
         List<ItemID> emptyBanks = new ArrayList<>();
-        for (Map.Entry<ItemID, Bank> entry : banks.entrySet()) {
-            Bank bank = entry.getValue();
+        for (Map.Entry<ItemID, SyncServerBank> entry : banks.entrySet()) {
+            SyncServerBank bank = entry.getValue();
             if (bank.getTotalBalance() <= 0) {
                 emptyBanks.add(entry.getKey()); // Collect empty banks
             }
@@ -388,33 +582,75 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         return emptyBanks; // Return list of removed empty banks
     }
     @Override
+    public CompletableFuture<List<ItemID>> removeEmptyBanksAsync()
+    {
+        return CompletableFuture.completedFuture(removeEmptyBanks());
+    }
+
+
+
+    @Override
     public void removeAllBanks() {
         banks.clear(); // Clear all banks in the account
     }
+    @Override
+    public void removeAllBanksAsync() {
+        banks.clear(); // Clear all banks in the account
+    }
+
+
+
     @Override
     public boolean hasAnyBank() {
         return !banks.isEmpty(); // Check if there are any banks
     }
     @Override
+    public CompletableFuture<Boolean> hasAnyBankAsync() {
+        return CompletableFuture.completedFuture(hasAnyBank());
+    }
+
+
+
+
+    @Override
     public boolean hasBank(ItemID itemID) {
         return itemID != null && banks.containsKey(itemID); // Check if bank exists for the item ID
     }
     @Override
-    public @Nullable IBank getBank(ItemID itemID) {
+    public CompletableFuture<Boolean> hasBankAsync(ItemID itemID) {
+        return CompletableFuture.completedFuture(hasAnyBank());
+    }
+
+
+
+
+    @Override
+    public @Nullable SyncServerBank getBank(ItemID itemID) {
         if (itemID == null) {
             return null; // Invalid item ID
         }
         return banks.get(itemID); // Get bank by item ID
     }
     @Override
-    public @Nullable IBank getOrCreateBank(ItemID itemID)
+    public CompletableFuture<@Nullable IAsyncBank> getBankAsync(ItemID itemID) {
+        if (itemID == null) {
+            return CompletableFuture.completedFuture(null); // Invalid item ID
+        }
+        return CompletableFuture.completedFuture(banks.get(itemID)); // Get bank by item ID
+    }
+
+
+
+
+    @Override
+    public @Nullable SyncServerBank getOrCreateBank(ItemID itemID)
     {
         if (itemID == null) {
             return null; // Invalid item ID
         }
-        Bank bank = banks.get(itemID);
+        SyncServerBank bank = banks.get(itemID);
         if (bank == null) {
-            bank = Bank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
+            bank = SyncServerBank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
             if (bank != null) {
                 banks.put(itemID, bank); // Add new bank to the account
             }
@@ -422,344 +658,34 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         return bank; // Return the existing or newly created bank
     }
     @Override
-    public Map<ItemID, IBank> getAllBanks() {
+    public CompletableFuture<@Nullable IAsyncBank> getOrCreateBankAsync(ItemID itemID)
+    {
+        if (itemID == null) {
+            return CompletableFuture.completedFuture(null); // Invalid item ID
+        }
+        SyncServerBank bank = banks.get(itemID);
+        if (bank == null) {
+            bank = SyncServerBank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
+            if (bank != null) {
+                banks.put(itemID, bank); // Add new bank to the account
+            }
+        }
+        return CompletableFuture.completedFuture(bank); // Return the existing or newly created bank
+    }
+
+
+
+
+
+    @Override
+    public Map<ItemID, SyncServerBank> getAllBanks() {
         return new HashMap<>(banks); // Return a copy of all banks in the account
     }
-
-    /*
-    public long getRawBalance(ItemID itemID)
-    {
-        if (itemID == null) {
-            return 0; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.getBalance(); // Get balance from the bank
-        }
-        return 0; // No bank found for the item ID
+    @Override
+    public CompletableFuture<Map<ItemID, IAsyncBank>> getAllBanksAsync() {
+        Map<ItemID, IAsyncBank> bankMap = new HashMap<>(banks);
+        return CompletableFuture.completedFuture(bankMap);
     }
-    public long getRawLockedBalance(ItemID itemID)
-    {
-        if (itemID == null) {
-            return 0; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.getLockedBalance(); // Get locked balance from the bank
-        }
-        return 0; // No bank found for the item ID
-    }
-    public long getRawTotalBalance(ItemID itemID)
-    {
-        if (itemID == null) {
-            return 0; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.getTotalBalance(); // Get total balance from the bank
-        }
-        return 0; // No bank found for the item ID
-    }
-    public float getRealBalance(ItemID itemID) {
-        if (itemID == null) {
-            return 0; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.getRealBalance(); // Get real balance from the bank
-        }
-        return 0; // No bank found for the item ID
-    }
-    public float getRealLockedBalance(ItemID itemID) {
-        if (itemID == null) {
-            return 0; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.getRealLockedBalance(); // Get real locked balance from the bank
-        }
-        return 0; // No bank found for the item ID
-    }
-    public float getRealTotalBalance(ItemID itemID) {
-        if (itemID == null) {
-            return 0; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.getRealTotalBalance(); // Get real total balance from the bank
-        }
-        return 0; // No bank found for the item ID
-    }
-
-
-
-
-    public IBank.Status setRawBalance(ItemID item, long amount)
-    {
-        if (item == null)
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
-        if(amount < 0)
-            return IBank.Status.FAILED_NEGATIVE_VALUE; // Invalid amount
-        Bank bank = banks.get(item);
-        if (bank != null)
-        {
-            bank.setBalance(amount);
-            return IBank.Status.SUCCESS;
-        }
-        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
-    }
-    public IBank.Status setRealBalance(ItemID item, float amount)
-    {
-        if (item == null)
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
-        if(amount < 0)
-            return IBank.Status.FAILED_NEGATIVE_VALUE; // Invalid amount
-        Bank bank = banks.get(item);
-        if (bank != null) {
-            bank.setRealBalance(amount); // Set balance in the bank
-            return IBank.Status.SUCCESS;
-        }
-        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
-    }
-
-
-    public IBank.Status depositRaw(ItemID itemID, long amount)
-    {
-        if (itemID == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.deposit(amount); // Deposit raw amount into the bank
-        }
-        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
-    }
-    public IBank.Status depositReal(ItemID itemID, float amount)
-    {
-        if (itemID == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.depositReal(amount); // Deposit raw amount into the bank
-        }
-        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
-    }
-
-
-    public IBank.Status withdrawRaw(ItemID itemID, long amount)
-    {
-        if (itemID == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.withdraw(amount); // Withdraw raw amount from the bank
-        }
-        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
-    }
-    public IBank.Status withdrawReal(ItemID itemID, float amount)
-    {
-        if (itemID == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.withdrawReal(amount); // Withdraw real amount from the bank
-        }
-        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
-    }
-
-
-    public IBank.Status transferRaw(ItemID itemID, long amount, BankAccount targetAccount) {
-        if (itemID == null || targetAccount == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID or target account
-        }
-        Bank bank = banks.get(itemID);
-        Bank targetBank = targetAccount.banks.get(itemID);
-        if(bank == null || targetBank == null) {
-            return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID in either account
-        }
-        return bank.transfer(amount, targetBank);
-    }
-    public IBank.Status transferReal(ItemID itemID, float amount, BankAccount targetAccount) {
-        if (itemID == null || targetAccount == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID or target account
-        }
-        Bank bank = banks.get(itemID);
-        Bank targetBank = targetAccount.banks.get(itemID);
-        if(bank == null || targetBank == null) {
-            return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID in either account
-        }
-        return bank.transferReal(amount, targetBank);
-    }
-    
-    public IBank.Status transferRawFromLocked(ItemID itemID, long amount, BankAccount targetAccount) {
-        if (itemID == null || targetAccount == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID or target account
-        }
-        Bank bank = banks.get(itemID);
-        Bank targetBank = targetAccount.banks.get(itemID);
-        if(bank == null || targetBank == null) {
-            return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID in either account
-        }
-        return bank.transferFromLocked(amount, targetBank);
-    }
-    public IBank.Status transferRealFromLocked(ItemID itemID, float amount, BankAccount targetAccount) {
-        if (itemID == null || targetAccount == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID or target account
-        }
-        Bank bank = banks.get(itemID);
-        Bank targetBank = targetAccount.banks.get(itemID);
-        if(bank == null || targetBank == null) {
-            return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID in either account
-        }
-        return bank.transferFromLockedReal(amount, targetBank);
-    }
-    public IBank.Status transferRawFromLockedPrefered(ItemID itemID, long amount, BankAccount targetAccount) {
-        if (itemID == null || targetAccount == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID or target account
-        }
-        Bank bank = banks.get(itemID);
-        Bank targetBank = targetAccount.banks.get(itemID);
-        if(bank == null || targetBank == null) {
-            return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID in either account
-        }
-        return bank.transferFromLockedPrefered(amount, targetBank);
-    }
-    public IBank.Status transferRealFromLockedPrefered(ItemID itemID, float amount, BankAccount targetAccount) {
-        if (itemID == null || targetAccount == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID or target account
-        }
-        Bank bank = banks.get(itemID);
-        Bank targetBank = targetAccount.banks.get(itemID);
-        if(bank == null || targetBank == null) {
-            return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID in either account
-        }
-        return bank.transferFromLockedPreferedReal(amount, targetBank);
-    }
-
-
-    public IBank.Status lockRawAmount(ItemID itemID, long amount) {
-        if (itemID == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.lockAmount(amount); // Lock raw amount in the bank
-        }
-        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
-    }
-    public IBank.Status lockRealAmount(ItemID itemID, float amount) {
-        if (itemID == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.lockAmountReal(amount); // Lock real amount in the bank
-        }
-        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
-    }
-
-
-
-    public IBank.Status unlockRawAmount(ItemID itemID, long amount) {
-        if (itemID == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.unlockAmount(amount); // Unlock raw amount in the bank
-        }
-        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
-    }
-    public IBank.Status unlockRealAmount(ItemID itemID, float amount) {
-        if (itemID == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.unlockAmountReal(amount); // Unlock real amount in the bank
-        }
-        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
-    }
-    public IBank.Status unlockAll(ItemID itemID) {
-        if (itemID == null) {
-            return IBank.Status.FAILED_INVALID_ITEM_ID; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            bank.unlockAll(); // Unlock all amounts in the bank
-            return IBank.Status.SUCCESS; // Successfully unlocked all amounts
-        }
-        return IBank.Status.FAILED_NO_BANK; // No bank found for the item ID
-    }
-
-    public String getNormalizedBalance(ItemID itemID) {
-        if (itemID == null) {
-            return "0"; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.getNormalizedBalance(); // Get normalized balance from the bank
-        }
-        return "0"; // No bank found for the item ID
-    }
-    public String getNormalizedLockedBalance(ItemID itemID) {
-        if (itemID == null) {
-            return "0"; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.getNormalizedLockedBalance(); // Get normalized locked balance from the bank
-        }
-        return "0"; // No bank found for the item ID
-    }
-    public String getNormalizedTotalBalance(ItemID itemID) {
-        if (itemID == null) {
-            return "0"; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.getNormalizedTotalBalance(); // Get normalized total balance from the bank
-        }
-        return "0"; // No bank found for the item ID
-    }
-    public String getFormattedBalance(ItemID itemID) {
-        if (itemID == null) {
-            return "0"; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.getFormattedBalance(); // Get formatted balance from the bank
-        }
-        return "0"; // No bank found for the item ID
-    }
-    public String getFormattedLockedBalance(ItemID itemID) {
-        if (itemID == null) {
-            return "0"; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.getFormattedLockedBalance(); // Get formatted locked balance from the bank
-        }
-        return "0"; // No bank found for the item ID
-    }
-    public String getFormattedTotalBalance(ItemID itemID) {
-        if (itemID == null) {
-            return "0"; // Invalid item ID
-        }
-        Bank bank = banks.get(itemID);
-        if (bank != null) {
-            return bank.getFormattedTotalBalance(); // Get formatted total balance from the bank
-        }
-        return "0"; // No bank found for the item ID
-    }
-*/
-
-
-
-
 
     @Override
     public boolean save(CompoundTag tag) {
@@ -787,8 +713,8 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         tag.put("users", usersTag);
 
         ListTag banksTag = new ListTag();
-        for (Map.Entry<ItemID, Bank> entry : banks.entrySet()) {
-            Bank bank = entry.getValue();
+        for (Map.Entry<ItemID, SyncServerBank> entry : banks.entrySet()) {
+            SyncServerBank bank = entry.getValue();
             CompoundTag bankTag = new CompoundTag();
             bank.save(bankTag);
             banksTag.add(bankTag);
@@ -842,7 +768,7 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         ListTag banksTag = tag.getList("banks", 10);
         for (int i = 0; i < banksTag.size(); i++) {
             CompoundTag bankTag = banksTag.getCompound(i);
-            Bank bank = Bank.createFromTag(bankTag);
+            SyncServerBank bank = SyncServerBank.createFromTag(bankTag);
             if (bank != null) {
                 banks.put(bank.getItemID(), bank);
             }
@@ -850,6 +776,7 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         return true;
     }
 
+    @Override
     public JsonElement toJson()
     {
         JsonObject jsonObject = new JsonObject();
@@ -871,15 +798,29 @@ public class BankAccount implements ServerSaveable, IBankAccount {
         jsonObject.add("users", usersJson);
 
         JsonArray banksJson = new JsonArray();
-        for (Map.Entry<ItemID, Bank> entry : banks.entrySet()) {
+        for (Map.Entry<ItemID, SyncServerBank> entry : banks.entrySet()) {
             banksJson.add(entry.getValue().toJson());
         }
         jsonObject.add("banks", banksJson);
         return jsonObject;
     }
+    @Override
+    public CompletableFuture<JsonElement> toJsonAsync()
+    {
+        return CompletableFuture.completedFuture(toJson());
+    }
+
+
+
+    @Override
     public String toJsonString()
     {
         return JsonUtilities.toPrettyString(toJson());
+    }
+    @Override
+    public CompletableFuture<String> toJsonStringAsync()
+    {
+        return CompletableFuture.completedFuture(toJsonString());
     }
 
     @Override

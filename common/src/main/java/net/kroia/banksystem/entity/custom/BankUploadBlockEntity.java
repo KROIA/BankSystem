@@ -2,10 +2,11 @@ package net.kroia.banksystem.entity.custom;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IAsyncBank;
+import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.SyncServerBank;
 import net.kroia.banksystem.block.custom.BankUploadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
@@ -32,6 +33,7 @@ import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -288,65 +290,82 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             return;
         if(playerOwner == null)
             return;
-        CompletableFuture<IBankAccount> accountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(bankAccountNumber);
+        CompletableFuture<IAsyncBankAccount> accountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(bankAccountNumber);
         accountFuture.thenAcceptAsync(account->{
             if(account == null)
                 return;
 
-            if(!account.hasPermission(playerOwner, BankPermission.DEPOSIT.getValue()))
-            {
-                return; // Player does not have permission to deposit
-            }
-
-
-
-            for (int i = 0; i < inventory.getContainerSize(); i++) {
-                ItemStack stack = inventory.getItem(i);
-                if(!stack.isEmpty())
+            CompletableFuture<Boolean> hasPermissionFuture = account.hasPermissionAsync(playerOwner, BankPermission.DEPOSIT.getValue());
+            hasPermissionFuture.thenAcceptAsync(hasPermission->{
+                if(!hasPermission)
                 {
-                    // Ignore damaged or enchanted items
-                    if(stack.isDamaged() || stack.isEnchanted())
+                    return; // Player does not have permission to deposit
+                }
+
+                for (int i = 0; i < inventory.getContainerSize(); i++) {
+                    final int finalI = i;
+                    ItemStack stack = inventory.getItem(i);
+                    if(!stack.isEmpty())
                     {
-                        if(dropIfNotBankable){
-                            dropItem(stack);
-                            inventory.setItem(i, ItemStack.EMPTY);
+                        // Ignore damaged or enchanted items
+                        if(stack.isDamaged() || stack.isEnchanted())
+                        {
+                            if(dropIfNotBankable){
+                                dropItem(stack);
+                                inventory.setItem(i, ItemStack.EMPTY);
+                            }
+                            else {
+                                continue;
+                            }
                         }
-                        else {
-                            continue;
-                        }
-                    }
 
-                    ItemID itemID = ItemID.of(stack);
-                    IBank itemBank = account.getBank(itemID);
-                    if(itemBank == null)
-                    {
-                        itemBank = account.createBank(itemID, 0);
-                    }
-                    long amount = stack.getCount();
-                    if(MoneyItem.isMoney(itemID))
-                    {
-                        amount *= ((MoneyItem)stack.getItem()).worth();
-                        itemBank = account.getBank(MoneyItem.getItemID());
-                        if(itemBank == null)
-                            itemBank = account.createBank(MoneyItem.getItemID(), 0);
+                        ItemID itemID = ItemID.of(stack);
+                        CompletableFuture<@Nullable IAsyncBank> itemBankFuture = account.getOrCreateBankAsync(itemID);
 
-                    }
-                    else
-                    {
-                        if(itemBank != null)
-                            amount = itemBank.convertToRawAmount(amount);
-                    }
+                        itemBankFuture.thenAcceptAsync(itemBank->{
+                            if(itemBank == null)
+                            {
+                                if(dropIfNotBankable){
+                                    dropItem(stack);
+                                    inventory.setItem(finalI, ItemStack.EMPTY);
+                                }
+                                return;
+                            }
+                            long amount = stack.getCount();
+                            if(MoneyItem.isMoney(itemID))
+                            {
+                                amount *= ((MoneyItem)stack.getItem()).worth();
+                                CompletableFuture<@Nullable IAsyncBank> moneyBankFuture = account.getOrCreateBankAsync(MoneyItem.getItemID());
+                                final long finalAmount = amount;
+                                moneyBankFuture.thenAcceptAsync(moneyBank->{
+                                    if(moneyBank != null) {
+                                        CompletableFuture<BankStatus> depositStatusFuture = moneyBank.depositAsync(finalAmount);
+                                        depositStatusFuture.thenAccept(depositStatus->{
+                                            if(depositStatus== BankStatus.SUCCESS)
+                                                inventory.setItem(finalI, ItemStack.EMPTY);
+                                        });
+                                    }else if(dropIfNotBankable){
+                                        dropItem(stack);
+                                        inventory.setItem(finalI, ItemStack.EMPTY);
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                amount = SyncServerBank.convertToRawAmountStatic(amount);
+                                CompletableFuture<BankStatus> depositStatusFuture = itemBank.depositAsync(amount);
+                                depositStatusFuture.thenAccept(depositStatus->{
+                                    if(depositStatus == BankStatus.SUCCESS)
+                                        inventory.setItem(finalI, ItemStack.EMPTY);
+                                });
+                            }
 
-                    if(itemBank != null) {
-                        if(itemBank.deposit(amount) == Bank.Status.SUCCESS)
-                            inventory.setItem(i, ItemStack.EMPTY);
-                    }else if(dropIfNotBankable){
-                        dropItem(stack);
-                        inventory.setItem(i, ItemStack.EMPTY);
+
+                        });
                     }
                 }
-            }
-            setChanged();
+                setChanged();
+            });
         });
     }
 

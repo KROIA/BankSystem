@@ -1,6 +1,7 @@
-package net.kroia.banksystem.api;
+package net.kroia.banksystem.api.bankaccount;
 
 import com.google.gson.JsonElement;
+import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
@@ -12,35 +13,36 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
-public interface IBankAccount {
+public interface IAsyncBankAccount {
 
 
     /**
      * Gets all data stored in this bank account
      * @return the bank account data
      */
-    BankAccountData getAccountData();
+    CompletableFuture<BankAccountData> getAccountDataAsync();
 
     /**
      * Gets all data stored in this bank account, except for all other item banks than the one specified by the itemID
      * @param itemID the itemID of the bank to get the data for
      * @return the bank account data for the specified itemID, or null if no such bank exists
      */
-    @Nullable BankAccountData getAccountData(ItemID itemID);
+    CompletableFuture<@Nullable BankAccountData> getAccountDataAsync(ItemID itemID);
 
     /**
      * Gets the bank data for the specified itemID
      * @param itemID the itemID of the bank to get the data for
      * @return the bank data for the specified itemID, or null if no such bank exists
      */
-    @Nullable BankData getBankData(ItemID itemID);
+    CompletableFuture<@Nullable BankData> getBankDataAsync(ItemID itemID);
 
     /**
      * Gets all bank data stored in this bank account
      * @return a list of all bank data in this bank account
      */
-    List<BankData> getBankData();
+    CompletableFuture<List<BankData>> getBankDataAsync();
 
     /**
      * Gets the user data for the specified user UUID
@@ -48,48 +50,48 @@ public interface IBankAccount {
      * @param userUUID the UUID of the user to get the data for
      * @return the user data for the specified user UUID, or null if no such user exists in this bank account
      */
-    @Nullable BankUserData getUserData(UUID userUUID);
+    CompletableFuture<@Nullable BankUserData> getUserDataAsync(UUID userUUID);
 
     /**
      * Gets all user data stored in this bank account
      * This does not include the personal bank owner data.
      * @return a list of all user data in this bank account
      */
-    List<BankUserData> getUserData();
+    CompletableFuture<List<BankUserData>> getUserDataAsync();
 
     /**
      * Gets the personal bank owner data
      * The personal bank owner does not have any permissions set because the owner has always all permissions.
      * @return the personal bank owner data, or null if no personal bank owner is set
      */
-    @Nullable UserData getPersonalBankOwnerData();
+    CompletableFuture<@Nullable UserData> getPersonalBankOwnerDataAsync();
 
 
     /**
      * Gets the account number of this bank account.
      * @return the account number
      */
-    int getAccountNumber();
+    int getAccountNumberAsync();
 
     /**
      * Sets the name of this bank account.
      * This is only decorative and does not affect the functionality of the bank account.
      * @param accountName the new account name
      */
-    void setAccountName(String accountName);
+    void setAccountNameAsync(String accountName);
 
     /**
      * Gets the name of this bank account.
      * @return the account name
      */
-    String getAccountName();
+    CompletableFuture<String> getAccountNameAsync();
 
     /**
      * Sets the icon of this bank account.
      * This is only decrative and does not affect the functionality of the bank account.
      * @param accountIcon the new account icon, or null to remove the icon
      */
-    void setAccountIcon(@Nullable ItemID accountIcon);
+    void setAccountIconAsync(@Nullable ItemID accountIcon);
 
 
 
@@ -104,7 +106,7 @@ public interface IBankAccount {
      * Gets the icon of this bank account.
      * @return the account icon, or null if no icon is set
      */
-    @Nullable ItemID getAccountIcon();
+    CompletableFuture<@Nullable ItemID> getAccountIconAsync();
 
     /**
      * Gets the permission level of the user with the specified UUID.
@@ -112,7 +114,7 @@ public interface IBankAccount {
      * @param userUUID the UUID of the user to get the permission level for
      * @return the permissions of the user
      */
-    int getPermission(UUID userUUID);
+    CompletableFuture<Integer> getPermissionAsync(UUID userUUID);
 
     /**
      * Checks if the user with the specified UUID has the specified permission.
@@ -121,7 +123,7 @@ public interface IBankAccount {
      * @param permission the permission to check for, as defined in class BankPermission
      * @return true if the user has the specified permission, false otherwise
      */
-    boolean hasPermission(UUID userUUID, int permission);
+    CompletableFuture<Boolean> hasPermissionAsync(UUID userUUID, int permission);
 
     /**
      * Sets the permission level of the user with the specified UUID.
@@ -129,7 +131,7 @@ public interface IBankAccount {
      * @param userUUID the UUID of the user to set the permission for
      * @param permission the permission level to set, as defined in class BankPermission
      */
-    void setPermission(UUID userUUID, int permission);
+    void setPermissionAsync(UUID userUUID, int permission);
 
     /**
      * Adds a user to this bank account with the specified permission level.
@@ -138,7 +140,7 @@ public interface IBankAccount {
      * @param user the user to add
      * @param permission the permission level to set for the user, as defined in class BankPermission
      */
-    void addUser(User user, int permission);
+    void addUserAsync(User user, int permission);
 
     /**
      * Sets the list of users for this bank account.
@@ -146,19 +148,19 @@ public interface IBankAccount {
      * The personal bank owner is not affected by this method.
      * @param userList a map of users and their permission levels
      */
-    void setUsers(Map<User, Integer> userList);
+    void setUsersAsync(Map<User, Integer> userList);
 
     /**
      * Removes a user from this bank account by their UUID.
      * @param userUUID the UUID of the user to remove
      */
-    void removeUser(UUID userUUID);
+    void removeUserAsync(UUID userUUID);
 
     /**
      * @return true if this bank account has any users, false otherwise
      *              This does include the personal bank owner.
      */
-    boolean hasAnyUser();
+    CompletableFuture<Boolean> hasAnyUserAsync();
 
     /**
      * Checks if this bank account has a user with the specified UUID.
@@ -166,14 +168,14 @@ public interface IBankAccount {
      * @param userUUID the UUID of the user to check for
      * @return true if the user exists in this bank account, false otherwise
      */
-    boolean hasUser(UUID userUUID);
+    CompletableFuture<Boolean> hasUserAsync(UUID userUUID);
 
     /**
      * Gets the personal bank owner of this bank account.
      * The personal bank owner is the user who created this bank account and has all permissions.
      * @return the personal bank owner, or null if no personal bank owner is set
      */
-    @Nullable User getPersonalBankOwner();
+    CompletableFuture<@Nullable User> getPersonalBankOwnerAsync();
 
 
     /**
@@ -183,58 +185,58 @@ public interface IBankAccount {
      * @param startBalance the starting balance of the bank, in raw amount.
      * @return the created or already existing bank, or null if the bank could not be created.
      */
-    @Nullable IBank createBank(ItemID itemID, long startBalance);
+    CompletableFuture<@Nullable IAsyncBank> createBankAsync(ItemID itemID, long startBalance);
 
     /**
      * Removes the bank for the specified itemID.
      * Items will be lost.
      * @param itemID the itemID of the bank to remove
      */
-    void removeBank(ItemID itemID);
+    void removeBankAsync(ItemID itemID);
 
     /**
      * Removes all banks that are empty, meaning they have no items stored in them.
      * @return a list of itemIDs of the removed banks
      */
-    List<ItemID> removeEmptyBanks();
+    CompletableFuture<List<ItemID>> removeEmptyBanksAsync();
 
     /**
      * Removes all banks from this bank account.
      */
-    void removeAllBanks();
+    void removeAllBanksAsync();
 
     /**
      * Checks if this bank account has any banks.
      * @return true if this bank account has any banks, false otherwise
      */
-    boolean hasAnyBank();
+    CompletableFuture<Boolean> hasAnyBankAsync();
 
     /**
      * Checks if this bank account has a bank for the specified itemID.
      * @param itemID the itemID of the bank to check for
      * @return true if this bank account has a bank for the specified itemID, false otherwise
      */
-    boolean hasBank(ItemID itemID);
+    CompletableFuture<Boolean> hasBankAsync(ItemID itemID);
 
     /**
      * Gets the bank for the specified itemID.
      * @param itemID the itemID of the bank to get
      * @return the bank for the specified itemID, or null if no such bank exists
      */
-    @Nullable IBank getBank(ItemID itemID);
+    CompletableFuture<@Nullable IAsyncBank> getBankAsync(ItemID itemID);
 
     /**
      * Gets the bank for the specified itemID, or creates it if it does not exist.
      * @param itemID the itemID of the bank to get or create
      * @return the bank for the specified itemID, or a new bank if it did not exist before
      */
-    @Nullable IBank getOrCreateBank(ItemID itemID);
+    CompletableFuture<@Nullable IAsyncBank> getOrCreateBankAsync(ItemID itemID);
 
     /**
      * Gets all banks in this bank account.
      * @return a map of itemIDs to their corresponding banks
      */
-    Map<ItemID, IBank> getAllBanks();
+    CompletableFuture<Map<ItemID, IAsyncBank>> getAllBanksAsync();
 
 
     /**
@@ -242,12 +244,12 @@ public interface IBankAccount {
      * This is not used for serialization, but for debugging and logging purposes.
      * @return a JsonElement representing this bank account
      */
-    JsonElement toJson();
+    CompletableFuture<JsonElement> toJsonAsync();
 
     /**
      * Converts this bank account to a JSON string representation.
      * This is not used for serialization, but for debugging and logging purposes.
      * @return a JSON string representing this bank account
      */
-    String toJsonString();
+    CompletableFuture<String> toJsonStringAsync();
 }

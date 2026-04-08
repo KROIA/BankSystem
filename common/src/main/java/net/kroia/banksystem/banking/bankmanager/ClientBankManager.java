@@ -1,8 +1,9 @@
-package net.kroia.banksystem.banking;
+package net.kroia.banksystem.banking.bankmanager;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.IAsyncServerBankManager;
-import net.kroia.banksystem.api.IClientBankManager;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
+import net.kroia.banksystem.api.bankmanager.IClientBankManager;
+import net.kroia.banksystem.banking.bankaccount.SyncServerBankAccount;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
@@ -21,10 +22,10 @@ public class ClientBankManager implements IClientBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
-        BankAccount.setBackend(backend);
+        SyncServerBankAccount.setBackend(backend);
     }
 
-    private final IAsyncServerBankManager asyncServerBankManager;
+    private final IAsyncBankManager asyncServerBankManager;
 
     /*private AsyncServerBankManagerForwardingRequest forwardingRequest()
     {
@@ -33,7 +34,7 @@ public class ClientBankManager implements IClientBankManager {
 
     public ClientBankManager()
     {
-        asyncServerBankManager = AsyncServerBankManager.createClientManager();
+        asyncServerBankManager = AsyncBankManager.createClientManager();
     }
 
     //private final int bankAccountNumber; // This is a placeholder, as the client does not have a bank account number
@@ -67,8 +68,8 @@ public class ClientBankManager implements IClientBankManager {
     {
         return asyncServerBankManager.getBankManagerDataAsync();
         //CompletableFuture<BankManagerData> future = new CompletableFuture<>();
-        /*AsyncServerBankManager.InputData inputData = new AsyncServerBankManager.InputData(AsyncServerBankManager.FunctionType.GetBankManagerDataAsync);
-        CompletableFuture<AsyncServerBankManager.OutputData> outputDataFuture = AsyncServerBankManager.forwardingRequest().sendRequestToServer(inputData);
+        /*AsyncBankManager.InputData inputData = new AsyncBankManager.InputData(AsyncBankManager.FunctionType.GetBankManagerDataAsync);
+        CompletableFuture<AsyncBankManager.OutputData> outputDataFuture = AsyncBankManager.forwardingRequest().sendRequestToServer(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));*/
         //future.complete(null);
         //return future;

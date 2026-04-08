@@ -3,7 +3,7 @@ package net.kroia.banksystem.screen.custom;
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.SyncServerBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
@@ -70,7 +70,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         @Override
         protected void render() {
             drawItem(stack, itemStackHitBox.x, itemStackHitBox.y);
-            String amountStr = Bank.getFormattedAmountStatic(stackSize);
+            String amountStr = SyncServerBank.getFormattedAmountStatic(stackSize);
             balanceLabel.setText(amountStr);
             if(itemStackHitBox.contains(getMousePos().x, getMousePos().y))
                 drawTooltip(stack, getMousePos());

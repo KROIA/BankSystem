@@ -1,11 +1,17 @@
-package net.kroia.banksystem.banking;
+package net.kroia.banksystem.banking.bankmanager;
 
 import com.google.gson.JsonElement;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.IAsyncServerBankManager;
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.banksystem.api.ISyncServerBankManager;
+import net.kroia.banksystem.api.bank.IAsyncBank;
+import net.kroia.banksystem.api.bank.ISyncServerBank;
+import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.bank.AsyncBank;
+import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
+import net.kroia.banksystem.banking.bankaccount.SyncServerBankAccount;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.util.ItemID;
@@ -23,38 +29,43 @@ import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * The AsyncServerBankManager is used to forward the methods to a server or master server
+ * The AsyncBankManager is used to forward the methods to a server or master server
  * todo: Some methodes are commented out because they return an interface to objects that can't be sent over the network.
  *       An async interface like this is needed for these objects.
  */
-public class AsyncServerBankManager implements IAsyncServerBankManager {
+public class AsyncBankManager implements IAsyncBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
-        BankAccount.setBackend(backend);
+        SyncServerBankAccount.setBackend(backend);
     }
     private final boolean isClientSide;
 
-    private AsyncServerBankManager(boolean clientSide) {
+    private AsyncBankManager(boolean clientSide) {
         this.isClientSide = clientSide;
     }
 
-    public static AsyncServerBankManager createClientManager()
+    public static AsyncBankManager createClientManager()
     {
-        return new AsyncServerBankManager(true);
+        return new AsyncBankManager(true);
     }
-    public static AsyncServerBankManager createSlaveServerManager()
+    public static AsyncBankManager createSlaveServerManager()
     {
-        return new AsyncServerBankManager(false);
+        return new AsyncBankManager(false);
     }
 
+    private AsyncBankAccount createBankAccount(int accountNr)
+    {
+        return AsyncBankAccount.createBank(accountNr, isClientSide);
+    }
+    private AsyncBank createBank(int accountNr, ItemID itemID)
+    {
+        return AsyncBank.createBank(accountNr, itemID, isClientSide);
+    }
 
 
     /**
@@ -76,21 +87,36 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
         UserExistsAsync,
         GetUserByUUIDAsync,
         GetUserByNameAsync,
+        BankAccountExistsAsync,
+        BankAccountHasBankAsync,
         //CreatePersonalBankAccountAsync,
+        CreatePersonalBankAccountGetAccountNrAsync_1,
+        CreatePersonalBankAccountGetAccountNrAsync_2,
+        GetPersonalBankAccountNrAsync_1,
+        GetPersonalBankAccountNrAsync_2,
         //CreateBankAccountAsync,
+        CreateBankAccountGetAccountNrAsync,
         //GetBankAccountAsync,
         //GetBankAccountsAsync_1,
+        GetBankAccountNumbersAsync_1,
+        GetBankAccountNumbersAsync_2,
+        GetBankAccountsDataAsync_1,
         //GetBankAccountsAsync_2,
+        GetBankAccountsDataAsync_2,
         //GetPersonalBankAccountAsync_1,
+        GetPersonalBankAccountDataAsync_1,
         //GetPersonalBankAccountAsync_2,
+        GetPersonalBankAccountDataAsync_2,
         //GetOrCreatePersonalBankAccountAsync_1,
         //GetOrCreatePersonalBankAccountAsync_2,
         UserHasPersonalBankAccountAsync,
         DeleteBankAccountAsync,
+        PersonalBankExistsAsync_1,
+        PersonalBankExistsAsync_2,
         //GetPersonalBankAsync_1,
         //GetPersonalBankAsync_2,
-        //GetOrCreatePersonalBankAsync_1,
-        //GetOrCreatePersonalBankAsync_2,
+        GetOrCreatePersonalBankAsync_1,
+        GetOrCreatePersonalBankAsync_2,
         IsItemIDAllowedAsync,
         AllowItemIDAsync,
         DisallowItemIDAsync,
@@ -133,21 +159,36 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
         put(FunctionType.UserExistsAsync,						    new AsyncFunctionDataCodecs(UUIDUtil.STREAM_CODEC.cast(), ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetUserByUUIDAsync,					    new AsyncFunctionDataCodecs(UUIDUtil.STREAM_CODEC.cast(), User.STREAM_CODEC));
         put(FunctionType.GetUserByNameAsync,					    new AsyncFunctionDataCodecs(ByteBufCodecs.STRING_UTF8.cast(), User.STREAM_CODEC));
+        put(FunctionType.BankAccountExistsAsync,					new AsyncFunctionDataCodecs(ByteBufCodecs.INT.cast(), ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.BankAccountHasBankAsync,					new AsyncFunctionDataCodecs(ParamGroup_int_ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         //put(FunctionType.CreatePersonalBankAccountAsync,		    new AsyncFunctionDataCodecs(null, null));
+        put(FunctionType.CreatePersonalBankAccountGetAccountNrAsync_1,new AsyncFunctionDataCodecs(UUIDUtil.STREAM_CODEC.cast(), ByteBufCodecs.INT.cast()));
+        put(FunctionType.CreatePersonalBankAccountGetAccountNrAsync_2,new AsyncFunctionDataCodecs(ByteBufCodecs.STRING_UTF8.cast(), ByteBufCodecs.INT.cast()));
+        put(FunctionType.GetPersonalBankAccountNrAsync_1,           new AsyncFunctionDataCodecs(UUIDUtil.STREAM_CODEC.cast(), ByteBufCodecs.INT.cast()));
+        put(FunctionType.GetPersonalBankAccountNrAsync_2,           new AsyncFunctionDataCodecs(ByteBufCodecs.STRING_UTF8.cast(), ByteBufCodecs.INT.cast()));
         //put(FunctionType.CreateBankAccountAsync,				    new AsyncFunctionDataCodecs(null, null));
+        put(FunctionType.CreateBankAccountGetAccountNrAsync,		new AsyncFunctionDataCodecs(ByteBufCodecs.STRING_UTF8.cast(), ByteBufCodecs.INT.cast()));
         //put(FunctionType.GetBankAccountAsync,					    new AsyncFunctionDataCodecs(null, null));
         //put(FunctionType.GetBankAccountsAsync_1,				    new AsyncFunctionDataCodecs(null, null));
+        put(FunctionType.GetBankAccountNumbersAsync_1,				new AsyncFunctionDataCodecs(UUIDUtil.STREAM_CODEC.cast(), ExtraCodecUtils.listStreamCodec(ByteBufCodecs.INT.cast())));
+        put(FunctionType.GetBankAccountNumbersAsync_2,				new AsyncFunctionDataCodecs(ItemID.STREAM_CODEC, ExtraCodecUtils.listStreamCodec(ByteBufCodecs.INT.cast())));
+        put(FunctionType.GetBankAccountsDataAsync_1,				    new AsyncFunctionDataCodecs(UUIDUtil.STREAM_CODEC.cast(), ExtraCodecUtils.listStreamCodec(BankAccountData.STREAM_CODEC)));
         //put(FunctionType.GetBankAccountsAsync_2,				    new AsyncFunctionDataCodecs(null, null));
+        put(FunctionType.GetBankAccountsDataAsync_2,				new AsyncFunctionDataCodecs(ItemID.STREAM_CODEC, ExtraCodecUtils.listStreamCodec(BankAccountData.STREAM_CODEC)));
         //put(FunctionType.GetPersonalBankAccountAsync_1,			    new AsyncFunctionDataCodecs(null, null));
+        put(FunctionType.GetPersonalBankAccountDataAsync_1,			    new AsyncFunctionDataCodecs(UUIDUtil.STREAM_CODEC.cast(), BankAccountData.STREAM_CODEC));
         //put(FunctionType.GetPersonalBankAccountAsync_2,			    new AsyncFunctionDataCodecs(null, null));
+        put(FunctionType.GetPersonalBankAccountDataAsync_2,			    new AsyncFunctionDataCodecs(ByteBufCodecs.STRING_UTF8.cast(), BankAccountData.STREAM_CODEC));
         //put(FunctionType.GetOrCreatePersonalBankAccountAsync_1,	    new AsyncFunctionDataCodecs(null, null));
         //put(FunctionType.GetOrCreatePersonalBankAccountAsync_2,	    new AsyncFunctionDataCodecs(null, null));
         put(FunctionType.UserHasPersonalBankAccountAsync,		    new AsyncFunctionDataCodecs(UUIDUtil.STREAM_CODEC.cast(), ByteBufCodecs.BOOL.cast()));
         put(FunctionType.DeleteBankAccountAsync,				    new AsyncFunctionDataCodecs(ByteBufCodecs.INT.cast(), ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.PersonalBankExistsAsync_1,				    new AsyncFunctionDataCodecs(ParamGroup_UUID_ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.PersonalBankExistsAsync_2,				    new AsyncFunctionDataCodecs(ParamGroup_String_ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         //put(FunctionType.GetPersonalBankAsync_1,				    new AsyncFunctionDataCodecs(null, null));
         //put(FunctionType.GetPersonalBankAsync_2,				    new AsyncFunctionDataCodecs(null, null));
-        //put(FunctionType.GetOrCreatePersonalBankAsync_1,		    new AsyncFunctionDataCodecs(null, null));
-        //put(FunctionType.GetOrCreatePersonalBankAsync_2,		    new AsyncFunctionDataCodecs(null, null));
+        put(FunctionType.GetOrCreatePersonalBankAsync_1,		    new AsyncFunctionDataCodecs(ParamGroup_UUID_ItemID.STREAM_CODEC, ByteBufCodecs.INT.cast()));
+        put(FunctionType.GetOrCreatePersonalBankAsync_2,		    new AsyncFunctionDataCodecs(ParamGroup_String_ItemID.STREAM_CODEC, ByteBufCodecs.INT.cast()));
         put(FunctionType.IsItemIDAllowedAsync,					    new AsyncFunctionDataCodecs(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.AllowItemIDAsync,						    new AsyncFunctionDataCodecs(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.DisallowItemIDAsync,					    new AsyncFunctionDataCodecs(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
@@ -257,21 +298,53 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
                 case FunctionType.UserExistsAsync -> OutputData.of(input.function, bankManager.userExists(input.decodeParams()));
                 case FunctionType.GetUserByUUIDAsync -> OutputData.of(input.function, bankManager.getUserByUUID(input.decodeParams()));
                 case FunctionType.GetUserByNameAsync -> OutputData.of(input.function, bankManager.getUserByName(input.decodeParams()));
+                case FunctionType.BankAccountExistsAsync -> OutputData.of(input.function, bankManager.bankAccountExists(input.decodeParams()));
+                case FunctionType.BankAccountHasBankAsync -> {
+                    ParamGroup_int_ItemID  param = input.decodeParams();
+                    yield OutputData.of(input.function, bankManager.bankAccountHasBank(param.integer, param.itemID));
+                }
                 //case FunctionType.CreatePersonalBankAccountAsync -> OutputData.of(input.function, bankManager.createPersonalBankAccount(input.decodeParams()));
+                case FunctionType.CreatePersonalBankAccountGetAccountNrAsync_1 -> OutputData.of(input.function, bankManager.createPersonalBankAccountGetAccountNr((UUID)input.decodeParams()));
+                case FunctionType.CreatePersonalBankAccountGetAccountNrAsync_2 -> OutputData.of(input.function, bankManager.createPersonalBankAccountGetAccountNr((String)input.decodeParams()));
+                case FunctionType.GetPersonalBankAccountNrAsync_1 -> OutputData.of(input.function, bankManager.getPersonalBankAccountNr((UUID)input.decodeParams()));
+                case FunctionType.GetPersonalBankAccountNrAsync_2 -> OutputData.of(input.function, bankManager.getPersonalBankAccountNr((String)input.decodeParams()));
                 //case FunctionType.CreateBankAccountAsync -> OutputData.of(input.function, bankManager.createBankAccount(input.decodeParams()));
+                case FunctionType.CreateBankAccountGetAccountNrAsync -> OutputData.of(input.function, bankManager.createBankAccountGetAccountNr(input.decodeParams()));
                 //case FunctionType.GetBankAccountAsync -> OutputData.of(input.function, bankManager.getBankAccount(input.decodeParams()));
                 //case FunctionType.GetBankAccountsAsync_1 -> OutputData.of(input.function, bankManager. );
+                case FunctionType.GetBankAccountNumbersAsync_1 -> OutputData.of(input.function, bankManager.getBankAccountNumbers((UUID)input.decodeParams()));
+                case FunctionType.GetBankAccountNumbersAsync_2 -> OutputData.of(input.function, bankManager.getBankAccountNumbers((ItemID)input.decodeParams()));
+                case FunctionType.GetBankAccountsDataAsync_1 -> OutputData.of(input.function, bankManager.getBankAccountsData((UUID)input.decodeParams()));
                 //case FunctionType.GetBankAccountsAsync_2 -> OutputData.of(input.function, bankManager. );
+                case FunctionType.GetBankAccountsDataAsync_2 -> OutputData.of(input.function, bankManager.getBankAccountsData((ItemID)input.decodeParams()));
                 //case FunctionType.GetPersonalBankAccountAsync_1 -> OutputData.of(input.function, bankManager. );
+                case FunctionType.GetPersonalBankAccountDataAsync_1 -> OutputData.of(input.function, bankManager.getPersonalBankAccountData((UUID)input.decodeParams()));
                 //case FunctionType.GetPersonalBankAccountAsync_2 -> OutputData.of(input.function, bankManager. );
+                case FunctionType.GetPersonalBankAccountDataAsync_2 -> OutputData.of(input.function, bankManager.getPersonalBankAccountData((String)input.decodeParams()));
                 //case FunctionType.GetOrCreatePersonalBankAccountAsync_1 -> OutputData.of(input.function, bankManager. );
                 //case FunctionType.GetOrCreatePersonalBankAccountAsync_2 -> OutputData.of(input.function, bankManager. );
                 case FunctionType.UserHasPersonalBankAccountAsync -> OutputData.of(input.function, bankManager.userHasPersonalBankAccount(input.decodeParams()));
                 case FunctionType.DeleteBankAccountAsync -> OutputData.of(input.function, bankManager.deleteBankAccount(input.decodeParams()));
+                case FunctionType.PersonalBankExistsAsync_1 -> {
+                    ParamGroup_UUID_ItemID param = input.decodeParams();
+                    yield OutputData.of(input.function, bankManager.personalBankExists(param.uuid, param.itemID));
+                }
+                case FunctionType.PersonalBankExistsAsync_2 -> {
+                    ParamGroup_String_ItemID param = input.decodeParams();
+                    yield OutputData.of(input.function, bankManager.personalBankExists(param.string, param.itemID));
+                }
                 //case FunctionType.GetPersonalBankAsync_1 -> OutputData.of(input.function, bankManager.);
                 //case FunctionType.GetPersonalBankAsync_2 -> OutputData.of(input.function, bankManager. );
-                //case FunctionType.GetOrCreatePersonalBankAsync_1 -> OutputData.of(input.function, bankManager. );
-                //case FunctionType.GetOrCreatePersonalBankAsync_2 -> OutputData.of(input.function, bankManager. );
+                case FunctionType.GetOrCreatePersonalBankAsync_1 -> {
+                    ParamGroup_UUID_ItemID param = input.decodeParams();
+                    ISyncServerBank bank = bankManager.getOrCreatePersonalBank(param.uuid, param.itemID);
+                    yield OutputData.of(input.function, (bank != null)?bankManager.getPersonalBankAccount(param.uuid()).getAccountNumber(): 0);
+                }
+                case FunctionType.GetOrCreatePersonalBankAsync_2 -> {
+                    ParamGroup_String_ItemID param = input.decodeParams();
+                    ISyncServerBank bank = bankManager.getOrCreatePersonalBank(param.string, param.itemID);
+                    yield OutputData.of(input.function, (bank != null)?bankManager.getPersonalBankAccount(param.string).getAccountNumber(): 0);
+                }
                 case FunctionType.IsItemIDAllowedAsync -> OutputData.of(input.function, bankManager.isItemIDAllowed(input.decodeParams()));
                 case FunctionType.AllowItemIDAsync -> OutputData.of(input.function, bankManager.allowItemID(input.decodeParams()) );
                 case FunctionType.DisallowItemIDAsync -> OutputData.of(input.function, bankManager.disallowItemID(input.decodeParams()) );
@@ -349,6 +422,14 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
                 UUIDUtil.STREAM_CODEC, p -> p.uuid,
                 ByteBufCodecs.STRING_UTF8, p -> p.string,
                 ParamGroup_UUID_String::new
+        );
+    }
+    private record ParamGroup_int_ItemID(int integer, ItemID itemID)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_int_ItemID> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.INT, p -> p.integer,
+                ItemID.STREAM_CODEC, p -> p.itemID,
+                ParamGroup_int_ItemID::new
         );
     }
     private record ParamGroup_UUID_ItemID(UUID uuid, ItemID itemID)
@@ -509,49 +590,246 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
         return future;
     }
 
+
+
+
+
     @Override
-    public CompletableFuture<IBankAccount> createPersonalBankAccountAsync(UUID user) {
-        return null;
+    public CompletableFuture<Boolean> bankAccountExistsAsync(int accountNumber)
+    {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.BankAccountExistsAsync, accountNumber);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
-    public CompletableFuture<IBankAccount> createBankAccountAsync(String accountName) {
-        return null;
+    public CompletableFuture<Boolean> bankAccountHasBankAsync(int accountNumber, ItemID itemID) {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.BankAccountHasBankAsync, new ParamGroup_int_ItemID(accountNumber, itemID));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+
+    @Override
+    public CompletableFuture<@Nullable IAsyncBankAccount> createPersonalBankAccountAsync(UUID user) {
+        CompletableFuture<@Nullable IAsyncBankAccount> future =  new CompletableFuture<>();
+        CompletableFuture<Integer> accountNrFuture = createPersonalBankAccountGetAccountNrAsync(user);
+        accountNrFuture.thenAccept(accountNr ->
+        {
+            if(accountNr <= 0)
+            {
+                future.complete(null);
+                return;
+            }
+            future.complete(createBankAccount(accountNr));
+        });
+        return future;
     }
 
     @Override
-    public CompletableFuture<@Nullable IBankAccount> getBankAccountAsync(int accountNumber) {
-        return null;
+    public CompletableFuture<Integer> createPersonalBankAccountGetAccountNrAsync(UUID user) {
+        CompletableFuture<Integer> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.CreatePersonalBankAccountGetAccountNrAsync_1, user);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
-    public CompletableFuture<List<IBankAccount>> getBankAccountsAsync(UUID userUUID) {
-        return null;
+    public CompletableFuture<Integer> createPersonalBankAccountGetAccountNrAsync(String userName) {
+        CompletableFuture<Integer> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.CreatePersonalBankAccountGetAccountNrAsync_2, userName);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
-    public CompletableFuture<List<IBankAccount>> getBankAccountsAsync(ItemID itemID) {
-        return null;
+    public CompletableFuture<Integer> getPersonalBankAccountNrAsync(UUID user) {
+        CompletableFuture<Integer> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetPersonalBankAccountNrAsync_1, user);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
-    public CompletableFuture<@Nullable IBankAccount> getPersonalBankAccountAsync(UUID userUUID) {
-        return null;
+    public CompletableFuture<Integer> getPersonalBankAccountNrAsync(String userName) {
+        CompletableFuture<Integer> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetPersonalBankAccountNrAsync_2, userName);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
-    public CompletableFuture<@Nullable IBankAccount> getPersonalBankAccountAsync(String userName) {
-        return null;
+    public CompletableFuture<@Nullable IAsyncBankAccount> createBankAccountAsync(String accountName) {
+        CompletableFuture<@Nullable IAsyncBankAccount> future =  new CompletableFuture<>();
+        CompletableFuture<Integer> accountNrFuture = createBankAccountGetAccountNrAsync(accountName);
+        accountNrFuture.thenAccept(accountNr ->
+        {
+            if(accountNr <= 0)
+            {
+                future.complete(null);
+                return;
+            }
+            future.complete(createBankAccount(accountNr));
+        });
+        return future;
     }
 
     @Override
-    public CompletableFuture<@Nullable IBankAccount> getOrCreatePersonalBankAccountAsync(UUID userUUID) {
-        return null;
+    public CompletableFuture<Integer> createBankAccountGetAccountNrAsync(String accountName) {
+        CompletableFuture<Integer> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.CreateBankAccountGetAccountNrAsync, accountName);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
-    public CompletableFuture<@Nullable IBankAccount> getOrCreatePersonalBankAccountAsync(@NotNull String userName) {
-        return null;
+    public CompletableFuture<@Nullable IAsyncBankAccount> getBankAccountAsync(int accountNumber) {
+        CompletableFuture<@Nullable IAsyncBankAccount>  future = new CompletableFuture<>();
+        CompletableFuture<Boolean> accountExistsFuture = bankAccountExistsAsync(accountNumber);
+        accountExistsFuture.thenAccept(accountExists ->{
+           if(accountExists)
+           {
+               future.complete(createBankAccount(accountNumber));
+           }
+           else
+           {
+               future.complete(null);
+           }
+        });
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<List<IAsyncBankAccount>> getBankAccountsAsync(UUID userUUID) {
+        CompletableFuture<List<IAsyncBankAccount>> future = new CompletableFuture<>();
+        getBankAccountNumbersAsync(userUUID).thenAccept((bankAccountDataList)->{
+            List<IAsyncBankAccount> list = new ArrayList<>();
+            for(Integer accountNr : bankAccountDataList)
+                list.add(createBankAccount(accountNr));
+            future.complete(list);
+        });
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<List<Integer>> getBankAccountNumbersAsync(UUID userUUID) {
+        CompletableFuture<List<Integer>> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetBankAccountNumbersAsync_1, userUUID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<List<Integer>> getBankAccountNumbersAsync(ItemID itemID) {
+        CompletableFuture<List<Integer>> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetBankAccountNumbersAsync_2, itemID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<List<BankAccountData>> getBankAccountsDataAsync(UUID userUUID)
+    {
+        CompletableFuture<List<BankAccountData>> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetBankAccountsDataAsync_1, userUUID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+
+    @Override
+    public CompletableFuture<List<IAsyncBankAccount>> getBankAccountsAsync(ItemID itemID) {
+        CompletableFuture<List<IAsyncBankAccount>> future = new CompletableFuture<>();
+        getBankAccountNumbersAsync(itemID).thenAccept((bankAccountDataList)->{
+            List<IAsyncBankAccount> list = new ArrayList<>();
+            for(Integer accountNr : bankAccountDataList)
+                list.add(createBankAccount(accountNr));
+            future.complete(list);
+        });
+        return future;
+    }
+    @Override
+    public CompletableFuture<List<BankAccountData>> getBankAccountsDataAsync(ItemID itemID)
+    {
+        CompletableFuture<List<BankAccountData>> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetBankAccountsDataAsync_2, itemID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<@Nullable IAsyncBankAccount> getPersonalBankAccountAsync(UUID userUUID) {
+        CompletableFuture<@Nullable IAsyncBankAccount> future = new CompletableFuture<>();
+        getPersonalBankAccountNrAsync(userUUID).thenAccept(accountNr -> {
+            if(accountNr > 0)
+            {
+                future.complete(createBankAccount(accountNr));
+            }
+        });
+        return future;
+    }
+    @Override
+    public CompletableFuture<@Nullable BankAccountData> getPersonalBankAccountDataAsync(UUID userUUID)
+    {
+        CompletableFuture<BankAccountData> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetPersonalBankAccountDataAsync_1, userUUID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<@Nullable IAsyncBankAccount> getPersonalBankAccountAsync(String userName) {
+        CompletableFuture<@Nullable IAsyncBankAccount> future = new CompletableFuture<>();
+        getPersonalBankAccountNrAsync(userName).thenAccept(accountNr -> {
+            if(accountNr > 0)
+            {
+                future.complete(createBankAccount(accountNr));
+            }
+        });
+        return future;
+    }
+    @Override
+    public CompletableFuture<@Nullable BankAccountData> getPersonalBankAccountDataAsync(String userName)
+    {
+        CompletableFuture<BankAccountData> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetPersonalBankAccountDataAsync_2, userName);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<@Nullable IAsyncBankAccount> getOrCreatePersonalBankAccountAsync(UUID userUUID) {
+        CompletableFuture<@Nullable IAsyncBankAccount> future = new CompletableFuture<>();
+        CompletableFuture<Integer> createdAccount = createPersonalBankAccountGetAccountNrAsync(userUUID);
+        createdAccount.thenAccept(account -> {
+           future.complete(createBankAccount(account));
+        });
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<@Nullable IAsyncBankAccount> getOrCreatePersonalBankAccountAsync(@NotNull String userName) {
+        CompletableFuture<@Nullable IAsyncBankAccount> future = new CompletableFuture<>();
+        CompletableFuture<Integer> createdAccount = createPersonalBankAccountGetAccountNrAsync(userName);
+        createdAccount.thenAccept(account -> {
+            future.complete(createBankAccount(account));
+        });
+        return future;
     }
 
     @Override
@@ -573,23 +851,89 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     }
 
     @Override
-    public CompletableFuture<@Nullable IBank> getPersonalBankAsync(UUID owner, ItemID itemID) {
-        return null;
+    public CompletableFuture<Boolean> personalBankExistsAsync(UUID owner, ItemID itemID) {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.PersonalBankExistsAsync_1, new ParamGroup_UUID_ItemID(owner, itemID));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
-    public CompletableFuture<@Nullable IBank> getPersonalBankAsync(String ownerName, ItemID itemID) {
-        return null;
+    public CompletableFuture<Boolean> personalBankExistsAsync(String ownerName, ItemID itemID) {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.PersonalBankExistsAsync_2, new ParamGroup_String_ItemID(ownerName, itemID));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
-    public CompletableFuture<@Nullable IBank> getOrCreatePersonalBankAsync(UUID owner, ItemID itemID) {
-        return null;
+    public CompletableFuture<@Nullable IAsyncBank> getPersonalBankAsync(UUID owner, ItemID itemID) {
+        CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
+        getPersonalBankAccountNrAsync(owner).thenAccept(accountNr -> {
+            if(accountNr > 0)
+            {
+                bankAccountHasBankAsync(accountNr, itemID).thenAccept(bankAccount -> {
+                    if(bankAccount)
+                        future.complete(createBank(accountNr, itemID));
+                    else
+                        future.complete(null);
+                });
+            }
+        });
+        return future;
     }
 
     @Override
-    public CompletableFuture<@Nullable IBank> getOrCreatePersonalBankAsync(String ownerName, ItemID itemID) {
-        return null;
+    public CompletableFuture<@Nullable IAsyncBank> getPersonalBankAsync(String ownerName, ItemID itemID) {
+        CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
+        getPersonalBankAccountNrAsync(ownerName).thenAccept(accountNr -> {
+            if(accountNr > 0)
+            {
+                bankAccountHasBankAsync(accountNr, itemID).thenAccept(bankAccount -> {
+                    if(bankAccount)
+                        future.complete(createBank(accountNr, itemID));
+                    else
+                        future.complete(null);
+                });
+            }
+        });
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<@Nullable IAsyncBank> getOrCreatePersonalBankAsync(UUID owner, ItemID itemID) {
+        CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetOrCreatePersonalBankAsync_1, new ParamGroup_UUID_ItemID(owner, itemID));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> {
+            int accountNr = outputData.decodeResult();
+            if(accountNr > 0){
+                IAsyncBank bank = createBank(accountNr, itemID);
+                future.complete(bank);
+            }
+            else
+                future.complete(null);
+        });
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<@Nullable IAsyncBank> getOrCreatePersonalBankAsync(String ownerName, ItemID itemID) {
+        CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetOrCreatePersonalBankAsync_2, new ParamGroup_String_ItemID(ownerName, itemID));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> {
+            int accountNr = outputData.decodeResult();
+            if(accountNr > 0){
+                IAsyncBank bank = createBank(accountNr, itemID);
+                future.complete(bank);
+            }
+            else
+                future.complete(null);
+        });
+        return future;
     }
 
     @Override
@@ -719,23 +1063,23 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
 
     private static void info(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.info("[AsyncServerBankManager] " + msg);
+        BACKEND_INSTANCES.LOGGER.info("[AsyncBankManager] " + msg);
     }
     private static void error(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.error("[AsyncServerBankManager] " + msg);
+        BACKEND_INSTANCES.LOGGER.error("[AsyncBankManager] " + msg);
     }
     private static void error(String msg, Throwable e)
     {
-        BACKEND_INSTANCES.LOGGER.error("[AsyncServerBankManager] " + msg, e);
+        BACKEND_INSTANCES.LOGGER.error("[AsyncBankManager] " + msg, e);
     }
     private static void warn(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.warn("[AsyncServerBankManager] " + msg);
+        BACKEND_INSTANCES.LOGGER.warn("[AsyncBankManager] " + msg);
     }
     private static void debug(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.debug("[AsyncServerBankManager] " + msg);
+        BACKEND_INSTANCES.LOGGER.debug("[AsyncBankManager] " + msg);
     }
 
 }

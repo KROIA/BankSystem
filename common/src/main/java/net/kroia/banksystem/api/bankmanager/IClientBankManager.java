@@ -1,4 +1,4 @@
-package net.kroia.banksystem.api;
+package net.kroia.banksystem.api.bankmanager;
 
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
@@ -21,7 +21,7 @@ public interface IClientBankManager {
      * Requests minimal bank data for a specific player and item.
      * Returns the data through a callback.
      * <p>
-     * Bank data for another player will only be returned if the player is allowed to view it. (Admin)
+     * SyncServerBank data for another player will only be returned if the player is allowed to view it. (Admin)
      *
      * @warning
      * The resulting BankData may be null if the player is not allowed to view the bank data of the specified player.

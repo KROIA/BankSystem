@@ -1,6 +1,6 @@
 package net.kroia.banksystem.util;
 
-import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.IBankSystemEvents;
 import net.kroia.banksystem.banking.User;
 import net.kroia.modutilities.event.DataEvent;
@@ -14,8 +14,8 @@ public class BankSystemEvents implements IBankSystemEvents {
 
 
 
-    public final DataEvent<IBankAccount> BANK_ACCOUNT_CREATED = new DataEvent<>();
-    public final DataEvent<IBankAccount> BANK_ACCOUNT_DELETED = new DataEvent<>();
+    public final DataEvent<ISyncServerBankAccount> BANK_ACCOUNT_CREATED = new DataEvent<>();
+    public final DataEvent<ISyncServerBankAccount> BANK_ACCOUNT_DELETED = new DataEvent<>();
 
 
 
@@ -54,13 +54,13 @@ public class BankSystemEvents implements IBankSystemEvents {
 
 
     @Override
-    public DataEvent<IBankAccount> getBankAccountCreatedEvent()
+    public DataEvent<ISyncServerBankAccount> getBankAccountCreatedEvent()
     {
         return BANK_ACCOUNT_CREATED;
     }
 
     @Override
-    public DataEvent<IBankAccount> getBankAccountDeletedEvent()
+    public DataEvent<ISyncServerBankAccount> getBankAccountDeletedEvent()
     {
         return BANK_ACCOUNT_DELETED;
     }

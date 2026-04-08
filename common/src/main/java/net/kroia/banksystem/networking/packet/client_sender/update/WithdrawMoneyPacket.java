@@ -1,11 +1,11 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.banksystem.api.ISyncServerBankManager;
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.ISyncServerBank;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -79,7 +79,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender) {
         ISyncServerBankManager bankManager = getSyncBankManager();
-        IBankAccount account = bankManager.getBankAccount(currentSelectedAccountNumber);
+        ISyncServerBankAccount account = bankManager.getBankAccount(currentSelectedAccountNumber);
         if(account == null)
             return;
 
@@ -89,7 +89,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             return;
         }
 
-        IBank moneyBank = account.getBank(MoneyItem.getItemID());
+        ISyncServerBank moneyBank = account.getBank(MoneyItem.getItemID());
         if(moneyBank == null) {
             return; // No money bank found for the player
         }
@@ -130,7 +130,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             }
 
             // Withdraw the requested amount of banknotes
-            if(moneyBank.withdraw(totalValue) == Bank.Status.SUCCESS){
+            if(moneyBank.withdraw(totalValue) == BankStatus.SUCCESS){
                 int intAmount = (int) requestedAmount;
                 if(requestedAmount > Integer.MAX_VALUE)
                 {
@@ -162,7 +162,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     @Override
     protected void handleOnMaster(UUID sender) {
         ISyncServerBankManager bankManager = getSyncBankManager();
-        IBankAccount account = bankManager.getBankAccount(currentSelectedAccountNumber);
+        ISyncServerBankAccount account = bankManager.getBankAccount(currentSelectedAccountNumber);
         if(account == null)
             return;
 
@@ -172,7 +172,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             return;
         }
 
-        IBank moneyBank = account.getBank(MoneyItem.getItemID());
+        ISyncServerBank moneyBank = account.getBank(MoneyItem.getItemID());
         if(moneyBank == null) {
             return; // No money bank found for the player
         }
@@ -214,7 +214,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             }
 
             // Withdraw the requested amount of banknotes
-            if(moneyBank.withdraw(totalValue) == Bank.Status.SUCCESS)
+            if(moneyBank.withdraw(totalValue) == BankStatus.SUCCESS)
             {
                 requestedBankNotes.put(itemID, requestedAmount);
             }

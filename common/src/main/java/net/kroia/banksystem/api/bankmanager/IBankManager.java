@@ -1,9 +1,9 @@
-package net.kroia.banksystem.api;
+package net.kroia.banksystem.api.bankmanager;
 
 public interface IBankManager {
 
     boolean hasSyncAccess();
     boolean hasAsyncAccess();
-    IAsyncServerBankManager getAsync();
+    IAsyncBankManager getAsync();
     ISyncServerBankManager getSync();
 }

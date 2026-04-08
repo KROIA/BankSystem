@@ -1,8 +1,8 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.banksystem.api.ISyncServerBankManager;
+import net.kroia.banksystem.api.bank.ISyncServerBank;
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
@@ -107,7 +107,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         // Check if the player is a admin
         boolean isAdmin = playerIsAdmin(sender);
 
-        IBankAccount account = bankManager.getBankAccount(input.accountNumber);
+        ISyncServerBankAccount account = bankManager.getBankAccount(input.accountNumber);
         if(account == null) {
             // If the account does not exist, we cannot update it
             future.complete(null);
@@ -129,7 +129,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                     account.removeBank(data.itemID);
                     continue;
                 }
-                IBank bank = account.getBank(data.itemID);
+                ISyncServerBank bank = account.getBank(data.itemID);
                 if (bank != null) {
                     if (data.resetLockedBalance)
                         bank.unlockAll();

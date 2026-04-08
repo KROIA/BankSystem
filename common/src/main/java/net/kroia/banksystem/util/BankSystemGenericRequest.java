@@ -1,7 +1,7 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.ISyncServerBankManager;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.minecraft.server.level.ServerPlayer;

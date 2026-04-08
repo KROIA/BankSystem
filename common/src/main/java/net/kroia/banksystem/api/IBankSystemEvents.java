@@ -1,5 +1,6 @@
 package net.kroia.banksystem.api;
 
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.banking.User;
 import net.kroia.modutilities.event.DataEvent;
 import net.kroia.modutilities.event.Signal;
@@ -24,13 +25,13 @@ public interface IBankSystemEvents {
      * Gets the event that is emitted when a bank account is created.
      * @return The bank account created event.
      */
-    DataEvent<IBankAccount> getBankAccountCreatedEvent();
+    DataEvent<ISyncServerBankAccount> getBankAccountCreatedEvent();
 
     /**
      * Gets the event that is emitted when a bank account is removed
      * @return The bank account updated event.
      */
-    DataEvent<IBankAccount> getBankAccountDeletedEvent();
+    DataEvent<ISyncServerBankAccount> getBankAccountDeletedEvent();
 
     /**
      * Signal gets emitted when bank data is saved to a file.

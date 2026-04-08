@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.api.ISyncServerBankManager;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.RegistryFriendlyByteBuf;

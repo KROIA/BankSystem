@@ -3,12 +3,13 @@ package net.kroia.banksystem.entity.custom;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.api.IAsyncServerBankManager;
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IAsyncBank;
+import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
-import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.SyncServerBank;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
@@ -35,6 +36,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -96,7 +98,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             {
                 bankITemID = MoneyBank.ITEM_ID;
             }
-            IBank bankAccount = bank.getBank(bankITemID);
+            ISyncServerBank bankAccount = bank.getBank(bankITemID);
             if(bankAccount == null) {
                 // Create item bank account
                 bankAccount = bank.createItemBank(bankITemID, 0, true);
@@ -146,7 +148,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 if(isMoney)
                     bankITemID = MoneyBank.ITEM_ID;
 
-                IBank bankAccount = bank.getBank(bankITemID);
+                ISyncServerBank bankAccount = bank.getBank(bankITemID);
                 if(bankAccount == null) {
                     cancelTask(itemID);
                     continue;
@@ -173,7 +175,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         {
                             depositAmount = bankAccount.convertToRawAmount(depositAmount);
                         }
-                        if(bankAccount.deposit(depositAmount) == Bank.Status.SUCCESS) {
+                        if(bankAccount.deposit(depositAmount) == BankStatus.SUCCESS) {
                             inventory.removeItem(itemID, availableAmount);
                             setAmount(itemID, getAmount(itemID) + availableAmount);
                         }
@@ -206,10 +208,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         long addedAmount = inventory.addItem(itemID, (long)bankAccount.convertToRealAmount(amount));
                         if(addedAmount > 0)
                         {
-                            if(bankAccount.withdraw(bankAccount.convertToRawAmount(addedAmount)) != Bank.Status.SUCCESS)
+                            if(bankAccount.withdraw(bankAccount.convertToRawAmount(addedAmount)) != BankStatus.SUCCESS)
                             {
                                 // error
-                                error("Failed to withdraw " + Bank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
+                                error("Failed to withdraw " + SyncServerBank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
                                 inventory.removeItem(itemID, addedAmount);
                                 cancelTask(itemID);
                                 continue;
@@ -231,10 +233,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         long addedAmount = inventory.addItem(itemID, amount);
                         if(addedAmount > 0)
                         {
-                            if(bankAccount.withdraw(bankAccount.convertToRawAmount(addedAmount)) != Bank.Status.SUCCESS)
+                            if(bankAccount.withdraw(bankAccount.convertToRawAmount(addedAmount)) != BankStatus.SUCCESS)
                             {
                                 // error
-                                error("Failed to withdraw " + Bank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
+                                error("Failed to withdraw " + SyncServerBank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
                                 inventory.removeItem(itemID, addedAmount);
                                 cancelTask(itemID);
                                 continue;
@@ -918,7 +920,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
     private void sendItemsToBank(UUID playerID, int accountNr)
     {
-        IAsyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
+        IAsyncBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
         if(accountNr <= 0)
             return;
 
@@ -928,7 +930,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
         itemsFuture.thenAccept((items)->
         {
-            CompletableFuture<IBankAccount> bankAccountFuture = bankManager.getBankAccountAsync(accountNr);
+            CompletableFuture<IAsyncBankAccount> bankAccountFuture = bankManager.getBankAccountAsync(accountNr);
             bankAccountFuture.thenAccept(bankAccount -> {
                 if (bankAccount == null) {
                     CompletableFuture<User> userFuture = bankManager.getUserByUUIDAsync(playerID);
@@ -938,53 +940,63 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     });
                     return;
                 }
-                if (!bankAccount.hasPermission(playerID, BankPermission.DEPOSIT.getValue())) {
-                    ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(bankAccount.getAccountName(), BankPermission.DEPOSIT));
-                    return;
-                }
-                playerData.selectedBankAccount = bankAccount.getAccountNumber();
+                CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(playerID, BankPermission.DEPOSIT.getValue());
+                hasPermissionFuture.thenAccept(hasPermission -> {
+                    if (!hasPermission) {
+                        CompletableFuture<String> accountNameFuture = bankAccount.getAccountNameAsync();
+                        accountNameFuture.thenAccept(accountName -> {
+                            ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(accountName, BankPermission.DEPOSIT));
+                        });
+                        return;
+                    }
+                    playerData.selectedBankAccount = bankAccount.getAccountNumberAsync();
 
-                for (ItemID itemID : items.keySet()) {
-                    long amount = items.get(itemID);
-                    if (amount <= 0)
-                        continue;
+                    for (ItemID itemID : items.keySet()) {
+                        long amount = items.get(itemID);
+                        if (amount <= 0)
+                            continue;
 
-                    IBank bank;
-                    boolean isMoney = MoneyItem.isMoney(itemID);
-                    if (isMoney) {
-                        bank = bankAccount.getOrCreateBank(MoneyItem.getItemID());
-                    } else {
-                        bank = bankAccount.getOrCreateBank(itemID);
+                        CompletableFuture<@Nullable IAsyncBank> bankFuture;
+                        boolean isMoney = MoneyItem.isMoney(itemID);
+                        if (isMoney) {
+                            bankFuture = bankAccount.getOrCreateBankAsync(MoneyItem.getItemID());
+                        } else {
+                            bankFuture = bankAccount.getOrCreateBankAsync(itemID);
+                        }
+                        bankFuture.thenAccept(bank -> {
+                            if (bank == null) {
+                                ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
+                                return;
+                            }
+                            long amountToDeposit = amount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                            if (isMoney) {
+                                amountToDeposit = amount * ((MoneyItem) Objects.requireNonNull(itemID.getStack()).getItem()).worth();
+                            }
+                            CompletableFuture<BankStatus> depositResult = bank.depositAsync(amountToDeposit);
+                            depositResult.thenAccept(deposit -> {
+                                if (deposit == BankStatus.SUCCESS) {
+                                    inventory.removeItem(itemID, amount);
+                                }
+                            });
+                        });
                     }
-
-                    if (bank == null) {
-                        ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
-                        continue;
-                    }
-                    long amountToDeposit = amount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
-                    if (isMoney) {
-                        amountToDeposit = amount * ((MoneyItem) Objects.requireNonNull(itemID.getStack()).getItem()).worth();
-                    }
-                    if (bank.deposit(amountToDeposit) == Bank.Status.SUCCESS) {
-                        inventory.removeItem(itemID, amount);
-                    }
-                }
-                // mark the block entity for saving
-                setChanged();
+                    // mark the block entity for saving
+                    setChanged();
+                });
             });
         });
     }
 
     private void sendToBlock(UUID playerID, int accountNr, HashMap<ItemID, Long> items)
     {
-        IAsyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
+        IAsyncBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
 
         PlayerData playerData = getPlayerData(playerID);
         TerminalInventory inventory = playerData.getInventory();
 
         if(accountNr <= 0)
             return;
-        CompletableFuture<IBankAccount> bankAccountFuture = bankManager.getBankAccountAsync(accountNr);
+        CompletableFuture<IAsyncBankAccount> bankAccountFuture = bankManager.getBankAccountAsync(accountNr);
         bankAccountFuture.thenAccept(bankAccount -> {
             if (bankAccount == null) {
                 CompletableFuture<User> userFuture = bankManager.getUserByUUIDAsync(playerID);
@@ -994,45 +1006,56 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 });
                 return;
             }
-            if (!bankAccount.hasPermission(playerID, BankPermission.DEPOSIT.getValue())) {
-                ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(bankAccount.getAccountName(), BankPermission.DEPOSIT));
-                return;
-            }
-            playerData.selectedBankAccount = bankAccount.getAccountNumber();
-
-            for (ItemID itemID : items.keySet()) {
-                long amount = items.get(itemID);
-                if (amount <= 0)
-                    continue;
-
-                IBank bank = null;
-
-                bank = bankAccount.getOrCreateBank(itemID);
-
-
-                if (bank == null) {
-                    ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
-                    continue;
+            CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(playerID, BankPermission.DEPOSIT.getValue());
+            hasPermissionFuture.thenAccept(hasPermission -> {
+                if (!hasPermission) {
+                    CompletableFuture<String>  accountNameFuture = bankAccount.getAccountNameAsync();
+                    accountNameFuture.thenAccept(accountName -> {
+                        ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(accountName, BankPermission.DEPOSIT));
+                    });
+                    return;
                 }
+                playerData.selectedBankAccount = bankAccount.getAccountNumberAsync();
 
-                //long withdrawAmount = amount;
-                long withdrawAmount = amount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                for (ItemID itemID : items.keySet()) {
+                    long amount = items.get(itemID);
+                    if (amount <= 0)
+                        continue;
 
-                withdrawAmount = Math.min(withdrawAmount, bank.getBalance());
-                if (withdrawAmount > 0) {
-                    long addedAmount = inventory.addItem(itemID, amount);
-                    if (addedAmount > 0) {
-
-                        if (bank.withdraw(addedAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) != Bank.Status.SUCCESS) {
-                            // error
-                            error("Failed to withdraw " + Bank.getNormalizedAmountStatic(addedAmount) + " " + itemID + " from bank account of user " + playerID);
-                            inventory.removeItem(itemID, addedAmount);
+                    CompletableFuture<@Nullable IAsyncBank> bankFuture = bankAccount.getOrCreateBankAsync(itemID);
+                    bankFuture.thenAccept(bank -> {
+                        if (bank == null) {
+                            ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
+                            return;
                         }
-                    }
+
+                        //long withdrawAmount = amount;
+                        final long withdrawAmountFinal = amount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+
+                        CompletableFuture<Long> balanceFuture = bank.getBalanceAsync();
+
+                        balanceFuture.thenAccept(balance -> {
+                            long withdrawAmount = Math.min(withdrawAmountFinal, balance);
+                            if (withdrawAmount > 0) {
+                                long addedAmount = inventory.addItem(itemID, amount);
+                                if (addedAmount > 0) {
+
+                                    CompletableFuture<BankStatus> withdrawResult = bank.withdrawAsync(addedAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+                                    withdrawResult.thenAccept(withdraw -> {
+                                        if (withdraw != BankStatus.SUCCESS) {
+                                            // error
+                                            error("Failed to withdraw " + SyncServerBank.getNormalizedAmountStatic(addedAmount) + " " + itemID + " from bank account of user " + playerID);
+                                            inventory.removeItem(itemID, addedAmount);
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                    });
                 }
-            }
-            // mark the block entity for saving
-            setChanged();
+                // mark the block entity for saving
+                setChanged();
+            });
         });
     }
 

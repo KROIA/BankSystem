@@ -3,7 +3,7 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.SyncServerBank;
 import net.kroia.banksystem.screen.custom.ATMScreen;
 import net.minecraft.network.chat.Component;
 
@@ -479,7 +479,7 @@ public class BankSystemTextMessages {
     public static String getATMSumTextMessage(long sum)
     {
         String msg = ATM_SUM_TEXT.getString();
-        String normalized = Bank.getFormattedAmountStatic(sum);
+        String normalized = SyncServerBank.getFormattedAmountStatic(sum);
         msg = replaceVariable(msg, Variables.AMOUNT, normalized);
         return msg;
     }
@@ -488,7 +488,7 @@ public class BankSystemTextMessages {
     public static String getATMAvailableTextMessage(long sum)
     {
         String msg = ATM_AVAILABLE_TEXT.getString();
-        String normalized = Bank.getFormattedAmountStatic(sum);
+        String normalized = SyncServerBank.getFormattedAmountStatic(sum);
         msg = replaceVariable(msg, Variables.AMOUNT, normalized);
         return msg;
     }
@@ -497,7 +497,7 @@ public class BankSystemTextMessages {
     public static String getATMNotEnoughBalance(long sum)
     {
         String msg = ATM_NOT_ENOUGH_BALANCE_TEXT.getString();
-        String normalized = Bank.getFormattedAmountStatic(sum);
+        String normalized = SyncServerBank.getFormattedAmountStatic(sum);
         msg = replaceVariable(msg, Variables.AMOUNT, normalized);
         return msg;
     }

@@ -31,7 +31,7 @@ public abstract class AsyncForwardingRequest<
     //}
     //@Override
     //public CompletableFuture<AsyncFunctionOutputData <FuncEnumType>> handleOnMasterServer(AsyncFunctionInputData<FuncEnumType> input, UUID playerSender) {
-    //    return AsyncServerBankManager.handlePacketOnMaster(input, playerSender);
+    //    return AsyncBankManager.handlePacketOnMaster(input, playerSender);
     //}
 
     @Override

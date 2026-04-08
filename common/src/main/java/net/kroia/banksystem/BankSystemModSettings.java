@@ -206,7 +206,7 @@ public final class BankSystemModSettings extends ModSettings {
 
         public Bank()
         {
-            super("Bank");
+            super("SyncServerBank");
         }
     }
 

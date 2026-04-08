@@ -1,7 +1,10 @@
-package net.kroia.banksystem.api;
+package net.kroia.banksystem.api.bankmanager;
 
 import com.google.gson.JsonElement;
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.bank.SyncServerBank;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.util.ItemID;
@@ -11,52 +14,48 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
-public interface IAsyncServerBankManager {
-
-
+public interface ISyncServerBankManager {
     /**
      * Contains all data about the bank manager.
      * @return Data packet containing all data about the bank manager.
      */
-    CompletableFuture<BankManagerData> getBankManagerDataAsync();
+    BankManagerData getBankManagerData();
 
     /**
      * Contains all user information about the bank manager.
      * A user consists of their UUID, name, and other individual settings.
      * @return Data packet containing all user information about the bank manager.
      */
-    CompletableFuture<BankManagerData.UserMapData> getBankManagerUserMapDataAsync();
+    BankManagerData.UserMapData getBankManagerUserMapData();
 
     /**
      * Contains a list of all bank accounts and their banks.
      * @return Data packet containing all bank accounts and their banks.
      */
-    CompletableFuture<BankManagerData.BankAccountsData> getBankManagerBankAccountsDataAsync();
+    BankManagerData.BankAccountsData getBankManagerBankAccountsData();
 
-
-    CompletableFuture<Boolean> setBanksystemAdminModeAsync(UUID playerUUID, boolean isAdmin);
-    CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID);
+    boolean setBanksystemAdminMode(UUID playerUUID, boolean isAdmin);
+    boolean isBanksystemAdmin(UUID playerUUID);
 
     /**
      * Returns a list of all allowed items that can be stored in the bank.
      * @return A list of allowed items that can be stored in the bank.
      */
-    CompletableFuture<List<ItemID>> getAllowedItemsAsync();
+    List<ItemID> getAllowedItems();
 
     /**
      * Returns a list of all blacklisted items that cannot be stored in the bank.
      * @return A list of blacklisted items that cannot be stored in the bank.
      */
-    CompletableFuture<List<ItemID>> getBlacklistedItemsAsync();
+    List<ItemID> getBlacklistedItems();
 
     /**
      * Returns a list of all items that cannot be removed from the bank.
      * These items are not allowed to be removed from the bank account.
      * @return A list of items that cannot be removed from the bank.
      */
-    CompletableFuture<List<ItemID>> getNotRemovableItemsAsync();
+    List<ItemID> getNotRemovableItems();
 
     /**
      * Returns minimalistic data about the bank manager.
@@ -64,16 +63,16 @@ public interface IAsyncServerBankManager {
      *
      * @return Data packet containing minimal data about the bank manager.
      */
-    CompletableFuture<ItemInfoData> getItemInfoDataAsync(@NotNull ItemID itemID);
+    ItemInfoData getItemInfoData(@NotNull ItemID itemID);
 
 
     /**
-     * Creates a new User for the manager which is used for assigning to a BankAccount.
+     * Creates a new User for the manager which is used for assigning to a SyncServerBankAccount.
      * This must be called once a player joins the server for the first time.
      * @param player The player to create a user for.
      */
-    void addUserAsync(@NotNull ServerPlayer player);
-    void addUserAsync(@NotNull UUID playerUUID, @NotNull String playerName);
+    void addUser(@NotNull ServerPlayer player);
+    void addUser(@NotNull UUID playerUUID, @NotNull String playerName);
 
     /**
      * Adds a new User to the bank manager.
@@ -81,7 +80,7 @@ public interface IAsyncServerBankManager {
      * this function can be called to add the user instead of the addUser(ServerPlayer player) method.
      * @param user contains all relevant data about the user to add.
      */
-    void addUserAsync(@NotNull User user);
+    void addUser(@NotNull User user);
 
     /**
      * Removes the user with the given UUID.
@@ -92,121 +91,148 @@ public interface IAsyncServerBankManager {
      * @param userUUID UUID of the user to remove.
      * @return True if the user was successfully removed, false otherwise.
      */
-    CompletableFuture<Boolean> removeUserAsync(UUID userUUID);
+    boolean removeUser(UUID userUUID);
 
     /**
      * Checks if a user with the given UUID exists in the bank manager.
      * @param userUUID UUID of the user to check.
      * @return True if the user exists, false otherwise.
      */
-    CompletableFuture<Boolean> userExistsAsync(UUID userUUID);
+    boolean userExists(UUID userUUID);
 
     /**
      * Gets the User object for the given UUID.
      * @param userUUID UUID of the user to get.
      * @return The User object if found, null otherwise.
      */
-    CompletableFuture<@Nullable User> getUserByUUIDAsync(UUID userUUID);
+    @Nullable User getUserByUUID(UUID userUUID);
 
     /**
      * Gets the User object for the given name.
      * @param name Name of the user to get.
      * @return The User object if found, null otherwise.
      */
-    CompletableFuture<@Nullable User> getUserByNameAsync(String name);
+    @Nullable User getUserByName(String name);
 
 
 
 
 
 
+
+
+    boolean bankAccountExists(int accountNumber);
+    boolean bankAccountHasBank(int accountNumber, ItemID itemID);
 
 
     /**
      * Creates a new personal bank account for the given user UUID.
      * The personal bank account is the default bank account for a user.
      * @param user The UUID of the user to create the personal bank account for.
-     * @return The created or already existing BankAccount object.
+     * @return The created or already existing SyncServerBankAccount object.
      */
-    CompletableFuture<IBankAccount> createPersonalBankAccountAsync(UUID user);
+    @Nullable ISyncServerBankAccount createPersonalBankAccount(UUID user);
+    int createPersonalBankAccountGetAccountNr(UUID user);
+    int createPersonalBankAccountGetAccountNr(String userName);
+
+    int getPersonalBankAccountNr(UUID user);
+    int getPersonalBankAccountNr(String userName);
 
     /**
      * Creates a new bank account with a given account name.
      * The account is empty and no user is assigned to it.
      * @param accountName The name of the bank account to create.
      *                    The name must not be unique.
-     * @return The created BankAccount object.
+     * @return The created SyncServerBankAccount object.
      */
-    CompletableFuture<IBankAccount> createBankAccountAsync(String accountName);
+    @Nullable ISyncServerBankAccount createBankAccount(String accountName);
+    int createBankAccountGetAccountNr(String accountName);
+
 
     /**
      * Gets a bank account with the given account number.
      * @param accountNumber The account number of the bank account to get.
-     * @return The BankAccount object if found, null otherwise.
+     * @return The SyncServerBankAccount object if found, null otherwise.
      */
-    CompletableFuture<@Nullable IBankAccount> getBankAccountAsync(int accountNumber);
+    @Nullable ISyncServerBankAccount getBankAccount(int accountNumber);
 
 
     /**
      * Gets all bank accounts that have the given user UUID as a bank user.
      * @param userUUID The UUID of the user to get bank accounts for.
-     * @return A list of BankAccount objects associated with the user UUID.
+     * @return A list of SyncServerBankAccount objects associated with the user UUID.
      */
-    CompletableFuture<List<IBankAccount>> getBankAccountsAsync(UUID userUUID);
+    List<ISyncServerBankAccount> getBankAccounts(UUID userUUID);
+
+
+    /**
+     * Gets a list of bank account numbers that have the user in it
+     * @param userUUID The UUID of the user to get bank accounts for.
+     * @return A list of bank account numbers associated with the user
+     */
+    List<Integer> getBankAccountNumbers(UUID userUUID);
+    List<Integer> getBankAccountNumbers(ItemID itemID);
+
+
+    List<BankAccountData> getBankAccountsData(UUID userUUID);
+
 
 
     /**
      * Gets all bank accounts that have the given item ID as a bank item.
      * @param itemID The item ID to get bank accounts for.
-     * @return A list of BankAccount objects associated with the item ID.
+     * @return A list of SyncServerBankAccount objects associated with the item ID.
      */
-    CompletableFuture<List<IBankAccount>> getBankAccountsAsync(ItemID itemID);
+    List<ISyncServerBankAccount> getBankAccounts(ItemID itemID);
+    List<BankAccountData> getBankAccountsData(ItemID itemID);
 
     /**
      * Gets the personal bank account for a given user UUID.
      * The personal bank account is the default bank account for a user.
      * @param userUUID The UUID of the user to get the personal bank account for.
-     * @return The BankAccount object if found, null otherwise.
+     * @return The SyncServerBankAccount object if found, null otherwise.
      */
-    CompletableFuture<@Nullable IBankAccount> getPersonalBankAccountAsync(UUID userUUID);
+    @Nullable ISyncServerBankAccount getPersonalBankAccount(UUID userUUID);
+    @Nullable BankAccountData getPersonalBankAccountData(UUID userUUID);
 
     /**
      * Gets the personal bank account for a given user name.
      * The personal bank account is the default bank account for a user.
      * @param userName The name of the user to get the personal bank account for.
-     * @return The BankAccount object if found, null otherwise.
+     * @return The SyncServerBankAccount object if found, null otherwise.
      */
-    CompletableFuture<@Nullable IBankAccount> getPersonalBankAccountAsync(String userName);
+    @Nullable ISyncServerBankAccount getPersonalBankAccount(String userName);
+    @Nullable BankAccountData getPersonalBankAccountData(String userName);
 
     /**
      * Trys to get the personal bank account for a given user UUID.
      * If the personal bank account does not exist, it will try to create a new one.
      * @param userUUID The UUID of the user to get or create the personal bank account for.
-     * @return The BankAccount object if found or created, null if an error occurs.
+     * @return The SyncServerBankAccount object if found or created, null if an error occurs.
      */
-    CompletableFuture<@Nullable IBankAccount> getOrCreatePersonalBankAccountAsync(UUID userUUID);
+    @Nullable ISyncServerBankAccount getOrCreatePersonalBankAccount(UUID userUUID);
 
     /**
-     * Trys to get the personal bank account for a given user name.
+     * Trys to get the personal bank account for a given username.
      * If the personal bank account does not exist, it will try to create a new one.
      * @param userName The name of the user to get or create the personal bank account for.
-     * @return The BankAccount object if found or created, null if an error occurs.
+     * @return The SyncServerBankAccount object if found or created, null if an error occurs.
      */
-    CompletableFuture<@Nullable IBankAccount> getOrCreatePersonalBankAccountAsync(@NotNull String userName);
+    @Nullable ISyncServerBankAccount getOrCreatePersonalBankAccount(@NotNull String userName);
 
     /**
      * Checks if a user has a personal bank account.
      * @param userUUID The UUID of the user to check.
      * @return True if the user has a personal bank account, false otherwise.
      */
-    CompletableFuture<Boolean> userHasPersonalBankAccountAsync(UUID userUUID);
+    boolean userHasPersonalBankAccount(UUID userUUID);
 
     /**
      * Deletes a bank account with the given account number.
      * @param accountNumber The account number of the bank account to delete.
      * @return True if the bank account was successfully deleted, false otherwise.
      */
-    CompletableFuture<Boolean> deleteBankAccountAsync(int accountNumber);
+    boolean deleteBankAccount(int accountNumber);
 
 
 
@@ -217,45 +243,52 @@ public interface IAsyncServerBankManager {
 
 
 
-
+    boolean personalBankExists(UUID owner, ItemID itemID);
+    boolean personalBankExists(String ownerName, ItemID itemID);
 
     /**
      * Gets the personal bank for a given owner UUID and item ID.
      * The personal bank is the default bank for a user.
      * @param owner The UUID of the owner to get the personal bank for.
      * @param itemID The item ID of the personal bank to get.
-     * @return The IBank object if found, null otherwise.
+     * @return The SyncServerBank object if found, null otherwise.
      */
-    CompletableFuture<@Nullable IBank> getPersonalBankAsync(UUID owner, ItemID itemID);
+    @Nullable SyncServerBank getPersonalBank(UUID owner, ItemID itemID);
+
+    //int getPersonalBankAccountNumber(UUID owner, ItemID itemID);
 
     /**
      * Gets the personal bank for a given owner name and item ID.
      * The personal bank is the default bank for a user.
      * @param ownerName The name of the owner to get the personal bank for.
      * @param itemID The item ID of the personal bank to get.
-     * @return The IBank object if found, null otherwise.
+     * @return The SyncServerBank object if found, null otherwise.
      */
-    CompletableFuture<@Nullable IBank> getPersonalBankAsync(String ownerName, ItemID itemID);
+    @Nullable SyncServerBank getPersonalBank(String ownerName, ItemID itemID);
+
+    //int getPersonalBankAccountNumber(String ownerName, ItemID itemID);
 
     /**
      * Gets or creates a personal bank for a given owner UUID and item ID.
      * If the personal bank does not exist, it will try to create a new one.
      * @param owner The UUID of the owner to get or create the personal bank for.
      * @param itemID The item ID of the personal bank to get or create.
-     * @return The IBank object if found or created, null if an error occurs.
+     * @return The SyncServerBank object if found or created, null if an error occurs.
      */
-    CompletableFuture<@Nullable IBank> getOrCreatePersonalBankAsync(UUID owner, ItemID itemID);
+    @Nullable SyncServerBank getOrCreatePersonalBank(UUID owner, ItemID itemID);
 
+    //int getOrCreatePersonalBankAccountNumber(UUID owner, ItemID itemID);
     /**
      * Gets or creates a personal bank for a given owner name and item ID.
      * If the personal bank does not exist, it will try to create a new one.
      * @param ownerName The name of the owner to get or create the personal bank for.
      * @param itemID The item ID of the personal bank to get or create.
-     * @return The IBank object if found or created, null if an error occurs.
+     * @return The SyncServerBank object if found or created, null if an error occurs.
      */
-    CompletableFuture<@Nullable IBank> getOrCreatePersonalBankAsync(String ownerName, ItemID itemID);
+    @Nullable SyncServerBank getOrCreatePersonalBank(String ownerName, ItemID itemID);
 
 
+    //int getOrCreatePersonalBankAccountNumber(String ownerName, ItemID itemID);
 
 
 
@@ -272,7 +305,7 @@ public interface IAsyncServerBankManager {
      * @param itemID The item ID to check.
      * @return True if the item ID is allowed, false otherwise.
      */
-    CompletableFuture<Boolean> isItemIDAllowedAsync(ItemID itemID);
+    boolean isItemIDAllowed(ItemID itemID);
 
 
     /**
@@ -281,7 +314,7 @@ public interface IAsyncServerBankManager {
      * @param itemID The item ID to allow.
      * @return True if the item ID was successfully allowed, false otherwise.
      */
-    CompletableFuture<Boolean> allowItemIDAsync(ItemID itemID);
+    boolean allowItemID(ItemID itemID);
 
     /**
      * Disallows the given item ID from being stored in a bank account.
@@ -289,7 +322,7 @@ public interface IAsyncServerBankManager {
      * @param itemID The item ID to disallow.
      * @return True if the item ID was successfully disallowed, false otherwise.
      */
-    CompletableFuture<Boolean> disallowItemIDAsync(ItemID itemID);
+    boolean disallowItemID(ItemID itemID);
 
     /**
      * Checks if the given item ID is not removable and cannot be removed from a bank account.
@@ -297,7 +330,7 @@ public interface IAsyncServerBankManager {
      * @param itemID The item ID to check.
      * @return True if the item ID is not removable, false otherwise.
      */
-    CompletableFuture<Boolean> isItemIDNotRemovableAsync(ItemID itemID);
+    boolean isItemIDNotRemovable(ItemID itemID);
 
     /**
      * Checks if the given item ID is blacklisted and cannot be stored in a bank account.
@@ -305,7 +338,7 @@ public interface IAsyncServerBankManager {
      * @param itemID The item ID to check.
      * @return True if the item ID is blacklisted, false otherwise.
      */
-    CompletableFuture<Boolean> isItemIDBlacklistedAsync(ItemID itemID);
+    boolean isItemIDBlacklisted(ItemID itemID);
 
 
 
@@ -315,31 +348,31 @@ public interface IAsyncServerBankManager {
     /**
      * @return The total amount of money in circulation across all banks.
      */
-    CompletableFuture<Double> getRealMoneyCirculationAsync();
+    double getRealMoneyCirculation();
 
     /**
      * @return The total amount of locked money in circulation across all banks.
      */
-    CompletableFuture<Double> getRealLockedMoneyCirculationAsync();
+    double getRealLockedMoneyCirculation();
 
     /**
      * @param itemID
      * @return The total amount of the specified item in circulation across all banks.
      */
-    CompletableFuture<Double> getRealItemCirculationAsync(ItemID itemID);
+    double getRealItemCirculation(ItemID itemID);
 
     /**
      * @param itemID
      * @return The total amount of the specified item that is locked in circulation across all banks.
      */
-    CompletableFuture<Double> getRealLockedItemCirculationAsync(ItemID itemID);
+    double getRealLockedItemCirculation(ItemID itemID);
 
     /**
      * Gets the JSON representation of the circulation data.
      *
      * @return A JsonElement containing the circulation data.
      */
-    CompletableFuture<JsonElement> getCirculationDataJsonAsync();
+    JsonElement getCirculationDataJson();
 
 
     /**
@@ -347,7 +380,7 @@ public interface IAsyncServerBankManager {
      *
      * @return A String containing the circulation data in JSON format.
      */
-    CompletableFuture<String> getCirculationDataJsonStringAsync();
+    String getCirculationDataJsonString();
 
 
 
@@ -359,7 +392,7 @@ public interface IAsyncServerBankManager {
      *
      * @return A JsonElement containing the bank manager data.
      */
-    CompletableFuture<JsonElement> toJsonAsync();
+    JsonElement toJson();
 
     /**
      * Converts the bank manager data to a JSON string representation.
@@ -368,7 +401,7 @@ public interface IAsyncServerBankManager {
      *
      * @return A String containing the bank manager data in JSON format.
      */
-    CompletableFuture<String> toJsonStringAsync();
+    String toJsonString();
 
 
     /**
@@ -376,12 +409,6 @@ public interface IAsyncServerBankManager {
      * @param playerUUID
      * @param playerName
      */
-    void onPlayerJoinAsync(UUID playerUUID, String playerName);
-
-
-
-
-
-
+    void onPlayerJoin(UUID playerUUID, String playerName);
 
 }
