@@ -361,19 +361,24 @@ public class SyncServerBank implements ServerSaveable, ISyncServerBank, IAsyncBa
         addBalanceInternal(amount);
         return otherBankStatus;
     }
+    @Override
+    public BankStatus transfer(long amount, int toAccount)
+    {
+        ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
+        if(account == null)
+            return BankStatus.FAILED_NO_BANK;
+        ISyncServerBank bank = account.getBank(itemID);
+        if(bank == null)
+            return BankStatus.FAILED_NO_BANK;
+        return transfer(amount, bank);
+    }
     //@Override
     //public CompletableFuture<BankStatus> transferAsync(long amount, @NotNull IAsyncBank other) {
     //    return CompletableFuture.completedFuture(transfer(amount, other));
     //}
     @Override
     public CompletableFuture<BankStatus> transferAsync(long amount, int toAccount) {
-        ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
-        if(account == null)
-            return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
-        ISyncServerBank bank = account.getBank(itemID);
-        if(bank == null)
-            return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
-        return CompletableFuture.completedFuture(transfer(amount, bank));
+        return CompletableFuture.completedFuture(transfer(amount, toAccount));
     }
 
 
@@ -383,6 +388,11 @@ public class SyncServerBank implements ServerSaveable, ISyncServerBank, IAsyncBa
     @Override
     public BankStatus transferReal(double amount, @NotNull ISyncServerBank other) {
         return transfer(convertToRawAmount(amount), other);
+    }
+    @Override
+    public BankStatus transferReal(double amount, int toAccount)
+    {
+        return transfer(convertToRawAmount(amount), toAccount);
     }
     @Override
     public CompletableFuture<BankStatus> transferRealAsync(double amount, int toAccount) {
@@ -412,15 +422,20 @@ public class SyncServerBank implements ServerSaveable, ISyncServerBank, IAsyncBa
         return otherBankStatus;
     }
     @Override
-    public CompletableFuture<BankStatus> transferFromLockedAsync(long amount, int toAccount)
+    public BankStatus transferFromLocked(long amount, int toAccount)
     {
         ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
         if(account == null)
-            return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
+            return BankStatus.FAILED_NO_BANK;
         ISyncServerBank bank = account.getBank(itemID);
         if(bank == null)
-            return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
-        return CompletableFuture.completedFuture(transferFromLocked(amount, bank));
+            return BankStatus.FAILED_NO_BANK;
+        return transferFromLocked(amount, bank);
+    }
+    @Override
+    public CompletableFuture<BankStatus> transferFromLockedAsync(long amount, int toAccount)
+    {
+        return CompletableFuture.completedFuture(transferFromLocked(amount, toAccount));
     }
 
 
@@ -428,6 +443,11 @@ public class SyncServerBank implements ServerSaveable, ISyncServerBank, IAsyncBa
     @Override
     public BankStatus transferFromLockedReal(double amount, @NotNull ISyncServerBank other) {
         return transferFromLocked(convertToRawAmount(amount), other);
+    }
+    @Override
+    public BankStatus transferFromLockedReal(double amount, int toAccount)
+    {
+        return transferFromLocked(convertToRawAmount(amount), toAccount);
     }
     @Override
     public CompletableFuture<BankStatus> transferFromLockedRealAsync(double amount, int toAccount)
@@ -474,6 +494,17 @@ public class SyncServerBank implements ServerSaveable, ISyncServerBank, IAsyncBa
         return otherBankStatus;
     }
     @Override
+    public BankStatus transferFromLockedPrefered(long amount, int toAccount)
+    {
+        ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
+        if(account == null)
+            return BankStatus.FAILED_NO_BANK;
+        ISyncServerBank bank = account.getBank(itemID);
+        if(bank == null)
+            return BankStatus.FAILED_NO_BANK;
+        return transferFromLockedPrefered(amount, bank);
+    }
+    @Override
     public CompletableFuture<BankStatus> transferFromLockedPreferedAsync(long amount, int toAccount)
     {
         ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
@@ -490,6 +521,11 @@ public class SyncServerBank implements ServerSaveable, ISyncServerBank, IAsyncBa
     @Override
     public BankStatus transferFromLockedPreferedReal(double amount, @NotNull ISyncServerBank other) {
         return transferFromLockedPrefered(convertToRawAmount(amount), other);
+    }
+    @Override
+    public BankStatus transferFromLockedPreferedReal(double amount, int toAccount)
+    {
+        return transferFromLockedPrefered(convertToRawAmount(amount), toAccount);
     }
     @Override
     public CompletableFuture<BankStatus> transferFromLockedPreferedRealAsync(double amount, int toAccount)

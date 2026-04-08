@@ -154,7 +154,9 @@ public interface ISyncServerBank {
      *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in both banks.
      */
     BankStatus transfer(long amount, ISyncServerBank other);
+    BankStatus transfer(long amount, int toAccount);
     BankStatus transferReal(double amount, @NotNull ISyncServerBank other);
+    BankStatus transferReal(double amount, int toAccount);
 
     /**
      * Transfers an amount of money or items from this bank to another bank, but only if the amount is locked.
@@ -166,7 +168,9 @@ public interface ISyncServerBank {
      *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in both banks.
      */
     BankStatus transferFromLocked(long amount, @NotNull ISyncServerBank other);
+    BankStatus transferFromLocked(long amount, int toAccount);
     BankStatus transferFromLockedReal(double amount, @NotNull ISyncServerBank other);
+    BankStatus transferFromLockedReal(double amount, int toAccount);
 
     /**
      * Transfers an amount of money or items from this bank to another bank, but first uses the locked balance and only
@@ -181,7 +185,9 @@ public interface ISyncServerBank {
      *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in both banks.
      */
     BankStatus transferFromLockedPrefered(long amount, @NotNull ISyncServerBank other);
+    BankStatus transferFromLockedPrefered(long amount, int toAccount);
     BankStatus transferFromLockedPreferedReal(double amount, @NotNull ISyncServerBank other);
+    BankStatus transferFromLockedPreferedReal(double amount, int toAccount);
 
     /**
      * Locks an amount of money or items in this bank.

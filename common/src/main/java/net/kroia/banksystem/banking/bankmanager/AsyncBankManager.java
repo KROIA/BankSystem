@@ -34,8 +34,6 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * The AsyncBankManager is used to forward the methods to a server or master server
- * todo: Some methodes are commented out because they return an interface to objects that can't be sent over the network.
- *       An async interface like this is needed for these objects.
  */
 public class AsyncBankManager implements IAsyncBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -60,7 +58,7 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     private AsyncBankAccount createBankAccount(int accountNr)
     {
-        return AsyncBankAccount.createBank(accountNr, isClientSide);
+        return AsyncBankAccount.createBankAccount(accountNr, isClientSide);
     }
     private AsyncBank createBank(int accountNr, ItemID itemID)
     {

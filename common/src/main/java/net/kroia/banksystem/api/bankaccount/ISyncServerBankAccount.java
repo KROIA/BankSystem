@@ -92,15 +92,6 @@ public interface ISyncServerBankAccount {
      */
     void setAccountIcon(@Nullable ItemID accountIcon);
 
-
-
-
-
-
-
-
-
-
     /**
      * Gets the icon of this bank account.
      * @return the account icon, or null if no icon is set

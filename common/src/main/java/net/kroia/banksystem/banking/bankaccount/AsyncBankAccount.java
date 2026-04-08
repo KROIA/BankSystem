@@ -6,6 +6,7 @@ import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
@@ -17,7 +18,9 @@ import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputDat
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionOutputData;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
@@ -51,11 +54,14 @@ public class AsyncBankAccount implements IAsyncBankAccount {
     {
         return new AsyncBankAccount(accountNr, false);
     }
-    public static AsyncBankAccount createBank(int accountNr, boolean clientSide)
+    public static AsyncBankAccount createBankAccount(int accountNr, boolean clientSide)
     {
         return new AsyncBankAccount(accountNr, clientSide);
     }
-
+    private AsyncBank createBank(ItemID itemID)
+    {
+        return AsyncBank.createBank(accountNr, itemID, isClientSide);
+    }
 
     /**
      * Enumeration to specify each function that can be forwarded
@@ -63,7 +69,37 @@ public class AsyncBankAccount implements IAsyncBankAccount {
     public enum FunctionType
     {
         GetAccountDataAsync_1,
-        GetAccountDataAsync_2
+        GetAccountDataAsync_2,
+        GetBankDataAsync_1,
+        GetBankDataAsync_2,
+        GetUserDataAsync_1,
+        GetUserDataAsync_2,
+        GetPersonalBankOwnerDataAsync,
+        //GetAccountNumberAsync,
+        SetAccountNameAsync,
+        GetAccountNameAsync,
+        SetAccountIconAsync,
+        GetAccountIconAsync,
+        GetPermissionAsync,
+        HasPermissionAsync,
+        SetPermissionAsync,
+        AddUserAsync,
+        SetUsersAsync,
+        RemoveUserAsync,
+        HasAnyUserAsync,
+        HasUserAsync,
+        GetPersonalBankOwnerAsync,
+        CreateBankAsync,
+        RemoveBankAsync,
+        RemoveEmptyBanksAsync,
+        RemoveAllBanksAsync,
+        HasAnyBankAsync,
+        HasBankAsync,
+        //GetBankAsync,
+        //GetOrCreateBankAsync,
+        //GetAllBanksAsync,
+        ToJsonAsync,
+        ToJsonStringAsync,
     }
 
     /**
@@ -72,9 +108,44 @@ public class AsyncBankAccount implements IAsyncBankAccount {
      *      -> inputParamsCodec  == null: The function does not take any parameters
      *      -> outputParamsCodec == null: The function does not return any value
      */
+    private static AsyncFunctionDataCodecs codecPacket(@Nullable StreamCodec<RegistryFriendlyByteBuf, ?> inputParamsCodec, @Nullable StreamCodec<RegistryFriendlyByteBuf, ?> outputParamsCodec)
+    {
+        return new AsyncFunctionDataCodecs(AsyncBank.BankIdentifyAndDataPacket.streamCodec(inputParamsCodec), outputParamsCodec);
+    }
     public static final Map<FunctionType, AsyncFunctionDataCodecs> codecs = new HashMap<>(){{
-        put(FunctionType.GetAccountDataAsync_1, new AsyncFunctionDataCodecs(BankIdentifyAndDataPacket.streamCodec(null), BankAccountData.STREAM_CODEC));
-        put(FunctionType.GetAccountDataAsync_2, new AsyncFunctionDataCodecs(BankIdentifyAndDataPacket.streamCodec(ItemID.STREAM_CODEC), BankAccountData.STREAM_CODEC));
+        put(FunctionType.GetAccountDataAsync_1,             codecPacket(null, BankAccountData.STREAM_CODEC));
+        put(FunctionType.GetAccountDataAsync_2,             codecPacket(ItemID.STREAM_CODEC, BankAccountData.STREAM_CODEC));
+        put(FunctionType.GetBankDataAsync_1,                codecPacket(ItemID.STREAM_CODEC, BankData.STREAM_CODEC));
+        put(FunctionType.GetBankDataAsync_2,                codecPacket(null, ExtraCodecUtils.listStreamCodec(BankData.STREAM_CODEC)));
+        put(FunctionType.GetUserDataAsync_1,                codecPacket(UUIDUtil.STREAM_CODEC.cast(), BankUserData.STREAM_CODEC));
+        put(FunctionType.GetUserDataAsync_2,                codecPacket(null, ExtraCodecUtils.listStreamCodec(BankUserData.STREAM_CODEC)));
+        put(FunctionType.GetPersonalBankOwnerDataAsync,     codecPacket(null, UserData.STREAM_CODEC));
+        //put(FunctionType.GetAccountNumberAsync,             codecPacket(null), null));
+        put(FunctionType.SetAccountNameAsync,               codecPacket(ByteBufCodecs.STRING_UTF8.cast(), null));
+        put(FunctionType.GetAccountNameAsync,               codecPacket(null, ByteBufCodecs.STRING_UTF8.cast()));
+        put(FunctionType.SetAccountIconAsync,               codecPacket(ItemID.STREAM_CODEC, null));
+        put(FunctionType.GetAccountIconAsync,               codecPacket(null, ItemID.STREAM_CODEC));
+        put(FunctionType.GetPermissionAsync,                codecPacket(UUIDUtil.STREAM_CODEC.cast(), ByteBufCodecs.INT.cast()));
+        put(FunctionType.HasPermissionAsync,                codecPacket(ParamGroup_UUID_int.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.SetPermissionAsync,                codecPacket(ParamGroup_UUID_int.STREAM_CODEC, null));
+        put(FunctionType.AddUserAsync,                      codecPacket(ParamGroup_User_int.STREAM_CODEC, null));
+        put(FunctionType.SetUsersAsync,                     codecPacket(ExtraCodecUtils.mapStreamCodec(User.STREAM_CODEC, ByteBufCodecs.INT, HashMap<User,Integer>::new), null));
+        put(FunctionType.RemoveUserAsync,                   codecPacket(UUIDUtil.STREAM_CODEC.cast(), null));
+        put(FunctionType.HasAnyUserAsync,                   codecPacket(null, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.HasUserAsync,                      codecPacket(UUIDUtil.STREAM_CODEC.cast(), ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.GetPersonalBankOwnerAsync,         codecPacket(null, User.STREAM_CODEC));
+        put(FunctionType.CreateBankAsync,                   codecPacket(ParamGroup_ItemID_long.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.RemoveBankAsync,                   codecPacket(ItemID.STREAM_CODEC, null));
+        put(FunctionType.RemoveEmptyBanksAsync,             codecPacket(null, ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC)));
+        put(FunctionType.RemoveAllBanksAsync,               codecPacket(null, null));
+        put(FunctionType.HasAnyBankAsync,                   codecPacket(null, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.HasBankAsync,                      codecPacket(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        //put(FunctionType.GetBankAsync,                      codecPacket(ItemID.STREAM_CODEC, null));
+        //put(FunctionType.GetOrCreateBankAsync,              codecPacket(ItemID.STREAM_CODEC, null));
+        //put(FunctionType.GetAllBanksAsync,                  codecPacket(null, null));
+        put(FunctionType.ToJsonAsync,                       codecPacket(null, ExtraCodecUtils.JSON_ELEMENT_CODEC));
+        put(FunctionType.ToJsonStringAsync,                 codecPacket(null, ByteBufCodecs.STRING_UTF8.cast()));
+
     }};
 
     /**
@@ -158,9 +229,70 @@ public class AsyncBankAccount implements IAsyncBankAccount {
 
 
             return CompletableFuture.completedFuture(switch (input.function) {
-                case FunctionType.GetAccountDataAsync_1 -> OutputData.of(input.function, bankAccount.getAccountData());
-                case FunctionType.GetAccountDataAsync_2 -> OutputData.of(input.function, bankAccount.getAccountData((ItemID)inputData.extra));
-
+                case FunctionType.GetAccountDataAsync_1 ->              OutputData.of(input.function, bankAccount.getAccountData());
+                case FunctionType.GetAccountDataAsync_2 ->              OutputData.of(input.function, bankAccount.getAccountData((ItemID)inputData.extra));
+                case FunctionType.GetBankDataAsync_1	-> 		        OutputData.of(input.function, bankAccount.getBankData((ItemID)inputData.extra));
+                case FunctionType.GetBankDataAsync_2	-> 		        OutputData.of(input.function, bankAccount.getBankData());
+                case FunctionType.GetUserDataAsync_1	-> 		        OutputData.of(input.function, bankAccount.getUserData((UUID)inputData.extra));
+                case FunctionType.GetUserDataAsync_2	-> 		        OutputData.of(input.function, bankAccount.getUserData());
+                case FunctionType.GetPersonalBankOwnerDataAsync	-> 		OutputData.of(input.function, bankAccount.getPersonalBankOwnerData());
+                //case FunctionType.GetAccountNumberAsync	-> 		OutputData.of(input.function, bankAccount.getAccountData());
+                case FunctionType.SetAccountNameAsync	-> 		        {
+                    bankAccount.setAccountName((String)inputData.extra);
+                    yield OutputData.of(input.function);
+                }
+                case FunctionType.GetAccountNameAsync	-> 		        OutputData.of(input.function, bankAccount.getAccountName());
+                case FunctionType.SetAccountIconAsync	-> 		        {
+                    bankAccount.setAccountIcon((ItemID)inputData.extra);
+                    yield OutputData.of(input.function);
+                }
+                case FunctionType.GetAccountIconAsync	-> 		        OutputData.of(input.function, bankAccount.getAccountIcon());
+                case FunctionType.GetPermissionAsync	-> 		        OutputData.of(input.function, bankAccount.getPermission((UUID)inputData.extra));
+                case FunctionType.HasPermissionAsync	-> 		        {
+                    ParamGroup_UUID_int data = (ParamGroup_UUID_int)inputData.extra;
+                    yield OutputData.of(input.function, bankAccount.hasPermission(data.uuid, data.integer));
+                }
+                case FunctionType.SetPermissionAsync	-> 		        {
+                    ParamGroup_UUID_int data = (ParamGroup_UUID_int)inputData.extra;
+                    bankAccount.setPermission(data.uuid, data.integer);
+                    yield OutputData.of(input.function);
+                }
+                case FunctionType.AddUserAsync	-> 		                {
+                    ParamGroup_User_int  data = (ParamGroup_User_int)inputData.extra;
+                    bankAccount.addUser(data.user, data.integer);
+                    yield OutputData.of(input.function);
+                }
+                case FunctionType.SetUsersAsync	-> 		               {
+                    bankAccount.setUsers((Map<User, Integer>)inputData.extra);
+                    yield OutputData.of(input.function);
+                }
+                case FunctionType.RemoveUserAsync	-> 		            {
+                    bankAccount.removeUser((UUID)inputData.extra);
+                    yield OutputData.of(input.function);
+                }
+                case FunctionType.HasAnyUserAsync	-> 		            OutputData.of(input.function, bankAccount.hasAnyUser());
+                case FunctionType.HasUserAsync	-> 		                OutputData.of(input.function, bankAccount.hasUser((UUID)inputData.extra));
+                case FunctionType.GetPersonalBankOwnerAsync	-> 		    OutputData.of(input.function, bankAccount.getPersonalBankOwner());
+                case FunctionType.CreateBankAsync	-> 		            {
+                    ParamGroup_ItemID_long data = (ParamGroup_ItemID_long)inputData.extra;
+                    yield OutputData.of(input.function, bankAccount.createBank(data.itemID, data.longValue) != null);
+                }
+                case FunctionType.RemoveBankAsync	-> 		            {
+                    bankAccount.removeBank((ItemID)inputData.extra);
+                    yield OutputData.of(input.function);
+                }
+                case FunctionType.RemoveEmptyBanksAsync	-> 		        OutputData.of(input.function, bankAccount.removeEmptyBanks());
+                case FunctionType.RemoveAllBanksAsync	-> 		        {
+                    bankAccount.removeAllBanks();
+                    yield OutputData.of(input.function);
+                }
+                case FunctionType.HasAnyBankAsync	-> 		            OutputData.of(input.function, bankAccount.hasAnyBank());
+                case FunctionType.HasBankAsync	-> 		                OutputData.of(input.function, bankAccount.hasBank((ItemID)inputData.extra));
+                //case FunctionType.GetBankAsync	-> 		OutputData.of(input.function, bankAccount.getAccountData());
+                //case FunctionType.GetOrCreateBankAsync	-> 		OutputData.of(input.function, bankAccount.getAccountData());
+                //case FunctionType.GetAllBanksAsync	-> 		OutputData.of(input.function, bankAccount.getAccountData());
+                case FunctionType.ToJsonAsync	-> 		                OutputData.of(input.function, bankAccount.toJson());
+                case FunctionType.ToJsonStringAsync	-> 		            OutputData.of(input.function, bankAccount.toJsonString());
 
             });
         }
@@ -244,14 +376,30 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         }
     }
 
-    /*private record ParamGroup_UUID_bool(UUID uuid, boolean bool)
+    private record ParamGroup_UUID_int(UUID uuid, int integer)
     {
-        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_UUID_bool> STREAM_CODEC = StreamCodec.composite(
+        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_UUID_int> STREAM_CODEC = StreamCodec.composite(
                 UUIDUtil.STREAM_CODEC, p -> p.uuid,
-                ByteBufCodecs.BOOL, p -> p.bool,
-                ParamGroup_UUID_bool::new
+                ByteBufCodecs.INT, p -> p.integer,
+                ParamGroup_UUID_int::new
         );
-    }*/
+    }
+    private record ParamGroup_User_int(User user, int integer)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_User_int> STREAM_CODEC = StreamCodec.composite(
+                User.STREAM_CODEC, p -> p.user,
+                ByteBufCodecs.INT, p -> p.integer,
+                ParamGroup_User_int::new
+        );
+    }
+    private record ParamGroup_ItemID_long(ItemID itemID, long longValue)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_ItemID_long> STREAM_CODEC = StreamCodec.composite(
+                ItemID.STREAM_CODEC, p -> p.itemID,
+                ByteBufCodecs.VAR_LONG, p -> p.longValue,
+                ParamGroup_ItemID_long::new
+        );
+    }
 
     // ================================================================================================================
     //
@@ -286,27 +434,47 @@ public class AsyncBankAccount implements IAsyncBankAccount {
 
     @Override
     public CompletableFuture<@Nullable BankData> getBankDataAsync(ItemID itemID) {
-        return null;
+        CompletableFuture<@Nullable BankData> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetBankDataAsync_1, accountNr, itemID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<List<BankData>> getBankDataAsync() {
-        return null;
+        CompletableFuture<List<BankData>> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetBankDataAsync_2, accountNr);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<@Nullable BankUserData> getUserDataAsync(UUID userUUID) {
-        return null;
+        CompletableFuture<@Nullable BankUserData> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetUserDataAsync_1, accountNr, userUUID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<List<BankUserData>> getUserDataAsync() {
-        return null;
+        CompletableFuture<List<BankUserData>> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetUserDataAsync_2, accountNr);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<@Nullable UserData> getPersonalBankOwnerDataAsync() {
-        return null;
+        CompletableFuture<@Nullable UserData> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetPersonalBankOwnerDataAsync, accountNr);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
@@ -316,122 +484,206 @@ public class AsyncBankAccount implements IAsyncBankAccount {
 
     @Override
     public void setAccountNameAsync(String accountName) {
-
+        InputData inputData = InputData.of(FunctionType.SetAccountNameAsync, accountNr, accountName);
+        sendRequest(inputData);
     }
 
     @Override
     public CompletableFuture<String> getAccountNameAsync() {
-        return null;
+        CompletableFuture<String> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetAccountNameAsync, accountNr);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public void setAccountIconAsync(@Nullable ItemID accountIcon) {
-
+        InputData inputData = InputData.of(FunctionType.SetAccountIconAsync, accountNr, accountIcon);
+        sendRequest(inputData);
     }
 
     @Override
     public CompletableFuture<@Nullable ItemID> getAccountIconAsync() {
-        return null;
+        CompletableFuture<@Nullable ItemID> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetAccountIconAsync, accountNr);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<Integer> getPermissionAsync(UUID userUUID) {
-        return null;
+        CompletableFuture<Integer> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetPermissionAsync, accountNr, userUUID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<Boolean> hasPermissionAsync(UUID userUUID, int permission) {
-        return null;
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetPermissionAsync, accountNr, new ParamGroup_UUID_int(userUUID, permission));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public void setPermissionAsync(UUID userUUID, int permission) {
-
+        InputData inputData = InputData.of(FunctionType.SetPermissionAsync, accountNr, new ParamGroup_UUID_int(userUUID, permission));
+        sendRequest(inputData);
     }
 
     @Override
     public void addUserAsync(User user, int permission) {
-
+        InputData inputData = InputData.of(FunctionType.AddUserAsync, accountNr, new ParamGroup_User_int(user, permission));
+        sendRequest(inputData);
     }
 
     @Override
     public void setUsersAsync(Map<User, Integer> userList) {
-
+        InputData inputData = InputData.of(FunctionType.SetUsersAsync, accountNr, userList);
+        sendRequest(inputData);
     }
 
     @Override
     public void removeUserAsync(UUID userUUID) {
-
+        InputData inputData = InputData.of(FunctionType.RemoveUserAsync, accountNr, userUUID);
+        sendRequest(inputData);
     }
 
     @Override
     public CompletableFuture<Boolean> hasAnyUserAsync() {
-        return null;
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.HasAnyUserAsync, accountNr);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<Boolean> hasUserAsync(UUID userUUID) {
-        return null;
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.HasUserAsync, accountNr, userUUID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<@Nullable User> getPersonalBankOwnerAsync() {
-        return null;
+        CompletableFuture<@Nullable User> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetPersonalBankOwnerAsync, accountNr);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<@Nullable IAsyncBank> createBankAsync(ItemID itemID, long startBalance) {
-        return null;
+        // Returns bool!
+
+        CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.CreateBankAsync, accountNr, new ParamGroup_ItemID_long(itemID, startBalance));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)->
+        {
+            if(outputData.decodeResult())
+                future.complete(createBank(itemID));
+            else
+                future.complete(null);
+        });
+        return future;
     }
 
     @Override
     public void removeBankAsync(ItemID itemID) {
-
+        InputData inputData = InputData.of(FunctionType.RemoveBankAsync, accountNr, itemID);
+        sendRequest(inputData);
     }
 
     @Override
     public CompletableFuture<List<ItemID>> removeEmptyBanksAsync() {
-        return null;
+        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.RemoveEmptyBanksAsync, accountNr);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public void removeAllBanksAsync() {
-
+        InputData inputData = InputData.of(FunctionType.RemoveEmptyBanksAsync, accountNr);
+        sendRequest(inputData);
     }
 
     @Override
     public CompletableFuture<Boolean> hasAnyBankAsync() {
-        return null;
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.HasAnyBankAsync, accountNr);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<Boolean> hasBankAsync(ItemID itemID) {
-        return null;
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.HasBankAsync, accountNr, itemID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getBankAsync(ItemID itemID) {
-        return null;
+        CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
+        hasBankAsync(itemID).thenAccept((hasItem) ->{
+            if(hasItem)
+                future.complete(createBank(itemID));
+            else
+                future.complete(null);
+        });
+        return future;
     }
 
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getOrCreateBankAsync(ItemID itemID) {
-        return null;
+        return createBankAsync(itemID, 0);
     }
 
     @Override
     public CompletableFuture<Map<ItemID, IAsyncBank>> getAllBanksAsync() {
-        return null;
+        CompletableFuture<Map<ItemID, IAsyncBank>> future = new CompletableFuture<>();
+        getBankDataAsync().thenAccept((bankData) -> {
+            Map<ItemID, IAsyncBank>  map = new HashMap<>();
+            for(BankData data : bankData)
+            {
+                map.put(data.itemID, createBank(data.itemID));
+            }
+            future.complete(map);
+        });
+        return future;
     }
 
     @Override
     public CompletableFuture<JsonElement> toJsonAsync() {
-        return null;
+        CompletableFuture<JsonElement> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.ToJsonAsync, accountNr);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override
     public CompletableFuture<String> toJsonStringAsync() {
-        return null;
+        CompletableFuture<String> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.ToJsonStringAsync, accountNr);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
 
