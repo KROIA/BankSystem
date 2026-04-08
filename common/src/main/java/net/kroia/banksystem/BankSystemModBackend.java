@@ -214,27 +214,31 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the server side
     private static void onServerTick(MinecraftServer server)
     {
-        INSTANCES.SERVER_DATA_HANDLER.tickUpdate();
+        if(INSTANCES.SERVER_DATA_HANDLER != null)
+            INSTANCES.SERVER_DATA_HANDLER.tickUpdate();
     }
 
     public static void loadDataFromFiles(MinecraftServer server)
     {
-        Path rootSaveFolder = server.getWorldPath(LevelResource.ROOT);
-        // Load data from the root save folder
-        INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder);
-        if(!INSTANCES.SERVER_DATA_HANDLER.loadAll())
-        {
-            INSTANCES.SERVER_DATA_HANDLER.saveAll();
-            INSTANCES.SERVER_DATA_HANDLER.loadAll(); // Try loading again after saving
+        if(INSTANCES.SERVER_DATA_HANDLER != null) {
+            Path rootSaveFolder = server.getWorldPath(LevelResource.ROOT);
+            // Load data from the root save folder
+            INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder);
+            if (!INSTANCES.SERVER_DATA_HANDLER.loadAll()) {
+                INSTANCES.SERVER_DATA_HANDLER.saveAll();
+                INSTANCES.SERVER_DATA_HANDLER.loadAll(); // Try loading again after saving
+            }
         }
 
     }
     public static void saveDataToFiles(MinecraftServer server)
     {
-        Path rootSaveFolder = server.getWorldPath(LevelResource.ROOT);
-        // Load data from the root save folder
-        INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder);
-        INSTANCES.SERVER_DATA_HANDLER.saveAll();
+        if(INSTANCES.SERVER_DATA_HANDLER != null) {
+            Path rootSaveFolder = server.getWorldPath(LevelResource.ROOT);
+            // Load data from the root save folder
+            INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder);
+            INSTANCES.SERVER_DATA_HANDLER.saveAll();
+        }
     }
     /*public static boolean isDataLoaded() {
         return INSTANCES.SERVER_DATA_HANDLER.isLoaded();

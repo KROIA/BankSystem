@@ -44,7 +44,8 @@ public class AsyncFunctionOutputData <FuncEnumType extends Enum<FuncEnumType>> {
             BiFunction<FuncEnumType, byte[], AsyncFunctionOutputData<FuncEnumType>> constructor) {
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
         if(outputParamsCodec != null) {
-            ((StreamCodec<RegistryFriendlyByteBuf, T>)outputParamsCodec).encode(buf, result);
+            StreamCodec<RegistryFriendlyByteBuf, T> castedCodec = (StreamCodec<RegistryFriendlyByteBuf, T>)outputParamsCodec;
+            castedCodec.encode(buf, result);
             return constructor.apply(functionType, buf.array());
         }
         else {

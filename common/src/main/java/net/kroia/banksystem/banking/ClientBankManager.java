@@ -33,7 +33,7 @@ public class ClientBankManager implements IClientBankManager {
 
     public ClientBankManager()
     {
-        asyncServerBankManager = new AsyncServerBankManager();
+        asyncServerBankManager = AsyncServerBankManager.createClientManager();
     }
 
     //private final int bankAccountNumber; // This is a placeholder, as the client does not have a bank account number

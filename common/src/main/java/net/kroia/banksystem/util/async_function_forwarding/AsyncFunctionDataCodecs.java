@@ -15,7 +15,7 @@ public  class AsyncFunctionDataCodecs {
 
     public AsyncFunctionDataCodecs(StreamCodec<RegistryFriendlyByteBuf, ?> inputParamsCodec, StreamCodec<RegistryFriendlyByteBuf, ?> outputParamsCodec)
     {
-        this.inputParamsCodec = ExtraCodecUtils.nullable(inputParamsCodec);
-        this.outputParamsCodec = ExtraCodecUtils.nullable(outputParamsCodec);
+        this.inputParamsCodec = (inputParamsCodec != null) ? ExtraCodecUtils.nullable(inputParamsCodec) : null;
+        this.outputParamsCodec = (outputParamsCodec != null) ? ExtraCodecUtils.nullable(outputParamsCodec) : null;;
     }
 }

@@ -31,6 +31,8 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * The AsyncServerBankManager is used to forward the methods to a server or master server
+ * todo: Some methodes are commented out because they return an interface to objects that can't be sent over the network.
+ *       An async interface like this is needed for these objects.
  */
 public class AsyncServerBankManager implements IAsyncServerBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -38,6 +40,22 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
         BACKEND_INSTANCES = backend;
         BankAccount.setBackend(backend);
     }
+    private final boolean isClientSide;
+
+    private AsyncServerBankManager(boolean clientSide) {
+        this.isClientSide = clientSide;
+    }
+
+    public static AsyncServerBankManager createClientManager()
+    {
+        return new AsyncServerBankManager(true);
+    }
+    public static AsyncServerBankManager createSlaveServerManager()
+    {
+        return new AsyncServerBankManager(false);
+    }
+
+
 
     /**
      * Enumeration to specify each function that can be forwarded
@@ -143,7 +161,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
         put(FunctionType.GetCirculationDataJsonStringAsync,		    new AsyncFunctionDataCodecs(null, ByteBufCodecs.STRING_UTF8.cast()));
         put(FunctionType.ToJsonAsync,							    new AsyncFunctionDataCodecs(null, ExtraCodecUtils.JSON_ELEMENT_CODEC));
         put(FunctionType.ToJsonStringAsync,						    new AsyncFunctionDataCodecs(null, ByteBufCodecs.STRING_UTF8.cast()));
-        put(FunctionType.OnPlayerJoinAsync,						    new AsyncFunctionDataCodecs(null, ParamGroup_UUID_String.STREAM_CODEC));
+        put(FunctionType.OnPlayerJoinAsync,						    new AsyncFunctionDataCodecs( ParamGroup_UUID_String.STREAM_CODEC, null));
     }};
 
     /**
@@ -282,12 +300,28 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
      */
     public static void setupNetworkPacket()
     {
-        Request instance = forwardingRequest();
+        Request instance = Request.instance;
     }
 
-    private static Request forwardingRequest()
+    //private static Request forwardingRequest()
+    //{
+    //    return Request.instance;
+    //}
+    private CompletableFuture<OutputData> sendRequest(InputData input)
     {
-        return Request.instance;
+        CompletableFuture<OutputData> future = new CompletableFuture<>();
+        CompletableFuture<OutputData> tmpFuture;
+        if(isClientSide)
+            tmpFuture = Request.instance.sendRequestToServer(input);
+        else
+            tmpFuture = Request.instance.sendRequestToMaster(input);
+
+        tmpFuture.thenAccept(outputData ->{
+            info("Response received for request: "+ input.function.toString());
+            future.complete(outputData);
+        });
+
+        return future;
     }
 
 
@@ -346,7 +380,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<BankManagerData> getBankManagerDataAsync() {
         CompletableFuture<BankManagerData> future = new CompletableFuture<>();
         InputData inputData = new InputData(FunctionType.GetBankManagerDataAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -355,7 +389,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<BankManagerData.UserMapData> getBankManagerUserMapDataAsync() {
         CompletableFuture<BankManagerData.UserMapData> future = new CompletableFuture<>();
         InputData inputData = new InputData(FunctionType.GetBankManagerUserMapDataAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -364,7 +398,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<BankManagerData.BankAccountsData> getBankManagerBankAccountsDataAsync() {
         CompletableFuture<BankManagerData.BankAccountsData> future = new CompletableFuture<>();
         InputData inputData = new InputData(FunctionType.GetBankManagerBankAccountsDataAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -373,7 +407,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Boolean> setBanksystemAdminModeAsync(UUID playerUUID, boolean isAdmin) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.SetBanksystemAdminModeAsync, new ParamGroup_UUID_bool(playerUUID, isAdmin));
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -382,7 +416,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.IsBanksystemAdminAsync, playerUUID);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -391,7 +425,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<List<ItemID>> getAllowedItemsAsync() {
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetAllowedItemsAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -400,7 +434,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<List<ItemID>> getBlacklistedItemsAsync() {
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetBlacklistedItemsAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -409,7 +443,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<List<ItemID>> getNotRemovableItemsAsync() {
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetNotRemovableItemsAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -418,7 +452,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<ItemInfoData> getItemInfoDataAsync(@NotNull ItemID itemID) {
         CompletableFuture<ItemInfoData> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetItemInfoDataAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -431,7 +465,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     @Override
     public void addUserAsync(@NotNull UUID playerUUID, @NotNull String playerName) {
         InputData inputData = InputData.of(FunctionType.AddUserAsync_1, new ParamGroup_UUID_String(playerUUID, playerName));
-        forwardingRequest().sendRequestToServer(inputData);
+        sendRequest(inputData);
     }
 
     @Override
@@ -443,7 +477,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Boolean> removeUserAsync(UUID userUUID) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.RemoveUserAsync, userUUID);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -452,7 +486,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Boolean> userExistsAsync(UUID userUUID) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.UserExistsAsync, userUUID);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -461,7 +495,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<@Nullable User> getUserByUUIDAsync(UUID userUUID) {
         CompletableFuture<@Nullable User> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetUserByUUIDAsync, userUUID);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -470,7 +504,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<@Nullable User> getUserByNameAsync(String name) {
         CompletableFuture<@Nullable User> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetUserByNameAsync, name);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -524,7 +558,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Boolean> userHasPersonalBankAccountAsync(UUID userUUID) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.UserHasPersonalBankAccountAsync, userUUID);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -533,7 +567,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Boolean> deleteBankAccountAsync(int accountNumber) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.DeleteBankAccountAsync, accountNumber);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -562,7 +596,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Boolean> isItemIDAllowedAsync(ItemID itemID) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.IsItemIDAllowedAsync, itemID);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -571,7 +605,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Boolean> allowItemIDAsync(ItemID itemID) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.AllowItemIDAsync, itemID);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -580,7 +614,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Boolean> disallowItemIDAsync(ItemID itemID) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.DisallowItemIDAsync, itemID);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -589,7 +623,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Boolean> isItemIDNotRemovableAsync(ItemID itemID) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.IsItemIDNotRemovableAsync, itemID);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -598,7 +632,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Boolean> isItemIDBlacklistedAsync(ItemID itemID) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.IsItemIDBlacklistedAsync, itemID);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -607,7 +641,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Double> getRealMoneyCirculationAsync() {
         CompletableFuture<Double> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetRealMoneyCirculationAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -616,7 +650,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Double> getRealLockedMoneyCirculationAsync() {
         CompletableFuture<Double> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetRealLockedMoneyCirculationAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -625,7 +659,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Double> getRealItemCirculationAsync(ItemID itemID) {
         CompletableFuture<Double> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetRealItemCirculationAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -634,7 +668,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<Double> getRealLockedItemCirculationAsync(ItemID itemID) {
         CompletableFuture<Double> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetRealLockedItemCirculationAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -643,7 +677,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<JsonElement> getCirculationDataJsonAsync() {
         CompletableFuture<JsonElement> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetCirculationDataJsonAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -652,7 +686,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<String> getCirculationDataJsonStringAsync() {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetCirculationDataJsonStringAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -661,7 +695,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<JsonElement> toJsonAsync() {
         CompletableFuture<JsonElement> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ToJsonAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -670,7 +704,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     public CompletableFuture<String> toJsonStringAsync() {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ToJsonStringAsync);
-        CompletableFuture<OutputData> outputDataFuture = forwardingRequest().sendRequestToServer(inputData);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
@@ -678,7 +712,7 @@ public class AsyncServerBankManager implements IAsyncServerBankManager {
     @Override
     public void onPlayerJoinAsync(UUID playerUUID, String playerName) {
         InputData inputData = InputData.of(FunctionType.OnPlayerJoinAsync, new ParamGroup_UUID_String(playerUUID, playerName));
-        forwardingRequest().sendRequestToServer(inputData);
+        sendRequest(inputData);
     }
 
 

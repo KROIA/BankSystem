@@ -38,8 +38,9 @@ public class AsyncFunctionInputData <FuncEnumType extends Enum<FuncEnumType>>{
             T params,
             BiFunction<FuncEnumType, byte[], AsyncFunctionInputData<FuncEnumType>> constructor) {
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
-        if(inputParamsCodec != null) {
-            ((StreamCodec<RegistryFriendlyByteBuf, T>)inputParamsCodec).encode(buf, params);
+        if(inputParamsCodec != null) { //ExtraCodecUtils.nullable(
+            StreamCodec<RegistryFriendlyByteBuf, T> castedCodec = (StreamCodec<RegistryFriendlyByteBuf, T>)inputParamsCodec;
+            castedCodec.encode(buf, params);
             return constructor.apply(functionType, buf.array());
             //return new AsyncFunctionInputData<FuncEnumType>(functionType, codec, buf.array());
         }

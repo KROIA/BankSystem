@@ -27,7 +27,7 @@ public class BankManager implements IBankManager {
     }
     public static BankManager createSlave()
     {
-        AsyncServerBankManager asyncServerBankManager = new AsyncServerBankManager();
+        AsyncServerBankManager asyncServerBankManager = AsyncServerBankManager.createSlaveServerManager();
         return new BankManager(asyncServerBankManager, null);
     }
     public static IClientBankManager createClient()
