@@ -1,9 +1,9 @@
 package net.kroia.banksystem.api.bankmanager;
 
 import com.google.gson.JsonElement;
-import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.banking.User;
-import net.kroia.banksystem.banking.bank.SyncServerBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
@@ -67,7 +67,7 @@ public interface ISyncServerBankManager {
 
 
     /**
-     * Creates a new User for the manager which is used for assigning to a SyncServerBankAccount.
+     * Creates a new User for the manager which is used for assigning to a IServerBankAccount.
      * This must be called once a player joins the server for the first time.
      * @param player The player to create a user for.
      */
@@ -126,12 +126,21 @@ public interface ISyncServerBankManager {
 
 
     /**
+     * Gets a bank account with the given account number.
+     * @param accountNumber The account number of the bank account to get.
+     * @return The IServerBankAccount object if found, null otherwise.
+     */
+    @Nullable IServerBankAccount getBankAccount(int accountNumber);
+    @Nullable BankAccountData getBankAccountData(int accountNumber);
+
+
+    /**
      * Creates a new personal bank account for the given user UUID.
      * The personal bank account is the default bank account for a user.
      * @param user The UUID of the user to create the personal bank account for.
-     * @return The created or already existing SyncServerBankAccount object.
+     * @return The created or already existing IServerBankAccount object.
      */
-    @Nullable ISyncServerBankAccount createPersonalBankAccount(UUID user);
+    @Nullable IServerBankAccount createPersonalBankAccount(UUID user);
     int createPersonalBankAccountGetAccountNr(UUID user);
     int createPersonalBankAccountGetAccountNr(String userName);
 
@@ -143,26 +152,21 @@ public interface ISyncServerBankManager {
      * The account is empty and no user is assigned to it.
      * @param accountName The name of the bank account to create.
      *                    The name must not be unique.
-     * @return The created SyncServerBankAccount object.
+     * @return The created IServerBankAccount object.
      */
-    @Nullable ISyncServerBankAccount createBankAccount(String accountName);
+    @Nullable IServerBankAccount createBankAccount(String accountName);
     int createBankAccountGetAccountNr(String accountName);
 
 
-    /**
-     * Gets a bank account with the given account number.
-     * @param accountNumber The account number of the bank account to get.
-     * @return The SyncServerBankAccount object if found, null otherwise.
-     */
-    @Nullable ISyncServerBankAccount getBankAccount(int accountNumber);
+
 
 
     /**
      * Gets all bank accounts that have the given user UUID as a bank user.
      * @param userUUID The UUID of the user to get bank accounts for.
-     * @return A list of SyncServerBankAccount objects associated with the user UUID.
+     * @return A list of IServerBankAccount objects associated with the user UUID.
      */
-    List<ISyncServerBankAccount> getBankAccounts(UUID userUUID);
+    List<IServerBankAccount> getBankAccounts(UUID userUUID);
 
 
     /**
@@ -181,44 +185,44 @@ public interface ISyncServerBankManager {
     /**
      * Gets all bank accounts that have the given item ID as a bank item.
      * @param itemID The item ID to get bank accounts for.
-     * @return A list of SyncServerBankAccount objects associated with the item ID.
+     * @return A list of IServerBankAccount objects associated with the item ID.
      */
-    List<ISyncServerBankAccount> getBankAccounts(ItemID itemID);
+    List<IServerBankAccount> getBankAccounts(ItemID itemID);
     List<BankAccountData> getBankAccountsData(ItemID itemID);
 
     /**
      * Gets the personal bank account for a given user UUID.
      * The personal bank account is the default bank account for a user.
      * @param userUUID The UUID of the user to get the personal bank account for.
-     * @return The SyncServerBankAccount object if found, null otherwise.
+     * @return The IServerBankAccount object if found, null otherwise.
      */
-    @Nullable ISyncServerBankAccount getPersonalBankAccount(UUID userUUID);
+    @Nullable IServerBankAccount getPersonalBankAccount(UUID userUUID);
     @Nullable BankAccountData getPersonalBankAccountData(UUID userUUID);
 
     /**
      * Gets the personal bank account for a given user name.
      * The personal bank account is the default bank account for a user.
      * @param userName The name of the user to get the personal bank account for.
-     * @return The SyncServerBankAccount object if found, null otherwise.
+     * @return The IServerBankAccount object if found, null otherwise.
      */
-    @Nullable ISyncServerBankAccount getPersonalBankAccount(String userName);
+    @Nullable IServerBankAccount getPersonalBankAccount(String userName);
     @Nullable BankAccountData getPersonalBankAccountData(String userName);
 
     /**
      * Trys to get the personal bank account for a given user UUID.
      * If the personal bank account does not exist, it will try to create a new one.
      * @param userUUID The UUID of the user to get or create the personal bank account for.
-     * @return The SyncServerBankAccount object if found or created, null if an error occurs.
+     * @return The IServerBankAccount object if found or created, null if an error occurs.
      */
-    @Nullable ISyncServerBankAccount getOrCreatePersonalBankAccount(UUID userUUID);
+    @Nullable IServerBankAccount getOrCreatePersonalBankAccount(UUID userUUID);
 
     /**
      * Trys to get the personal bank account for a given username.
      * If the personal bank account does not exist, it will try to create a new one.
      * @param userName The name of the user to get or create the personal bank account for.
-     * @return The SyncServerBankAccount object if found or created, null if an error occurs.
+     * @return The IServerBankAccount object if found or created, null if an error occurs.
      */
-    @Nullable ISyncServerBankAccount getOrCreatePersonalBankAccount(@NotNull String userName);
+    @Nullable IServerBankAccount getOrCreatePersonalBankAccount(@NotNull String userName);
 
     /**
      * Checks if a user has a personal bank account.
@@ -251,9 +255,9 @@ public interface ISyncServerBankManager {
      * The personal bank is the default bank for a user.
      * @param owner The UUID of the owner to get the personal bank for.
      * @param itemID The item ID of the personal bank to get.
-     * @return The SyncServerBank object if found, null otherwise.
+     * @return The IServerBank object if found, null otherwise.
      */
-    @Nullable SyncServerBank getPersonalBank(UUID owner, ItemID itemID);
+    @Nullable IServerBank getPersonalBank(UUID owner, ItemID itemID);
 
     //int getPersonalBankAccountNumber(UUID owner, ItemID itemID);
 
@@ -262,9 +266,9 @@ public interface ISyncServerBankManager {
      * The personal bank is the default bank for a user.
      * @param ownerName The name of the owner to get the personal bank for.
      * @param itemID The item ID of the personal bank to get.
-     * @return The SyncServerBank object if found, null otherwise.
+     * @return The IServerBank object if found, null otherwise.
      */
-    @Nullable SyncServerBank getPersonalBank(String ownerName, ItemID itemID);
+    @Nullable IServerBank getPersonalBank(String ownerName, ItemID itemID);
 
     //int getPersonalBankAccountNumber(String ownerName, ItemID itemID);
 
@@ -273,9 +277,9 @@ public interface ISyncServerBankManager {
      * If the personal bank does not exist, it will try to create a new one.
      * @param owner The UUID of the owner to get or create the personal bank for.
      * @param itemID The item ID of the personal bank to get or create.
-     * @return The SyncServerBank object if found or created, null if an error occurs.
+     * @return The IServerBank object if found or created, null if an error occurs.
      */
-    @Nullable SyncServerBank getOrCreatePersonalBank(UUID owner, ItemID itemID);
+    @Nullable IServerBank getOrCreatePersonalBank(UUID owner, ItemID itemID);
 
     //int getOrCreatePersonalBankAccountNumber(UUID owner, ItemID itemID);
     /**
@@ -283,9 +287,9 @@ public interface ISyncServerBankManager {
      * If the personal bank does not exist, it will try to create a new one.
      * @param ownerName The name of the owner to get or create the personal bank for.
      * @param itemID The item ID of the personal bank to get or create.
-     * @return The SyncServerBank object if found or created, null if an error occurs.
+     * @return The IServerBank object if found or created, null if an error occurs.
      */
-    @Nullable SyncServerBank getOrCreatePersonalBank(String ownerName, ItemID itemID);
+    @Nullable IServerBank getOrCreatePersonalBank(String ownerName, ItemID itemID);
 
 
     //int getOrCreatePersonalBankAccountNumber(String ownerName, ItemID itemID);

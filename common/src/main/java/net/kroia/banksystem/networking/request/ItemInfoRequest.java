@@ -18,15 +18,13 @@ public class ItemInfoRequest extends BankSystemGenericRequest<ItemID, ItemInfoDa
     public String getRequestTypeID() {
         return ItemInfoRequest.class.getName();
     }
-    @Override
-    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<ItemInfoData> handleOnServer(ItemID itemID, ServerPlayer sender) {
-        return handleOnMasterServer(itemID, sender.getUUID());
+        return handleOnMasterServer(itemID, "", sender.getUUID());
     }
     @Override
-    public CompletableFuture<ItemInfoData> handleOnMasterServer(ItemID itemID, UUID sender) {
+    public CompletableFuture<ItemInfoData> handleOnMasterServer(ItemID itemID, String slaveID, UUID sender) {
         if(!playerIsAdmin(sender)) {
             return null; // If the player is not an admin, return null
         }

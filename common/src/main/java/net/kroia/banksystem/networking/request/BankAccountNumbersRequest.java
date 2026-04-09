@@ -1,6 +1,6 @@
 package net.kroia.banksystem.networking.request;
 
-import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
@@ -19,25 +19,23 @@ public class BankAccountNumbersRequest extends BankSystemGenericRequest<List<UUI
     public String getRequestTypeID() {
         return BankAccountNumbersRequest.class.getSimpleName();
     }
-    @Override
-    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<List<Integer>> handleOnServer(List<UUID> input, ServerPlayer sender) {
-        return handleOnMasterServer(input, sender.getUUID());
+        return handleOnMasterServer(input, "", sender.getUUID());
     }
     @Override
-    public CompletableFuture<List<Integer>> handleOnMasterServer(List<UUID> input, UUID sender) {
+    public CompletableFuture<List<Integer>> handleOnMasterServer(List<UUID> input, String slaveID, UUID sender) {
         CompletableFuture<List<Integer>>  future = new CompletableFuture<>();
-        ISyncServerBankManager bankManager = getSyncBankManager();
+        ISyncServerBankManager bankManager = getServerBankManager();
         if(input.isEmpty())
             input.add(sender);
 
 
         List<Integer> accountNumbers = new ArrayList<>();
         for(UUID uuid : input) {
-            List<ISyncServerBankAccount> accounts = bankManager.getBankAccounts(uuid);
-            for(ISyncServerBankAccount account : accounts) {
+            List<IServerBankAccount> accounts = bankManager.getBankAccounts(uuid);
+            for(IServerBankAccount account : accounts) {
                 int accountNumber = account.getAccountNumber();
                 if(accountNumbers.contains(accountNumber)) {
                     continue; // Skip if the account number is already in the list

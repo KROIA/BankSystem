@@ -8,7 +8,7 @@ import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.bank.SyncServerBank;
+import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.block.custom.BankDownloadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
@@ -547,10 +547,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         CompletableFuture<Long>  currentBalanceFuture = itemBank.getBalanceAsync();
         currentBalanceFuture.thenAccept((currentBalance) -> {
             int amountToFill = amountToFillIn;
-            long amountToReserve = SyncServerBank.convertToRawAmountStatic(amountToFill);
+            long amountToReserve = ServerBank.convertToRawAmountStatic(amountToFill);
             if(amountToReserve > currentBalance) {
                 amountToFill = (int) (currentBalance / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
-                amountToReserve = SyncServerBank.convertToRawAmountStatic(amountToFill);
+                amountToReserve = ServerBank.convertToRawAmountStatic(amountToFill);
             }
             if(amountToReserve <= 0)
             {
@@ -571,14 +571,14 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                 // Try to fill the inventory with the item
                 int filledAmount = tryFillInventory(item, amountToFillFinal);
                 if(filledAmount > 0) {
-                    long amountToWithdraw = SyncServerBank.convertToRawAmountStatic(filledAmount);
+                    long amountToWithdraw = ServerBank.convertToRawAmountStatic(filledAmount);
                     CompletableFuture<BankStatus> withdrawStatusFuture = itemBank.withdrawLockedPreferedAsync(amountToWithdraw);
                     withdrawStatusFuture.thenAccept((withdrawStatus) -> {
                         if(withdrawStatus == BankStatus.SUCCESS) {
                             if(filledAmount != amountToFillFinal)
                             {
                                 // If we filled less than requested, unlock the remaining amount
-                                long remainingAmount = SyncServerBank.convertToRawAmountStatic(amountToFillFinal - filledAmount);
+                                long remainingAmount = ServerBank.convertToRawAmountStatic(amountToFillFinal - filledAmount);
                                 itemBank.unlockAmountAsync(remainingAmount);
                             }
                             setChanged();

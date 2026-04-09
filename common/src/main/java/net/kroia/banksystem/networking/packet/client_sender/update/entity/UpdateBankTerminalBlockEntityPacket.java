@@ -45,6 +45,11 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     }
 
 
+    @Override
+    protected boolean needsRoutingToMaster() { return false; }
+
+
+
     public BlockPos getPos() {
         return pos;
     }

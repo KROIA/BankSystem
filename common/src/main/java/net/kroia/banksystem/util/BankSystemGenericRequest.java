@@ -45,9 +45,29 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
     }
 
 
-    protected ISyncServerBankManager getSyncBankManager()
+    protected ISyncServerBankManager getServerBankManager()
     {
         return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+    }
+
+    @Override
+    public boolean needsRoutingToMaster() { return BACKEND_INSTANCES.isSlaveServer; }
+
+
+    protected void info(String message) {
+        BACKEND_INSTANCES.LOGGER.info("["+getRequestTypeID()+"] "+ message);
+    }
+    protected void error(String message) {
+        BACKEND_INSTANCES.LOGGER.error("["+getRequestTypeID()+"] "+ message);
+    }
+    protected void error(String message, Throwable throwable) {
+        BACKEND_INSTANCES.LOGGER.error("["+getRequestTypeID()+"] "+ message, throwable);
+    }
+    protected void warn(String message) {
+        BACKEND_INSTANCES.LOGGER.warn("["+getRequestTypeID()+"] "+ message);
+    }
+    protected void debug(String message) {
+        BACKEND_INSTANCES.LOGGER.debug("["+getRequestTypeID()+"] "+ message);
     }
 
 }

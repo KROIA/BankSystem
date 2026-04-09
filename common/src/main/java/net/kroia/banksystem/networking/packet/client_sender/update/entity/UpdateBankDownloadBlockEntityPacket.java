@@ -36,6 +36,10 @@ public class UpdateBankDownloadBlockEntityPacket extends BankSystemNetworkPacket
         this.withdrawOrders = withdrawOrders;
         this.accountNr = accountNr;
     }
+    @Override
+    protected boolean needsRoutingToMaster() {
+        return false;
+    }
 
     /*public UpdateBankDownloadBlockEntityPacket(RegistryFriendlyByteBuf buf) {
         super(buf);

@@ -123,7 +123,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private void setupGui(int accountNumber)
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber).thenAccept((bankAccountData) -> {
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankAccountDataAsync(accountNumber).thenAccept((bankAccountData) -> {
             assert bankAccountData != null;
             setupGui(bankAccountData);
         });
@@ -237,7 +237,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     {
         createNewBankButton = new Button(CREATE_NEW_BANK.getString());
         createNewBankButton.setOnFallingEdge(() -> {
-            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData().thenAccept((minimalBankManagerData) -> {
+            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankManagerDataAsync().thenAccept((minimalBankManagerData) -> {
                 if(!screenIsOpen)
                     return;
                 List<ItemStack> allowedItemStacks;
@@ -534,7 +534,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private void onAddUserButtonClicked()
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData().thenAccept((bankManagerData) -> {
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankManagerDataAsync().thenAccept((bankManagerData) -> {
             if(!screenIsOpen || bankManagerData == null)
                 return;
 
@@ -606,10 +606,10 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                 this,
                 ()->{
                     // delete
-                    getBankManager().requestDeleteBankAccount(accountNumber).thenAccept((success) -> {
+                    getBankManager().deleteBankAccountAsync(accountNumber).thenAccept((success) -> {
                         if(success)
                         {
-                            info("SyncServerBank account deleted successfully.");
+                            info("ServerBank account deleted successfully.");
                             onClose();
                         }
                         else
@@ -642,7 +642,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         if(lastTickCount > 20)
         {
             lastTickCount = 0;
-            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber).thenAccept(this::updateBankData);
+            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankAccountDataAsync(accountNumber).thenAccept(this::updateBankData);
         }
     }
 }

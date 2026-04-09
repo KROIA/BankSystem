@@ -3,7 +3,6 @@ package net.kroia.banksystem.screen.custom;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
-import net.kroia.banksystem.networking.request.BankSelectionScreenDataRequest;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
@@ -16,6 +15,7 @@ import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -111,7 +111,7 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
         addElement(accountsListView);
 
 
-        getBankManager().requestBankAccounts(this.playerUUID).thenAccept(this::onBankAccountsReceived);
+        getBankManager().getBankAccountsDataAsync(this.playerUUID).thenAccept(this::onBankAccountsReceived);
 
     }
 
@@ -127,9 +127,9 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
         accountsListView.setBounds(width/4, titleLabel.getBottom()+spacing, titleLabel.getWidth(), height-titleLabel.getBottom()-padding-spacing);
     }
 
-    private void onBankAccountsReceived(BankSelectionScreenDataRequest.Output output) {
+    private void onBankAccountsReceived(List<BankAccountData> bankAccounts) {
         accountsListView.removeChilds();
-        for(BankAccountData accountData : output.bankAccounts()) {
+        for(BankAccountData accountData : bankAccounts) {
 
             if(!accountData.hasAnyPermission(playerUUID, permissionFilter)) {
                 continue; // Skip accounts that do not match the permission filter

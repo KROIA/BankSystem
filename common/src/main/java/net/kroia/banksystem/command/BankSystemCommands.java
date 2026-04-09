@@ -13,7 +13,7 @@ import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
-import net.kroia.banksystem.banking.bank.SyncServerBank;
+import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
@@ -246,7 +246,7 @@ public class BankSystemCommands {
                                     CompletableFuture<Double> circulation = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getRealMoneyCirculationAsync();
                                     circulation.thenAccept(result -> {
                                         ServerPlayerUtilities.printToClientConsole(player,
-                                                BankSystemTextMessages.getCirculationMessage(SyncServerBank.getFormattedAmountStatic(result),
+                                                BankSystemTextMessages.getCirculationMessage(ServerBank.getFormattedAmountStatic(result),
                                                         MoneyItem.getName()));
                                     });
 
@@ -518,7 +518,7 @@ public class BankSystemCommands {
                                                                         ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
 
                                                                         // Execute the command on the server_sender
-                                                                        long rawAmount = SyncServerBank.convertToRawAmountStatic(balance);
+                                                                        long rawAmount = ServerBank.convertToRawAmountStatic(balance);
                                                                         bank_create(player, username, itemIDObj, rawAmount);
                                                                     });
                                                                     return Command.SINGLE_SUCCESS;
@@ -561,7 +561,7 @@ public class BankSystemCommands {
                                                                         ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
 
                                                                         // Execute the command on the server_sender
-                                                                        long realBalance = SyncServerBank.convertToRawAmountStatic(balance);
+                                                                        long realBalance = ServerBank.convertToRawAmountStatic(balance);
                                                                         bank_setBalance(player, username, itemIDObj, realBalance);
                                                                     });
                                                                     return Command.SINGLE_SUCCESS;
@@ -633,7 +633,7 @@ public class BankSystemCommands {
                                                     CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().allowItemIDAsync(id);
                                                     resultFuture.thenAccept(result -> {
                                                         if (result)
-                                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemID, SyncServerBank.getFormattedAmountStatic(1)));
+                                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemID, ServerBank.getFormattedAmountStatic(1)));
                                                         else
                                                             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemID));
                                                     });
@@ -671,7 +671,7 @@ public class BankSystemCommands {
                                             CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().allowItemIDAsync(id);
                                             resultFuture.thenAccept(result -> {
                                                 if (result)
-                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemIDObj.toString(), SyncServerBank.getFormattedAmountStatic(1)));
+                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemIDObj.toString(), ServerBank.getFormattedAmountStatic(1)));
                                                 else
                                                     ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemIDObj.toString()));
                                             });
@@ -790,9 +790,9 @@ public class BankSystemCommands {
 
                                                 // Get arguments
                                                 float amount = FloatArgumentType.getFloat(context, "amount");
-                                                long rawAmount = SyncServerBank.convertToRawAmountStatic(amount);
+                                                long rawAmount = ServerBank.convertToRawAmountStatic(amount);
                                                 BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.set(rawAmount);
-                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(SyncServerBank.getFormattedAmountStatic(amount)));
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(ServerBank.getFormattedAmountStatic(amount)));
                                             });
                                             return Command.SINGLE_SUCCESS;
                                         })
@@ -1016,7 +1016,7 @@ public class BankSystemCommands {
             return Command.SINGLE_SUCCESS;
         }
         long balance = bank.getBalance();
-        ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getYourBalanceMessage(SyncServerBank.getFormattedAmountStatic(balance)));
+        ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getYourBalanceMessage(ServerBank.getFormattedAmountStatic(balance)));
         return Command.SINGLE_SUCCESS;
     }
 

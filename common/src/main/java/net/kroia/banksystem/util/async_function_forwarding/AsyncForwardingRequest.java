@@ -35,11 +35,8 @@ public abstract class AsyncForwardingRequest<
     //}
 
     @Override
-    public boolean needsRoutingToMaster() { return true; }
-
-    @Override
     public CompletableFuture<OUT> handleOnServer(IN input, ServerPlayer sender) {
-        return handleOnMasterServer(input, sender.getUUID());
+        return handleOnMasterServer(input, "", sender.getUUID());
     }
 
 

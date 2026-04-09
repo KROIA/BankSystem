@@ -3,10 +3,14 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.modutilities.gui.GuiContainerScreen;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+
+import java.util.UUID;
 
 public abstract class BankSystemGuiContainerScreen<T extends AbstractContainerMenu> extends GuiContainerScreen<T> {
 
@@ -32,6 +36,18 @@ public abstract class BankSystemGuiContainerScreen<T extends AbstractContainerMe
         return BACKEND_INSTANCES.CLIENT_BANK_MANAGER;
     }
 
+    protected LocalPlayer getThisPlayer()
+    {
+        return Minecraft.getInstance().player;
+    }
+    protected UUID getThisPlayerUUID()
+    {
+        return getThisPlayer().getUUID();
+    }
+    protected String getThisPlayerName()
+    {
+        return getThisPlayer().getDisplayName().getString();
+    }
 
 
     protected void info(String msg)

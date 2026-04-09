@@ -88,7 +88,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         removeBankingItemButton = new Button(TEXT.REMOVE_BANKING_ITEM_BUTTON.getString(), () -> {
             if(currentBankingItemID != null) {
                 AskPopupScreen popup = new AskPopupScreen(this, () -> {
-                    BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestDisallowItem(currentBankingItemID).thenAccept((success)->{
+                    getBankManager().disallowItemIDAsync(currentBankingItemID).thenAccept((success)->{
                         if(success)
                             setCurrentBankingItemID(null);
                         updateCurrentBankingItemsView();
@@ -155,7 +155,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         //minecraft.setScreen(askItemFractionScaleFactorScreen);
 
 
-        /*BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestAllowItem(new ItemID(itemStack), (result) ->
+        /*getBankManager().requestAllowItem(new ItemID(itemStack), (result) ->
         {
             if(!screenIsOpen)
                 return; // Do not update if the screen is not open
@@ -176,7 +176,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         currentBankingItemID = ItemID.of(itemStack);
         updateItemInfoData();
 
-        /*for(ItemID itemID : BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getAllowedItemIDs()) {
+        /*for(ItemID itemID : getBankManager().getAllowedItemIDs()) {
             String name = itemID.getName();
             if (name.compareTo(ItemUtilities.getItemIDStr(itemStack.getItem())) == 0) {
                 currentBankingItemView.setItemStack(itemID.getStack());
@@ -190,7 +190,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
     public void updateCurrentBankingItemsView()
     {
         currentBankingItemsView.clearItems();
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData().thenAccept((minimalBankManagerData) -> {
+        getBankManager().getBankManagerDataAsync().thenAccept((minimalBankManagerData) -> {
             if(!screenIsOpen)
                 return; // Do not update if the screen is not open
             List<ItemStack> allowedItemStacks;
@@ -209,7 +209,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
     {
         if(currentBankingItemID == null)
             return;
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestItemInfoData(currentBankingItemID).thenAccept(itemInfoWidget::setItemInfo);
+        getBankManager().getItemInfoDataAsync(currentBankingItemID).thenAccept(itemInfoWidget::setItemInfo);
         //itemInfoWidget.setItemID(currentBankingItemID);
     }
 

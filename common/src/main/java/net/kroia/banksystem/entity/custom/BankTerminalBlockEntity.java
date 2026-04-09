@@ -9,7 +9,7 @@ import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
-import net.kroia.banksystem.banking.bank.SyncServerBank;
+import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
@@ -211,7 +211,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             if(bankAccount.withdraw(bankAccount.convertToRawAmount(addedAmount)) != BankStatus.SUCCESS)
                             {
                                 // error
-                                error("Failed to withdraw " + SyncServerBank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
+                                error("Failed to withdraw " + ServerBank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
                                 inventory.removeItem(itemID, addedAmount);
                                 cancelTask(itemID);
                                 continue;
@@ -236,7 +236,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             if(bankAccount.withdraw(bankAccount.convertToRawAmount(addedAmount)) != BankStatus.SUCCESS)
                             {
                                 // error
-                                error("Failed to withdraw " + SyncServerBank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
+                                error("Failed to withdraw " + ServerBank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
                                 inventory.removeItem(itemID, addedAmount);
                                 cancelTask(itemID);
                                 continue;
@@ -435,7 +435,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     }
 
                     // Get the item's ResourceLocation
-                    ItemID _itemID = ItemID.getFromItemStack(stack); // todo: unsafe if the stack is not registred.
+                    ItemID _itemID = ItemID.getFromItemStack(stack);
                     if(itemID == null)
                     {
                         warn("ItemStack: "+stack+" is not registered for ItemID. Skipping this item");
@@ -557,12 +557,6 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 itemTag.putInt("Slot", i);
                 Tag stackTag = stack.save(pRegistries);
                 itemTag.put("ItemStack", stackTag);
-                /*CompoundTag idTag = new CompoundTag();
-                ItemID itemID = ItemID.of(stack);
-                itemID.save(idTag);
-                stackTag.put("ItemID", idTag); // todo: Maybe serializing the item ID does not work
-                stackTag.putInt("Count", stack.getCount());
-                itemTag.put("ItemStack", stackTag);*/
                 inventoryTag.add(itemTag);
             }
             tag.put("Slots", inventoryTag);
@@ -583,10 +577,6 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     return false;
                 int slot = itemTag.getInt("Slot");
                 CompoundTag stackTag = itemTag.getCompound("ItemStack");
-                //CompoundTag idTag = stackTag.getCompound("ItemID"); // todo: Maybe serializing the item ID does not work
-                //ItemID itemID = ItemID.createFromTag(idTag);
-                //int count = stackTag.getInt("Count");
-                //ItemStack stack = ItemUtilities.createItemStackFromId(itemID, count);
                 ItemStack stack = ItemStack.parse(pRegistries,
                                 stackTag)
                         .orElse(ItemStack.EMPTY);
@@ -1044,7 +1034,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                     withdrawResult.thenAccept(withdraw -> {
                                         if (withdraw != BankStatus.SUCCESS) {
                                             // error
-                                            error("Failed to withdraw " + SyncServerBank.getNormalizedAmountStatic(addedAmount) + " " + itemID + " from bank account of user " + playerID);
+                                            error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(addedAmount) + " " + itemID + " from bank account of user " + playerID);
                                             inventory.removeItem(itemID, addedAmount);
                                         }
                                     });

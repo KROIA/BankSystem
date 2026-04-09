@@ -10,8 +10,7 @@ import net.kroia.banksystem.api.IBankSystemEvents;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.banking.bank.AsyncBank;
-import net.kroia.banksystem.banking.bank.ClientBank;
-import net.kroia.banksystem.banking.bank.SyncServerBank;
+import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.bankmanager.ClientBankManager;
@@ -28,9 +27,11 @@ import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.software.Software;
 import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.packet.general.SyncItemIDsPacket;
 import net.kroia.banksystem.util.*;
 import net.kroia.modutilities.networking.server_server.ServerServerConfig;
 import net.kroia.modutilities.networking.server_server.ServerServerManager;
+import net.kroia.modutilities.networking.server_server.slave.SlaveServerClient;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -73,7 +74,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankTerminalBlockEntity.setBackend(INSTANCES);
 
         BankManager.setBackend(INSTANCES);
-        ClientBank.setBackend(INSTANCES);
+        //ClientBank.setBackend(INSTANCES);
         AsyncBank.setBackend(INSTANCES);
         BankSystemModSettings.setBackend(INSTANCES);
         BankSystemCommands.setBackend(INSTANCES);
@@ -85,7 +86,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemNetworkPacket.setBackend(INSTANCES);
         BankSystemGenericRequest.setBackend(INSTANCES);
         BankSystemTextMessages.setBackend(INSTANCES);
-        SyncServerBank.setBackend(INSTANCES);
+        ServerBank.setBackend(INSTANCES);
         AsyncBankAccount.setBackend(INSTANCES);
 
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -138,18 +139,29 @@ public class BankSystemModBackend implements BankSystemAPI {
             if(config.isMaster)
             {
                 INSTANCES.isSlaveServer = false;
-                ServerServerManager.createMaster(server, config.sharedSecret, config.masterTcpPort);
+                ServerServerManager.createMaster(server, config.sharedSecret, config.masterTcpPort,
+                        BankSystemModBackend::onMasterServerStartupComplete,
+                        BankSystemModBackend::onMasterServerStartupFailure,
+                        BankSystemModBackend::onMasterServerSlaveConnected,
+                        BankSystemModBackend::onMasterServerSlaveDisconnected);
                 ServerServerManager.start();
             }
             else
             {
                 INSTANCES.isSlaveServer = true;
-                ServerServerManager.createSlave(server, config.sharedSecret, config.slaveID, config.masterHost, config.masterTcpPort);
+                ServerServerManager.createSlave(server, config.sharedSecret, config.slaveID, config.masterHost, config.masterTcpPort,
+                        BankSystemModBackend::onSlaveConnectionAccepted,
+                        BankSystemModBackend::onSlaveConnectionFailed,
+                        BankSystemModBackend::onSlaveConnectionLost,
+                        BankSystemModBackend::onSlaveDisconnected);
                 ServerServerManager.start();
             }
         }
         NEZNAMY_TAB_Placeholders.setBackend(INSTANCES);
         OldBankDataLoader.setBackend(INSTANCES);
+
+        INSTANCES.SERVER_SETTINGS = new BankSystemModSettings();
+        INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
 
         if(INSTANCES.isSlaveServer)
         {
@@ -157,9 +169,6 @@ public class BankSystemModBackend implements BankSystemAPI {
         }
         else
         {
-            INSTANCES.SERVER_SETTINGS = new BankSystemModSettings();
-            INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
-
             INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
             INSTANCES.SERVER_BANK_MANAGER = BankManager.createMaster();
 
@@ -179,6 +188,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     // Called from the server side
     public static void onServerStop(MinecraftServer server) {
+        ServerServerManager.stop();
         if(!INSTANCES.isSlaveServer) {
             TickEvent.SERVER_POST.unregister(BankSystemModBackend::onServerTick);
             saveDataToFiles(server);
@@ -290,5 +300,41 @@ public class BankSystemModBackend implements BankSystemAPI {
     public IBankSystemDataHandler getDataHandler()
     {
         return INSTANCES.SERVER_DATA_HANDLER;
+    }
+
+
+
+    private static void onSlaveConnectionAccepted()
+    {
+
+    }
+    private static void onSlaveConnectionFailed(SlaveServerClient.ConnectionEstablishState state)
+    {
+
+    }
+    private static void onSlaveConnectionLost(Throwable reason)
+    {
+
+    }
+    private static void onSlaveDisconnected()
+    {
+
+    }
+
+    private static void onMasterServerStartupComplete()
+    {
+
+    }
+    private static void onMasterServerStartupFailure(Throwable reason)
+    {
+
+    }
+    private static void onMasterServerSlaveConnected(String slaveID)
+    {
+        SyncItemIDsPacket.sendAllItemsToSlave(slaveID);
+    }
+    private static void onMasterServerSlaveDisconnected(String slaveID)
+    {
+
     }
 }

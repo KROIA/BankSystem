@@ -19,17 +19,15 @@ public class RemoveEmptyBanksRequest extends BankSystemGenericRequest<Integer, L
     public String getRequestTypeID() {
         return RemoveEmptyBanksRequest.class.getSimpleName();
     }
-    @Override
-    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<List<ItemID>> handleOnServer(Integer input, ServerPlayer sender) {
-        return handleOnMasterServer(input, sender.getUUID());
+        return handleOnMasterServer(input, "", sender.getUUID());
     }
     @Override
-    public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, UUID sender) {
+    public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, String slaveID, UUID sender) {
         CompletableFuture<List<ItemID>>  future = new CompletableFuture<>();
-        ISyncServerBankManager bankManager = getSyncBankManager();
+        ISyncServerBankManager bankManager = getServerBankManager();
         ISyncServerBankAccount account = bankManager.getBankAccount(input);
         if(account == null) {
             future.complete(List.of());

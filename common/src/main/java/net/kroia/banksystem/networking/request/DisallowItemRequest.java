@@ -15,16 +15,14 @@ public class DisallowItemRequest extends BankSystemGenericRequest<ItemID, Boolea
     public String getRequestTypeID() {
         return DisallowItemRequest.class.getName();
     }
-    @Override
-    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<Boolean> handleOnServer(ItemID itemID, ServerPlayer sender) {
-        return handleOnMasterServer(itemID, sender.getUUID());
+        return handleOnMasterServer(itemID, "", sender.getUUID());
     }
     @Override
-    public CompletableFuture<Boolean> handleOnMasterServer(ItemID itemID, UUID sender) {
-        ISyncServerBankManager bankManager = getSyncBankManager();
+    public CompletableFuture<Boolean> handleOnMasterServer(ItemID itemID, String slaveID, UUID sender) {
+        ISyncServerBankManager bankManager = getServerBankManager();
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
         // Check if sender has permission to allow the item
         if(playerIsAdmin(sender)) {

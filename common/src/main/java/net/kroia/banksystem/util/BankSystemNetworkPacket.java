@@ -88,6 +88,13 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
             ServerServerManager.broadcastToSlaves(this);
         }
     }
+    protected void sendToSlave(String slaveID)
+    {
+        if(ServerServerManager.isRunning() && ServerServerManager.isMaster())
+        {
+            ServerServerManager.sendToSlave(slaveID, this);
+        }
+    }
 
     protected void info(String message) {
         BACKEND_INSTANCES.LOGGER.info("[BankSystemNetworkPacket] "+ message);

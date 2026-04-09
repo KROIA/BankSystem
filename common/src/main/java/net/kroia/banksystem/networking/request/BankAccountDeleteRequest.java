@@ -16,16 +16,14 @@ public class BankAccountDeleteRequest extends BankSystemGenericRequest<Integer, 
     public String getRequestTypeID() {
         return BankAccountDeleteRequest.class.getName();
     }
-    @Override
-    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<Boolean> handleOnServer(Integer input, ServerPlayer sender) {
-        return handleOnMasterServer(input, sender.getUUID());
+        return handleOnMasterServer(input, "", sender.getUUID());
     }
     @Override
-    public CompletableFuture<Boolean> handleOnMasterServer(Integer input, UUID sender) {
-        ISyncServerBankManager bankManager = getSyncBankManager();
+    public CompletableFuture<Boolean> handleOnMasterServer(Integer input, String slaveID, UUID sender) {
+        ISyncServerBankManager bankManager = getServerBankManager();
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
         boolean isAdmin = playerIsAdmin(sender);
         ISyncServerBankAccount account = bankManager.getBankAccount(input);

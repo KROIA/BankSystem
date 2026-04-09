@@ -1,18 +1,20 @@
 package net.kroia.banksystem.networking.packet.client_sender.update;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.networking.packet.server_server.DropItemsInPlayerInventoryRequest;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.modutilities.networking.server_server.ForwardPacketContext;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -25,6 +27,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
@@ -160,9 +163,11 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     }
 
     @Override
-    protected void handleOnMaster(UUID sender) {
+    protected void handleOnMaster(ForwardPacketContext context) {
+        UUID sender = context.senderPlayerUUID;
         ISyncServerBankManager bankManager = getSyncBankManager();
-        ISyncServerBankAccount account = bankManager.getBankAccount(currentSelectedAccountNumber);
+        final int finalCurrentSelectedAccountNumber = currentSelectedAccountNumber;
+        ISyncServerBankAccount account = bankManager.getBankAccount(finalCurrentSelectedAccountNumber);
         if(account == null)
             return;
 
@@ -220,7 +225,34 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             }
         }
 
-        // todo: send requestedBankNotes to the slave to drop the items into the players inventory
+
+
+
+        CompletableFuture<Map<ItemID, Long>> notDroppedItemsFuture = DropItemsInPlayerInventoryRequest.sendToSlave(context.senderServerID, context.senderPlayerUUID, requestedBankNotes);
+        notDroppedItemsFuture.thenAccept(notDropedItems -> {
+            ISyncServerBankAccount redepositAccount = getSyncBankManager().getBankAccount(finalCurrentSelectedAccountNumber);
+            if(redepositAccount == null) {
+                error("WithdrawMoneyPacket: Invalid bank account ID: " + finalCurrentSelectedAccountNumber + " Items are lost now: "+notDropedItems);
+                return;
+            }
+            ISyncServerBank redepositMoneyBank = redepositAccount.getBank(MoneyItem.getItemID());
+            if(redepositMoneyBank == null) {
+                error("WithdrawMoneyPacket: no money bank account with ID: " + finalCurrentSelectedAccountNumber+" Items are lost now: "+notDropedItems);
+                return; // No money bank found for the player
+            }
+
+            long toDepositMoney = 0;
+            for(Map.Entry<ItemID, Long> entry : notDropedItems.entrySet()) {
+                ItemID  itemID = entry.getKey();
+                ItemStack itemStack = itemID.getStack();
+                if(itemStack != null) {
+                    if (itemStack.getItem() instanceof MoneyItem moneyItem) {
+                        toDepositMoney += moneyItem.worth() * entry.getValue();
+                    }
+                }
+            }
+            redepositMoneyBank.deposit(toDepositMoney);
+        });
 
     }
 

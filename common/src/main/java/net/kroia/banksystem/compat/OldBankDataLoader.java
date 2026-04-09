@@ -4,7 +4,7 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
-import net.kroia.banksystem.banking.bankaccount.SyncServerBankAccount;
+import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.bankmanager.SyncBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.util.ItemID;
@@ -101,7 +101,7 @@ public class OldBankDataLoader {
     public boolean load_vLessThan_1_5_0_ALPHA_3(CompoundTag tag)
     {
         Map<UUID, User> userMap = new HashMap<>();
-        Map<Integer, SyncServerBankAccount> bankAccounts = new HashMap<>();
+        Map<Integer, ServerBankAccount> bankAccounts = new HashMap<>();
         int nextAccountNumber = tag.getInt("nextAccountNumber");
         manager.load_compatibilityMode_setNextAccountNumber(nextAccountNumber);
 
@@ -156,7 +156,7 @@ public class OldBankDataLoader {
             bankAccounts.clear();
             for (int i = 0; i < accountsList.size(); i++) {
                 CompoundTag accountTag = accountsList.getCompound(i);
-                SyncServerBankAccount account = SyncServerBankAccount.createFromTag(accountTag);
+                ServerBankAccount account = ServerBankAccount.createFromTag(accountTag);
                 if(account != null) {
                     bankAccounts.put(account.getAccountNumber(), account);
                 } else {

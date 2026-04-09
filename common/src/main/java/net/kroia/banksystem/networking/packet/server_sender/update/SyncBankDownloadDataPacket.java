@@ -39,6 +39,11 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
         this.accountNr = accountNr;
     }
 
+    @Override
+    protected boolean needsRoutingToMaster() {
+        return false;
+    }
+
     /*public SyncBankDownloadDataPacket(RegistryFriendlyByteBuf buf) {
         super(buf);
     }*/

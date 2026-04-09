@@ -28,15 +28,13 @@ public class BankSelectionScreenDataRequest extends BankSystemGenericRequest<UUI
     public String getRequestTypeID() {
         return BankSelectionScreenDataRequest.class.getSimpleName();
     }
-    @Override
-    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<Output> handleOnServer(UUID input, ServerPlayer sender) {
-        return handleOnMasterServer(input, sender.getUUID());
+        return handleOnMasterServer(input, "", sender.getUUID());
     }
     @Override
-    public CompletableFuture<Output> handleOnMasterServer(UUID input, UUID sender) {
+    public CompletableFuture<Output> handleOnMasterServer(UUID input, String slaveID, UUID sender) {
         CompletableFuture<Output>  future = new CompletableFuture<>();
         ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         var accounts = bankManager.getBankAccounts(input);

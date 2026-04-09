@@ -93,15 +93,13 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
     public String getRequestTypeID() {
         return UpdateBankAccountRequest.class.getSimpleName();
     }
-    @Override
-    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<BankAccountData> handleOnServer(InputData input, ServerPlayer sender) {
-        return handleOnMasterServer(input, sender.getUUID());
+        return handleOnMasterServer(input, "", sender.getUUID());
     }
     @Override
-    public CompletableFuture<BankAccountData> handleOnMasterServer(InputData input, UUID sender) {
+    public CompletableFuture<BankAccountData> handleOnMasterServer(InputData input, String slaveID, UUID sender) {
         CompletableFuture<BankAccountData>  future = new CompletableFuture<>();
         ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         // Check if the player is a admin

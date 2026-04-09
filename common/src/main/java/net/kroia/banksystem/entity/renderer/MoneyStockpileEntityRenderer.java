@@ -77,10 +77,10 @@ public class MoneyStockpileEntityRenderer implements BlockEntityRenderer<MoneySt
             float xOffset = 0;
             if(itemData.getGridSpacesPerItemType() == 2)
             {
-                // SyncServerBank notes are rendered with a slight offset to the right
+                // ServerBank notes are rendered with a slight offset to the right
                 isBankNote = true;
                 xOffset = 0.08f;
-                gridIncrement = 2; // SyncServerBank notes take up two grid spaces
+                gridIncrement = 2; // ServerBank notes take up two grid spaces
             }
 
 

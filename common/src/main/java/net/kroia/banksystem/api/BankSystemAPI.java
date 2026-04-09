@@ -6,14 +6,14 @@ import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 public interface BankSystemAPI {
 
     /**
-     * Returns the mod ID of the SyncServerBank System mod.
+     * Returns the mod ID of the ServerBank System mod.
      *
      * @return The mod ID as a String.
      */
     String getModID();
 
     /**
-     * Returns the version of the SyncServerBank System mod.
+     * Returns the version of the ServerBank System mod.
      *
      * @return The mod version as a String.
      */

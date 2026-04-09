@@ -6,7 +6,7 @@ import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
-import net.kroia.banksystem.banking.bankaccount.SyncServerBankAccount;
+import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.util.ItemID;
@@ -30,7 +30,7 @@ public class AsyncBank implements IAsyncBank {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
-        SyncServerBankAccount.setBackend(backend);
+        ServerBankAccount.setBackend(backend);
     }
 
 
@@ -244,8 +244,11 @@ public class AsyncBank implements IAsyncBank {
          * @return the response data future for to send back to the requestor
          */
         @Override
-        public CompletableFuture<OutputData> handleOnMasterServer(InputData input, @Nullable UUID playerSender) {
-            info("Received request to handle on master server for function: "+input.function.toString());
+        public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
+            String playerInfo = "";
+            if(playerSender != null)
+                playerInfo = " from player: " + playerSender.toString();
+            info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             BankIdentifyAndDataPacket inputData = input.decodeParams();
             int accountNr = inputData.accountNr;
             ISyncServerBankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(accountNr);

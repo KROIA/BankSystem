@@ -35,6 +35,11 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
         this.bankAccountNumber = bankAccountNumber;
     }
 
+    @Override
+    protected boolean needsRoutingToMaster() {
+        return false;
+    }
+
     /*public SyncBankUploadDataPacket(RegistryFriendlyByteBuf buf) {
         super(buf);
     }*/

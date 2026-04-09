@@ -1,6 +1,6 @@
 package net.kroia.banksystem.banking.clientdata;
 
-import net.kroia.banksystem.banking.bank.SyncServerBank;
+import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -53,33 +53,33 @@ public class BankData {
     }
 
     //public float getRealBalance() {
-    //    return SyncServerBank.convertToRealAmountStatic(balance);
+    //    return ServerBank.convertToRealAmountStatic(balance);
     //}
     //public float getRealLockedBalance() {
-    //    return SyncServerBank.convertToRealAmountStatic(lockedBalance);
+    //    return ServerBank.convertToRealAmountStatic(lockedBalance);
     //}
     //public float getRealTotalBalance() {
-    //    return SyncServerBank.convertToRealAmountStatic(balance + lockedBalance);
+    //    return ServerBank.convertToRealAmountStatic(balance + lockedBalance);
     //}
 
     public String getFormattedBalance(){
-        return SyncServerBank.getFormattedAmountStatic(balance);
+        return ServerBank.getFormattedAmountStatic(balance);
     }
     public String getFormattedLockedBalance(){
-        return SyncServerBank.getFormattedAmountStatic(lockedBalance);
+        return ServerBank.getFormattedAmountStatic(lockedBalance);
     }
     public String getFormattedTotalBalance(){
-        return SyncServerBank.getFormattedAmountStatic(balance + lockedBalance);
+        return ServerBank.getFormattedAmountStatic(balance + lockedBalance);
     }
 
     public String getNormalizedBalance() {
-        return SyncServerBank.getNormalizedAmountStatic(balance);
+        return ServerBank.getNormalizedAmountStatic(balance);
     }
     public String getNormalizedLockedBalance() {
-        return SyncServerBank.getNormalizedAmountStatic(lockedBalance);
+        return ServerBank.getNormalizedAmountStatic(lockedBalance);
     }
     public String getNormalizedTotalBalance() {
-        return SyncServerBank.getNormalizedAmountStatic(balance + lockedBalance);
+        return ServerBank.getNormalizedAmountStatic(balance + lockedBalance);
     }
 
     public long getBalance() {
@@ -87,7 +87,7 @@ public class BankData {
     }
     public double getRealBalance()
     {
-        return SyncServerBank.convertToRealAmountStatic(balance);
+        return ServerBank.convertToRealAmountStatic(balance);
     }
     public long getLockedBalance() {
         return lockedBalance;

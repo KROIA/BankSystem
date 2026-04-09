@@ -1,7 +1,7 @@
 package net.kroia.banksystem.screen.uiElements;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.bank.SyncServerBank;
+import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
@@ -139,8 +139,8 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         double totalLocked = info.totalLocked; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
 
 
-        totalSuplyTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalSuplyMessage(SyncServerBank.getNormalizedAmountStatic(totalSupply)));
-        totalLockedTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalLockedMessage(SyncServerBank.getNormalizedAmountStatic(totalLocked)));
+        totalSuplyTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalSuplyMessage(ServerBank.getNormalizedAmountStatic(totalSupply)));
+        totalLockedTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalLockedMessage(ServerBank.getNormalizedAmountStatic(totalLocked)));
 
 
         List<BankAccountData> bankData = info.bankAccounts;

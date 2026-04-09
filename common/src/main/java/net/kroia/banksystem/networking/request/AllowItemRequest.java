@@ -1,7 +1,8 @@
 package net.kroia.banksystem.networking.request;
 
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
-import net.kroia.banksystem.banking.bank.SyncServerBank;
+import net.kroia.banksystem.banking.bank.ServerBank;
+import net.kroia.banksystem.networking.packet.server_server.ClientConsoleMessagePacket;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
@@ -29,15 +30,13 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
     public String getRequestTypeID() {
         return AllowItemRequest.class.getName();
     }
-    @Override
-    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<Boolean> handleOnServer(AllowItemRequest.Data data, ServerPlayer sender) {
         // Check if sender has permission to allow the item
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
         if(playerIsAdmin(sender)) {
-            ISyncServerBankManager bankManager = getSyncBankManager();
+            ISyncServerBankManager bankManager = getServerBankManager();
             if(data != null)
             {
                 if(bankManager.isItemIDAllowed(data.itemID))
@@ -49,7 +48,7 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
 
                 if(bankManager.allowItemID(data.itemID))
                 {
-                    String smallestAmountStr = SyncServerBank.getFormattedAmountStatic(1);
+                    String smallestAmountStr = ServerBank.getFormattedAmountStatic(1);
                     ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedMessage(data.itemID.getName(), smallestAmountStr));
                     future.complete(true);
                     return future;
@@ -68,40 +67,36 @@ public class AllowItemRequest extends BankSystemGenericRequest<AllowItemRequest.
         return future;
     }
     @Override
-    public CompletableFuture<Boolean> handleOnMasterServer(AllowItemRequest.Data data, UUID sender) {
+    public CompletableFuture<Boolean> handleOnMasterServer(AllowItemRequest.Data data, String slaveID, UUID sender) {
         // Check if sender has permission to allow the item
 
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
         if(playerIsAdmin(sender)) {
-            ISyncServerBankManager bankManager = getSyncBankManager();
+            ISyncServerBankManager bankManager = getServerBankManager();
             if(data != null)
             {
                 if(bankManager.isItemIDAllowed(data.itemID))
                 {
-                    // todo: replace by sending a custom packet to the slaves client back to print the message
-                    ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemAlreadyAllowedMessage(data.itemID.getName()));
+                    ClientConsoleMessagePacket.sendMessageFromMaster(sender, BankSystemTextMessages.getItemAlreadyAllowedMessage(data.itemID.getName()));
                     future.complete(true);
                     return future;
                 }
 
                 if(bankManager.allowItemID(data.itemID))
                 {
-                    String smallestAmountStr = SyncServerBank.getFormattedAmountStatic(1);
-                    // todo: replace by sending a custom packet to the slaves client back to print the message
-                    ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedMessage(data.itemID.getName(), smallestAmountStr));
+                    String smallestAmountStr = ServerBank.getFormattedAmountStatic(1);
+                    ClientConsoleMessagePacket.sendMessageFromMaster(sender, BankSystemTextMessages.getItemNowAllowedMessage(data.itemID.getName(), smallestAmountStr));
                     future.complete(true);
                     return future;
                 }
                 else
                 {
-                    // todo: replace by sending a custom packet to the slaves client back to print the message
-                    ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getItemNowAllowedFailedMessage(data.itemID.getName()));
+                    ClientConsoleMessagePacket.sendMessageFromMaster(sender, BankSystemTextMessages.getItemNowAllowedFailedMessage(data.itemID.getName()));
                 }
             }
             else
             {
-                // todo: replace by sending a custom packet to the slaves client back to print the message
-                ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getInvalidItemIDMessage("null"));
+                ClientConsoleMessagePacket.sendMessageFromMaster(sender, BankSystemTextMessages.getInvalidItemIDMessage("null"));
             }
         }
         future.complete(false);

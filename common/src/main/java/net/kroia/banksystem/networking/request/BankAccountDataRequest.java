@@ -52,16 +52,14 @@ public class BankAccountDataRequest extends BankSystemGenericRequest<BankAccount
     public String getRequestTypeID() {
         return BankAccountDataRequest.class.getName();
     }
-    @Override
-    public boolean needsRoutingToMaster() { return true; }
 
 
     @Override
     public CompletableFuture<@Nullable BankAccountData> handleOnServer(InputData inputData, ServerPlayer sender) {
-        return handleOnMasterServer(inputData, sender.getUUID());
+        return handleOnMasterServer(inputData, "", sender.getUUID());
     }
     @Override
-    public CompletableFuture<@Nullable BankAccountData> handleOnMasterServer(InputData inputData, UUID sender) {
+    public CompletableFuture<@Nullable BankAccountData> handleOnMasterServer(InputData inputData, String slaveID, UUID sender) {
         ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         CompletableFuture<BankAccountData>  future = new CompletableFuture<>();
         if(bankManager == null)

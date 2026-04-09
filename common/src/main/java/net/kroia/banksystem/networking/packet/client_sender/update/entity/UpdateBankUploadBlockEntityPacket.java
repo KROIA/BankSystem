@@ -37,6 +37,10 @@ public class UpdateBankUploadBlockEntityPacket extends BankSystemNetworkPacket {
         this.dropIfNotBankable = dropIfNotBankable;
         this.bankAccountNumber = bankAccountNumber;
     }
+    @Override
+    protected boolean needsRoutingToMaster() {
+        return false;
+    }
 
     public static void sendPacket(BlockPos pos, boolean isOwned, boolean dropIfNotBankable, int bankAccountNumber) {
         new UpdateBankUploadBlockEntityPacket(pos, isOwned, dropIfNotBankable, bankAccountNumber).sendToServer();

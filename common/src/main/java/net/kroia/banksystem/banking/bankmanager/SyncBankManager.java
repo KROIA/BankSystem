@@ -5,14 +5,14 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.IAsyncBank;
+import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
-import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
-import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.User;
-import net.kroia.banksystem.banking.bank.SyncServerBank;
-import net.kroia.banksystem.banking.bankaccount.SyncServerBankAccount;
+import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
@@ -33,12 +33,12 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
-public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankManager, IAsyncBankManager {
+public class SyncBankManager implements ServerSaveableChunked, IServerBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
     public static void setBackend(BankSystemModBackend.Instances backend) {
         SyncBankManager.BACKEND_INSTANCES = backend;
-        SyncServerBankAccount.setBackend(backend);
+        ServerBankAccount.setBackend(backend);
     }
 
 
@@ -57,7 +57,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     /**
      * Using the account number as key.
      */
-    private final Map<Integer, SyncServerBankAccount> bankAccounts = new HashMap<>();
+    private final Map<Integer, ServerBankAccount> bankAccounts = new HashMap<>();
 
     private int nextAccountNumber = 1; // Start with account number 1
 
@@ -105,7 +105,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     @Override
     public BankManagerData.BankAccountsData getBankManagerBankAccountsData() {
         Map<Integer, BankAccountData> bankAccountDataMap = new HashMap<>();
-        for (Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
+        for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
             bankAccountDataMap.put(entry.getKey(), entry.getValue().getAccountData());
         }
         return new BankManagerData.BankAccountsData(bankAccountDataMap);
@@ -190,8 +190,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
         double totalLocked = 0;
         List<BankAccountData> bankAccounts = new java.util.ArrayList<>();
 
-        for (Map.Entry<Integer, SyncServerBankAccount> entry : this.bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for (Map.Entry<Integer, ServerBankAccount> entry : this.bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             ISyncServerBank bank = account.getBank(itemID);
             if (bank == null)
                 continue;
@@ -248,8 +248,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     public boolean removeUser(UUID userUUID) {
         if (userMap.containsKey(userUUID)) {
             User user = userMap.remove(userUUID);
-            for (Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-                SyncServerBankAccount account = entry.getValue();
+            for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+                ServerBankAccount account = entry.getValue();
                 if (account.hasUser(userUUID)) {
                     account.removeUser(userUUID);
                     if (!account.hasAnyUser()) {
@@ -324,12 +324,11 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
     @Override
     public boolean bankAccountHasBank(int accountNumber, ItemID itemID) {
-        SyncServerBankAccount account = bankAccounts.get(accountNumber);
+        ServerBankAccount account = bankAccounts.get(accountNumber);
         if (account == null)
             return false;
         return account.hasBank(itemID);
     }
-
     @Override
     public CompletableFuture<Boolean> bankAccountHasBankAsync(int accountNumber, ItemID itemID) {
         return CompletableFuture.completedFuture(bankAccountHasBank(accountNumber, itemID));
@@ -338,9 +337,27 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
 
+    @Override
+    public @Nullable BankAccountData getBankAccountData(int accountNumber)
+    {
+        ServerBankAccount account = bankAccounts.get(accountNumber);
+        if (account == null)
+            return null;
+        return account.getAccountData();
+    }
+    @Override
+    public CompletableFuture<@Nullable BankAccountData> getBankAccountDataAsync(int accountNumber)
+    {
+        return CompletableFuture.completedFuture(getBankAccountData(accountNumber));
+    }
+
+
+
+
+
 
     @Override
-    public @Nullable ISyncServerBankAccount createPersonalBankAccount(UUID user) {
+    public @Nullable ServerBankAccount createPersonalBankAccount(UUID user) {
         return createPersonalBankAccount_internal(user);
     }
     @Override
@@ -390,7 +407,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
     @Override
     public int getPersonalBankAccountNr(UUID user) {
-        SyncServerBankAccount account = getPersonalBankAccount_internal(user);
+        ServerBankAccount account = getPersonalBankAccount_internal(user);
         if(account != null)
             return account.getAccountNumber();
         return 0;
@@ -403,7 +420,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     @Override
     public int getPersonalBankAccountNr(String userName)
     {
-        SyncServerBankAccount account = getPersonalBankAccount_internal(userName);
+        ServerBankAccount account = getPersonalBankAccount_internal(userName);
         if(account != null)
             return account.getAccountNumber();
         return 0;
@@ -419,13 +436,13 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
     @Override
-    public @Nullable ISyncServerBankAccount createBankAccount(String accountName)
+    public @Nullable ServerBankAccount createBankAccount(String accountName)
     {
         if(accountName == null || accountName.isEmpty()) {
             accountName = "Unnamed Account";
         }
         int accountNumber = generateNewAccountNumber();
-        SyncServerBankAccount account = SyncServerBankAccount.create(accountNumber);
+        ServerBankAccount account = ServerBankAccount.create(accountNumber);
         if(account == null)
         {
             warn("Failed to create bank account with number: " + accountNumber);
@@ -452,7 +469,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
             accountName = "Unnamed Account";
         }
         int accountNumber = generateNewAccountNumber();
-        SyncServerBankAccount account = SyncServerBankAccount.create(accountNumber);
+        ServerBankAccount account = ServerBankAccount.create(accountNumber);
         if(account == null)
         {
             warn("Failed to create bank account with number: " + accountNumber);
@@ -480,7 +497,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     }
 
     @Override
-    public @Nullable ISyncServerBankAccount getBankAccount(int accountNumber)
+    public @Nullable IServerBankAccount getBankAccount(int accountNumber)
     {
         return bankAccounts.get(accountNumber);
     }
@@ -492,11 +509,11 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
     @Override
-    public List<ISyncServerBankAccount> getBankAccounts(UUID userUUID)
+    public List<IServerBankAccount> getBankAccounts(UUID userUUID)
     {
-        List<ISyncServerBankAccount> accounts = new ArrayList<>();
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        List<IServerBankAccount> accounts = new ArrayList<>();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             if(account.hasUser(userUUID)) {
                 accounts.add(account); // Add the account if the user is a member
             }
@@ -506,8 +523,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     @Override
     public CompletableFuture<List<IAsyncBankAccount>> getBankAccountsAsync(UUID userUUID) {
         List<IAsyncBankAccount> accounts = new ArrayList<>();
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             if(account.hasUser(userUUID)) {
                 accounts.add(account); // Add the account if the user is a member
             }
@@ -522,8 +539,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     public List<Integer> getBankAccountNumbers(UUID userUUID)
     {
         List<Integer> accounts = new ArrayList<>();
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             if(account.hasUser(userUUID)) {
                 accounts.add(account.getAccountNumber()); // Add the account if the user is a member
             }
@@ -544,8 +561,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     public List<Integer> getBankAccountNumbers(ItemID itemID)
     {
         List<Integer> accounts = new ArrayList<>();
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             if(account.hasBank(itemID)) {
                 accounts.add(account.getAccountNumber()); // Add the account if the user is a member
             }
@@ -565,8 +582,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     public List<BankAccountData> getBankAccountsData(UUID userUUID)
     {
         List<BankAccountData> accounts = new ArrayList<>();
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             if(account.hasUser(userUUID)) {
                 accounts.add(account.getAccountData()); // Add the account if the user is a member
             }
@@ -583,11 +600,11 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
     @Override
-    public List<ISyncServerBankAccount> getBankAccounts(ItemID itemID)
+    public List<IServerBankAccount> getBankAccounts(ItemID itemID)
     {
-        List<ISyncServerBankAccount> accounts = new ArrayList<>();
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        List<IServerBankAccount> accounts = new ArrayList<>();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             if(account.hasBank(itemID)) {
                 accounts.add(account); // Add the account if it has the bank for the given itemID
             }
@@ -597,8 +614,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     @Override
     public CompletableFuture<List<IAsyncBankAccount>> getBankAccountsAsync(ItemID itemID) {
         List<IAsyncBankAccount> accounts = new ArrayList<>();
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             if(account.hasBank(itemID)) {
                 accounts.add(account); // Add the account if it has the bank for the given itemID
             }
@@ -614,8 +631,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     public List<BankAccountData> getBankAccountsData(ItemID itemID)
     {
         List<BankAccountData> accounts = new ArrayList<>();
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             if(account.hasBank(itemID)) {
                 accounts.add(account.getAccountData()); // Add the account if it has the bank for the given itemID
             }
@@ -633,14 +650,14 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
     @Override
-    public @Nullable ISyncServerBankAccount getPersonalBankAccount(UUID userUUID)
+    public @Nullable IServerBankAccount getPersonalBankAccount(UUID userUUID)
     {
         return getPersonalBankAccount_internal(userUUID);
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getPersonalBankAccountAsync(UUID userUUID) {
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             User creator = account.getPersonalBankOwner();
             if(creator != null && creator.getUUID().equals(userUUID)) {
                 return CompletableFuture.completedFuture(account); // Found the personal bank account
@@ -655,8 +672,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     @Override
     public @Nullable BankAccountData getPersonalBankAccountData(UUID userUUID)
     {
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             User creator = account.getPersonalBankOwner();
             if(creator != null && creator.getUUID().equals(userUUID)) {
                 return account.getAccountData(); // Found the personal bank account
@@ -674,7 +691,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
     @Override
-    public @Nullable ISyncServerBankAccount getPersonalBankAccount(String userName)
+    public @Nullable IServerBankAccount getPersonalBankAccount(String userName)
     {
         return getPersonalBankAccount_internal(userName);
     }
@@ -717,7 +734,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
     @Override
-    public @Nullable ISyncServerBankAccount getOrCreatePersonalBankAccount(UUID userUUID)
+    public @Nullable IServerBankAccount getOrCreatePersonalBankAccount(UUID userUUID)
     {
         return getOrCreatePersonalBankAccount_internal(userUUID);
     }
@@ -736,7 +753,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
     @Override
-    public @Nullable ISyncServerBankAccount getOrCreatePersonalBankAccount(@NotNull String userName)
+    public @Nullable IServerBankAccount getOrCreatePersonalBankAccount(@NotNull String userName)
     {
         User user = getUserByName(userName);
         if(user == null)
@@ -755,8 +772,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     @Override
     public boolean userHasPersonalBankAccount(UUID userUUID)
     {
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             User creator = account.getPersonalBankOwner();
             if(creator != null && creator.getUUID().equals(userUUID)) {
                 return true; // User has a personal bank account
@@ -773,7 +790,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     public boolean deleteBankAccount(int accountNumber)
     {
         if(bankAccounts.containsKey(accountNumber)) {
-            SyncServerBankAccount account = bankAccounts.get(accountNumber);
+            ServerBankAccount account = bankAccounts.get(accountNumber);
             if(account.getPersonalBankOwner() != null){
                 error("Cannot delete personal bank account with number: " + accountNumber + ".");
                 return false; // Cannot delete personal bank accounts
@@ -826,7 +843,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
     @Override
-    public @Nullable SyncServerBank getPersonalBank(UUID owner, ItemID itemID)
+    public @Nullable IServerBank getPersonalBank(UUID owner, ItemID itemID)
     {
         ISyncServerBankAccount account = getPersonalBankAccount(owner);
         if(account == null)
@@ -846,7 +863,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
     @Override
-    public @Nullable SyncServerBank getPersonalBank(String ownerName, ItemID itemID)
+    public @Nullable IServerBank getPersonalBank(String ownerName, ItemID itemID)
     {
         User owner = getUserByName(ownerName);
         if(owner == null)
@@ -871,13 +888,13 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
     @Override
-    public @Nullable SyncServerBank getOrCreatePersonalBank(UUID owner, ItemID itemID)
+    public @Nullable IServerBank getOrCreatePersonalBank(UUID owner, ItemID itemID)
     {
         ISyncServerBankAccount account = getOrCreatePersonalBankAccount(owner);
         if(account == null) {
             return null;
         }
-        SyncServerBank bank = account.getBank(itemID);
+        IServerBank bank = account.getBank(itemID);
         if(bank != null)
             return bank;
         else
@@ -898,7 +915,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
     @Override
-    public @Nullable SyncServerBank getOrCreatePersonalBank(String ownerName, ItemID itemID)
+    public @Nullable IServerBank getOrCreatePersonalBank(String ownerName, ItemID itemID)
     {
         User owner = getUserByName(ownerName);
         if(owner == null)
@@ -956,8 +973,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
             return false;
         }
 
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             if(account.hasBank(itemID)) {
                 account.removeBank(itemID);
                 info("Removed item bank for itemID: " + itemID + " from account number: " + entry.getKey());
@@ -1013,8 +1030,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     {
         double total = 0;
         ItemID moneyItemID = MoneyItem.getItemID();
-        for (Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             ISyncServerBank moneyBank = account.getBank(moneyItemID);
             if(moneyBank != null) {
                 total += moneyBank.getRealTotalBalance();
@@ -1032,8 +1049,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     {
         double total = 0;
         ItemID moneyItemID = MoneyItem.getItemID();
-        for (Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             ISyncServerBank moneyBank = account.getBank(moneyItemID);
             if(moneyBank != null) {
                 total += moneyBank.getRealLockedBalance();
@@ -1050,8 +1067,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     public double getRealItemCirculation(ItemID itemID)
     {
         double total = 0;
-        for (Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             ISyncServerBank bank = account.getBank(itemID);
             if(bank != null)
                 total += bank.getRealTotalBalance();
@@ -1067,8 +1084,8 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
     public double getRealLockedItemCirculation(ItemID itemID)
     {
         double total = 0;
-        for (Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             ISyncServerBank bank = account.getBank(itemID);
             if(bank != null)
                 total += bank.getRealLockedBalance();
@@ -1090,10 +1107,10 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
             public double freeBalance = 0;
         }
         Map<ItemID, Data> sums = new HashMap<>();
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet())
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet())
         {
-            SyncServerBankAccount account = entry.getValue();
-            for(Map.Entry<ItemID, SyncServerBank> bankEntry : account.getAllBanks().entrySet())
+            ServerBankAccount account = entry.getValue();
+            for(Map.Entry<ItemID, IServerBank> bankEntry : account.getAllBanks().entrySet())
             {
                 ItemID itemID = bankEntry.getKey();
                 ISyncServerBank bank = bankEntry.getValue();
@@ -1156,7 +1173,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
         jsonObject.add("itemCentScaleFactors", itemScaleFactorsJson);
 
         JsonArray accountsJson = new JsonArray();
-        for (SyncServerBankAccount account : bankAccounts.values()) {
+        for (ServerBankAccount account : bankAccounts.values()) {
             accountsJson.add(account.toJson());
         }
         jsonObject.add("bankAccounts", accountsJson);
@@ -1245,7 +1262,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
         listTags.put("allowedItems", allowedItems);
 
         ListTag accountsList = new ListTag();
-        for (Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
+        for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
             CompoundTag accountTag = new CompoundTag();
             entry.getValue().save(accountTag);
             accountsList.add(accountTag);
@@ -1305,7 +1322,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
             bankAccounts.clear();
             for (int i = 0; i < accountsList.size(); i++) {
                 CompoundTag accountTag = accountsList.getCompound(i);
-                SyncServerBankAccount account = SyncServerBankAccount.createFromTag(accountTag);
+                ServerBankAccount account = ServerBankAccount.createFromTag(accountTag);
                 if(account != null) {
                     bankAccounts.put(account.getAccountNumber(), account);
                 } else {
@@ -1333,7 +1350,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
         this.userMap.putAll(userMap);
         return true;
     }
-    public boolean load_compatibilityMode_setBankAccounts(Map<Integer, SyncServerBankAccount> bankAccounts)
+    public boolean load_compatibilityMode_setBankAccounts(Map<Integer, ServerBankAccount> bankAccounts)
     {
         this.bankAccounts.clear();
         this.bankAccounts.putAll(bankAccounts);
@@ -1343,10 +1360,10 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
 
 
-    public @Nullable SyncServerBankAccount getPersonalBankAccount_internal(UUID userUUID)
+    public @Nullable ServerBankAccount getPersonalBankAccount_internal(UUID userUUID)
     {
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             User creator = account.getPersonalBankOwner();
             if(creator != null && creator.getUUID().equals(userUUID)) {
                 return account; // Found the personal bank account
@@ -1354,10 +1371,10 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
         }
         return null; // No personal bank account found for this user
     }
-    public @Nullable SyncServerBankAccount getPersonalBankAccount_internal(String userName)
+    public @Nullable ServerBankAccount getPersonalBankAccount_internal(String userName)
     {
-        for(Map.Entry<Integer, SyncServerBankAccount> entry : bankAccounts.entrySet()) {
-            SyncServerBankAccount account = entry.getValue();
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
             User creator = account.getPersonalBankOwner();
             if(creator != null && creator.getName().equals(userName)) {
                 return account; // Found the personal bank account
@@ -1365,9 +1382,9 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
         }
         return null; // No personal bank account found for this user
     }
-    public @Nullable SyncServerBankAccount getOrCreatePersonalBankAccount_internal(UUID userUUID)
+    public @Nullable ServerBankAccount getOrCreatePersonalBankAccount_internal(UUID userUUID)
     {
-        SyncServerBankAccount account = getPersonalBankAccount_internal(userUUID);
+        ServerBankAccount account = getPersonalBankAccount_internal(userUUID);
         if(account != null) {
             return account;
         }
@@ -1376,7 +1393,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
         }
     }
 
-    public @Nullable SyncServerBankAccount createPersonalBankAccount_internal(UUID user)
+    public @Nullable ServerBankAccount createPersonalBankAccount_internal(UUID user)
     {
         User creator = userMap.get(user);
         if(creator == null) {
@@ -1389,7 +1406,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
         //    return getPersonalBankAccount_internal(user); // Return existing account if it exists
         //}
 
-        SyncServerBankAccount existingAccount = getPersonalBankAccount_internal(user);
+        ServerBankAccount existingAccount = getPersonalBankAccount_internal(user);
         if(existingAccount != null) {
             //warn("User with UUID: " + user + " already has a personal bank account with number: " + existingAccount.getAccountNumber());
             return existingAccount;
@@ -1397,7 +1414,7 @@ public class SyncBankManager implements ServerSaveableChunked, ISyncServerBankMa
 
         int accountNumber = generateNewAccountNumber();
         long startBalance = BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.get();
-        SyncServerBankAccount account = SyncServerBankAccount.createPersonal(accountNumber, creator, startBalance);
+        ServerBankAccount account = ServerBankAccount.createPersonal(accountNumber, creator, startBalance);
         if(account == null) {
             warn("Failed to create personal bank account for user with UUID: " + user);
             return null;

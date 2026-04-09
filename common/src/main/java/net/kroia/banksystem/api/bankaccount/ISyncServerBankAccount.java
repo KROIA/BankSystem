@@ -1,8 +1,8 @@
 package net.kroia.banksystem.api.bankaccount;
 
 import com.google.gson.JsonElement;
+import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.banking.User;
-import net.kroia.banksystem.banking.bank.SyncServerBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
@@ -175,7 +175,7 @@ public interface ISyncServerBankAccount {
      * @param startBalance the starting balance of the bank, in raw amount.
      * @return the created or already existing bank, or null if the bank could not be created.
      */
-    @Nullable SyncServerBank createBank(ItemID itemID, long startBalance);
+    @Nullable IServerBank createBank(ItemID itemID, long startBalance);
 
     /**
      * Removes the bank for the specified itemID.
@@ -213,20 +213,20 @@ public interface ISyncServerBankAccount {
      * @param itemID the itemID of the bank to get
      * @return the bank for the specified itemID, or null if no such bank exists
      */
-    @Nullable SyncServerBank getBank(ItemID itemID);
+    @Nullable IServerBank getBank(ItemID itemID);
 
     /**
      * Gets the bank for the specified itemID, or creates it if it does not exist.
      * @param itemID the itemID of the bank to get or create
      * @return the bank for the specified itemID, or a new bank if it did not exist before
      */
-    @Nullable SyncServerBank getOrCreateBank(ItemID itemID);
+    @Nullable IServerBank getOrCreateBank(ItemID itemID);
 
     /**
      * Gets all banks in this bank account.
      * @return a map of itemIDs to their corresponding banks
      */
-    Map<ItemID, SyncServerBank> getAllBanks();
+    Map<ItemID, IServerBank> getAllBanks();
 
 
     /**

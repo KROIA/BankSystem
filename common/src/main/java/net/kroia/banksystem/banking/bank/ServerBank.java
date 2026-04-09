@@ -4,10 +4,10 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bank.BankStatus;
-import net.kroia.banksystem.api.bank.IAsyncBank;
+import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.item.BankSystemItems;
@@ -25,10 +25,10 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.concurrent.CompletableFuture;
 
-public class SyncServerBank implements ServerSaveable, ISyncServerBank, IAsyncBank {
+public class ServerBank implements ServerSaveable, IServerBank {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
-        SyncServerBank.BACKEND_INSTANCES = backend;
+        ServerBank.BACKEND_INSTANCES = backend;
     }
 
 
@@ -41,18 +41,18 @@ public class SyncServerBank implements ServerSaveable, ISyncServerBank, IAsyncBa
     protected long lockedBalance;
     private ItemID itemID;
 
-    private SyncServerBank()
+    private ServerBank()
     {
 
     }
-    private SyncServerBank(ItemID itemID, long balance)
+    private ServerBank(ItemID itemID, long balance)
     {
         this.itemID = itemID;
         this.balance = Math.max(balance, 0); // Ensure balance is not negative
         this.lockedBalance = 0;
     }
 
-    public static @Nullable SyncServerBank create(ItemID itemID, long balance) {
+    public static @Nullable ServerBank create(ItemID itemID, long balance) {
         if (itemID == null || balance < 0) {
             return null; // Invalid parameters
         }
@@ -61,11 +61,11 @@ public class SyncServerBank implements ServerSaveable, ISyncServerBank, IAsyncBa
             return null; // Item not allowed in bank
         }
 
-        return new SyncServerBank(itemID, balance);
+        return new ServerBank(itemID, balance);
     }
-    public static @Nullable SyncServerBank createFromTag(CompoundTag tag)
+    public static @Nullable ServerBank createFromTag(CompoundTag tag)
     {
-        SyncServerBank bank = new SyncServerBank();
+        ServerBank bank = new ServerBank();
         if(bank.load(tag)) {
             return bank;
         }
@@ -907,10 +907,10 @@ public class SyncServerBank implements ServerSaveable, ISyncServerBank, IAsyncBa
         if(amount1 < 0 || amount2 < 0)
             return BankStatus.FAILED_NEGATIVE_VALUE;
 
-        if ((from1 instanceof  SyncServerBank castedFrom1) &&
-                (to1 instanceof  SyncServerBank castedTo1) &&
-                (from2 instanceof  SyncServerBank castedFrom2) &&
-                (to2 instanceof  SyncServerBank castedTo2))
+        if ((from1 instanceof  ServerBank castedFrom1) &&
+                (to1 instanceof  ServerBank castedTo1) &&
+                (from2 instanceof  ServerBank castedFrom2) &&
+                (to2 instanceof  ServerBank castedTo2))
         {
             // Both transactions must be possible, otherwise no transaction is done
             // Copy original data

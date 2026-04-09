@@ -227,7 +227,7 @@ public class ATMScreen extends BankSystemGuiScreen {
         updateBalanceView();
         calculateSum();
 
-        getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID()).thenAccept((accountData) -> {
+        getBankManager().getPersonalBankAccountDataAsync(Minecraft.getInstance().player.getUUID()).thenAccept((accountData) -> {
             if(accountData != null && !accountData.bankData.isEmpty())
             {
                 currentSelectedAccountNumber = accountData.accountNumber;
@@ -292,7 +292,7 @@ public class ATMScreen extends BankSystemGuiScreen {
     private void updateBalanceView()
     {
         //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), (accountData) ->
-        getBankManager().requestBankAccountData(currentSelectedAccountNumber).thenAccept((accountData) ->
+        getBankManager().getBankAccountDataAsync(currentSelectedAccountNumber).thenAccept((accountData) ->
         {
             if(instance == null || accountData == null)
                 return;

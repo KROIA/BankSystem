@@ -34,7 +34,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
-        SyncServerBankAccount.setBackend(backend);
+        ServerBankAccount.setBackend(backend);
     }
 
 
@@ -110,7 +110,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
      */
     private static AsyncFunctionDataCodecs codecPacket(@Nullable StreamCodec<RegistryFriendlyByteBuf, ?> inputParamsCodec, @Nullable StreamCodec<RegistryFriendlyByteBuf, ?> outputParamsCodec)
     {
-        return new AsyncFunctionDataCodecs(AsyncBank.BankIdentifyAndDataPacket.streamCodec(inputParamsCodec), outputParamsCodec);
+        return new AsyncFunctionDataCodecs(BankIdentifyAndDataPacket.streamCodec(inputParamsCodec), outputParamsCodec);
     }
     public static final Map<FunctionType, AsyncFunctionDataCodecs> codecs = new HashMap<>(){{
         put(FunctionType.GetAccountDataAsync_1,             codecPacket(null, BankAccountData.STREAM_CODEC));
@@ -219,8 +219,11 @@ public class AsyncBankAccount implements IAsyncBankAccount {
          * @return the response data future for to send back to the requestor
          */
         @Override
-        public CompletableFuture<OutputData> handleOnMasterServer(InputData input, @Nullable UUID playerSender) {
-            info("Received request to handle on master server for function: "+input.function.toString());
+        public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
+            String playerInfo = "";
+            if(playerSender != null)
+                playerInfo = " from player: " + playerSender.toString();
+            info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             BankIdentifyAndDataPacket inputData = input.decodeParams();
             int accountNr = inputData.accountNr;
             ISyncServerBankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(accountNr);
@@ -524,9 +527,13 @@ public class AsyncBankAccount implements IAsyncBankAccount {
     @Override
     public CompletableFuture<Boolean> hasPermissionAsync(UUID userUUID, int permission) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetPermissionAsync, accountNr, new ParamGroup_UUID_int(userUUID, permission));
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        try {
+            InputData inputData = InputData.of(FunctionType.HasPermissionAsync, accountNr, new ParamGroup_UUID_int(userUUID, permission));
+            CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+            outputDataFuture.thenAccept((outputData) -> future.complete(outputData.decodeResult()));
+        }catch(Exception e) {
+            future.completeExceptionally(e);
+        }
         return future;
     }
 

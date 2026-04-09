@@ -1,6 +1,8 @@
 package net.kroia.banksystem.networking;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.banking.bank.AsyncBank;
+import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
 import net.kroia.banksystem.banking.bankmanager.AsyncBankManager;
 import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
@@ -8,10 +10,14 @@ import net.kroia.banksystem.networking.packet.client_sender.update.entity.Update
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.general.RegisterItemIDPacket;
 import net.kroia.banksystem.networking.packet.general.SyncItemIDsPacket;
+import net.kroia.banksystem.networking.packet.server_server.ClientConsoleMessagePacket;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
+import net.kroia.banksystem.networking.packet.server_server.DepositItemsInBankRequest;
+import net.kroia.banksystem.networking.packet.server_server.DropItemsInPlayerInventoryRequest;
 import net.kroia.banksystem.networking.packet.server_server.PlayerJoinPacket;
+import net.kroia.banksystem.networking.packet.server_server.WithdrawItemsFromBankRequest;
 import net.kroia.banksystem.networking.request.*;
 import net.kroia.modutilities.networking.NetworkPacketManager;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
@@ -32,6 +38,9 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public static BankAccountDeleteRequest DELETE_BANK_ACCOUNT_REQUEST = (BankAccountDeleteRequest) AsynchronousRequestResponseSystem.register(new BankAccountDeleteRequest());
     public static AllowedItemsRequest ALLOWED_ITEMS_REQUEST = (AllowedItemsRequest) AsynchronousRequestResponseSystem.register(new AllowedItemsRequest());
 
+    public static DropItemsInPlayerInventoryRequest DROP_ITEMS_IN_PLAYER_INVENTORY_REQUEST = (DropItemsInPlayerInventoryRequest)AsynchronousRequestResponseSystem.register(new DropItemsInPlayerInventoryRequest());
+    public static DepositItemsInBankRequest DEPOSIT_ITEMS_IN_BANK_REQUEST = (DepositItemsInBankRequest)AsynchronousRequestResponseSystem.register(new DepositItemsInBankRequest());
+    public static WithdrawItemsFromBankRequest WITHDRAW_ITEMS_FROM_BANK_REQUEST = (WithdrawItemsFromBankRequest)AsynchronousRequestResponseSystem.register(new WithdrawItemsFromBankRequest());
     //public static AsyncServerBankManagerForwardingRequest ASYNC_SERVER_BANK_MANAGER_FORWARDING_REQUEST = (AsyncServerBankManagerForwardingRequest)AsynchronousRequestResponseSystem.register(new AsyncServerBankManagerForwardingRequest());
 
 
@@ -43,6 +52,8 @@ public class BankSystemNetworking extends NetworkPacketManager {
         setupServerServerPackets();
 
         AsyncBankManager.setupNetworkPacket();
+        AsyncBankAccount.setupNetworkPacket();
+        AsyncBank.setupNetworkPacket();
 
         this.setupARRS(); // Setup the Asynchronous Request Response System (ARRS)
     }
@@ -58,6 +69,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerS2C(SyncBankUploadDataPacket.TYPE, SyncBankUploadDataPacket.STREAM_CODEC);
         registerS2C(SyncBankDownloadDataPacket.TYPE, SyncBankDownloadDataPacket.STREAM_CODEC);
         registerS2C(SyncItemIDsPacket.TYPE, SyncItemIDsPacket.STREAM_CODEC);
+
     }
 
     @Override
@@ -74,5 +86,6 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public void setupServerServerPackets()
     {
         registerS2S(PlayerJoinPacket.TYPE, PlayerJoinPacket.STREAM_CODEC);
+        registerS2S(ClientConsoleMessagePacket.TYPE, ClientConsoleMessagePacket.STREAM_CODEC);
     }
 }

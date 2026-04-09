@@ -43,6 +43,11 @@ public class ItemIDManager implements ServerSaveableChunked {
         return item;
     }
 
+    public static ConcurrentHashMap<ItemID, ItemStack> getItemIDMap()
+    {
+        return new ConcurrentHashMap<>(itemIDMap);
+    }
+
     public static CompletableFuture<ItemID> registerItemStackServerSide(@NotNull ItemStack itemStack)
     {
         ItemStack cpy =  itemStack.copy();

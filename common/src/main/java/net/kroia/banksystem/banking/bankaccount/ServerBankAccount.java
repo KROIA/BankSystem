@@ -5,13 +5,13 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.IAsyncBank;
-import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
-import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.User;
-import net.kroia.banksystem.banking.bank.SyncServerBank;
+import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
@@ -28,11 +28,11 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
-public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAccount, IAsyncBankAccount {
+public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
-        SyncServerBankAccount.BACKEND_INSTANCES = backend;
+        ServerBankAccount.BACKEND_INSTANCES = backend;
         User.setBackend(backend);
     }
 
@@ -53,63 +53,63 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
      */
     private @Nullable User personalBankOwner;
     private final Map<UUID, BankUser> users = new HashMap<>();
-    private final Map<ItemID, SyncServerBank> banks = new HashMap<>();
+    private final Map<ItemID, ServerBank> banks = new HashMap<>();
 
-    private SyncServerBankAccount(int accountNumber) {
+    private ServerBankAccount(int accountNumber) {
         this.accountNumber = accountNumber;
         this.accountIcon = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.CHEST.getDefaultInstance());
     }
-    private SyncServerBankAccount(int accountNumber, @Nullable User personalBankOwner, List<BankUser> users, Map<ItemID, SyncServerBank> banks) {
+    private ServerBankAccount(int accountNumber, @Nullable User personalBankOwner, List<BankUser> users, Map<ItemID, ServerBank> banks) {
         this.accountNumber = accountNumber;
         this.personalBankOwner = personalBankOwner;
         this.accountIcon = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.CHEST.getDefaultInstance());
         if( personalBankOwner != null) {
-            this.accountName = personalBankOwner.getName()+"'s SyncServerBank Account";
+            this.accountName = personalBankOwner.getName()+"'s ServerBank Account";
         }
         this.banks.putAll(banks);
         for (BankUser user : users) {
             this.users.put(user.getUUID(), user);
         }
     }
-    private SyncServerBankAccount()
+    private ServerBankAccount()
     {
 
     }
 
-    public static @Nullable SyncServerBankAccount create(int accountNumber)
+    public static @Nullable ServerBankAccount create(int accountNumber)
     {
         if (accountNumber <= 0) {
             return null; // Invalid account number
         }
-        SyncServerBankAccount acc = new SyncServerBankAccount(accountNumber);
+        ServerBankAccount acc = new ServerBankAccount(accountNumber);
         BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_CREATED.notifyListeners(acc); // Notify listeners that a new bank account has been created
         return acc; // Return the newly created bank account
     }
-    public static @Nullable SyncServerBankAccount create(int accountNumber, List<BankUser> users, Map<ItemID, SyncServerBank> banks) {
+    public static @Nullable ServerBankAccount create(int accountNumber, List<BankUser> users, Map<ItemID, ServerBank> banks) {
         if (accountNumber <= 0 || users == null || banks == null) {
             return null; // Invalid account number or data
         }
-        SyncServerBankAccount acc = new SyncServerBankAccount(accountNumber, null, users, banks);
+        ServerBankAccount acc = new ServerBankAccount(accountNumber, null, users, banks);
         BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_CREATED.notifyListeners(acc); // Notify listeners that a new bank account has been created
         return acc; // Return the newly created bank account
     }
-    public static @Nullable SyncServerBankAccount createPersonal(int accountNumber, User user, long startMoneyBalance) {
+    public static @Nullable ServerBankAccount createPersonal(int accountNumber, User user, long startMoneyBalance) {
         if (user == null || accountNumber <= 0) {
             return null; // Invalid user or account number
         }
 
-        SyncServerBank moneyBank = SyncServerBank.create(MoneyItem.getItemID(), startMoneyBalance);
+        ServerBank moneyBank = ServerBank.create(MoneyItem.getItemID(), startMoneyBalance);
         if (moneyBank == null) {
             return null; // Failed to create money bank
         }
-        Map<ItemID, SyncServerBank> banks = new HashMap<>();
+        Map<ItemID, ServerBank> banks = new HashMap<>();
         banks.put(MoneyItem.getItemID(), moneyBank); // Add money bank to the account
-        SyncServerBankAccount acc = new SyncServerBankAccount(accountNumber, user, new ArrayList<>(), banks);
+        ServerBankAccount acc = new ServerBankAccount(accountNumber, user, new ArrayList<>(), banks);
         BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_CREATED.notifyListeners(acc); // Notify listeners that a new bank account has been created
         return acc; // Return the newly created bank account
     }
-    public static @Nullable SyncServerBankAccount createFromTag(CompoundTag tag) {
-        SyncServerBankAccount account = new SyncServerBankAccount();
+    public static @Nullable ServerBankAccount createFromTag(CompoundTag tag) {
+        ServerBankAccount account = new ServerBankAccount();
         if (!account.load(tag)) {
             return null; // Invalid data
         }
@@ -135,10 +135,10 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
             users.put(userUUID, user.toBankUserData()); // Convert BankUser to BankUserData
         }
 
-        for(Map.Entry<ItemID, SyncServerBank> entry : this.banks.entrySet()) {
+        for(Map.Entry<ItemID, ServerBank> entry : this.banks.entrySet()) {
             ItemID itemID = entry.getKey();
-            SyncServerBank bank = entry.getValue();
-            bankData.put(itemID, bank.getMinimalData()); // Convert SyncServerBank to BankData
+            ServerBank bank = entry.getValue();
+            bankData.put(itemID, bank.getMinimalData()); // Convert ServerBank to BankData
         }
 
         return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
@@ -174,9 +174,9 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
             users.put(userUUID, user.toBankUserData()); // Convert BankUser to BankUserData
         }
 
-        SyncServerBank bank = this.banks.get(itemID);
+        ServerBank bank = this.banks.get(itemID);
         if (bank != null) {
-            bankData.put(itemID, bank.getMinimalData()); // Convert SyncServerBank to BankData
+            bankData.put(itemID, bank.getMinimalData()); // Convert ServerBank to BankData
             return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
         }
         else {
@@ -199,7 +199,7 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
         if (itemID == null) {
             return null; // Invalid item ID
         }
-        SyncServerBank bank = banks.get(itemID);
+        ServerBank bank = banks.get(itemID);
         if (bank != null) {
             return bank.getMinimalData(); // Get minimal data for the bank with the given item ID
         }
@@ -219,7 +219,7 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
     public List<BankData> getBankData()
     {
         return banks.values().stream()
-                .map(SyncServerBank::getMinimalData)
+                .map(ServerBank::getMinimalData)
                 .toList(); // Get minimal data for all banks in the account
     }
     @Override
@@ -516,7 +516,7 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
 
 
     @Override
-    public @Nullable SyncServerBank createBank(ItemID itemID, long startBalance)
+    public @Nullable ServerBank createBank(ItemID itemID, long startBalance)
     {
         if (itemID == null) {
             return null; // Invalid item ID
@@ -524,7 +524,7 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
         if (banks.containsKey(itemID)) {
             return banks.get(itemID); // Return existing bank if it already exists
         }
-        SyncServerBank bank = SyncServerBank.create(itemID, startBalance); // Create a new bank with 0 balance
+        ServerBank bank = ServerBank.create(itemID, startBalance); // Create a new bank with 0 balance
         if (bank != null) {
             banks.put(itemID, bank); // Add new bank to the account
             return bank;
@@ -540,7 +540,7 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
         if (banks.containsKey(itemID)) {
             return CompletableFuture.completedFuture(banks.get(itemID)); // Return existing bank if it already exists
         }
-        SyncServerBank bank = SyncServerBank.create(itemID, startBalance); // Create a new bank with 0 balance
+        ServerBank bank = ServerBank.create(itemID, startBalance); // Create a new bank with 0 balance
         if (bank != null) {
             banks.put(itemID, bank); // Add new bank to the account
             return CompletableFuture.completedFuture(bank);
@@ -570,8 +570,8 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
     public List<ItemID> removeEmptyBanks()
     {
         List<ItemID> emptyBanks = new ArrayList<>();
-        for (Map.Entry<ItemID, SyncServerBank> entry : banks.entrySet()) {
-            SyncServerBank bank = entry.getValue();
+        for (Map.Entry<ItemID, ServerBank> entry : banks.entrySet()) {
+            ServerBank bank = entry.getValue();
             if (bank.getTotalBalance() <= 0) {
                 emptyBanks.add(entry.getKey()); // Collect empty banks
             }
@@ -625,7 +625,7 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
 
 
     @Override
-    public @Nullable SyncServerBank getBank(ItemID itemID) {
+    public @Nullable ServerBank getBank(ItemID itemID) {
         if (itemID == null) {
             return null; // Invalid item ID
         }
@@ -643,14 +643,14 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
 
 
     @Override
-    public @Nullable SyncServerBank getOrCreateBank(ItemID itemID)
+    public @Nullable ServerBank getOrCreateBank(ItemID itemID)
     {
         if (itemID == null) {
             return null; // Invalid item ID
         }
-        SyncServerBank bank = banks.get(itemID);
+        ServerBank bank = banks.get(itemID);
         if (bank == null) {
-            bank = SyncServerBank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
+            bank = ServerBank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
             if (bank != null) {
                 banks.put(itemID, bank); // Add new bank to the account
             }
@@ -663,9 +663,9 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
         if (itemID == null) {
             return CompletableFuture.completedFuture(null); // Invalid item ID
         }
-        SyncServerBank bank = banks.get(itemID);
+        ServerBank bank = banks.get(itemID);
         if (bank == null) {
-            bank = SyncServerBank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
+            bank = ServerBank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
             if (bank != null) {
                 banks.put(itemID, bank); // Add new bank to the account
             }
@@ -678,7 +678,7 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
 
 
     @Override
-    public Map<ItemID, SyncServerBank> getAllBanks() {
+    public Map<ItemID, IServerBank> getAllBanks() {
         return new HashMap<>(banks); // Return a copy of all banks in the account
     }
     @Override
@@ -713,8 +713,8 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
         tag.put("users", usersTag);
 
         ListTag banksTag = new ListTag();
-        for (Map.Entry<ItemID, SyncServerBank> entry : banks.entrySet()) {
-            SyncServerBank bank = entry.getValue();
+        for (Map.Entry<ItemID, ServerBank> entry : banks.entrySet()) {
+            ServerBank bank = entry.getValue();
             CompoundTag bankTag = new CompoundTag();
             bank.save(bankTag);
             banksTag.add(bankTag);
@@ -768,7 +768,7 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
         ListTag banksTag = tag.getList("banks", 10);
         for (int i = 0; i < banksTag.size(); i++) {
             CompoundTag bankTag = banksTag.getCompound(i);
-            SyncServerBank bank = SyncServerBank.createFromTag(bankTag);
+            ServerBank bank = ServerBank.createFromTag(bankTag);
             if (bank != null) {
                 banks.put(bank.getItemID(), bank);
             }
@@ -798,7 +798,7 @@ public class SyncServerBankAccount implements ServerSaveable, ISyncServerBankAcc
         jsonObject.add("users", usersJson);
 
         JsonArray banksJson = new JsonArray();
-        for (Map.Entry<ItemID, SyncServerBank> entry : banks.entrySet()) {
+        for (Map.Entry<ItemID, ServerBank> entry : banks.entrySet()) {
             banksJson.add(entry.getValue().toJson());
         }
         jsonObject.add("banks", banksJson);

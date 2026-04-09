@@ -14,15 +14,13 @@ public class BankManagerDataRequest extends BankSystemGenericRequest<Integer, Ba
     public String getRequestTypeID() {
         return BankManagerDataRequest.class.getName();
     }
-    @Override
-    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<BankManagerData> handleOnServer(Integer input, ServerPlayer sender) {
-        return handleOnMasterServer(input, sender.getUUID());
+        return handleOnMasterServer(input, "", sender.getUUID());
     }
     @Override
-    public CompletableFuture<BankManagerData> handleOnMasterServer(Integer input, UUID sender) {
+    public CompletableFuture<BankManagerData> handleOnMasterServer(Integer input, String slaveID, UUID sender) {
         return CompletableFuture.completedFuture(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankManagerData());
     }
 

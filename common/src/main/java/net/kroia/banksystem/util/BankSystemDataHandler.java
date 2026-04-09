@@ -147,7 +147,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
         Path settingsFilePath = getGlobalSettingsFilePath();
         if(!fileExists(settingsFilePath)) {
-            warn("SyncServerBank settings file not found, creating default settings file.");
+            warn("ServerBank settings file not found, creating default settings file.");
             success &= save_globalSettings(settingsFilePath);
         }
         else

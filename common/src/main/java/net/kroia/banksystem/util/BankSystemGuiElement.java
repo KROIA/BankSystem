@@ -3,6 +3,10 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+
+import java.util.UUID;
 
 public abstract class BankSystemGuiElement extends GuiElement {
     protected static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -25,5 +29,19 @@ public abstract class BankSystemGuiElement extends GuiElement {
 
     public IClientBankManager getMarketManager() {
         return BACKEND_INSTANCES.CLIENT_BANK_MANAGER;
+    }
+
+
+    protected LocalPlayer getThisPlayer()
+    {
+        return Minecraft.getInstance().player;
+    }
+    protected UUID getThisPlayerUUID()
+    {
+        return getThisPlayer().getUUID();
+    }
+    protected String getThisPlayerName()
+    {
+        return getThisPlayer().getDisplayName().getString();
     }
 }

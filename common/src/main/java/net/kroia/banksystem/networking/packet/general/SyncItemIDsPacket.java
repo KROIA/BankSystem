@@ -62,6 +62,16 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
         SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
         packet.broadcastToSlaves();
     }
+    public static void sendToSlave(String slaveID, Map<ItemID, ItemStack> items)
+    {
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
+        packet.info("Send to slave: "+slaveID+"\n"+packet);
+        packet.sendToSlave(slaveID);
+    }
+    public static void sendAllItemsToSlave(String slaveID)
+    {
+        sendToSlave(slaveID, ItemIDManager.getItemIDMap());
+    }
     /*public static void sendRegistrationRequestToMaster(Map<ItemID, ItemStack> items)
     {
         SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
@@ -89,6 +99,18 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
     @Override
     protected void handleOnSlave(ForwardPacketContext context)
     {
+        info("handleOnSlave\n"+this);
         ItemIDManager.receiveSyncPacket(this);
+    }
+
+    @Override
+    public String toString()
+    {
+        StringBuilder s = new StringBuilder();
+        for(Map.Entry<ItemID, ItemStack> entry : items.entrySet())
+        {
+            s.append(entry.getKey()).append(" -> Stack=").append(entry.getValue().getItem()).append("\n");
+        }
+        return "SyncItemIDsPacket\n"+s.toString();
     }
 }

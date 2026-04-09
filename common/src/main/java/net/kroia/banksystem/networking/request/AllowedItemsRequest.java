@@ -19,18 +19,16 @@ public class AllowedItemsRequest extends BankSystemGenericRequest<Integer, List<
         return AllowedItemsRequest.class.getName();
     }
 
-    @Override
-    public boolean needsRoutingToMaster() { return true; }
 
     @Override
     public CompletableFuture<List<ItemID>> handleOnServer(Integer input, ServerPlayer sender)
     {
-        return handleOnMasterServer(input, sender.getUUID());
+        return handleOnMasterServer(input, "", sender.getUUID());
     }
     @Override
-    public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, UUID sender)
+    public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, String slaveID, UUID sender)
     {
-        return CompletableFuture.completedFuture(getSyncBankManager().getAllowedItems());
+        return CompletableFuture.completedFuture(getServerBankManager().getAllowedItems());
     }
 
     @Override

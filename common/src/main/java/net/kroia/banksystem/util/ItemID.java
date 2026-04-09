@@ -220,7 +220,7 @@ public class ItemID implements ServerSaveable {
 
     @Override
     public String toString() {
-        return getName();
+        return getName()+"="+getShort();
     }
 
     public short getShort() {

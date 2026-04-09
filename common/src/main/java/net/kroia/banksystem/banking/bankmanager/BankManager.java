@@ -1,24 +1,21 @@
 package net.kroia.banksystem.banking.bankmanager;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
-import net.kroia.banksystem.api.bankmanager.IBankManager;
-import net.kroia.banksystem.api.bankmanager.IClientBankManager;
-import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
-import net.kroia.banksystem.banking.bankaccount.SyncServerBankAccount;
+import net.kroia.banksystem.api.bankmanager.*;
+import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 
 public class BankManager implements IBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
-        SyncServerBankAccount.setBackend(backend);
+        ServerBankAccount.setBackend(backend);
         SyncBankManager.setBackend(BACKEND_INSTANCES);
         AsyncBankManager.setBackend(BACKEND_INSTANCES);
     }
 
 
     private final IAsyncBankManager asyncServerBankManager;
-    private final ISyncServerBankManager syncServerBankManager;
+    private final IServerBankManager serverBankManager;
 
 
     public static BankManager createMaster()
@@ -37,16 +34,16 @@ public class BankManager implements IBankManager {
     }
 
 
-    private BankManager(IAsyncBankManager asyncManager, ISyncServerBankManager syncManager)
+    private BankManager(IAsyncBankManager asyncBankManager, IServerBankManager syncManager)
     {
-        asyncServerBankManager = asyncManager;
-        syncServerBankManager = syncManager;
+        asyncServerBankManager = asyncBankManager;
+        serverBankManager = syncManager;
     }
 
     @Override
     public boolean hasSyncAccess()
     {
-        return syncServerBankManager != null;
+        return serverBankManager != null;
     }
     @Override
     public boolean hasAsyncAccess()
@@ -59,8 +56,8 @@ public class BankManager implements IBankManager {
         return asyncServerBankManager;
     }
     @Override
-    public ISyncServerBankManager getSync()
+    public IServerBankManager getSync()
     {
-        return syncServerBankManager;
+        return serverBankManager;
     }
 }

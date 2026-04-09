@@ -3,11 +3,11 @@ package net.kroia.banksystem.api.bankmanager;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
-import net.kroia.banksystem.networking.request.BankSelectionScreenDataRequest;
 import net.kroia.banksystem.networking.request.BankTerminalBlockDataRequest;
 import net.kroia.banksystem.networking.request.UpdateBankAccountRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.core.BlockPos;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -17,11 +17,25 @@ import java.util.concurrent.CompletableFuture;
 //@Environment(EnvType.CLIENT)
 public interface IClientBankManager {
 
+
+    //IAsyncBankManager getAsync();
+
+    CompletableFuture<BankManagerData> getBankManagerDataAsync();
+    CompletableFuture<@Nullable BankAccountData> getBankAccountDataAsync(int accountNumber);
+    CompletableFuture<@Nullable BankAccountData> getPersonalBankAccountDataAsync(UUID userUUID);
+    CompletableFuture<ItemInfoData> getItemInfoDataAsync(@NotNull ItemID itemID);
+    CompletableFuture<Boolean> allowItemIDAsync(ItemID itemID);
+    CompletableFuture<Boolean> disallowItemIDAsync(ItemID itemID);
+    CompletableFuture<List<BankAccountData>> getBankAccountsDataAsync(UUID userUUID);
+    CompletableFuture<Boolean> deleteBankAccountAsync(int accountNumber);
+
+
+
     /**
      * Requests minimal bank data for a specific player and item.
      * Returns the data through a callback.
      * <p>
-     * SyncServerBank data for another player will only be returned if the player is allowed to view it. (Admin)
+     * ServerBank data for another player will only be returned if the player is allowed to view it. (Admin)
      *
      * @warning
      * The resulting BankData may be null if the player is not allowed to view the bank data of the specified player.
@@ -41,9 +55,9 @@ public interface IClientBankManager {
      *
      * @param accountNumber The account number of the bank account.
      */
-    CompletableFuture<@Nullable BankAccountData> requestBankAccountData(int accountNumber);
+    //CompletableFuture<@Nullable BankAccountData> requestBankAccountData(int accountNumber);
 
-    CompletableFuture<@Nullable BankAccountData> requestPersonalBankAccountData(UUID playerUUID);
+    //CompletableFuture<@Nullable BankAccountData> requestPersonalBankAccountData(UUID playerUUID);
 
     /**
      * Requests minimal bank manager data.
@@ -53,7 +67,7 @@ public interface IClientBankManager {
      * The resulting MinimalBankManagerData may be null if the player is not allowed to view the bank data of the specified player.
      *
      */
-    CompletableFuture<@Nullable BankManagerData> requestBankManagerData();
+    //CompletableFuture<@Nullable BankManagerData> requestBankManagerData();
 
     /**
      * Requests item information data for a specific item.
@@ -64,7 +78,7 @@ public interface IClientBankManager {
      *
      * @param itemID   The ID of the item.
      */
-    CompletableFuture<@Nullable ItemInfoData> requestItemInfoData(ItemID itemID);
+    //CompletableFuture<@Nullable ItemInfoData> requestItemInfoData(ItemID itemID);
 
     /**
      * Requests to the server to allow an item to be used in the bank system.
@@ -72,7 +86,7 @@ public interface IClientBankManager {
      *
      * @param itemID   The ID of the item to allow.
      */
-    CompletableFuture<Boolean> requestAllowItem(ItemID itemID);
+    //CompletableFuture<Boolean> requestAllowItem(ItemID itemID);
 
     /**
      * Requests to the server to forbid an item to be used in the bank system.
@@ -80,7 +94,7 @@ public interface IClientBankManager {
      *
      * @param itemID   The ID of the item to disallow.
      */
-    CompletableFuture<Boolean> requestDisallowItem(ItemID itemID);
+    //CompletableFuture<Boolean> requestDisallowItem(ItemID itemID);
 
 
     /**
@@ -120,15 +134,15 @@ public interface IClientBankManager {
 
 
 
-    CompletableFuture<List<Integer>> requestBankAccountNumbers(UUID playerUUID);
-    CompletableFuture<List<Integer>> requestBankAccountNumbers(List<UUID> playerUUIDs);
+    //CompletableFuture<List<Integer>> requestBankAccountNumbers(UUID playerUUID);
+    //CompletableFuture<List<Integer>> requestBankAccountNumbers(List<UUID> playerUUIDs);
 
 
     CompletableFuture<BankAccountData> requestUpdateBankAccount(UpdateBankAccountRequest.InputData inputData);
 
 
     CompletableFuture<BankTerminalBlockDataRequest.Output> requestBankTerminalData(BlockPos pos);
-    CompletableFuture<BankSelectionScreenDataRequest.Output> requestBankAccounts(UUID playerUUID);
-    CompletableFuture<Boolean> requestDeleteBankAccount(int accountNumber);
+    //CompletableFuture<BankSelectionScreenDataRequest.Output> requestBankAccounts(UUID playerUUID);
+    //CompletableFuture<Boolean> requestDeleteBankAccount(int accountNumber);
     CompletableFuture<List<ItemID>> requestAllowdItems();
 }
