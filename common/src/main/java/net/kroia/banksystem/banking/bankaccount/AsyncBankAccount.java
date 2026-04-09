@@ -222,10 +222,21 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         @Override
         public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
             String playerInfo = "";
-            if(playerSender != null)
-                playerInfo = " from player: " + playerSender.toString();
+            String playerName = "";
+            if(playerSender != null) {
+                playerName = tryGetPlayerName(playerSender);
+                playerInfo = " from player: " + playerName;
+            }
             info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             BankIdentifyAndDataPacket inputData = input.decodeParams();
+            if(playerSender != null)
+            {
+                if(!isAllowedToCallByClient(input))
+                {
+                    warn("The player '"+playerName+"' try's to call the function: '"+input.function.toString()+"' which is not allowed from the client side!");
+                    return CompletableFuture.completedFuture(OutputData.of(input.function));
+                }
+            }
             int accountNr = inputData.accountNr;
             IServerBankManager serverBankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
             if(serverBankManager == null) {
@@ -308,6 +319,34 @@ public class AsyncBankAccount implements IAsyncBankAccount {
                 case FunctionType.ToJsonStringAsync	-> 		            OutputData.of(input.function, bankAccount.toJsonString());
 
             });
+        }
+        @Override
+        protected boolean isAllowedToCallByClient(InputData input)
+        {
+            return switch (input.function) {
+                case FunctionType.GetAccountDataAsync_1,
+                     FunctionType.GetAccountDataAsync_2,
+                     FunctionType.GetBankDataAsync_1,
+                     FunctionType.GetBankDataAsync_2,
+                     FunctionType.GetUserDataAsync_1,
+                     FunctionType.GetUserDataAsync_2,
+                     FunctionType.GetPersonalBankOwnerDataAsync,
+                     FunctionType.SetAccountNameAsync,
+                     FunctionType.GetAccountNameAsync,
+                     FunctionType.SetAccountIconAsync,
+                     FunctionType.GetAccountIconAsync,
+                     FunctionType.GetPermissionAsync,
+                     FunctionType.HasPermissionAsync,
+                     FunctionType.HasAnyUserAsync,
+                     FunctionType.HasUserAsync,
+                     FunctionType.GetPersonalBankOwnerAsync,
+                     FunctionType.HasAnyBankAsync,
+                     FunctionType.HasBankAsync,
+                     FunctionType.ToJsonAsync,
+                     FunctionType.ToJsonStringAsync -> true;
+
+                default -> false;
+            };
         }
     }
 

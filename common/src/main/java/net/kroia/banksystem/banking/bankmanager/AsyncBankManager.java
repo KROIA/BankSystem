@@ -275,9 +275,20 @@ public class AsyncBankManager implements IAsyncBankManager {
         @Override
         public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
             String playerInfo = "";
-            if(playerSender != null)
-                playerInfo = " from player: " + playerSender.toString();
+            String playerName = "";
+            if(playerSender != null) {
+                playerName = tryGetPlayerName(playerSender);
+                playerInfo = " from player: " + playerName;
+            }
             info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
+            if(playerSender != null)
+            {
+                if(!isAllowedToCallByClient(input))
+                {
+                    warn("The player '"+playerName+"' try's to call the function: '"+input.function.toString()+"' which is not allowed from the client side!");
+                    return CompletableFuture.completedFuture(OutputData.of(input.function));
+                }
+            }
             IServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
             if(bankManager == null) {
                 if(BACKEND_INSTANCES.isSlaveServer)
@@ -379,6 +390,52 @@ public class AsyncBankManager implements IAsyncBankManager {
                 }
 
             });
+        }
+
+
+        @Override
+        protected boolean isAllowedToCallByClient(InputData input)
+        {
+            return switch (input.function) {
+                case FunctionType.GetBankManagerDataAsync,
+                     FunctionType.GetBankManagerUserMapDataAsync,
+                     FunctionType.GetBankManagerBankAccountsDataAsync,
+                     FunctionType.IsBanksystemAdminAsync,
+                     FunctionType.GetAllowedItemsAsync,
+                     FunctionType.GetBlacklistedItemsAsync,
+                     FunctionType.GetNotRemovableItemsAsync,
+                     FunctionType.GetItemInfoDataAsync,
+                     FunctionType.UserExistsAsync,
+                     FunctionType.GetUserByUUIDAsync,
+                     FunctionType.GetUserByNameAsync,
+                     FunctionType.BankAccountExistsAsync,
+                     FunctionType.BankAccountHasBankAsync,
+                     FunctionType.GetBankAccountDataAsync,
+                     FunctionType.GetPersonalBankAccountNrAsync_1,
+                     FunctionType.GetPersonalBankAccountNrAsync_2,
+                     FunctionType.GetBankAccountNumbersAsync_1,
+                     FunctionType.GetBankAccountNumbersAsync_2,
+                     FunctionType.GetBankAccountsDataAsync_1,
+                     FunctionType.GetBankAccountsDataAsync_2,
+                     FunctionType.GetPersonalBankAccountDataAsync_1,
+                     FunctionType.GetPersonalBankAccountDataAsync_2,
+                     FunctionType.UserHasPersonalBankAccountAsync,
+                     FunctionType.PersonalBankExistsAsync_1,
+                     FunctionType.PersonalBankExistsAsync_2,
+                     FunctionType.IsItemIDAllowedAsync,
+                     FunctionType.IsItemIDNotRemovableAsync,
+                     FunctionType.IsItemIDBlacklistedAsync,
+                     FunctionType.GetRealMoneyCirculationAsync,
+                     FunctionType.GetRealLockedMoneyCirculationAsync,
+                     FunctionType.GetRealItemCirculationAsync,
+                     FunctionType.GetRealLockedItemCirculationAsync,
+                     FunctionType.GetCirculationDataJsonAsync,
+                     FunctionType.GetCirculationDataJsonStringAsync,
+                     FunctionType.ToJsonAsync,
+                     FunctionType.ToJsonStringAsync -> true;
+
+                default -> false;
+            };
         }
     }
 
