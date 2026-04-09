@@ -279,6 +279,16 @@ public class AsyncBankManager implements IAsyncBankManager {
                 playerInfo = " from player: " + playerSender.toString();
             info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             IServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+            if(bankManager == null) {
+                if(BACKEND_INSTANCES.isSlaveServer)
+                {
+                    throw new RuntimeException("[AsyncBankManager]: This server is configured to be a slave server but the slave seems not to be connected to its master.\n" +
+                            "This server instance has no IServerBankManager!");
+                }
+                throw new RuntimeException("Server bank manager not found");
+            }
+
+
             return CompletableFuture.completedFuture(switch (input.function) {
                 case FunctionType.GetBankManagerDataAsync -> OutputData.of(input.function, bankManager.getBankManagerData());
                 case FunctionType.GetBankManagerUserMapDataAsync -> OutputData.of(input.function, bankManager.getBankManagerUserMapData());

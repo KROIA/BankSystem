@@ -23,7 +23,8 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
     {
         BANK_SYSTEM_SETTING,
         BANK_ACCOUNT,
-        ATM_SCREEN, // ATM screen is not implemented yet
+        ATM_SCREEN,
+        TEST_SCREEN,
     }
 
     public static final Type<SyncOpenGUIPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "sync_open_gui_packet"));
@@ -89,6 +90,12 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         packet.guiType = GUIType.ATM_SCREEN;
         packet.sendToClient(player);
     }
+    public static void send_openTestScreen(ServerPlayer player)
+    {
+        SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
+        packet.guiType = GUIType.TEST_SCREEN;
+        packet.sendToClient(player);
+    }
 
     @Override
     protected void handleOnClient(NetworkManager.PacketContext context)
@@ -103,6 +110,9 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
                 break;
             case ATM_SCREEN:
                 BankSystemClientHooks.openATMScreen();
+                break;
+            case TEST_SCREEN:
+                BankSystemClientHooks.openTestScreen();
                 break;
         }
     }

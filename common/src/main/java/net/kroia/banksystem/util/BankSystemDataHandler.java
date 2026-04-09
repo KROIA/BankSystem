@@ -22,7 +22,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
-    private final String ITEM_IDS_FOLDER_NAME = "ItemIDs";
+    private final String ITEM_IDS_FILE_NAME = "ItemIDs.nbt";
     private final String BANK_DATA_FOLDER_NAME = "Bank_data";
     private final String META_DATA_FILE_NAME = "Meta_data.nbt";
     private final String BANK_SETTINGS_FILE_NAME = "settings.json";
@@ -83,8 +83,10 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         boolean success = true;
         success &= save_metadata();
         success &= save_globalSettings();
-        success &= save_bank();
-        success &= save_itemIDs();
+        if(!BACKEND_INSTANCES.isSlaveServer) {
+            success &= save_bank();
+            success &= save_itemIDs();
+        }
 
 
         if(success) {
@@ -101,50 +103,50 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         debug("Loading BankSystem Mod data...");
         boolean success = true;
         success &= load_metadata();
-        boolean loadInCompatibilityMode = !success;
-        success &= load_itemIDs();
+        if(!BACKEND_INSTANCES.isSlaveServer) {
+            boolean loadInCompatibilityMode = !success;
+            success &= load_itemIDs();
 
-        // check if file exists
-        loadInCompatibilityMode |= fileExists(getAbsoluteSavePath("Bank_data.dat"));
+            // check if file exists
+            loadInCompatibilityMode |= fileExists(getAbsoluteSavePath("Bank_data.dat"));
 
 
-        if(loadInCompatibilityMode)
-        {
-            success = true;
-            // load in compatibility mode
-            info("Loading BankSystem Mod data in compatibility mode. This is only needed if you updated the mod to a newer version and the old data is not compatible with the new version.");
-            success &= load_bank_compatibilityMode();
+            if (loadInCompatibilityMode) {
+                success = true;
+                // load in compatibility mode
+                info("Loading BankSystem Mod data in compatibility mode. This is only needed if you updated the mod to a newer version and the old data is not compatible with the new version.");
 
-            // delete old settings file
-            Path oldSettingsFilePath = getAbsoluteSavePath("settings.dat");
-            if(fileExists(oldSettingsFilePath)) {
-                try {
-                    Files.delete(oldSettingsFilePath);
-                    info("Deleted old settings file: " + oldSettingsFilePath);
-                } catch (IOException e) {
-                    error("Failed to delete old settings file: " + oldSettingsFilePath, e);
+                success &= load_bank_compatibilityMode();
+
+                // delete old settings file
+                Path oldSettingsFilePath = getAbsoluteSavePath("settings.dat");
+                if (fileExists(oldSettingsFilePath)) {
+                    try {
+                        Files.delete(oldSettingsFilePath);
+                        info("Deleted old settings file: " + oldSettingsFilePath);
+                    } catch (IOException e) {
+                        error("Failed to delete old settings file: " + oldSettingsFilePath, e);
+                    }
                 }
-            }
-            Path potentialBankableItemsFile = getAbsoluteSavePath("PotentialBankableItems.json");
-            if(fileExists(potentialBankableItemsFile)) {
-                try {
-                    Files.delete(potentialBankableItemsFile);
-                    info("Deleted old potential bankable items file: " + potentialBankableItemsFile);
-                } catch (IOException e) {
-                    error("Failed to delete old potential bankable items file: " + potentialBankableItemsFile, e);
+                Path potentialBankableItemsFile = getAbsoluteSavePath("PotentialBankableItems.json");
+                if (fileExists(potentialBankableItemsFile)) {
+                    try {
+                        Files.delete(potentialBankableItemsFile);
+                        info("Deleted old potential bankable items file: " + potentialBankableItemsFile);
+                    } catch (IOException e) {
+                        error("Failed to delete old potential bankable items file: " + potentialBankableItemsFile, e);
+                    }
                 }
-            }
 
-            success &= save_globalSettings(getGlobalSettingsFilePath());
+                success &= save_globalSettings(getGlobalSettingsFilePath());
 
-            if(success) {
-                debug("BankSystem Mod data loaded successfully.");
+                if (success) {
+                    debug("BankSystem Mod data loaded successfully.");
+                } else
+                    error("Failed to load BankSystem Mod data.");
+                return success;
             }
-            else
-                error("Failed to load BankSystem Mod data.");
-            return success;
         }
-
         Path settingsFilePath = getGlobalSettingsFilePath();
         if(!fileExists(settingsFilePath)) {
             warn("ServerBank settings file not found, creating default settings file.");
@@ -152,7 +154,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         }
         else
             success &= load_globalSettings(settingsFilePath);
-        success &= load_bank();
+
+        if(!BACKEND_INSTANCES.isSlaveServer)
+            success &= load_bank();
 
 
 
@@ -168,11 +172,11 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public boolean save_itemIDs()
     {
         boolean success = true;
-        Map<String, ListTag> idData = new HashMap<>();
-        success = BACKEND_INSTANCES.ITEM_ID_MANAGER.save(idData);
-        if(!idData.isEmpty()) {
-            saveDataCompoundListMap(getAbsoluteSavePath(ITEM_IDS_FOLDER_NAME), idData);
-        }
+        CompoundTag tag  = new CompoundTag();
+        success = BACKEND_INSTANCES.ITEM_ID_MANAGER.save(tag);
+
+        saveDataCompound(getAbsoluteSavePath(ITEM_IDS_FILE_NAME), tag);
+
         if(success)
         {
            // BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_SAVED_TO_FILE.notifyListeners();
@@ -181,8 +185,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     }
     public boolean load_itemIDs()
     {
-        Map<String, ListTag> idData = readDataCompoundListMap(getAbsoluteSavePath(ITEM_IDS_FOLDER_NAME));
-        return idData != null && BACKEND_INSTANCES.ITEM_ID_MANAGER.load(idData);
+        CompoundTag tag = readDataCompound(getAbsoluteSavePath(ITEM_IDS_FILE_NAME));
+        return tag != null && BACKEND_INSTANCES.ITEM_ID_MANAGER.load(tag);
     }
 
     @Override

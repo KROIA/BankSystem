@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBankAccountRequest.InputData, BankAccountData> {
+public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBankAccountRequest.InputData, @Nullable BankAccountData> {
 
     public record InputData(int accountNumber,
                             String accountName,
@@ -99,8 +99,8 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         return handleOnMasterServer(input, "", sender.getUUID());
     }
     @Override
-    public CompletableFuture<BankAccountData> handleOnMasterServer(InputData input, String slaveID, UUID sender) {
-        CompletableFuture<BankAccountData>  future = new CompletableFuture<>();
+    public CompletableFuture<@Nullable BankAccountData> handleOnMasterServer(InputData input, String slaveID, UUID sender) {
+        CompletableFuture<@Nullable BankAccountData>  future = new CompletableFuture<>();
         ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         // Check if the player is a admin
         boolean isAdmin = playerIsAdmin(sender);
@@ -140,35 +140,35 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 }
             }
         }
-        if(canManage) {
-            if (input.setUsers != null) {
-                Map<User, Integer> userList = new HashMap<>(input.setUsers.size());
-                for (Map.Entry<UUID, Integer> entry : input.setUsers.entrySet()) {
-                    UUID userUUID = entry.getKey();
-                    int permissions = entry.getValue();
-                    User userToSet = bankManager.getUserByUUID(userUUID);
-                    if (userToSet != null) {
-                        userList.put(userToSet, permissions);
-                    }
+
+        if (input.setUsers != null) {
+            Map<User, Integer> userList = new HashMap<>(input.setUsers.size());
+            for (Map.Entry<UUID, Integer> entry : input.setUsers.entrySet()) {
+                UUID userUUID = entry.getKey();
+                int permissions = entry.getValue();
+                User userToSet = bankManager.getUserByUUID(userUUID);
+                if (userToSet != null) {
+                    userList.put(userToSet, permissions);
                 }
-                account.setUsers(userList);
             }
-            if(input.accountIcon == null)
-            {
-                account.setAccountIcon(null);
-            }
-            else {
-                ItemID iconID = ItemID.getOrRegisterFromItemStackServerSide_direct(input.accountIcon);
-                account.setAccountIcon(iconID);
-            }
-            if(!account.hasAnyUser())
-            {
-                // If the account has no users, we remove it
-                bankManager.deleteBankAccount(input.accountNumber);
-                future.complete(null);
-                return future; // The account was deleted
-            }
+            account.setUsers(userList);
         }
+        if(input.accountIcon == null)
+        {
+            account.setAccountIcon(null);
+        }
+        else {
+            ItemID iconID = ItemID.getOrRegisterFromItemStackServerSide_direct(input.accountIcon);
+            account.setAccountIcon(iconID);
+        }
+        if(!account.hasAnyUser())
+        {
+            // If the account has no users, we remove it
+            bankManager.deleteBankAccount(input.accountNumber);
+            future.complete(null);
+            return future; // The account was deleted
+        }
+
         future.complete(account.getAccountData());
         return future;
     }

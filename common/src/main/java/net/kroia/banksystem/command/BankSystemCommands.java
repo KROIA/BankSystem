@@ -775,6 +775,16 @@ public class BankSystemCommands {
                                 })
 
                         )
+                        .then(Commands.literal("testScreen")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    SyncOpenGUIPacket.send_openTestScreen(player);
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
                         .then(Commands.literal("setStartingBalance")
                                 .requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("amount", FloatArgumentType.floatArg(0))
@@ -855,10 +865,13 @@ public class BankSystemCommands {
                                             return;
                                         }
 
-                                        if (BACKEND_INSTANCES.SERVER_DATA_HANDLER.save_bank())
-                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
-                                        else
-                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
+                                        if(!BACKEND_INSTANCES.isSlaveServer)
+                                        {
+                                            if (BACKEND_INSTANCES.SERVER_DATA_HANDLER.save_bank())
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
+                                            else
+                                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
+                                        }
                                     });
                                     return Command.SINGLE_SUCCESS;
                                 })

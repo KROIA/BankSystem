@@ -172,7 +172,7 @@ public class ClientBankManager implements IClientBankManager {
     //}
 
     @Override
-    public CompletableFuture<BankAccountData> requestUpdateBankAccount(UpdateBankAccountRequest.InputData inputData)
+    public CompletableFuture<@Nullable BankAccountData> requestUpdateBankAccount(UpdateBankAccountRequest.InputData inputData)
     {
         return BankSystemNetworking.UPDATE_BANK_ACCOUNT_REQUEST.sendRequestToServer(inputData);
     }

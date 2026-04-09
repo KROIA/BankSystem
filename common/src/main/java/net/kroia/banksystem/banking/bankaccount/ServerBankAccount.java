@@ -34,6 +34,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     public static void setBackend(BankSystemModBackend.Instances backend) {
         ServerBankAccount.BACKEND_INSTANCES = backend;
         User.setBackend(backend);
+        ServerBank.setBackend(backend);
     }
 
     public record BankAccountSQL_Data(int bankAccountNr, String accountName, @Nullable ItemID accountIcon, @Nullable UUID personalBankOwner)

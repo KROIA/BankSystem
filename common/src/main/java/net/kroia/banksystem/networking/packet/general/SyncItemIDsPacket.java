@@ -99,8 +99,8 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
     @Override
     protected void handleOnSlave(ForwardPacketContext context)
     {
-        info("handleOnSlave\n"+this);
         ItemIDManager.receiveSyncPacket(this);
+        info("handleOnSlave\n"+this);
     }
 
     @Override

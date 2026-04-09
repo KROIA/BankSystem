@@ -27,6 +27,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
@@ -84,6 +85,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
 
     private Button selectAccountButton;
+    private boolean accountIconChangedFlag = false;
     private ItemViewButton accountIconButton;
     private Label accountNameLabel;
     private TextBox accountNameTextBox;
@@ -123,15 +125,17 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private void setupGui(int accountNumber)
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankAccountDataAsync(accountNumber).thenAccept((bankAccountData) -> {
-            assert bankAccountData != null;
-            setupGui(bankAccountData);
-        });
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankAccountDataAsync(accountNumber).thenAccept(this::setupGui);
     }
-    private void setupGui(BankAccountData bankAccountData)
+    private void setupGui(@Nullable BankAccountData bankAccountData)
     {
+        if(bankAccountData == null)
+        {
+            return;
+        }
+
         boolean isEditingPlayer = false;
-        UUID thisPlayerUUID = minecraft.player.getUUID();
+        UUID thisPlayerUUID = getThisPlayerUUID();
         for(BankUserData userData : bankAccountData.users.values())
         {
             if(userData.userUUID.equals(thisPlayerUUID))
@@ -186,7 +190,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
         selectAccountButton = new Button(BankAccountSelectionScreen.TEXT.SELECT_ACCOUNT_BUTTON.getString());
         selectAccountButton.setOnFallingEdge(() -> {
-            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, Minecraft.getInstance().player.getUUID(), (accountNumber) -> {
+            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, getThisPlayerUUID(), (accountNumber) -> {
                 if(!screenIsOpen)
                     return;
                 this.accountNumber = accountNumber;
@@ -378,6 +382,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         }
 
         UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.itemView.getItemStack(), bankData, setUsers);
+        accountIconChangedFlag = false;
         BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input).thenAccept(this::setupGui);
     }
     private void updateBankData(BankAccountData bankAccountData)
@@ -400,6 +405,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         {
             accountNameLabel.setText(bankAccountData.accountName);
         }
+
+        if(!accountIconChangedFlag)
+            accountIconButton.setItem(bankAccountData.accountIcon);
 
 
         Map<ItemID, BankData> bankMap = bankAccountData.bankData;
@@ -481,7 +489,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             return;
         }
 
-        this.canManage = isAdminMode || bankAccountData.hasPermission(minecraft.player.getUUID(),BankPermission.MANAGE.getValue());
+        this.canManage = isAdminMode || bankAccountData.hasPermission(getThisPlayerUUID(),BankPermission.MANAGE.getValue());
         this.personalBankOwnerData = bankAccountData.personalBankOwnerData;
         this.bankAccountName = bankAccountData.accountName;
         Map<UUID, BankUserWidget> toRemoveUsers = new HashMap<>(bankUserWidgets);
@@ -572,6 +580,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         {
             CreativeModeItemSelectionScreen creativeModeItemSelectionScreen = new CreativeModeItemSelectionScreen((itemStack) ->
             {
+                accountIconChangedFlag = true;
                 accountIconButton.setItem(itemStack);
                 minecraft.setScreen(this);
             }, () ->
@@ -587,6 +596,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     this,
                     allItems,
                     (itemStack)->{
+                        accountIconChangedFlag = true;
                         accountIconButton.setItem(itemStack);
                         minecraft.setScreen(this);
                     }

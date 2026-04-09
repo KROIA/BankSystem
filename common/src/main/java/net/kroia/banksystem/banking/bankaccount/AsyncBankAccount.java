@@ -5,6 +5,7 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
@@ -226,7 +227,16 @@ public class AsyncBankAccount implements IAsyncBankAccount {
             info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             BankIdentifyAndDataPacket inputData = input.decodeParams();
             int accountNr = inputData.accountNr;
-            ISyncServerBankAccount bankAccount = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(accountNr);
+            IServerBankManager serverBankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+            if(serverBankManager == null) {
+                if(BACKEND_INSTANCES.isSlaveServer)
+                {
+                    throw new RuntimeException("[AsyncBankAccount]: This server is configured to be a slave server but the slave seems not to be connected to its master.\n" +
+                            "This server instance has no IServerBankManager!");
+                }
+                throw new RuntimeException("Server bank manager not found");
+            }
+            ISyncServerBankAccount bankAccount = serverBankManager.getBankAccount(accountNr);
             if(bankAccount == null)
                 return CompletableFuture.completedFuture(OutputData.of(input.function));
 

@@ -10,7 +10,6 @@ import net.kroia.banksystem.api.IBankSystemEvents;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.banking.bank.AsyncBank;
-import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.bankmanager.ClientBankManager;
@@ -47,6 +46,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     {
         public boolean isSlaveServer = false;
         public BankSystemModSettings SERVER_SETTINGS;
+        //public BankSystemConfig CONFIG;
         public BankSystemDataHandler SERVER_DATA_HANDLER;
         public BankManager SERVER_BANK_MANAGER;
         public IClientBankManager CLIENT_BANK_MANAGER;
@@ -74,9 +74,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankTerminalBlockEntity.setBackend(INSTANCES);
 
         BankManager.setBackend(INSTANCES);
-        //ClientBank.setBackend(INSTANCES);
         AsyncBank.setBackend(INSTANCES);
         BankSystemModSettings.setBackend(INSTANCES);
+        //BankSystemConfig.setBackend(INSTANCES);
         BankSystemCommands.setBackend(INSTANCES);
         BankDownloadBlockEntity.setBackend(INSTANCES);
         BankUploadBlockEntity.setBackend(INSTANCES);
@@ -86,7 +86,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemNetworkPacket.setBackend(INSTANCES);
         BankSystemGenericRequest.setBackend(INSTANCES);
         BankSystemTextMessages.setBackend(INSTANCES);
-        ServerBank.setBackend(INSTANCES);
+
         AsyncBankAccount.setBackend(INSTANCES);
 
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -133,48 +133,33 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     // Called from the server side
     public static void onServerStart(MinecraftServer server) {
-        ServerServerConfig config = ServerServerConfig.get();
-        if(config.enable)
-        {
-            if(config.isMaster)
-            {
-                INSTANCES.isSlaveServer = false;
-                ServerServerManager.createMaster(server, config.sharedSecret, config.masterTcpPort,
-                        BankSystemModBackend::onMasterServerStartupComplete,
-                        BankSystemModBackend::onMasterServerStartupFailure,
-                        BankSystemModBackend::onMasterServerSlaveConnected,
-                        BankSystemModBackend::onMasterServerSlaveDisconnected);
-                ServerServerManager.start();
-            }
-            else
-            {
-                INSTANCES.isSlaveServer = true;
-                ServerServerManager.createSlave(server, config.sharedSecret, config.slaveID, config.masterHost, config.masterTcpPort,
-                        BankSystemModBackend::onSlaveConnectionAccepted,
-                        BankSystemModBackend::onSlaveConnectionFailed,
-                        BankSystemModBackend::onSlaveConnectionLost,
-                        BankSystemModBackend::onSlaveDisconnected);
-                ServerServerManager.start();
-            }
-        }
+
         NEZNAMY_TAB_Placeholders.setBackend(INSTANCES);
         OldBankDataLoader.setBackend(INSTANCES);
+
 
         INSTANCES.SERVER_SETTINGS = new BankSystemModSettings();
         INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
 
+        //Path configPath = server.getWorldPath(LevelResource.ROOT).resolve("Finance/BankSystem/BankSystemConfig.json");
+        //INSTANCES.CONFIG = BankSystemConfig.create(configPath);
+        INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
+
+        ItemIDManager.clear();
+        ServerServerConfig config = ServerServerConfig.get();
+        if(config.enable)
+        {
+            setupServerServerInfrastructure(config, server);
+        }
         if(INSTANCES.isSlaveServer)
         {
             INSTANCES.SERVER_BANK_MANAGER = BankManager.createSlave();
         }
         else
         {
-            INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
+            INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs(server);
             INSTANCES.SERVER_BANK_MANAGER = BankManager.createMaster();
-
-            loadDataFromFiles(server);
             TickEvent.SERVER_POST.register(BankSystemModBackend::onServerTick);
-
 
             // Save the data when the game saves the world
             LifecycleEvent.SERVER_LEVEL_SAVE.register((ServerLevel level) -> {
@@ -183,7 +168,7 @@ public class BankSystemModBackend implements BankSystemAPI {
                 }
             });
         }
-
+        loadDataFromFiles(server);
     }
 
     // Called from the server side
@@ -196,7 +181,9 @@ public class BankSystemModBackend implements BankSystemAPI {
             BankSystemDataHandler.resetBankDataLoaded();
             BankSystemDataHandler.resetGlobalDataLoaded();
         }
-
+        //BankSystemConfig.Settings settings = INSTANCES.CONFIG.getSettings();
+        //settings.bank.items.add(MoneyItem.getItemID());
+        //INSTANCES.CONFIG.save();
         INSTANCES.SERVER_EVENTS.removeListeners();
     }
 
@@ -223,7 +210,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the client side
     private static void onPlayerLeaveClientSide(@Nullable LocalPlayer localPlayer)
     {
-        ItemIDManager.clear();
+
     }
     // Called from the client side
     private static void onPlayerJoinClientSide(@Nullable LocalPlayer localPlayer)
@@ -304,6 +291,30 @@ public class BankSystemModBackend implements BankSystemAPI {
 
 
 
+
+    private static void setupServerServerInfrastructure(ServerServerConfig config, MinecraftServer server)
+    {
+        if(config.isMaster)
+        {
+            INSTANCES.isSlaveServer = false;
+            ServerServerManager.createMaster(server, config.sharedSecret, config.masterTcpPort,
+                    BankSystemModBackend::onMasterServerStartupComplete,
+                    BankSystemModBackend::onMasterServerStartupFailure,
+                    BankSystemModBackend::onMasterServerSlaveConnected,
+                    BankSystemModBackend::onMasterServerSlaveDisconnected);
+            ServerServerManager.start();
+        }
+        else
+        {
+            INSTANCES.isSlaveServer = true;
+            ServerServerManager.createSlave(server, config.sharedSecret, config.slaveID, config.masterHost, config.masterTcpPort,
+                    BankSystemModBackend::onSlaveConnectionAccepted,
+                    BankSystemModBackend::onSlaveConnectionFailed,
+                    BankSystemModBackend::onSlaveConnectionLost,
+                    BankSystemModBackend::onSlaveDisconnected);
+            ServerServerManager.start();
+        }
+    }
     private static void onSlaveConnectionAccepted()
     {
 

@@ -138,7 +138,7 @@ public interface IClientBankManager {
     //CompletableFuture<List<Integer>> requestBankAccountNumbers(List<UUID> playerUUIDs);
 
 
-    CompletableFuture<BankAccountData> requestUpdateBankAccount(UpdateBankAccountRequest.InputData inputData);
+    CompletableFuture<@Nullable BankAccountData> requestUpdateBankAccount(UpdateBankAccountRequest.InputData inputData);
 
 
     CompletableFuture<BankTerminalBlockDataRequest.Output> requestBankTerminalData(BlockPos pos);

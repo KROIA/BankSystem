@@ -60,7 +60,7 @@ public class ItemID implements ServerSaveable {
     public void tryUpdateNameCache()
     {
         ItemStack stack = getStack();
-        if(stack == null) {
+        if(stack == null || stack.isEmpty() || stack.getItem() == Items.AIR) {
             name_cache = String.valueOf(id);
             return;
         }

@@ -1,16 +1,19 @@
 package net.kroia.banksystem.util;
 
 import com.ibm.icu.impl.Pair;
+import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.networking.packet.general.RegisterItemIDPacket;
 import net.kroia.banksystem.networking.packet.general.SyncItemIDsPacket;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.server_server.ServerServerManager;
-import net.kroia.modutilities.persistence.ServerSaveableChunked;
+import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -20,7 +23,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class ItemIDManager implements ServerSaveableChunked {
+public class ItemIDManager implements ServerSaveable {
 
     private static final ConcurrentHashMap<ItemID, ItemStack> itemIDMap = new ConcurrentHashMap<>();
 
@@ -173,7 +176,8 @@ public class ItemIDManager implements ServerSaveableChunked {
             newItemIDMap.put(id, cpy);
             itemIDMap.put(id, cpy);
         }
-        onNewItemAdded(newItemIDMap);
+        if(!newItemIDMap.isEmpty())
+            onNewItemAdded(newItemIDMap);
         return ids;
     }
 
@@ -213,6 +217,7 @@ public class ItemIDManager implements ServerSaveableChunked {
 
 
 
+
     private static void onNewItemAdded(Map<ItemID, ItemStack> newItems)
     {
         // Broadcast update to players
@@ -237,10 +242,10 @@ public class ItemIDManager implements ServerSaveableChunked {
             // Search the entire list to check if the same item stack already is registered
             ItemStack itemStack = entry.getValue();
 
-            ItemID id = getItemID(itemStack);
-            if(id != null)
-                continue;
-            id = entry.getKey();
+            //ItemID id = getItemID(itemStack);
+            //if(id != null)
+            //    continue;
+            ItemID id = entry.getKey();
             ItemStack cpy = itemStack.copy();
             cpy.setCount(1);
             String name = ItemUtilities.getItemIDStr(cpy.getItem());
@@ -253,7 +258,9 @@ public class ItemIDManager implements ServerSaveableChunked {
                 pendingItemIDs.remove(itemStack);
             }
 
+
             itemIDMap.put(id, cpy);
+            id.tryUpdateNameCache();
         }
         List<Pair<List<ItemStack>, CompletableFuture<List<ItemID>>>> cpyList = new ArrayList<>(pendingItemIDGroups);
         for(Pair<List<ItemStack>, CompletableFuture<List<ItemID>>> pair : cpyList)
@@ -284,6 +291,87 @@ public class ItemIDManager implements ServerSaveableChunked {
     }
 
     @Override
+    public boolean save(CompoundTag tag) {
+        ConcurrentHashMap<ItemID, ItemStack> usedMap = itemIDMap;
+        if(usedMap.isEmpty())
+        {
+            if(singlePlayerServerBackupOnPlayerLeave != null)
+                usedMap = singlePlayerServerBackupOnPlayerLeave;
+        }
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if(access == null)
+            return false;
+        ListTag listTag = new ListTag();
+        for(Map.Entry<ItemID, ItemStack> entry : usedMap.entrySet())
+        {
+            ItemStack itemStack = entry.getValue();
+            ItemID itemID = entry.getKey();
+            CompoundTag pairTag = new CompoundTag();
+            CompoundTag idTag = new CompoundTag();
+            itemID.save(idTag);
+            pairTag.put("itemID", idTag);
+            CompoundTag itemStackTag = new CompoundTag();
+            Tag stackTag = itemStack.save(access, itemStackTag);
+            pairTag.put("itemStack", stackTag);
+
+            listTag.add(pairTag);
+        }
+        tag.put("itemIDs", listTag);
+        return true;
+    }
+
+    @Override
+    public boolean load(CompoundTag tag) {
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if(access == null)
+            return false;
+
+        ListTag listTag =  tag.getList("itemIDs", Tag.TAG_COMPOUND);
+        for(Tag tagElement : listTag)
+        {
+            CompoundTag compoundTag = (CompoundTag)tagElement;
+            if(compoundTag==null || !compoundTag.contains("itemID") || !compoundTag.contains("itemStack"))
+                continue;
+
+            CompoundTag itemStackTag = compoundTag.getCompound("itemStack");
+            CompoundTag itemIDTag = compoundTag.getCompound("itemID");
+
+            ItemID id = new ItemID(ItemID.INVALID_ID);
+            if(!id.load(itemIDTag))
+                continue;
+
+            Optional<ItemStack> itemStackOptional = ItemStack.parse(access, itemStackTag);
+            if(itemStackOptional.isEmpty())
+                continue;
+
+            ItemStack itemStack = itemStackOptional.get();
+
+            itemIDMap.put(id, itemStack);
+            id.tryUpdateNameCache();
+        }
+        singlePlayerServerBackupOnPlayerLeave = null;
+        return true;
+    }
+
+
+    public void createDefaultItemIDs(MinecraftServer server)
+    {
+        RegistryAccess access = server.registryAccess();
+        if(access == null)
+            return;
+
+        ArrayList<ItemStack> moneyItems = BankSystemItems.getMoneyItems();
+        for(ItemStack itemStack : moneyItems)
+        {
+            registerItemStackServerSide_direct(itemStack);
+        }
+
+        access.lookupOrThrow(Registries.ITEM).listElements().forEach(listElement -> {
+            registerItemStackServerSide_direct(listElement.value().getDefaultInstance());
+        });
+    }
+
+    /*@Override
     public boolean save(Map<String, ListTag> listTags) {
         ListTag listTag = new ListTag();
         RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
@@ -350,5 +438,7 @@ public class ItemIDManager implements ServerSaveableChunked {
         }
         singlePlayerServerBackupOnPlayerLeave = null;
         return true;
-    }
+    }*/
+
+
 }
