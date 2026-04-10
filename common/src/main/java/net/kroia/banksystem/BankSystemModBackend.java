@@ -1,7 +1,6 @@
 package net.kroia.banksystem;
 
 import dev.architectury.event.events.client.ClientPlayerEvent;
-import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.api.BankSystemAPI;
@@ -10,6 +9,7 @@ import net.kroia.banksystem.api.IBankSystemEvents;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
+import net.kroia.banksystem.api.command.IBankSystemCommands;
 import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
@@ -51,11 +51,12 @@ public class BankSystemModBackend implements BankSystemAPI {
         public BankSystemModSettings SERVER_SETTINGS;
         //public BankSystemConfig CONFIG;
         public BankSystemDataHandler SERVER_DATA_HANDLER;
-        public BankManager SERVER_BANK_MANAGER;
+        public IBankManager SERVER_BANK_MANAGER;
         public IClientBankManager CLIENT_BANK_MANAGER;
         public BankSystemEvents SERVER_EVENTS;
         public BankSystemNetworking NETWORKING;
         public ItemIDManager ITEM_ID_MANAGER;
+        public IBankSystemCommands COMMAND_HANDLER;
 
         public BankSystemLogger LOGGER;
     }
@@ -70,6 +71,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.SERVER_DATA_HANDLER = null;
         INSTANCES.SERVER_BANK_MANAGER = null;
         INSTANCES.CLIENT_BANK_MANAGER = null;
+        INSTANCES.COMMAND_HANDLER = null;
         INSTANCES.SERVER_EVENTS = null;
         INSTANCES.NETWORKING = null;
         INSTANCES.ITEM_ID_MANAGER = new ItemIDManager();
@@ -89,13 +91,10 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemNetworkPacket.setBackend(INSTANCES);
         BankSystemGenericRequest.setBackend(INSTANCES);
         BankSystemTextMessages.setBackend(INSTANCES);
-
         AsyncBankAccount.setBackend(INSTANCES);
 
-        CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
-            BankSystemCommands.register(dispatcher);
-        });
 
+        BankSystemCommands.registerCommands();
 
 
         BankSystemBlocks.init();
@@ -158,11 +157,13 @@ public class BankSystemModBackend implements BankSystemAPI {
         if(INSTANCES.isSlaveServer)
         {
             INSTANCES.SERVER_BANK_MANAGER = BankManager.createSlave();
+            INSTANCES.COMMAND_HANDLER = BankSystemCommands.createSlave();
         }
         else
         {
 
             INSTANCES.SERVER_BANK_MANAGER = BankManager.createMaster();
+            INSTANCES.COMMAND_HANDLER = BankSystemCommands.createMaster();
             TickEvent.SERVER_POST.register(BankSystemModBackend::onServerTick);
 
             // Save the data when the game saves the world

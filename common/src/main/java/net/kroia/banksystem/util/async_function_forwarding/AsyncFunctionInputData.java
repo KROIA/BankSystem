@@ -58,7 +58,7 @@ public class AsyncFunctionInputData <FuncEnumType extends Enum<FuncEnumType>>{
     // Decode the params back into the correct type using the codec
     @SuppressWarnings("unchecked")
     public <T> T decodeParams() {
-        if (inputParamsCodec == null)
+        if (inputParamsCodec == null || encodedParams.length == 0)
             return null;
         RegistryFriendlyByteBuf paramBuf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(encodedParams), null);
         return (T) inputParamsCodec.decode(paramBuf);

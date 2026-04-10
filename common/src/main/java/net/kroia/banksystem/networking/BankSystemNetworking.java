@@ -4,6 +4,7 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
 import net.kroia.banksystem.banking.bankmanager.AsyncBankManager;
+import net.kroia.banksystem.command.AsyncBankSystemCommandHandler;
 import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
@@ -54,6 +55,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
         AsyncBankManager.setupNetworkPacket();
         AsyncBankAccount.setupNetworkPacket();
         AsyncBank.setupNetworkPacket();
+        AsyncBankSystemCommandHandler.setupNetworkPacket();
 
         this.setupARRS(); // Setup the Asynchronous Request Response System (ARRS)
     }

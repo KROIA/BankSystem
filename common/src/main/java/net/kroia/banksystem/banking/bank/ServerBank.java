@@ -7,8 +7,9 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
-import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -56,7 +57,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         if (itemID == null || balance < 0) {
             return null; // Invalid parameters
         }
-        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        IServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(!bankManager.isItemIDAllowed(itemID)) {
             return null; // Item not allowed in bank
         }
@@ -364,7 +365,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public BankStatus transfer(long amount, int toAccount)
     {
-        ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
+        IServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
         if(account == null)
             return BankStatus.FAILED_NO_BANK;
         ISyncServerBank bank = account.getBank(itemID);
@@ -396,7 +397,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> transferRealAsync(double amount, int toAccount) {
-        ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
+        IServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
         if(account == null)
             return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
         ISyncServerBank bank = account.getBank(itemID);

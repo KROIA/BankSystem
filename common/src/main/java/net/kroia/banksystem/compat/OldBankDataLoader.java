@@ -5,7 +5,7 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
-import net.kroia.banksystem.banking.bankmanager.SyncBankManager;
+import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
@@ -77,8 +77,8 @@ public class OldBankDataLoader {
         }
     }
 
-    private final SyncBankManager manager;
-    public OldBankDataLoader(SyncBankManager serverBankManager)
+    private final ServerBankManager manager;
+    public OldBankDataLoader(ServerBankManager serverBankManager)
     {
         this.manager = serverBankManager;
     }

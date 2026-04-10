@@ -1,26 +1,31 @@
 package net.kroia.banksystem.banking.bankmanager;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.bankmanager.*;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
+import net.kroia.banksystem.api.bankmanager.IBankManager;
+import net.kroia.banksystem.api.bankmanager.IClientBankManager;
+import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 public class BankManager implements IBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
         ServerBankAccount.setBackend(backend);
-        SyncBankManager.setBackend(BACKEND_INSTANCES);
+        ServerBankManager.setBackend(BACKEND_INSTANCES);
         AsyncBankManager.setBackend(BACKEND_INSTANCES);
     }
 
 
-    private final IAsyncBankManager asyncServerBankManager;
-    private final IServerBankManager serverBankManager;
+    private final @NotNull IAsyncBankManager asyncServerBankManager;
+    private final @Nullable IServerBankManager serverBankManager;
 
 
     public static BankManager createMaster()
     {
-        SyncBankManager syncManager = new SyncBankManager();
+        ServerBankManager syncManager = new ServerBankManager();
         return new BankManager(syncManager, syncManager);
     }
     public static BankManager createSlave()
@@ -34,7 +39,7 @@ public class BankManager implements IBankManager {
     }
 
 
-    private BankManager(IAsyncBankManager asyncBankManager, IServerBankManager syncManager)
+    private BankManager(@NotNull IAsyncBankManager asyncBankManager, @Nullable IServerBankManager syncManager)
     {
         asyncServerBankManager = asyncBankManager;
         serverBankManager = syncManager;
@@ -48,7 +53,7 @@ public class BankManager implements IBankManager {
     @Override
     public boolean hasAsyncAccess()
     {
-        return asyncServerBankManager != null;
+        return true;
     }
     @Override
     public IAsyncBankManager getAsync()

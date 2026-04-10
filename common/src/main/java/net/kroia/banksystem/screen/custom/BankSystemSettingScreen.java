@@ -19,6 +19,7 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 public class BankSystemSettingScreen extends BankSystemGuiScreen {
 
@@ -150,18 +151,21 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
 
     private void onNewBankingItemSelected(ItemStack itemStack) {
 
-        setCurrentBankingItemID(itemStack);
-        updateCurrentBankingItemsView();
+        //setCurrentBankingItemID(itemStack);
+        //updateCurrentBankingItemsView();
         //minecraft.setScreen(askItemFractionScaleFactorScreen);
 
+        CompletableFuture<ItemID> idFuture = ItemID.getOrRegisterFromItemStackClientSide(itemStack);
+        idFuture.thenAccept(id -> {
+            getBankManager().allowItemIDAsync(id).thenAccept((result) ->
+            {
+                if(!screenIsOpen || !result)
+                    return; // Do not update if the screen is not open
+                setCurrentBankingItemID(id.getStack());
+                updateCurrentBankingItemsView();
+            });
+        });
 
-        /*getBankManager().requestAllowItem(new ItemID(itemStack), (result) ->
-        {
-            if(!screenIsOpen)
-                return; // Do not update if the screen is not open
-            setCurrentBankingItemID(itemStack);
-            updateCurrentBankingItemsView();
-        });*/
     }
     private void setCurrentBankingItemID(ItemStack itemStack) {
         currentBankingItemID = null;

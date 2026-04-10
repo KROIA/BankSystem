@@ -100,6 +100,9 @@ public class ItemIDManager implements ServerSaveable {
 
     public static CompletableFuture<ItemID> registerItemStackClientSide(@NotNull ItemStack itemStack)
     {
+        ItemID itemID = ItemIDManager.getItemID(itemStack);
+        if(itemID.isValid())
+            return CompletableFuture.completedFuture(itemID);
         ItemStack cpy =  itemStack.copy();
         cpy.setCount(1);
         CompletableFuture<ItemID>  future = new CompletableFuture<>();
@@ -114,7 +117,7 @@ public class ItemIDManager implements ServerSaveable {
         for (ItemStack itemStack : itemStacks)
         {
             ItemID itemID = getItemID(itemStack);
-            if(itemID == null) {
+            if(!itemID.isValid()) {
                 ItemStack cpy = itemStack.copy();
                 cpy.setCount(1);
                 cpyStacks.add(cpy);

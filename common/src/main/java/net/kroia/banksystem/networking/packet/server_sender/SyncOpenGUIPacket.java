@@ -21,7 +21,7 @@ import java.util.UUID;
 public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
     enum GUIType
     {
-        BANK_SYSTEM_SETTING,
+        BANK_SYSTEM_MANAGE,
         BANK_ACCOUNT,
         ATM_SCREEN,
         TEST_SCREEN,
@@ -61,8 +61,10 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         super(friendlyByteBuf);
     }*/
 
-    public static void send_openBankSystemSettingScreen(ServerPlayer player)
+    public static void send_openBankSystemManageScreen(ServerPlayer player)
     {
+        if(player == null)
+            return;
         // check if player is in creative mode
         if(!player.isCreative())
         {
@@ -71,11 +73,13 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         }
 
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
-        packet.guiType = GUIType.BANK_SYSTEM_SETTING;
+        packet.guiType = GUIType.BANK_SYSTEM_MANAGE;
         packet.sendToClient(player);
     }
     public static void send_openBankAccountScreen(ServerPlayer player, UUID targetPlayerUUID, int accountNumber, boolean isAdminMode)
     {
+        if(player == null)
+            return;
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
         packet.guiType = GUIType.BANK_ACCOUNT;
         packet.targetPlayerUUID = targetPlayerUUID;
@@ -86,12 +90,16 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
 
     public static void send_openATMScreen(ServerPlayer player)
     {
+        if(player == null)
+            return;
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
         packet.guiType = GUIType.ATM_SCREEN;
         packet.sendToClient(player);
     }
     public static void send_openTestScreen(ServerPlayer player)
     {
+        if(player == null)
+            return;
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
         packet.guiType = GUIType.TEST_SCREEN;
         packet.sendToClient(player);
@@ -102,7 +110,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
     {
         switch(guiType)
         {
-            case BANK_SYSTEM_SETTING:
+            case BANK_SYSTEM_MANAGE:
                 BankSystemClientHooks.openBankSystemSettingScreen();
                 break;
             case BANK_ACCOUNT:

@@ -168,6 +168,8 @@ public interface ISyncServerBankManager {
      */
     List<IServerBankAccount> getBankAccounts(UUID userUUID);
 
+    @Nullable IServerBankAccount getBankAccountByName(String accountName);
+
 
     /**
      * Gets a list of bank account numbers that have the user in it

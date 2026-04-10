@@ -62,7 +62,7 @@ public class AsyncFunctionOutputData <FuncEnumType extends Enum<FuncEnumType>> {
     // Used on the slave side to unwrap the result after receiving
     @SuppressWarnings("unchecked")
     public <T> T decodeResult() {
-        if (outputParamsCodec == null)
+        if (outputParamsCodec == null || encodedResult.length == 0)
             return null;
         RegistryFriendlyByteBuf resultBuf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(encodedResult), null);
         return (T) outputParamsCodec.decode(resultBuf);

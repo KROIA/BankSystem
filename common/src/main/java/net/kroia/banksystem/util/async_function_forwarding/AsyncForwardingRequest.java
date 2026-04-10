@@ -1,6 +1,6 @@
 package net.kroia.banksystem.util.async_function_forwarding;
 
-import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.modutilities.ServerPlayerUtilities;
@@ -41,7 +41,7 @@ public abstract class AsyncForwardingRequest<
     //    return AsyncBankManager.handlePacketOnMaster(input, playerSender);
     //}
 
-    protected String tryGetPlayerName(UUID player)
+    public static String tryGetPlayerName(UUID player)
     {
 
         if(UtilitiesPlatform.getServer() != null) {
@@ -52,7 +52,7 @@ public abstract class AsyncForwardingRequest<
         }
         String playerName;
         if(BACKEND_INSTANCES.SERVER_BANK_MANAGER != null) {
-            IServerBankManager serverBankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+            ISyncServerBankManager serverBankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
             if (serverBankManager != null) {
                 User user = serverBankManager.getUserByUUID(player);
                 if (user != null) {

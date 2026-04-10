@@ -168,6 +168,10 @@ public interface IAsyncBankManager {
      */
     CompletableFuture<List<IAsyncBankAccount>> getBankAccountsAsync(UUID userUUID);
 
+
+    CompletableFuture<@Nullable IAsyncBankAccount> getBankAccountByNameAsync(String accountName);
+    CompletableFuture<Integer> getBankAccountNrByNameAsync(String accountName);
+
     /**
      * Gets a list of bank account numbers that have the user in it
      * @param userUUID The UUID of the user to get bank accounts for.

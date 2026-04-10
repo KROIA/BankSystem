@@ -33,11 +33,11 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
-public class SyncBankManager implements ServerSaveableChunked, IServerBankManager {
+public class ServerBankManager implements ServerSaveableChunked, IServerBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
     public static void setBackend(BankSystemModBackend.Instances backend) {
-        SyncBankManager.BACKEND_INSTANCES = backend;
+        ServerBankManager.BACKEND_INSTANCES = backend;
         ServerBankAccount.setBackend(backend);
     }
 
@@ -62,7 +62,7 @@ public class SyncBankManager implements ServerSaveableChunked, IServerBankManage
     private int nextAccountNumber = 1; // Start with account number 1
 
 
-    public SyncBankManager() {
+    public ServerBankManager() {
         getBlacklistedItems();
         getAllowedItems();
         getNotRemovableItems();
@@ -532,6 +532,37 @@ public class SyncBankManager implements ServerSaveableChunked, IServerBankManage
         return CompletableFuture.completedFuture(accounts); // Return all accounts the user is a member of
     }
 
+
+
+
+
+    @Override
+    public @Nullable IServerBankAccount getBankAccountByName(String accountName)
+    {
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
+            if(account.getAccountName().equals(accountName)) {
+                return account;
+            }
+        }
+        return null;
+    }
+    @Override
+    public CompletableFuture<@Nullable IAsyncBankAccount> getBankAccountByNameAsync(String accountName)
+    {
+        return CompletableFuture.completedFuture(getBankAccountByName(accountName));
+    }
+    @Override
+    public CompletableFuture<Integer> getBankAccountNrByNameAsync(String accountName)
+    {
+        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
+            if(account.getAccountName().equals(accountName)) {
+                return CompletableFuture.completedFuture(entry.getKey());
+            }
+        }
+        return CompletableFuture.completedFuture(0);
+    }
 
 
 
@@ -1435,22 +1466,22 @@ public class SyncBankManager implements ServerSaveableChunked, IServerBankManage
 
     private void info(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.info("[SyncBankManager] " + msg);
+        BACKEND_INSTANCES.LOGGER.info("[ServerBankManager] " + msg);
     }
     private void error(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.error("[SyncBankManager] " + msg);
+        BACKEND_INSTANCES.LOGGER.error("[ServerBankManager] " + msg);
     }
     private void error(String msg, Throwable e)
     {
-        BACKEND_INSTANCES.LOGGER.error("[SyncBankManager] " + msg, e);
+        BACKEND_INSTANCES.LOGGER.error("[ServerBankManager] " + msg, e);
     }
     private void warn(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.warn("[SyncBankManager] " + msg);
+        BACKEND_INSTANCES.LOGGER.warn("[ServerBankManager] " + msg);
     }
     private void debug(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.debug("[SyncBankManager] " + msg);
+        BACKEND_INSTANCES.LOGGER.debug("[ServerBankManager] " + msg);
     }
 }

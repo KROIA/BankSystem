@@ -320,8 +320,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         if(isAdminMode)
         {
             textWidth = createNewBankButton.getTextWidth(CREATE_NEW_BANK.getString())+10;
-            int xOffset = deleteBankAccountButton!=null?deleteBankAccountButton.getWidth()+spacing:0;
-            createNewBankButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth-xOffset, padding, textWidth, closeButton.getHeight());
+            createNewBankButton.setBounds(selectAccountButton.getRight()+spacing, padding, textWidth, closeButton.getHeight());
         }
     }
 

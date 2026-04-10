@@ -996,12 +996,12 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 });
                 return;
             }
-            CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(playerID, BankPermission.DEPOSIT.getValue());
+            CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(playerID, BankPermission.WITHDRAW.getValue());
             hasPermissionFuture.thenAccept(hasPermission -> {
                 if (!hasPermission) {
                     CompletableFuture<String>  accountNameFuture = bankAccount.getAccountNameAsync();
                     accountNameFuture.thenAccept(accountName -> {
-                        ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(accountName, BankPermission.DEPOSIT));
+                        ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(accountName, BankPermission.WITHDRAW));
                     });
                     return;
                 }
