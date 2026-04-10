@@ -7,6 +7,7 @@ import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
 import net.kroia.banksystem.api.IBankSystemEvents;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.banking.bank.AsyncBank;
@@ -28,6 +29,7 @@ import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.general.SyncItemIDsPacket;
 import net.kroia.banksystem.util.*;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.server_server.ServerServerConfig;
 import net.kroia.modutilities.networking.server_server.ServerServerManager;
 import net.kroia.modutilities.networking.server_server.slave.SlaveServerClient;
@@ -40,6 +42,7 @@ import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 
 public class BankSystemModBackend implements BankSystemAPI {
     public static class Instances
@@ -147,6 +150,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         ItemIDManager.clear();
         ServerServerConfig config = ServerServerConfig.get();
+        INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs(server);
         if(config.enable)
         {
             setupServerServerInfrastructure(config, server);
@@ -157,7 +161,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         }
         else
         {
-            INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs(server);
+
             INSTANCES.SERVER_BANK_MANAGER = BankManager.createMaster();
             TickEvent.SERVER_POST.register(BankSystemModBackend::onServerTick);
 
@@ -317,7 +321,13 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
     private static void onSlaveConnectionAccepted()
     {
-
+        // Notify the master that players are on this server to create the personal bank account if the players don't have one
+        ArrayList<ServerPlayer> players = ServerPlayerUtilities.getOnlinePlayers();
+        IAsyncBankManager manager = INSTANCES.SERVER_BANK_MANAGER.getAsync();
+        for(ServerPlayer player : players)
+        {
+            manager.onPlayerJoinAsync(player.getUUID(), player.getName().getString());
+        }
     }
     private static void onSlaveConnectionFailed(SlaveServerClient.ConnectionEstablishState state)
     {

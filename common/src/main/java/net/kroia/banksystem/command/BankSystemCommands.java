@@ -671,9 +671,9 @@ public class BankSystemCommands {
                                             CompletableFuture<Boolean> resultFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().allowItemIDAsync(id);
                                             resultFuture.thenAccept(result -> {
                                                 if (result)
-                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(itemIDObj.toString(), ServerBank.getFormattedAmountStatic(1)));
+                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedMessage(id.toString(), ServerBank.getFormattedAmountStatic(1)));
                                                 else
-                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(itemIDObj.toString()));
+                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getItemNowAllowedFailedMessage(id.toString()));
                                             });
                                         });
                                     });

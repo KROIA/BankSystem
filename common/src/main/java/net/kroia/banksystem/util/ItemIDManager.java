@@ -2,6 +2,7 @@ package net.kroia.banksystem.util;
 
 import com.ibm.icu.impl.Pair;
 import net.kroia.banksystem.item.BankSystemItems;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.general.RegisterItemIDPacket;
 import net.kroia.banksystem.networking.packet.general.SyncItemIDsPacket;
 import net.kroia.modutilities.ItemUtilities;
@@ -17,7 +18,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -155,7 +155,7 @@ public class ItemIDManager implements ServerSaveable {
         {
             // Search the entire list to check if the same item stack already is registered
             ItemID id = getItemID(stack);
-            if(id != null)
+            if(id != null && id.isValid())
             {
                 ids.add(id);
                 continue;
@@ -181,7 +181,7 @@ public class ItemIDManager implements ServerSaveable {
         return ids;
     }
 
-    public static @Nullable ItemID getItemID(@NotNull ItemStack itemStack)
+    public static @NotNull ItemID getItemID(@NotNull ItemStack itemStack)
     {
         int oldAmount = itemStack.getCount();
         itemStack.setCount(1);
@@ -196,7 +196,7 @@ public class ItemIDManager implements ServerSaveable {
             }
         }
         itemStack.setCount(oldAmount);
-        return null;
+        return ItemID.INVALID_ID;
     }
 
     /*private static @NotNull ItemID generateIdFromItemStack(@NotNull ItemStack itemStack)
@@ -262,6 +262,7 @@ public class ItemIDManager implements ServerSaveable {
             itemIDMap.put(id, cpy);
             id.tryUpdateNameCache();
         }
+        MoneyItem.resetItemID();
         List<Pair<List<ItemStack>, CompletableFuture<List<ItemID>>>> cpyList = new ArrayList<>(pendingItemIDGroups);
         for(Pair<List<ItemStack>, CompletableFuture<List<ItemID>>> pair : cpyList)
         {
@@ -365,6 +366,7 @@ public class ItemIDManager implements ServerSaveable {
         {
             registerItemStackServerSide_direct(itemStack);
         }
+        MoneyItem.resetItemID();
 
         access.lookupOrThrow(Registries.ITEM).listElements().forEach(listElement -> {
             registerItemStackServerSide_direct(listElement.value().getDefaultInstance());

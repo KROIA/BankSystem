@@ -509,6 +509,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
         CompletableFuture<Boolean> result = new CompletableFuture<>();
         ItemID item = order.itemID;
+        int itemsInInventory = countItemsInInventory(item);
+        if(itemsInInventory >= order.targetAmount)
+            return CompletableFuture.completedFuture(false);
+
         CompletableFuture<@Nullable BankData> itemBankDataFuture = account.getBankDataAsync(item);
         itemBankDataFuture.thenAccept((itemBankData) -> {
             if (itemBankData == null) {
@@ -665,10 +669,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     public void handlePacket(ServerPlayer sender, UpdateBankDownloadBlockEntityPacket packet)
     {
-        int accountNr = packet.getAccountNr();
+        final int finalAccountNr = packet.getAccountNr();
         UUID senderUUID = sender.getUUID();
         // Check if the sender has permission to withdraw from that bank account
-        CompletableFuture<@Nullable IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(accountNr);
+        CompletableFuture<@Nullable IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(finalAccountNr);
         account.thenAccept(bankAccount -> {
             if(bankAccount == null) {
                 setBockstate_connected(false);
@@ -681,7 +685,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                     return; // Player does not have permission to withdraw from this bank account
                 }
 
-                this.bankAccountNumber = accountNr;
+                this.bankAccountNumber = finalAccountNr;
                 this.withdrawOrders.clear();
                 List<WithdrawOrder> orders = packet.getWithdrawOrders();
                 for (WithdrawOrder order : orders) {

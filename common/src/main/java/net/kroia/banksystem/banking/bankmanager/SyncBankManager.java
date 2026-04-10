@@ -1204,6 +1204,10 @@ public class SyncBankManager implements ServerSaveableChunked, IServerBankManage
     {
         if(!userExists(playerUUID)) {
             addUser(playerUUID, playerName);
+        }
+        ServerBankAccount account = getPersonalBankAccount_internal(playerUUID);
+        if(account == null)
+        {
             createPersonalBankAccount(playerUUID);
         }
     }

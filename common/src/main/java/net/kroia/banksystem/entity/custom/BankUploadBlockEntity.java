@@ -288,7 +288,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
     {
         if(!this.sendingEnabled)
             return;
-        if(playerOwner == null)
+        if(playerOwner == null || !hasItemsInInventory())
             return;
         CompletableFuture<IAsyncBankAccount> accountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(bankAccountNumber);
         accountFuture.thenAcceptAsync(account->{
@@ -367,6 +367,16 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                 setChanged();
             });
         });
+    }
+    boolean hasItemsInInventory()
+    {
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if(!stack.isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public MenuProvider getMenuProvider() {

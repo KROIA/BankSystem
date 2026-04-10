@@ -66,27 +66,27 @@ public class ItemID implements ServerSaveable {
         }
         name_cache = ItemUtilities.getItemIDStr(stack.getItem());
     }
-    public static @Nullable ItemID fromJson(JsonElement jsonElement)
+    public static @NotNull ItemID fromJson(JsonElement jsonElement)
     {
         if(!jsonElement.isJsonObject())
-            return null;
+            return INVALID_ID;
 
         JsonObject jsonObject = jsonElement.getAsJsonObject();
         if(!jsonObject.has(compoundTagKey_ID))
-            return null;
+            return INVALID_ID;
         short id = jsonObject.get(compoundTagKey_ID).getAsShort();
         return new ItemID(id);
     }
 
-    public static @Nullable ItemID createFromTag(CompoundTag tag) {
+    public static @NotNull ItemID createFromTag(CompoundTag tag) {
         ItemID itemID = new ItemID((short) 0);
         if (!itemID.load(tag)) {
-            return null; // Invalid data
+            return INVALID_ID; // Invalid data
         }
         return itemID;
     }
 
-    public static @Nullable ItemID getFromItemStack(ItemStack itemStack)
+    public static @NotNull ItemID getFromItemStack(ItemStack itemStack)
     {
         return ItemIDManager.getItemID(itemStack);
     }
@@ -140,6 +140,7 @@ public class ItemID implements ServerSaveable {
         if(id == null)
         {
             warn("Item not registered: "+ defaultInstance);
+            return INVALID_ID;
         }
         return id;
     }

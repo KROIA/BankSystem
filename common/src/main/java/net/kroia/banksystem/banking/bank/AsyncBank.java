@@ -234,7 +234,8 @@ public class AsyncBank implements IAsyncBank {
         @Override
         public CompletableFuture<OutputData> sendRequestToServer(InputData input)
         {
-            info("Sending request to server for function: "+input.function.toString());
+            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+                info("Sending request to server for function: "+input.function.toString());
             return super.sendRequestToServer(input);
         }
 
@@ -252,7 +253,8 @@ public class AsyncBank implements IAsyncBank {
                 playerName =  tryGetPlayerName(playerSender);
                 playerInfo = " from player: " + playerName;
             }
-            info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
+            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+                info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             BankIdentifyAndDataPacket inputData = input.decodeParams();
             if(playerSender != null)
             {
@@ -411,7 +413,8 @@ public class AsyncBank implements IAsyncBank {
             tmpFuture = Request.instance.sendRequestToMaster(input);
 
         tmpFuture.thenAccept(outputData ->{
-            info("Response received for request: "+ input.function.toString());
+            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+                info("Response received for request: "+ input.function.toString());
             future.complete(outputData);
         });
 

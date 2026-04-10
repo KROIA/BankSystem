@@ -36,6 +36,10 @@ public class MoneyItem extends Item{
         itemID = ItemID.of(BankSystemItems.MONEY.get().getDefaultInstance());
         return itemID;
     }
+    public static void resetItemID() {
+        itemID = null;
+        getItemID();
+    }
     public static String getCurrencyName() {
         return CURRENCY_NAME.getString();
     }
