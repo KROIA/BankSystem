@@ -16,14 +16,18 @@ import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.networking.packet.server_server.ClientConsoleMessagePacket;
+import net.kroia.banksystem.networking.packet.server_server.ServerInfoRequest;
+import net.kroia.banksystem.networking.packet.server_server.ServerNetworkInfoRequest;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -159,15 +163,39 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         return CompletableFuture.completedFuture(banksystem_disallowItem(executor,itemID));
     }
 
+    @Override
+    public CompletableFuture<Boolean> banksystem_serverInfo_async(@NotNull UUID executor)
+    {
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if(server == null)
+            return CompletableFuture.completedFuture(false);
 
-
-
-
-
-
-
-
-
+        ServerPlayerUtilities.printToClientConsole(executor, ServerInfoRequest.createInfo(server).toString());
+        return CompletableFuture.completedFuture(true);
+    }
+    @Override
+    public CompletableFuture<Boolean> banksystem_serverNetworkInfo_async(@NotNull UUID executor)
+    {
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if(server == null)
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        ServerNetworkInfoRequest.sendRequest().thenAccept(serverNetworkInfo -> {
+            StringBuilder builder = new StringBuilder();
+            builder.append("§8============================================\n");
+            List<ServerInfoRequest.ServerInfo> servers = serverNetworkInfo.servers();
+            for(int i = 0; i < servers.size(); i++)
+            {
+                builder.append(servers.get(i));
+                if(i < servers.size()-1)
+                    builder.append("\n");
+            }
+            builder.append("\n§8============================================");
+            ServerPlayerUtilities.printToClientConsole(executor, builder.toString());
+            future.complete(true);
+        });
+        return future;
+    }
 
 
     @Override

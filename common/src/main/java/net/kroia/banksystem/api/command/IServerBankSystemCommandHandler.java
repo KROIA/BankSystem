@@ -14,6 +14,7 @@ public interface IServerBankSystemCommandHandler {
     boolean banksystem_allowItem(@NotNull UUID executor, ItemID itemID);
     boolean banksystem_disallowItem(@NotNull UUID executor, ItemID itemID);
 
+
     boolean money_add(@NotNull UUID executor, float amount);
     boolean money_add_user(@NotNull UUID executor, String userName, float amount);
     boolean money_set(@NotNull UUID executor, float amount);

@@ -11,38 +11,29 @@ import net.kroia.banksystem.networking.packet.client_sender.update.entity.Update
 import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.packet.general.RegisterItemIDPacket;
 import net.kroia.banksystem.networking.packet.general.SyncItemIDsPacket;
-import net.kroia.banksystem.networking.packet.server_server.ClientConsoleMessagePacket;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
-import net.kroia.banksystem.networking.packet.server_server.DepositItemsInBankRequest;
-import net.kroia.banksystem.networking.packet.server_server.DropItemsInPlayerInventoryRequest;
-import net.kroia.banksystem.networking.packet.server_server.PlayerJoinPacket;
-import net.kroia.banksystem.networking.packet.server_server.WithdrawItemsFromBankRequest;
-import net.kroia.banksystem.networking.request.*;
+import net.kroia.banksystem.networking.packet.server_server.*;
+import net.kroia.banksystem.networking.request.AllowedItemsRequest;
+import net.kroia.banksystem.networking.request.BankTerminalBlockDataRequest;
+import net.kroia.banksystem.networking.request.RemoveEmptyBanksRequest;
+import net.kroia.banksystem.networking.request.UpdateBankAccountRequest;
 import net.kroia.modutilities.networking.NetworkPacketManager;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 
 public class BankSystemNetworking extends NetworkPacketManager {
 
-    //public static ItemInfoRequest ITEM_INFO_REQUEST = (ItemInfoRequest) AsynchronousRequestResponseSystem.register(new ItemInfoRequest());
-    //public static BankManagerDataRequest BANK_MANAGER_DATA_REQUEST = (BankManagerDataRequest) AsynchronousRequestResponseSystem.register(new BankManagerDataRequest());
-    //public static BankAccountDataRequest BANK_ACCOUNT_DATA_REQUEST = (BankAccountDataRequest) AsynchronousRequestResponseSystem.register(new BankAccountDataRequest());
-    //public static MinimalBankDataRequest MINIMAL_BANK_DATA_REQUEST = (MinimalBankDataRequest) AsynchronousRequestResponseSystem.register(new MinimalBankDataRequest());
-    //public static AllowItemRequest ALLOW_ITEM_REQUEST = (AllowItemRequest) AsynchronousRequestResponseSystem.register(new AllowItemRequest());
-    //public static DisallowItemRequest DISALLOW_ITEM_REQUEST = (DisallowItemRequest) AsynchronousRequestResponseSystem.register(new DisallowItemRequest());
     public static RemoveEmptyBanksRequest REMOVE_EMPTY_BANKS_REQUEST = (RemoveEmptyBanksRequest) AsynchronousRequestResponseSystem.register(new RemoveEmptyBanksRequest());
-    //public static BankAccountNumbersRequest BANK_ACCOUNT_NUMBERS_REQUEST = (BankAccountNumbersRequest) AsynchronousRequestResponseSystem.register(new BankAccountNumbersRequest());
     public static UpdateBankAccountRequest UPDATE_BANK_ACCOUNT_REQUEST = (UpdateBankAccountRequest) AsynchronousRequestResponseSystem.register(new UpdateBankAccountRequest());
     public static BankTerminalBlockDataRequest BANK_TERMINAL_BLOCK_DATA_REQUEST = (BankTerminalBlockDataRequest) AsynchronousRequestResponseSystem.register(new BankTerminalBlockDataRequest());
-   // public static BankSelectionScreenDataRequest BANK_SELECTION_SCREEN_DATA_REQUEST = (BankSelectionScreenDataRequest) AsynchronousRequestResponseSystem.register(new BankSelectionScreenDataRequest());
-   // public static BankAccountDeleteRequest DELETE_BANK_ACCOUNT_REQUEST = (BankAccountDeleteRequest) AsynchronousRequestResponseSystem.register(new BankAccountDeleteRequest());
     public static AllowedItemsRequest ALLOWED_ITEMS_REQUEST = (AllowedItemsRequest) AsynchronousRequestResponseSystem.register(new AllowedItemsRequest());
-
     public static DropItemsInPlayerInventoryRequest DROP_ITEMS_IN_PLAYER_INVENTORY_REQUEST = (DropItemsInPlayerInventoryRequest)AsynchronousRequestResponseSystem.register(new DropItemsInPlayerInventoryRequest());
     public static DepositItemsInBankRequest DEPOSIT_ITEMS_IN_BANK_REQUEST = (DepositItemsInBankRequest)AsynchronousRequestResponseSystem.register(new DepositItemsInBankRequest());
     public static WithdrawItemsFromBankRequest WITHDRAW_ITEMS_FROM_BANK_REQUEST = (WithdrawItemsFromBankRequest)AsynchronousRequestResponseSystem.register(new WithdrawItemsFromBankRequest());
-    //public static AsyncServerBankManagerForwardingRequest ASYNC_SERVER_BANK_MANAGER_FORWARDING_REQUEST = (AsyncServerBankManagerForwardingRequest)AsynchronousRequestResponseSystem.register(new AsyncServerBankManagerForwardingRequest());
+
+    public static ServerInfoRequest SERVER_INFO_REQUEST = (ServerInfoRequest)AsynchronousRequestResponseSystem.register(new ServerInfoRequest());
+    public static ServerNetworkInfoRequest SERVER_NETWORK_INFO_REQUEST = (ServerNetworkInfoRequest)AsynchronousRequestResponseSystem.register(new ServerNetworkInfoRequest());
 
 
     public BankSystemNetworking() {

@@ -75,6 +75,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.SERVER_EVENTS = null;
         INSTANCES.NETWORKING = null;
         INSTANCES.ITEM_ID_MANAGER = new ItemIDManager();
+        ServerServerUtils.setBackend(INSTANCES);
         BankSystemDataHandler.setBackend(INSTANCES);
         BankTerminalBlockEntity.setBackend(INSTANCES);
 

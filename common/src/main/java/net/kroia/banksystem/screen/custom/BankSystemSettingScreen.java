@@ -150,11 +150,6 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
 
 
     private void onNewBankingItemSelected(ItemStack itemStack) {
-
-        //setCurrentBankingItemID(itemStack);
-        //updateCurrentBankingItemsView();
-        //minecraft.setScreen(askItemFractionScaleFactorScreen);
-
         CompletableFuture<ItemID> idFuture = ItemID.getOrRegisterFromItemStackClientSide(itemStack);
         idFuture.thenAccept(id -> {
             getBankManager().allowItemIDAsync(id).thenAccept((result) ->
@@ -165,7 +160,6 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
                 updateCurrentBankingItemsView();
             });
         });
-
     }
     private void setCurrentBankingItemID(ItemStack itemStack) {
         currentBankingItemID = null;

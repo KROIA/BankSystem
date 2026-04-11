@@ -112,7 +112,7 @@ public class BankSystemCommandsRegistration {
                         )
                 )
                 .then(Commands.literal("allowItem")
-                        .requires(source -> source.hasPermission(2))
+                        //.requires(source -> source.hasPermission(2))
                         .then(Commands.argument("itemID", StringArgumentType.string())
                                 .executes(context -> {
                                     ServerPlayer player = context.getSource().getPlayerOrException();
@@ -132,7 +132,7 @@ public class BankSystemCommandsRegistration {
                         )
                 )
                 .then(Commands.literal("allowItemInHand")
-                        .requires(source -> source.hasPermission(2))
+                        //.requires(source -> source.hasPermission(2))
                         .executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
 
@@ -151,7 +151,7 @@ public class BankSystemCommandsRegistration {
 
                 )
                 .then(Commands.literal("disallowItem")
-                        .requires(source -> source.hasPermission(2))
+                        //.requires(source -> source.hasPermission(2))
                         .then(Commands.argument("itemID", StringArgumentType.string())
                                 .executes(context -> {
                                     ServerPlayer player = context.getSource().getPlayerOrException();
@@ -173,7 +173,7 @@ public class BankSystemCommandsRegistration {
                         )
                 )
                 .then(Commands.literal("disallowItemInHand")
-                        .requires(source -> source.hasPermission(2))
+                        //.requires(source -> source.hasPermission(2))
                         .executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
 
@@ -189,7 +189,22 @@ public class BankSystemCommandsRegistration {
                             });
                             return Command.SINGLE_SUCCESS;
                         })
-
+                )
+                .then(Commands.literal("serverInfo")
+                        //.requires(source -> source.hasPermission(2))
+                        .executes(context -> {
+                            ServerPlayer player = context.getSource().getPlayerOrException();
+                            handler().banksystem_serverInfo_async(player.getUUID());
+                            return Command.SINGLE_SUCCESS;
+                        })
+                )
+                .then(Commands.literal("serverNetworkInfo")
+                        //.requires(source -> source.hasPermission(2))
+                        .executes(context -> {
+                            ServerPlayer player = context.getSource().getPlayerOrException();
+                            handler().banksystem_serverNetworkInfo_async(player.getUUID());
+                            return Command.SINGLE_SUCCESS;
+                        })
                 )
                 /*.then(Commands.literal("setStartingBalance")
                         .requires(source -> source.hasPermission(2))

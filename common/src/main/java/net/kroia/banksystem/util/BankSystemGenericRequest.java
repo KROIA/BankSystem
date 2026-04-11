@@ -7,6 +7,7 @@ import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<IN, OUT> {
 
@@ -48,6 +49,15 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
     protected ISyncServerBankManager getServerBankManager()
     {
         return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+    }
+
+
+    public CompletableFuture<OUT> handleOnServer(IN input, ServerPlayer sender) {
+        if(needsRoutingToMaster())
+        {
+            warn("Received packet that should have been sent to the master: "+getRequestTypeID());
+        }
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override

@@ -3,6 +3,7 @@ package net.kroia.banksystem.block.custom;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.util.ServerServerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -138,6 +139,8 @@ public class BankDownloadBlock extends Block implements EntityBlock {
 
         if (level.isClientSide())
             return InteractionResult.SUCCESS;
+
+        ServerServerUtils.canInteractWithBankSystem(player.getUUID());
 
         // open screen
         if (player instanceof ServerPlayer sPlayer) {

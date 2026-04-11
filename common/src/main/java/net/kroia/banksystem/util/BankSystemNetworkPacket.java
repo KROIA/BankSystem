@@ -32,7 +32,10 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
         handleOnServer(player);
     }
     protected void handleOnServer(ServerPlayer player) {
-
+        if(needsRoutingToMaster())
+        {
+            warn("Received packet that should have been sent to the master: "+type().id());
+        }
     }
 
     @Override

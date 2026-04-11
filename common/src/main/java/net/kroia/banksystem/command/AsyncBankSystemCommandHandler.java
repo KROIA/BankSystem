@@ -9,23 +9,29 @@ import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
+import net.kroia.banksystem.networking.packet.server_server.ServerInfoRequest;
+import net.kroia.banksystem.networking.packet.server_server.ServerNetworkInfoRequest;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ServerServerUtils;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionOutputData;
 import net.kroia.modutilities.ServerPlayerUtilities;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -379,6 +385,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> banksystem_manage_async(@NotNull UUID executor) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(executor).thenAcceptAsync(result -> {
             ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
@@ -409,6 +417,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> banksystem_setBankSystemAdminMode_async(@NotNull UUID executor, boolean isAdmin) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_setBankSystemAdminMode, executor, isAdmin));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -420,6 +430,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> banksystem_setBankSystemAdminMode_user_async(@NotNull UUID executor, String userName, boolean isAdmin) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_setBankSystemAdminMode_user, executor, new ParamGroup_String_Bool(userName, isAdmin)));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -431,6 +443,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> banksystem_allowItem_async(@NotNull UUID executor, ItemID itemID) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_allowItem, executor, itemID));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -442,6 +456,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> banksystem_disallowItem_async(@NotNull UUID executor, ItemID itemID) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_disallowItem, executor, itemID));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -450,9 +466,44 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         });
         return future;
     }
+    @Override
+    public CompletableFuture<Boolean> banksystem_serverInfo_async(@NotNull UUID executor)
+    {
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if(server == null)
+            return CompletableFuture.completedFuture(false);
+
+        ServerPlayerUtilities.printToClientConsole(executor, ServerInfoRequest.createInfo(server).toString());
+        return CompletableFuture.completedFuture(true);
+    }
+    @Override
+    public CompletableFuture<Boolean> banksystem_serverNetworkInfo_async(@NotNull UUID executor)
+    {
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if(server == null)
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        ServerNetworkInfoRequest.sendRequest().thenAccept(serverNetworkInfo -> {
+            StringBuilder builder = new StringBuilder();
+            builder.append("§8============================================\n");
+            List<ServerInfoRequest.ServerInfo> servers = serverNetworkInfo.servers();
+            for(int i = 0; i < servers.size(); i++)
+            {
+                builder.append(servers.get(i));
+                if(i < servers.size()-1)
+                    builder.append("\n");
+            }
+            builder.append("\n§8============================================");
+            ServerPlayerUtilities.printToClientConsole(executor, builder.toString());
+            future.complete(true);
+        });
+        return future;
+    }
 
     @Override
     public CompletableFuture<Boolean> money_add_async(UUID executor, float amount) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_add, executor, amount));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -464,6 +515,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> money_add_user_async(UUID executor, String userName, float amount) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_add_user, executor, new ParamGroup_String_Float(userName, amount)));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -475,6 +528,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> money_set_async(@NotNull UUID executor, float amount) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_set, executor, amount));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -486,6 +541,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> money_set_user_async(@NotNull UUID executor, String userName, float amount) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_set_user, executor, new ParamGroup_String_Float(userName, amount)));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -497,6 +554,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> money_remove_async(@NotNull UUID executor, float amount) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_remove, executor, amount));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -508,6 +567,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> money_remove_user_async(@NotNull UUID executor, String userName, float amount) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_remove_user, executor, new ParamGroup_String_Float(userName, amount)));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -519,6 +580,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> money_send_user_async(@NotNull UUID executor, String toUserName, float amount) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_send_user, executor, new ParamGroup_String_Float(toUserName, amount)));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -530,6 +593,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> money_circulation_async(@NotNull UUID executor) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_circulation, executor));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -541,6 +606,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> bank_enableNotifications_async(@NotNull UUID executor) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Bank_enableNotifications, executor));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -552,6 +619,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
     @Override
     public CompletableFuture<Boolean> bank_disableNotifications_async(@NotNull UUID executor) {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Bank_disableNotifications, executor));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
@@ -566,6 +635,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
     @Override
     public CompletableFuture<Boolean> bank_manage_async(@NotNull UUID executor)
     {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getOrCreatePersonalBankAccountAsync(executor);
         CompletableFuture<Boolean> isAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(executor);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
@@ -588,6 +659,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
     @Override
     public CompletableFuture<Boolean> bank_manage_account_async(@NotNull UUID executor, String accountName)
     {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         IAsyncBankManager manager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
         CompletableFuture<IAsyncBankAccount> account = manager.getBankAccountByNameAsync(accountName);
         CompletableFuture<Boolean> isAdmin = manager.isBanksystemAdminAsync(executor);
@@ -621,6 +694,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
     @Override
     public CompletableFuture<Boolean> bank_manage_account_async(@NotNull UUID executor, int accountNr)
     {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         IAsyncBankManager manager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
         CompletableFuture<IAsyncBankAccount> account = manager.getBankAccountAsync(accountNr);
         CompletableFuture<Boolean> isAdmin = manager.isBanksystemAdminAsync(executor);
@@ -653,6 +728,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
     @Override
     public CompletableFuture<IAsyncBankAccount> bank_create_async(@NotNull UUID executor, String accountName)
     {
+        if(!ServerServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Bank_create, executor, accountName));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<IAsyncBankAccount> future = new CompletableFuture<>();
