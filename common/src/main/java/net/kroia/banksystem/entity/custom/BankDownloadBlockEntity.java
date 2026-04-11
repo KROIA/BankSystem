@@ -3,14 +3,18 @@ package net.kroia.banksystem.entity.custom;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IAsyncBank;
+import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.bank.ServerBank;
+import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.block.custom.BankDownloadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
-import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.networking.entity.UpdateBankDownloadBlockEntityPacket;
+import net.kroia.banksystem.networking.entity.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.core.BlockPos;
@@ -43,6 +47,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements MenuProvider {
 
@@ -219,17 +224,19 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             inventory.fromTag(tag.getList("Items", Tag.TAG_COMPOUND), provider);
             blockIsPowered = tag.getBoolean("RecievingEnabled");
 
-            IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getPersonalBankAccount(playerOwner);
-            if(account == null)
-                return;
-            bankAccountNumber = account.getAccountNumber();
-            if(tag.contains("ItemID")) {
-                ItemID itemID = ItemID.createFromTag(tag.getCompound("ItemID"));
-                if(itemID != null) {
-                    WithdrawOrder order = new WithdrawOrder(itemID, targetAmount, WithdrawCondition.NONE, 0);
-                    withdrawOrders.add(order);
+            CompletableFuture<IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(playerOwner);
+            account.thenAccept(bankAccount -> {
+                if(bankAccount == null)
+                    return;
+                bankAccountNumber = bankAccount.getAccountNumberAsync();
+                if(tag.contains("ItemID")) {
+                    ItemID itemID = ItemID.createFromTag(tag.getCompound("ItemID"));
+                    if(itemID != null) {
+                        WithdrawOrder order = new WithdrawOrder(itemID, targetAmount, WithdrawCondition.NONE, 0);
+                        withdrawOrders.add(order);
+                    }
                 }
-            }
+            });
             return;
         }
 
@@ -419,19 +426,27 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     public int getBankAccountNumber() {
         return bankAccountNumber;
     }
-    public boolean hasPermissionToOpenBlock(ServerPlayer player)
+    public CompletableFuture<Boolean> hasPermissionToOpenBlock(ServerPlayer player)
     {
-        if(bankAccountNumber <= 0)
-            return true; // Block not claimed
-        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(bankAccountNumber);
-
-        if(account == null) {
-            bankAccountNumber = 0;
-            return true;
+        CompletableFuture<Boolean> future =  new CompletableFuture<>();
+        if(bankAccountNumber <= 0) {
+            future.complete(true);
+            return future;
         }
-
-        // Only allow opening if the player has permission to withdraw from the bank account
-        return account.hasPermission(player.getUUID(), BankPermission.WITHDRAW.getValue());
+        IAsyncBankManager asyncBankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
+        CompletableFuture<IAsyncBankAccount> account = asyncBankManager.getBankAccountAsync(bankAccountNumber);
+        account.thenAccept((bankAccount) ->
+        {
+            if(bankAccount == null) {
+                bankAccountNumber = 0;
+                future.complete(true);
+            }
+            else {
+                CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(player.getUUID(), BankPermission.WITHDRAW.getValue());
+                hasPermissionFuture.thenAccept(future::complete);
+            }
+        });
+        return future;
     }
 
     public void update()
@@ -463,138 +478,129 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         if(!blockIsPowered || currentlyReceiving)
             return;
 
+        CompletableFuture<IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(bankAccountNumber);
+        account.thenAccept(accountResult -> {
+            if(accountResult == null) {
+                bankAccountNumber = 0; // Reset account number if it does not exist
+                setBockstate_connected(false);
+                return;
+            }
 
-
-        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(bankAccountNumber);
-        if(account == null) {
-            bankAccountNumber = 0; // Reset account number if it does not exist
-            setBockstate_connected(false);
-            return;
-        }
-
-        /*IBank itemBank = account.getBank(itemID);
-        if(itemBank == null)
-            return;
-        ItemStack exampleStack = itemID.getStack();
-        if(exampleStack == null)
-            return;
-        int centScaleFactor = itemBank.getItemFractionScaleFactor();
-        int stackSize = exampleStack.getMaxStackSize();
-        long currentItemCount = countItems();
-        long targetItemCount = targetAmount;
-        if(currentItemCount >= targetItemCount)
-            return;
-        currentlyReceiving = true;
-        long amountToReceive = (targetItemCount - currentItemCount);
-
-        long balance = itemBank.getBalance() / centScaleFactor;
-        if(balance > 0) {
-            for (int i = 0; i < inventory.getContainerSize(); i++) {
-                balance = itemBank.getBalance() / centScaleFactor;
-                if(balance == 0 || amountToReceive <= 0)
-                    break;
-                ItemStack stack = inventory.getItem(i);
-                if (new ItemID(stack).equals(itemID)) {
-                    if (stack.isDamaged() || stack.isEnchanted())
-                        continue;
-                    long fillInStackAmount = stackSize - stack.getCount();
-                    long amountToReceiveFromStack = Math.min(fillInStackAmount, amountToReceive);
-                    if (amountToReceiveFromStack > 0) {
-
-                        amountToReceiveFromStack = Math.min(amountToReceiveFromStack, balance);
-
-                        if (itemBank.withdraw(itemBank.convertToRawAmount(amountToReceiveFromStack)) == Bank.Status.SUCCESS) {
-                            stack.grow((int) amountToReceiveFromStack);
-                            amountToReceive -= amountToReceiveFromStack;
-                        }
-                    }
-                } else if (stack.isEmpty()) {
-                    long amountToReceiveFromStack = Math.min(stackSize, amountToReceive);
-                    if (amountToReceiveFromStack > 0 ) {
-                        amountToReceiveFromStack = Math.min(amountToReceiveFromStack, balance);
-
-                        if (itemBank.withdraw(itemBank.convertToRawAmount(amountToReceiveFromStack)) == Bank.Status.SUCCESS) {
-                            inventory.setItem(i, new ItemStack(exampleStack.getItem(), (int) amountToReceiveFromStack));
-                            amountToReceive -= amountToReceiveFromStack;
-                        }
-                    }
+            currentlyReceiving = true;
+            for( WithdrawOrder order : withdrawOrders)
+            {
+                if(order != null) {
+                    currentlyReceiving = true;
+                    processWithdrawOrder(order, accountResult);
                 }
             }
 
-        }*/
-
-        currentlyReceiving = true;
-        for( WithdrawOrder order : withdrawOrders)
-        {
-            if(order != null) {
-                currentlyReceiving = true;
-                processWithdrawOrder(order, account);
-            }
-        }
-
-        setChanged();
-        currentlyReceiving = false;
+            setChanged();
+            currentlyReceiving = false;
+        });
     }
 
 
-    private boolean processWithdrawOrder(WithdrawOrder order, IBankAccount account)
+
+    private CompletableFuture<Boolean> processWithdrawOrder(WithdrawOrder order, IAsyncBankAccount account)
     {
         if(order.targetAmount <= 0)
-            return false;
+            return CompletableFuture.completedFuture(false);
 
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
         ItemID item = order.itemID;
-        IBank itemBank = account.getBank(item);
-        if(itemBank == null)
-            return false;
+        int itemsInInventory = countItemsInInventory(item);
+        if(itemsInInventory >= order.targetAmount)
+            return CompletableFuture.completedFuture(false);
 
-        long realBankBalance = (long)Math.floor(itemBank.getRealBalance());
-        if(!order.meetsCondition(realBankBalance)) {
-            return false; // Condition not met, do not withdraw
-        }
-        int amountToFill = Math.max(0, order.targetAmount - countItemsInInventory(item));
-        if(amountToFill <= 0)
-            return false; // No need to withdraw, inventory already has enough items
+        CompletableFuture<@Nullable BankData> itemBankDataFuture = account.getBankDataAsync(item);
+        itemBankDataFuture.thenAccept((itemBankData) -> {
+            if (itemBankData == null) {
+                result.complete(false);
+                return;
+            }
 
-        int filledAmount = withdrawAndFillInventory(item, amountToFill, itemBank);
-        return filledAmount > 0;
+            long realBankBalance = (long) Math.floor(itemBankData.getRealBalance());
+            if (!order.meetsCondition(realBankBalance)) {
+                result.complete(false);
+                return; // Condition not met, do not withdraw
+            }
+            int amountToFill = Math.max(0, order.targetAmount - countItemsInInventory(item));
+            if (amountToFill <= 0)
+            {
+                result.complete(false);
+                return; // No need to withdraw, inventory already has enough items
+            }
+
+
+
+            CompletableFuture<@Nullable IAsyncBank> itemBankFuture = account.getBankAsync(item);
+            itemBankFuture.thenAccept((itemBank) -> {
+                CompletableFuture<Integer> filledAmountFuture = withdrawAndFillInventory(item, amountToFill, itemBank);
+                filledAmountFuture.thenAccept((filledAmount) -> {
+                    result.complete(filledAmount > 0);
+                });
+            });
+        });
+        return result;
     }
 
-    private int withdrawAndFillInventory(ItemID item, int amountToFill, IBank itemBank)
+    private CompletableFuture<Integer> withdrawAndFillInventory(ItemID item, final int amountToFillIn, IAsyncBank itemBank)
     {
-        long amountToReserve = itemBank.convertToRawAmount(amountToFill);
-        long currentBalance = itemBank.getBalance();
-        if(amountToReserve > currentBalance) {
-            amountToFill = (int) (currentBalance / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
-            amountToReserve = itemBank.convertToRawAmount(amountToFill);
-        }
-        if(amountToReserve <= 0)
-            return 0;
-
-        if(itemBank.lockAmount(amountToReserve) != IBank.Status.SUCCESS) // Lock the amount to prevent other transactions from interfering
-            return 0; // Failed to lock the amount, return 0
-
-        // Try to fill the inventory with the item
-        int filledAmount = tryFillInventory(item, amountToFill);
-        if(filledAmount > 0) {
-            long amountToWithdraw = itemBank.convertToRawAmount(filledAmount);
-            if(itemBank.withdrawLockedPrefered(amountToWithdraw) == IBank.Status.SUCCESS) {
-                if(filledAmount != amountToFill)
-                {
-                    // If we filled less than requested, unlock the remaining amount
-                    long remainingAmount = itemBank.convertToRawAmount(amountToFill - filledAmount);
-                    itemBank.unlockAmount(remainingAmount);
-                }
-                setChanged();
-                return filledAmount; // Successfully withdrew and filled the inventory
-            } else {
-                itemBank.unlockAmount(amountToReserve); // Unlock the amount if withdrawal failed
+        CompletableFuture<Integer>  result = new CompletableFuture<>();
+        CompletableFuture<Long>  currentBalanceFuture = itemBank.getBalanceAsync();
+        currentBalanceFuture.thenAccept((currentBalance) -> {
+            int amountToFill = amountToFillIn;
+            long amountToReserve = ServerBank.convertToRawAmountStatic(amountToFill);
+            if(amountToReserve > currentBalance) {
+                amountToFill = (int) (currentBalance / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+                amountToReserve = ServerBank.convertToRawAmountStatic(amountToFill);
             }
-        }
-        else
-        {
-            itemBank.unlockAmount(amountToReserve); // Unlock the amount if nothing was filled
-        }
-        return 0;
+            if(amountToReserve <= 0)
+            {
+                result.complete(0);
+                return;
+            }
+
+            CompletableFuture<BankStatus> lockStatusFuture = itemBank.lockAmountAsync(amountToReserve);
+            final int amountToFillFinal = amountToFill;
+            final long amountToReserveFinal = amountToReserve;
+            lockStatusFuture.thenAccept((lockStatus) -> {
+                if(lockStatus != BankStatus.SUCCESS) // Lock the amount to prevent other transactions from interfering
+                {
+                    result.complete(0);
+                    return; // Failed to lock the amount, return 0
+                }
+
+                // Try to fill the inventory with the item
+                int filledAmount = tryFillInventory(item, amountToFillFinal);
+                if(filledAmount > 0) {
+                    long amountToWithdraw = ServerBank.convertToRawAmountStatic(filledAmount);
+                    CompletableFuture<BankStatus> withdrawStatusFuture = itemBank.withdrawLockedPreferedAsync(amountToWithdraw);
+                    withdrawStatusFuture.thenAccept((withdrawStatus) -> {
+                        if(withdrawStatus == BankStatus.SUCCESS) {
+                            if(filledAmount != amountToFillFinal)
+                            {
+                                // If we filled less than requested, unlock the remaining amount
+                                long remainingAmount = ServerBank.convertToRawAmountStatic(amountToFillFinal - filledAmount);
+                                itemBank.unlockAmountAsync(remainingAmount);
+                            }
+                            setChanged();
+                            result.complete(filledAmount);
+                            return; // Successfully withdrew and filled the inventory
+                        } else {
+                            itemBank.unlockAmountAsync(amountToReserveFinal); // Unlock the amount if withdrawal failed
+                        }
+                    });
+                }
+                else
+                {
+                    itemBank.unlockAmountAsync(amountToReserveFinal); // Unlock the amount if nothing was filled
+                }
+            });
+        });
+
+        return result;
     }
 
     private int tryFillInventory(ItemID item, int amountToFill)
@@ -663,33 +669,35 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     public void handlePacket(ServerPlayer sender, UpdateBankDownloadBlockEntityPacket packet)
     {
-
-        int accountNr = packet.getAccountNr();
+        final int finalAccountNr = packet.getAccountNr();
         UUID senderUUID = sender.getUUID();
         // Check if the sender has permission to withdraw from that bank account
-        IBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getBankAccount(accountNr);
-        if(account == null) {
-            setBockstate_connected(false);
-            return;
-        }
-        if(!account.hasPermission(senderUUID, BankPermission.WITHDRAW.getValue())) {
-            setBockstate_connected(false);
-            return; // Player does not have permission to withdraw from this bank account
-        }
-
-        this.bankAccountNumber = accountNr;
-        this.withdrawOrders.clear();
-        List<WithdrawOrder> orders = packet.getWithdrawOrders();
-        for (WithdrawOrder order : orders) {
-            if(order != null) {
-                this.withdrawOrders.add(order);
+        CompletableFuture<@Nullable IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(finalAccountNr);
+        account.thenAccept(bankAccount -> {
+            if(bankAccount == null) {
+                setBockstate_connected(false);
+                return;
             }
-        }
+            CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(senderUUID, BankPermission.WITHDRAW.getValue());
+            hasPermissionFuture.thenAccept((hasPermission) -> {
+                if(!hasPermission) {
+                    setBockstate_connected(false);
+                    return; // Player does not have permission to withdraw from this bank account
+                }
 
-        setChanged();
-        setBockstate_connected(true);
-        SyncBankDownloadDataPacket.sendPacket(sender, this);
+                this.bankAccountNumber = finalAccountNr;
+                this.withdrawOrders.clear();
+                List<WithdrawOrder> orders = packet.getWithdrawOrders();
+                for (WithdrawOrder order : orders) {
+                    if(order != null) {
+                        this.withdrawOrders.add(order);
+                    }
+                }
 
-
+                setChanged();
+                setBockstate_connected(true);
+                SyncBankDownloadDataPacket.sendPacket(sender, this);
+            });
+        });
     }
 }

@@ -6,7 +6,11 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveable;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -18,18 +22,38 @@ public class User implements ServerSaveable {
         User.BACKEND_INSTANCES = backend;
     }
 
+    public static final StreamCodec<RegistryFriendlyByteBuf, User> STREAM_CODEC = StreamCodec.composite(
+            UUIDUtil.STREAM_CODEC, p -> p.userUUID,
+            ByteBufCodecs.STRING_UTF8, p -> p.userName,
+            ByteBufCodecs.BOOL, p -> p.enableBankNotifications,
+            ByteBufCodecs.BOOL, p -> p.isBanksystemAdmin,
+            User::new
+    );
+
     private UUID userUUID;
     private String userName;
     private boolean enableBankNotifications = true;
+    private boolean isBanksystemAdmin = false;
 
     private User()
     {
 
     }
+    private User(UUID userUUID, String userName, boolean enableBankNotifications, boolean isBankModAdmin)
+    {
+        this.userUUID = userUUID;
+        this.userName = userName;
+        this.enableBankNotifications = enableBankNotifications;
+        this.isBanksystemAdmin = isBankModAdmin;
+    }
     public User(UUID userUUID, String userName, boolean enableBankNotifications) {
         this.userUUID = userUUID;
         this.userName = userName;
         this.enableBankNotifications = enableBankNotifications;
+    }
+    public static User createWithChangedName(User oldUser, String newName)
+    {
+        return new User(oldUser.userUUID, newName, oldUser.enableBankNotifications, oldUser.isBanksystemAdmin);
     }
     public static @Nullable User createFromTag(CompoundTag tag)
     {
@@ -56,12 +80,19 @@ public class User implements ServerSaveable {
     public void setEnableBankNotifications(boolean enableBankNotifications) {
         this.enableBankNotifications = enableBankNotifications;
     }
+    public boolean isBanksystemAdmin() {
+        return isBanksystemAdmin;
+    }
+    public void setBanksystemAdmin(boolean isBankModAdmin) {
+        this.isBanksystemAdmin = isBankModAdmin;
+    }
 
     @Override
     public boolean save(CompoundTag tag) {
         tag.putUUID("userUUID", userUUID);
         tag.putString("userName", userName);
         tag.putBoolean("enableBankNotifications", enableBankNotifications);
+        tag.putBoolean("isBanksystemAdmin", isBanksystemAdmin);
         return true;
     }
 
@@ -73,6 +104,10 @@ public class User implements ServerSaveable {
         this.userUUID = tag.getUUID("userUUID");
         this.userName = tag.getString("userName");
         this.enableBankNotifications = tag.getBoolean("enableBankNotifications");
+        if(tag.contains("isBanksystemAdmin"))
+            this.isBanksystemAdmin = tag.getBoolean("isBanksystemAdmin");
+        else
+            this.isBanksystemAdmin = false;
         return true;
     }
 
@@ -82,6 +117,7 @@ public class User implements ServerSaveable {
         jsonObject.addProperty("userUUID", userUUID.toString());
         jsonObject.addProperty("userName", userName);
         jsonObject.addProperty("enableBankNotifications", enableBankNotifications);
+        jsonObject.addProperty("isBanksystemAdmin", isBanksystemAdmin);
         return jsonObject;
     }
     @Override

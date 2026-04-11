@@ -2,7 +2,7 @@ package net.kroia.banksystem.item.custom.software;
 
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.block.custom.TerminalBlock;
-import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
+import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
 

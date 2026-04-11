@@ -7,7 +7,7 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.banking.clientdata.UserData;
-import net.kroia.banksystem.networking.request.UpdateBankAccountRequest;
+import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.BankAccountManagementItem;
 import net.kroia.banksystem.screen.uiElements.BankUserWidget;
@@ -27,6 +27,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
@@ -84,6 +85,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
 
     private Button selectAccountButton;
+    private boolean accountIconChangedFlag = false;
     private ItemViewButton accountIconButton;
     private Label accountNameLabel;
     private TextBox accountNameTextBox;
@@ -123,15 +125,17 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private void setupGui(int accountNumber)
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber, (bankAccountData) -> {
-            assert bankAccountData != null;
-            setupGui(bankAccountData);
-        });
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankAccountDataAsync(accountNumber).thenAccept(this::setupGui);
     }
-    private void setupGui(BankAccountData bankAccountData)
+    private void setupGui(@Nullable BankAccountData bankAccountData)
     {
+        if(bankAccountData == null)
+        {
+            return;
+        }
+
         boolean isEditingPlayer = false;
-        UUID thisPlayerUUID = minecraft.player.getUUID();
+        UUID thisPlayerUUID = getThisPlayerUUID();
         for(BankUserData userData : bankAccountData.users.values())
         {
             if(userData.userUUID.equals(thisPlayerUUID))
@@ -142,7 +146,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         }
         personalBankOwnerData = bankAccountData.personalBankOwnerData;
         bankAccountName = bankAccountData.accountName;
-        this.canManage = (personalBankOwnerData != null && personalBankOwnerData.userUUID.equals(thisPlayerUUID)) || isAdminMode || isEditingPlayer;
+        this.canManage = (personalBankOwnerData != null && personalBankOwnerData.userUUID().equals(thisPlayerUUID)) || isAdminMode || isEditingPlayer;
 
         bankAccountManagementItems.clear();
         createBankData.clear();
@@ -186,7 +190,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
         selectAccountButton = new Button(BankAccountSelectionScreen.TEXT.SELECT_ACCOUNT_BUTTON.getString());
         selectAccountButton.setOnFallingEdge(() -> {
-            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, Minecraft.getInstance().player.getUUID(), (accountNumber) -> {
+            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, getThisPlayerUUID(), (accountNumber) -> {
                 if(!screenIsOpen)
                     return;
                 this.accountNumber = accountNumber;
@@ -237,7 +241,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     {
         createNewBankButton = new Button(CREATE_NEW_BANK.getString());
         createNewBankButton.setOnFallingEdge(() -> {
-            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData((minimalBankManagerData) -> {
+            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankManagerDataAsync().thenAccept((minimalBankManagerData) -> {
                 if(!screenIsOpen)
                     return;
                 List<ItemStack> allowedItemStacks;
@@ -316,8 +320,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         if(isAdminMode)
         {
             textWidth = createNewBankButton.getTextWidth(CREATE_NEW_BANK.getString())+10;
-            int xOffset = deleteBankAccountButton!=null?deleteBankAccountButton.getWidth()+spacing:0;
-            createNewBankButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth-xOffset, padding, textWidth, closeButton.getHeight());
+            createNewBankButton.setBounds(selectAccountButton.getRight()+spacing, padding, textWidth, closeButton.getHeight());
         }
     }
 
@@ -378,7 +381,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         }
 
         UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.itemView.getItemStack(), bankData, setUsers);
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input, this::setupGui);
+        accountIconChangedFlag = false;
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input).thenAccept(this::setupGui);
     }
     private void updateBankData(BankAccountData bankAccountData)
     {
@@ -401,6 +405,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             accountNameLabel.setText(bankAccountData.accountName);
         }
 
+        if(!accountIconChangedFlag)
+            accountIconButton.setItem(bankAccountData.accountIcon);
+
 
         Map<ItemID, BankData> bankMap = bankAccountData.bankData;
         ArrayList<Pair<ItemID, BankData>> sortedBankAccounts = new ArrayList<>();
@@ -411,7 +418,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             if(bankData != null)
                 sortedBankAccounts.add(new Pair<>(itemID, bankData));
         }
-        sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance, a.getSecond().balance));
+        sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance(), a.getSecond().balance()));
 
         Map<ItemID, BankAccountManagementItem> toRemove = new HashMap<>(bankAccountManagementItems);
         for(Pair<ItemID, BankData> pair : sortedBankAccounts)
@@ -421,14 +428,14 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             if(item == null)
             {
                 item = new BankAccountManagementItem(pair.getFirst(), accountNumber, isAdminMode, canManage);
-                item.setBalance(bankData.balance);
+                item.setBalance(bankData.balance());
                 bankAccountManagementItems.put(pair.getFirst(), item);
                 bankElementListView.addChild(item);
             }
             toRemove.remove(pair.getFirst());
-            item.setBalanceLabel(bankData.balance);
-            item.setLockedBalance(bankData.lockedBalance);
-            item.setTotalBalance(bankData.balance + bankData.lockedBalance);
+            item.setBalanceLabel(bankData.balance());
+            item.setLockedBalance(bankData.lockedBalance());
+            item.setTotalBalance(bankData.balance() + bankData.lockedBalance());
         }
         for(BankAccountManagementItem item : toRemove.values())
         {
@@ -481,7 +488,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             return;
         }
 
-        this.canManage = isAdminMode || bankAccountData.hasPermission(minecraft.player.getUUID(),BankPermission.MANAGE.getValue());
+        this.canManage = isAdminMode || bankAccountData.hasPermission(getThisPlayerUUID(),BankPermission.MANAGE.getValue());
         this.personalBankOwnerData = bankAccountData.personalBankOwnerData;
         this.bankAccountName = bankAccountData.accountName;
         Map<UUID, BankUserWidget> toRemoveUsers = new HashMap<>(bankUserWidgets);
@@ -534,27 +541,27 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private void onAddUserButtonClicked()
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankManagerData((bankManagerData) -> {
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankManagerDataAsync().thenAccept((bankManagerData) -> {
             if(!screenIsOpen || bankManagerData == null)
                 return;
 
             UserSelectionScreen userSelectionScreen = new UserSelectionScreen(
                     this,
                     (userData) -> {
-                        if(bankUserWidgets.containsKey(userData.userUUID))
+                        if(bankUserWidgets.containsKey(userData.userUUID()))
                             return;
-                        BankUserData bankUserData = new BankUserData(userData.userUUID, userData.userName, false, BankPermission.DEPOSIT.getValue());
+                        BankUserData bankUserData = new BankUserData(userData.userUUID(), userData.userName(), false, BankPermission.DEPOSIT.getValue());
                         BankUserWidget userWidget = new BankUserWidget(bankUserData, toRemoveUserWidgets::add, canManage, this);
-                        bankUserWidgets.put(userData.userUUID, userWidget);
+                        bankUserWidgets.put(userData.userUUID(), userWidget);
                         userElementListView.addChild(userWidget);
                     });
-            List<UserData> userDataList = new ArrayList<>(bankManagerData.userMapData.userMap.values().stream().toList());
+            List<UserData> userDataList = new ArrayList<>(bankManagerData.userMapData().userMap().values().stream().toList());
             // remove already added users
-            userDataList.removeIf(userData -> bankUserWidgets.containsKey(userData.userUUID));
+            userDataList.removeIf(userData -> bankUserWidgets.containsKey(userData.userUUID()));
             // remove bank owner
             if(personalBankOwnerData != null)
             {
-                userDataList.removeIf(userData -> userData.userUUID.equals(personalBankOwnerData.userUUID));
+                userDataList.removeIf(userData -> userData.userUUID().equals(personalBankOwnerData.userUUID()));
             }
 
             userSelectionScreen.setUsers(userDataList);
@@ -572,6 +579,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         {
             CreativeModeItemSelectionScreen creativeModeItemSelectionScreen = new CreativeModeItemSelectionScreen((itemStack) ->
             {
+                accountIconChangedFlag = true;
                 accountIconButton.setItem(itemStack);
                 minecraft.setScreen(this);
             }, () ->
@@ -587,6 +595,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     this,
                     allItems,
                     (itemStack)->{
+                        accountIconChangedFlag = true;
                         accountIconButton.setItem(itemStack);
                         minecraft.setScreen(this);
                     }
@@ -606,10 +615,10 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                 this,
                 ()->{
                     // delete
-                    getBankManager().requestDeleteBankAccount(accountNumber, (success) -> {
+                    getBankManager().deleteBankAccountAsync(accountNumber).thenAccept((success) -> {
                         if(success)
                         {
-                            info("Bank account deleted successfully.");
+                            info("ServerBank account deleted successfully.");
                             onClose();
                         }
                         else
@@ -642,7 +651,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         if(lastTickCount > 20)
         {
             lastTickCount = 0;
-            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestBankAccountData(accountNumber, this::updateBankData);
+            BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankAccountDataAsync(accountNumber).thenAccept(this::updateBankData);
         }
     }
 }

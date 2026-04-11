@@ -6,8 +6,8 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
-import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankDownloadBlockEntityPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.networking.entity.UpdateBankDownloadBlockEntityPacket;
+import net.kroia.banksystem.networking.entity.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.ItemID;
@@ -509,12 +509,12 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         addElement(inventoryView);
         addElement(settingsMenu);
 
-        getBankManager().requestAllowdItems((allowedItems) -> {
+        getBankManager().requestAllowdItems().thenAccept((allowedItems) -> {
             settingsMenu.setBankableItems(allowedItems);
             settingsMenu.setOrders(withdrawOrders);
             settingsMenu.setBankAccountNumber(accountNr);
         });
-        getBankManager().requestBankAccountData(accountNr, settingsMenu::setBankAccountData);
+        getBankManager().getBankAccountDataAsync(accountNr).thenAccept(settingsMenu::setBankAccountData);
     }
     @Override
     public void containerTick() {
@@ -527,7 +527,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         if(tickCount > 10)
         {
             tickCount = 0;
-            getBankManager().requestBankAccountData(accountNr, settingsMenu::setBankAccountData);
+            getBankManager().getBankAccountDataAsync(accountNr).thenAccept(settingsMenu::setBankAccountData);
         }
     }
 
@@ -568,7 +568,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     {
         BankDownloadScreen.accountNr = accountNr;
         settingsMenu.setBankAccountNumber(accountNr);
-        getBankManager().requestBankAccountData(accountNr, settingsMenu::setBankAccountData);
+        getBankManager().getBankAccountDataAsync(accountNr).thenAccept(settingsMenu::setBankAccountData);
     }
     private void applySettigns()
     {

@@ -2,10 +2,10 @@ package net.kroia.banksystem.compat;
 
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.banksystem.banking.BankAccount;
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.api.bank.ISyncServerBank;
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
@@ -101,7 +101,7 @@ public class OldBankDataLoader {
     public boolean load_vLessThan_1_5_0_ALPHA_3(CompoundTag tag)
     {
         Map<UUID, User> userMap = new HashMap<>();
-        Map<Integer, BankAccount> bankAccounts = new HashMap<>();
+        Map<Integer, ServerBankAccount> bankAccounts = new HashMap<>();
         int nextAccountNumber = tag.getInt("nextAccountNumber");
         manager.load_compatibilityMode_setNextAccountNumber(nextAccountNumber);
 
@@ -156,7 +156,7 @@ public class OldBankDataLoader {
             bankAccounts.clear();
             for (int i = 0; i < accountsList.size(); i++) {
                 CompoundTag accountTag = accountsList.getCompound(i);
-                BankAccount account = BankAccount.createFromTag(accountTag);
+                ServerBankAccount account = ServerBankAccount.createFromTag(accountTag);
                 if(account != null) {
                     bankAccounts.put(account.getAccountNumber(), account);
                 } else {
@@ -226,7 +226,7 @@ public class OldBankDataLoader {
         // Create personal banks for each user
         ItemID icon = ItemID.of(Items.CHEST.getDefaultInstance());
         for (AccountData accountData : accountDataList) {
-            IBankAccount account = manager.createPersonalBankAccount(accountData.playerUUID);
+            ISyncServerBankAccount account = manager.createPersonalBankAccount(accountData.playerUUID);
             if (account == null) {
                 BACKEND_INSTANCES.LOGGER.error("Failed to create personal bank account for user: " + accountData.playerName);
                 success = false;
@@ -241,7 +241,7 @@ public class OldBankDataLoader {
                     long balance = bankData.balance;
                     long lockedBalance = bankData.lockedBalance;
 
-                    IBank bank = account.createBank(bankData.itemID, 0);
+                    ISyncServerBank bank = account.createBank(bankData.itemID, 0);
                     if(bank != null) {
                         bank.setBalance(balance + lockedBalance);
                         if (lockedBalance > 0) {

@@ -5,13 +5,9 @@ import me.neznamy.tab.api.TabPlayer;
 import me.neznamy.tab.api.placeholder.PlaceholderManager;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.banksystem.api.IServerBankManager;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.modutilities.setting.Setting;
 
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -44,16 +40,16 @@ public class NEZNAMY_TAB_Placeholders {
 
     private static void registerPlayerPlaceholder()
     {
-        IServerBankManager sbm = BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        IAsyncBankManager sbm = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
         BankSystemModSettings.Placeholder settings = BACKEND_INSTANCES.SERVER_SETTINGS.PLACEHOLDER;
 
-
-        registerPlayerPlaceholder(settings.PLAYER_BALANCE, (playerTab) -> {
+        // todo: make the placeholde compatible with the master -- slave architecture by using CompletableFuture<> objects to probide the string data
+        /*registerPlayerPlaceholder(settings.PLAYER_BALANCE, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
-            IBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
+            ISyncServerBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
             if(bankAccount != null)
             {
-                IBank bank = bankAccount.getBank(MoneyItem.getItemID());
+                ISyncServerBank bank = bankAccount.getBank(MoneyItem.getItemID());
                 if(bank != null)
                     return bank.getNormalizedBalance();
             }
@@ -62,10 +58,10 @@ public class NEZNAMY_TAB_Placeholders {
 
         registerPlayerPlaceholder(settings.PLAYER_LOCKED_BALANCE, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
-            IBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
+            ISyncServerBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
             if(bankAccount != null)
             {
-                IBank bank = bankAccount.getBank(MoneyItem.getItemID());
+                ISyncServerBank bank = bankAccount.getBank(MoneyItem.getItemID());
                 if(bank != null)
                     return bank.getNormalizedLockedBalance();
             }
@@ -74,10 +70,10 @@ public class NEZNAMY_TAB_Placeholders {
 
         registerPlayerPlaceholder(settings.PLAYER_TOTAL_BALANCE, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
-            IBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
+            ISyncServerBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
             if(bankAccount != null)
             {
-                IBank bank = bankAccount.getBank(MoneyItem.getItemID());
+                ISyncServerBank bank = bankAccount.getBank(MoneyItem.getItemID());
                 if(bank != null)
                     return bank.getNormalizedTotalBalance();
             }
@@ -86,21 +82,22 @@ public class NEZNAMY_TAB_Placeholders {
 
         registerPlayerPlaceholder(settings.PLAYER_BANKUSER_JSON, (playerTab) -> {
             UUID playerUUID = playerTab.getUniqueId();
-            IBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
+            ISyncServerBankAccount bankAccount = sbm.getPersonalBankAccount(playerUUID);
             if(bankAccount != null)
             {
                 return bankAccount.toJsonString();
             }
             return "0";
-        });
+        });*/
     }
 
     private static void registerServerPlaceholder()
     {
-        IServerBankManager sbm = BACKEND_INSTANCES.SERVER_BANK_MANAGER;
+        IAsyncBankManager sbm = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
         BankSystemModSettings.Placeholder settings = BACKEND_INSTANCES.SERVER_SETTINGS.PLACEHOLDER;
 
-        registerServerPlaceholder(settings.SERVER_CIRCULATION_JSON, sbm::getCirculationDataJsonString);
+        // todo: make the placeholde compatible with the master -- slave architecture by using CompletableFuture<> objects to probide the string data
+        //registerServerPlaceholder(settings.SERVER_CIRCULATION_JSON, sbm::getCirculationDataJsonString);
     }
 
 

@@ -2,14 +2,14 @@ package net.kroia.banksystem.block.custom;
 
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.networking.entity.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.util.MultiServerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.util.StringRepresentable;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Player;
@@ -28,6 +28,8 @@ import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.concurrent.CompletableFuture;
 
 import static dev.architectury.registry.menu.MenuRegistry.openExtendedMenu;
 
@@ -138,15 +140,20 @@ public class BankDownloadBlock extends Block implements EntityBlock {
         if (level.isClientSide())
             return InteractionResult.SUCCESS;
 
+        MultiServerUtils.canInteractWithBankSystem(player.getUUID());
+
         // open screen
         if (player instanceof ServerPlayer sPlayer) {
-            if(blockEntity.hasPermissionToOpenBlock(sPlayer)) {
-                MenuProvider menuProvider = blockEntity.getMenuProvider();
-                SyncBankDownloadDataPacket.sendPacket(sPlayer, blockEntity);
-                openExtendedMenu(sPlayer, menuProvider, (menu) -> {
-                    menu.writeBlockPos(pos);
-                });
-            }
+            CompletableFuture<Boolean> hasPermission = blockEntity.hasPermissionToOpenBlock(sPlayer);
+            hasPermission.thenAccept(hasPermissionResult -> {
+                if(hasPermissionResult) {
+                    MenuProvider menuProvider = blockEntity.getMenuProvider();
+                    SyncBankDownloadDataPacket.sendPacket(sPlayer, blockEntity);
+                    openExtendedMenu(sPlayer, menuProvider, (menu) -> {
+                        menu.writeBlockPos(pos);
+                    });
+                }
+            });
         }
         return InteractionResult.SUCCESS;
     }

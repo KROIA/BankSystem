@@ -2,10 +2,14 @@ package net.kroia.banksystem.util;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.modutilities.networking.client_server.NetworkPacket;
+import net.kroia.modutilities.networking.multi_server.ForwardPacketContext;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
+import java.util.UUID;
 
 public abstract class BankSystemNetworkPacket extends NetworkPacket {
     protected static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -28,10 +32,28 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
         handleOnServer(player);
     }
     protected void handleOnServer(ServerPlayer player) {
+        if(needsRoutingToMaster())
+        {
+            warn("Received packet that should have been sent to the master: "+type().id());
+        }
+    }
 
+    @Override
+    protected void handleOnMaster(ForwardPacketContext context) {
+        handleOnMaster(context.senderPlayerUUID);
+    };
+    protected void handleOnMaster(UUID playerUUID) {
+
+    };
+
+    protected ISyncServerBankManager getSyncBankManager()
+    {
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
     }
 
 
+    @Override
+    protected boolean needsRoutingToMaster() { return BACKEND_INSTANCES.isSlaveServer; }
 
     protected void sendToServer()
     {
@@ -44,6 +66,37 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
     protected void sendToClients(List<ServerPlayer> player)
     {
         BACKEND_INSTANCES.NETWORKING.sendToClients(player, this);
+    }
+
+    protected boolean sendToMaster()
+    {
+        if(MultiServerManager.isRunning() && MultiServerManager.isSlave())
+        {
+            return MultiServerManager.sendToMaster(null, this);
+        }
+        return false;
+    }
+    protected boolean sendToMaster(UUID senderPlayerUUID)
+    {
+        if(MultiServerManager.isRunning() && MultiServerManager.isSlave())
+        {
+            return MultiServerManager.sendToMaster(senderPlayerUUID, this);
+        }
+        return false;
+    }
+    protected void broadcastToSlaves()
+    {
+        if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
+        {
+            MultiServerManager.broadcastToSlaves(this);
+        }
+    }
+    protected void sendToSlave(String slaveID)
+    {
+        if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
+        {
+            MultiServerManager.sendToSlave(slaveID, this);
+        }
     }
 
     protected void info(String message) {

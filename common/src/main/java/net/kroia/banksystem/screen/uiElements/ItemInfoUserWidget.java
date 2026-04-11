@@ -1,7 +1,7 @@
 package net.kroia.banksystem.screen.uiElements;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.modutilities.gui.GuiScreen;
@@ -99,15 +99,15 @@ public class ItemInfoUserWidget extends BankSystemGuiElement {
     }
     public void setBalance(long balance)
     {
-        balanceTextLabel.setText(Bank.getNormalizedAmountStatic(balance));
+        balanceTextLabel.setText(ServerBank.getNormalizedAmountStatic(balance));
     }
     public void setLockedBalance(long lockedBalance)
     {
-        lockedBalanceTextLabel.setText(Bank.getNormalizedAmountStatic(lockedBalance));
+        lockedBalanceTextLabel.setText(ServerBank.getNormalizedAmountStatic(lockedBalance));
     }
     public void setTotalBalance(long totalBalance)
     {
-        totalBalanceTextLabel.setText(Bank.getNormalizedAmountStatic(totalBalance));
+        totalBalanceTextLabel.setText(ServerBank.getNormalizedAmountStatic(totalBalance));
     }
     public void setUserNames(List<String> names)
     {

@@ -1,16 +1,19 @@
 package net.kroia.banksystem.api;
 
+import net.kroia.banksystem.api.bankmanager.IBankManager;
+import net.kroia.banksystem.api.bankmanager.IClientBankManager;
+
 public interface BankSystemAPI {
 
     /**
-     * Returns the mod ID of the Bank System mod.
+     * Returns the mod ID of the ServerBank System mod.
      *
      * @return The mod ID as a String.
      */
     String getModID();
 
     /**
-     * Returns the version of the Bank System mod.
+     * Returns the version of the ServerBank System mod.
      *
      * @return The mod version as a String.
      */
@@ -24,7 +27,7 @@ public interface BankSystemAPI {
     /**
      * @return An instance of IBankUserManager that provides access to bank user management functionalities.
      */
-    IServerBankManager getServerBankManager();
+    IBankManager getServerBankManager();
 
     /**
      * @return An instance of IClientBankManager that provides access to client-side bank management functionalities.

@@ -15,6 +15,9 @@ import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
 public class ItemID implements ServerSaveable {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -57,33 +60,33 @@ public class ItemID implements ServerSaveable {
     public void tryUpdateNameCache()
     {
         ItemStack stack = getStack();
-        if(stack == null) {
+        if(stack == null || stack.isEmpty() || stack.getItem() == Items.AIR) {
             name_cache = String.valueOf(id);
             return;
         }
         name_cache = ItemUtilities.getItemIDStr(stack.getItem());
     }
-    public static @Nullable ItemID fromJson(JsonElement jsonElement)
+    public static @NotNull ItemID fromJson(JsonElement jsonElement)
     {
         if(!jsonElement.isJsonObject())
-            return null;
+            return INVALID_ID;
 
         JsonObject jsonObject = jsonElement.getAsJsonObject();
         if(!jsonObject.has(compoundTagKey_ID))
-            return null;
+            return INVALID_ID;
         short id = jsonObject.get(compoundTagKey_ID).getAsShort();
         return new ItemID(id);
     }
 
-    public static @Nullable ItemID createFromTag(CompoundTag tag) {
+    public static @NotNull ItemID createFromTag(CompoundTag tag) {
         ItemID itemID = new ItemID((short) 0);
         if (!itemID.load(tag)) {
-            return null; // Invalid data
+            return INVALID_ID; // Invalid data
         }
         return itemID;
     }
 
-    public static @Nullable ItemID getFromItemStack(ItemStack itemStack)
+    public static @NotNull ItemID getFromItemStack(ItemStack itemStack)
     {
         return ItemIDManager.getItemID(itemStack);
     }
@@ -93,9 +96,43 @@ public class ItemID implements ServerSaveable {
      * @param itemStack
      * @return the itemID associated with the itemStack
      */
-    public static @NotNull ItemID getOrRegisterFromItemStack(@NotNull ItemStack itemStack)
+    public static @NotNull CompletableFuture<ItemID> getOrRegisterFromItemStackServerSide(@NotNull ItemStack itemStack)
     {
-        return ItemIDManager.registerItemStack(itemStack);
+        return ItemIDManager.registerItemStackServerSide(itemStack);
+    }
+    public static @NotNull CompletableFuture<List<ItemID>> getOrRegisterFromItemStackServerSide(@NotNull List<ItemStack> itemStacks)
+    {
+        return ItemIDManager.registerItemStackServerSide(itemStacks);
+    }
+
+    /**
+     * Do not call this from the server side
+     * @param itemStack
+     * @return the itemID associated with the itemStack
+     */
+    public static @NotNull CompletableFuture<ItemID> getOrRegisterFromItemStackClientSide(@NotNull ItemStack itemStack)
+    {
+        return ItemIDManager.registerItemStackClientSide(itemStack);
+    }
+    public static @NotNull CompletableFuture<List<ItemID>> getOrRegisterFromItemStackClientSide(@NotNull List<ItemStack> itemStacks)
+    {
+        return ItemIDManager.registerItemStackClientSide(itemStacks);
+    }
+
+
+    /**
+     * This function is only save to call from the master server
+     * @param itemStack
+     * @return the itemID associated with the itemStack
+     */
+    public static @NotNull ItemID getOrRegisterFromItemStackServerSide_direct(@NotNull ItemStack itemStack)
+    {
+        @Nullable ItemID id = getFromItemStack(itemStack);
+        if(id == null)
+        {
+            id = ItemIDManager.registerItemStackServerSide_direct(itemStack);
+        }
+        return id;
     }
 
     public static ItemID of(ItemStack defaultInstance) {
@@ -103,6 +140,7 @@ public class ItemID implements ServerSaveable {
         if(id == null)
         {
             warn("Item not registered: "+ defaultInstance);
+            return INVALID_ID;
         }
         return id;
     }
@@ -183,7 +221,7 @@ public class ItemID implements ServerSaveable {
 
     @Override
     public String toString() {
-        return getName();
+        return getName()+"="+getShort();
     }
 
     public short getShort() {

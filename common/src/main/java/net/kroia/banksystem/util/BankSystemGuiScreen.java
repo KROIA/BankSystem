@@ -1,10 +1,14 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.banking.ClientBankManager;
+import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.modutilities.gui.GuiScreen;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+
+import java.util.UUID;
 
 public abstract class BankSystemGuiScreen extends GuiScreen {
 
@@ -27,10 +31,22 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
         BACKEND_INSTANCES = backend;
     }
 
-    protected ClientBankManager getBankManager() {
+    protected IClientBankManager getBankManager() {
         return BACKEND_INSTANCES.CLIENT_BANK_MANAGER;
     }
 
+    protected LocalPlayer getThisPlayer()
+    {
+        return Minecraft.getInstance().player;
+    }
+    protected UUID getThisPlayerUUID()
+    {
+        return getThisPlayer().getUUID();
+    }
+    protected String getThisPlayerName()
+    {
+        return getThisPlayer().getDisplayName().getString();
+    }
 
 
     protected void info(String msg)
