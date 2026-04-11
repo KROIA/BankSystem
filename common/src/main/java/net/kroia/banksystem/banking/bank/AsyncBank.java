@@ -7,7 +7,6 @@ import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
-import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.util.ItemID;
@@ -31,7 +30,6 @@ public class AsyncBank implements IAsyncBank {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
-        ServerBankAccount.setBackend(backend);
     }
 
 
@@ -399,10 +397,6 @@ public class AsyncBank implements IAsyncBank {
         Request instance = Request.instance;
     }
 
-    //private static Request forwardingRequest()
-    //{
-    //    return Request.instance;
-    //}
     private CompletableFuture<OutputData> sendRequest(InputData input)
     {
         CompletableFuture<OutputData> future = new CompletableFuture<>();

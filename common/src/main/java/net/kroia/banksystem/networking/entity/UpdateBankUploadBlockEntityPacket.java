@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.packet.client_sender.update.entity;
+package net.kroia.banksystem.networking.entity;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;

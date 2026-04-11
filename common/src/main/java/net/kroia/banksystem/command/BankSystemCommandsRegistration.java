@@ -34,7 +34,6 @@ public class BankSystemCommandsRegistration {
     
     // Method to register commands
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        //BACKEND_INSTANCES.LOGGER.info("Registering commands");
 
         // /bankSystem manage                                    - Open bank settings GUI to manage the bankable items
         // /bankSystem testScreen                                    - Open thest screen for development
@@ -44,13 +43,6 @@ public class BankSystemCommandsRegistration {
         // /bankSystem allowItemInHand                                - Makes the item in the player's hand available for bank accounts
         // /bankSystem disallowItem <itemID>                          - Makes the itemID unavailable for bank accounts
         // /bankSystem disallowItemInHand                             - Makes the item in the player's hand unavailable for bank accounts
-        //// /bankSystem setStartingBalance                             - Set the starting money balance for new players
-        //// /bankSystem setItemTransferTickInterval                    - Set the amount of ticks it uses for a item to be transferred in the bank terminal block. If set to 0, it will be instant.
-        //// /bankSystem save                                           - Save all bank data and settings
-        //// /bankSystem saveBankaccounts                               - Save all bank data
-        //// /bankSystem saveSettings                                   - Save BankSystemMod settings to file
-        //// /bankSystem loadBankaccounts                               - Load all bank data from file
-        //// /bankSystem loadSettings                                   - Load BankSystemMod settings from file
         dispatcher.register(
                 Commands.literal("banksystem")
                 .then(Commands.literal("testScreen")
@@ -62,7 +54,6 @@ public class BankSystemCommandsRegistration {
                         })
                 )
                 .then(Commands.literal("manage")
-                        //.requires(source -> source.hasPermission(2))
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -107,7 +98,6 @@ public class BankSystemCommandsRegistration {
                         )
                 )
                 .then(Commands.literal("allowItem")
-                        //.requires(source -> source.hasPermission(2))
                         .then(Commands.argument("itemID", StringArgumentType.string())
                                 .executes(context -> {
                                     ServerPlayer player = context.getSource().getPlayerOrException();
@@ -127,7 +117,6 @@ public class BankSystemCommandsRegistration {
                         )
                 )
                 .then(Commands.literal("allowItemInHand")
-                        //.requires(source -> source.hasPermission(2))
                         .executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
 
@@ -146,7 +135,6 @@ public class BankSystemCommandsRegistration {
 
                 )
                 .then(Commands.literal("disallowItem")
-                        //.requires(source -> source.hasPermission(2))
                         .then(Commands.argument("itemID", StringArgumentType.string())
                                 .executes(context -> {
                                     ServerPlayer player = context.getSource().getPlayerOrException();
@@ -168,7 +156,6 @@ public class BankSystemCommandsRegistration {
                         )
                 )
                 .then(Commands.literal("disallowItemInHand")
-                        //.requires(source -> source.hasPermission(2))
                         .executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
 
@@ -186,7 +173,6 @@ public class BankSystemCommandsRegistration {
                         })
                 )
                 .then(Commands.literal("serverInfo")
-                        //.requires(source -> source.hasPermission(2))
                         .executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
                             handler().banksystem_serverInfo_async(player.getUUID());
@@ -194,163 +180,12 @@ public class BankSystemCommandsRegistration {
                         })
                 )
                 .then(Commands.literal("serverNetworkInfo")
-                        //.requires(source -> source.hasPermission(2))
                         .executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
                             handler().banksystem_serverNetworkInfo_async(player.getUUID());
                             return Command.SINGLE_SUCCESS;
                         })
                 )
-                /*.then(Commands.literal("setStartingBalance")
-                        .requires(source -> source.hasPermission(2))
-                        .then(Commands.argument("amount", FloatArgumentType.floatArg(0))
-                                .executes(context -> {
-                                    CommandSourceStack source = context.getSource();
-                                    ServerPlayer player = source.getPlayerOrException();
-                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
-                                    isBanksystemAdmin.thenAccept(isAdmin -> {
-                                        if (!isAdmin) {
-                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
-                                            return;
-                                        }
-
-                                        // Get arguments
-                                        float amount = FloatArgumentType.getFloat(context, "amount");
-                                        long rawAmount = ServerBank.convertToRawAmountStatic(amount);
-                                        BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.STARTING_BALANCE.set(rawAmount);
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingStartBalanceSetMessage(ServerBank.getFormattedAmountStatic(amount)));
-                                    });
-                                    return Command.SINGLE_SUCCESS;
-                                })
-                        )
-                )
-                .then(Commands.literal("setItemTransferTickInterval")
-                        .requires(source -> source.hasPermission(2))
-                        .then(Commands.argument("ticks", IntegerArgumentType.integer(0))
-                                .executes(context -> {
-                                    CommandSourceStack source = context.getSource();
-                                    ServerPlayer player = source.getPlayerOrException();
-
-                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
-                                    isBanksystemAdmin.thenAccept(isAdmin -> {
-                                        if (!isAdmin) {
-                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
-                                            return;
-                                        }
-
-                                        // Get arguments
-                                        int amount = IntegerArgumentType.getInteger(context, "ticks");
-                                        BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ITEM_TRANSFER_TICK_INTERVAL.set(amount);
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankSettingItemTransferTickIntervalMessage(amount));
-                                    });
-                                    return Command.SINGLE_SUCCESS;
-                                })
-                        )
-                )
-                .then(Commands.literal("save")
-                        .requires(source -> source.hasPermission(2))
-                        .executes(context -> {
-                            CommandSourceStack source = context.getSource();
-                            ServerPlayer player = source.getPlayerOrException();
-
-                            CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
-                            isBanksystemAdmin.thenAccept(isAdmin -> {
-                                if (!isAdmin) {
-                                    ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
-                                    return;
-                                }
-
-                                if (BACKEND_INSTANCES.SERVER_DATA_HANDLER.saveAll())
-                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
-                                else
-                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
-                            });
-                            return Command.SINGLE_SUCCESS;
-                        })
-                )
-                .then(Commands.literal("saveBankaccounts")
-                        .requires(source -> source.hasPermission(2))
-                        .executes(context -> {
-                            CommandSourceStack source = context.getSource();
-                            ServerPlayer player = source.getPlayerOrException();
-
-                            CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
-                            isBanksystemAdmin.thenAccept(isAdmin -> {
-                                if (!isAdmin) {
-                                    ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
-                                    return;
-                                }
-
-                                if(!BACKEND_INSTANCES.isSlaveServer)
-                                {
-                                    if (BACKEND_INSTANCES.SERVER_DATA_HANDLER.save_bank())
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
-                                    else
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
-                                }
-                            });
-                            return Command.SINGLE_SUCCESS;
-                        })
-                )
-                .then(Commands.literal("saveSettings")
-                        .requires(source -> source.hasPermission(2))
-                        .executes(context -> {
-                            CommandSourceStack source = context.getSource();
-                            ServerPlayer player = source.getPlayerOrException();
-
-                            CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
-                            isBanksystemAdmin.thenAccept(isAdmin -> {
-                                if (!isAdmin) {
-                                    ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
-                                    return;
-                                }
-                                if (BACKEND_INSTANCES.SERVER_DATA_HANDLER.save_globalSettings())
-                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSavedMessage());
-                                else
-                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataSaveFailedMessage());
-                            });
-                            return Command.SINGLE_SUCCESS;
-                        })
-                )
-                .then(Commands.literal("loadBankaccounts")
-                        .requires(source -> source.hasPermission(2))
-                        .executes(context -> {
-                            CommandSourceStack source = context.getSource();
-                            ServerPlayer player = source.getPlayerOrException();
-
-                            CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
-                            isBanksystemAdmin.thenAccept(isAdmin -> {
-                                if (!isAdmin) {
-                                    ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
-                                    return;
-                                }
-                                if (BACKEND_INSTANCES.SERVER_DATA_HANDLER.load_bank())
-                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadedMessage());
-                                else
-                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadFailedMessage());
-                            });
-                            return Command.SINGLE_SUCCESS;
-                        })
-                )
-                .then(Commands.literal("loadSettings")
-                        .requires(source -> source.hasPermission(2))
-                        .executes(context -> {
-                            CommandSourceStack source = context.getSource();
-                            ServerPlayer player = source.getPlayerOrException();
-                            CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
-                            isBanksystemAdmin.thenAccept(isAdmin -> {
-                                if (!isAdmin) {
-                                    ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
-                                    return;
-                                }
-                                if (BACKEND_INSTANCES.SERVER_DATA_HANDLER.load_globalSettings())
-                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadedMessage());
-                                else
-                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankDataLoadFailedMessage());
-                            });
-                            return Command.SINGLE_SUCCESS;
-                        })
-                )*/
         );
 
         // /money                               - Show balance
@@ -373,14 +208,12 @@ public class BankSystemCommandsRegistration {
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.literal("add")
-                                //.requires(source -> source.hasPermission(2)) // Admin-only for adding money
                                 .then(Commands.argument("amount", FloatArgumentType.floatArg(0, Long.MAX_VALUE))
                                         .executes(context -> {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
 
                                             // Get arguments
-                                            String username = player.getName().getString();
                                             float amount = FloatArgumentType.getFloat(context, "amount");
                                             handler().money_add_async(player.getUUID(), amount);
                                             return Command.SINGLE_SUCCESS;
@@ -401,7 +234,6 @@ public class BankSystemCommandsRegistration {
                                 )
                         )
                         .then(Commands.literal("set")
-                                //.requires(source -> source.hasPermission(2)) // Admin-only for adding money
                                 .then(Commands.argument("amount", FloatArgumentType.floatArg(0, Long.MAX_VALUE))
                                         .executes(context -> {
                                             ServerPlayer player = context.getSource().getPlayerOrException();
@@ -427,7 +259,6 @@ public class BankSystemCommandsRegistration {
                                 )
                         )
                         .then(Commands.literal("remove")
-                                //.requires(source -> source.hasPermission(2)) // Admin-only for adding money
                                 .then(Commands.argument("amount", FloatArgumentType.floatArg(0, Long.MAX_VALUE))
                                         .executes(context -> {
                                             ServerPlayer player = context.getSource().getPlayerOrException();
@@ -494,10 +325,6 @@ public class BankSystemCommandsRegistration {
         // /bank create <accountname>                           - Create a new bank account with the given name
         // /bank <username> manage                              - Opens the management window to manage personal bank of the specific user
         // /bank <username> show                                - Show bank balance of a player
-        //// /bank <username> create <itemID> <amount>            - Create a bank for another player
-        //// /bank <username> setBalance <itemID> <amount>        - Set balance of a bank for another player
-        //// /bank <username> delete <itemID>                     - Delete a bank for another player
-
         dispatcher.register(
                 Commands.literal("bank")
                         .executes(context -> {
@@ -553,7 +380,6 @@ public class BankSystemCommandsRegistration {
                                 )
                         )
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
-                                        //.requires(source -> source.hasPermission(2))
                                         .then(Commands.literal("manage")
                                                 .executes(context -> {
                                                     UUID playerUUID = context.getSource().getPlayerOrException().getUUID();
@@ -574,113 +400,7 @@ public class BankSystemCommandsRegistration {
                                                     return Command.SINGLE_SUCCESS;
                                                 })
                                         )
-                                        /*.then(Commands.literal("create")
-                                                .then(Commands.argument("itemID", StringArgumentType.string())
-                                                        .then(Commands.argument("balance", FloatArgumentType.floatArg(0))
-                                                                .executes(context -> {
-                                                                    CommandSourceStack source = context.getSource();
-                                                                    ServerPlayer player = source.getPlayerOrException();
-
-                                                                    // Get arguments
-                                                                    String itemID = StringArgumentType.getString(context, "itemID");
-                                                                    float balance = FloatArgumentType.getFloat(context, "balance");
-                                                                    String username = StringArgumentType.getString(context, "username");
-
-                                                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
-                                                                    isBanksystemAdmin.thenAccept(isAdmin -> {
-                                                                        if (!isAdmin) {
-                                                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
-                                                                            return;
-                                                                        }
-
-                                                                        ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
-                                                                        if (itemStack == ItemStack.EMPTY) {
-                                                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
-                                                                            return;
-                                                                        }
-                                                                        ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
-
-                                                                        // Execute the command on the server_sender
-                                                                        long rawAmount = ServerBank.convertToRawAmountStatic(balance);
-                                                                        bank_create(player, username, itemIDObj, rawAmount);
-                                                                    });
-                                                                    return Command.SINGLE_SUCCESS;
-                                                                })
-                                                        )
-                                                )
-                                        )
-                                        .then(Commands.literal("setBalance")
-                                                .then(Commands.argument("itemID", StringArgumentType.string())
-                                                        .then(Commands.argument("balance", FloatArgumentType.floatArg(0, Long.MAX_VALUE))
-                                                                .executes(context -> {
-                                                                    CommandSourceStack source = context.getSource();
-                                                                    ServerPlayer player = source.getPlayerOrException();
-
-                                                                    // Get arguments
-                                                                    String itemID = StringArgumentType.getString(context, "itemID");
-                                                                    float balance = FloatArgumentType.getFloat(context, "balance");
-                                                                    String username = StringArgumentType.getString(context, "username");
-
-                                                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
-                                                                    isBanksystemAdmin.thenAccept(isAdmin -> {
-                                                                        if (!isAdmin) {
-                                                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
-                                                                            return;
-                                                                        }
-
-
-                                                                        ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
-                                                                        if (itemStack == ItemStack.EMPTY) {
-                                                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
-                                                                            return;
-                                                                        }
-                                                                        ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
-
-                                                                        // Execute the command on the server_sender
-                                                                        long realBalance = ServerBank.convertToRawAmountStatic(balance);
-                                                                        bank_setBalance(player, username, itemIDObj, realBalance);
-                                                                    });
-                                                                    return Command.SINGLE_SUCCESS;
-                                                                })
-                                                        )
-                                                )
-                                        )
-                                        .then(Commands.literal("delete")
-                                                .then(Commands.argument("itemID", StringArgumentType.string())
-                                                        .executes(context -> {
-                                                            CommandSourceStack source = context.getSource();
-                                                            ServerPlayer player = source.getPlayerOrException();
-
-                                                            // Get arguments
-                                                            String itemID = StringArgumentType.getString(context, "itemID");
-                                                            String username = StringArgumentType.getString(context, "username");
-
-                                                            CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
-                                                            isBanksystemAdmin.thenAccept(isAdmin -> {
-                                                                if (!isAdmin) {
-                                                                    ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
-                                                                    return;
-                                                                }
-
-                                                                // Execute the command on the server_sender
-                                                                ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID);
-                                                                if (itemStack == ItemStack.EMPTY) {
-                                                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemID));
-                                                                    return;
-                                                                }
-                                                                ItemID itemIDObj = ItemID.getFromItemStack(itemStack);
-
-                                                                bank_delete(player, username, itemIDObj);
-                                                            });
-                                                            return Command.SINGLE_SUCCESS;
-                                                        })
-                                                )
-                                        )*/
                         )
-
-
-
-
         );
     }
 
@@ -690,39 +410,13 @@ public class BankSystemCommandsRegistration {
         CompletableFuture<Suggestions> future = new CompletableFuture<>();
         BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankManagerUserMapDataAsync().thenAccept(userMapData ->
         {
-            userMapData.userMap.values().forEach(userData -> {
-                builder.suggest("\""+userData.userName+"\"");
+            userMapData.userMap().values().forEach(userData -> {
+                builder.suggest("\""+ userData.userName() +"\"");
             });
             future.complete(builder.build());
         });
         return future;
     }
-
-    /*private static int showBalance(ServerPlayer player) {
-        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
-        ISyncServerBank bank = bankManager.getOrCreatePersonalBank(player.getUUID(), MoneyItem.getItemID());
-        if(bank == null)
-        {
-            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(), MoneyItem.getName()));
-            return Command.SINGLE_SUCCESS;
-        }
-        long balance = bank.getBalance();
-        ServerPlayerUtilities.printToClientConsole(player,BankSystemTextMessages.getYourBalanceMessage(ServerBank.getFormattedAmountStatic(balance)));
-        return Command.SINGLE_SUCCESS;
-    }
-
-    private static int bank_show(ServerPlayer player, String targetPlayer) {
-        IAsyncBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
-        CompletableFuture<@Nullable IAsyncBankAccount> account = bankManager.getOrCreatePersonalBankAccountAsync(targetPlayer);
-        if(account == null)
-        {
-            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(targetPlayer, MoneyItem.getName()));
-            return Command.SINGLE_SUCCESS;
-        }
-        ServerPlayerUtilities.printToClientConsole(player, account.toString());
-        return Command.SINGLE_SUCCESS;
-    }*/
-
 
 
     private static void info(String msg)

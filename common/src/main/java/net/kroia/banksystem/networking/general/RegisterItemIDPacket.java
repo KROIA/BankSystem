@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.packet.general;
+package net.kroia.banksystem.networking.general;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;

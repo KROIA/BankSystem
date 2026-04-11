@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.request;
+package net.kroia.banksystem.networking.general;
 
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;

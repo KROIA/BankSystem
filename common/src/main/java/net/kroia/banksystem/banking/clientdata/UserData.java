@@ -7,7 +7,7 @@ import net.minecraft.network.codec.StreamCodec;
 
 import java.util.UUID;
 
-public class UserData {
+public record UserData(UUID userUUID, String userName, boolean enableBankNotifications) {
 
 
     public static final StreamCodec<RegistryFriendlyByteBuf, UserData> STREAM_CODEC = StreamCodec.composite(
@@ -17,28 +17,4 @@ public class UserData {
             UserData::new
     );
 
-    public final UUID userUUID;
-    public final String userName;
-    public final boolean enableBankNotifications;
-
-    public UserData(UUID userUUID, String userName, boolean enableBankNotifications) {
-        this.userUUID = userUUID;
-        this.userName = userName;
-        this.enableBankNotifications = enableBankNotifications;
-    }
-
-
-    /*@Override
-    public void encode(FriendlyByteBuf buf) {
-        buf.writeUUID(userUUID);
-        buf.writeUtf(userName);
-        buf.writeBoolean(enableBankNotifications);
-    }
-
-    public static UserData decode(FriendlyByteBuf buf) {
-        UUID userUUID = buf.readUUID();
-        String userName = buf.readUtf();
-        boolean enableBankNotifications = buf.readBoolean();
-        return new UserData(userUUID, userName, enableBankNotifications);
-    }*/
 }

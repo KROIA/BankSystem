@@ -35,7 +35,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
-        ServerBankAccount.setBackend(backend);
+        AsyncBank.setBackend(backend);
     }
 
 
@@ -360,10 +360,6 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         Request instance = Request.instance;
     }
 
-    //private static Request forwardingRequest()
-    //{
-    //    return Request.instance;
-    //}
     private CompletableFuture<OutputData> sendRequest(InputData input)
     {
         CompletableFuture<OutputData> future = new CompletableFuture<>();
@@ -720,7 +716,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
             Map<ItemID, IAsyncBank>  map = new HashMap<>();
             for(BankData data : bankData)
             {
-                map.put(data.itemID, createBank(data.itemID));
+                map.put(data.itemID(), createBank(data.itemID()));
             }
             future.complete(map);
         });

@@ -131,25 +131,25 @@ public class ItemInfoWidget extends BankSystemGuiElement {
             this.itemID = null;
             return;
         }
-        this.itemID = info.itemID;
+        this.itemID = info.itemID();
         if(this.itemID == null)
             return;
 
-        double totalSupply = info.totalSupply; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalSupply(itemID);
-        double totalLocked = info.totalLocked; //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
+        double totalSupply = info.totalSupply(); //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalSupply(itemID);
+        double totalLocked = info.totalLocked(); //BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getTotalLocked(itemID);
 
 
         totalSuplyTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalSuplyMessage(ServerBank.getNormalizedAmountStatic(totalSupply)));
         totalLockedTextLabel.setText(BankSystemTextMessages.getItemInfoWidgetTotalLockedMessage(ServerBank.getNormalizedAmountStatic(totalLocked)));
 
 
-        List<BankAccountData> bankData = info.bankAccounts;
+        List<BankAccountData> bankData = info.bankAccounts();
         if(bankData == null)
             return;
         // sort by total balance
         bankData = bankData.stream().sorted((a, b) -> Long.compare(
-                b.bankData.get(info.itemID).balance+b.bankData.get(info.itemID).lockedBalance,
-                a.bankData.get(info.itemID).balance+a.bankData.get(info.itemID).lockedBalance)).toList();
+                b.bankData.get(info.itemID()).balance() + b.bankData.get(info.itemID()).lockedBalance(),
+                a.bankData.get(info.itemID()).balance() + a.bankData.get(info.itemID()).lockedBalance())).toList();
 
         playerDataView.getLayout().enabled = false;
         HashMap<Integer, ItemInfoUserWidget> toRemoveItems = new HashMap<>(playerDataWidgets);
@@ -167,9 +167,9 @@ public class ItemInfoWidget extends BankSystemGuiElement {
             else
                 toRemoveItems.remove(account.accountNumber);
 
-            userWidget.setBalance(bankDataItem.balance);
-            userWidget.setLockedBalance(bankDataItem.lockedBalance);
-            userWidget.setTotalBalance(bankDataItem.balance + bankDataItem.lockedBalance);
+            userWidget.setBalance(bankDataItem.balance());
+            userWidget.setLockedBalance(bankDataItem.lockedBalance());
+            userWidget.setTotalBalance(bankDataItem.balance() + bankDataItem.lockedBalance());
             userWidget.setAccountNumber(account.accountNumber);
             userWidget.setAccountName(account.accountName);
             userWidget.setUserNames(account.getSearchTexts());

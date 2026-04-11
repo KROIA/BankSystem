@@ -10,8 +10,6 @@ import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.api.command.IBankSystemCommands;
-import net.kroia.banksystem.banking.bank.AsyncBank;
-import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.bankmanager.ClientBankManager;
 import net.kroia.banksystem.block.BankSystemBlocks;
@@ -27,8 +25,8 @@ import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.software.Software;
 import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.banksystem.networking.packet.general.SyncItemIDsPacket;
-import net.kroia.banksystem.networking.packet.server_server.BanksystemMetadataRequest;
+import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
+import net.kroia.banksystem.networking.multi_server.BanksystemMetadataRequest;
 import net.kroia.banksystem.util.*;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.multi_server.MultiServerConfig;
@@ -81,7 +79,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankTerminalBlockEntity.setBackend(INSTANCES);
 
         BankManager.setBackend(INSTANCES);
-        AsyncBank.setBackend(INSTANCES);
+
         BankSystemModSettings.setBackend(INSTANCES);
         //BankSystemConfig.setBackend(INSTANCES);
         BankSystemCommands.setBackend(INSTANCES);
@@ -93,7 +91,6 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemNetworkPacket.setBackend(INSTANCES);
         BankSystemGenericRequest.setBackend(INSTANCES);
         BankSystemTextMessages.setBackend(INSTANCES);
-        AsyncBankAccount.setBackend(INSTANCES);
 
 
         BankSystemCommands.registerCommands();

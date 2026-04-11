@@ -1,5 +1,7 @@
 package net.kroia.banksystem.api.bankmanager;
 
+import org.jetbrains.annotations.Nullable;
+
 public interface IBankManager {
 
     /**
@@ -29,7 +31,7 @@ public interface IBankManager {
      * Do not call this from client side!
      * @return the synchronized access interface.
      */
-    IServerBankManager getSync();
+    @Nullable IServerBankManager getSync();
 
 
     /**

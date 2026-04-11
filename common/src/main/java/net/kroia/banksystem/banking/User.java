@@ -53,8 +53,7 @@ public class User implements ServerSaveable {
     }
     public static User createWithChangedName(User oldUser, String newName)
     {
-        User cpy = new User(oldUser.userUUID, newName, oldUser.enableBankNotifications, oldUser.isBanksystemAdmin);
-        return cpy;
+        return new User(oldUser.userUUID, newName, oldUser.enableBankNotifications, oldUser.isBanksystemAdmin);
     }
     public static @Nullable User createFromTag(CompoundTag tag)
     {

@@ -5,7 +5,6 @@ import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
-import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.util.MultiServerUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -14,7 +13,7 @@ public class BankManager implements IBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
-        ServerBankAccount.setBackend(backend);
+
         ServerBankManager.setBackend(BACKEND_INSTANCES);
         AsyncBankManager.setBackend(BACKEND_INSTANCES);
     }
@@ -64,7 +63,7 @@ public class BankManager implements IBankManager {
         return asyncServerBankManager;
     }
     @Override
-    public IServerBankManager getSync()
+    public @Nullable IServerBankManager getSync()
     {
         return serverBankManager;
     }

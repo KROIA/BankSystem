@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.packet.client_sender.update;
+package net.kroia.banksystem.networking.entity;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.bank.BankStatus;
@@ -7,12 +7,12 @@ import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
-import net.kroia.banksystem.networking.packet.server_server.DropItemsInPlayerInventoryRequest;
+import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRequest;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.multi_server.ForwardPacketContext;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -23,9 +23,11 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -43,10 +45,6 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     HashMap<ItemID, Long> requestedBankNoteIDs;// = new HashMap<>();
     int currentSelectedAccountNumber;
 
-    /*public WithdrawMoneyPacket(FriendlyByteBuf buf) {
-        super(buf);
-    }
-    */
     public WithdrawMoneyPacket(HashMap<ItemID, Long> requestedBankNoteIDs, int currentSelectedAccountNumber) {
         super();
         this.requestedBankNoteIDs = requestedBankNoteIDs;
@@ -58,30 +56,11 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         packet.sendToServer();
     }
 
-    /*@Override
-    public void encode(FriendlyByteBuf buf) {
-        buf.writeVarInt(currentSelectedAccountNumber);
-        buf.writeVarInt(requestedBankNoteIDs.size());
-        for (ItemID itemID : requestedBankNoteIDs.keySet()) {
-            buf.writeItem(itemID.getStack());
-            buf.writeVarLong(requestedBankNoteIDs.get(itemID));
-        }
-    }
 
     @Override
-    public void decode(FriendlyByteBuf buf) {
-        currentSelectedAccountNumber = buf.readVarInt();
-        int size = buf.readVarInt();
-        requestedBankNoteIDs = new HashMap<>();
-        for (int i = 0; i < size; i++) {
-            ItemID itemID = new ItemID(buf.readItem());
-            long amount = buf.readVarInt();
-            requestedBankNoteIDs.put(itemID, amount);
-        }
-    }*/
-    @Override
     protected void handleOnServer(ServerPlayer sender) {
-        ISyncServerBankManager bankManager = getSyncBankManager();
+        handle(sender.getUUID(), null);
+        /*ISyncServerBankManager bankManager = getSyncBankManager();
         ISyncServerBankAccount account = bankManager.getBankAccount(currentSelectedAccountNumber);
         if(account == null)
             return;
@@ -158,22 +137,27 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                     }
                 }
             }
-        }
+        }*/
 
     }
 
     @Override
     protected void handleOnMaster(ForwardPacketContext context) {
-        UUID sender = context.senderPlayerUUID;
+        handle(context.senderPlayerUUID, context.senderServerID);
+    }
+    public void handle(UUID player, @Nullable String slaveID)
+    {
         ISyncServerBankManager bankManager = getSyncBankManager();
+        if(bankManager == null)
+            return;
         final int finalCurrentSelectedAccountNumber = currentSelectedAccountNumber;
         ISyncServerBankAccount account = bankManager.getBankAccount(finalCurrentSelectedAccountNumber);
         if(account == null)
             return;
 
-        if(!account.hasPermission(sender, BankPermission.WITHDRAW.getValue()))
+        if(!account.hasPermission(player, BankPermission.WITHDRAW.getValue()))
         {
-            ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
+            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
             return;
         }
 
@@ -214,7 +198,8 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
 
             if (!moneyBank.hasSufficientFunds(totalValue)) {
-                ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getName(), sender.toString()));
+                String userName = Objects.requireNonNull(bankManager.getUserByUUID(player)).getName();
+                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getName(), userName));
                 continue;
             }
 
@@ -227,33 +212,50 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
 
 
+        if(slaveID == null)
+        {
+            Map<ItemID, Long> notDropped = DropItemsInPlayerInventoryRequest.dropItems(UtilitiesPlatform.getServer(), player, requestedBankNotes);
+            putRemainingItemsBack(finalCurrentSelectedAccountNumber, notDropped);
+        }
+        else
+        {
+            dropRequestToSlave(slaveID, player, finalCurrentSelectedAccountNumber, requestedBankNotes);
+        }
+    }
 
-        CompletableFuture<Map<ItemID, Long>> notDroppedItemsFuture = DropItemsInPlayerInventoryRequest.sendToSlave(context.senderServerID, context.senderPlayerUUID, requestedBankNotes);
+    private void dropRequestToSlave(String slaveID, UUID player, int bankaccountNr, Map<ItemID, Long> items)
+    {
+        CompletableFuture<Map<ItemID, Long>> notDroppedItemsFuture = DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, player, items);
         notDroppedItemsFuture.thenAccept(notDropedItems -> {
-            ISyncServerBankAccount redepositAccount = getSyncBankManager().getBankAccount(finalCurrentSelectedAccountNumber);
-            if(redepositAccount == null) {
-                error("WithdrawMoneyPacket: Invalid bank account ID: " + finalCurrentSelectedAccountNumber + " Items are lost now: "+notDropedItems);
-                return;
-            }
-            ISyncServerBank redepositMoneyBank = redepositAccount.getBank(MoneyItem.getItemID());
-            if(redepositMoneyBank == null) {
-                error("WithdrawMoneyPacket: no money bank account with ID: " + finalCurrentSelectedAccountNumber+" Items are lost now: "+notDropedItems);
-                return; // No money bank found for the player
-            }
+            putRemainingItemsBack(bankaccountNr, notDropedItems);
+        });
+    }
+    private void putRemainingItemsBack(int bankaccountNr, Map<ItemID, Long> items)
+    {
+        if(items.isEmpty())
+            return;
+        ISyncServerBankAccount redepositAccount = getSyncBankManager().getBankAccount(bankaccountNr);
+        if(redepositAccount == null) {
+            error("WithdrawMoneyPacket: Invalid bank account ID: " + bankaccountNr + " Items are lost now: "+items);
+            return;
+        }
+        ISyncServerBank redepositMoneyBank = redepositAccount.getBank(MoneyItem.getItemID());
+        if(redepositMoneyBank == null) {
+            error("WithdrawMoneyPacket: no money bank account with ID: " + bankaccountNr+" Items are lost now: "+items);
+            return; // No money bank found for the player
+        }
 
-            long toDepositMoney = 0;
-            for(Map.Entry<ItemID, Long> entry : notDropedItems.entrySet()) {
-                ItemID  itemID = entry.getKey();
-                ItemStack itemStack = itemID.getStack();
-                if(itemStack != null) {
-                    if (itemStack.getItem() instanceof MoneyItem moneyItem) {
-                        toDepositMoney += moneyItem.worth() * entry.getValue();
-                    }
+        long toDepositMoney = 0;
+        for(Map.Entry<ItemID, Long> entry : items.entrySet()) {
+            ItemID  itemID = entry.getKey();
+            ItemStack itemStack = itemID.getStack();
+            if(itemStack != null) {
+                if (itemStack.getItem() instanceof MoneyItem moneyItem) {
+                    toDepositMoney += moneyItem.worth() * entry.getValue();
                 }
             }
-            redepositMoneyBank.deposit(toDepositMoney);
-        });
-
+        }
+        redepositMoneyBank.deposit(toDepositMoney);
     }
 
 

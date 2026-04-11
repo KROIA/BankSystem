@@ -8,8 +8,8 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.networking.BankSystemNetworking;
-import net.kroia.banksystem.networking.request.BankTerminalBlockDataRequest;
-import net.kroia.banksystem.networking.request.UpdateBankAccountRequest;
+import net.kroia.banksystem.networking.entity.BankTerminalBlockDataRequest;
+import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.NotNull;
@@ -29,27 +29,11 @@ public class ClientBankManager implements IClientBankManager {
 
     private final IAsyncBankManager asyncServerBankManager;
 
-    /*private AsyncServerBankManagerForwardingRequest forwardingRequest()
-    {
-        return BankSystemNetworking.ASYNC_SERVER_BANK_MANAGER_FORWARDING_REQUEST;
-    }*/
-
     public ClientBankManager()
     {
         asyncServerBankManager = AsyncBankManager.createClientManager();
     }
 
-    //private final int bankAccountNumber; // This is a placeholder, as the client does not have a bank account number
-
-
-
-
-
-    //@Override
-    //public IAsyncBankManager getAsync()
-    //{
-    //    return asyncServerBankManager;
-    //}
 
     @Override
     public CompletableFuture<BankManagerData> getBankManagerDataAsync()

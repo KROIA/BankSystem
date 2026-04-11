@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.packet.server_sender.update;
+package net.kroia.banksystem.networking.entity;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
@@ -44,9 +44,6 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
         return false;
     }
 
-    /*public SyncBankDownloadDataPacket(RegistryFriendlyByteBuf buf) {
-        super(buf);
-    }*/
 
     public static void sendPacket(ServerPlayer receiver, BankDownloadBlockEntity blockEntity) {
         List<BankDownloadBlockEntity.WithdrawOrder> withdrawOrders = blockEntity.getWithdrawOrders();
@@ -55,31 +52,6 @@ public class SyncBankDownloadDataPacket extends BankSystemNetworkPacket {
         new SyncBankDownloadDataPacket(withdrawOrders, blockInventorySlotCount, accountNr).sendToClient(receiver);
     }
 
-    //public void handle()
-
-
-    /*@Override
-    public void encode(FriendlyByteBuf buf) {
-        buf.writeInt(withdrawOrders.size());
-        for (BankDownloadBlockEntity.WithdrawOrder order : withdrawOrders) {
-            order.encode(buf);
-        }
-        buf.writeInt(blockInventorySlotCount);
-        buf.writeInt(accountNr);
-    }
-
-    @Override
-    public void decode(FriendlyByteBuf buf) {
-        int size = buf.readInt();
-        withdrawOrders = new java.util.ArrayList<>(size);
-        for (int i = 0; i < size; i++) {
-            BankDownloadBlockEntity.WithdrawOrder order = BankDownloadBlockEntity.WithdrawOrder.decode(buf);
-            if(order != null)
-                withdrawOrders.add(order);
-        }
-        blockInventorySlotCount = buf.readInt();
-        accountNr = buf.readInt();
-    }*/
 
     @Override
     protected void handleOnClient(NetworkManager.PacketContext context) {

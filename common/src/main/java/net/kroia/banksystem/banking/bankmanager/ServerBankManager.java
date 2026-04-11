@@ -37,7 +37,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
     public static void setBackend(BankSystemModBackend.Instances backend) {
-        ServerBankManager.BACKEND_INSTANCES = backend;
+        BACKEND_INSTANCES = backend;
         ServerBankAccount.setBackend(backend);
     }
 

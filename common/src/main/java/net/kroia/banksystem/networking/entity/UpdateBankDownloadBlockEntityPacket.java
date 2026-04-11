@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.packet.client_sender.update.entity;
+package net.kroia.banksystem.networking.entity;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
@@ -41,36 +41,9 @@ public class UpdateBankDownloadBlockEntityPacket extends BankSystemNetworkPacket
         return false;
     }
 
-    /*public UpdateBankDownloadBlockEntityPacket(RegistryFriendlyByteBuf buf) {
-        super(buf);
-    }*/
-
     public static void sendPacket(BlockPos pos, List<BankDownloadBlockEntity.WithdrawOrder> withdrawOrders, int accountNr) {
         new UpdateBankDownloadBlockEntityPacket(pos, withdrawOrders, accountNr).sendToServer();
     }
-
-    /*@Override
-    public void encode(FriendlyByteBuf buf) {
-        buf.writeBlockPos(pos);
-        buf.writeInt(withdrawOrders.size());
-        for (BankDownloadBlockEntity.WithdrawOrder order : withdrawOrders) {
-            order.encode(buf);
-        }
-        buf.writeInt(accountNr);
-    }
-
-    @Override
-    public void decode(FriendlyByteBuf buf) {
-        pos = buf.readBlockPos();
-        int size = buf.readInt();
-        withdrawOrders = new java.util.ArrayList<>(size);
-        for (int i = 0; i < size; i++) {
-            BankDownloadBlockEntity.WithdrawOrder order = BankDownloadBlockEntity.WithdrawOrder.decode(buf);
-            if(order != null)
-                withdrawOrders.add(order);
-        }
-        accountNr = buf.readInt();
-    }*/
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {

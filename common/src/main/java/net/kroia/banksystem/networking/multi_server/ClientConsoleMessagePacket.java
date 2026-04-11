@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.packet.server_server;
+package net.kroia.banksystem.networking.multi_server;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;

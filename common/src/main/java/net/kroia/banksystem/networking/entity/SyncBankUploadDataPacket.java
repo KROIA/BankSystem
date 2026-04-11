@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.packet.server_sender.update;
+package net.kroia.banksystem.networking.entity;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
@@ -40,10 +40,6 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
         return false;
     }
 
-    /*public SyncBankUploadDataPacket(RegistryFriendlyByteBuf buf) {
-        super(buf);
-    }*/
-
     public static void sendPacket(ServerPlayer receiver, BankUploadBlockEntity blockEntity) {
         UUID playerOwner = blockEntity.getPlayerOwner();
         boolean dropIfNotBankable = blockEntity.doesDropIfNotBankable();
@@ -51,23 +47,6 @@ public class SyncBankUploadDataPacket extends BankSystemNetworkPacket {
         int bankAccountNumber = blockEntity.getBankAccountNumber();
         new SyncBankUploadDataPacket(isOwned, dropIfNotBankable, bankAccountNumber).sendToClient(receiver);
     }
-
-/*
-    @Override
-    public void encode(FriendlyByteBuf buf) {
-        buf.writeBoolean(isOwned);
-        buf.writeBoolean(dropIfNotBankable);
-        buf.writeInt(bankAccountNumber);
-
-    }
-
-    @Override
-    public void decode(FriendlyByteBuf buf) {
-        isOwned = buf.readBoolean();
-        dropIfNotBankable = buf.readBoolean();
-        bankAccountNumber = buf.readInt();
-    }*/
-
 
     @Override
     protected void handleOnClient(NetworkManager.PacketContext context) {

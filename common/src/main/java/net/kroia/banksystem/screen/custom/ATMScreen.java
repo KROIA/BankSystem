@@ -5,7 +5,7 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
-import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
+import net.kroia.banksystem.networking.entity.WithdrawMoneyPacket;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -301,7 +301,7 @@ public class ATMScreen extends BankSystemGuiScreen {
             if(accountData.bankData.containsKey(MoneyItem.getItemID()))
             {
                 BankData minimalBankData = accountData.bankData.get(MoneyItem.getItemID());
-                currentBalanceWeekVar = minimalBankData.balance;
+                currentBalanceWeekVar = minimalBankData.balance();
                 balanceView.updateBalance(currentBalanceWeekVar);
             }
         });
@@ -332,8 +332,6 @@ public class ATMScreen extends BankSystemGuiScreen {
                 requestedBankNoteIDs.put(itemID, amount);
             }
         }
-        //requestedBankNoteIDs.put(ItemUtilities.getItemID(BankSystemItems.MONEY50.get()), 0);
-        //requestedBankNoteIDs.put(ItemUtilities.getItemID(BankSystemItems.MONEY10.get()), 100);
         WithdrawMoneyPacket.sendPacket(requestedBankNoteIDs, currentSelectedAccountNumber);
     }
 

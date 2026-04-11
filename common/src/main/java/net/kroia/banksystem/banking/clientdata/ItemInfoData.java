@@ -12,7 +12,7 @@ import java.util.List;
  * Represents data about a bank item
  * This class is used to transfer user bank data from the server to the client.
  */
-public class ItemInfoData  {
+public record ItemInfoData(ItemID itemID, double totalSupply, double totalLocked, List<BankAccountData> bankAccounts) {
 
     public static final StreamCodec<RegistryFriendlyByteBuf, ItemInfoData> STREAM_CODEC = StreamCodec.composite(
             ItemID.STREAM_CODEC, p -> p.itemID,
@@ -22,46 +22,4 @@ public class ItemInfoData  {
             ItemInfoData::new
     );
 
-    public final ItemID itemID;
-    public final double totalSupply;
-    public final double totalLocked;
-    public final List<BankAccountData> bankAccounts;
-
-
-    public ItemInfoData(ItemID itemID,
-                        double totalSupply,
-                        double totalLocked,
-                        List<BankAccountData> bankAccounts) {
-        this.itemID = itemID;
-        this.totalSupply = totalSupply;
-        this.totalLocked = totalLocked;
-        this.bankAccounts = bankAccounts;
-    }
-
-    /*@Override
-    public void encode(FriendlyByteBuf buf) {
-        buf.writeItem(itemID.getStack());
-        buf.writeDouble(totalSupply);
-        buf.writeDouble(totalLocked);
-        buf.writeInt(itemFractionScaleFactor);
-        buf.writeInt(bankAccounts.size());
-        for(BankAccountData bankAccount : bankAccounts)
-        {
-            bankAccount.encode(buf);
-        }
-    }
-
-    public static ItemInfoData decode(FriendlyByteBuf buf) {
-        ItemID itemID = new ItemID(buf.readItem());
-        double totalSupply = buf.readDouble();
-        double totalLocked = buf.readDouble();
-        int itemFractionScaleFactor = buf.readInt();
-        int size = buf.readInt();
-        List<BankAccountData> bankAccounts = new ArrayList<>(size);
-        for(int i = 0; i < size; i++)
-        {
-            bankAccounts.add(BankAccountData.decode(buf));
-        }
-        return new ItemInfoData(itemID, totalSupply, totalLocked, bankAccounts, itemFractionScaleFactor);
-    }*/
 }

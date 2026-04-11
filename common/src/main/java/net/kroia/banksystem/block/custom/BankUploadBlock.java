@@ -2,7 +2,7 @@ package net.kroia.banksystem.block.custom;
 
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankUploadDataPacket;
+import net.kroia.banksystem.networking.entity.SyncBankUploadDataPacket;
 import net.kroia.banksystem.util.MultiServerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;

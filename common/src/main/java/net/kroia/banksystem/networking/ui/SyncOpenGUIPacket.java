@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.packet.server_sender;
+package net.kroia.banksystem.networking.ui;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;

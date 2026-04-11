@@ -57,7 +57,7 @@ public class UserSelectionScreen extends BankSystemGuiScreen {
     public void setUsers(List<UserData> users) {
         userListView.removeChilds();
         for (UserData user : users) {
-            Button button = new Button(user.userName, () -> {
+            Button button = new Button(user.userName(), () -> {
                 onUserSelected.accept(user);
                 onClose();
             });

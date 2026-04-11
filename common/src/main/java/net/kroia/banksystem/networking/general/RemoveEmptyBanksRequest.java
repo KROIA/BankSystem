@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.request;
+package net.kroia.banksystem.networking.general;
 
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;

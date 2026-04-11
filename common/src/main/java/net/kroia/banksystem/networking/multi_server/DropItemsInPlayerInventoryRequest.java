@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.packet.server_server;
+package net.kroia.banksystem.networking.multi_server;
 
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
@@ -12,6 +12,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -61,25 +62,49 @@ public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<
         return DropItemsInPlayerInventoryRequest.class.getName();
     }
 
-    public CompletableFuture<OutputData> handleOnSlaveServer(InputData input, @Nullable UUID playerSender) {
-
-        MinecraftServer server = UtilitiesPlatform.getServer();
+    public static Map<ItemID, Long> dropItems(MinecraftServer server, UUID playerReceiver, Map<ItemID, Long> itemsToDrop)
+    {
         if(server == null)
         {
-            error("server is null");
-            return CompletableFuture.completedFuture(new OutputData(input.playerReceiver, input.items));
+            return itemsToDrop;
         }
-        ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(input.playerReceiver);
+        ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(playerReceiver);
         if(player == null)
         {
-            warn("receiver player not online");
-            return CompletableFuture.completedFuture(new OutputData(input.playerReceiver, input.items));
+            return itemsToDrop;
         }
 
-        Map<ItemID, Long> notDropedItems = new HashMap<>();
+        Map<ItemID, Long> notDroppedItems = new HashMap<>();
+        for(Map.Entry<ItemID, Long> entry : itemsToDrop.entrySet())
+        {
+            ItemID itemID = entry.getKey();
+            long amount = entry.getValue();
+            ItemStack stack = itemID.getStack().copy();
+            if(stack.isEmpty())
+            {
+                notDroppedItems.put(itemID, amount);
+            }
+            else
+            {
+                int remaining = 0;
+                int nextStackSize = 0;
+                do
+                {
+                    nextStackSize = Math.min(stack.getMaxStackSize(), (int)amount);
+                    stack.setCount(nextStackSize);
+                    remaining = ServerPlayerUtilities.addToPlayerInventory(player, stack);
+                    amount -= (nextStackSize-remaining);
+                }while(remaining != nextStackSize && amount > 0);
 
-        CompletableFuture<OutputData>  future = new CompletableFuture<>();
-        return future;
+                notDroppedItems.put(itemID, amount);
+            }
+        }
+        return notDroppedItems;
+    }
+
+    public CompletableFuture<OutputData> handleOnSlaveServer(InputData input, @Nullable UUID playerSender) {
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        return CompletableFuture.completedFuture(new OutputData(input.playerReceiver, dropItems(server,  input.playerReceiver, input.items)));
     }
 
 

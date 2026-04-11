@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.packet.general;
+package net.kroia.banksystem.networking.general;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
@@ -65,18 +65,13 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
     public static void sendToSlave(String slaveID, Map<ItemID, ItemStack> items)
     {
         SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
-        //packet.info("Send to slave: "+slaveID+"\n"+packet);
         packet.sendToSlave(slaveID);
     }
     public static void sendAllItemsToSlave(String slaveID)
     {
         sendToSlave(slaveID, ItemIDManager.getItemIDMap());
     }
-    /*public static void sendRegistrationRequestToMaster(Map<ItemID, ItemStack> items)
-    {
-        SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
-        packet.sendToMaster();
-    }*/
+
 
     @Override
     public void handleOnClient(NetworkManager.PacketContext context)
@@ -90,17 +85,11 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
 
     }
 
-    //@Override
-    //protected void handleOnMaster(ForwardPacketContext context)
-    //{
-    //    ItemIDManager.receiveSyncPacket(this);
-    //}
 
     @Override
     protected void handleOnSlave(ForwardPacketContext context)
     {
         ItemIDManager.receiveSyncPacket(this);
-        //info("handleOnSlave\n"+this);
     }
 
     @Override

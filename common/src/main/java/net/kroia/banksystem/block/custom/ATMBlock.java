@@ -1,6 +1,6 @@
 package net.kroia.banksystem.block.custom;
 
-import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
+import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;

@@ -7,7 +7,7 @@ import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
-import net.kroia.banksystem.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
+import net.kroia.banksystem.networking.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.ItemID;
@@ -279,7 +279,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             if(bankData != null)
                 sortedBankAccounts.add(new Pair<>(itemID, bankData));
         }
-        sortedBankAccounts.sort((a, b) -> Float.compare(b.getSecond().getBalance(), a.getSecond().getBalance()));
+        sortedBankAccounts.sort((a, b) -> Float.compare(b.getSecond().balance(), a.getSecond().balance()));
 
         int x = 0;
         int y = 0;
@@ -288,7 +288,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         HashMap<ItemID,ItemID> availableItems = new HashMap<>();
         for (Pair<ItemID, BankData> pair : sortedBankAccounts)
         {
-            long balance = pair.getSecond().balance;
+            long balance = pair.getSecond().balance();
             BankElement element = getBankElement(pair.getFirst());
             if (element == null) {
                 ItemStack stack = pair.getFirst().getStack();

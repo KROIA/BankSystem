@@ -1,4 +1,4 @@
-package net.kroia.banksystem.networking.request;
+package net.kroia.banksystem.networking.entity;
 
 
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;

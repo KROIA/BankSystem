@@ -7,7 +7,7 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.banking.clientdata.UserData;
-import net.kroia.banksystem.networking.request.UpdateBankAccountRequest;
+import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.BankAccountManagementItem;
 import net.kroia.banksystem.screen.uiElements.BankUserWidget;
@@ -146,7 +146,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         }
         personalBankOwnerData = bankAccountData.personalBankOwnerData;
         bankAccountName = bankAccountData.accountName;
-        this.canManage = (personalBankOwnerData != null && personalBankOwnerData.userUUID.equals(thisPlayerUUID)) || isAdminMode || isEditingPlayer;
+        this.canManage = (personalBankOwnerData != null && personalBankOwnerData.userUUID().equals(thisPlayerUUID)) || isAdminMode || isEditingPlayer;
 
         bankAccountManagementItems.clear();
         createBankData.clear();
@@ -418,7 +418,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             if(bankData != null)
                 sortedBankAccounts.add(new Pair<>(itemID, bankData));
         }
-        sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance, a.getSecond().balance));
+        sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance(), a.getSecond().balance()));
 
         Map<ItemID, BankAccountManagementItem> toRemove = new HashMap<>(bankAccountManagementItems);
         for(Pair<ItemID, BankData> pair : sortedBankAccounts)
@@ -428,14 +428,14 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             if(item == null)
             {
                 item = new BankAccountManagementItem(pair.getFirst(), accountNumber, isAdminMode, canManage);
-                item.setBalance(bankData.balance);
+                item.setBalance(bankData.balance());
                 bankAccountManagementItems.put(pair.getFirst(), item);
                 bankElementListView.addChild(item);
             }
             toRemove.remove(pair.getFirst());
-            item.setBalanceLabel(bankData.balance);
-            item.setLockedBalance(bankData.lockedBalance);
-            item.setTotalBalance(bankData.balance + bankData.lockedBalance);
+            item.setBalanceLabel(bankData.balance());
+            item.setLockedBalance(bankData.lockedBalance());
+            item.setTotalBalance(bankData.balance() + bankData.lockedBalance());
         }
         for(BankAccountManagementItem item : toRemove.values())
         {
@@ -548,20 +548,20 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             UserSelectionScreen userSelectionScreen = new UserSelectionScreen(
                     this,
                     (userData) -> {
-                        if(bankUserWidgets.containsKey(userData.userUUID))
+                        if(bankUserWidgets.containsKey(userData.userUUID()))
                             return;
-                        BankUserData bankUserData = new BankUserData(userData.userUUID, userData.userName, false, BankPermission.DEPOSIT.getValue());
+                        BankUserData bankUserData = new BankUserData(userData.userUUID(), userData.userName(), false, BankPermission.DEPOSIT.getValue());
                         BankUserWidget userWidget = new BankUserWidget(bankUserData, toRemoveUserWidgets::add, canManage, this);
-                        bankUserWidgets.put(userData.userUUID, userWidget);
+                        bankUserWidgets.put(userData.userUUID(), userWidget);
                         userElementListView.addChild(userWidget);
                     });
-            List<UserData> userDataList = new ArrayList<>(bankManagerData.userMapData.userMap.values().stream().toList());
+            List<UserData> userDataList = new ArrayList<>(bankManagerData.userMapData().userMap().values().stream().toList());
             // remove already added users
-            userDataList.removeIf(userData -> bankUserWidgets.containsKey(userData.userUUID));
+            userDataList.removeIf(userData -> bankUserWidgets.containsKey(userData.userUUID()));
             // remove bank owner
             if(personalBankOwnerData != null)
             {
-                userDataList.removeIf(userData -> userData.userUUID.equals(personalBankOwnerData.userUUID));
+                userDataList.removeIf(userData -> userData.userUUID().equals(personalBankOwnerData.userUUID()));
             }
 
             userSelectionScreen.setUsers(userDataList);
