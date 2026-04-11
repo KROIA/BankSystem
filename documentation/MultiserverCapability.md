@@ -9,8 +9,9 @@
 </td>
 
 
-This mod is capable to connect multiple minecraft servers together and share the banking system including the bankaccounts. A Master-Slave architecture is used when this feature is enabled.
-The master contains the core logic for the banking system and the slave servers use async interfaces to connect over the network to the master banking system server.
+This mod allows multiple Minecraft servers to connect and share the banking system, including bank accounts. When activated, it uses a master-slave architecture. The master server contains the core logic of the banking system, while the slave servers establish a network connection to the master server via asynchronous interfaces.
+
+
 
 
 ---
