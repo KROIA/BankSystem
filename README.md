@@ -22,8 +22,14 @@ You want to support me?<br>
 * [Downloads](#downloads)
 * [Blocks](#blocks)
 * [Items](#items)
-* [How to use](#how-to-use)
-    * [For server player / single player](#for-server-player--single-player)
+* [Usage](#usage)
+    * [Bank Terminal Block](#bank-terminal-block)
+    * [ATM Block](#atm-block)
+    * [Interaction for automation systems](#interaction-for-automation-systems)
+      * [Bank Upload Block](#bank-upload-block)
+      * [Bank Download Block](#bank-download-block)
+    * [Shared bank account](#shared-bank-account)
+    * [Creating a new bank account](#creating-a-new-bank-account)
     * [For admins / single player](#for-admins--single-player)
 * [Commands](#commands)
 
@@ -32,6 +38,8 @@ You want to support me?<br>
 ## Features
 - Adds a banking system to the game for money and items.
 - Adds new [blocks](#blocks) to interact with the bank account.
+- Money can be placed as a block for decorative and storage purposes.
+- Connect multiple servers to share bank accounts across multiple servers.
 
 ## Dependencies
 - [Architectury](https://www.curseforge.com/minecraft/mc-mods/architectury-api)
@@ -39,6 +47,9 @@ You want to support me?<br>
 - [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities) (Only needed for Quilt)
 - [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api) (Only needed for Fabric)
 
+
+## Setup
+[Setup (click here)](documentation/setup.md)
   
 ---
 ## Downloads
@@ -157,12 +168,28 @@ Right click on a <b>Terminal Block</b> using a <b>Banking Software</b> to create
 </tr>
 
 
+
+<tr>
+<td>
+<b>ATM Block</b><br>
+Used to withdraw money.<br>
+Interaction using right click.<br>
+Right click on a <b>Terminal Block</b> using a <b>ATM Software</b> to create this block.
+</td>
+<td>
+<div align="center">
+    <img src="documentation/images/atmBlock.png" width="100"> 
+</div>
+</td>
+</tr>
+
+
 <tr>
 <td>
 <b>Bank Upload Block</b><br>
 Used to send items to a specified bank account.<br>
 Change its settings by right clicking on it<br>
-Once the block is connected to a bankaccount, other players can't access it any more.<br>
+Once the block is connected to a bank account, other players can't access it any more.<br>
 Can be connected to Pipes and hoppers.<br>
 Needs to be powered by redstone to send items to the bank.<br>
 6 Iron nuggets<br>
@@ -182,7 +209,7 @@ Needs to be powered by redstone to send items to the bank.<br>
 <b>Bank Download Block</b><br>
 Used to receive items from a specified bank account.<br>
 Change its settings by right clicking on it<br>
-Once the block is connected to a bankaccount, other players can't access it any more.<br>
+Once the block is connected to a bank account, other players can't access it any more.<br>
 Can be connected to Pipes and hoppers.<br>
 Needs to be powered by redstone to receive items to the bank.<br>
 6 Iron nuggets<br>
@@ -264,6 +291,22 @@ Used to programm the <b>Terminal Block</b> to be a <b>Bank Terminal Block</b><br
 </tr>
 
 
+
+<tr>
+<td>
+<b>ATM Software</b><br>
+Used to programm the <b>Terminal Block</b> to be a <b>ATM Block</b><br>
+1 Empty Software<br>
+1 Dispenser<br>
+</td>
+<td>
+<div align="center">
+    <img src="documentation/images/atmSoftware.png" width="300"> 
+</div>
+</td>
+</tr>
+
+
 <tr>
 <td>
 <b>Bank Transmitter Module</b><br>
@@ -319,28 +362,184 @@ The admin is responsible to bring money in to circulation.<br>
 
 </table>
 
+
 ---
-## How to use
-### For server player / single player
-<div align="center">
-    <img src="documentation/images/bankingView.png" > 
-</div>
+
+## Commands
+| Command | Description | Admin only | Banksystem Admin only |
+|---------|-------------|------------|------------|
+| /banksystem manage                          								| Opens the settings window for the mod   |  | :heavy_check_mark: |
+| /banksystem op [user]                         							| Makes the specified player a Banksystem Admin   | :heavy_check_mark: |  |
+| /banksystem deop [user]                         							| Removes the Banksystem Admin status from the player   | :heavy_check_mark: |  |
+| /banksystem allowItem [itemID]                     						| Adds the item to the list of bankable items   |  | :heavy_check_mark: |
+| /banksystem allowItemInHand	                     						| Adds the item, that is currently in the main hand, to the list of bankable items   |  | :heavy_check_mark: |
+| /banksystem disallowItem [itemID]                     					| Removes the item from the list of bankable items. This removes the itembanks from all players    |  | :heavy_check_mark: |
+| /banksystem disallowItemInHand [itemID]                     				| Removes the item, that is currently in the main hand, from the list of bankable items. This removes the itembanks from all players   |  | :heavy_check_mark: |
+| /banksystem serverInfo                     								| Gets some informations about this server  |  |  |
+| /banksystem serverNetworkInfo                     						| Gets some informations about the server network this server is connected to  |  |  |
+| | | | |
+| /money                           											| Show money balance                            |  |  |
+| /money add [amount]              											| Add money to self                             |  | :heavy_check_mark: |
+| /money add [user] [amount]       											| Add money to another player                   |  | :heavy_check_mark: |
+| /money set [amount]              											| Set money to self                             |  | :heavy_check_mark: |
+| /money set [user] [amount]       											| Set money to another player                   |  | :heavy_check_mark: |
+| /money remove [amount]           											| Remove money from self                        |  | :heavy_check_mark: |
+| /money remove [user] [amount]    											| Remove money from another player              |  | :heavy_check_mark: |
+| /money send [user] [amount]      											| Send money to another player                  |  |  |
+| /money circulation               											| Show money circulation of all players + bot   |  |  |
+| | | | |
+| /bank                                                						| Show bank balance (money and items)      		|  |  |
+| /bank enableNotifications                                                 | Enables bank notifications (no effect currently)   |  |  |
+| /bank disableNotifications                                                | Disables bank notifications (no effect currently)    |  |  | 
+| /bank manage                                                       	    | Opens the management window to manage own bank account |  |  |
+| /bank manage [accountname]                                                | Opens the management window to manage the specified bank account |  |  |
+| /bank create [accountname]                                                | Create a new bank account with the given name |  |  |
+| /bank [username] manage                                					| Opens the management window to manage the personal bank account for the specific player	 | | :heavy_check_mark: | 
+| /bank [username] show                                						| Show bank balance of another player      		| | :heavy_check_mark: | 
+
+---- 
+
+
+## Usage
+### Bank Terminal Block
+<table>
+<tr>
+<td width = 500 valign="top">
+The Bank Terminal Block is used to deposit/withdraw items to/from the bank account.
+
+> [!NOTE]  
+> The block contains an inventory which is unique for every player. 
+> Like a ender chest but when the block gets destroyed, 
+> the items which are not stored in the bank account will be dropped.
+> 
 <br>
+</td>
+<td width = 600>
+<div align="center">
+    <img src="documentation/images/BankTerminalBlock.gif" width=600> 
+</div>
+</td>
+</tr>
+</table>
 
-Now open the **Bank Terminal Block** using right click.<br>
-This opens a menu which lets you send and receive items/money to your bank account.<br>
-Each player has its own bank terminal inventory, other player can not access your items, contained in this block.<br>
-If the block gets destroyed, all items which are not transfered to the bank will drop.<br>
-It drops all items from all players which let some items in it.<br>
 
-## Send items to the bank
-Put your items you want to send to the bank inside the bank terminal inventory and click the **Send items to bank** button.<br>
-It takes some time for all items to arrive on your bank acoount.<br>
+---
+### ATM Block
+<table>
+<tr>
+<td width = 500 valign="top">
+The ATM Block lets you withdraw money as specific bank notes.<br>
+</td>
+<td width = 600>
+<div align="center">
+    <img src="documentation/images/ATMBlock.gif" width=600> 
+</div>
+</td>
+</tr>
+</table>
 
-## Receive items from the bank
-Put the amount you want to withdraw in to the textfield next to the item.<br>
-Press the **Receive items from bank** button to start the transaction.<br>
-It also takes some time for the items to arrive in the bank terminal block.<br>
+---
+### Interaction for automation systems
+
+<div align="center">
+    <img src="documentation/images/bank_upDownload_block.png" > 
+</div>
+
+#### Bank Upload Block
+
+<table>
+<tr>
+<td width = 500 valign="top">
+To use the Bank Upload Block, it has to be connected to your bank account.<br>
+Open the block and press on the <b>Connect to Bank</b> button.<br>
+- <b>Drop items if not bankable:</b><br>
+   This setting specifies if the block drops iteps that can not be stored in the bank or not.<br>
+<br>
+Once the block is connected to your bank account, items can be placed in it.<br>
+To send the items to the bank account, the block must be powered by a redstone signal.<br>
+</td>
+<td width = 600>
+<div align="center">
+    <img src="documentation/images/BankUploadBlock.gif" width=600> 
+</div>
+</td>
+</tr>
+</table>
+
+#### Bank Download Block
+
+<table>
+<tr>
+<td width = 500 valign="top">
+To use the Bank Download Block, it has to be connected to your bank account.<br>
+Open the block and press on the <b>Connect to Bank</b> button.<br>
+- <b>Select item:</b><br>
+   Click that button to select, which item you want to receive from your bank account.<br>
+   <br>
+- <b>Amount:</b><br>
+   Define how many items the block should try to hold in its inventory.<br>
+   If items get removed from the inventory, the block try's to download new items until the specified amount is reached.<br>
+<br>
+Press the <b>Apply</b> button to save the changes.<br>
+Once the block is configured, a redstone signal triggers the block to work<br>
+</td>
+<td width = 600>
+<div align="center">
+    <img src="documentation/images/BankDownloadBlock.gif" width=600> 
+</div>
+</td>
+</tr>
+</table>
+
+---
+### Shared bank account
+<table>
+<tr>
+<td width = 500 valign="top">
+A player can be added to a bank account in the <b>managementGUI</b>.<br>
+Open it using the command:<br>
+<b>/bank managementGUI</b><br>
+Permissions for each player can be changed as shown in the image.<br>
+- <b>Allowed to deposit</b>:<br>If checked, the player is allowed to deposit items to the bank account.<br>
+- <b>Allowed to withdraw</b>:<br>If checked, the player is allowed to use items from that bank account.<br>
+- <b>Allowed to manage</b>:<br>If checked, the player is allowed to:<br>
+   - add or remove other players.<br>
+   - change permissions of other players in that bank account.<br>
+   - change the account name.<br>
+   - change the account icon.<br>
+   - delete the account.<br>
+<br>
+A Bank account can not be deleted if it is a personal bank account. Each player has one personal bank account.<br>
+Only manually create bank accounts can be deleted.
+
+</td>
+<td width = 600>
+<div align="center">
+    <img src="documentation/images/addToOwnBankaccount.gif" width=600> 
+</div>
+</td>
+</tr>
+</table>
+
+---
+
+### Creating a new bank account
+<table>
+<tr>
+<td width = 500 valign="top">
+A player can create a bank account using the command:<br>
+<b>/bank create [accountname]</b><br>
+After the bank has been created, the ManagementGUI opens.<br>
+
+</td>
+<td width = 600>
+<div align="center">
+    <img src="documentation/images/createBankaccount.gif" width=600> 
+</div>
+</td>
+</tr>
+</table>
+
 
 ---
 ### For Admins / Single Player
@@ -362,6 +561,7 @@ It shows the total suply, this is the sum of all players bank accounts for that 
 You can also see the sum of [locked amount](#locked-amount) over all players.<br>
 Using the **Manage** button on each players display, the [bank account window](#managing-items-for-banking) for that player will be opened.<br>
 
+---
 #### Managing players bank account
 Manage players bank account using the GUI. To open the gui, type the following command:
 ```
@@ -375,6 +575,14 @@ Other ways to open this window:
     <img src="documentation/images/bankManagementGUI.png" > 
 </div>
 <br>
+
+#### Locked amount
+Other mods which access a players bank account may want to reserve some amount for later use. <br>
+The [Stock Market Mod](https://github.com/KROIA/StockMarket) for example uses this feature to reserve the amount (money/items) you want to trade. If a trade is not executed immediately the player must wait until the transaction is processed.<br>
+To prevent double spending for the time that trade is not executed, the amount gets reserved.<br> 
+If you release the locked amount without knowing what mod reserved the amount, may cause problems.<br>
+
+
 
 The window shows all items which are currently stored on the players bank account.<br>
 <details close> 
@@ -405,95 +613,3 @@ The window shows all items which are currently stored on the players bank accoun
     Check the check box if you want to release the locked amount for a specific item. This may affect other mods which have locked the money/item in the first place.<br>
     Click the <b>Save changes</b> button to apply your changes.<br>
 </details>
-
----
-
-## Commands
-| Command | Description | Admin only |
-|---------|-------------|------------|
-| /money                           											| Show balance                                  |  |
-| /money add [amount]              											| Add money to self                             | :heavy_check_mark: |
-| /money add [user] [amount]       											| Add money to another player                   | :heavy_check_mark: |
-| /money set [amount]              											| Set money to self                             | :heavy_check_mark: |
-| /money set [user] [amount]       											| Set money to another player                   | :heavy_check_mark: |
-| /money remove [amount]           											| Remove money from self                        | :heavy_check_mark: |
-| /money remove [user] [amount]    											| Remove money from another player              | :heavy_check_mark: |
-| /money send [user] [amount]      											| Send money to another player                  |  |
-| /money circulation               											| Show money circulation of all players + bot   |  |
-| /bank                                                						| Show bank balance (money and items)      		|  |
-| /bank enableNotifications                                                 | Enables bank notifications on transactions    |  |
-| /bank disableNotifications                                                | Disables bank notifications on transactions   |  | 
-| /bank [username] bankManagementGUI                                		| Open the bank [management window](#managing-players-bank-account) for the specific player	| :heavy_check_mark: |
-| /bank [username] show                                						| Show bank balance of another player      		| :heavy_check_mark: |
-| /bank [username] create [itemID] [amount]            						| Create a bank for another player         		| :heavy_check_mark: |
-| /bank [username] setBalance [itemID] [amount]        						| Set balance of a bank for another player 		| :heavy_check_mark: |
-| /bank [username] delete [itemID]                     						| Delete a bank for another player         		| :heavy_check_mark: |
-| /bank allowItem [itemID]                     						        | Adds the item to the list of bankable items   | :heavy_check_mark: |
-| /bank settingsGUI                     						            | Opens the [items management window](#managing-items-for-banking)   | :heavy_check_mark: |
-| /bank setStartingBalance                                                  | Set the starting money balance for new players when they join the server as a new player | :heavy_check_mark: |
-| /bank setItemTransferTickInterval                                         | Set the amount of ticks it uses for a item to be transfered in the bank terminal block. If set to 0, it will be instant.  | :heavy_check_mark: |
-| /bank save                                                                | Saves all bank data | :heavy_check_mark: |
-| /bank load                                                                | Loads all bank data | :heavy_check_mark: |
-
----- 
-
-### Interaction for automation systems
-
-<div align="center">
-    <img src="documentation/images/bank_upDownload_block.png" width=600> 
-</div>
-
-#### Bank Upload Block
-
-<table>
-<tr>
-<td width = 500 valign="top">
-To use the Bank Upload Block, it has to be connected to your bank account.<br>
-Open the block and press on the <b>Connect to Bank</b> button.<br>
-- <b>Drop items if not bankable:</b><br>
-   This setting specifies if the block drops iteps that can not be stored in the bank or not.<br>
-<br>
-Once the block is connected to your bank account, items can be placed in it.<br>
-To send the items to the bank account, the block must be powered by a redstone signal.<br>
-</td>
-<td width = 400>
-<div align="center">
-    <img src="documentation/images/bank_upload_block_gui.png" width=400> 
-</div>
-</td>
-</tr>
-</table>
-
-#### Bank Download Block
-
-<table>
-<tr>
-<td width = 500 valign="top">
-To use the Bank Download Block, it has to be connected to your bank account.<br>
-Open the block and press on the <b>Connect to Bank</b> button.<br>
-- <b>Select item:</b><br>
-   Click that button to select, which item you want to receive from your bank account.<br>
-   <br>
-- <b>Amount:</b><br>
-   Define how many items the block should try to hold in its inventory.<br>
-   If items get removed from the inventory, the block try's to download new items until the specified amount is reached.<br>
-<br>
-Press the <b>Apply</b> button to save the changes.<br>
-Once the block is configured, a redstone signal triggers the block to work<br>
-</td>
-<td width = 400>
-<div align="center">
-    <img src="documentation/images/bank_download_block_gui.png" width=400> 
-</div>
-</td>
-</tr>
-</table>
-
---- 
-
-#### Locked amount
-Other mods which access a players bank account may want to reserve some amount for later use. <br>
-The [Stock Market Mod](https://github.com/KROIA/StockMarket) for example uses this feature to reserve the amount (money/items) you want to trade. If a trade is not executed immediately the player must wait until the transaction is processed.<br>
-To prevent double spending for the time that trade is not executed, the amount gets reserved.<br> 
-If you release the locked amount without knowing what mod reserved the amount, may cause problems.<br>
-

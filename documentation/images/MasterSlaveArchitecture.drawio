@@ -1,0 +1,66 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Seite-1" id="XgzimoMiKdgVU5I-jql1">
+    <mxGraphModel dx="571" dy="311" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;div&gt;Minecraft server A&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="70" width="160" x="360" y="530" as="geometry" />
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-3" edge="1" parent="1" source="L84bQm8tTn4MwxBVoNxv-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;strokeWidth=3;" target="L84bQm8tTn4MwxBVoNxv-2">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="360" y="570" />
+              <mxPoint x="360" y="570" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="Banksystem Master" vertex="1">
+          <mxGeometry height="30" width="120" x="380" y="555" as="geometry" />
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-2" parent="1" style="shape=datastore;whiteSpace=wrap;html=1;" value="Bank Data" vertex="1">
+          <mxGeometry height="60" width="60" x="270" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Minecraft server B&lt;/div&gt;" vertex="1">
+          <mxGeometry height="50" width="160" x="160" y="710" as="geometry" />
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-19" edge="1" parent="1" source="L84bQm8tTn4MwxBVoNxv-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;strokeWidth=2;endArrow=none;endFill=0;entryX=0.25;entryY=1;entryDx=0;entryDy=0;" target="L84bQm8tTn4MwxBVoNxv-22">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="410" y="650" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="Banksystem Slave B" vertex="1">
+          <mxGeometry height="30" width="120" x="180" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Minecraft server B&lt;/div&gt;" vertex="1">
+          <mxGeometry height="50" width="160" x="360" y="710" as="geometry" />
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-20" edge="1" parent="1" source="L84bQm8tTn4MwxBVoNxv-16" style="edgeStyle=orthogonalEdgeStyle;shape=connector;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;strokeColor=default;strokeWidth=2;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=default;labelBackgroundColor=default;endArrow=none;endFill=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="L84bQm8tTn4MwxBVoNxv-22">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="440" y="650" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="Banksystem Slave C" vertex="1">
+          <mxGeometry height="30" width="120" x="380" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-17" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Singleplayer session&lt;/div&gt;" vertex="1">
+          <mxGeometry height="50" width="160" x="560" y="710" as="geometry" />
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-21" edge="1" parent="1" source="L84bQm8tTn4MwxBVoNxv-18" style="edgeStyle=orthogonalEdgeStyle;shape=connector;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;strokeColor=default;strokeWidth=2;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=default;labelBackgroundColor=default;endArrow=none;endFill=0;entryX=0.75;entryY=1;entryDx=0;entryDy=0;" target="L84bQm8tTn4MwxBVoNxv-22">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="470" y="640" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-18" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="Banksystem Slave D" vertex="1">
+          <mxGeometry height="30" width="120" x="580" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-23" edge="1" parent="1" source="L84bQm8tTn4MwxBVoNxv-22" style="edgeStyle=orthogonalEdgeStyle;shape=connector;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=default;strokeWidth=3;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=default;labelBackgroundColor=default;endArrow=none;endFill=0;" target="L84bQm8tTn4MwxBVoNxv-1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="L84bQm8tTn4MwxBVoNxv-22" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="TCP Server" vertex="1">
+          <mxGeometry height="20" width="70" x="405" y="590" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

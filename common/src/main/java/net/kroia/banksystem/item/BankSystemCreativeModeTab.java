@@ -42,6 +42,6 @@ public class BankSystemCreativeModeTab {
 
     public static <T extends CreativeModeTab> RegistrySupplier<T> registerTab(String name, Supplier<T> tab)
     {
-        return TABS.register(new ResourceLocation(BankSystemMod.MOD_ID, name), tab);
+        return TABS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), tab);
     }
 }

@@ -1,34 +1,45 @@
 package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.ClientBankManager;
-import net.kroia.banksystem.networking.packet.client_sender.request.RequestPotentialBankItemIDsPacket;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.ItemInfoWidget;
+import net.kroia.banksystem.util.BankSystemGuiScreen;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CloseButton;
 import net.kroia.modutilities.gui.elements.ItemSelectionView;
 import net.kroia.modutilities.gui.elements.ItemView;
-import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
+import net.kroia.modutilities.gui.screens.CreativeModeItemSelectionScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.flag.FeatureFlagSet;
+import net.minecraft.world.item.ItemStack;
 
-public class BankSystemSettingScreen extends GuiScreen {
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
-    private static final String PREFIX = "gui.";
-    private static final String NAME = ".setting_screen.";
-    public static final Component TITLE = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "title");
-    public static final Component CLOSE = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "close");
-    public static final Component NEW_BANKING_ITEM_BUTTON = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "new_banking_item");
-    public static final Component REMOVE_BANKING_ITEM_BUTTON = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "remove_banking_item");
-    public static final Component BANKING_ITEMS = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "banking_items");
-    public static final Component ASK_TITLE = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "ask_remove_title");
-    public static final Component ASK_MSG = Component.translatable(PREFIX+ BankSystemMod.MOD_ID + NAME + "ask_remove_message");
+public class BankSystemSettingScreen extends BankSystemGuiScreen {
 
-    private String currentBankingItemID;
+    private static final class TEXT {
+        private static final String PREFIX = "gui." + BankSystemMod.MOD_ID + ".setting_screen.";
+        public static final Component TITLE = Component.translatable(PREFIX + "title");
+        public static final Component NEW_BANKING_ITEM_BUTTON = Component.translatable(PREFIX + "new_banking_item");
+        public static final Component REMOVE_BANKING_ITEM_BUTTON = Component.translatable(PREFIX + "remove_banking_item");
+        public static final Component BANKING_ITEMS = Component.translatable(PREFIX + "banking_items");
+        public static final Component ASK_TITLE = Component.translatable(PREFIX + "ask_remove_title");
+        public static final Component ASK_MSG = Component.translatable(PREFIX + "ask_remove_message");
+
+        //public static final Component ASK_ITEM_FRACTION_SCALE_FACTOR_SCREEN_TITLE = Component.translatable(PREFIX + "ask_item_fraction_scale_factor_screen.title");
+        //public static final Component ASK_ITEM_FRACTION_SCALE_FACTOR_SCREEN_LABEL = Component.translatable(PREFIX + "ask_item_fraction_scale_factor_screen.label");
+        //public static final Component ASK_ITEM_FRACTION_SCALE_FACTOR_SCREEN_TOOLTIP= Component.translatable(PREFIX + "ask_item_fraction_scale_factor_screen.tooltip");
+        //public static final Component ASK_ITEM_FRACTION_SCALE_FACTOR_SCREEN_CONFIRM_BUTTON = Component.translatable(PREFIX + "ask_item_fraction_scale_factor_screen.confirm_button");
+    }
+
+
+    private ItemID currentBankingItemID;
 
     public static final int padding = 10;
     private final CloseButton closeButton;
@@ -40,34 +51,50 @@ public class BankSystemSettingScreen extends GuiScreen {
     private final ItemInfoWidget itemInfoWidget;
     private static BankSystemSettingScreen instance;
     private int lastTickCount = 0;
+    private static boolean screenIsOpen = false;
+
+    private CreativeModeItemSelectionScreen creativeModeItemSelectionScreen;
+
     public BankSystemSettingScreen() {
-        super(TITLE);
+        super(TEXT.TITLE);
         instance = this;
-        if(ClientBankManager.getPotentialBankItemIDs().isEmpty())
-        {
-            RequestPotentialBankItemIDsPacket.sendRequest();
-        }
+        setGuiScale(0.5f);
+        //RequestPotentialBankItemIDsPacket.sendRequest();
+
 
         closeButton = new CloseButton(this::onClose);
 
-        newBankingItemButton = new Button(NEW_BANKING_ITEM_BUTTON.getString());
+        newBankingItemButton = new Button(TEXT.NEW_BANKING_ITEM_BUTTON.getString());
         newBankingItemButton.setOnFallingEdge(() -> {
-            ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, ClientBankManager.getPotentialBankItemIDs(), this::onNewBankingItemSelected);
-            itemSelectionScreen.sortItems();
-            this.minecraft.setScreen(itemSelectionScreen);
+
+            FeatureFlagSet enabledFeatures = minecraft.player.level().enabledFeatures();
+            boolean showOperatorTab = false; // Set this to `true` if you need the operator tab
+
+            creativeModeItemSelectionScreen = new CreativeModeItemSelectionScreen(this::onNewBankingItemSelected,()->
+            {
+                minecraft.setScreen(this);
+                creativeModeItemSelectionScreen = null;
+            });
+            Minecraft.getInstance().setScreen(creativeModeItemSelectionScreen);
         });
 
-        currentBankingItemsView = new ItemSelectionView(ClientBankManager.getAllowedItemIDs(), this::setCurrentBankingItemID);
-        currentBankingItemsView.setPosition(padding, padding);
-        currentBankingItemsView.setItemLabelText(BANKING_ITEMS.getString());
-        currentBankingItemsView.sortItems();
 
-        removeBankingItemButton = new Button(REMOVE_BANKING_ITEM_BUTTON.getString(), () -> {
+        currentBankingItemsView = new ItemSelectionView(this::setCurrentBankingItemID);
+        currentBankingItemsView.setPosition(padding, padding);
+        currentBankingItemsView.setItemLabelText(TEXT.BANKING_ITEMS.getString());
+
+
+
+
+        removeBankingItemButton = new Button(TEXT.REMOVE_BANKING_ITEM_BUTTON.getString(), () -> {
             if(currentBankingItemID != null) {
                 AskPopupScreen popup = new AskPopupScreen(this, () -> {
-                    ClientBankManager.requestRemoveItemID(currentBankingItemID);
-                    setCurrentBankingItemID(null);
-                }, () -> {}, ASK_TITLE.getString() + " "+currentBankingItemID + "?", ASK_MSG.getString());
+                    getBankManager().disallowItemIDAsync(currentBankingItemID).thenAccept((success)->{
+                        if(success)
+                            setCurrentBankingItemID(null);
+                        updateCurrentBankingItemsView();
+                    });
+                }, () -> {}, TEXT.ASK_TITLE.getString() + " " + ItemUtilities.getItemName(currentBankingItemID.getStack().getItem())  + "?", TEXT.ASK_MSG.getString());
                 popup.setSize(400,100);
                 popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
                 minecraft.setScreen(popup);
@@ -88,12 +115,21 @@ public class BankSystemSettingScreen extends GuiScreen {
         addElement(currentBankingItemsView);
         addElement(currentBankingItemView);
         addElement(itemInfoWidget);
+
+        updateCurrentBankingItemsView();
     }
 
     public static void openScreen()
     {
         BankSystemSettingScreen screen = new BankSystemSettingScreen();
         Minecraft.getInstance().setScreen(screen);
+        screenIsOpen = true;
+    }
+
+    @Override
+    public void onClose() {
+        screenIsOpen = false;
+        super.onClose();
     }
 
     @Override
@@ -113,60 +149,75 @@ public class BankSystemSettingScreen extends GuiScreen {
     }
 
 
-    private void onNewBankingItemSelected(String itemID) {
-        var items = ClientBankManager.getAllowedItemIDs();
-        if(!items.contains(itemID)) {
-            ClientBankManager.requestAllowNewItemID(itemID);
-        }
-        setCurrentBankingItemID(itemID);
+    private void onNewBankingItemSelected(ItemStack itemStack) {
+        CompletableFuture<ItemID> idFuture = ItemID.getOrRegisterFromItemStackClientSide(itemStack);
+        idFuture.thenAccept(id -> {
+            getBankManager().allowItemIDAsync(id).thenAccept((result) ->
+            {
+                if(!screenIsOpen || !result)
+                    return; // Do not update if the screen is not open
+                setCurrentBankingItemID(id.getStack());
+                updateCurrentBankingItemsView();
+            });
+        });
     }
-    private void setCurrentBankingItemID(String newItemID) {
+    private void setCurrentBankingItemID(ItemStack itemStack) {
         currentBankingItemID = null;
-        itemInfoWidget.setItemID(null);
-        if(newItemID == null) {
+
+        if(itemStack == null) {
             currentBankingItemView.setItemStack(null);
+            itemInfoWidget.setItemInfo(null);
             return;
         }
-        ClientBankManager.requestItemInfo(newItemID);
-        var items = ClientBankManager.getAllowedItemIDs();
         currentBankingItemView.setItemStack(null);
+        currentBankingItemView.setItemStack(itemStack);
+        currentBankingItemID = ItemID.of(itemStack);
+        updateItemInfoData();
 
-        for(String itemID : items) {
-            if (itemID.compareTo(newItemID) == 0) {
-                currentBankingItemView.setItemStack(ItemUtilities.createItemStackFromId(newItemID));
-                currentBankingItemID = newItemID;
-                itemInfoWidget.setItemID(currentBankingItemID);
+        /*for(ItemID itemID : getBankManager().getAllowedItemIDs()) {
+            String name = itemID.getName();
+            if (name.compareTo(ItemUtilities.getItemIDStr(itemStack.getItem())) == 0) {
+                currentBankingItemView.setItemStack(itemID.getStack());
+                currentBankingItemID = new ItemID(itemStack);
+                updateItemInfoData();
                 break;
             }
-        }
+        }*/
     }
 
-    public void updateBankData()
+    public void updateCurrentBankingItemsView()
     {
-        var items = ClientBankManager.getAllowedItemIDs();
-        currentBankingItemsView.setAllowedItems(items);
-        currentBankingItemsView.sortItems();
-        setCurrentBankingItemID(currentBankingItemID);
+        currentBankingItemsView.clearItems();
+        getBankManager().getBankManagerDataAsync().thenAccept((minimalBankManagerData) -> {
+            if(!screenIsOpen)
+                return; // Do not update if the screen is not open
+            List<ItemStack> allowedItemStacks;
+            if(minimalBankManagerData == null)
+            {
+                allowedItemStacks = new ArrayList<>();
+            }
+            else {
+                allowedItemStacks = minimalBankManagerData.getAllowedItemStacks();
+            }
+            currentBankingItemsView.setItems(allowedItemStacks);
+            currentBankingItemsView.sortItems();
+        });
     }
     public void updateItemInfoData()
     {
-        itemInfoWidget.setItemID(currentBankingItemID);
+        if(currentBankingItemID == null)
+            return;
+        getBankManager().getItemInfoDataAsync(currentBankingItemID).thenAccept(itemInfoWidget::setItemInfo);
+        //itemInfoWidget.setItemID(currentBankingItemID);
     }
 
     @Override
     public void tick() {
-        if(ClientBankManager.hasUpdatedBankData())
-            updateBankData();
-
-        if(ClientBankManager.hasUpdatedItemInfo())
-            updateItemInfoData();
-
-
         lastTickCount++;
         if(lastTickCount > 20 && currentBankingItemID != null)
         {
             lastTickCount = 0;
-            ClientBankManager.requestItemInfo(currentBankingItemID);
+            updateItemInfoData();
         }
     }
 }

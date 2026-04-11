@@ -32,14 +32,27 @@ public class BankSystemBlocks {
     public static final RegistrySupplier<Block> METAL_CASE_BLOCK = registerBlock(MetalCaseBlock.NAME, MetalCaseBlock::new);
     public static final RegistrySupplier<TerminalBlock> TERMINAL_BLOCK = registerBlock(TerminalBlock.NAME, TerminalBlock::new);
     public static final RegistrySupplier<TerminalBlock> BANK_TERMINAL_BLOCK = registerBlock(BankTerminalBlock.NAME, BankTerminalBlock::new);
+    public static final RegistrySupplier<TerminalBlock> ATM_BLOCK = registerBlock(ATMBlock.NAME, ATMBlock::new);
     public static final RegistrySupplier<Block> BANK_UPLOAD_BLOCK = registerBlock(BankUploadBlock.NAME, BankUploadBlock::new);
     public static final RegistrySupplier<Block> BANK_DOWNLOAD_BLOCK = registerBlock(BankDownloadBlock.NAME, BankDownloadBlock::new);
+    public static final RegistrySupplier<Block> MONEY_STOCKPILE_BLOCK = registerBlockNoItem(MoneyStockpileBlock.NAME, MoneyStockpileBlock::new);
 
 
     public static <T extends Block> RegistrySupplier<T> registerBlock(String name, Supplier<T> block)
     {
-        RegistrySupplier<T> toReturn = BLOCKS.register(new ResourceLocation(BankSystemMod.MOD_ID, name), block);
+        RegistrySupplier<T> toReturn = BLOCKS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), block);
         BankSystemItems.registerBlockItem(name, toReturn);
         return toReturn;
+    }
+    /*
+    mc < 1.21
+    public static <T extends Block> RegistrySupplier<T> registerBlockNoItem(String name, Supplier<T> block)
+    {
+        return BLOCKS.register(new ResourceLocation(BankSystemMod.MOD_ID, name), block);
+    }
+    */
+    public static <T extends Block> RegistrySupplier<T> registerBlockNoItem(String name, Supplier<T> block)
+    {
+        return BLOCKS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), block);
     }
 }

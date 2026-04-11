@@ -2,15 +2,14 @@ package net.kroia.banksystem.block.custom;
 
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDataPacket;
-import net.kroia.banksystem.networking.packet.server_sender.update.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.networking.entity.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.util.MultiServerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.util.StringRepresentable;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Player;
@@ -30,7 +29,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static dev.architectury.registry.menu.MenuRegistry.openExtendedMenu;
 
@@ -61,7 +60,7 @@ public class BankDownloadBlock extends Block implements EntityBlock {
         }
 
         @Override
-        public String getSerializedName() {
+        public @NotNull String getSerializedName() {
             return this.name;
         }
     }
@@ -72,7 +71,7 @@ public class BankDownloadBlock extends Block implements EntityBlock {
     public static final EnumProperty<ReceivingState> RECEIVING_STATE = EnumProperty.create("receiving_state", ReceivingState.class);
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     public BankDownloadBlock() {
-        super(Properties.copy(net.minecraft.world.level.block.Blocks.CHEST).isRedstoneConductor((state, level, pos) -> false));
+        super(Properties.ofFullCopy(net.minecraft.world.level.block.Blocks.CHEST).isRedstoneConductor((state, level, pos) -> false));
         this.registerDefaultState(this.stateDefinition.any().setValue(CONNECTION_STATE, ConnectionState.NOT_CONNECTED));
         this.registerDefaultState(this.stateDefinition.any().setValue(RECEIVING_STATE, ReceivingState.NOT_RECEIVING));
         this.registerDefaultState(this.defaultBlockState().setValue(FACING, Direction.NORTH)); // Default facing
@@ -113,6 +112,7 @@ public class BankDownloadBlock extends Block implements EntityBlock {
         super.neighborChanged(state, level, pos, block, fromPos, isMoving); // Call super to handle other changes
     }
 
+    @Override
     public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         boolean isPowered = level.hasNeighborSignal(pos);
 
@@ -131,12 +131,7 @@ public class BankDownloadBlock extends Block implements EntityBlock {
     }
 
     @Override
-    public final @NotNull InteractionResult use(@NotNull BlockState state,
-                                                @NotNull Level level,
-                                                @NotNull BlockPos pos,
-                                                @NotNull Player player,
-                                                @NotNull InteractionHand hand,
-                                                @NotNull BlockHitResult hit) {
+    protected final @NotNull InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
 
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof BankDownloadBlockEntity blockEntity))
@@ -145,17 +140,20 @@ public class BankDownloadBlock extends Block implements EntityBlock {
         if (level.isClientSide())
             return InteractionResult.SUCCESS;
 
+        MultiServerUtils.canInteractWithBankSystem(player.getUUID());
+
         // open screen
         if (player instanceof ServerPlayer sPlayer) {
-            UUID playerOwner = blockEntity.getPlayerOwner();
-            if(playerOwner == null || playerOwner.equals(player.getUUID())) {
-                MenuProvider menuProvider = blockEntity.getMenuProvider();
-                SyncBankDataPacket.sendPacket(sPlayer, player.getUUID());
-                SyncBankDownloadDataPacket.sendPacket(sPlayer, blockEntity);
-                openExtendedMenu(sPlayer, menuProvider, (menu) -> {
-                    menu.writeBlockPos(pos);
-                });
-            }
+            CompletableFuture<Boolean> hasPermission = blockEntity.hasPermissionToOpenBlock(sPlayer);
+            hasPermission.thenAccept(hasPermissionResult -> {
+                if(hasPermissionResult) {
+                    MenuProvider menuProvider = blockEntity.getMenuProvider();
+                    SyncBankDownloadDataPacket.sendPacket(sPlayer, blockEntity);
+                    openExtendedMenu(sPlayer, menuProvider, (menu) -> {
+                        menu.writeBlockPos(pos);
+                    });
+                }
+            });
         }
         return InteractionResult.SUCCESS;
     }

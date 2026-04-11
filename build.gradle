@@ -2,7 +2,6 @@ plugins {
     id 'dev.architectury.loom' version '1.7-SNAPSHOT' apply false
     id 'architectury-plugin' version '3.4-SNAPSHOT'
     id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
-    id 'maven-publish'
 }
 
 architectury {
@@ -39,6 +38,9 @@ subprojects {
         // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
         // See https://docs.gradle.org/current/userguide/declaring_repositories.html
         // for more information about repositories.
+
+        // https://github.com/NEZNAMY/TAB API
+        maven { url 'https://jitpack.io' }
     }
 
     dependencies {
@@ -46,12 +48,15 @@ subprojects {
         //mappings "net.fabricmc:yarn:$rootProject.yarn_mappings:v2"
 
         //mappings channel: rootProject.mapping_channel, version: rootProject.mapping_version
+        mappings loom.officialMojangMappings()
 
-        mappings loom.layered() {
-            officialMojangMappings()
-            parchment("org.parchmentmc.data:parchment-${rootProject.minecraft_version}:${rootProject.mapping_version}")
-        }
+        //mappings loom.layered() {
+        //    officialMojangMappings()
+        //    parchment("org.parchmentmc.data:parchment-${rootProject.minecraft_version}:${rootProject.mapping_version}")
+        //}
 
+        // https://github.com/NEZNAMY/TAB API
+        compileOnly 'com.github.NEZNAMY:TAB-API:5.2.5'
 
 
     }
@@ -62,12 +67,12 @@ subprojects {
         // If you remove this line, sources will not be generated.
         withSourcesJar()
 
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     tasks.withType(JavaCompile).configureEach {
-        it.options.release = 17
+        it.options.release = 21
     }
 
     // Configure Maven publishing.
