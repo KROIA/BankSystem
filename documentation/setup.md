@@ -2,7 +2,7 @@
 
 
 
-- [MultiServer Setup](MultiServerCapability.md)
+- [MultiServer Setup](MultiserverCapability.md)
 
 
 ---
