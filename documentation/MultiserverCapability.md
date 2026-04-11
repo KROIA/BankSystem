@@ -3,7 +3,7 @@
 <tr>
 <td>
 <div align="center">
-    <img src="images/MasterSlaveArchitecture.png" style="width:80%"> 
+    <img src="images/MasterSlaveArchitecture.png" style="width:80%"> <br>
     <figcaption><b>Master-Slave Architecture</b></figcaption>
 </div>
 </td>
