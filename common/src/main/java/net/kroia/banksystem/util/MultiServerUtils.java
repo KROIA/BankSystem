@@ -3,11 +3,11 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.ServerPlayerUtilities;
-import net.kroia.modutilities.networking.server_server.ServerServerManager;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 
 import java.util.UUID;
 
-public class ServerServerUtils {
+public class MultiServerUtils {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
@@ -16,7 +16,7 @@ public class ServerServerUtils {
 
     public static boolean checkConnectionToMaster()
     {
-        return ServerServerManager.isRunning() && ServerServerManager.isSlave();
+        return MultiServerManager.isRunning() && MultiServerManager.isSlave();
     }
     public static boolean checkConnectionToMaster(UUID executor)
     {

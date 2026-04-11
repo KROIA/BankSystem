@@ -7,7 +7,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.modutilities.networking.server_server.ForwardPacketContext;
+import net.kroia.modutilities.networking.multi_server.ForwardPacketContext;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -65,7 +65,7 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
     public static void sendToSlave(String slaveID, Map<ItemID, ItemStack> items)
     {
         SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
-        packet.info("Send to slave: "+slaveID+"\n"+packet);
+        //packet.info("Send to slave: "+slaveID+"\n"+packet);
         packet.sendToSlave(slaveID);
     }
     public static void sendAllItemsToSlave(String slaveID)
@@ -100,7 +100,7 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
     protected void handleOnSlave(ForwardPacketContext context)
     {
         ItemIDManager.receiveSyncPacket(this);
-        info("handleOnSlave\n"+this);
+        //info("handleOnSlave\n"+this);
     }
 
     @Override

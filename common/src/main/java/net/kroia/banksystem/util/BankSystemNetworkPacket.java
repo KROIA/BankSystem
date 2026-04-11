@@ -4,8 +4,8 @@ import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.modutilities.networking.client_server.NetworkPacket;
-import net.kroia.modutilities.networking.server_server.ForwardPacketContext;
-import net.kroia.modutilities.networking.server_server.ServerServerManager;
+import net.kroia.modutilities.networking.multi_server.ForwardPacketContext;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
@@ -70,32 +70,32 @@ public abstract class BankSystemNetworkPacket extends NetworkPacket {
 
     protected boolean sendToMaster()
     {
-        if(ServerServerManager.isRunning() && ServerServerManager.isSlave())
+        if(MultiServerManager.isRunning() && MultiServerManager.isSlave())
         {
-            return ServerServerManager.sendToMaster(null, this);
+            return MultiServerManager.sendToMaster(null, this);
         }
         return false;
     }
     protected boolean sendToMaster(UUID senderPlayerUUID)
     {
-        if(ServerServerManager.isRunning() && ServerServerManager.isSlave())
+        if(MultiServerManager.isRunning() && MultiServerManager.isSlave())
         {
-            return ServerServerManager.sendToMaster(senderPlayerUUID, this);
+            return MultiServerManager.sendToMaster(senderPlayerUUID, this);
         }
         return false;
     }
     protected void broadcastToSlaves()
     {
-        if(ServerServerManager.isRunning() && ServerServerManager.isMaster())
+        if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
         {
-            ServerServerManager.broadcastToSlaves(this);
+            MultiServerManager.broadcastToSlaves(this);
         }
     }
     protected void sendToSlave(String slaveID)
     {
-        if(ServerServerManager.isRunning() && ServerServerManager.isMaster())
+        if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
         {
-            ServerServerManager.sendToSlave(slaveID, this);
+            MultiServerManager.sendToSlave(slaveID, this);
         }
     }
 

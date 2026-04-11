@@ -23,6 +23,7 @@ public interface IAsyncBank {
 
     /**
      * Gets the currently free available balance of this bank.
+     * The returned value is the backend value.
      *
      * @return The currently free available balance of this bank.
      */
@@ -35,6 +36,7 @@ public interface IAsyncBank {
      * to prevent double spending.
      * <p>
      * For example, the StockMarketMod uses this to lock funds when a player creates a buy order which is not yet fulfilled.
+     * The returned value is the backend value.
      *
      * @return The currently locked balance of this bank.
      */
@@ -43,16 +45,36 @@ public interface IAsyncBank {
     /**
      * Gets the total balance of this bank.
      * This is the sum of the available balance and the locked balance.
+     * The returned value is the backend value.
      *
      * @return The total balance of this bank.
      */
     CompletableFuture<Long> getTotalBalanceAsync();
 
-
+    /**
+     * Gets the currently free available balance of this bank.
+     * The returned value is the scaled backend value.
+     *
+     * @return The currently free available balance of this bank.
+     */
     CompletableFuture<Double> getRealBalanceAsync();
 
+    /**
+     * Gets the total balance of this bank.
+     * This is the sum of the available balance and the locked balance.
+     * The returned value is the scaled backend value.
+     *
+     * @return The total balance of this bank.
+     */
     CompletableFuture<Double> getRealLockedBalanceAsync();
 
+    /**
+     * Gets the total balance of this bank.
+     * This is the sum of the available balance and the locked balance.
+     * The returned value is the scaled backend value.
+     *
+     * @return The total balance of this bank.
+     */
     CompletableFuture<Double> getRealTotalBalanceAsync();
 
     /**
@@ -85,19 +107,32 @@ public interface IAsyncBank {
      */
     CompletableFuture<Boolean> setBalanceAsync(long balance);
 
-
+    /**
+     * Sets the balance using the scaled backend value
+     * @param balance The new balance to set.
+     * @return true if the balance was set successfully,
+     *         false if the balance is negative or if it ran in the case where it was to force the locked amount to be reduced.
+     */
     CompletableFuture<Boolean> setRealBalanceAsync(double balance);
 
     /**
      * Deposits an amount of money or items into this bank.
      *
-     * @param amount The amount to deposit. 
+     * @param amount The amount to deposit.
+     *               The given value is the backend value. Example: 150 for a real amount of 1.50
      * @return CompletableFuture<BankStatus> indicating the result of the deposit operation.
      *         If the CompletableFuture<BankStatus> is not CompletableFuture<BankStatus>.SUCCESS, then nothing has changed in the bank.
      */
     CompletableFuture<BankStatus> depositAsync(long amount);
 
-
+    /**
+     * Deposits an amount of money or items into this bank.
+     *
+     * @param amount The amount to deposit.
+     *               The given value is the real amount a user would see: 1.50
+     * @return CompletableFuture<BankStatus> indicating the result of the deposit operation.
+     *         If the CompletableFuture<BankStatus> is not CompletableFuture<BankStatus>.SUCCESS, then nothing has changed in the bank.
+     */
     CompletableFuture<BankStatus> depositRealAsync(double amount);
 
 
@@ -119,6 +154,13 @@ public interface IAsyncBank {
      */
     CompletableFuture<BankStatus> withdrawAsync(long amount);
 
+    /**
+     * Withdraws a scaled amount of money or items from this bank.
+     *
+     * @param amount The amount to withdraw.
+     * @return BankStatus indicating the result of the withdrawal operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in the bank.
+     */
     CompletableFuture<BankStatus> withdrawRealAsync(double amount);
 
     /**
@@ -130,6 +172,15 @@ public interface IAsyncBank {
      *         If the CompletableFuture<BankStatus> is not CompletableFuture<BankStatus>.SUCCESS, then nothing has changed in the bank.
      */
     CompletableFuture<BankStatus> withdrawLockedAsync(long amount);
+
+    /**
+     * Withdraws a scaled amount of money or items from this bank, but only if the amount is locked.
+     * This is useful for transactions that require the amount to be locked before the withdrawal.
+     *
+     * @param amount The amount to withdraw.
+     * @return BankStatus indicating the result of the withdrawal operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in the bank.
+     */
     CompletableFuture<BankStatus> withdrawLockedRealAsync(double amount);
 
     /**
@@ -154,8 +205,6 @@ public interface IAsyncBank {
      * @return CompletableFuture<BankStatus> indicating the result of the transfer operation.
      *         If the CompletableFuture<BankStatus> is not CompletableFuture<BankStatus>.SUCCESS, then nothing has changed in both banks.
      */
-    //CompletableFuture<BankStatus> transferAsync(long amount, @NotNull IAsyncBank other);
-    //CompletableFuture<BankStatus> transferRealAsync(double amount, @NotNull IAsyncBank other);
     CompletableFuture<BankStatus> transferAsync(long amount, int toAccount);
     CompletableFuture<BankStatus> transferRealAsync(double amount, int toAccount);
 
@@ -168,8 +217,6 @@ public interface IAsyncBank {
      * @return CompletableFuture<BankStatus> indicating the result of the transfer operation.
      *         If the CompletableFuture<BankStatus> is not CompletableFuture<BankStatus>.SUCCESS, then nothing has changed in both banks.
      */
-    //CompletableFuture<BankStatus> transferFromLockedAsync(long amount, @NotNull IAsyncBank other);
-    //CompletableFuture<BankStatus> transferFromLockedRealAsync(double amount, @NotNull IAsyncBank other);
     CompletableFuture<BankStatus> transferFromLockedAsync(long amount, int toAccount);
     CompletableFuture<BankStatus> transferFromLockedRealAsync(double amount, int toAccount);
 
@@ -187,8 +234,6 @@ public interface IAsyncBank {
      * @return CompletableFuture<BankStatus> indicating the result of the transfer operation.
      *         If the CompletableFuture<BankStatus> is not CompletableFuture<BankStatus>.SUCCESS, then nothing has changed in both banks.
      */
-    //CompletableFuture<BankStatus> transferFromLockedPreferedAsync(long amount, @NotNull IAsyncBank other);
-    //CompletableFuture<BankStatus> transferFromLockedPreferedRealAsync(double amount, @NotNull IAsyncBank other);
     CompletableFuture<BankStatus> transferFromLockedPreferedAsync(long amount, int toAccount);
     CompletableFuture<BankStatus> transferFromLockedPreferedRealAsync(double amount, int toAccount);
 

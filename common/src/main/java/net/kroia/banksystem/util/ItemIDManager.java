@@ -7,7 +7,7 @@ import net.kroia.banksystem.networking.packet.general.RegisterItemIDPacket;
 import net.kroia.banksystem.networking.packet.general.SyncItemIDsPacket;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
-import net.kroia.modutilities.networking.server_server.ServerServerManager;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
@@ -56,7 +56,7 @@ public class ItemIDManager implements ServerSaveable {
         ItemStack cpy =  itemStack.copy();
         cpy.setCount(1);
         CompletableFuture<ItemID>  future = new CompletableFuture<>();
-        if(ServerServerManager.isRunning() && ServerServerManager.isMaster())
+        if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
         {
             future.complete(registerItemStackServerSide_direct(cpy));
         }
@@ -225,7 +225,7 @@ public class ItemIDManager implements ServerSaveable {
     {
         // Broadcast update to players
         SyncItemIDsPacket packet = new SyncItemIDsPacket(newItems);
-        if(ServerServerManager.isRunning() && ServerServerManager.isMaster())
+        if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
         {
             packet.broadcastToSlaves();
         }

@@ -18,6 +18,7 @@ public interface IAsyncBankSystemCommandHandler {
     CompletableFuture<Boolean> banksystem_serverInfo_async(@NotNull UUID executor);
     CompletableFuture<Boolean> banksystem_serverNetworkInfo_async(@NotNull UUID executor);
 
+    CompletableFuture<Boolean> money_async(@NotNull UUID executor);
     CompletableFuture<Boolean> money_add_async(@NotNull UUID executor, float amount);
     CompletableFuture<Boolean> money_add_user_async(@NotNull UUID executor, String userName, float amount);
     CompletableFuture<Boolean> money_set_async(@NotNull UUID executor, float amount);
@@ -35,5 +36,5 @@ public interface IAsyncBankSystemCommandHandler {
     CompletableFuture<Boolean> bank_manage_account_async(@NotNull UUID executor, String accountName);
     CompletableFuture<Boolean> bank_manage_account_async(@NotNull UUID executor, int accountNr);
     CompletableFuture<IAsyncBankAccount> bank_create_async(@NotNull UUID executor, String accountName);
-
+    CompletableFuture<Boolean> bank_show_user_async(@NotNull UUID executor, String userName);
 }

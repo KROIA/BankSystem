@@ -121,17 +121,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         User user = userMap.get(playerUUID);
         if (user == null)
             return false;
-        user.setBankModAdmin(isAdmin);
+        user.setBanksystemAdmin(isAdmin);
         return true;
     }
 
     @Override
     public CompletableFuture<Boolean> setBanksystemAdminModeAsync(UUID playerUUID, boolean isAdmin) {
-        User user = userMap.get(playerUUID);
-        if (user == null)
-            return CompletableFuture.completedFuture(false);
-        user.setBankModAdmin(isAdmin);
-        return CompletableFuture.completedFuture(true);
+        return CompletableFuture.completedFuture(setBanksystemAdminMode(playerUUID, isAdmin));
     }
 
     @Override
@@ -139,7 +135,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         User user = userMap.get(playerUUID);
         if (user == null)
             return false;
-        return user.isBankModAdmin();
+        return user.isBanksystemAdmin();
     }
 
     @Override
@@ -147,7 +143,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         User user = userMap.get(playerUUID);
         if (user == null)
             return CompletableFuture.completedFuture(false);
-        return CompletableFuture.completedFuture(user.isBankModAdmin());
+        return CompletableFuture.completedFuture(user.isBanksystemAdmin());
     }
 
 
@@ -280,6 +276,19 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
 
     @Override
+    public boolean updateUserName(UUID playerUUID, String playerName)
+    {
+        User user = userMap.get(playerUUID);
+        if (user == null)
+            return false;
+        if(user.getName().equals(playerName))
+            return false;
+        User newUser = User.createWithChangedName(user,  playerName);
+        userMap.put(playerUUID, newUser);
+        return true;
+    }
+
+    @Override
     public CompletableFuture<Boolean> userExistsAsync(UUID userUUID) {
         return CompletableFuture.completedFuture(userExists(userUUID));
     }
@@ -372,7 +381,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public int createPersonalBankAccountGetAccountNr(UUID user) {
         @Nullable ISyncServerBankAccount account = createPersonalBankAccount(user);
         if (account == null) {
-            return 0;
+            return ServerBankAccount.INVALID_ACCOUNT_NUMBER;
         }
         return account.getAccountNumber();
     }
@@ -390,7 +399,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     {
         User user = getUserByName(userName);
         if(user == null)
-            return 0;
+            return ServerBankAccount.INVALID_ACCOUNT_NUMBER;
         else
             return createPersonalBankAccountGetAccountNr(user.getUUID());
     }
@@ -410,7 +419,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         ServerBankAccount account = getPersonalBankAccount_internal(user);
         if(account != null)
             return account.getAccountNumber();
-        return 0;
+        return ServerBankAccount.INVALID_ACCOUNT_NUMBER;
     }
     @Override
     public CompletableFuture<Integer> getPersonalBankAccountNrAsync(UUID user)
@@ -423,7 +432,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         ServerBankAccount account = getPersonalBankAccount_internal(userName);
         if(account != null)
             return account.getAccountNumber();
-        return 0;
+        return ServerBankAccount.INVALID_ACCOUNT_NUMBER;
     }
     @Override
     public CompletableFuture<Integer> getPersonalBankAccountNrAsync(String userName)
@@ -459,7 +468,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     {
         @Nullable ISyncServerBankAccount account = createBankAccount(accountName);
         if(account == null) {
-            return 0;
+            return ServerBankAccount.INVALID_ACCOUNT_NUMBER;
         }
         return account.getAccountNumber();
     }
@@ -488,7 +497,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         CompletableFuture<@Nullable IAsyncBankAccount>  futureAccount = createBankAccountAsync(accountName);
         futureAccount.thenAccept(account -> {
             if(account == null) {
-                future.complete(0);
+                future.complete(ServerBankAccount.INVALID_ACCOUNT_NUMBER);
             }
             else
                 future.complete(account.getAccountNumberAsync());
@@ -561,7 +570,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 return CompletableFuture.completedFuture(entry.getKey());
             }
         }
-        return CompletableFuture.completedFuture(0);
+        return CompletableFuture.completedFuture(ServerBankAccount.INVALID_ACCOUNT_NUMBER);
     }
 
 
@@ -929,7 +938,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         if(bank != null)
             return bank;
         else
-            return account.createBank(itemID, 0);
+            return account.createBank(itemID, ServerBankAccount.INVALID_ACCOUNT_NUMBER);
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getOrCreatePersonalBankAsync(UUID owner, ItemID itemID) {
@@ -1236,6 +1245,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         if(!userExists(playerUUID)) {
             addUser(playerUUID, playerName);
         }
+        updateUserName(playerUUID, playerName);
         ServerBankAccount account = getPersonalBankAccount_internal(playerUUID);
         if(account == null)
         {
@@ -1435,11 +1445,6 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             warn("No user found with UUID: " + user);
             return null;
         }
-
-        //if(userHasPersonalBankAccount(user)) {
-        //    warn("User with UUID: " + user + " already has a personal bank account.");
-        //    return getPersonalBankAccount_internal(user); // Return existing account if it exists
-        //}
 
         ServerBankAccount existingAccount = getPersonalBankAccount_internal(user);
         if(existingAccount != null) {

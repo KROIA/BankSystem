@@ -6,6 +6,7 @@ import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.util.MultiServerUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -53,7 +54,9 @@ public class BankManager implements IBankManager {
     @Override
     public boolean hasAsyncAccess()
     {
-        return true;
+        if(!BACKEND_INSTANCES.isSlaveServer)
+            return true;
+        return MultiServerUtils.canInteractWithBankSystem();
     }
     @Override
     public IAsyncBankManager getAsync()

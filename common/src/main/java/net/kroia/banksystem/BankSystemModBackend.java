@@ -28,11 +28,12 @@ import net.kroia.banksystem.item.custom.software.Software;
 import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.packet.general.SyncItemIDsPacket;
+import net.kroia.banksystem.networking.packet.server_server.BanksystemMetadataRequest;
 import net.kroia.banksystem.util.*;
 import net.kroia.modutilities.ServerPlayerUtilities;
-import net.kroia.modutilities.networking.server_server.ServerServerConfig;
-import net.kroia.modutilities.networking.server_server.ServerServerManager;
-import net.kroia.modutilities.networking.server_server.slave.SlaveServerClient;
+import net.kroia.modutilities.networking.multi_server.MultiServerConfig;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
+import net.kroia.modutilities.networking.multi_server.slave.SlaveServerClient;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -75,7 +76,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.SERVER_EVENTS = null;
         INSTANCES.NETWORKING = null;
         INSTANCES.ITEM_ID_MANAGER = new ItemIDManager();
-        ServerServerUtils.setBackend(INSTANCES);
+        MultiServerUtils.setBackend(INSTANCES);
         BankSystemDataHandler.setBackend(INSTANCES);
         BankTerminalBlockEntity.setBackend(INSTANCES);
 
@@ -149,11 +150,12 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
 
         ItemIDManager.clear();
-        ServerServerConfig config = ServerServerConfig.get();
+        MultiServerConfig config = MultiServerConfig.get();
         INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs(server);
+        INSTANCES.isSlaveServer = false;
         if(config.enable)
         {
-            setupServerServerInfrastructure(config, server);
+            setupMultiServerInfrastructure(config, server);
         }
         if(INSTANCES.isSlaveServer)
         {
@@ -179,7 +181,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     // Called from the server side
     public static void onServerStop(MinecraftServer server) {
-        ServerServerManager.stop();
+        MultiServerManager.cleanup();
         if(!INSTANCES.isSlaveServer) {
             TickEvent.SERVER_POST.unregister(BankSystemModBackend::onServerTick);
             saveDataToFiles(server);
@@ -298,27 +300,27 @@ public class BankSystemModBackend implements BankSystemAPI {
 
 
 
-    private static void setupServerServerInfrastructure(ServerServerConfig config, MinecraftServer server)
+    private static void setupMultiServerInfrastructure(MultiServerConfig config, MinecraftServer server)
     {
         if(config.isMaster)
         {
             INSTANCES.isSlaveServer = false;
-            ServerServerManager.createMaster(server, config.sharedSecret, config.masterTcpPort,
+            MultiServerManager.createMaster(server, config.sharedSecret, config.masterTcpPort,
                     BankSystemModBackend::onMasterServerStartupComplete,
                     BankSystemModBackend::onMasterServerStartupFailure,
                     BankSystemModBackend::onMasterServerSlaveConnected,
                     BankSystemModBackend::onMasterServerSlaveDisconnected);
-            ServerServerManager.start();
+            MultiServerManager.start();
         }
         else
         {
             INSTANCES.isSlaveServer = true;
-            ServerServerManager.createSlave(server, config.sharedSecret, config.slaveID, config.masterHost, config.masterTcpPort,
+            MultiServerManager.createSlave(server, config.sharedSecret, config.slaveID, config.masterHost, config.masterTcpPort,
                     BankSystemModBackend::onSlaveConnectionAccepted,
                     BankSystemModBackend::onSlaveConnectionFailed,
                     BankSystemModBackend::onSlaveConnectionLost,
                     BankSystemModBackend::onSlaveDisconnected);
-            ServerServerManager.start();
+            MultiServerManager.start();
         }
     }
     private static void onSlaveConnectionAccepted()
@@ -354,7 +356,21 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
     private static void onMasterServerSlaveConnected(String slaveID)
     {
-        SyncItemIDsPacket.sendAllItemsToSlave(slaveID);
+        BanksystemMetadataRequest.sendRequestToSlave(slaveID).thenAccept(metadata -> {
+            String slaveModVersion = metadata.modversion();
+            BankSystemAPI api = BankSystemMod.getAPI();
+            if(!api.getModVersion().equals(slaveModVersion))
+            {
+                String msg = "Slave '"+slaveID+"' uses not the same BankSystemMod version: "+slaveModVersion + " This server uses: "+api.getModVersion()+" Disconnecting slave!";
+                INSTANCES.LOGGER.warn(msg);
+                MultiServerManager.disconnectSlave(slaveID, msg);
+            }
+            else
+            {
+                SyncItemIDsPacket.sendAllItemsToSlave(slaveID);
+            }
+        });
+
     }
     private static void onMasterServerSlaveDisconnected(String slaveID)
     {

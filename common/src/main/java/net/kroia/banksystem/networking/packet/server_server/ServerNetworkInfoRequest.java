@@ -4,7 +4,7 @@ import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.modutilities.networking.server_server.ServerServerManager;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -36,7 +36,7 @@ public class ServerNetworkInfoRequest extends BankSystemGenericRequest<ServerNet
 
     public static CompletableFuture<OutputData> sendRequest()
     {
-        if(ServerServerManager.isRunning() && ServerServerManager.isSlave())
+        if(MultiServerManager.isRunning() && MultiServerManager.isSlave())
             return BankSystemNetworking.SERVER_NETWORK_INFO_REQUEST.sendRequestToMaster(new InputData(false));
         else
             return createResponse();
@@ -44,10 +44,10 @@ public class ServerNetworkInfoRequest extends BankSystemGenericRequest<ServerNet
 
     private static CompletableFuture<OutputData> createResponse()
     {
-        if(!ServerServerManager.isRunning())
+        if(!MultiServerManager.isRunning())
             return CompletableFuture.completedFuture(new OutputData(List.of(ServerInfoRequest.createInfo(UtilitiesPlatform.getServer()))));
 
-        List<String> slaves = ServerServerManager.getConnectedSlaveIDs();
+        List<String> slaves = MultiServerManager.getConnectedSlaveIDs();
         if(slaves.isEmpty())
             return CompletableFuture.completedFuture(new OutputData(List.of(ServerInfoRequest.createInfo(UtilitiesPlatform.getServer()))));
 

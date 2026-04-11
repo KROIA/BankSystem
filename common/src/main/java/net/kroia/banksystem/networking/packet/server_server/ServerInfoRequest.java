@@ -5,7 +5,7 @@ import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.modutilities.networking.server_server.ServerServerManager;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -103,10 +103,10 @@ public class ServerInfoRequest extends BankSystemGenericRequest<ServerInfoReques
     public static ServerInfo createInfo(MinecraftServer server)
     {
         String customText = "";
-        if(ServerServerManager.isInUse())
+        if(MultiServerManager.isInUse())
         {
-            if (!ServerServerManager.isRunning()) {
-                if(ServerServerManager.isMaster())
+            if (!MultiServerManager.isRunning()) {
+                if(MultiServerManager.isMaster())
                 {
                     customText += "TCP server is not running\n";
                 }
@@ -127,18 +127,18 @@ public class ServerInfoRequest extends BankSystemGenericRequest<ServerInfoReques
             playerInfos.add(new PlayerInfo(player.getUUID(), player.getName().getString()));
         }
 
-        if(!ServerServerManager.isRunning())
+        if(!MultiServerManager.isRunning())
             return new ServerInfo(false,serverName,"", "", 0, playerInfos, customText);
 
 
 
-        if(ServerServerManager.isMaster())
+        if(MultiServerManager.isMaster())
         {
             return new ServerInfo(true,
                     serverName,
-                    ServerServerManager.getSlaveID(),
-                    ServerServerManager.getMasterIP(),
-                    ServerServerManager.getMasterPort(),
+                    MultiServerManager.getSlaveID(),
+                    MultiServerManager.getMasterIP(),
+                    MultiServerManager.getMasterPort(),
                     playerInfos,
                     customText);
         }
@@ -146,9 +146,9 @@ public class ServerInfoRequest extends BankSystemGenericRequest<ServerInfoReques
         {
             return new ServerInfo(false,
                     serverName,
-                    ServerServerManager.getSlaveID(),
-                    ServerServerManager.getSlaveIP(),
-                    ServerServerManager.getMasterPort(),
+                    MultiServerManager.getSlaveID(),
+                    MultiServerManager.getSlaveIP(),
+                    MultiServerManager.getMasterPort(),
                     playerInfos,
                     customText);
         }
@@ -156,7 +156,7 @@ public class ServerInfoRequest extends BankSystemGenericRequest<ServerInfoReques
 
     public static CompletableFuture<ServerInfo> sendRequest(String slaveID)
     {
-        if(ServerServerManager.isRunning() && ServerServerManager.isMaster())
+        if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
             return BankSystemNetworking.SERVER_INFO_REQUEST.sendRequestToSlave(slaveID, new ServerInfoRequest.InputData(false));
         else
             return CompletableFuture.completedFuture(createInfo(UtilitiesPlatform.getServer()));

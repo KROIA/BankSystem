@@ -5,8 +5,8 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.modutilities.networking.server_server.ForwardPacketContext;
-import net.kroia.modutilities.networking.server_server.ServerServerManager;
+import net.kroia.modutilities.networking.multi_server.ForwardPacketContext;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -37,7 +37,7 @@ public class RegisterItemIDPacket extends BankSystemNetworkPacket
         List<ItemStack> items = new ArrayList<>();
         items.add(item);
         RegisterItemIDPacket packet = new RegisterItemIDPacket(items);
-        if(ServerServerManager.isRunning() && ServerServerManager.isSlave())
+        if(MultiServerManager.isRunning() && MultiServerManager.isSlave())
         {
             packet.sendToMaster();
         }
@@ -49,7 +49,7 @@ public class RegisterItemIDPacket extends BankSystemNetworkPacket
     public static void sendRegisterItemIDPacketToMaster(List<ItemStack> items)
     {
         RegisterItemIDPacket packet = new RegisterItemIDPacket(items);
-        if(ServerServerManager.isRunning() && ServerServerManager.isSlave())
+        if(MultiServerManager.isRunning() && MultiServerManager.isSlave())
         {
             packet.sendToMaster();
         }

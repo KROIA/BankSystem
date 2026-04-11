@@ -24,7 +24,7 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
             User user = manager.getUserByUUID(player.getUUID());
             if(user != null)
             {
-                return user.isBankModAdmin();
+                return user.isBanksystemAdmin();
             }
         }
         return false;
@@ -38,7 +38,7 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
             User user = manager.getUserByUUID(playerUUID);
             if(user != null)
             {
-                return user.isBankModAdmin();
+                return user.isBanksystemAdmin();
             }
         }
         return false;

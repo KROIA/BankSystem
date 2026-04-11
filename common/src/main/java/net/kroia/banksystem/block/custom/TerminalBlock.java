@@ -2,7 +2,7 @@ package net.kroia.banksystem.block.custom;
 
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.item.custom.software.Software;
-import net.kroia.banksystem.util.ServerServerUtils;
+import net.kroia.banksystem.util.MultiServerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
@@ -60,7 +60,7 @@ public class TerminalBlock extends Block {
         {
             if(!pLevel.isClientSide())
             {
-                ServerServerUtils.canInteractWithBankSystem(pPlayer.getUUID());
+                MultiServerUtils.canInteractWithBankSystem(pPlayer.getUUID());
             }
 
             // Open the GUI
@@ -72,7 +72,7 @@ public class TerminalBlock extends Block {
     protected InteractionResult useWithoutItem(BlockState pState, Level pLevel, BlockPos pPos, Player pPlayer, BlockHitResult pHitResult) {
         if(!pLevel.isClientSide())
         {
-            ServerServerUtils.canInteractWithBankSystem(pPlayer.getUUID());
+            MultiServerUtils.canInteractWithBankSystem(pPlayer.getUUID());
         }
         openGui(pState, pLevel, pPos, pPlayer, pPlayer.getUsedItemHand(), pHitResult);
         return InteractionResult.PASS;

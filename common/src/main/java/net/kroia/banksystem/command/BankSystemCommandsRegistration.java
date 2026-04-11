@@ -7,12 +7,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.bank.ISyncServerBank;
-import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
-import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
-import net.kroia.banksystem.banking.bank.ServerBank;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
@@ -374,7 +369,8 @@ public class BankSystemCommandsRegistration {
                             ServerPlayer player = source.getPlayerOrException();
 
                             // Execute the balance command on the server_sender
-                            return showBalance(player);
+                            handler().money_async(player.getUUID());
+                            return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.literal("add")
                                 //.requires(source -> source.hasPermission(2)) // Admin-only for adding money
@@ -509,7 +505,8 @@ public class BankSystemCommandsRegistration {
                             ServerPlayer player = source.getPlayerOrException();
 
                             // Execute the balance command on the server_sender
-                            return bank_show(player, player.getName().getString());
+                            handler().bank_show_user_async(player.getUUID(), player.getName().getString());
+                            return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.literal("enableNotifications")
                                 .executes(context -> {
@@ -572,15 +569,8 @@ public class BankSystemCommandsRegistration {
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
-                                                    CompletableFuture<Boolean> isBanksystemAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(player.getUUID());
-                                                    isBanksystemAdmin.thenAccept(isAdmin -> {
-                                                        if (!isAdmin) {
-                                                            ServerPlayerUtilities.printToClientConsole("This command is only for BankSystem admins!");
-                                                            return;
-                                                        }
-                                                        String username = StringArgumentType.getString(context, "username");
-                                                        bank_show(player, username);
-                                                    });
+                                                    String username = StringArgumentType.getString(context, "username");
+                                                    handler().bank_show_user_async(player.getUUID(), username);
                                                     return Command.SINGLE_SUCCESS;
                                                 })
                                         )
@@ -708,7 +698,7 @@ public class BankSystemCommandsRegistration {
         return future;
     }
 
-    private static int showBalance(ServerPlayer player) {
+    /*private static int showBalance(ServerPlayer player) {
         ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         ISyncServerBank bank = bankManager.getOrCreatePersonalBank(player.getUUID(), MoneyItem.getItemID());
         if(bank == null)
@@ -722,8 +712,8 @@ public class BankSystemCommandsRegistration {
     }
 
     private static int bank_show(ServerPlayer player, String targetPlayer) {
-        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
-        ISyncServerBankAccount account = bankManager.getOrCreatePersonalBankAccount(targetPlayer);
+        IAsyncBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
+        CompletableFuture<@Nullable IAsyncBankAccount> account = bankManager.getOrCreatePersonalBankAccountAsync(targetPlayer);
         if(account == null)
         {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(targetPlayer, MoneyItem.getName()));
@@ -731,7 +721,7 @@ public class BankSystemCommandsRegistration {
         }
         ServerPlayerUtilities.printToClientConsole(player, account.toString());
         return Command.SINGLE_SUCCESS;
-    }
+    }*/
 
 
 

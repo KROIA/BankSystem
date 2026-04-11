@@ -22,6 +22,7 @@ public interface ISyncServerBank {
 
     /**
      * Gets the currently free available balance of this bank.
+     * The returned value is the backend value.
      *
      * @return The currently free available balance of this bank.
      */
@@ -34,6 +35,7 @@ public interface ISyncServerBank {
      * to prevent double spending.
      * <p>
      * For example, the StockMarketMod uses this to lock funds when a player creates a buy order which is not yet fulfilled.
+     * The returned value is the backend value.
      *
      * @return The currently locked balance of this bank.
      */
@@ -42,16 +44,36 @@ public interface ISyncServerBank {
     /**
      * Gets the total balance of this bank.
      * This is the sum of the available balance and the locked balance.
+     * The returned value is the backend value.
      *
      * @return The total balance of this bank.
      */
     long getTotalBalance();
 
-
+    /**
+     * Gets the currently free available balance of this bank.
+     * The returned value is the scaled backend value.
+     *
+     * @return The currently free available balance of this bank.
+     */
     double getRealBalance();
 
+    /**
+     * Gets the total balance of this bank.
+     * This is the sum of the available balance and the locked balance.
+     * The returned value is the scaled backend value.
+     *
+     * @return The total balance of this bank.
+     */
     double getRealLockedBalance();
 
+    /**
+     * Gets the total balance of this bank.
+     * This is the sum of the available balance and the locked balance.
+     * The returned value is the scaled backend value.
+     *
+     * @return The total balance of this bank.
+     */
     double getRealTotalBalance();
 
     /**
@@ -84,7 +106,12 @@ public interface ISyncServerBank {
      */
     boolean setBalance(long balance);
 
-
+    /**
+     * Sets the balance using the scaled backend value
+     * @param balance The new balance to set.
+     * @return true if the balance was set successfully,
+     *         false if the balance is negative or if it ran in the case where it was to force the locked amount to be reduced.
+     */
     boolean setRealBalance(double balance);
 
     /**
@@ -96,7 +123,14 @@ public interface ISyncServerBank {
      */
     BankStatus deposit(long amount);
 
-
+    /**
+     * Deposits an amount of money or items into this bank.
+     *
+     * @param amount The amount to deposit.
+     *               The given value is the real amount a user would see: 1.50
+     * @return CompletableFuture<BankStatus> indicating the result of the deposit operation.
+     *         If the CompletableFuture<BankStatus> is not CompletableFuture<BankStatus>.SUCCESS, then nothing has changed in the bank.
+     */
     BankStatus depositReal(double amount);
 
 
@@ -118,6 +152,13 @@ public interface ISyncServerBank {
      */
     BankStatus withdraw(long amount);
 
+    /**
+     * Withdraws a scaled amount of money or items from this bank.
+     *
+     * @param amount The amount to withdraw.
+     * @return BankStatus indicating the result of the withdrawal operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in the bank.
+     */
     BankStatus withdrawReal(double amount);
 
     /**
@@ -129,6 +170,15 @@ public interface ISyncServerBank {
      *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in the bank.
      */
     BankStatus withdrawLocked(long amount);
+
+    /**
+     * Withdraws a scaled amount of money or items from this bank, but only if the amount is locked.
+     * This is useful for transactions that require the amount to be locked before the withdrawal.
+     *
+     * @param amount The amount to withdraw.
+     * @return BankStatus indicating the result of the withdrawal operation.
+     *         If the BankStatus is not BankStatus.SUCCESS, then nothing has changed in the bank.
+     */
     BankStatus withdrawLockedReal(double amount);
 
     /**
@@ -176,7 +226,7 @@ public interface ISyncServerBank {
      * Transfers an amount of money or items from this bank to another bank, but first uses the locked balance and only
      * if the locked amount is not enough, it will try to transfer the amount from the available balance.
      * This is useful for transactions that require the amount to be locked before the transfer.
-     * Use this function prefered over the 'transferFromLocked' function, because it will not fail
+     * Use this function preferred over the 'transferFromLocked' function, because it will not fail
      * if the amount is not locked. (can happen because of the 'setBalance' function)
      *
      * @param amount The amount to transfer. 

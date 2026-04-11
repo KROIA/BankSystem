@@ -34,6 +34,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
 
     public static ServerInfoRequest SERVER_INFO_REQUEST = (ServerInfoRequest)AsynchronousRequestResponseSystem.register(new ServerInfoRequest());
     public static ServerNetworkInfoRequest SERVER_NETWORK_INFO_REQUEST = (ServerNetworkInfoRequest)AsynchronousRequestResponseSystem.register(new ServerNetworkInfoRequest());
+    public static BanksystemMetadataRequest BANKSYSTEM_METADATA_REQUEST = (BanksystemMetadataRequest)AsynchronousRequestResponseSystem.register(new BanksystemMetadataRequest());
 
 
     public BankSystemNetworking() {

@@ -39,6 +39,7 @@ You want to support me?<br>
 - Adds a banking system to the game for money and items.
 - Adds new [blocks](#blocks) to interact with the bank account.
 - Money can be placed as a block for decorative and storage purposes.
+- Connect multiple servers to share bank accounts across multiple servers.
 
 ## Dependencies
 - [Architectury](https://www.curseforge.com/minecraft/mc-mods/architectury-api)
@@ -46,6 +47,9 @@ You want to support me?<br>
 - [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities) (Only needed for Quilt)
 - [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api) (Only needed for Fabric)
 
+
+## Setup
+[Setup (click here)](documentation/setup.md)
   
 ---
 ## Downloads
@@ -362,33 +366,36 @@ The admin is responsible to bring money in to circulation.<br>
 ---
 
 ## Commands
-| Command | Description | Admin only |
-|---------|-------------|------------|
-| /money                           											| Show balance                                  |  |
-| /money add [amount]              											| Add money to self                             | :heavy_check_mark: |
-| /money add [user] [amount]       											| Add money to another player                   | :heavy_check_mark: |
-| /money set [amount]              											| Set money to self                             | :heavy_check_mark: |
-| /money set [user] [amount]       											| Set money to another player                   | :heavy_check_mark: |
-| /money remove [amount]           											| Remove money from self                        | :heavy_check_mark: |
-| /money remove [user] [amount]    											| Remove money from another player              | :heavy_check_mark: |
-| /money send [user] [amount]      											| Send money to another player                  |  |
-| /money circulation               											| Show money circulation of all players + bot   |  |
-| /bank                                                						| Show bank balance (money and items)      		|  |
-| /bank enableNotifications                                                 | Enables bank notifications on transactions    |  |
-| /bank disableNotifications                                                | Disables bank notifications on transactions   |  | 
-| /bank managementGUI                                                       | Opens the management window to manage own bank accounts |  |
-| /bank create [accountname]                                                | Create a new bank account with the given name |  |
-| /bank [username] bankManagementGUI                                		| Open the bank [management window](#managing-players-bank-account) for the specific player	| :heavy_check_mark: |
-| /bank [username] show                                						| Show bank balance of another player      		| :heavy_check_mark: |
-| /bank [username] create [itemID] [amount]            						| Create a bank for another player         		| :heavy_check_mark: |
-| /bank [username] setBalance [itemID] [amount]        						| Set balance of a bank for another player 		| :heavy_check_mark: |
-| /bank [username] delete [itemID]                     						| Delete a bank for another player         		| :heavy_check_mark: |
-| /bank allowItem [itemID]                     						        | Adds the item to the list of bankable items   | :heavy_check_mark: |
-| /bank settingsGUI                     						            | Opens the [items management window](#managing-items-for-banking)   | :heavy_check_mark: |
-| /bank setStartingBalance                                                  | Set the starting money balance for new players when they join the server as a new player | :heavy_check_mark: |
-| /bank setItemTransferTickInterval                                         | Set the amount of ticks it uses for a item to be transferred in the bank terminal block. If set to 0, it will be instant.  | :heavy_check_mark: |
-| /bank save                                                                | Saves all bank data | :heavy_check_mark: |
-| /bank load                                                                | Loads all bank data | :heavy_check_mark: |
+| Command | Description | Admin only | Banksystem Admin only |
+|---------|-------------|------------|------------|
+| /banksystem manage                          								| Opens the settings window for the mod   |  | :heavy_check_mark: |
+| /banksystem op [user]                         							| Makes the specified player a Banksystem Admin   | :heavy_check_mark: |  |
+| /banksystem deop [user]                         							| Removes the Banksystem Admin status from the player   | :heavy_check_mark: |  |
+| /banksystem allowItem [itemID]                     						| Adds the item to the list of bankable items   |  | :heavy_check_mark: |
+| /banksystem allowItemInHand	                     						| Adds the item, that is currently in the main hand, to the list of bankable items   |  | :heavy_check_mark: |
+| /banksystem disallowItem [itemID]                     					| Removes the item from the list of bankable items. This removes the itembanks from all players    |  | :heavy_check_mark: |
+| /banksystem disallowItemInHand [itemID]                     				| Removes the item, that is currently in the main hand, from the list of bankable items. This removes the itembanks from all players   |  | :heavy_check_mark: |
+| /banksystem serverInfo                     								| Gets some informations about this server  |  |  |
+| /banksystem serverNetworkInfo                     						| Gets some informations about the server network this server is connected to  |  |  |
+| | | | |
+| /money                           											| Show money balance                            |  |  |
+| /money add [amount]              											| Add money to self                             |  | :heavy_check_mark: |
+| /money add [user] [amount]       											| Add money to another player                   |  | :heavy_check_mark: |
+| /money set [amount]              											| Set money to self                             |  | :heavy_check_mark: |
+| /money set [user] [amount]       											| Set money to another player                   |  | :heavy_check_mark: |
+| /money remove [amount]           											| Remove money from self                        |  | :heavy_check_mark: |
+| /money remove [user] [amount]    											| Remove money from another player              |  | :heavy_check_mark: |
+| /money send [user] [amount]      											| Send money to another player                  |  |  |
+| /money circulation               											| Show money circulation of all players + bot   |  |  |
+| | | | |
+| /bank                                                						| Show bank balance (money and items)      		|  |  |
+| /bank enableNotifications                                                 | Enables bank notifications (no effect currently)   |  |  |
+| /bank disableNotifications                                                | Disables bank notifications (no effect currently)    |  |  | 
+| /bank manage                                                       	    | Opens the management window to manage own bank account |  |  |
+| /bank manage [accountname]                                                | Opens the management window to manage the specified bank account |  |  |
+| /bank create [accountname]                                                | Create a new bank account with the given name |  |  |
+| /bank [username] manage                                					| Opens the management window to manage the personal bank account for the specific player	 | | :heavy_check_mark: | 
+| /bank [username] show                                						| Show bank balance of another player      		| | :heavy_check_mark: | 
 
 ---- 
 

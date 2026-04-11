@@ -198,6 +198,30 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
 
 
+
+
+    @Override
+    public boolean money(@NotNull UUID executor)
+    {
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        ISyncServerBank bank = bankManager.getOrCreatePersonalBank(executor, MoneyItem.getItemID());
+        if(bank == null)
+        {
+            String playerName = Objects.requireNonNull(bankManager.getUserByUUID(executor)).getName();
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(playerName, MoneyItem.getName()));
+            return false;
+        }
+        long balance = bank.getBalance();
+        sendMessage(executor, BankSystemTextMessages.getYourBalanceMessage(ServerBank.getFormattedAmountStatic(balance)));
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> money_async(@NotNull UUID executor)
+    {
+        return CompletableFuture.completedFuture(money(executor));
+    }
+
+
     @Override
     public boolean money_add(@NotNull UUID executor, float amount) {
         String userName = tryGetPlayerName(executor);
@@ -538,6 +562,37 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     public CompletableFuture<IAsyncBankAccount> bank_create_async(@NotNull UUID executor, String accountName)
     {
         return CompletableFuture.completedFuture(AsyncBankAccount.createSlaveServerBank(bank_create(executor, accountName)));
+    }
+
+
+
+    @Override
+    public boolean bank_show_user(@NotNull UUID executor, String userName)
+    {
+        IServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        User executorUser = bankManager.getUserByUUID(executor);
+        String executorUserName = "";
+        if(executorUser != null)
+        {
+            executorUserName = executorUser.getName();
+        }
+        if(!executorUserName.equals(userName)) {
+            if (!isPlayerAdmin(executor))
+                return false;
+        }
+
+        IServerBankAccount account = bankManager.getOrCreatePersonalBankAccount(userName);
+        if (account == null) {
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getName()));
+            return false;
+        }
+        sendMessage(executor, account.toJsonString());
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> bank_show_user_async(@NotNull UUID executor, String userName)
+    {
+        return CompletableFuture.completedFuture(bank_show_user(executor, userName));
     }
 
 

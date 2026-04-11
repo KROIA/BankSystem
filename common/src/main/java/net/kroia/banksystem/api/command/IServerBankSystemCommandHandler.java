@@ -14,7 +14,7 @@ public interface IServerBankSystemCommandHandler {
     boolean banksystem_allowItem(@NotNull UUID executor, ItemID itemID);
     boolean banksystem_disallowItem(@NotNull UUID executor, ItemID itemID);
 
-
+    boolean money(@NotNull UUID executor);
     boolean money_add(@NotNull UUID executor, float amount);
     boolean money_add_user(@NotNull UUID executor, String userName, float amount);
     boolean money_set(@NotNull UUID executor, float amount);
@@ -32,6 +32,6 @@ public interface IServerBankSystemCommandHandler {
     boolean bank_manage_account(@NotNull UUID executor, String accountName);
     boolean bank_manage_account(@NotNull UUID executor, int accountNr);
     int bank_create(@NotNull UUID executor, String accountName);
-
+    boolean bank_show_user(@NotNull UUID executor, String userName);
 
 }

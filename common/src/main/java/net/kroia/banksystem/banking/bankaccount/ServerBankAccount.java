@@ -36,6 +36,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         User.setBackend(backend);
         ServerBank.setBackend(backend);
     }
+    public static final int INVALID_ACCOUNT_NUMBER = 0;
 
     public record BankAccountSQL_Data(int bankAccountNr, String accountName, @Nullable ItemID accountIcon, @Nullable UUID personalBankOwner)
     {

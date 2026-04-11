@@ -38,8 +38,24 @@ public interface IAsyncBankManager {
      */
     CompletableFuture<BankManagerData.BankAccountsData> getBankManagerBankAccountsDataAsync();
 
-
+    /**
+     * Changes the admin mode for the banksystem mod for the given player.
+     * @param playerUUID for which the admin mode is set.
+     * @param isAdmin true: the player will be an admin.
+     *                false: the player will no longer be an admin.
+     * @return true: if the transaction was successfully.
+     *         false: if the transaction was not successfully.
+     *                Possible reasons:
+     *                  - The user is not known by the banksystem. Register the user using addUser() first
+     */
     CompletableFuture<Boolean> setBanksystemAdminModeAsync(UUID playerUUID, boolean isAdmin);
+
+    /**
+     * Checks if the given player is a banksystem admin
+     * @param playerUUID player to check
+     * @return  true: if the given player is an admin.
+     *          false: if the given player is not an admin or the player is not known by the banksystem.
+     */
     CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID);
 
     /**
@@ -76,6 +92,14 @@ public interface IAsyncBankManager {
      * @param player The player to create a user for.
      */
     void addUserAsync(@NotNull ServerPlayer player);
+
+    /**
+     * Creates a new User for the manager which is used for assigning to a ServerBankAccount.
+     * This must be called once a player joins the server for the first time.
+     * This is an alternative for addUserAsync(@NotNull ServerPlayer player);
+     * @param playerUUID Players UUID
+     * @param playerName Players name
+     */
     void addUserAsync(@NotNull UUID playerUUID, @NotNull String playerName);
 
     /**
@@ -122,8 +146,21 @@ public interface IAsyncBankManager {
 
 
 
-
+    /**
+     * Checks if a bank account exist for the given accountNumber
+     * @param accountNumber to check
+     * @return true:  if an account exists
+     *         false: if no account exists
+     */
     CompletableFuture<Boolean> bankAccountExistsAsync(int accountNumber);
+
+    /**
+     * Checks if a specific item bank exist in a bank account with the specific accountNumber
+     * @param accountNumber in which it checks for the item bank
+     * @param itemID to check for an item bank
+     * @return true:  if an account exists with the given item bank in it
+     *         false: if no account exists or no item bank exists in that bank account
+     */
     CompletableFuture<Boolean> bankAccountHasBankAsync(int accountNumber, ItemID itemID);
 
     /**
@@ -132,6 +169,12 @@ public interface IAsyncBankManager {
      * @return The ServerBankAccount object if found, null otherwise.
      */
     CompletableFuture<@Nullable IAsyncBankAccount> getBankAccountAsync(int accountNumber);
+
+    /**
+     * Gets the bank account data for the given account number.
+     * @param accountNumber The account number for which the data is requested.
+     * @return The BankAccountData object if found, null otherwise.
+     */
     CompletableFuture<@Nullable BankAccountData> getBankAccountDataAsync(int accountNumber);
 
 
@@ -143,10 +186,45 @@ public interface IAsyncBankManager {
      * @return The created or already existing ServerBankAccount object.
      */
     CompletableFuture<@Nullable IAsyncBankAccount> createPersonalBankAccountAsync(UUID user);
+
+    /**
+     * Creates a personal bank account for the given user and returns the
+     * bank account number to that bank account.
+     * If there is already a personal bank account for that user, it will not create a new one
+     * but return the account number to the already existing account.
+     * @param user for which the account gets created
+     * @return the account number to the personal bank account or
+     *         ServerBankAccount.INVALID_ACCOUNT_NUMBER if the creation of a personal bank account has failed.
+     *         Possible reasons for a fail:
+     *          - User is not registered to the banksystem.
+     */
     CompletableFuture<Integer> createPersonalBankAccountGetAccountNrAsync(UUID user);
+
+    /**
+     * Creates a personal bank account for the given user and returns the
+     * bank account number to that bank account.
+     * If there is already a personal bank account for that user, it will not create a new one
+     * but return the account number to the already existing account.
+     * @param userName for which the account gets created
+     * @return the account number to the personal bank account or
+     *         ServerBankAccount.INVALID_ACCOUNT_NUMBER if the creation of a personal bank account has failed.
+     *         Possible reasons for a fail:
+     *          - User is not registered to the banksystem.
+     */
     CompletableFuture<Integer> createPersonalBankAccountGetAccountNrAsync(String userName);
 
+    /**
+     * Gets the bank account number to the personal bank account for the given player
+     * @param user
+     * @return the account number or ServerBankAccount.INVALID_ACCOUNT_NUMBER if it does not exist
+     */
     CompletableFuture<Integer> getPersonalBankAccountNrAsync(UUID user);
+
+    /**
+     * Gets the bank account number to the personal bank account for the given player
+     * @param userName
+     * @return the account number or ServerBankAccount.INVALID_ACCOUNT_NUMBER if it does not exist
+     */
     CompletableFuture<Integer> getPersonalBankAccountNrAsync(String userName);
 
     /**
@@ -157,6 +235,13 @@ public interface IAsyncBankManager {
      * @return The created ServerBankAccount object.
      */
     CompletableFuture<IAsyncBankAccount> createBankAccountAsync(String accountName);
+
+    /**
+     * Creates a bank account with a specified account name
+     * @param accountName used to create the account
+     * @return The account number of the new created bank account or
+     *         ServerBankAccount.INVALID_ACCOUNT_NUMBER if the bank account can't be created
+     */
     CompletableFuture<Integer> createBankAccountGetAccountNrAsync(String accountName);
 
 
@@ -169,7 +254,18 @@ public interface IAsyncBankManager {
     CompletableFuture<List<IAsyncBankAccount>> getBankAccountsAsync(UUID userUUID);
 
 
+    /**
+     * Gets the first bank account interface that uses a specific name
+     * @param accountName for searching
+     * @return the bank account interface to the first match
+     */
     CompletableFuture<@Nullable IAsyncBankAccount> getBankAccountByNameAsync(String accountName);
+
+    /**
+     * Gets the first bank account number that uses a specific name
+     * @param accountName for searching
+     * @return the bank account number to the first match
+     */
     CompletableFuture<Integer> getBankAccountNrByNameAsync(String accountName);
 
     /**
@@ -178,9 +274,19 @@ public interface IAsyncBankManager {
      * @return A list of bank account numbers associated with the user
      */
     CompletableFuture<List<Integer>> getBankAccountNumbersAsync(UUID userUUID);
+
+    /**
+     * Gets a list of bank account numbers that contain a item bank for the specified item
+     * @param itemID to search for
+     * @return list of bank account numbers
+     */
     CompletableFuture<List<Integer>> getBankAccountNumbersAsync(ItemID itemID);
 
-
+    /**
+     * Gets a list of bank account data objects that have the user in it
+     * @param userUUID The UUID of the user to get bankaccounts for.
+     * @return A list of bank account data objects associated with the user
+     */
     CompletableFuture<List<BankAccountData>> getBankAccountsDataAsync(UUID userUUID);
 
 
@@ -190,6 +296,12 @@ public interface IAsyncBankManager {
      * @return A list of ServerBankAccount objects associated with the item ID.
      */
     CompletableFuture<List<IAsyncBankAccount>> getBankAccountsAsync(ItemID itemID);
+
+    /**
+     * Gets a list of bank account data objects that contain an item bank for the specified item
+     * @param itemID to search for
+     * @return list of bank account data objects
+     */
     CompletableFuture<List<BankAccountData>> getBankAccountsDataAsync(ItemID itemID);
 
     /**
@@ -199,6 +311,13 @@ public interface IAsyncBankManager {
      * @return The ServerBankAccount object if found, null otherwise.
      */
     CompletableFuture<@Nullable IAsyncBankAccount> getPersonalBankAccountAsync(UUID userUUID);
+
+    /**
+     * Gets the personal bank account data for a given user UUID.
+     * The personal bank account is the default bank account for a user.
+     * @param userUUID The UUID of the user to get the personal bank account for.
+     * @return The data object if found, null otherwise.
+     */
     CompletableFuture<@Nullable BankAccountData> getPersonalBankAccountDataAsync(UUID userUUID);
 
     /**
@@ -208,6 +327,13 @@ public interface IAsyncBankManager {
      * @return The ServerBankAccount object if found, null otherwise.
      */
     CompletableFuture<@Nullable IAsyncBankAccount> getPersonalBankAccountAsync(String userName);
+
+    /**
+     * Gets the personal bank account data for a given user UUID.
+     * The personal bank account is the default bank account for a user.
+     * @param userName The username to get the personal bank account for.
+     * @return The data object if found, null otherwise.
+     */
     CompletableFuture<@Nullable BankAccountData> getPersonalBankAccountDataAsync(String userName);
 
     /**
@@ -219,7 +345,7 @@ public interface IAsyncBankManager {
     CompletableFuture<@Nullable IAsyncBankAccount> getOrCreatePersonalBankAccountAsync(UUID userUUID);
 
     /**
-     * Trys to get the personal bank account for a given user name.
+     * Trys to get the personal bank account for a given username.
      * If the personal bank account does not exist, it will try to create a new one.
      * @param userName The name of the user to get or create the personal bank account for.
      * @return The ServerBankAccount object if found or created, null if an error occurs.
@@ -246,8 +372,22 @@ public interface IAsyncBankManager {
 
 
 
-
+    /**
+     * Checks if the personal bank account, for the specified user, contains an itembank for the given item
+     * @param owner to seach for the personal bank account
+     * @param itemID to check for a itembank
+     * @return true:  if such an itembank exists.
+     *         false: if no bank account or no itembank exists.
+     */
     CompletableFuture<Boolean> personalBankExistsAsync(UUID owner, ItemID itemID);
+
+    /**
+     * Checks if the personal bank account, for the specified user, contains an itembank for the given item
+     * @param ownerName to seach for the personal bank account
+     * @param itemID to check for a itembank
+     * @return true:  if such an itembank exists.
+     *         false: if no bank account or no itembank exists.
+     */
     CompletableFuture<Boolean> personalBankExistsAsync(String ownerName, ItemID itemID);
 
 
@@ -260,9 +400,7 @@ public interface IAsyncBankManager {
      * @return The IAsyncBank object if found, null otherwise.
      */
     CompletableFuture<@Nullable IAsyncBank> getPersonalBankAsync(UUID owner, ItemID itemID);
-
-    //CompletableFuture<Integer> getPersonalBankAccountNumberAsync(UUID owner, ItemID itemID);
-
+    
     /**
      * Gets the personal bank for a given owner name and item ID.
      * The personal bank is the default bank for a user.
@@ -271,10 +409,7 @@ public interface IAsyncBankManager {
      * @return The IAsyncBank object if found, null otherwise.
      */
     CompletableFuture<@Nullable IAsyncBank> getPersonalBankAsync(String ownerName, ItemID itemID);
-
-
-    //CompletableFuture<Integer> getPersonalBankAccountNumberAsync(String ownerName, ItemID itemID);
-
+    
     /**
      * Gets or creates a personal bank for a given owner UUID and item ID.
      * If the personal bank does not exist, it will try to create a new one.
@@ -283,8 +418,6 @@ public interface IAsyncBankManager {
      * @return The IAsyncBank object if found or created, null if an error occurs.
      */
     CompletableFuture<@Nullable IAsyncBank> getOrCreatePersonalBankAsync(UUID owner, ItemID itemID);
-
-    //CompletableFuture<Integer> getOrCreatePersonalBankAccountNumberAsync(UUID owner, ItemID itemID);
 
 
     /**
@@ -295,10 +428,6 @@ public interface IAsyncBankManager {
      * @return The IAsyncBank object if found or created, null if an error occurs.
      */
     CompletableFuture<@Nullable IAsyncBank> getOrCreatePersonalBankAsync(String ownerName, ItemID itemID);
-
-    //CompletableFuture<Integer> getOrCreatePersonalBankAccountNumberAsync(String ownerName, ItemID itemID);
-
-
 
 
 
@@ -366,6 +495,7 @@ public interface IAsyncBankManager {
     /**
      * @param itemID
      * @return The total amount of the specified item in circulation across all banks.
+     *         (Including the locked balance)
      */
     CompletableFuture<Double> getRealItemCirculationAsync(ItemID itemID);
 
