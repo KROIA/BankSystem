@@ -105,8 +105,10 @@ public class BankSystemModBackend implements BankSystemAPI {
 
 
         INSTANCES.NETWORKING = new BankSystemNetworking();
+        INSTANCES.SERVER_EVENTS = new BankSystemEvents();
 
-        }
+
+    }
 
     // Called from the client side
     public static void onClientSetup()
@@ -127,8 +129,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the server side
     public static void onServerSetup()
     {
-        if(INSTANCES.SERVER_EVENTS == null)
-            INSTANCES.SERVER_EVENTS = new BankSystemEvents();
+
 
     }
 
@@ -174,6 +175,10 @@ public class BankSystemModBackend implements BankSystemAPI {
             });
         }
         loadDataFromFiles(server);
+
+
+
+        INSTANCES.SERVER_EVENTS.BANKSYSTEM_SETUP_COMPLETED.notifyListeners();
     }
 
     // Called from the server side
@@ -365,6 +370,8 @@ public class BankSystemModBackend implements BankSystemAPI {
             else
             {
                 SyncItemIDsPacket.sendAllItemsToSlave(slaveID);
+
+                INSTANCES.SERVER_EVENTS.MASTER_SERVER_SLAVE_CONNECTED.notifyListeners();
             }
         });
 

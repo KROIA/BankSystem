@@ -82,7 +82,7 @@ public interface IAsyncBank {
      *
      * @return The type of this bank.
      */
-    CompletableFuture<ItemID> getItemIDAsync();
+    ItemID getItemIDAsync();
 
     /**
      * Gets the name of the item associated with this bank.

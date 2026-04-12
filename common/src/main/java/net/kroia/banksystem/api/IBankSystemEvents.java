@@ -53,6 +53,10 @@ public interface IBankSystemEvents {
      */
     Signal getSettingsLoadedFromFileSignal();
 
+    Signal getBanksystemSetupCompleteSignal();
+
+    Signal getMasterServerSlaveConnected();
+
     /**
      * Removes all listeners for the events and signals in this class.
      */

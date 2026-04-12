@@ -11,7 +11,8 @@ public enum BankStatus {
     FAILED_NEGATIVE_VALUE,
     FAILED_WRONG_INSTANCE_TYPE,
     FAILED_INVALID_ITEM_ID,
-    FAILED_NO_BANK;
+    FAILED_NO_BANK,
+    FAILED_NO_MASTER_CONNECTION;
 
     public static final StreamCodec<RegistryFriendlyByteBuf, BankStatus> STREAM_CODEC = ExtraCodecUtils.enumStreamCodec(BankStatus.class);
 }

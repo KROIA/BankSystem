@@ -41,4 +41,9 @@ public interface IBankManager {
      */
     IAsyncBankManager getAsync();
 
+
+    boolean isSlave();
+
+    boolean isMaster();
+
 }

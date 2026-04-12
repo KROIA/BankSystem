@@ -67,4 +67,15 @@ public class BankManager implements IBankManager {
     {
         return serverBankManager;
     }
+
+    @Override
+    public boolean isSlave()
+    {
+        return serverBankManager == null;
+    }
+    @Override
+    public boolean isMaster()
+    {
+        return serverBankManager != null;
+    }
 }

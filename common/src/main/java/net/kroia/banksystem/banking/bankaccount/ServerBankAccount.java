@@ -22,6 +22,7 @@ import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
@@ -756,7 +757,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
 
 
-        ListTag usersTag = tag.getList("users", 10);
+        ListTag usersTag = tag.getList("users", Tag.TAG_COMPOUND);
         for (int i = 0; i < usersTag.size(); i++) {
             CompoundTag userTag = usersTag.getCompound(i);
             UUID userUUID = userTag.getUUID("userUUID");
@@ -767,7 +768,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             }
         }
 
-        ListTag banksTag = tag.getList("banks", 10);
+        ListTag banksTag = tag.getList("banks", Tag.TAG_COMPOUND);
         for (int i = 0; i < banksTag.size(); i++) {
             CompoundTag bankTag = banksTag.getCompound(i);
             ServerBank bank = ServerBank.createFromTag(bankTag);

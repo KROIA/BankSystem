@@ -158,8 +158,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
         return itemID;
     }
     @Override
-    public CompletableFuture<ItemID> getItemIDAsync() {
-        return CompletableFuture.completedFuture(itemID);
+    public ItemID getItemIDAsync() {
+        return itemID;
     }
 
 

@@ -1,6 +1,7 @@
 package net.kroia.banksystem.banking.bankmanager;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
@@ -12,10 +13,12 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
+import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
@@ -562,6 +565,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<BankManagerData> getBankManagerDataAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(new BankManagerData(new BankManagerData.UserMapData(Map.of()), new BankManagerData.BankAccountsData(Map.of()), List.of(), List.of(), List.of()));
         CompletableFuture<BankManagerData> future = new CompletableFuture<>();
         InputData inputData = new InputData(FunctionType.GetBankManagerDataAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -571,6 +576,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<BankManagerData.UserMapData> getBankManagerUserMapDataAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(new BankManagerData.UserMapData(Map.of()));
         CompletableFuture<BankManagerData.UserMapData> future = new CompletableFuture<>();
         InputData inputData = new InputData(FunctionType.GetBankManagerUserMapDataAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -580,6 +587,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<BankManagerData.BankAccountsData> getBankManagerBankAccountsDataAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(new BankManagerData.BankAccountsData(Map.of()));
         CompletableFuture<BankManagerData.BankAccountsData> future = new CompletableFuture<>();
         InputData inputData = new InputData(FunctionType.GetBankManagerBankAccountsDataAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -589,6 +598,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> setBanksystemAdminModeAsync(UUID playerUUID, boolean isAdmin) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.SetBanksystemAdminModeAsync, new ParamGroup_UUID_bool(playerUUID, isAdmin));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -598,6 +609,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.IsBanksystemAdminAsync, playerUUID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -607,6 +620,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<List<ItemID>> getAllowedItemsAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetAllowedItemsAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -616,6 +631,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<List<ItemID>> getBlacklistedItemsAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetBlacklistedItemsAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -625,6 +642,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<List<ItemID>> getNotRemovableItemsAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetNotRemovableItemsAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -634,6 +653,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<ItemInfoData> getItemInfoDataAsync(@NotNull ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(new ItemInfoData(itemID, 0,0, List.of()));
         CompletableFuture<ItemInfoData> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetItemInfoDataAsync, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -648,6 +669,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public void addUserAsync(@NotNull UUID playerUUID, @NotNull String playerName) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return;
         InputData inputData = InputData.of(FunctionType.AddUserAsync_1, new ParamGroup_UUID_String(playerUUID, playerName));
         sendRequest(inputData);
     }
@@ -659,6 +682,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> removeUserAsync(UUID userUUID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.RemoveUserAsync, userUUID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -668,6 +693,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> userExistsAsync(UUID userUUID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.UserExistsAsync, userUUID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -677,6 +704,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable User> getUserByUUIDAsync(UUID userUUID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable User> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetUserByUUIDAsync, userUUID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -686,6 +715,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable User> getUserByNameAsync(String name) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable User> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetUserByNameAsync, name);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -700,6 +731,8 @@ public class AsyncBankManager implements IAsyncBankManager {
     @Override
     public CompletableFuture<Boolean> bankAccountExistsAsync(int accountNumber)
     {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.BankAccountExistsAsync, accountNumber);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -709,6 +742,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> bankAccountHasBankAsync(int accountNumber, ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.BankAccountHasBankAsync, new ParamGroup_int_ItemID(accountNumber, itemID));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -718,6 +753,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getBankAccountAsync(int accountNumber) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncBankAccount>  future = new CompletableFuture<>();
         CompletableFuture<Boolean> accountExistsFuture = bankAccountExistsAsync(accountNumber);
         accountExistsFuture.thenAccept(accountExists ->{
@@ -735,6 +772,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable BankAccountData> getBankAccountDataAsync(int accountNumber) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable BankAccountData> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetBankAccountDataAsync, accountNumber);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -745,6 +784,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> createPersonalBankAccountAsync(UUID user) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncBankAccount> future =  new CompletableFuture<>();
         CompletableFuture<Integer> accountNrFuture = createPersonalBankAccountGetAccountNrAsync(user);
         accountNrFuture.thenAccept(accountNr ->
@@ -761,6 +802,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Integer> createPersonalBankAccountGetAccountNrAsync(UUID user) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(ServerBankAccount.INVALID_ACCOUNT_NUMBER);
         CompletableFuture<Integer> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.CreatePersonalBankAccountGetAccountNrAsync_1, user);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -770,6 +813,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Integer> createPersonalBankAccountGetAccountNrAsync(String userName) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(ServerBankAccount.INVALID_ACCOUNT_NUMBER);
         CompletableFuture<Integer> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.CreatePersonalBankAccountGetAccountNrAsync_2, userName);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -779,6 +824,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Integer> getPersonalBankAccountNrAsync(UUID user) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(ServerBankAccount.INVALID_ACCOUNT_NUMBER);
         CompletableFuture<Integer> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetPersonalBankAccountNrAsync_1, user);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -788,6 +835,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Integer> getPersonalBankAccountNrAsync(String userName) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(ServerBankAccount.INVALID_ACCOUNT_NUMBER);
         CompletableFuture<Integer> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetPersonalBankAccountNrAsync_2, userName);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -797,6 +846,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> createBankAccountAsync(String accountName) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncBankAccount> future =  new CompletableFuture<>();
         CompletableFuture<Integer> accountNrFuture = createBankAccountGetAccountNrAsync(accountName);
         accountNrFuture.thenAccept(accountNr ->
@@ -813,6 +864,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Integer> createBankAccountGetAccountNrAsync(String accountName) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(ServerBankAccount.INVALID_ACCOUNT_NUMBER);
         CompletableFuture<Integer> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.CreateBankAccountGetAccountNrAsync, accountName);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -824,6 +877,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<List<IAsyncBankAccount>> getBankAccountsAsync(UUID userUUID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<IAsyncBankAccount>> future = new CompletableFuture<>();
         getBankAccountNumbersAsync(userUUID).thenAccept((bankAccountDataList)->{
             List<IAsyncBankAccount> list = new ArrayList<>();
@@ -840,6 +895,8 @@ public class AsyncBankManager implements IAsyncBankManager {
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getBankAccountByNameAsync(String accountName)
     {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncBankAccount> future =  new CompletableFuture<>();
         CompletableFuture<Integer> accountNrFuture = getBankAccountNrByNameAsync(accountName);
         accountNrFuture.thenAccept(accountNr ->
@@ -856,6 +913,8 @@ public class AsyncBankManager implements IAsyncBankManager {
     @Override
     public CompletableFuture<Integer> getBankAccountNrByNameAsync(String accountName)
     {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(ServerBankAccount.INVALID_ACCOUNT_NUMBER);
         CompletableFuture<Integer> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetBankAccountNrByNameAsync, accountName);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -868,6 +927,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<List<Integer>> getBankAccountNumbersAsync(UUID userUUID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<Integer>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetBankAccountNumbersAsync_1, userUUID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -877,6 +938,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<List<Integer>> getBankAccountNumbersAsync(ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<Integer>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetBankAccountNumbersAsync_2, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -887,6 +950,8 @@ public class AsyncBankManager implements IAsyncBankManager {
     @Override
     public CompletableFuture<List<BankAccountData>> getBankAccountsDataAsync(UUID userUUID)
     {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<BankAccountData>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetBankAccountsDataAsync_1, userUUID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -897,6 +962,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<List<IAsyncBankAccount>> getBankAccountsAsync(ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<IAsyncBankAccount>> future = new CompletableFuture<>();
         getBankAccountNumbersAsync(itemID).thenAccept((bankAccountDataList)->{
             List<IAsyncBankAccount> list = new ArrayList<>();
@@ -909,6 +976,8 @@ public class AsyncBankManager implements IAsyncBankManager {
     @Override
     public CompletableFuture<List<BankAccountData>> getBankAccountsDataAsync(ItemID itemID)
     {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<BankAccountData>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetBankAccountsDataAsync_2, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -918,6 +987,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getPersonalBankAccountAsync(UUID userUUID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncBankAccount> future = new CompletableFuture<>();
         getPersonalBankAccountNrAsync(userUUID).thenAccept(accountNr -> {
             if(accountNr > 0)
@@ -930,6 +1001,8 @@ public class AsyncBankManager implements IAsyncBankManager {
     @Override
     public CompletableFuture<@Nullable BankAccountData> getPersonalBankAccountDataAsync(UUID userUUID)
     {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<BankAccountData> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetPersonalBankAccountDataAsync_1, userUUID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -939,6 +1012,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getPersonalBankAccountAsync(String userName) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncBankAccount> future = new CompletableFuture<>();
         getPersonalBankAccountNrAsync(userName).thenAccept(accountNr -> {
             if(accountNr > 0)
@@ -951,6 +1026,8 @@ public class AsyncBankManager implements IAsyncBankManager {
     @Override
     public CompletableFuture<@Nullable BankAccountData> getPersonalBankAccountDataAsync(String userName)
     {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<BankAccountData> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetPersonalBankAccountDataAsync_2, userName);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -960,6 +1037,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getOrCreatePersonalBankAccountAsync(UUID userUUID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncBankAccount> future = new CompletableFuture<>();
         CompletableFuture<Integer> createdAccount = createPersonalBankAccountGetAccountNrAsync(userUUID);
         createdAccount.thenAccept(account -> {
@@ -970,6 +1049,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getOrCreatePersonalBankAccountAsync(@NotNull String userName) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncBankAccount> future = new CompletableFuture<>();
         CompletableFuture<Integer> createdAccount = createPersonalBankAccountGetAccountNrAsync(userName);
         createdAccount.thenAccept(account -> {
@@ -980,6 +1061,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> userHasPersonalBankAccountAsync(UUID userUUID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.UserHasPersonalBankAccountAsync, userUUID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -989,6 +1072,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> deleteBankAccountAsync(int accountNumber) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.DeleteBankAccountAsync, accountNumber);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -998,6 +1083,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> personalBankExistsAsync(UUID owner, ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.PersonalBankExistsAsync_1, new ParamGroup_UUID_ItemID(owner, itemID));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1007,6 +1094,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> personalBankExistsAsync(String ownerName, ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.PersonalBankExistsAsync_2, new ParamGroup_String_ItemID(ownerName, itemID));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1016,6 +1105,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getPersonalBankAsync(UUID owner, ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
         getPersonalBankAccountNrAsync(owner).thenAccept(accountNr -> {
             if(accountNr > 0)
@@ -1033,6 +1124,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getPersonalBankAsync(String ownerName, ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
         getPersonalBankAccountNrAsync(ownerName).thenAccept(accountNr -> {
             if(accountNr > 0)
@@ -1050,6 +1143,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getOrCreatePersonalBankAsync(UUID owner, ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetOrCreatePersonalBankAsync_1, new ParamGroup_UUID_ItemID(owner, itemID));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1067,6 +1162,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getOrCreatePersonalBankAsync(String ownerName, ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetOrCreatePersonalBankAsync_2, new ParamGroup_String_ItemID(ownerName, itemID));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1084,6 +1181,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> isItemIDAllowedAsync(ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.IsItemIDAllowedAsync, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1093,6 +1192,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> allowItemIDAsync(ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.AllowItemIDAsync, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1102,6 +1203,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> disallowItemIDAsync(ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.DisallowItemIDAsync, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1111,6 +1214,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> isItemIDNotRemovableAsync(ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.IsItemIDNotRemovableAsync, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1120,6 +1225,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Boolean> isItemIDBlacklistedAsync(ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.IsItemIDBlacklistedAsync, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1129,6 +1236,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Double> getRealMoneyCirculationAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(0.0);
         CompletableFuture<Double> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetRealMoneyCirculationAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1138,6 +1247,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Double> getRealLockedMoneyCirculationAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(0.0);
         CompletableFuture<Double> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetRealLockedMoneyCirculationAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1147,6 +1258,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Double> getRealItemCirculationAsync(ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(0.0);
         CompletableFuture<Double> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetRealItemCirculationAsync, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1156,6 +1269,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<Double> getRealLockedItemCirculationAsync(ItemID itemID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(0.0);
         CompletableFuture<Double> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetRealLockedItemCirculationAsync, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1165,6 +1280,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<JsonElement> getCirculationDataJsonAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(new JsonObject());
         CompletableFuture<JsonElement> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetCirculationDataJsonAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1174,6 +1291,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<String> getCirculationDataJsonStringAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture("");
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetCirculationDataJsonStringAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1183,6 +1302,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<JsonElement> toJsonAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(new JsonObject());
         CompletableFuture<JsonElement> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ToJsonAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1192,6 +1313,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public CompletableFuture<String> toJsonStringAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture("");
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ToJsonStringAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -1201,6 +1324,8 @@ public class AsyncBankManager implements IAsyncBankManager {
 
     @Override
     public void onPlayerJoinAsync(UUID playerUUID, String playerName) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return;
         InputData inputData = InputData.of(FunctionType.OnPlayerJoinAsync, new ParamGroup_UUID_String(playerUUID, playerName));
         sendRequest(inputData);
     }

@@ -26,6 +26,9 @@ public class BankSystemEvents implements IBankSystemEvents {
     public final Signal SETTINGS_SAVED_TO_FILE = new Signal();
     public final Signal SETTINGS_LOADED_FROM_FILE = new Signal();
 
+    public final Signal BANKSYSTEM_SETUP_COMPLETED = new Signal();
+    public final Signal MASTER_SERVER_SLAVE_CONNECTED = new Signal();
+
 
     @Override
     public void removeListeners() {
@@ -37,6 +40,8 @@ public class BankSystemEvents implements IBankSystemEvents {
         BANK_DATA_LOADED_FROM_FILE.removeListeners();
         SETTINGS_SAVED_TO_FILE.removeListeners();
         SETTINGS_LOADED_FROM_FILE.removeListeners();
+        BANKSYSTEM_SETUP_COMPLETED.removeListeners();
+        MASTER_SERVER_SLAVE_CONNECTED.removeListeners();
     }
 
 
@@ -83,5 +88,17 @@ public class BankSystemEvents implements IBankSystemEvents {
     @Override
     public Signal getSettingsLoadedFromFileSignal() {
         return SETTINGS_LOADED_FROM_FILE;
+    }
+
+    @Override
+    public Signal getBanksystemSetupCompleteSignal()
+    {
+        return BANKSYSTEM_SETUP_COMPLETED;
+    }
+
+    @Override
+    public Signal getMasterServerSlaveConnected()
+    {
+        return MASTER_SERVER_SLAVE_CONNECTED;
     }
 }
