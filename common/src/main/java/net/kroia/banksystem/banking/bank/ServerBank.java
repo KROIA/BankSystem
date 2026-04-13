@@ -10,6 +10,7 @@ import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -620,7 +621,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public long convertToRawAmount(double realAmount)
     {
-        return convertToRawAmountStatic(realAmount);
+        return BankManager.convertToRawAmountStatic(realAmount);
     }
     @Override
     public CompletableFuture<Long> convertToRawAmountAsync(double realAmount)
@@ -634,13 +635,17 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public double convertToRealAmount(long rawAmount)
     {
-        return convertToRealAmountStatic(rawAmount);
+        return BankManager.convertToRealAmountStatic(rawAmount);
     }
     @Override
     public CompletableFuture<Double> convertToRealAmountAsync(long rawAmount)
     {
-        return CompletableFuture.completedFuture(convertToRealAmountStatic(rawAmount));
+        return CompletableFuture.completedFuture(BankManager.convertToRealAmountStatic(rawAmount));
     }
+
+
+
+
 
 
 
@@ -731,7 +736,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public String getNormalizedAmount(double realAmount)
     {
-        long amount = convertToRawAmountStatic(realAmount);
+        long amount = BankManager.convertToRawAmountStatic(realAmount);
         return getNormalizedAmountStatic(amount);
     }
     @Override
@@ -760,7 +765,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public String getFormattedAmount(double realAmount)
     {
-        long amount = convertToRawAmountStatic(realAmount);
+        long amount = BankManager.convertToRawAmountStatic(realAmount);
         return getFormattedAmountStatic(amount);
     }
     @Override
@@ -956,10 +961,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
 
 
-    public static long convertToRawAmountStatic(double realAmount)
-    {
-        return Math.round(realAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
-    }
+
     public static long convertToRawAmountStatic(String realTextboxText) // 1864165.05
     {
         if(realTextboxText == null)
@@ -989,10 +991,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         }
         return A + B;
     }
-    public static double convertToRealAmountStatic(long rawAmount)
-    {
-        return (float)rawAmount / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
-    }
+
 
     // (1000 means 10.00 currency units)
     public static String getNormalizedAmountStatic(long amount)
@@ -1040,13 +1039,13 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     public static String getNormalizedAmountStatic(double realAmount)
     {
-        long amount = convertToRawAmountStatic(realAmount);
+        long amount = BankManager.convertToRawAmountStatic(realAmount);
         return getNormalizedAmountStatic(amount);
     }
 
     public static String getFormattedAmountStatic(double realAmount)
     {
-        long amount = convertToRawAmountStatic(realAmount);
+        long amount = BankManager.convertToRawAmountStatic(realAmount);
         return getFormattedAmountStatic(amount);
     }
 

@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
@@ -1064,6 +1065,22 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public CompletableFuture<Boolean> isItemIDBlacklistedAsync(ItemID itemID) {
         return CompletableFuture.completedFuture(isItemIDBlacklisted(itemID));
     }
+
+
+
+    @Override
+    public int getItemFractionScaleFactor()
+    {
+        return BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+    }
+    @Override
+    public CompletableFuture<Integer> getItemFractionScaleFactorAsync()
+    {
+        return CompletableFuture.completedFuture(getItemFractionScaleFactor());
+    }
+
+
+
 
     @Override
     public double getRealMoneyCirculation()

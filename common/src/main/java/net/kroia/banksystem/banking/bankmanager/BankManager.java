@@ -1,6 +1,7 @@
 package net.kroia.banksystem.banking.bankmanager;
 
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
@@ -77,5 +78,23 @@ public class BankManager implements IBankManager {
     public boolean isMaster()
     {
         return serverBankManager != null;
+    }
+
+
+    public static long convertToRawAmountStatic(double realAmount)
+    {
+        return Math.round(realAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+    }
+    public static long convertToRawAmountStatic(double realAmount, int itemFractionScaleFactor)
+    {
+        return Math.round(realAmount * itemFractionScaleFactor);
+    }
+    public static double convertToRealAmountStatic(long rawAmount)
+    {
+        return (float)rawAmount / (float) BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+    }
+    public static double convertToRealAmountStatic(long rawAmount, int itemFractionScaleFactor)
+    {
+        return (float)rawAmount / (float)itemFractionScaleFactor;
     }
 }

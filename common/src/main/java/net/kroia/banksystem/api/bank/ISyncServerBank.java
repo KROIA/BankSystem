@@ -287,7 +287,6 @@ public interface ISyncServerBank {
      */
     double convertToRealAmount(long rawAmount);
 
-
     /**
      * @return the normalized balance of this bank.
      *         This is used for display purposes

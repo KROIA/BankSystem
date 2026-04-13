@@ -6,13 +6,12 @@ import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.block.custom.BankUploadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.menu.custom.BankUploadContainerMenu;
-import net.kroia.banksystem.networking.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.entity.SyncBankUploadDataPacket;
+import net.kroia.banksystem.networking.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -352,8 +351,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             }
                             else
                             {
-                                amount = ServerBank.convertToRawAmountStatic(amount);
-                                CompletableFuture<BankStatus> depositStatusFuture = itemBank.depositAsync(amount);
+                                CompletableFuture<BankStatus> depositStatusFuture = itemBank.depositRealAsync((double)amount);
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus == BankStatus.SUCCESS)
                                         inventory.setItem(finalI, ItemStack.EMPTY);

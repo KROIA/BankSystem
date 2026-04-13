@@ -100,10 +100,10 @@ public class ItemID implements ServerSaveable {
     {
         return ItemIDManager.registerItemStackServerSide(itemStack);
     }
-    public static @NotNull CompletableFuture<List<ItemID>> getOrRegisterFromItemStackServerSide(@NotNull List<ItemStack> itemStacks)
-    {
-        return ItemIDManager.registerItemStackServerSide(itemStacks);
-    }
+    //public static @NotNull CompletableFuture<List<ItemID>> getOrRegisterFromItemStackServerSide(@NotNull List<ItemStack> itemStacks)
+    //{
+    //    return ItemIDManager.registerItemStackServerSide(itemStacks);
+    //}
 
     /**
      * Do not call this from the server side

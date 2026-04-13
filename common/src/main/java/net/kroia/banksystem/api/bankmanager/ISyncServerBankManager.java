@@ -472,6 +472,12 @@ public interface ISyncServerBankManager {
     boolean isItemIDBlacklisted(ItemID itemID);
 
 
+    /**
+     * Gets the scaling factor used for backend item amounts.
+     * A scaling factor of 100 means that a raw bank value of 1 represents 0.01 Items
+     * @return global scaling factor, used for all items
+     */
+    int getItemFractionScaleFactor();
 
 
 

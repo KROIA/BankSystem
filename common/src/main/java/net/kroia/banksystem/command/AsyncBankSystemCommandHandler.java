@@ -218,45 +218,46 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
                 throw new RuntimeException("Server bank manager not found");
             }
 
+            boolean result=false;
             switch (input.function) {
-                case FunctionType.Banksystem_setBankSystemAdminMode ->			commandHandler.banksystem_setBankSystemAdminMode(executorPlayer, (boolean)inputData.extra);
+                case FunctionType.Banksystem_setBankSystemAdminMode ->			result = commandHandler.banksystem_setBankSystemAdminMode(executorPlayer, (boolean)inputData.extra);
                 case FunctionType.Banksystem_setBankSystemAdminMode_user ->		{
                     ParamGroup_String_Bool data = (ParamGroup_String_Bool)inputData.extra;
-                    commandHandler.banksystem_setBankSystemAdminMode_user(executorPlayer, data.string, data.boolValue);
+                    result = commandHandler.banksystem_setBankSystemAdminMode_user(executorPlayer, data.string, data.boolValue);
                 }
-                case FunctionType.Banksystem_allowItem ->                   commandHandler.banksystem_allowItem(executorPlayer, (ItemID)inputData.extra);
-                case FunctionType.Banksystem_disallowItem ->                commandHandler.banksystem_disallowItem(executorPlayer, (ItemID)inputData.extra);
-                case FunctionType.Money_add ->                              commandHandler.money_add(executorPlayer, (float)inputData.extra);
+                case FunctionType.Banksystem_allowItem ->                   result = commandHandler.banksystem_allowItem(executorPlayer, (ItemID)inputData.extra);
+                case FunctionType.Banksystem_disallowItem ->                result = commandHandler.banksystem_disallowItem(executorPlayer, (ItemID)inputData.extra);
+                case FunctionType.Money_add ->                              result = commandHandler.money_add(executorPlayer, (float)inputData.extra);
                 case FunctionType.Money_add_user ->  {
                     ParamGroup_String_Float data = (ParamGroup_String_Float)inputData.extra;
-                    commandHandler.money_add_user(executorPlayer, data.string, data.floatValue);
+                    result = commandHandler.money_add_user(executorPlayer, data.string, data.floatValue);
                 }
-                case FunctionType.Money ->				                    commandHandler.money(executorPlayer);
-                case FunctionType.Money_set ->				                commandHandler.money_set(executorPlayer, (float)inputData.extra);
+                case FunctionType.Money ->				                    result = commandHandler.money(executorPlayer);
+                case FunctionType.Money_set ->				                result = commandHandler.money_set(executorPlayer, (float)inputData.extra);
                 case FunctionType.Money_set_user ->				            {
                     ParamGroup_String_Float data = (ParamGroup_String_Float)inputData.extra;
-                    commandHandler.money_set_user(executorPlayer, data.string, data.floatValue);
+                    result =  commandHandler.money_set_user(executorPlayer, data.string, data.floatValue);
                 }
-                case FunctionType.Money_remove ->				            commandHandler.money_remove(executorPlayer, (float)inputData.extra);
+                case FunctionType.Money_remove ->				            result = commandHandler.money_remove(executorPlayer, (float)inputData.extra);
                 case FunctionType.Money_remove_user ->				        {
                     ParamGroup_String_Float data = (ParamGroup_String_Float)inputData.extra;
-                    commandHandler.money_remove_user(executorPlayer, data.string, data.floatValue);
+                    result = commandHandler.money_remove_user(executorPlayer, data.string, data.floatValue);
                 }
                 case FunctionType.Money_send_user ->				        {
                     ParamGroup_String_Float data = (ParamGroup_String_Float)inputData.extra;
-                    commandHandler.money_send_user(executorPlayer, data.string, data.floatValue);
+                    result = commandHandler.money_send_user(executorPlayer, data.string, data.floatValue);
                 }
-                case FunctionType.Money_circulation ->				        commandHandler.money_circulation(executorPlayer);
-                case FunctionType.Bank_enableNotifications ->				commandHandler.bank_enableNotifications(executorPlayer);
-                case FunctionType.Bank_disableNotifications ->				commandHandler.bank_disableNotifications(executorPlayer);
-                case FunctionType.Bank_create ->{
+                case FunctionType.Money_circulation ->				        result = commandHandler.money_circulation(executorPlayer);
+                case FunctionType.Bank_enableNotifications ->				result = commandHandler.bank_enableNotifications(executorPlayer);
+                case FunctionType.Bank_disableNotifications ->				result = commandHandler.bank_disableNotifications(executorPlayer);
+                case FunctionType.Bank_create -> {
                     int accountNr = commandHandler.bank_create(executorPlayer, (String)inputData.extra);
                     return CompletableFuture.completedFuture(OutputData.of(input.function, accountNr));
                 }
-                case FunctionType.Bank_show_user ->                         commandHandler.bank_show_user(executorPlayer, (String)inputData.extra);
+                case FunctionType.Bank_show_user ->                         result = commandHandler.bank_show_user(executorPlayer, (String)inputData.extra);
             }
 
-            return CompletableFuture.completedFuture(OutputData.of(input.function, true));
+            return CompletableFuture.completedFuture(OutputData.of(input.function, result));
         }
         @Override
         protected boolean isAllowedToCallByClient(InputData input)

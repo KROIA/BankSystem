@@ -56,7 +56,14 @@ public class ItemIDManager implements ServerSaveable {
         ItemStack cpy =  itemStack.copy();
         cpy.setCount(1);
         CompletableFuture<ItemID>  future = new CompletableFuture<>();
-        if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
+        ItemID itemID = getItemID(cpy);
+        if(itemID.isValid())
+        {
+            future.complete(itemID);
+            return future;
+        }
+
+        if(MultiServerUtils.canInteractWithBankSystem())
         {
             future.complete(registerItemStackServerSide_direct(cpy));
         }
@@ -67,14 +74,14 @@ public class ItemIDManager implements ServerSaveable {
         }
         return future;
     }
-    public static CompletableFuture<List<ItemID>> registerItemStackServerSide(List<ItemStack> itemStacks) {
+    /*public static CompletableFuture<List<ItemID>> registerItemStackServerSide(List<ItemStack> itemStacks) {
         List<ItemStack> cpyStacks = new ArrayList<>();
         CompletableFuture<List<ItemID>> groupFuture = new CompletableFuture<>();
         List<ItemID> foundItemIDs = new ArrayList<>();
         for (ItemStack itemStack : itemStacks)
         {
             ItemID itemID = getItemID(itemStack);
-            if(itemID == null) {
+            if(!itemID.isValid()) {
                 ItemStack cpy = itemStack.copy();
                 cpy.setCount(1);
                 cpyStacks.add(cpy);
@@ -91,11 +98,20 @@ public class ItemIDManager implements ServerSaveable {
             groupFuture.complete(foundItemIDs);
         }
         else {
-            pendingItemIDGroups.add(Pair.of(cpyStacks, groupFuture));
-            RegisterItemIDPacket.sendRegisterItemIDPacketToMaster(cpyStacks);
+            if(MultiServerManager.isRunning() && MultiServerManager.isMaster()) {
+                pendingItemIDGroups.add(Pair.of(cpyStacks, groupFuture));
+                RegisterItemIDPacket.sendRegisterItemIDPacketToMaster(cpyStacks);
+            }
+            else
+            {
+                for(ItemStack stack : cpyStacks)
+                {
+                    foundItemIDs.add(registerItemStackServerSide_direct(stack));
+                }
+            }
         }
         return groupFuture;
-    }
+    }*/
 
 
     public static CompletableFuture<ItemID> registerItemStackClientSide(@NotNull ItemStack itemStack)

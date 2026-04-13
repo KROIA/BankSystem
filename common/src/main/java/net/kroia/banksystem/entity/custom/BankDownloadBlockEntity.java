@@ -8,13 +8,13 @@ import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.bank.ServerBank;
+import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.block.custom.BankDownloadBlock;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
-import net.kroia.banksystem.networking.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.entity.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.networking.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.core.BlockPos;
@@ -551,10 +551,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         CompletableFuture<Long>  currentBalanceFuture = itemBank.getBalanceAsync();
         currentBalanceFuture.thenAccept((currentBalance) -> {
             int amountToFill = amountToFillIn;
-            long amountToReserve = ServerBank.convertToRawAmountStatic(amountToFill);
+            long amountToReserve = BankManager.convertToRawAmountStatic(amountToFill);
             if(amountToReserve > currentBalance) {
                 amountToFill = (int) (currentBalance / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
-                amountToReserve = ServerBank.convertToRawAmountStatic(amountToFill);
+                amountToReserve = BankManager.convertToRawAmountStatic(amountToFill);
             }
             if(amountToReserve <= 0)
             {
@@ -575,14 +575,14 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                 // Try to fill the inventory with the item
                 int filledAmount = tryFillInventory(item, amountToFillFinal);
                 if(filledAmount > 0) {
-                    long amountToWithdraw = ServerBank.convertToRawAmountStatic(filledAmount);
+                    long amountToWithdraw = BankManager.convertToRawAmountStatic(filledAmount);
                     CompletableFuture<BankStatus> withdrawStatusFuture = itemBank.withdrawLockedPreferedAsync(amountToWithdraw);
                     withdrawStatusFuture.thenAccept((withdrawStatus) -> {
                         if(withdrawStatus == BankStatus.SUCCESS) {
                             if(filledAmount != amountToFillFinal)
                             {
                                 // If we filled less than requested, unlock the remaining amount
-                                long remainingAmount = ServerBank.convertToRawAmountStatic(amountToFillFinal - filledAmount);
+                                long remainingAmount = BankManager.convertToRawAmountStatic(amountToFillFinal - filledAmount);
                                 itemBank.unlockAmountAsync(remainingAmount);
                             }
                             setChanged();

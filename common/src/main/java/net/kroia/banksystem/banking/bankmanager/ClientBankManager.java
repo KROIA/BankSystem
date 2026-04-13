@@ -75,6 +75,11 @@ public class ClientBankManager implements IClientBankManager {
     {
         return asyncServerBankManager.deleteBankAccountAsync(accountNumber);
     }
+    @Override
+    public CompletableFuture<Integer> getItemFractionScaleFactor()
+    {
+        return asyncServerBankManager.getItemFractionScaleFactorAsync();
+    }
 
 
 
