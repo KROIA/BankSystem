@@ -1209,6 +1209,17 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
 
 
+    @Override
+    public long convertToRawAmount(double realAmount)
+    {
+        return BankManager.convertToRawAmountStatic(realAmount);
+    }
+    @Override
+    public double convertToRealAmount(long rawAmount)
+    {
+        return BankManager.convertToRealAmountStatic(rawAmount);
+    }
+
 
     @Override
     public JsonElement toJson()

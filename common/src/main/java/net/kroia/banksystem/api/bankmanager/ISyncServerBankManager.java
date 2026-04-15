@@ -521,6 +521,9 @@ public interface ISyncServerBankManager {
     String getCirculationDataJsonString();
 
 
+    long convertToRawAmount(double realAmount);
+    double convertToRealAmount(long rawAmount);
+
 
 
     /**

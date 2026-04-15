@@ -225,6 +225,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the client side
     private static void onPlayerJoinClientSide(@Nullable LocalPlayer localPlayer)
     {
+        INSTANCES.CLIENT_BANK_MANAGER.getItemFractionScaleFactorAsync();
         //ItemIDManager.clear();
     }
 

@@ -1,6 +1,7 @@
 package net.kroia.banksystem.banking.bankmanager;
 
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
@@ -28,6 +29,7 @@ public class ClientBankManager implements IClientBankManager {
     }
 
     private final IAsyncBankManager asyncServerBankManager;
+    private int itemFractionScaleFactor = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
     public ClientBankManager()
     {
@@ -76,9 +78,26 @@ public class ClientBankManager implements IClientBankManager {
         return asyncServerBankManager.deleteBankAccountAsync(accountNumber);
     }
     @Override
-    public CompletableFuture<Integer> getItemFractionScaleFactor()
+    public CompletableFuture<Integer> getItemFractionScaleFactorAsync()
     {
-        return asyncServerBankManager.getItemFractionScaleFactorAsync();
+        CompletableFuture<Integer> fut = asyncServerBankManager.getItemFractionScaleFactorAsync();
+        fut.thenAccept(value -> itemFractionScaleFactor = value);
+        return fut;
+    }
+    @Override
+    public int getItemFractionScaleFactor()
+    {
+        return itemFractionScaleFactor;
+    }
+    @Override
+    public long convertToRawAmount(double realAmount)
+    {
+        return BankManager.convertToRawAmountStatic(realAmount, itemFractionScaleFactor);
+    }
+    @Override
+    public double convertToRealAmount(long rawAmount)
+    {
+        return BankManager.convertToRealAmountStatic(rawAmount, itemFractionScaleFactor);
     }
 
 

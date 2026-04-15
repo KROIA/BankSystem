@@ -81,6 +81,7 @@ public class BankManager implements IBankManager {
     }
 
 
+
     public static long convertToRawAmountStatic(double realAmount)
     {
         return Math.round(realAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
