@@ -52,8 +52,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
     {
         //Banksystem_manage,
         //Banksystem_testScreen,
-        Banksystem_setBankSystemAdminMode,
-        Banksystem_setBankSystemAdminMode_user,
+        //Banksystem_setBankSystemAdminMode,
+        //Banksystem_setBankSystemAdminMode_user,
         Banksystem_allowItem,
         Banksystem_disallowItem,
 
@@ -94,8 +94,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         //put(FunctionType.GetAccountDataAsync_1,             codecPacket(null, BankAccountData.STREAM_CODEC));
         //put(FunctionType.Banksystem_manage,                 codecPacket(null));
         //put(FunctionType.Banksystem_testScreen,             codecPacket(null));
-        put(FunctionType.Banksystem_setBankSystemAdminMode,         codecPacket(ByteBufCodecs.BOOL.cast()));
-        put(FunctionType.Banksystem_setBankSystemAdminMode_user,    codecPacket(ParamGroup_String_Bool.STREAM_CODEC));
+        //put(FunctionType.Banksystem_setBankSystemAdminMode,         codecPacket(ByteBufCodecs.BOOL.cast()));
+        //put(FunctionType.Banksystem_setBankSystemAdminMode_user,    codecPacket(ParamGroup_String_Bool.STREAM_CODEC));
         put(FunctionType.Banksystem_allowItem,                      codecPacket(ItemID.STREAM_CODEC));
         put(FunctionType.Banksystem_disallowItem,                   codecPacket(ItemID.STREAM_CODEC));
 
@@ -220,11 +220,11 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
             boolean result=false;
             switch (input.function) {
-                case FunctionType.Banksystem_setBankSystemAdminMode ->			result = commandHandler.banksystem_setBankSystemAdminMode(executorPlayer, (boolean)inputData.extra);
-                case FunctionType.Banksystem_setBankSystemAdminMode_user ->		{
+               // case FunctionType.Banksystem_setBankSystemAdminMode ->			result = commandHandler.banksystem_setBankSystemAdminMode(executorPlayer, (boolean)inputData.extra);
+               /* case FunctionType.Banksystem_setBankSystemAdminMode_user ->		{
                     ParamGroup_String_Bool data = (ParamGroup_String_Bool)inputData.extra;
                     result = commandHandler.banksystem_setBankSystemAdminMode_user(executorPlayer, data.string, data.boolValue);
-                }
+                }*/
                 case FunctionType.Banksystem_allowItem ->                   result = commandHandler.banksystem_allowItem(executorPlayer, (ItemID)inputData.extra);
                 case FunctionType.Banksystem_disallowItem ->                result = commandHandler.banksystem_disallowItem(executorPlayer, (ItemID)inputData.extra);
                 case FunctionType.Money_add ->                              result = commandHandler.money_add(executorPlayer, (float)inputData.extra);
@@ -423,7 +423,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         return CompletableFuture.completedFuture(false);
     }
 
-    @Override
+   /* @Override
     public CompletableFuture<Boolean> banksystem_setBankSystemAdminMode_async(@NotNull UUID executor, boolean isAdmin) {
         if(!MultiServerUtils.checkConnectionToMaster(executor))
             return CompletableFuture.completedFuture(false);
@@ -447,7 +447,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
             future.complete(outputData.decodeResult());
         });
         return future;
-    }
+    }*/
 
     @Override
     public CompletableFuture<Boolean> banksystem_allowItem_async(@NotNull UUID executor, ItemID itemID) {

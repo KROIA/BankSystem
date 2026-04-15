@@ -60,7 +60,7 @@ public class BankSystemCommands implements IBankSystemCommands {
         return asyncHandler;
     }
     @Override
-    public IServerBankSystemCommandHandler getSync()
+    public @Nullable IServerBankSystemCommandHandler getSync()
     {
         return serverHandler;
     }

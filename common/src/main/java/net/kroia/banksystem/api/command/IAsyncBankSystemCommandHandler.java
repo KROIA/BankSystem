@@ -11,8 +11,8 @@ public interface IAsyncBankSystemCommandHandler {
 
     CompletableFuture<Boolean> banksystem_manage_async(@NotNull UUID executor);
     CompletableFuture<Boolean> banksystem_testScreen_async(@NotNull UUID executor);
-    CompletableFuture<Boolean> banksystem_setBankSystemAdminMode_async(@NotNull UUID executor, boolean isAdmin);
-    CompletableFuture<Boolean> banksystem_setBankSystemAdminMode_user_async(@NotNull UUID executor, String userName, boolean isAdmin);
+    //CompletableFuture<Boolean> banksystem_setBankSystemAdminMode_async(@NotNull UUID executor, boolean isAdmin);
+    //CompletableFuture<Boolean> banksystem_setBankSystemAdminMode_user_async(@NotNull UUID executor, String userName, boolean isAdmin);
     CompletableFuture<Boolean> banksystem_allowItem_async(@NotNull UUID executor, ItemID itemID);
     CompletableFuture<Boolean> banksystem_disallowItem_async(@NotNull UUID executor, ItemID itemID);
     CompletableFuture<Boolean> banksystem_serverInfo_async(@NotNull UUID executor);

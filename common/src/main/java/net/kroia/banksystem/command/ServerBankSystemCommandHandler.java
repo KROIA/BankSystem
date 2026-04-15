@@ -92,10 +92,10 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         }
         return false;
     }
-    @Override
-    public CompletableFuture<Boolean> banksystem_setBankSystemAdminMode_user_async(@NotNull UUID executor, String userName, boolean isAdmin) {
-        return CompletableFuture.completedFuture(banksystem_setBankSystemAdminMode_user(executor, userName, isAdmin));
-    }
+    //@Override
+    //public CompletableFuture<Boolean> banksystem_setBankSystemAdminMode_user_async(@NotNull UUID executor, String userName, boolean isAdmin) {
+    //    return CompletableFuture.completedFuture(banksystem_setBankSystemAdminMode_user(executor, userName, isAdmin));
+    //}
 
 
 
@@ -103,10 +103,10 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     public boolean banksystem_setBankSystemAdminMode(@NotNull UUID executor, boolean isAdmin) {
         return banksystem_setBankSystemAdminMode_user(executor, tryGetPlayerName(executor), isAdmin);
     }
-    @Override
-    public CompletableFuture<Boolean> banksystem_setBankSystemAdminMode_async(@NotNull UUID executor, boolean isAdmin) {
-        return CompletableFuture.completedFuture(banksystem_setBankSystemAdminMode(executor, isAdmin));
-    }
+    //@Override
+    //public CompletableFuture<Boolean> banksystem_setBankSystemAdminMode_async(@NotNull UUID executor, boolean isAdmin) {
+    //    return CompletableFuture.completedFuture(banksystem_setBankSystemAdminMode(executor, isAdmin));
+    //}
 
 
 

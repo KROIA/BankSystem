@@ -8,6 +8,7 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
+import net.kroia.banksystem.api.command.IServerBankSystemCommandHandler;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
@@ -30,6 +31,14 @@ public class BankSystemCommandsRegistration {
     private static IAsyncBankSystemCommandHandler handler()
     {
         return BACKEND_INSTANCES.COMMAND_HANDLER.getAsync();
+    }
+    private static IServerBankSystemCommandHandler masterHandler()
+    {
+        return BACKEND_INSTANCES.COMMAND_HANDLER.getSync();
+    }
+    private static boolean isMaster()
+    {
+        return BACKEND_INSTANCES.COMMAND_HANDLER.getSync() != null;
     }
     
     // Method to register commands
@@ -66,7 +75,10 @@ public class BankSystemCommandsRegistration {
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
-                            handler().banksystem_setBankSystemAdminMode_async(player.getUUID(), true);
+                            if(isMaster())
+                                masterHandler().banksystem_setBankSystemAdminMode(player.getUUID(), true);
+                            else
+                                ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
@@ -74,7 +86,11 @@ public class BankSystemCommandsRegistration {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
                                             String toPlayer = StringArgumentType.getString(context, "username");
-                                            handler().banksystem_setBankSystemAdminMode_user_async(player.getUUID(), toPlayer, true);
+                                            if(isMaster())
+                                                masterHandler().banksystem_setBankSystemAdminMode_user(player.getUUID(), toPlayer, true);
+                                            else
+                                                ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+
                                             return Command.SINGLE_SUCCESS;
                                         })
                         )
@@ -84,7 +100,11 @@ public class BankSystemCommandsRegistration {
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
-                            handler().banksystem_setBankSystemAdminMode_async(player.getUUID(), false);
+                            if(isMaster())
+                                masterHandler().banksystem_setBankSystemAdminMode(player.getUUID(), true);
+                            else
+                                ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
@@ -92,7 +112,10 @@ public class BankSystemCommandsRegistration {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
                                     String toPlayer = StringArgumentType.getString(context, "username");
-                                    handler().banksystem_setBankSystemAdminMode_user_async(player.getUUID(), toPlayer, false);
+                                    if(isMaster())
+                                        masterHandler().banksystem_setBankSystemAdminMode_user(player.getUUID(), toPlayer, true);
+                                    else
+                                        ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
