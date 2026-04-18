@@ -88,8 +88,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         Software.setBackend(INSTANCES);
         ItemID.setBackend(INSTANCES);
 
-        BankSystemNetworkPacket.setBackend(INSTANCES);
-        BankSystemGenericRequest.setBackend(INSTANCES);
+        BankSystemNetworking.setBackend(INSTANCES);
         BankSystemTextMessages.setBackend(INSTANCES);
 
 

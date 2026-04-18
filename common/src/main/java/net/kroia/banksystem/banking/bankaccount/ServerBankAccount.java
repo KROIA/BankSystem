@@ -23,11 +23,13 @@ import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
@@ -57,6 +59,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     private @Nullable User personalBankOwner;
     private final Map<UUID, BankUser> users = new HashMap<>();
     private final Map<ItemID, ServerBank> banks = new HashMap<>();
+    private boolean hasChanges = false;
+
+    private final List<Consumer<BankAccountData>> changeListeners = new ArrayList<>();
 
     private ServerBankAccount(int accountNumber) {
         this.accountNumber = accountNumber;
@@ -121,6 +126,44 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
 
 
+    public void update(MinecraftServer server)
+    {
+        if(hasChanges()) {
+            if(!changeListeners.isEmpty()) {
+                BankAccountData changes = getAccountData();
+                for (Consumer<BankAccountData> currentListener : changeListeners) {
+                    currentListener.accept(changes);
+                }
+            }
+            clearChangeFlag();
+        }
+    }
+
+
+
+
+
+    @Override
+    public boolean hasChanges()
+    {
+        if(hasChanges)
+            return true;
+        for(Map.Entry<ItemID, ServerBank> entry : banks.entrySet()) {
+            if(entry.getValue().hasChanges()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public void clearChangeFlag()
+    {
+        hasChanges = false;
+        for(Map.Entry<ItemID, ServerBank> entry : banks.entrySet()) {
+            entry.getValue().clearChangeFlag();
+        }
+    }
 
     @Override
     public BankAccountData getAccountData()
@@ -150,6 +193,58 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     public CompletableFuture<BankAccountData> getAccountDataAsync()
     {
         return CompletableFuture.completedFuture(getAccountData());
+    }
+
+
+    /*private BankAccountData getChangedAccountData()
+    {
+        UserData personalBankOwnerData = null;
+        if (this.personalBankOwner != null) {
+            personalBankOwnerData = this.personalBankOwner.getUserData(); // Convert User to UserData
+        }
+        Map<UUID, BankUserData> users = new HashMap<>();
+        Map<ItemID, BankData> bankData = new HashMap<>();
+
+        for(Map.Entry<UUID, BankUser> entry : this.users.entrySet()) {
+            UUID userUUID = entry.getKey();
+            BankUser user = entry.getValue();
+            users.put(userUUID, user.toBankUserData()); // Convert BankUser to BankUserData
+        }
+
+        for(Map.Entry<ItemID, ServerBank> entry : this.banks.entrySet()) {
+            ServerBank bank = entry.getValue();
+            if(bank.hasChanges()) {
+                ItemID itemID = entry.getKey();
+                bankData.put(itemID, bank.getMinimalData()); // Convert ServerBank to BankData
+            }
+        }
+
+        return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
+    }*/
+
+    @Override
+    public void subscribeBankChanges(Consumer<BankAccountData> callback)
+    {
+        if(callback == null)
+            return;
+        for(Consumer<BankAccountData> currentListener : changeListeners)
+        {
+            if(currentListener == callback)
+                return; // Already subscribed
+        }
+        changeListeners.add(callback);
+    }
+    @Override
+    public void unsubscribeBankChanges(Consumer<BankAccountData> callback)
+    {
+        for(Consumer<BankAccountData> currentListener : changeListeners)
+        {
+            if(currentListener == callback)
+            {
+                changeListeners.remove(currentListener);
+                return;
+            }
+        }
     }
 
 
@@ -300,6 +395,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (accountName == null || accountName.isEmpty()) {
             accountName = "";
         }
+        hasChanges |= !this.accountName.equals(accountName);
         this.accountName = accountName; // Set the name of the bank account
     }
     @Override
@@ -322,11 +418,12 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
     @Override
     public void setAccountIcon(@Nullable ItemID accountIcon) {
+        hasChanges |= this.accountIcon != accountIcon;
         this.accountIcon = accountIcon; // Set the icon for the bank account
     }
     @Override
     public void setAccountIconAsync(@Nullable ItemID accountIcon) {
-        this.accountIcon = accountIcon; // Set the icon for the bank account
+        setAccountIcon(accountIcon);
     }
 
 
@@ -399,6 +496,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             return;
         }
         user.setPermission(permission); // Update existing user's permission
+        hasChanges = true;
     }
     @Override
     public void setPermissionAsync(UUID userUUID, int permission)
@@ -424,6 +522,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             return;
         }
         users.put(user.getUUID(), new BankUser(user, permission)); // Add new user
+        hasChanges = true;
     }
     @Override
     public void addUserAsync(User user, int permission)
@@ -449,6 +548,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
                     continue; // Do not add the personalBankOwnerData as a user again
                 }
                 users.put(user.getUUID(), new BankUser(user, permission)); // Add new user
+                hasChanges = true;
             }
         }
     }
@@ -466,9 +566,10 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (userUUID == null) {
             return;
         }
-        users.remove(userUUID); // Remove user by UUID
+        hasChanges |= users.remove(userUUID) != null; // Remove user by UUID
         if(personalBankOwner != null && personalBankOwner.getUUID().equals(userUUID)) {
             personalBankOwner = null; // If the removed user is the personalBankOwnerData, set personalBankOwnerData to null
+            hasChanges = true;
         }
     }
     @Override
@@ -530,6 +631,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         ServerBank bank = ServerBank.create(itemID, startBalance); // Create a new bank with 0 balance
         if (bank != null) {
             banks.put(itemID, bank); // Add new bank to the account
+            hasChanges = true;
             return bank;
         }
         return null; // Failed to create bank
@@ -546,6 +648,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         ServerBank bank = ServerBank.create(itemID, startBalance); // Create a new bank with 0 balance
         if (bank != null) {
             banks.put(itemID, bank); // Add new bank to the account
+            hasChanges = true;
             return CompletableFuture.completedFuture(bank);
         }
         return CompletableFuture.completedFuture(null); // Failed to create bank
@@ -560,7 +663,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (itemID == null) {
             return; // Invalid item ID
         }
-        banks.remove(itemID); // Remove bank by item ID
+        hasChanges |= banks.remove(itemID) != null; // Remove bank by item ID
     }
     @Override
     public void removeBankAsync(ItemID itemID) {
@@ -580,7 +683,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             }
         }
         for (ItemID itemID : emptyBanks) {
-            banks.remove(itemID); // Remove empty banks from the account
+            hasChanges |= banks.remove(itemID) != null; // Remove empty banks from the account
         }
         return emptyBanks; // Return list of removed empty banks
     }
@@ -594,11 +697,12 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
     @Override
     public void removeAllBanks() {
+        hasChanges |= !banks.isEmpty();
         banks.clear(); // Clear all banks in the account
     }
     @Override
     public void removeAllBanksAsync() {
-        banks.clear(); // Clear all banks in the account
+        removeAllBanks();
     }
 
 

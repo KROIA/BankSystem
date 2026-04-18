@@ -14,8 +14,14 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public interface ISyncServerBankManager {
+
+
+    void subscribeBankChanges(int accountNr, Consumer<BankAccountData> callback);
+    void unsubscribeBankChanges(int accountNr, Consumer<BankAccountData> callback);
+
     /**
      * Contains all data about the bank manager.
      * @return Data packet containing all data about the bank manager.

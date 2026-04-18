@@ -100,7 +100,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
                 minecraft.setScreen(popup);
             }
         });
-        removeBankingItemButton.setIdleColor(0xFFe8711c);
+        removeBankingItemButton.setBackgroundColor(0xFFe8711c);
         removeBankingItemButton.setHoverColor(0xFFe04c12);
         removeBankingItemButton.setPressedColor(0xFFe04c12);
 

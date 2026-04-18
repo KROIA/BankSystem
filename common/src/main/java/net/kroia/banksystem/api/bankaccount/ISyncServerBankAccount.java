@@ -13,15 +13,26 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public interface ISyncServerBankAccount {
 
+    /**
+     * @return true if any bank account has changes since the last reset of the ChangeFlag
+     */
+    boolean hasChanges();
+
+    void clearChangeFlag();
 
     /**
      * Gets all data stored in this bank account
      * @return the bank account data
      */
     BankAccountData getAccountData();
+
+
+    void subscribeBankChanges(Consumer<BankAccountData> callback);
+    void unsubscribeBankChanges(Consumer<BankAccountData> callback);
 
     /**
      * Gets all data stored in this bank account, except for all other item banks than the one specified by the itemID

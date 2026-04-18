@@ -39,8 +39,11 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     }
 
+
+
     protected long balance;
     protected long lockedBalance;
+    protected boolean changeFlag = false;
     private ItemID itemID;
 
     private ServerBank()
@@ -74,6 +77,17 @@ public class ServerBank implements ServerSaveable, IServerBank {
         return null; // Invalid data
     }
 
+    @Override
+    public boolean hasChanges()
+    {
+        return changeFlag;
+    }
+
+    @Override
+    public void clearChangeFlag()
+    {
+        changeFlag = false;
+    }
 
     @Override
     public BankData getMinimalData() {
@@ -418,6 +432,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         lockedBalance -= amount;
         BankStatus otherBankStatus = other.deposit(amount);
         if(otherBankStatus == BankStatus.SUCCESS) {
+            changeFlag = true;
             return BankStatus.SUCCESS;
         }
         lockedBalance += amount;
@@ -490,6 +505,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         lockedBalance -= amount;
         BankStatus otherBankStatus = other.deposit(amount);
         if(otherBankStatus == BankStatus.SUCCESS) {
+            changeFlag = true;
             return BankStatus.SUCCESS;
         }
         lockedBalance = lastLocked;
@@ -946,6 +962,11 @@ public class ServerBank implements ServerSaveable, IServerBank {
             castedTo2.lockedBalance = origTo2LockedBalance2;
             castedTo1.balance = origTo1Balance1;
             castedTo2.balance = origTo2Balance2;
+            castedTo2.changeFlag = true;
+            castedTo1.changeFlag = true;
+            castedFrom1.changeFlag = true;
+            castedFrom2.changeFlag = true;
+
             if(BankStatus1 == BankStatus.SUCCESS)
                 return BankStatus2;
             return BankStatus1;
@@ -957,7 +978,10 @@ public class ServerBank implements ServerSaveable, IServerBank {
         setBalanceInternal(this.balance + balance);
     }
     private void setBalanceInternal(long balance) {
-        this.balance = balance;
+        if(balance != this.balance) {
+            this.balance = balance;
+            changeFlag = true;
+        }
     }
 
 

@@ -201,7 +201,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
 
         closeButton = new CloseButton(this::onClose);
-        closeButton.setIdleColor(0xFFf55a42);
+        closeButton.setBackgroundColor(0xFFf55a42);
         closeButton.setHoverColor(0xFFe03d24);
         closeButton.setPressedColor(0xFFde2b10);
         closeButton.setOutlineColor(0xFFde2510);

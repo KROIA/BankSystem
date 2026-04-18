@@ -13,6 +13,14 @@ import org.jetbrains.annotations.NotNull;
 public interface ISyncServerBank {
 
     /**
+     * @return true if the balance has changed since the last reset of the change flag
+     */
+    boolean hasChanges();
+
+    void clearChangeFlag();
+
+
+    /**
      * Returns minimalistic data about this bank.
      * Can be requested by the client using the ClientBankManager.
      *

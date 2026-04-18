@@ -7,7 +7,9 @@ import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
+import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.entity.UpdateBankTerminalBlockEntityPacket;
+import net.kroia.banksystem.networking.general.BankAccountChangeStream;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.ItemID;
@@ -16,6 +18,7 @@ import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
+import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -138,6 +141,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private int selectedBankAccountNr = -1;
     //private int userPermission = 0;
 
+    private UUID bankChangeStreamID = null;
 
 
     public BankTerminalScreen(BankTerminalContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
@@ -188,7 +192,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
 
         getBankManager().requestBankTerminalData(pMenu.getBlockPos()).thenAccept((bankTerminalData) -> {
-            selectedBankAccountNr = bankTerminalData.selectedBankAccount();
+            setSelectedBankAccountNr(bankTerminalData.selectedBankAccount());
 
             //userPermission = bankTerminalData.userPermission;
 
@@ -201,6 +205,8 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
                 getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID()).thenAccept(this::updateBankList);
             }
         });
+
+
     }
 
     @Override
@@ -236,12 +242,34 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     }
 
     public void handleTick() {
-        tickCount++;
+        /*tickCount++;
         if(tickCount - lastTickCount > 10)
         {
             lastTickCount = tickCount;
             updateBankList();
+        }*/
+    }
+
+    private void setSelectedBankAccountNr(int selectedBankAccountNr) {
+        if(selectedBankAccountNr == this.selectedBankAccountNr)
+            return;
+        if(bankChangeStreamID != null)
+        {
+            StreamSystem.stopStream(bankChangeStreamID);
+            bankChangeStreamID = null;
         }
+
+        this.selectedBankAccountNr = selectedBankAccountNr;
+
+        BankAccountChangeStream.InputData inputData = new BankAccountChangeStream.InputData(selectedBankAccountNr);
+        bankChangeStreamID = BankSystemNetworking.BANKSYSTEM_ACCOUNT_CHANGE_STREAM.startServerToClient(inputData, (changedData)->
+                {
+                    updateBankList(changedData.changedData());
+                },
+                ()->
+                {
+                    bankChangeStreamID = null;
+                });
     }
 
     private void updateBankList()
@@ -259,12 +287,12 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             error("Failed to update bank data for player: " + playerName + ". BankAccountData is null.");
             getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID()).thenAccept((data)->{
                 if(data != null)
-                    selectedBankAccountNr = data.accountNumber;
+                    setSelectedBankAccountNr(data.accountNumber);
             });
             return;
         }
         selectAccountButton.setAccountData(minimalBankUserData);
-        selectedBankAccountNr = minimalBankUserData.accountNumber;
+        setSelectedBankAccountNr(minimalBankUserData.accountNumber);
         UUID thisPlayer = getThisPlayerUUID();
 
         receiveItemsFromBankButton.setEnabled(minimalBankUserData.hasPermission(thisPlayer, BankPermission.WITHDRAW.getValue()));
@@ -360,7 +388,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     {
         if(!screenIsOpen)
             return;
-        this.selectedBankAccountNr = accountNumber;
+        setSelectedBankAccountNr(accountNumber);
         bankElements.clear();
         itemListView.removeChilds();
         updateBankList();

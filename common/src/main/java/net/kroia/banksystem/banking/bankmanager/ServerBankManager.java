@@ -3,6 +3,7 @@ package net.kroia.banksystem.banking.bankmanager;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.IAsyncBank;
@@ -14,10 +15,7 @@ import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
-import net.kroia.banksystem.banking.clientdata.BankAccountData;
-import net.kroia.banksystem.banking.clientdata.BankManagerData;
-import net.kroia.banksystem.banking.clientdata.ItemInfoData;
-import net.kroia.banksystem.banking.clientdata.UserData;
+import net.kroia.banksystem.banking.clientdata.*;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
@@ -25,6 +23,7 @@ import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -33,6 +32,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 public class ServerBankManager implements ServerSaveableChunked, IServerBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -61,6 +61,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     private final Map<Integer, ServerBankAccount> bankAccounts = new HashMap<>();
 
     private int nextAccountNumber = 1; // Start with account number 1
+    private int tickCounter = 0;
 
 
     public ServerBankManager() {
@@ -69,6 +70,40 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         getNotRemovableItems();
 
         setupDefaultItems();
+
+
+        TickEvent.SERVER_POST.register(this::update);
+    }
+
+    public void update(MinecraftServer server)
+    {
+        tickCounter++;
+        if(tickCounter < 20)
+            return; // Only process bank updates once per second to save some performance
+        tickCounter = 0;
+
+        for(ServerBankAccount account : bankAccounts.values())
+            account.update(server);
+    }
+
+
+    @Override
+    public void subscribeBankChanges(int accountNr, Consumer<BankAccountData> callback)
+    {
+        ServerBankAccount account = bankAccounts.get(accountNr);
+        if(account != null)
+        {
+            account.subscribeBankChanges(callback);
+        }
+    }
+    @Override
+    public void unsubscribeBankChanges(int accountNr, Consumer<BankAccountData> callback)
+    {
+        ServerBankAccount account = bankAccounts.get(accountNr);
+        if(account != null)
+        {
+            account.unsubscribeBankChanges(callback);
+        }
     }
 
     @Override
