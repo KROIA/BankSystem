@@ -90,6 +90,11 @@ public class ClientBankManager implements IClientBankManager {
         return itemFractionScaleFactor;
     }
     @Override
+    public int getItemFractionDigitsCount()
+    {
+        return (int)Math.log10(itemFractionScaleFactor);
+    }
+    @Override
     public long convertToRawAmount(double realAmount)
     {
         return BankManager.convertToRawAmountStatic(realAmount, itemFractionScaleFactor);

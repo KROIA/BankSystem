@@ -77,9 +77,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             itemView.setSize(16, 16);
             bankBalanceLabel = new Label("0");
             amountTextBox = new TextBox();
-            amountTextBox.setAllowNumbers(true, false);
-            amountTextBox.setAllowLetters(false);
-            amountTextBox.setAllowNegativeNumbers(false);
+            amountTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 100,0));
             amountTextBox.setText("1");
             conditionSelectionDropDown = new DropDownMenu(TEXT.CONDITION.getString());
             //conditionSelectionDropDown.setZ(1000);
@@ -122,9 +120,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             });
 
             conditionAmountTextBox = new TextBox();
-            conditionAmountTextBox.setAllowNumbers(true, false);
-            conditionAmountTextBox.setAllowLetters(false);
-            conditionAmountTextBox.setAllowNegativeNumbers(false);
+            conditionAmountTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 100,0));
             conditionAmountTextBox.setText("0");
             deleteButton = new Button("X", () -> onRemoveOrder.accept(this));
 

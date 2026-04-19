@@ -30,6 +30,7 @@ public interface IClientBankManager {
     CompletableFuture<Boolean> deleteBankAccountAsync(int accountNumber);
     CompletableFuture<Integer> getItemFractionScaleFactorAsync();
     int getItemFractionScaleFactor();
+    int getItemFractionDigitsCount();
     long convertToRawAmount(double realAmount);
     double convertToRealAmount(long rawAmount);
 

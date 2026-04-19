@@ -57,8 +57,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             itemStackHitBox = new Rectangle(1,1,16,16);
 
             this.amountBox = new TextBox(0,0,0);
-            this.amountBox.setMaxChars(10); // Max length of input
-            this.amountBox.setAllowLetters(false); // Allow only digits
+            this.amountBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10,0));
 
             addChild(balanceLabel);
             addChild(amountBox);

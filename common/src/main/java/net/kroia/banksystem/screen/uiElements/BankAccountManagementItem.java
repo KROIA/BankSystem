@@ -124,13 +124,9 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
         if(isAdminMode)
         {
             balanceValueTextBox = new TextBox();
-            balanceValueTextBox.setAllowLetters(false);
-            balanceValueTextBox.setAllowNumbers(true, true);
-            balanceValueTextBox.setAllowNegativeNumbers(false);
-            int maxDecimalChar = ServerBank.getMaxDecimalDigitsCount();
-            balanceValueTextBox.setMaxDecimalChar(maxDecimalChar);
+            int itemFractionScaleFactor = getMarketManager().getItemFractionScaleFactor();
             balanceValueTextBox.setOnTextChanged(this::onBalanceTextBoxChanged);
-            balanceValueTextBox.setMaxChars(6*3+1); // Max size of a long
+            balanceValueTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, (int)Math.log10((double) Long.MAX_VALUE /itemFractionScaleFactor),(int)Math.log10(itemFractionScaleFactor)));
             balanceValueTextBox.setHoverTooltipSupplier(BALANCE_TEXTBOX_TOOLTIP::getString);
             balanceValueTextBox.setHoverTooltipFontScale(0.8f);
             balanceValueTextBox.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);

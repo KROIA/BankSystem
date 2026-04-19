@@ -43,9 +43,7 @@ public class ATMScreen extends BankSystemGuiScreen {
 
             itemView = new ItemView(this.itemStack);
             amountTextBox = new TextBox();
-            amountTextBox.setAllowLetters(false);
-            amountTextBox.setAllowNumbers(true, false);
-            amountTextBox.setAllowNegativeNumbers(false);
+            amountTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 100, 0));
 
             amountTextBox.setOnTextChanged((text -> {
                 // Send signal to root GuiElement
