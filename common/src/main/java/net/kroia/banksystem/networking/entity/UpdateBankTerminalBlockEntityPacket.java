@@ -36,6 +36,15 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     private boolean sendItemsToBank;
     private int selectedBankAccount; // This can be used to specify which bank account is being updated
 
+    /**
+     *
+     *
+     * @param pos
+     * @param itemTransferToMarketAmounts map of items and amount. The amount is not the backend value but whole item counts
+     *                                    Only whole items can be withdrawn
+     * @param sendItemsToMarket
+     * @param selectedBankAccount
+     */
     public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<ItemID, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket, int selectedBankAccount) {
         super();
         this.pos = pos;

@@ -10,6 +10,7 @@ import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.networking.general.BankAccountChangeStream;
+import net.kroia.banksystem.screen.uiElements.AmountButtonGroup;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.ItemID;
@@ -35,25 +36,32 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         public static final int HEIGHT = 20;
         private long targetAmount = 0;
         private ItemStack stack;
-        public long stackSize;
+        private long wholeBankBalance;
         private final Rectangle itemStackHitBox;
         public final ItemID itemID;
 
         private final TextBox amountBox;
         private final Label balanceLabel;
+        private final AmountButtonGroup addAmountButtonGroup;
 
         BankTerminalScreen parent;
 
-        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long stackSize) {
+        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long rawBalance) {
             super(0, 0, 100, HEIGHT);
             this.parent = parent;
             this.stack = stack;
             this.itemID = itemID;
-            this.stackSize = stackSize;
 
-            int boxPadding = 2;
+            //int boxPadding = 2;
+
+            addAmountButtonGroup = AmountButtonGroup.create(new long[]{1L, 10L, 32L, 64L},
+                    this::addAmountFromButton,
+                    ()->{setTargetAmount(0);},
+                    this::getTargetAmount);
+            addChild(addAmountButtonGroup);
 
             balanceLabel = new Label("");
+            balanceLabel.setTextFontScale(0.8f);
             itemStackHitBox = new Rectangle(1,1,16,16);
 
             this.amountBox = new TextBox(0,0,0);
@@ -65,14 +73,19 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
                 saveAmount();
             });
             amountBox.setText(0);
+            setHeight(addAmountButtonGroup.getHeight());
+            addAmountButtonGroup.updateButtons();
+
+            wholeBankBalance = (long)getBankManager().convertToRealAmount(rawBalance);
+            String amountStr = ServerBank.getFormattedAmountStatic(rawBalance);
+            balanceLabel.setText(amountStr);
             //addChild(receiveItemsFromMarketButton);
         }
 
         @Override
         protected void render() {
             drawItem(stack, itemStackHitBox.x, itemStackHitBox.y);
-            String amountStr = ServerBank.getFormattedAmountStatic(stackSize);
-            balanceLabel.setText(amountStr);
+
             if(itemStackHitBox.contains(getMousePos().x, getMousePos().y))
                 drawTooltip(stack, getMousePos());
         }
@@ -82,34 +95,58 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             int width = getWidth()-17;
             int height = getHeight();
             int padding = 2;
-            int balanceLabelWidth = width/2;
+            int balanceLabelWidth = width/4;
             itemStackHitBox.y = (height-16)/2;
 
             balanceLabel.setBounds(padding+17, padding, balanceLabelWidth, height-padding*2);
-            amountBox.setBounds(balanceLabel.getRight(), padding, getWidth()-balanceLabel.getRight()-padding, height-padding*2);
+            amountBox.setBounds(balanceLabel.getRight(), padding, width/3, height-padding*2);
+            addAmountButtonGroup.setBounds(amountBox.getRight()+1, 0, getWidth()-amountBox.getRight()-1, height);
+        }
+        public void setBankBalance(long amount) {
+            wholeBankBalance = (long)getBankManager().convertToRealAmount(amount);
+            String amountStr = ServerBank.getFormattedAmountStatic(amount);
+            balanceLabel.setText(amountStr);
+
+            if(targetAmount > wholeBankBalance) {
+                targetAmount = wholeBankBalance;
+                amountBox.setText(targetAmount);
+                addAmountButtonGroup.updateButtons();
+            }
 
         }
         public long getTargetAmount()
         {
-            saveAmount();
+            //saveAmount();
             return targetAmount;
         }
         public void setTargetAmount(int amount)
         {
             this.targetAmount = amount;
-            amountBox.setText(amount);
+            if(targetAmount > wholeBankBalance) {
+                targetAmount = wholeBankBalance;
+            }
+            else if(targetAmount < 0)
+            {
+                targetAmount = 0;
+            }
+
+            amountBox.setText(targetAmount);
         }
         private void saveAmount() {
             targetAmount = this.amountBox.getInt();
-            if(targetAmount > stackSize) {
-                targetAmount = stackSize;
+            if(targetAmount > wholeBankBalance) {
+                targetAmount = wholeBankBalance;
             }
             else if(targetAmount < 0)
             {
                 targetAmount = 0;
             }
             amountBox.setText(targetAmount);
+        }
 
+        private void addAmountFromButton(long amount)
+        {
+            setTargetAmount((int)(getTargetAmount() + amount));
         }
     }
 
@@ -169,7 +206,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             }
         });
         sendItemsToBankButton = new Button(SEND_ITEMS_TO_BANK_BUTTON_TEXT.getString());
-        sendItemsToBankButton.setOnFallingEdge(this::onTransmittItemsToBank);
+        sendItemsToBankButton.setOnFallingEdge(this::onTransmitItemsToBank);
 
         receiveItemsFromBankButton = new Button(RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT.getString());
         receiveItemsFromBankButton.setOnFallingEdge(this::onReceiveItemsFromBank);
@@ -177,7 +214,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         itemListView = new VerticalListView(0, 0, 100, 100);
         LayoutGrid layoutGrid = new LayoutGrid();
         layoutGrid.stretchX = true;
-        layoutGrid.columns = 3;
+        layoutGrid.columns = 2;
         itemListView.setLayout(layoutGrid);
         inventoryView = new ContainerView<>(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 256, 256));
         inventoryView.setSize(176, 166);
@@ -233,6 +270,11 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     public void onClose() {
         super.onClose();
         screenIsOpen = false;
+        if(bankChangeStreamID != null)
+        {
+            StreamSystem.stopStream(bankChangeStreamID);
+            bankChangeStreamID = null;
+        }
     }
     @Override
     public void containerTick() {
@@ -323,7 +365,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
                 bankElements.add(element);
                 itemListView.addChild(element);
             } else {
-                element.stackSize = balance;
+                element.setBankBalance(balance);
             }
             if (needsResize)
                 availableItems.put(pair.getFirst(), pair.getFirst());
@@ -354,7 +396,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         return null;
     }
 
-    private void onTransmittItemsToBank() {
+    private void onTransmitItemsToBank() {
 
         /*for(BankElement element : bankElements)
         {
@@ -364,6 +406,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         HashMap<ItemID, Long> itemTransferToBankAmounts = new HashMap<>();
         UpdateBankTerminalBlockEntityPacket.sendPacketToServer(this.menu.getBlockPos(), itemTransferToBankAmounts, true, selectedBankAccountNr);
+        updateBankList();
     }
     private void onReceiveItemsFromBank() {
         for(BankElement element : bankElements)
@@ -382,6 +425,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             }
         }
         UpdateBankTerminalBlockEntityPacket.sendPacketToServer(this.menu.getBlockPos(), itemTransferToMarketAmounts, false, selectedBankAccountNr);
+        updateBankList();
     }
     private void onBankaccountSelected(int accountNumber)
     {

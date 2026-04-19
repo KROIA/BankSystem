@@ -10,6 +10,7 @@ import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
+import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
@@ -1020,21 +1021,23 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         }
 
                         //long withdrawAmount = amount;
-                        final long withdrawAmountFinal = amount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                        final long withdrawAmountFinal = BankManager.convertToRawAmountStatic(amount);
 
                         CompletableFuture<Long> balanceFuture = bank.getBalanceAsync();
 
                         balanceFuture.thenAccept(balance -> {
                             long withdrawAmount = Math.min(withdrawAmountFinal, balance);
                             if (withdrawAmount > 0) {
-                                long addedAmount = inventory.addItem(itemID, amount);
+                                long itemsToDepositInInventory = (long)Math.floor(BankManager.convertToRealAmountStatic(withdrawAmount));
+                                long addedAmount = inventory.addItem(itemID, itemsToDepositInInventory);
                                 if (addedAmount > 0) {
 
-                                    CompletableFuture<BankStatus> withdrawResult = bank.withdrawAsync(addedAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+                                    CompletableFuture<BankStatus> withdrawResult = bank.withdrawAsync(BankManager.convertToRawAmountStatic(addedAmount));
                                     withdrawResult.thenAccept(withdraw -> {
                                         if (withdraw != BankStatus.SUCCESS) {
                                             // error
-                                            error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(addedAmount) + " " + itemID + " from bank account of user " + playerID);
+                                            error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(BankManager.convertToRawAmountStatic(addedAmount)) +
+                                                    " " + itemID + " from bank account of user " + playerID +" : "+withdraw);
                                             inventory.removeItem(itemID, addedAmount);
                                         }
                                     });
