@@ -1034,7 +1034,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
 
         String amountString = String.valueOf(wholeUnits);
-        int exponent = (int)(Math.log((double)wholeUnits)/Math.log(10));
+        double logResult = Math.log10(wholeUnits);
+        int exponent = (int)logResult;
         int exponent3 = exponent/3;
         if(exponent3 > 0)
         {
