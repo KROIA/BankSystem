@@ -193,7 +193,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         //BankSystemConfig.Settings settings = INSTANCES.CONFIG.getSettings();
         //settings.bank.items.add(MoneyItem.getItemID());
         //INSTANCES.CONFIG.save();
-        INSTANCES.SERVER_EVENTS.removeListeners();
+        //INSTANCES.SERVER_EVENTS.removeListeners();
     }
 
     // Called from the server side
