@@ -6,7 +6,7 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
-import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
+import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.networking.general.BankAccountChangeStream;

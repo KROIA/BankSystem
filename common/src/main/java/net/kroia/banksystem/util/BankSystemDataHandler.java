@@ -5,7 +5,7 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
-import net.kroia.banksystem.compat.OldBankDataLoader;
+import net.kroia.banksystem.minecraft.compat.OldBankDataLoader;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.persistence.DataPersistence;
 import net.minecraft.nbt.CompoundTag;

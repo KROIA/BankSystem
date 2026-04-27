@@ -2,7 +2,7 @@ package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.menu.custom.BankUploadContainerMenu;
+import net.kroia.banksystem.minecraft.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.networking.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.entity.SyncBankUploadDataPacket;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;

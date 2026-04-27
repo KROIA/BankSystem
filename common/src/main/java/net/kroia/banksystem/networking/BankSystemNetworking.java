@@ -5,7 +5,7 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
 import net.kroia.banksystem.banking.bankmanager.AsyncBankManager;
-import net.kroia.banksystem.command.AsyncBankSystemCommandHandler;
+import net.kroia.banksystem.minecraft.command.AsyncBankSystemCommandHandler;
 import net.kroia.banksystem.networking.entity.*;
 import net.kroia.banksystem.networking.general.*;
 import net.kroia.banksystem.networking.multi_server.*;
@@ -83,7 +83,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
     @Override
     public void setupServerServerPackets()
     {
-        registerS2S(PlayerJoinPacket.TYPE, PlayerJoinPacket.STREAM_CODEC);
+        //registerS2S(PlayerJoinPacket.TYPE, PlayerJoinPacket.STREAM_CODEC);
         registerS2S(ClientConsoleMessagePacket.TYPE, ClientConsoleMessagePacket.STREAM_CODEC);
     }
 }

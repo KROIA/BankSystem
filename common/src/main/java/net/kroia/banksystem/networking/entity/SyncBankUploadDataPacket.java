@@ -2,7 +2,7 @@ package net.kroia.banksystem.networking.entity;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.screen.custom.BankUploadScreen;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.minecraft.network.RegistryFriendlyByteBuf;

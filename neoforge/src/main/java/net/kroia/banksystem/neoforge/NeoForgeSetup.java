@@ -2,7 +2,7 @@ package net.kroia.banksystem.neoforge;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.menu.BankSystemMenus;
+import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.screen.custom.BankDownloadScreen;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
 import net.kroia.banksystem.screen.custom.BankUploadScreen;

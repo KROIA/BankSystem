@@ -1,8 +1,8 @@
 package net.kroia.banksystem.util;
 
 import com.ibm.icu.impl.Pair;
-import net.kroia.banksystem.item.BankSystemItems;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.general.RegisterItemIDPacket;
 import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
 import net.kroia.modutilities.ItemUtilities;
