@@ -233,6 +233,14 @@ public class AsyncBankAccount implements IAsyncBankAccount {
             if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             BankIdentifyAndDataPacket inputData = input.decodeParams();
+            if(!isAllowedToCallByUntrustedSlaveServer(input))
+            {
+                if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isSlaveServerTrusted(slaveID))
+                {
+                    warn("The slave server: '"+slaveID+"' try's to call the function: '"+input.function.toString()+"' which is not allowed for an untrusted slave server!");
+                    return CompletableFuture.completedFuture(OutputData.of(input.function));
+                }
+            }
             if(playerSender != null)
             {
                 if(!isAllowedToCallByClient(input))
@@ -327,6 +335,33 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         @Override
         protected boolean isAllowedToCallByClient(InputData input)
         {
+            return switch (input.function) {
+                case FunctionType.GetAccountDataAsync_1,
+                     FunctionType.GetAccountDataAsync_2,
+                     FunctionType.GetBankDataAsync_1,
+                     FunctionType.GetBankDataAsync_2,
+                     FunctionType.GetUserDataAsync_1,
+                     FunctionType.GetUserDataAsync_2,
+                     FunctionType.GetPersonalBankOwnerDataAsync,
+                     FunctionType.SetAccountNameAsync,
+                     FunctionType.GetAccountNameAsync,
+                     FunctionType.SetAccountIconAsync,
+                     FunctionType.GetAccountIconAsync,
+                     FunctionType.GetPermissionAsync,
+                     FunctionType.HasPermissionAsync,
+                     FunctionType.HasAnyUserAsync,
+                     FunctionType.HasUserAsync,
+                     FunctionType.GetPersonalBankOwnerAsync,
+                     FunctionType.HasAnyBankAsync,
+                     FunctionType.HasBankAsync,
+                     FunctionType.ToJsonAsync,
+                     FunctionType.ToJsonStringAsync -> true;
+
+                default -> false;
+            };
+        }
+        @Override
+        protected boolean isAllowedToCallByUntrustedSlaveServer(InputData input) {
             return switch (input.function) {
                 case FunctionType.GetAccountDataAsync_1,
                      FunctionType.GetAccountDataAsync_2,

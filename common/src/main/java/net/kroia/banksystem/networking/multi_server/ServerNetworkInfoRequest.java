@@ -12,6 +12,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -59,7 +60,7 @@ public class ServerNetworkInfoRequest extends BankSystemGenericRequest<ServerNet
             slavesFutures.add(ServerInfoRequest.sendRequest(slave));
         }
 
-
+        Set<String> trustedSlaves = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getTrustedSlaveServers();
         CompletableFuture.allOf(slavesFutures.toArray(new CompletableFuture[0]))
                 .thenApply(v -> slavesFutures.stream()
                         .map(CompletableFuture::join)
@@ -67,6 +68,8 @@ public class ServerNetworkInfoRequest extends BankSystemGenericRequest<ServerNet
                 )
                 .thenAccept(results ->
                 {
+                    for(ServerInfoRequest.ServerInfo info : results)
+                        info.isTrusted = trustedSlaves.contains(info.slaveID);
                     results.addFirst(ServerInfoRequest.createInfo(UtilitiesPlatform.getServer()));
                     future.complete(new OutputData(results));
                 });

@@ -99,6 +99,37 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
 
 
 
+
+    @Override
+    public boolean banksystem_setSlaveServerTrusted(@NotNull UUID executor, String slaveID, boolean isTrusted)
+    {
+        IServerBankManager manager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if(manager == null)
+            return false;
+        if(isTrusted) {
+            if (manager.isSlaveServerTrusted(slaveID))
+            {
+                sendMessage(executor, "The slave '"+slaveID+"' is already trusted");
+                return true;
+            }
+            manager.trustSlaveServer(slaveID);
+            sendMessage(executor, "The slave '"+slaveID+"' is now trusted");
+        }
+        else
+        {
+            if (!manager.isSlaveServerTrusted(slaveID))
+            {
+                sendMessage(executor, "The slave '"+slaveID+"' was not trusted");
+                return true;
+            }
+            manager.untrustSlaveServer(slaveID);
+            sendMessage(executor, "The slave '"+slaveID+"' is no longer trusted");
+        }
+        return true;
+    }
+
+
+
     @Override
     public boolean banksystem_setBankSystemAdminMode(@NotNull UUID executor, boolean isAdmin) {
         return banksystem_setBankSystemAdminMode_user(executor, tryGetPlayerName(executor), isAdmin);

@@ -7,17 +7,20 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
 import net.kroia.banksystem.api.command.IServerBankSystemCommandHandler;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -44,14 +47,16 @@ public class BankSystemCommandsRegistration {
     // Method to register commands
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 
-        // /bankSystem manage                                    - Open bank settings GUI to manage the bankable items
-        // /bankSystem testScreen                                    - Open thest screen for development
-        // /bankSystem setBankSystemAdminMode <ON/OFF>
-        // /bankSystem setBankSystemAdminMode <playerName> <ON/OFF>
-        // /bankSystem allowItem <itemID>                             - Makes the itemID available for bank accounts
-        // /bankSystem allowItemInHand                                - Makes the item in the player's hand available for bank accounts
-        // /bankSystem disallowItem <itemID>                          - Makes the itemID unavailable for bank accounts
-        // /bankSystem disallowItemInHand                             - Makes the item in the player's hand unavailable for bank accounts
+        // /banksystem manage                                         - Open bank settings GUI to manage the bankable items
+        // /banksystem testScreen                                     - Open thest screen for development
+        // /banksystem trust <slaveServerID>                          - Ads the slave server ID to the trusted list
+        // /banksystem untrust <slaveServerID>                        - Removes the slave ID from the trusted list
+        // /banksystem setBankSystemAdminMode <ON/OFF>
+        // /banksystem setBankSystemAdminMode <playerName> <ON/OFF>
+        // /banksystem allowItem <itemID>                             - Makes the itemID available for bank accounts
+        // /banksystem allowItemInHand                                - Makes the item in the player's hand available for bank accounts
+        // /banksystem disallowItem <itemID>                          - Makes the itemID unavailable for bank accounts
+        // /banksystem disallowItemInHand                             - Makes the item in the player's hand unavailable for bank accounts
         dispatcher.register(
                 Commands.literal("banksystem")
                 .then(Commands.literal("testScreen")
@@ -69,6 +74,38 @@ public class BankSystemCommandsRegistration {
                             handler().banksystem_manage_async(player.getUUID());
                             return Command.SINGLE_SUCCESS;
                         })
+                )
+                .then(Commands.literal("trust")
+                        .requires(source -> source.hasPermission(2)) // Admin-only
+                        .then(Commands.argument("slaveID", StringArgumentType.string()).suggests((context, builder) -> getSlaveServerIDSuggestion(builder))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+                                    String slaveID = StringArgumentType.getString(context, "slaveID");
+                                    if(isMaster())
+                                        masterHandler().banksystem_setSlaveServerTrusted(player.getUUID(), slaveID, true);
+                                    else
+                                        ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                )
+                .then(Commands.literal("untrust")
+                        .requires(source -> source.hasPermission(2)) // Admin-only
+                        .then(Commands.argument("slaveID", StringArgumentType.string()).suggests((context, builder) -> getSlaveServerIDSuggestion(builder))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+                                    String slaveID = StringArgumentType.getString(context, "slaveID");
+                                    if(isMaster())
+                                        masterHandler().banksystem_setSlaveServerTrusted(player.getUUID(), slaveID, false);
+                                    else
+                                        ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
                 )
                 .then(Commands.literal("op")
                         .requires(source -> source.hasPermission(2)) // Admin-only
@@ -440,7 +477,19 @@ public class BankSystemCommandsRegistration {
         });
         return future;
     }
+    private static CompletableFuture<Suggestions> getSlaveServerIDSuggestion(SuggestionsBuilder builder)
+    {
+        IServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if(bankManager == null)
+            return CompletableFuture.completedFuture(builder.build());
 
+        List<String> slaves = MultiServerManager.getConnectedSlaveIDs();
+        for(String slave : slaves)
+        {
+            builder.suggest("\""+ slave +"\"");
+        }
+        return CompletableFuture.completedFuture(builder.build());
+    }
 
     private static void info(String msg)
     {

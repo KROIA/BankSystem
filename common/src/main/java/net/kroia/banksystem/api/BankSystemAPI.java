@@ -38,4 +38,7 @@ public interface BankSystemAPI {
      * @return An instance of IBankSystemDataHandler that provides access to data handling functionalities for the bank system.
      */
     IBankSystemDataHandler getDataHandler();
+
+
+    boolean isSlave();
 }

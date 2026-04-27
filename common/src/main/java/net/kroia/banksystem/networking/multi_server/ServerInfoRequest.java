@@ -44,12 +44,22 @@ public class ServerInfoRequest extends BankSystemGenericRequest<ServerInfoReques
             return name;
         }
     }
-    public record ServerInfo(boolean isMaster, String serverName, String slaveID, String serverIP, int serverPort, List<PlayerInfo> onlinePlayers, String customText)
+    public static class ServerInfo
     {
+        public boolean isMaster;
+        public boolean isTrusted;
+        public String serverName;
+        public String slaveID;
+        public String serverIP;
+        public int serverPort;
+        public List<PlayerInfo> onlinePlayers;
+        public String customText;
+
         public static final StreamCodec<RegistryFriendlyByteBuf, ServerInfo> STREAM_CODEC = new StreamCodec<>() {
             @Override
             public void encode(RegistryFriendlyByteBuf buf, ServerInfo info) {
                 ByteBufCodecs.BOOL.encode(buf, info.isMaster);
+                ByteBufCodecs.BOOL.encode(buf, info.isTrusted);
                 ByteBufCodecs.STRING_UTF8.encode(buf, info.serverName);
                 ByteBufCodecs.STRING_UTF8.encode(buf, info.slaveID);
                 ByteBufCodecs.STRING_UTF8.encode(buf, info.serverIP);
@@ -61,15 +71,30 @@ public class ServerInfoRequest extends BankSystemGenericRequest<ServerInfoReques
             @Override
             public @NotNull ServerInfo decode(RegistryFriendlyByteBuf buf) {
                 boolean isMaster = ByteBufCodecs.BOOL.decode(buf);
+                boolean isTrusted = ByteBufCodecs.BOOL.decode(buf);
                 String serverName = ByteBufCodecs.STRING_UTF8.decode(buf);
                 String slaveID = ByteBufCodecs.STRING_UTF8.decode(buf);
                 String serverIP = ByteBufCodecs.STRING_UTF8.decode(buf);
                 int serverPort = ByteBufCodecs.INT.decode(buf);
                 List<PlayerInfo> onlinePlayers = ExtraCodecUtils.listStreamCodec(PlayerInfo.STREAM_CODEC).decode(buf);
                 String customText = ByteBufCodecs.STRING_UTF8.decode(buf);
-                return new ServerInfo(isMaster, serverName, slaveID, serverIP, serverPort, onlinePlayers, customText);
+                return new ServerInfo(isMaster, isTrusted, serverName, slaveID, serverIP, serverPort, onlinePlayers, customText);
             }
+
+
         };
+
+        public ServerInfo(boolean isMaster, boolean isTrusted, String serverName, String slaveID, String serverIP, int serverPort, List<PlayerInfo> onlinePlayers, String customText)
+        {
+            this.isMaster = isMaster;
+            this.isTrusted = isTrusted;
+            this.serverName = serverName;
+            this.slaveID = slaveID;
+            this.serverIP = serverIP;
+            this.serverPort = serverPort;
+            this.onlinePlayers = onlinePlayers;
+            this.customText = customText;
+        }
 
         @Override
         public @NotNull String toString()
@@ -84,6 +109,7 @@ public class ServerInfoRequest extends BankSystemGenericRequest<ServerInfoReques
             }
             else {
                 builder.append("§eSlave: §f'").append(slaveID).append("'\n");
+                builder.append("  §7Trusted: §f").append((isTrusted?"Yes":"No")).append("\n");
                 builder.append("  §7Name:    §f").append(serverName).append("\n");
                 builder.append("  §7IP:       §f").append(serverIP).append("\n");
             }
@@ -128,13 +154,14 @@ public class ServerInfoRequest extends BankSystemGenericRequest<ServerInfoReques
         }
 
         if(!MultiServerManager.isRunning())
-            return new ServerInfo(false,serverName,"", "", 0, playerInfos, customText);
+            return new ServerInfo(false, false, serverName,"", "", 0, playerInfos, customText);
 
 
 
         if(MultiServerManager.isMaster())
         {
             return new ServerInfo(true,
+                    true,
                     serverName,
                     MultiServerManager.getSlaveID(),
                     MultiServerManager.getMasterIP(),
@@ -145,6 +172,7 @@ public class ServerInfoRequest extends BankSystemGenericRequest<ServerInfoReques
         else
         {
             return new ServerInfo(false,
+                    false,
                     serverName,
                     MultiServerManager.getSlaveID(),
                     MultiServerManager.getSlaveIP(),

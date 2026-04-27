@@ -256,6 +256,14 @@ public class AsyncBank implements IAsyncBank {
             if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             BankIdentifyAndDataPacket inputData = input.decodeParams();
+            if(!isAllowedToCallByUntrustedSlaveServer(input))
+            {
+                if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isSlaveServerTrusted(slaveID))
+                {
+                    warn("The slave server: '"+slaveID+"' try's to call the function: '"+input.function.toString()+"' which is not allowed for an untrusted slave server!");
+                    return CompletableFuture.completedFuture(OutputData.of(input.function));
+                }
+            }
             if(playerSender != null)
             {
                 if(!isAllowedToCallByClient(input))
@@ -358,6 +366,39 @@ public class AsyncBank implements IAsyncBank {
         }
         @Override
         protected boolean isAllowedToCallByClient(InputData input)
+        {
+            return switch (input.function) {
+                case FunctionType.GetMinimalDataAsync,
+                     FunctionType.GetBalanceAsync,
+                     FunctionType.GetLockedBalanceAsync,
+                     FunctionType.GetTotalBalanceAsync,
+                     FunctionType.GetRealBalanceAsync,
+                     FunctionType.GetRealLockedBalanceAsync,
+                     FunctionType.GetRealTotalBalanceAsync,
+                     //FunctionType.GetItemIDAsync,
+                     FunctionType.GetItemNameAsync,
+                     FunctionType.ConvertToRawAmountAsync,
+                     FunctionType.ConvertToRealAmountAsync,
+                     FunctionType.GetNormalizedBalanceAsync,
+                     FunctionType.GetNormalizedLockedBalanceAsync,
+                     FunctionType.GetNormalizedTotalBalanceAsync,
+                     FunctionType.GetFormattedBalanceAsync,
+                     FunctionType.GetFormattedLockedBalanceAsync,
+                     FunctionType.GetFormattedTotalBalanceAsync,
+                     FunctionType.GetNormalizedAmountAsync_1,
+                     FunctionType.GetNormalizedAmountAsync_2,
+                     FunctionType.GetFormattedAmountAsync_1,
+                     FunctionType.GetFormattedAmountAsync_2,
+                     FunctionType.ToStringAsync,
+                     FunctionType.ToStringNoOwnerAsync,
+                     FunctionType.ToJsonAsync,
+                     FunctionType.ToJsonStringAsync -> true;
+
+                default -> false;
+            };
+        }
+        @Override
+        protected boolean isAllowedToCallByUntrustedSlaveServer(InputData input)
         {
             return switch (input.function) {
                 case FunctionType.GetMinimalDataAsync,

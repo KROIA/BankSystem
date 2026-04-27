@@ -15,7 +15,10 @@ import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
-import net.kroia.banksystem.banking.clientdata.*;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.banking.clientdata.BankManagerData;
+import net.kroia.banksystem.banking.clientdata.ItemInfoData;
+import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
@@ -23,6 +26,7 @@ import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -59,6 +63,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      * Using the account number as key.
      */
     private final Map<Integer, ServerBankAccount> bankAccounts = new HashMap<>();
+
+    private final Set<String> trustedSlaveServers = new HashSet<>();
 
     private int nextAccountNumber = 1; // Start with account number 1
     private int tickCounter = 0;
@@ -173,13 +179,45 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return false;
         return user.isBanksystemAdmin();
     }
-
     @Override
     public CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID) {
         User user = userMap.get(playerUUID);
         if (user == null)
             return CompletableFuture.completedFuture(false);
         return CompletableFuture.completedFuture(user.isBanksystemAdmin());
+    }
+
+
+
+    @Override
+    public boolean isSlaveServerTrusted(String slaveID)
+    {
+        return trustedSlaveServers.contains(slaveID);
+    }
+    @Override
+    public CompletableFuture<Boolean> isSlaveServerTrustedAsync(String slaveID)
+    {
+        return CompletableFuture.completedFuture(isSlaveServerTrusted(slaveID));
+    }
+
+
+    @Override
+    public Set<String> getTrustedSlaveServers()
+    {
+        return trustedSlaveServers;
+    }
+
+
+
+    @Override
+    public void trustSlaveServer(String slaveID)
+    {
+        trustedSlaveServers.add(slaveID);
+    }
+    @Override
+    public void untrustSlaveServer(String slaveID)
+    {
+        trustedSlaveServers.remove(slaveID);
     }
 
 
@@ -1358,7 +1396,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         listTags.put("users", userList);
 
-        // Save item cent scale factors
+
         ListTag allowedItems = new ListTag();
         for (ItemID itemID : allowedItemIDs) {
             CompoundTag pairTag = new CompoundTag();
@@ -1376,6 +1414,14 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             accountsList.add(accountTag);
         }
         listTags.put("bankAccounts", accountsList);
+
+
+        ListTag trustedSlaves = new ListTag();
+        for(String slaveID : trustedSlaveServers)
+        {
+            trustedSlaves.add(StringTag.valueOf(slaveID));
+        }
+        listTags.put("trustedSlaves", trustedSlaves);
 
 
 
@@ -1438,6 +1484,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 }
             }
         }
+
+        if(listTags.containsKey("trustedSlaves")) {
+            ListTag trustedSlaves = listTags.get("trustedSlaves");
+            trustedSlaveServers.clear();
+            for (net.minecraft.nbt.Tag trustedSlave : trustedSlaves) {
+                String slaveID = trustedSlave.getAsString();
+                trustedSlaveServers.add(slaveID);
+            }
+        }
+
         return true;
     }
 

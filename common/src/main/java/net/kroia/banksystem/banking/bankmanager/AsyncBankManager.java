@@ -81,6 +81,7 @@ public class AsyncBankManager implements IAsyncBankManager {
         GetBankManagerBankAccountsDataAsync,
         SetBanksystemAdminModeAsync,
         IsBanksystemAdminAsync,
+        IsSlaveServerTrustedAsync,
         GetAllowedItemsAsync,
         GetBlacklistedItemsAsync,
         GetNotRemovableItemsAsync,
@@ -154,6 +155,7 @@ public class AsyncBankManager implements IAsyncBankManager {
         put(FunctionType.GetBankManagerBankAccountsDataAsync,       new AsyncFunctionDataCodecs(null, BankManagerData.BankAccountsData.STREAM_CODEC));
         put(FunctionType.SetBanksystemAdminModeAsync,               new AsyncFunctionDataCodecs(ParamGroup_UUID_bool.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.IsBanksystemAdminAsync,				    new AsyncFunctionDataCodecs(UUIDUtil.STREAM_CODEC.cast(),ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.IsSlaveServerTrustedAsync,				    new AsyncFunctionDataCodecs(ByteBufCodecs.STRING_UTF8.cast(), ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetAllowedItemsAsync,					    new AsyncFunctionDataCodecs(null, ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC)));
         put(FunctionType.GetBlacklistedItemsAsync,				    new AsyncFunctionDataCodecs(null, ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC)));
         put(FunctionType.GetNotRemovableItemsAsync,				    new AsyncFunctionDataCodecs(null, ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC)));
@@ -290,6 +292,14 @@ public class AsyncBankManager implements IAsyncBankManager {
                 playerName = tryGetPlayerName(playerSender);
                 playerInfo = " from player: " + playerName;
             }
+            if(!isAllowedToCallByUntrustedSlaveServer(input))
+            {
+                if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isSlaveServerTrusted(slaveID))
+                {
+                    warn("The slave server: '"+slaveID+"' try's to call the function: '"+input.function.toString()+"' which is not allowed for an untrusted slave server!");
+                    return CompletableFuture.completedFuture(OutputData.of(input.function));
+                }
+            }
             if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             if(playerSender != null)
@@ -320,6 +330,7 @@ public class AsyncBankManager implements IAsyncBankManager {
                     yield OutputData.of(input.function, bankManager.setBanksystemAdminMode(param.uuid, param.bool));
                 }
                 case FunctionType.IsBanksystemAdminAsync -> OutputData.of(input.function, bankManager.isBanksystemAdmin(input.decodeParams()));
+                case FunctionType.IsSlaveServerTrustedAsync -> OutputData.of(input.function, bankManager.isSlaveServerTrusted(input.decodeParams()));
                 case FunctionType.GetAllowedItemsAsync -> OutputData.of(input.function, bankManager.getAllowedItems());
                 case FunctionType.GetBlacklistedItemsAsync -> OutputData.of(input.function, bankManager.getBlacklistedItems());
                 case FunctionType.GetNotRemovableItemsAsync -> OutputData.of(input.function, bankManager.getNotRemovableItems());
@@ -440,6 +451,55 @@ public class AsyncBankManager implements IAsyncBankManager {
                      FunctionType.GetBankManagerUserMapDataAsync,
                      FunctionType.GetBankManagerBankAccountsDataAsync,
                      FunctionType.IsBanksystemAdminAsync,
+                     FunctionType.IsSlaveServerTrustedAsync,
+                     FunctionType.GetAllowedItemsAsync,
+                     FunctionType.GetBlacklistedItemsAsync,
+                     FunctionType.GetNotRemovableItemsAsync,
+                     FunctionType.GetItemInfoDataAsync,
+                     FunctionType.UserExistsAsync,
+                     FunctionType.GetUserByUUIDAsync,
+                     FunctionType.GetUserByNameAsync,
+                     FunctionType.BankAccountExistsAsync,
+                     FunctionType.BankAccountHasBankAsync,
+                     FunctionType.GetBankAccountDataAsync,
+                     FunctionType.GetPersonalBankAccountNrAsync_1,
+                     FunctionType.GetPersonalBankAccountNrAsync_2,
+                     FunctionType.GetBankAccountNumbersAsync_1,
+                     FunctionType.GetBankAccountNumbersAsync_2,
+                     FunctionType.GetBankAccountsDataAsync_1,
+                     FunctionType.GetBankAccountsDataAsync_2,
+                     FunctionType.GetPersonalBankAccountDataAsync_1,
+                     FunctionType.GetPersonalBankAccountDataAsync_2,
+                     FunctionType.UserHasPersonalBankAccountAsync,
+                     FunctionType.DeleteBankAccountAsync,
+                     FunctionType.PersonalBankExistsAsync_1,
+                     FunctionType.PersonalBankExistsAsync_2,
+                     FunctionType.IsItemIDAllowedAsync,
+                     FunctionType.AllowItemIDAsync,
+                     FunctionType.DisallowItemIDAsync,
+                     FunctionType.IsItemIDNotRemovableAsync,
+                     FunctionType.IsItemIDBlacklistedAsync,
+                     FunctionType.GetItemFractionScaleFactorAsync,
+                     FunctionType.GetRealMoneyCirculationAsync,
+                     FunctionType.GetRealLockedMoneyCirculationAsync,
+                     FunctionType.GetRealItemCirculationAsync,
+                     FunctionType.GetRealLockedItemCirculationAsync,
+                     FunctionType.GetCirculationDataJsonAsync,
+                     FunctionType.GetCirculationDataJsonStringAsync,
+                     FunctionType.ToJsonAsync,
+                     FunctionType.ToJsonStringAsync -> true;
+
+                default -> false;
+            };
+        }
+        @Override
+        protected boolean isAllowedToCallByUntrustedSlaveServer(InputData input) {
+            return switch (input.function) {
+                case FunctionType.GetBankManagerDataAsync,
+                     FunctionType.GetBankManagerUserMapDataAsync,
+                     FunctionType.GetBankManagerBankAccountsDataAsync,
+                     FunctionType.IsBanksystemAdminAsync,
+                     FunctionType.IsSlaveServerTrustedAsync,
                      FunctionType.GetAllowedItemsAsync,
                      FunctionType.GetBlacklistedItemsAsync,
                      FunctionType.GetNotRemovableItemsAsync,
@@ -618,6 +678,19 @@ public class AsyncBankManager implements IAsyncBankManager {
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.IsBanksystemAdminAsync, playerUUID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+
+    @Override
+    public CompletableFuture<Boolean> isSlaveServerTrustedAsync(String slaveID)
+    {
+        if(!MultiServerUtils.canInteractWithBankSystem())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.IsBanksystemAdminAsync, slaveID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;

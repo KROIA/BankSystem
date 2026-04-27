@@ -298,6 +298,11 @@ public class BankSystemModBackend implements BankSystemAPI {
     {
         return INSTANCES.SERVER_DATA_HANDLER;
     }
+    @Override
+    public boolean isSlave()
+    {
+        return INSTANCES.isSlaveServer;
+    }
 
 
 
