@@ -27,6 +27,8 @@ import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.multi_server.BanksystemMetadataRequest;
+import net.kroia.banksystem.testing.TestRegistry;
+import net.kroia.banksystem.testing.tests.ExampleTests;
 import net.kroia.banksystem.util.*;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.multi_server.MultiServerConfig;
@@ -106,7 +108,15 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.NETWORKING = new BankSystemNetworking();
         INSTANCES.SERVER_EVENTS = new BankSystemEvents();
 
+        if (TestRegistry.ENABLE_TESTS) {
+            registerTestSuites();
+        }
 
+    }
+
+    private static void registerTestSuites()
+    {
+        TestRegistry.register(new ExampleTests());
     }
 
     // Called from the client side

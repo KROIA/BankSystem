@@ -27,3 +27,5 @@ mcmodsrepo
 forge*changelog.txt
 
 *.bat
+
+.claude
