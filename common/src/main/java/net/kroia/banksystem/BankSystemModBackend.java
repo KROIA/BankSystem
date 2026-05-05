@@ -27,7 +27,7 @@ import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.multi_server.BanksystemMetadataRequest;
-import net.kroia.banksystem.testing.TestRegistry;
+import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.banksystem.testing.tests.ExampleTests;
 import net.kroia.banksystem.util.*;
 import net.kroia.modutilities.ServerPlayerUtilities;

@@ -10,8 +10,8 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
 import net.kroia.banksystem.api.command.IServerBankSystemCommandHandler;
-import net.kroia.banksystem.testing.TestRegistry;
-import net.kroia.banksystem.testing.TestRunner;
+import net.kroia.modutilities.testing.TestRegistry;
+import net.kroia.modutilities.testing.TestRunner;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
@@ -254,7 +254,7 @@ public class BankSystemCommandsRegistration {
                             // /banksystem test — Run all tests
                             ServerPlayer player = context.getSource().getPlayerOrException();
                             boolean isSlave = BACKEND_INSTANCES.isSlaveServer;
-                            TestRunner runner = new TestRunner(isSlave, player.getServer());
+                            TestRunner runner = new TestRunner("BankSystem", isSlave, player.getServer());
                             runner.runAll(player);
                             return Command.SINGLE_SUCCESS;
                         })
@@ -263,7 +263,7 @@ public class BankSystemCommandsRegistration {
                                     // /banksystem test list — List available categories
                                     ServerPlayer player = context.getSource().getPlayerOrException();
                                     boolean isSlave = BACKEND_INSTANCES.isSlaveServer;
-                                    TestRunner runner = new TestRunner(isSlave, player.getServer());
+                                    TestRunner runner = new TestRunner("BankSystem", isSlave, player.getServer());
                                     runner.listCategories(player);
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -275,7 +275,7 @@ public class BankSystemCommandsRegistration {
                                     ServerPlayer player = context.getSource().getPlayerOrException();
                                     String categoryName = StringArgumentType.getString(context, "category");
                                     boolean isSlave = BACKEND_INSTANCES.isSlaveServer;
-                                    TestRunner runner = new TestRunner(isSlave, player.getServer());
+                                    TestRunner runner = new TestRunner("BankSystem", isSlave, player.getServer());
                                     runner.runCategory(player, categoryName);
                                     return Command.SINGLE_SUCCESS;
                                 })

@@ -1,8 +1,9 @@
 package net.kroia.banksystem.testing.tests;
 
-import net.kroia.banksystem.testing.TestCategory;
-import net.kroia.banksystem.testing.TestResult;
-import net.kroia.banksystem.testing.TestSuite;
+import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.modutilities.testing.TestCategory;
+import net.kroia.modutilities.testing.TestResult;
+import net.kroia.modutilities.testing.TestSuite;
 
 /**
  * Example test suite demonstrating how to write tests for the BankSystem test framework.
@@ -18,7 +19,7 @@ public class ExampleTests extends TestSuite {
 
     @Override
     public TestCategory getCategory() {
-        return TestCategory.PERMISSION;
+        return BankSystemTestCategories.PERMISSION;
     }
 
     @Override
@@ -39,19 +40,16 @@ public class ExampleTests extends TestSuite {
     }
 
     private TestResult testExamplePass() {
-        // This is where a real test would go
         return pass("Example test passed");
     }
 
     private TestResult testExampleAssertEquals() {
-        // Demonstrates assertEquals usage
         int expected = 42;
         int actual = 42;
         return assertEquals("Values should be equal", expected, actual);
     }
 
     private TestResult testExampleAssertTrue() {
-        // Demonstrates assertTrue usage
         boolean condition = true;
         return assertTrue("Condition should be true", condition);
     }
