@@ -1,5 +1,6 @@
 package net.kroia.banksystem.testing.tests;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.modutilities.testing.TestCategory;
@@ -25,6 +26,8 @@ public class NetworkingValidationTests extends TestSuite {
         addTest("deop_command_passes_false", this::testDeopCommandPassesFalse);
         addTest("deposit_permission_check_uses_getValue", this::testDepositPermissionCheckUsesGetValue);
         addTest("money_remove_compares_same_units", this::testMoneyRemoveComparesSameUnits);
+        addTest("interact_distance_constant_is_reasonable", this::testInteractDistanceConstantIsReasonable);
+        addTest("interact_distance_check_math", this::testInteractDistanceCheckMath);
     }
 
     @Override
@@ -198,5 +201,69 @@ public class NetworkingValidationTests extends TestSuite {
                         "Raw 100000 >= 50000.0f is " + buggyResult + " but real 1.0 >= 50000.0 is " + correctResult + ". " +
                         "Fix: use getRealBalance() or convertToRawAmount(amount) for same-unit comparison",
                 buggyResult && !correctResult);
+    }
+
+    /**
+     * Issue #28: BankSystemMod.MAX_INTERACT_DISTANCE_SQR is the squared maximum distance
+     * a player may be from a block-entity to interact with it. The four packet handlers
+     * (UpdateBankTerminal/Download/Upload + BankTerminalBlockDataRequest) all reference
+     * this constant.
+     *
+     * Verify the constant is in a sensible range — 4 to 16 blocks (squared 16 to 256).
+     * Smaller would break legitimate gameplay; larger defeats the purpose.
+     */
+    private TestResult testInteractDistanceConstantIsReasonable() {
+        double sqr = BankSystemMod.MAX_INTERACT_DISTANCE_SQR;
+        if (sqr <= 0) {
+            return fail("MAX_INTERACT_DISTANCE_SQR must be positive, got " + sqr);
+        }
+        if (sqr < 16.0) {
+            return fail("MAX_INTERACT_DISTANCE_SQR (" + sqr + ") is less than 4 blocks² — "
+                    + "would break legitimate menu interactions outside vanilla reach");
+        }
+        if (sqr > 256.0) {
+            return fail("MAX_INTERACT_DISTANCE_SQR (" + sqr + ") is greater than 16 blocks² — "
+                    + "too permissive to prevent remote-entity interaction");
+        }
+        return pass("MAX_INTERACT_DISTANCE_SQR = " + sqr
+                + " (≈" + Math.sqrt(sqr) + " blocks) is in the reasonable 4-16 block range");
+    }
+
+    /**
+     * Issue #28: Verify the distance-check math used by all four packet handlers
+     * accepts in-range positions and rejects out-of-range ones, matching the
+     * `distanceToSqr(blockCenter)` pattern they implement.
+     *
+     * Player at (0,0,0); block at (x, 0, 0); block centre is (x+0.5, 0.5, 0.5).
+     * Squared distance = (x+0.5)² + 0.5² + 0.5² = (x+0.5)² + 0.5.
+     */
+    private TestResult testInteractDistanceCheckMath() {
+        double max = BankSystemMod.MAX_INTERACT_DISTANCE_SQR;
+
+        // Player at origin, block at (1,0,0): centre = (1.5, 0.5, 0.5), distSqr = 2.25 + 0.25 + 0.25 = 2.75
+        double closeSqr = 1.5 * 1.5 + 0.5 * 0.5 + 0.5 * 0.5;
+        if (closeSqr > max) {
+            return fail("Close block at distSqr=" + closeSqr + " incorrectly exceeds max=" + max);
+        }
+
+        // Player at origin, block at (20,0,0): centre = (20.5, 0.5, 0.5), distSqr = 420.25 + 0.5 = 420.75
+        double farSqr = 20.5 * 20.5 + 0.5 * 0.5 + 0.5 * 0.5;
+        if (farSqr <= max) {
+            return fail("Far block at distSqr=" + farSqr + " incorrectly passes max=" + max);
+        }
+
+        // Boundary: a block exactly at sqrt(max) blocks away should pass; just beyond should fail.
+        double boundary = Math.sqrt(max);
+        double justInside = (boundary - 0.6) * (boundary - 0.6) + 0.5; // includes 0.5² + 0.5² centre offset
+        double justOutside = (boundary + 0.6) * (boundary + 0.6) + 0.5;
+        if (justInside > max) {
+            return fail("Block just inside boundary (distSqr=" + justInside + ") incorrectly rejected");
+        }
+        if (justOutside <= max) {
+            return fail("Block just outside boundary (distSqr=" + justOutside + ") incorrectly accepted");
+        }
+
+        return pass("Distance check math: close=" + closeSqr + " <= " + max
+                + " < far=" + farSqr + " (boundary at ≈" + boundary + " blocks)");
     }
 }

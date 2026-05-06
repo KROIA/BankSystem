@@ -81,9 +81,12 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     @Override
     protected void handleOnServer(NetworkManager.PacketContext context)
     {
-        BlockEntity blockEntity = context.getPlayer().level().getBlockEntity(this.pos);
+        ServerPlayer player = (ServerPlayer) context.getPlayer();
+        if (player.distanceToSqr(this.pos.getX() + 0.5, this.pos.getY() + 0.5, this.pos.getZ() + 0.5) > BankSystemMod.MAX_INTERACT_DISTANCE_SQR)
+            return;
+        BlockEntity blockEntity = player.level().getBlockEntity(this.pos);
         if(blockEntity instanceof BankTerminalBlockEntity bankTerminalBlockEntity) {
-            bankTerminalBlockEntity.handlePacket(this, (ServerPlayer) context.getPlayer());
+            bankTerminalBlockEntity.handlePacket(this, player);
         }else
         {
             BACKEND_INSTANCES.LOGGER.error("BankTerminalBlockEntity not found at position "+this.pos);

@@ -10,10 +10,13 @@ import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
+import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
+import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionOutputData;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 
 /**
@@ -38,6 +41,10 @@ public class AsyncForwardingTests extends TestSuite {
         addTest("getBankAccountNrByNameAsync_returns_int", this::testGetBankAccountNrByNameAsyncReturnsInt);
         addTest("deleteBankAccountAsync_uses_AND_logic", this::testDeleteBankAccountAsyncUsesORLogic);
         addTest("getPersonalBankAccountAsync_completes_when_not_found", this::testGetPersonalBankAccountAsyncCompletesWhenNotFound);
+        addTest("inputData_encoded_length_matches_payload", this::testInputDataEncodedLengthMatchesPayload);
+        addTest("inputData_round_trip", this::testInputDataRoundTrip);
+        addTest("outputData_encoded_length_matches_payload", this::testOutputDataEncodedLengthMatchesPayload);
+        addTest("outputData_round_trip", this::testOutputDataRoundTrip);
     }
 
     @Override
@@ -306,5 +313,85 @@ public class AsyncForwardingTests extends TestSuite {
         return pass("Bug confirmed: getPersonalBankAccountAsync does not complete the future " +
                 "when accountNr <= 0, causing callers to hang. " +
                 "Missing else branch with future.complete(null)");
+    }
+
+    // Use any existing FunctionType — the input data factory is generic over the enum.
+    private enum DummyFn { TEST }
+
+    /**
+     * Issue #27: AsyncFunctionInputData.of previously returned `buf.array()`,
+     * which is the entire backing array of the Unpooled.buffer() (default 256 bytes
+     * of capacity). The encoded payload was followed by ~250 bytes of zeros that
+     * still travelled over the network. After the fix, ByteBufUtil.getBytes returns
+     * exactly the readable region.
+     *
+     * Verify: encoding a single VAR_INT (1 byte for small values) produces a byte
+     * array of length 1 — not the default capacity.
+     */
+    private TestResult testInputDataEncodedLengthMatchesPayload() {
+        StreamCodec<RegistryFriendlyByteBuf, Integer> codec = ByteBufCodecs.VAR_INT.cast();
+        AsyncFunctionInputData<DummyFn> data = AsyncFunctionInputData.of(
+                codec, DummyFn.TEST, 5,
+                (fn, bytes) -> new AsyncFunctionInputData<>(fn, codec, bytes));
+        // VAR_INT for value 5 fits in exactly 1 byte
+        if (data.encodedParams.length != 1) {
+            return fail("Expected encodedParams.length == 1 for VAR_INT(5), got "
+                    + data.encodedParams.length
+                    + ". Likely buf.array() regression — should use ByteBufUtil.getBytes(buf)");
+        }
+        return pass("AsyncFunctionInputData.of returns exactly the encoded payload bytes");
+    }
+
+    /**
+     * Issue #27: encode-then-decode round-trip for AsyncFunctionInputData. If the
+     * byte slice were wrong (extra trailing bytes or truncation), the decoded value
+     * would not equal the original.
+     */
+    private TestResult testInputDataRoundTrip() {
+        StreamCodec<RegistryFriendlyByteBuf, Integer> codec = ByteBufCodecs.VAR_INT.cast();
+        int original = 0xDEAD_BEEF;
+        AsyncFunctionInputData<DummyFn> data = AsyncFunctionInputData.of(
+                codec, DummyFn.TEST, original,
+                (fn, bytes) -> new AsyncFunctionInputData<>(fn, codec, bytes));
+        Integer decoded = data.decodeParams();
+        if (decoded == null) {
+            return fail("decodeParams returned null — encodedParams may be empty");
+        }
+        return assertEquals("encode-decode round-trip preserves the value",
+                Integer.valueOf(original), decoded);
+    }
+
+    /**
+     * Issue #27: same as testInputDataEncodedLengthMatchesPayload but for
+     * AsyncFunctionOutputData (master-side encoding).
+     */
+    private TestResult testOutputDataEncodedLengthMatchesPayload() {
+        StreamCodec<RegistryFriendlyByteBuf, Integer> codec = ByteBufCodecs.VAR_INT.cast();
+        AsyncFunctionOutputData<DummyFn> data = AsyncFunctionOutputData.of(
+                codec, DummyFn.TEST, 5,
+                (fn, bytes) -> new AsyncFunctionOutputData<>(fn, codec, bytes));
+        if (data.encodedResult.length != 1) {
+            return fail("Expected encodedResult.length == 1 for VAR_INT(5), got "
+                    + data.encodedResult.length
+                    + ". Likely buf.array() regression — should use ByteBufUtil.getBytes(buf)");
+        }
+        return pass("AsyncFunctionOutputData.of returns exactly the encoded payload bytes");
+    }
+
+    /**
+     * Issue #27: encode-then-decode round-trip for AsyncFunctionOutputData.
+     */
+    private TestResult testOutputDataRoundTrip() {
+        StreamCodec<RegistryFriendlyByteBuf, Integer> codec = ByteBufCodecs.VAR_INT.cast();
+        int original = 12345;
+        AsyncFunctionOutputData<DummyFn> data = AsyncFunctionOutputData.of(
+                codec, DummyFn.TEST, original,
+                (fn, bytes) -> new AsyncFunctionOutputData<>(fn, codec, bytes));
+        Integer decoded = data.decodeResult();
+        if (decoded == null) {
+            return fail("decodeResult returned null");
+        }
+        return assertEquals("encode-decode round-trip preserves the value",
+                Integer.valueOf(original), decoded);
     }
 }

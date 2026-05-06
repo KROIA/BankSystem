@@ -47,6 +47,8 @@ public class UpdateBankDownloadBlockEntityPacket extends BankSystemNetworkPacket
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {
+        if (sender.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) > BankSystemMod.MAX_INTERACT_DISTANCE_SQR)
+            return;
         BlockEntity blockEntity = sender.level().getBlockEntity(pos);
         if (blockEntity instanceof BankDownloadBlockEntity be) {
             be.handlePacket(sender,this);

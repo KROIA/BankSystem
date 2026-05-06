@@ -1,6 +1,7 @@
 package net.kroia.banksystem.util.async_function_forwarding;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -42,14 +43,16 @@ public class AsyncFunctionOutputData <FuncEnumType extends Enum<FuncEnumType>> {
             FuncEnumType functionType,
             T result,
             BiFunction<FuncEnumType, byte[], AsyncFunctionOutputData<FuncEnumType>> constructor) {
-        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
-        if(outputParamsCodec != null) {
+        if(outputParamsCodec == null)
+            return constructor.apply(functionType, new byte[0]);
+        ByteBuf rawBuf = Unpooled.buffer();
+        try {
+            RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(rawBuf, null);
             StreamCodec<RegistryFriendlyByteBuf, T> castedCodec = (StreamCodec<RegistryFriendlyByteBuf, T>)outputParamsCodec;
             castedCodec.encode(buf, result);
-            return constructor.apply(functionType, buf.array());
-        }
-        else {
-            return constructor.apply(functionType, new byte[0]);
+            return constructor.apply(functionType, ByteBufUtil.getBytes(buf));
+        } finally {
+            rawBuf.release();
         }
     }
     // Used on the master side to wrap the result before sending back
