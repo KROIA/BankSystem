@@ -58,7 +58,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
 
     public static @Nullable ServerBank create(ItemID itemID, long balance) {
-        if (itemID == null || balance < 0) {
+        if (itemID == null || !itemID.isValid() || balance < 0) {
             return null; // Invalid parameters
         }
         IServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
@@ -891,23 +891,20 @@ public class ServerBank implements ServerSaveable, IServerBank {
                 !tag.contains("lockedBalance"))
             return false;
 
+        itemID = ItemID.INVALID_ID;
         if(tag.contains("itemID",Tag.TAG_STRING))
         {
             String itemIDStr = tag.getString("itemID");
-            itemID = null; // Reset itemID
             if(itemIDStr.equals("$") || itemIDStr.equals("money")) {
                 itemID = ItemID.getFromItemStack(BankSystemItems.MONEY.get().getDefaultInstance());
             }
             else {
                 ItemStack itemStack = ItemUtilities.createItemStackFromId(itemIDStr);
-                if (itemStack == ItemStack.EMPTY || itemStack == null || itemStack.is(Items.AIR))
-                    itemID = null; // Invalid item ID
-                else {
+                if (itemStack != null && itemStack != ItemStack.EMPTY && !itemStack.is(Items.AIR))
                     itemID = ItemID.getFromItemStack(itemStack);
-                }
             }
         }
-        if(itemID == null)
+        else
         {
             CompoundTag itemTag = tag.getCompound("itemID");
             itemID = ItemID.createFromTag(itemTag);
@@ -917,7 +914,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         long balance = tag.getLong("balance");
         lockedBalance = tag.getLong("lockedBalance");
         setBalanceInternal(balance);
-        return balance >= 0 && lockedBalance >= 0 && itemID != null;
+        return balance >= 0 && lockedBalance >= 0 && itemID.isValid();
     }
 
 

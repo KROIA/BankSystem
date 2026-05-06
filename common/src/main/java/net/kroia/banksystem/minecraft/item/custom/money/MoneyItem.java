@@ -27,17 +27,17 @@ public class MoneyItem extends Item{
     //public static int ITEM_FRACTION_SCALE_FACTOR = 100; // Scale factor for item fractions, e.g., 100 means 1.00 currency units
     private static final Component ITEM_NAME = Component.translatable("item."+ BankSystemMod.MOD_ID+".money_name");
     private static final Component CURRENCY_NAME = Component.translatable("item."+ BankSystemMod.MOD_ID+".currency");
-    private static ItemID itemID = null;
+    private static ItemID itemID = ItemID.INVALID_ID;
 
     public static ItemID getItemID() {
-        if(itemID != null) {
+        if(itemID.isValid()) {
             return itemID;
         }
         itemID = ItemID.of(BankSystemItems.MONEY.get().getDefaultInstance());
         return itemID;
     }
     public static void resetItemID() {
-        itemID = null;
+        itemID = ItemID.INVALID_ID;
         getItemID();
     }
     public static String getCurrencyName() {

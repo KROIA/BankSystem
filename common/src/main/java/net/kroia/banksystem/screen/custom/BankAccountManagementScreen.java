@@ -140,7 +140,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         {
             if(userData.userUUID.equals(thisPlayerUUID))
             {
-                isEditingPlayer = BankPermission.hasPermission(userData.permissions, BankPermission.MANAGE.getValue());
+                isEditingPlayer = BankPermission.hasPermission(userData.permissions, BankPermission.MANAGE);
                 break;
             }
         }
@@ -488,7 +488,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             return;
         }
 
-        this.canManage = isAdminMode || bankAccountData.hasPermission(getThisPlayerUUID(),BankPermission.MANAGE.getValue());
+        this.canManage = isAdminMode || bankAccountData.hasPermission(getThisPlayerUUID(), BankPermission.MANAGE);
         this.personalBankOwnerData = bankAccountData.personalBankOwnerData;
         this.bankAccountName = bankAccountData.accountName;
         Map<UUID, BankUserWidget> toRemoveUsers = new HashMap<>(bankUserWidgets);

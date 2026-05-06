@@ -111,7 +111,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
             future.complete(null);
             return future;
         }
-        boolean canManage = account.hasPermission(sender, BankPermission.MANAGE.getValue());
+        boolean canManage = account.hasPermission(sender, BankPermission.MANAGE);
         if (!isAdmin && !canManage) {
             future.complete(null);
             return future;

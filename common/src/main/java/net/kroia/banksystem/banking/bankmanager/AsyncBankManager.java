@@ -383,7 +383,7 @@ public class AsyncBankManager implements IAsyncBankManager {
                         if(bankAccount == null)
                             yield OutputData.of(input.function);
                         if(!bankManager.isBanksystemAdmin(playerSender) &&
-                           !bankAccount.hasPermission(playerSender, BankPermission.MANAGE.getValue()))
+                           !bankAccount.hasPermission(playerSender, BankPermission.MANAGE))
                             yield OutputData.of(input.function);
                     }
                     yield OutputData.of(input.function, bankManager.deleteBankAccount(bankAccountNr));

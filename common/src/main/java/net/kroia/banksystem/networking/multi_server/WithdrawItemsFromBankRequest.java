@@ -94,7 +94,7 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
         // Check permission
         if(input.executor != null)
         {
-            if(!account.hasPermission(input.executor, BankPermission.WITHDRAW.getValue()))
+            if(!account.hasPermission(input.executor, BankPermission.WITHDRAW))
             {
                 User user = getServerBankManager().getUserByUUID(input.executor);
                 String playerName;

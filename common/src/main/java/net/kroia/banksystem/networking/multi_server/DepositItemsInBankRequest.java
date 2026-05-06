@@ -94,7 +94,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
         // Check permission
         if(input.executor != null)
         {
-            if(!account.hasPermission(input.executor, BankPermission.DEPOSIT.getValue()))
+            if(!account.hasPermission(input.executor, BankPermission.DEPOSIT))
             {
                 User user = getServerBankManager().getUserByUUID(input.executor);
                 String playerName;

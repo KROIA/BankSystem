@@ -1058,7 +1058,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean allowItemID(ItemID itemID)
     {
-        if(itemID == null)
+        if(itemID == null || !itemID.isValid())
             return false;
         if(isItemIDBlacklisted(itemID))
         {
@@ -1077,7 +1077,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean disallowItemID(ItemID itemID)
     {
-        if(itemID == null)
+        if(itemID == null || !itemID.isValid())
             return false;
         if(isItemIDNotRemovable(itemID))
         {

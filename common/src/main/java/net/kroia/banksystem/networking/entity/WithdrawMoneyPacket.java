@@ -66,7 +66,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         if(account == null)
             return;
 
-        if(!account.hasPermission(sender.getUUID(), BankPermission.WITHDRAW.getValue()))
+        if(!account.hasPermission(sender.getUUID(), BankPermission.WITHDRAW))
         {
             ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
             return;
@@ -156,7 +156,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         if(account == null)
             return;
 
-        if(!account.hasPermission(player, BankPermission.WITHDRAW.getValue()))
+        if(!account.hasPermission(player, BankPermission.WITHDRAW))
         {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
             return;

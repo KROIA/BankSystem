@@ -35,6 +35,7 @@ import net.kroia.banksystem.testing.tests.BankAccountTests;
 import net.kroia.banksystem.testing.tests.BankManagerTests;
 import net.kroia.banksystem.testing.tests.BankPermissionTests;
 import net.kroia.banksystem.testing.tests.ExampleTests;
+import net.kroia.banksystem.testing.tests.MultiServerSecurityTests;
 import net.kroia.banksystem.testing.tests.NetworkingValidationTests;
 import net.kroia.banksystem.testing.tests.ServerBankTests;
 import net.kroia.banksystem.util.*;
@@ -133,6 +134,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         TestRegistry.register(new BankManagerTests());
         TestRegistry.register(new AsyncForwardingTests());
         TestRegistry.register(new NetworkingValidationTests());
+        TestRegistry.register(new MultiServerSecurityTests());
     }
 
     // Called from the client side

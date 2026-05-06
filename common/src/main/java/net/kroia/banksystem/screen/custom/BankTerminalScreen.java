@@ -336,8 +336,8 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         setSelectedBankAccountNr(minimalBankUserData.accountNumber);
         UUID thisPlayer = getThisPlayerUUID();
 
-        receiveItemsFromBankButton.setEnabled(minimalBankUserData.hasPermission(thisPlayer, BankPermission.WITHDRAW.getValue()));
-        sendItemsToBankButton.setEnabled(minimalBankUserData.hasPermission(thisPlayer, BankPermission.DEPOSIT.getValue()));
+        receiveItemsFromBankButton.setEnabled(minimalBankUserData.hasPermission(thisPlayer, BankPermission.WITHDRAW));
+        sendItemsToBankButton.setEnabled(minimalBankUserData.hasPermission(thisPlayer, BankPermission.DEPOSIT));
 
         Map<ItemID, BankData> bankMap = minimalBankUserData.bankData;
         ArrayList<Pair<ItemID, BankData>> sortedBankAccounts = new ArrayList<>();

@@ -77,6 +77,15 @@ public class BankAccountData {
         }
         return personalBankOwnerData != null && personalBankOwnerData.userUUID().equals(userUUID); // Personal bank owner has all permissions
     }
+
+    /**
+     * Type-safe overload of {@link #hasPermission(UUID, int)} taking a {@link BankPermission} enum.
+     * Prefer this overload over the int variant.
+     */
+    public boolean hasPermission(UUID userUUID, BankPermission permission)
+    {
+        return hasPermission(userUUID, permission.getValue());
+    }
     public boolean hasAnyPermission(UUID userUUID, int permission)
     {
         if (userUUID == null || permission < 0) {

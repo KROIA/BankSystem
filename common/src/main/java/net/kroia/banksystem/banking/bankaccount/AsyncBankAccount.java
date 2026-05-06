@@ -275,14 +275,14 @@ public class AsyncBankAccount implements IAsyncBankAccount {
                 case FunctionType.GetPersonalBankOwnerDataAsync	-> 		OutputData.of(input.function, bankAccount.getPersonalBankOwnerData());
                 //case FunctionType.GetAccountNumberAsync	-> 		OutputData.of(input.function, bankAccount.getAccountData());
                 case FunctionType.SetAccountNameAsync	-> 		        {
-                    if(playerSender != null && !bankAccount.hasPermission(playerSender, BankPermission.MANAGE.getValue()))
+                    if(playerSender != null && !bankAccount.hasPermission(playerSender, BankPermission.MANAGE))
                         yield OutputData.of(input.function);
                     bankAccount.setAccountName((String)inputData.extra);
                     yield OutputData.of(input.function);
                 }
                 case FunctionType.GetAccountNameAsync	-> 		        OutputData.of(input.function, bankAccount.getAccountName());
                 case FunctionType.SetAccountIconAsync	-> 		        {
-                    if(playerSender != null && !bankAccount.hasPermission(playerSender, BankPermission.MANAGE.getValue()))
+                    if(playerSender != null && !bankAccount.hasPermission(playerSender, BankPermission.MANAGE))
                         yield OutputData.of(input.function);
                     bankAccount.setAccountIcon((ItemID)inputData.extra);
                     yield OutputData.of(input.function);

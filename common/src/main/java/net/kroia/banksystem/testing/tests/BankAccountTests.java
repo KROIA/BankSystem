@@ -51,6 +51,9 @@ public class BankAccountTests extends TestSuite {
         addTest("hasUserAsync_checks_specific_user", this::testHasUserAsyncChecksSpecificUser);
         addTest("hasBankAsync_checks_specific_bank", this::testHasBankAsyncChecksSpecificBank);
 
+        // R2: Type-safe Permissions wrapper
+        addTest("hasPermission_enum_overload_matches_int", this::testHasPermissionEnumOverloadMatchesInt);
+
         // Account Properties
         addTest("setAccountName_valid", this::testSetAccountNameValid);
         addTest("setAccountName_null_becomes_empty", this::testSetAccountNameNullBecomesEmpty);
@@ -182,6 +185,36 @@ public class BankAccountTests extends TestSuite {
         int actualPermission = account.getPermission(TEST_USER_A);
         return assertEquals("getPermission should return the set permission value",
                 expectedPermission, actualPermission);
+    }
+
+    /**
+     * Task #R2: hasPermission(UUID, BankPermission) must agree with the int variant.
+     * Enum overload exists so callers don't have to remember .getValue() vs .ordinal().
+     */
+    private TestResult testHasPermissionEnumOverloadMatchesInt() {
+        if (manager == null) {
+            return fail("ServerBankManager is null -- cannot run on slave server");
+        }
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) {
+            return fail("Test bank account was not created");
+        }
+        User userA = manager.getUserByUUID(TEST_USER_A);
+        if (userA == null) {
+            return fail("Test user A not registered");
+        }
+        // Grant DEPOSIT only
+        account.addUser(userA, BankPermission.DEPOSIT.getValue());
+
+        for (BankPermission p : BankPermission.values()) {
+            boolean viaInt = account.hasPermission(TEST_USER_A, p.getValue());
+            boolean viaEnum = account.hasPermission(TEST_USER_A, p);
+            if (viaInt != viaEnum) {
+                return fail("Enum overload disagreed with int form for "
+                        + p.name() + ": int=" + viaInt + " enum=" + viaEnum);
+            }
+        }
+        return pass("hasPermission(UUID, BankPermission) agrees with int form for all BankPermission values");
     }
 
     private TestResult testSetPermissionUpdates() {

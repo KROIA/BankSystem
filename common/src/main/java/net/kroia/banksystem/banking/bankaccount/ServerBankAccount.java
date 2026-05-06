@@ -250,7 +250,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public @Nullable BankAccountData getAccountData(ItemID itemID)
     {
-        if (itemID == null) {
+        if (itemID == null || !itemID.isValid()) {
             return null; // Invalid item ID
         }
         UserData personalBankOwnerData = null;
@@ -288,7 +288,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public @Nullable BankData getBankData(ItemID itemID)
     {
-        if (itemID == null) {
+        if (itemID == null || !itemID.isValid()) {
             return null; // Invalid item ID
         }
         ServerBank bank = banks.get(itemID);
@@ -616,7 +616,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public @Nullable ServerBank createBank(ItemID itemID, long startBalance)
     {
-        if (itemID == null) {
+        if (itemID == null || !itemID.isValid()) {
             return null; // Invalid item ID
         }
         if (banks.containsKey(itemID)) {
@@ -633,7 +633,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public CompletableFuture<@Nullable IAsyncBank> createBankAsync(ItemID itemID, long startBalance)
     {
-        if (itemID == null) {
+        if (itemID == null || !itemID.isValid()) {
             return CompletableFuture.completedFuture(null); // Invalid item ID
         }
         if (banks.containsKey(itemID)) {
@@ -654,7 +654,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
     @Override
     public void removeBank(ItemID itemID) {
-        if (itemID == null) {
+        if (itemID == null || !itemID.isValid()) {
             return; // Invalid item ID
         }
         hasChanges |= banks.remove(itemID) != null; // Remove bank by item ID
@@ -715,7 +715,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
     @Override
     public boolean hasBank(ItemID itemID) {
-        return itemID != null && banks.containsKey(itemID); // Check if bank exists for the item ID
+        return itemID != null && itemID.isValid() && banks.containsKey(itemID); // Check if bank exists for the item ID
     }
     @Override
     public CompletableFuture<Boolean> hasBankAsync(ItemID itemID) {
@@ -727,7 +727,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
     @Override
     public @Nullable ServerBank getBank(ItemID itemID) {
-        if (itemID == null) {
+        if (itemID == null || !itemID.isValid()) {
             return null; // Invalid item ID
         }
         return banks.get(itemID); // Get bank by item ID
@@ -746,7 +746,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public @Nullable ServerBank getOrCreateBank(ItemID itemID)
     {
-        if (itemID == null) {
+        if (itemID == null || !itemID.isValid()) {
             return null; // Invalid item ID
         }
         ServerBank bank = banks.get(itemID);

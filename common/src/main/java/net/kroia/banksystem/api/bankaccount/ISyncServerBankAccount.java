@@ -2,6 +2,7 @@ package net.kroia.banksystem.api.bankaccount;
 
 import com.google.gson.JsonElement;
 import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
@@ -125,6 +126,15 @@ public interface ISyncServerBankAccount {
      * @return true if the user has the specified permission, false otherwise
      */
     boolean hasPermission(UUID userUUID, int permission);
+
+    /**
+     * Type-safe overload of {@link #hasPermission(UUID, int)} taking a {@link BankPermission} enum.
+     * Prefer this overload over the int variant — it eliminates the {@code getValue()}/{@code ordinal()}
+     * confusion that has historically caused permission-bypass bugs.
+     */
+    default boolean hasPermission(UUID userUUID, BankPermission permission) {
+        return hasPermission(userUUID, permission.getValue());
+    }
 
     /**
      * Sets the permission level of the user with the specified UUID.
