@@ -289,9 +289,16 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
             ItemData data = entry.getValue();
             if (data.getAmount() <= 0) continue;
 
-            ItemStack stack = data.getItemID().getStack().copy();
-            stack.setCount(data.getAmount());
-            level.addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(level, worldPosition.getX() + 0.5D, worldPosition.getY() + 0.5D, worldPosition.getZ() + 0.5D, stack));
+            ItemStack template = data.getItemID().getStack();
+            int maxSize = template.getMaxStackSize();
+            int remaining = data.getAmount();
+            while (remaining > 0) {
+                ItemStack stack = template.copy();
+                int count = Math.min(remaining, maxSize);
+                stack.setCount(count);
+                level.addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(level, worldPosition.getX() + 0.5D, worldPosition.getY() + 0.5D, worldPosition.getZ() + 0.5D, stack));
+                remaining -= count;
+            }
         }
         items.clear();
         sum = 0;

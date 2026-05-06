@@ -364,7 +364,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getName()));
             return false;
         }
-        if(bank.getBalance() >= amount) {
+        if(bank.getRealBalance() >= amount) {
             bank.withdrawReal(amount);
         }
         else {

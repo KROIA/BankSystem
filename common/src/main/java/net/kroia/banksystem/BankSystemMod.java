@@ -6,9 +6,9 @@ public final class BankSystemMod {
 
     public static final String MOD_ID = "banksystem";
     public static final String VERSION = "1.5.0_ALPHA";
-    private static BankSystemModBackend backend;
+    private static volatile BankSystemModBackend backend;
 
-    public static void init() {
+    public static synchronized void init() {
         if(backend == null)
             backend = new BankSystemModBackend();
     }
@@ -16,7 +16,7 @@ public final class BankSystemMod {
 
     public static BankSystemAPI getAPI() {
         if(backend == null)
-            backend = new BankSystemModBackend();
+            init();
         return backend;
     }
 }

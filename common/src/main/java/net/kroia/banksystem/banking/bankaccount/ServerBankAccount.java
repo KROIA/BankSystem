@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.bankaccount;
 
+import java.util.Objects;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -237,14 +238,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public void unsubscribeBankChanges(Consumer<BankAccountData> callback)
     {
-        for(Consumer<BankAccountData> currentListener : changeListeners)
-        {
-            if(currentListener == callback)
-            {
-                changeListeners.remove(currentListener);
-                return;
-            }
-        }
+        changeListeners.remove(callback);
     }
 
 
@@ -392,11 +386,11 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
     @Override
     public void setAccountName(String accountName) {
-        if (accountName == null || accountName.isEmpty()) {
+        if (accountName == null) {
             accountName = "";
         }
         hasChanges |= !this.accountName.equals(accountName);
-        this.accountName = accountName; // Set the name of the bank account
+        this.accountName = accountName;
     }
     @Override
     public void setAccountNameAsync(String accountName) {
@@ -418,8 +412,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
     @Override
     public void setAccountIcon(@Nullable ItemID accountIcon) {
-        hasChanges |= this.accountIcon != accountIcon;
-        this.accountIcon = accountIcon; // Set the icon for the bank account
+        hasChanges |= !java.util.Objects.equals(this.accountIcon, accountIcon);
+        this.accountIcon = accountIcon;
     }
     @Override
     public void setAccountIconAsync(@Nullable ItemID accountIcon) {
@@ -599,7 +593,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<Boolean> hasUserAsync(UUID userUUID) {
-        return CompletableFuture.completedFuture(hasAnyUser());
+        return CompletableFuture.completedFuture(hasUser(userUUID));
     }
 
 
@@ -725,7 +719,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<Boolean> hasBankAsync(ItemID itemID) {
-        return CompletableFuture.completedFuture(hasAnyBank());
+        return CompletableFuture.completedFuture(hasBank(itemID));
     }
 
 

@@ -6,6 +6,7 @@ import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRequest;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
@@ -191,14 +192,17 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 continue;
             }
             long itemValue = moneyItem.worth();
+            if (requestedAmount <= 0 || itemValue <= 0)
+                continue;
+            if (requestedAmount > Long.MAX_VALUE / itemValue)
+                continue;
             long totalValue = requestedAmount * itemValue;
-            if (totalValue <= 0) {
-                continue; // Skip invalid requests
-            }
 
 
             if (!moneyBank.hasSufficientFunds(totalValue)) {
-                String userName = Objects.requireNonNull(bankManager.getUserByUUID(player)).getName();
+                User user = bankManager.getUserByUUID(player);
+                if(user == null) continue;
+                String userName = user.getName();
                 ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getName(), userName));
                 continue;
             }

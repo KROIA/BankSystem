@@ -1,5 +1,6 @@
 package net.kroia.banksystem.testing.tests;
 
+import io.netty.buffer.Unpooled;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
@@ -7,10 +8,13 @@ import net.kroia.banksystem.banking.bankmanager.AsyncBankManager;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
 
 /**
  * Tests for the async forwarding system verifying correct FunctionType usage,
@@ -166,21 +170,32 @@ public class AsyncForwardingTests extends TestSuite {
             return fail("GetMinimalDataAsync should have a non-null output codec");
         }
 
-        // The actual codec in the source is BankManagerData.STREAM_CODEC (the bug).
-        // It should be BankData.STREAM_CODEC.
-        // We verify by comparing the codec object identity via Object reference.
-        Object registeredCodec = minimalDataCodecs.outputParamsCodec;
-        Object expectedCodec = BankData.STREAM_CODEC;
-        Object wrongCodec = BankManagerData.STREAM_CODEC;
-
-        if (registeredCodec == wrongCodec) {
-            return fail("GetMinimalDataAsync output codec is BankManagerData.STREAM_CODEC (wrong). " +
-                    "Should be BankData.STREAM_CODEC. See AsyncBank.java line 128");
+        // AsyncFunctionDataCodecs wraps the codec via ExtraCodecUtils.nullable(),
+        // so identity comparison won't work. Verify behaviour by round-tripping
+        // a BankData through the registered codec instead.
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        StreamCodec rawCodec = (StreamCodec) minimalDataCodecs.outputParamsCodec;
+        BankData original = new BankData(ItemID.INVALID_ID, 1234L, 567L);
+        try {
+            RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
+            rawCodec.encode(buf, original);
+            Object decoded = rawCodec.decode(buf);
+            if (!(decoded instanceof BankData decodedBankData)) {
+                return fail("GetMinimalDataAsync codec did not round-trip to BankData (got: "
+                        + (decoded == null ? "null" : decoded.getClass().getName())
+                        + "). It is likely BankManagerData.STREAM_CODEC. See AsyncBank.java line 128");
+            }
+            if (decodedBankData.balance() != 1234L || decodedBankData.lockedBalance() != 567L) {
+                return fail("GetMinimalDataAsync codec round-tripped a BankData but values changed: "
+                        + decodedBankData);
+            }
+            return pass("GetMinimalDataAsync correctly uses BankData.STREAM_CODEC");
+        } catch (ClassCastException e) {
+            return fail("GetMinimalDataAsync codec rejected a BankData — likely BankManagerData.STREAM_CODEC: "
+                    + e.getMessage());
+        } catch (Exception e) {
+            return fail("Failed to round-trip BankData through GetMinimalDataAsync codec: " + e.getMessage());
         }
-        if (registeredCodec != expectedCodec) {
-            return fail("GetMinimalDataAsync output codec is neither BankData nor BankManagerData — unexpected codec");
-        }
-        return pass("GetMinimalDataAsync correctly uses BankData.STREAM_CODEC");
     }
 
     /**

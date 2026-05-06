@@ -94,7 +94,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
         // Check permission
         if(input.executor != null)
         {
-            if(!account.hasPermission(input.executor, BankPermission.DEPOSIT.ordinal()))
+            if(!account.hasPermission(input.executor, BankPermission.DEPOSIT.getValue()))
             {
                 User user = getServerBankManager().getUserByUUID(input.executor);
                 String playerName;
@@ -110,7 +110,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
         Map<ItemID, Long> notDepositedItems = new HashMap<>();
         for(Map.Entry<ItemID, Long> entry : input.items.entrySet())
         {
-            long toDeposit = entry.getValue();
+            long toDeposit = Math.max(0, entry.getValue());
             IServerBank itemBank = account.getOrCreateBank(entry.getKey());
             if(itemBank != null)
             {

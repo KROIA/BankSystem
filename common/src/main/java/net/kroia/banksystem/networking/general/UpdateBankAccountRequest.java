@@ -142,10 +142,14 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         }
 
         if (input.setUsers != null) {
+            int validMask = BankPermission.getAllPermissions();
+            User owner = account.getPersonalBankOwner();
             Map<User, Integer> userList = new HashMap<>(input.setUsers.size());
             for (Map.Entry<UUID, Integer> entry : input.setUsers.entrySet()) {
                 UUID userUUID = entry.getKey();
-                int permissions = entry.getValue();
+                int permissions = entry.getValue() & validMask;
+                if (owner != null && owner.getUUID().equals(userUUID))
+                    continue;
                 User userToSet = bankManager.getUserByUUID(userUUID);
                 if (userToSet != null) {
                     userList.put(userToSet, permissions);

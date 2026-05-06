@@ -192,11 +192,12 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     @Override
     public boolean save_bank()
     {
+        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if(bankManager == null)
+            return false;
         boolean success = true;
         Map<String, ListTag> bankData = new HashMap<>();
-        ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
-        if(bankManager != null)
-            success = bankManager.save(bankData);
+        success = bankManager.save(bankData);
         saveDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME), bankData);
         if(success)
         {

@@ -357,7 +357,10 @@ public class AsyncBankManager implements IAsyncBankManager {
                 case FunctionType.GetPersonalBankAccountNrAsync_2 -> OutputData.of(input.function, bankManager.getPersonalBankAccountNr((String)input.decodeParams()));
                 //case FunctionType.CreateBankAccountAsync -> OutputData.of(input.function, bankManager.createBankAccount(input.decodeParams()));
                 case FunctionType.CreateBankAccountGetAccountNrAsync -> OutputData.of(input.function, bankManager.createBankAccountGetAccountNr(input.decodeParams()));
-                case FunctionType.GetBankAccountNrByNameAsync -> OutputData.of(input.function, bankManager.getBankAccountByName(input.decodeParams()));
+                case FunctionType.GetBankAccountNrByNameAsync -> {
+                    IServerBankAccount acc = bankManager.getBankAccountByName(input.decodeParams());
+                    yield OutputData.of(input.function, acc != null ? acc.getAccountNumber() : ServerBankAccount.INVALID_ACCOUNT_NUMBER);
+                }
                 //case FunctionType.GetBankAccountAsync -> OutputData.of(input.function, bankManager.getBankAccount(input.decodeParams()));
                 //case FunctionType.GetBankAccountsAsync_1 -> OutputData.of(input.function, bankManager. );
                 case FunctionType.GetBankAccountNumbersAsync_1 -> OutputData.of(input.function, bankManager.getBankAccountNumbers((UUID)input.decodeParams()));
@@ -379,8 +382,8 @@ public class AsyncBankManager implements IAsyncBankManager {
                         IServerBankAccount bankAccount = bankManager.getBankAccount(bankAccountNr);
                         if(bankAccount == null)
                             yield OutputData.of(input.function);
-                        if(!bankManager.isBanksystemAdmin(playerSender) ||
-                           !bankAccount.hasPermission(playerSender, BankPermission.MANAGE.ordinal()))
+                        if(!bankManager.isBanksystemAdmin(playerSender) &&
+                           !bankAccount.hasPermission(playerSender, BankPermission.MANAGE.getValue()))
                             yield OutputData.of(input.function);
                     }
                     yield OutputData.of(input.function, bankManager.deleteBankAccount(bankAccountNr));
@@ -690,7 +693,7 @@ public class AsyncBankManager implements IAsyncBankManager {
         if(!MultiServerUtils.canInteractWithBankSystem())
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.IsBanksystemAdminAsync, slaveID);
+        InputData inputData = InputData.of(FunctionType.IsSlaveServerTrustedAsync, slaveID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
@@ -1073,6 +1076,10 @@ public class AsyncBankManager implements IAsyncBankManager {
             {
                 future.complete(createBankAccount(accountNr));
             }
+            else
+            {
+                future.complete(null);
+            }
         });
         return future;
     }
@@ -1097,6 +1104,10 @@ public class AsyncBankManager implements IAsyncBankManager {
             if(accountNr > 0)
             {
                 future.complete(createBankAccount(accountNr));
+            }
+            else
+            {
+                future.complete(null);
             }
         });
         return future;
@@ -1196,6 +1207,10 @@ public class AsyncBankManager implements IAsyncBankManager {
                         future.complete(null);
                 });
             }
+            else
+            {
+                future.complete(null);
+            }
         });
         return future;
     }
@@ -1214,6 +1229,10 @@ public class AsyncBankManager implements IAsyncBankManager {
                     else
                         future.complete(null);
                 });
+            }
+            else
+            {
+                future.complete(null);
             }
         });
         return future;

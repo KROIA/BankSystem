@@ -395,9 +395,9 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
     {
         UUID playerOwner = getPlayerOwner();
         boolean sendUpdate = false;
-        dropIfNotBankable = packet.isDropIfNotBankable();
-        bankAccountNumber = packet.getBankAccountNumber();
         if(playerOwner == null || playerOwner.equals(sender.getUUID())) {
+            dropIfNotBankable = packet.isDropIfNotBankable();
+            bankAccountNumber = packet.getBankAccountNumber();
             setPlayerOwner(packet.isOwned() ? sender.getUUID() : null);
             sendUpdate = true;
         }

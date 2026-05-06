@@ -125,7 +125,7 @@ public class AsyncBank implements IAsyncBank {
         return new AsyncFunctionDataCodecs(BankIdentifyAndDataPacket.streamCodec(inputParamsCodec), outputParamsCodec);
     }
     public static final Map<FunctionType, AsyncFunctionDataCodecs> codecs = new HashMap<>(){{
-            put(FunctionType.GetMinimalDataAsync,                 codecPacket(null, BankManagerData.STREAM_CODEC));
+            put(FunctionType.GetMinimalDataAsync,                 codecPacket(null, BankData.STREAM_CODEC));
             put(FunctionType.GetBalanceAsync,                     codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
             put(FunctionType.GetLockedBalanceAsync,               codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
             put(FunctionType.GetTotalBalanceAsync,                codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));

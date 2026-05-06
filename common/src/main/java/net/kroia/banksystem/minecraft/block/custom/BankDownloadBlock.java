@@ -147,10 +147,12 @@ public class BankDownloadBlock extends Block implements EntityBlock {
             CompletableFuture<Boolean> hasPermission = blockEntity.hasPermissionToOpenBlock(sPlayer);
             hasPermission.thenAccept(hasPermissionResult -> {
                 if(hasPermissionResult) {
-                    MenuProvider menuProvider = blockEntity.getMenuProvider();
-                    SyncBankDownloadDataPacket.sendPacket(sPlayer, blockEntity);
-                    openExtendedMenu(sPlayer, menuProvider, (menu) -> {
-                        menu.writeBlockPos(pos);
+                    sPlayer.server.execute(() -> {
+                        MenuProvider menuProvider = blockEntity.getMenuProvider();
+                        SyncBankDownloadDataPacket.sendPacket(sPlayer, blockEntity);
+                        openExtendedMenu(sPlayer, menuProvider, (menu) -> {
+                            menu.writeBlockPos(pos);
+                        });
                     });
                 }
             });

@@ -24,7 +24,7 @@ public class BankAccountChangeStream extends BankSystemGenericStream<BankAccount
         );
     }
 
-    OutputData nextPacket = null;
+    volatile OutputData nextPacket = null;
 
     private void onChangesCallback(BankAccountData changeData)
     {

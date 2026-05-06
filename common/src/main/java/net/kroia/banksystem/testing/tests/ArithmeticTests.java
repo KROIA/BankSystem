@@ -68,19 +68,14 @@ public class ArithmeticTests extends TestSuite {
     }
 
     /**
-     * Issue #19: "10.5" should logically be 1050 (10 and 50/100), but the
-     * current implementation parses the fractional part as Long.parseLong("5")
-     * which yields 5 instead of 50.  Result is 1005 instead of 1050.
-     *
-     * This test documents the current (buggy) behaviour.
+     * Issue #19 (fixed): "10.5" should be 1050 (10 and 50/100). The fractional
+     * part "5" is now padded to "50" before parsing.
      */
     private TestResult testConvertToRawAmountSingleDecimal() {
         long result = ServerBank.convertToRawAmountStatic("10.5");
-        // Current buggy behaviour: A = 10*100 = 1000, B = parseLong("5") = 5 -> 1005
-        // Correct behaviour would be 1050
         return assertEquals(
-                "Issue #19: \"10.5\" currently produces 1005 (bug: should be 1050)",
-                1005L, result);
+                "Issue #19: \"10.5\" -> 1050 (10 wholes + 50 hundredths)",
+                1050L, result);
     }
 
     /**

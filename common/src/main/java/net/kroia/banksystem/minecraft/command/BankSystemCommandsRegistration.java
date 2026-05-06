@@ -140,7 +140,7 @@ public class BankSystemCommandsRegistration {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
                             if(isMaster())
-                                masterHandler().banksystem_setBankSystemAdminMode(player.getUUID(), true);
+                                masterHandler().banksystem_setBankSystemAdminMode(player.getUUID(), false);
                             else
                                 ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
 
@@ -152,7 +152,7 @@ public class BankSystemCommandsRegistration {
                                     ServerPlayer player = source.getPlayerOrException();
                                     String toPlayer = StringArgumentType.getString(context, "username");
                                     if(isMaster())
-                                        masterHandler().banksystem_setBankSystemAdminMode_user(player.getUUID(), toPlayer, true);
+                                        masterHandler().banksystem_setBankSystemAdminMode_user(player.getUUID(), toPlayer, false);
                                     else
                                         ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
                                     return Command.SINGLE_SUCCESS;

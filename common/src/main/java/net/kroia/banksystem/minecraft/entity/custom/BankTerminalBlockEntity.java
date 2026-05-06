@@ -344,7 +344,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
                 // If the slot is empty, it has space
                 if (stack.isEmpty()) {
-                    freeSpace+=64;
+                    freeSpace += amount > 0 ? amount : 64;
                     continue;
                 }
                 if(stack.isDamaged() || stack.isEnchanted())
@@ -377,35 +377,21 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
                 stacks.add(stack);
             }
-            CompletableFuture<List<ItemID>> future = ItemID.getOrRegisterFromItemStackClientSide(stacks);
-            future.thenAccept((itemIDs)->
-            {
-                HashMap<ItemID, Long> items = new HashMap<>();
-                for (int i = 0; i < this.getContainerSize(); i++) {
-                    ItemStack stack = this.getItem(i);
-
-                    // If the slot is empty, it has space
-                    if (stack.isEmpty() || stack.isDamaged() || stack.isEnchanted()) {
-                        continue;
-                    }
-
-                    // Get the item's ResourceLocation
-                    ItemID itemID = ItemID.getFromItemStack(stack);
-                    if(itemID == null)
-                    {
-                        warn("ItemStack: "+stack+" is not registered for ItemID. Skipping this item");
-                        continue;
-                    }
-
-                    // Compare the ResourceLocation to the provided string
-                    // Check if the stack can fit the amount
-                    if(!items.containsKey(itemID))
-                        items.put(itemID, (long)stack.getCount());
-                    else
-                        items.put(itemID, items.get(itemID) + stack.getCount());
+            HashMap<ItemID, Long> items = new HashMap<>();
+            for (ItemStack stack : stacks) {
+                ItemID itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
+                if(itemID == null || !itemID.isValid())
+                {
+                    warn("ItemStack: "+stack+" is not registered for ItemID. Skipping this item");
+                    continue;
                 }
-                futureResult.complete(items);
-            });
+
+                if(!items.containsKey(itemID))
+                    items.put(itemID, (long)stack.getCount());
+                else
+                    items.put(itemID, items.get(itemID) + stack.getCount());
+            }
+            futureResult.complete(items);
 
             return futureResult;
         }
@@ -423,34 +409,20 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 }
                 stacks.add(stack);
             }
-            CompletableFuture<List<ItemID>> future = ItemID.getOrRegisterFromItemStackClientSide(stacks);
-            future.thenAccept((itemIDs)->
-            {
-                long count = 0;
-                for (int i = 0; i < this.getContainerSize(); i++) {
-                    ItemStack stack = this.getItem(i);
-
-                    // If the slot is empty, it has space
-                    if (stack.isEmpty() || stack.isDamaged() || stack.isEnchanted()) {
-                        continue;
-                    }
-
-                    // Get the item's ResourceLocation
-                    ItemID _itemID = ItemID.getFromItemStack(stack);
-                    if(itemID == null)
-                    {
-                        warn("ItemStack: "+stack+" is not registered for ItemID. Skipping this item");
-                        continue;
-                    }
-
-                    // Compare the ResourceLocation to the provided string
-                    if (_itemID.equals(itemID)) {
-                        // Check if the stack can fit the amount)
-                        count += stack.getCount();
-                    }
+            long count = 0;
+            for (ItemStack stack : stacks) {
+                ItemID _itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
+                if(_itemID == null || !_itemID.isValid())
+                {
+                    warn("ItemStack: "+stack+" is not registered for ItemID. Skipping this item");
+                    continue;
                 }
-                futureResult.complete(count);
-            });
+
+                if (_itemID.equals(itemID)) {
+                    count += stack.getCount();
+                }
+            }
+            futureResult.complete(count);
             return futureResult;
         }
         // Only counts items that are not damaged or enchanted
@@ -585,7 +557,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     return false;
                 inventory.set(slot, stack);
             }
-            return false;
+            return true;
         }
 
         @Override
@@ -606,17 +578,17 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         @Override
         public @NotNull ItemStack getItem(int slot) {
             if(slot < 0 || slot >= inventory.size())
-                return null;
+                return ItemStack.EMPTY;
             return inventory.get(slot);
         }
 
         @Override
         public @NotNull ItemStack removeItem(int slot, int amount) {
             if(slot < 0 || slot >= inventory.size())
-                return null;
+                return ItemStack.EMPTY;
             ItemStack stack = inventory.get(slot);
             if(stack.isEmpty())
-                return null;
+                return ItemStack.EMPTY;
             ItemStack copy = stack.copy();
             if(stack.getCount() <= amount)
             {
@@ -634,10 +606,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         @Override
         public @NotNull ItemStack removeItemNoUpdate(int slot) {
             if(slot < 0 || slot >= inventory.size())
-                return null;
+                return ItemStack.EMPTY;
             ItemStack stack = inventory.get(slot);
             if(stack.isEmpty())
-                return null;
+                return ItemStack.EMPTY;
             inventory.set(slot, ItemStack.EMPTY);
             return stack;
         }

@@ -754,7 +754,22 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         if(!MultiServerUtils.checkConnectionToMaster(executor))
             return CompletableFuture.completedFuture(null);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Bank_create, executor, accountName));
-        handleResponse(outputDataFuture, executor);
+        outputDataFuture.whenComplete((result, throwable) -> {
+            if(throwable != null)
+            {
+                error("Async command execution result for command "+result.function.name()+" from player: "+Request.tryGetPlayerName(executor)+" Result: Failure", throwable);
+                ServerPlayerUtilities.printToClientConsole(executor, "Bank creation failed");
+            }
+            else
+            {
+                int accountNr = result.decodeResult();
+                boolean success = accountNr > 0;
+                String text = "Async command execution result for command "+result.function.name()+" from player: "+Request.tryGetPlayerName(executor)+" Result: "+(success?"Success":"Failure");
+                info(text);
+                if(!success)
+                    ServerPlayerUtilities.printToClientConsole(executor, text);
+            }
+        });
         CompletableFuture<IAsyncBankAccount> future = new CompletableFuture<>();
         outputDataFuture.thenAccept(outputData -> {
             int accountNr = outputData.decodeResult();

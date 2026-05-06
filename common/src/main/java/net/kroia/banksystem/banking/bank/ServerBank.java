@@ -308,7 +308,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> withdrawLockedAsync(long amount) {
-        return CompletableFuture.completedFuture(withdraw(amount));
+        return CompletableFuture.completedFuture(withdrawLocked(amount));
     }
 
 
@@ -702,7 +702,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getNormalizedTotalBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getNormalizedAmount(lockedBalance));
+        return CompletableFuture.completedFuture(getNormalizedAmount(balance + lockedBalance));
     }
 
 
@@ -744,7 +744,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getFormattedTotalBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getFormattedAmount(lockedBalance));
+        return CompletableFuture.completedFuture(getFormattedAmount(balance + lockedBalance));
     }
 
 
@@ -834,7 +834,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> toStringNoOwnerAsync()
     {
-        return CompletableFuture.completedFuture(toJsonString());
+        return CompletableFuture.completedFuture(toStringNoOwner());
     }
 
 
@@ -1009,7 +1009,13 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
         }
         try {
-            B = Long.parseLong(realTextboxText.substring(decimalPlaces + 1));
+            String fracStr = realTextboxText.substring(decimalPlaces + 1);
+            int scaleDigits = String.valueOf(BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR).length() - 1;
+            if (fracStr.length() > scaleDigits)
+                fracStr = fracStr.substring(0, scaleDigits);
+            while (fracStr.length() < scaleDigits)
+                fracStr = fracStr + "0";
+            B = Long.parseLong(fracStr);
         }catch (NumberFormatException ignored) {
 
         }
@@ -1029,11 +1035,23 @@ public class ServerBank implements ServerSaveable, IServerBank {
         // 1.0e18 = 1E
         String exponents = "kMGTPEZY";
 
+        if(amount <= 0)
+            return "0";
+
         long wholeUnits = amount / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
-
-
         String amountString = String.valueOf(wholeUnits);
+        if(wholeUnits <= 0)
+        {
+            double cents = (amount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (double)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            String centsString = String.valueOf(cents);
+            if(centsString.startsWith("0."))
+                centsString = centsString.substring(2);
+            if(BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR > 1)
+                return "0." + centsString;
+            return "0";
+        }
+
         double logResult = Math.log10(wholeUnits);
         int exponent = (int)logResult;
         int exponent3 = exponent/3;
@@ -1043,17 +1061,17 @@ public class ServerBank implements ServerSaveable, IServerBank {
             String firstPart = amountString.substring(0, modValue);
             if(firstPart.isEmpty())
                 firstPart = "0";
-            String secondPart = amountString.substring(modValue, modValue+2);
+            int endIdx = Math.min(modValue+2, amountString.length());
+            String secondPart = amountString.substring(modValue, endIdx);
 
             amountString = firstPart+"."+secondPart + exponents.charAt(exponent3-1);
         }
         else
         {
-            float cents = (amount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR; // Convert to cents
+            double cents = (amount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (double)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
-            String centsString = String.valueOf((cents));
+            String centsString = String.valueOf(cents);
 
-            // Remove "0." prefix if cents are zero
             if(centsString.startsWith("0.")) {
                 centsString = centsString.substring(2);
             }

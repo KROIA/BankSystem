@@ -245,7 +245,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public List<ItemID> getNotRemovableItems() {
-        List<ItemID> ids = ItemIDManager.registerItemStackServerSide_direct(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS);
+        List<ItemID> ids = ItemIDManager.registerItemStackServerSide_direct(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_NOT_REMOVABLE_ITEMS);
         return ids;
     }
 
@@ -318,16 +318,19 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public boolean removeUser(UUID userUUID) {
         if (userMap.containsKey(userUUID)) {
             User user = userMap.remove(userUUID);
+            List<Integer> emptyAccounts = new ArrayList<>();
             for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
                 ServerBankAccount account = entry.getValue();
                 if (account.hasUser(userUUID)) {
                     account.removeUser(userUUID);
                     if (!account.hasAnyUser()) {
-                        int accountNr = entry.getKey();
-                        deleteBankAccount(accountNr); // Remove the account if it has no users left
-                        info("Removed empty bank account with number: " + accountNr);
+                        emptyAccounts.add(entry.getKey());
                     }
                 }
+            }
+            for (int accountNr : emptyAccounts) {
+                deleteBankAccount(accountNr);
+                info("Removed empty bank account with number: " + accountNr);
             }
             BACKEND_INSTANCES.SERVER_EVENTS.USER_REMOVED.notifyListeners(user);
             info("Removed user with UUID: " + userUUID);
@@ -556,7 +559,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         if(account == null)
         {
             warn("Failed to create bank account with number: " + accountNumber);
-            CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(null);
         }
         account.setAccountName(accountName);
         account.setAccountIcon(ItemIDManager.registerItemStackServerSide_direct(Items.CHEST.getDefaultInstance()));
@@ -854,13 +857,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getOrCreatePersonalBankAccountAsync(UUID userUUID) {
-        CompletableFuture<@Nullable IAsyncBankAccount> account = getPersonalBankAccountAsync(userUUID);
-        if(account != null) {
-            return account;
-        }
-        else {
-            return createPersonalBankAccountAsync(userUUID);
-        }
+        IServerBankAccount account = getOrCreatePersonalBankAccount_internal(userUUID);
+        return CompletableFuture.completedFuture(account);
     }
 
 
@@ -1012,7 +1010,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         if(bank != null)
             return bank;
         else
-            return account.createBank(itemID, ServerBankAccount.INVALID_ACCOUNT_NUMBER);
+            return account.createBank(itemID, 0);
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getOrCreatePersonalBankAsync(UUID owner, ItemID itemID) {

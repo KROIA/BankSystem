@@ -7,6 +7,7 @@ import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
@@ -274,11 +275,15 @@ public class AsyncBankAccount implements IAsyncBankAccount {
                 case FunctionType.GetPersonalBankOwnerDataAsync	-> 		OutputData.of(input.function, bankAccount.getPersonalBankOwnerData());
                 //case FunctionType.GetAccountNumberAsync	-> 		OutputData.of(input.function, bankAccount.getAccountData());
                 case FunctionType.SetAccountNameAsync	-> 		        {
+                    if(playerSender != null && !bankAccount.hasPermission(playerSender, BankPermission.MANAGE.getValue()))
+                        yield OutputData.of(input.function);
                     bankAccount.setAccountName((String)inputData.extra);
                     yield OutputData.of(input.function);
                 }
                 case FunctionType.GetAccountNameAsync	-> 		        OutputData.of(input.function, bankAccount.getAccountName());
                 case FunctionType.SetAccountIconAsync	-> 		        {
+                    if(playerSender != null && !bankAccount.hasPermission(playerSender, BankPermission.MANAGE.getValue()))
+                        yield OutputData.of(input.function);
                     bankAccount.setAccountIcon((ItemID)inputData.extra);
                     yield OutputData.of(input.function);
                 }
@@ -755,7 +760,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
     public void removeAllBanksAsync() {
         if(!MultiServerUtils.canInteractWithBankSystem())
             return;
-        InputData inputData = InputData.of(FunctionType.RemoveEmptyBanksAsync, accountNr);
+        InputData inputData = InputData.of(FunctionType.RemoveAllBanksAsync, accountNr);
         sendRequest(inputData);
     }
 

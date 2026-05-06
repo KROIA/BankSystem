@@ -92,10 +92,10 @@ public class BankManager implements IBankManager {
     }
     public static double convertToRealAmountStatic(long rawAmount)
     {
-        return (float)rawAmount / (float) BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        return (double)rawAmount / (double) BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
     }
     public static double convertToRealAmountStatic(long rawAmount, int itemFractionScaleFactor)
     {
-        return (float)rawAmount / (float)itemFractionScaleFactor;
+        return (double)rawAmount / (double)itemFractionScaleFactor;
     }
 }
