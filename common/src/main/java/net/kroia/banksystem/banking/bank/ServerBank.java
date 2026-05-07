@@ -304,6 +304,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
             return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
         }
         lockedBalance -= amount;
+        changeFlag = true;
         return BankStatus.SUCCESS;
     }
     @Override
@@ -339,6 +340,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         }
 
         lockedBalance -= amount;
+        changeFlag = true;
         return BankStatus.SUCCESS;
     }
     @Override
@@ -1003,7 +1005,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
         try{
             A = Long.parseLong(realTextboxText.substring(0, decimalPlaces)) * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
         }catch (NumberFormatException ignored) {
-
+            if (!realTextboxText.substring(0, decimalPlaces).isEmpty()) {
+                return 0;
+            }
         }
         try {
             String fracStr = realTextboxText.substring(decimalPlaces + 1);
@@ -1032,7 +1036,11 @@ public class ServerBank implements ServerSaveable, IServerBank {
         // 1.0e18 = 1E
         String exponents = "kMGTPEZY";
 
-        if(amount <= 0)
+        if(amount < 0) {
+            BACKEND_INSTANCES.LOGGER.warn("[ServerBank] getNormalizedAmountStatic called with negative amount: " + amount);
+            return "0";
+        }
+        if(amount == 0)
             return "0";
 
         long wholeUnits = amount / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
@@ -1106,7 +1114,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         if(rawAmount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR != 0)
         {
 
-            float cents = (rawAmount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR; // Convert to cents
+            double cents = (rawAmount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (double)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR; // Convert to cents
 
             String centsString = String.valueOf(cents);
 
@@ -1143,6 +1151,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     private boolean willOverflow(long tryToAddAmount)
     {
+        if (willAdditionOverflow(balance, lockedBalance)) return true;
         return willAdditionOverflow(balance + lockedBalance, tryToAddAmount);
     }
     private static boolean willAdditionOverflow(long a, long b) {

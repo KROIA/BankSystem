@@ -53,8 +53,12 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
     {
         DepositItemsInBankRequest.InputData inputData = new DepositItemsInBankRequest.InputData(bankAccount, executor, items);
         CompletableFuture<Map<ItemID, Long>> future = new CompletableFuture<>();
-        BankSystemNetworking.DEPOSIT_ITEMS_IN_BANK_REQUEST.sendRequestToMaster(inputData).thenAccept(response -> {
-            future.complete(response.items);
+        BankSystemNetworking.DEPOSIT_ITEMS_IN_BANK_REQUEST.sendRequestToMaster(inputData).whenComplete((response, ex) -> {
+            if (ex != null || response == null) {
+                future.complete(new HashMap<>()); // Return empty map on error
+            } else {
+                future.complete(response.items);
+            }
         });
         return future;
     }

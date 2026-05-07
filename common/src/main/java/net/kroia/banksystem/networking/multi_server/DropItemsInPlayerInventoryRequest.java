@@ -23,11 +23,12 @@ import java.util.concurrent.CompletableFuture;
 public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<DropItemsInPlayerInventoryRequest.InputData,DropItemsInPlayerInventoryRequest.OutputData> {
 
 
-    public record InputData(UUID playerReceiver, Map<ItemID, Long> items)
+    public record InputData(UUID playerReceiver, Map<ItemID, Long> items, boolean forceDrop)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
                 UUIDUtil.STREAM_CODEC, p->p.playerReceiver,
                 ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap<ItemID, Long>::new), p -> p.items,
+                ByteBufCodecs.BOOL, p -> p.forceDrop,
                 InputData::new
         );
     }
@@ -49,10 +50,27 @@ public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<
      */
     public static CompletableFuture<Map<ItemID, Long>> sendToSlave(String slaveID, UUID playerReceiver, Map<ItemID, Long> items)
     {
-        InputData inputData = new InputData(playerReceiver, items);
+        return sendToSlave(slaveID, playerReceiver, items, false);
+    }
+
+    /**
+     *
+     * @param slaveID
+     * @param playerReceiver
+     * @param items
+     * @param forceDrop if true, items that don't fit in inventory are dropped at the player's feet
+     * @return a future containing the items that have not been dropped
+     */
+    public static CompletableFuture<Map<ItemID, Long>> sendToSlave(String slaveID, UUID playerReceiver, Map<ItemID, Long> items, boolean forceDrop)
+    {
+        InputData inputData = new InputData(playerReceiver, items, forceDrop);
         CompletableFuture<Map<ItemID, Long>> future = new CompletableFuture<>();
-        BankSystemNetworking.DROP_ITEMS_IN_PLAYER_INVENTORY_REQUEST.sendRequestToSlave(slaveID, inputData).thenAccept(response -> {
-            future.complete(response.items);
+        BankSystemNetworking.DROP_ITEMS_IN_PLAYER_INVENTORY_REQUEST.sendRequestToSlave(slaveID, inputData).whenComplete((response, ex) -> {
+            if (ex != null || response == null) {
+                future.complete(items); // Return all items as not-dropped
+            } else {
+                future.complete(response.items);
+            }
         });
         return future;
     }
@@ -63,6 +81,11 @@ public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<
     }
 
     public static Map<ItemID, Long> dropItems(MinecraftServer server, UUID playerReceiver, Map<ItemID, Long> itemsToDrop)
+    {
+        return dropItems(server, playerReceiver, itemsToDrop, false);
+    }
+
+    public static Map<ItemID, Long> dropItems(MinecraftServer server, UUID playerReceiver, Map<ItemID, Long> itemsToDrop, boolean forceDrop)
     {
         if(server == null)
         {
@@ -96,7 +119,23 @@ public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<
                     amount -= (nextStackSize-remaining);
                 }while(remaining != nextStackSize && amount > 0);
 
-                notDroppedItems.put(itemID, amount);
+                if(forceDrop && amount > 0)
+                {
+                    // Drop remaining items at the player's feet
+                    while(amount > 0)
+                    {
+                        nextStackSize = Math.min(stack.getMaxStackSize(), (int)amount);
+                        ItemStack dropStack = stack.copy();
+                        dropStack.setCount(nextStackSize);
+                        player.drop(dropStack, false);
+                        amount -= nextStackSize;
+                    }
+                }
+
+                if(amount > 0)
+                {
+                    notDroppedItems.put(itemID, amount);
+                }
             }
         }
         return notDroppedItems;
@@ -104,7 +143,7 @@ public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<
 
     public CompletableFuture<OutputData> handleOnSlaveServer(InputData input, @Nullable UUID playerSender) {
         MinecraftServer server = UtilitiesPlatform.getServer();
-        return CompletableFuture.completedFuture(new OutputData(input.playerReceiver, dropItems(server,  input.playerReceiver, input.items)));
+        return CompletableFuture.completedFuture(new OutputData(input.playerReceiver, dropItems(server, input.playerReceiver, input.items, input.forceDrop)));
     }
 
 

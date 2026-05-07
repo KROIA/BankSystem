@@ -114,11 +114,6 @@ public class AmountButtonGroup extends BankSystemGuiElement {
             sumWidth += maxWidth;
             addRemoveButtons.add(buttons);
         }
-        if(zeroButton != null) {
-            formatButton(zeroButton, fontScale, zeroColor);
-            addChild(zeroButton);
-        }
-
         setHeight((getTextHeight()+padding)*2);
         setWidth(sumWidth+padding*2);
     }

@@ -463,8 +463,13 @@ public class ATMScreen extends BankSystemGuiScreen {
             long amount = moneyElement.getAmount();
             ItemStack itemStack = moneyElement.getItemStack();
             MoneyItem moneyItem = (MoneyItem) itemStack.getItem();
-            amount *= moneyItem.worth(); // Assuming getValue() returns the value of the money item
-            sum += amount;
+            try {
+                amount = Math.multiplyExact(amount, moneyItem.worth());
+                sum = Math.addExact(sum, amount);
+            } catch (ArithmeticException e) {
+                sum = Long.MAX_VALUE;
+                break;
+            }
         }
         balanceView.updateSum(sum);
         balanceView.enableWarning(currentBalanceWeekVar < sum);

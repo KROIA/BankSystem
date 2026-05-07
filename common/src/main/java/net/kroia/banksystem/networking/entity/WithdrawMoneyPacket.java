@@ -255,7 +255,16 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             ItemStack itemStack = itemID.getStack();
             if(itemStack != null) {
                 if (itemStack.getItem() instanceof MoneyItem moneyItem) {
-                    toDepositMoney += moneyItem.worth() * entry.getValue();
+                    long worth = moneyItem.worth();
+                    long count = entry.getValue();
+                    if (worth <= 0 || count <= 0)
+                        continue;
+                    if (count > Long.MAX_VALUE / worth)
+                        continue; // skip: multiplication would overflow
+                    long product = worth * count;
+                    if (toDepositMoney > Long.MAX_VALUE - product)
+                        continue; // skip: running sum would overflow
+                    toDepositMoney += product;
                 }
             }
         }

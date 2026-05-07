@@ -22,7 +22,7 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
 
     public static class ItemData implements ServerSaveable
     {
-        private final ItemID itemID;
+        private ItemID itemID;
         private int amount;
         private int gridSpacesPerItemType = 1;
         private int usesGridSpaces = 1;
@@ -100,6 +100,7 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
             if (tag == null) {
                 return false; // Cannot load from a null tag
             }
+            itemID = new ItemID(ItemID.INVALID_ID);
             itemID.load(tag); // Assuming ItemID has a load method
             amount = tag.getInt("amount");
             gridSpacesPerItemType = tag.getInt("gridSpacesPerItemType");
@@ -147,42 +148,37 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
             else
             {
                 data.setAmount(0);
-                int willNeedGricCounts = (amount / 64 + (amount % 64 == 0 ? 0 : 1)) * data.getGridSpacesPerItemType();
+                int willNeedGridCounts = (amount / 64 + (amount % 64 == 0 ? 0 : 1)) * data.getGridSpacesPerItemType();
                 int freeSpaces = maxGridSpaces - usedGridSpaces;
-                if(freeSpaces < willNeedGricCounts)
+                if(freeSpaces < willNeedGridCounts)
                     return 0; // Not enough space in the grid to add this item type
-                int canAddStackCount = Math.min(freeSpaces, willNeedGricCounts / data.getGridSpacesPerItemType());
+                int canAddStackCount = Math.min(freeSpaces, willNeedGridCounts / data.getGridSpacesPerItemType());
                 added = Math.min(canAddStackCount * 64, amount);
                 data.setAmount(added);
                 items.put(id, data);
             }
         }
         else {
-            int wouldUseGridSpaces = usedGridSpaces -data.getUsedGridSpaces() + data.getWillUseGridSpaceIfAdded(amount);
-            if(usedGridSpaces <= maxGridSpaces)
+            int wouldUseGridSpaces = usedGridSpaces - data.getUsedGridSpaces() + data.getWillUseGridSpaceIfAdded(amount);
+            if(wouldUseGridSpaces <= maxGridSpaces)
             {
-                int willNeedGricCounts = (amount / 64 + (amount % 64 == 0 ? 0 : 1)) * data.getGridSpacesPerItemType();
-                int freeSpaces = maxGridSpaces - usedGridSpaces;
-                if(freeSpaces < willNeedGricCounts)
-                {
-                    // Not enough space in the grid to add this item type
-                    return 0;
-                }
-                int canAddStackCount = Math.min(freeSpaces, willNeedGricCounts / data.getGridSpacesPerItemType());
-                added = Math.min(canAddStackCount * 64, amount);
-                data.addAmount(added);
-            }
-            else if(wouldUseGridSpaces <= maxGridSpaces)
-            {
-                added = Math.min(data.getCapacityUntilNextGridElement(), amount);
+                added = amount;
                 data.addAmount(added);
             }
             else
             {
-                // Not enough space in the grid to add this item type
-                return 0;
+                int freeGridSlots = maxGridSpaces - usedGridSpaces;
+                int currentRemainder = data.getAmount() % 64;
+                int partialCapacity = (currentRemainder == 0) ? 0 : (64 - currentRemainder);
+                int fitsInPartial = Math.min(amount, partialCapacity);
+                int remaining = amount - fitsInPartial;
+                int fullStacksWeCanAdd = freeGridSlots / data.getGridSpacesPerItemType();
+                int fitsInNewStacks = fullStacksWeCanAdd * 64;
+                added = fitsInPartial + Math.min(remaining, fitsInNewStacks);
+                if(added <= 0)
+                    return 0;
+                data.addAmount(added);
             }
-
         }
 
         sum += added;

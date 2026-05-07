@@ -560,11 +560,11 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (userUUID == null) {
             return;
         }
-        hasChanges |= users.remove(userUUID) != null; // Remove user by UUID
-        if(personalBankOwner != null && personalBankOwner.getUUID().equals(userUUID)) {
-            personalBankOwner = null; // If the removed user is the personalBankOwnerData, set personalBankOwnerData to null
-            hasChanges = true;
+        // Prevent removing the personal bank owner from their own account
+        if (personalBankOwner != null && personalBankOwner.getUUID().equals(userUUID)) {
+            return;
         }
+        hasChanges |= users.remove(userUUID) != null; // Remove user by UUID
     }
     @Override
     public void removeUserAsync(UUID userUUID) {

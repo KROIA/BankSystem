@@ -170,7 +170,12 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                 return null;
             ItemID itemID = ItemID.createFromTag(tag.getCompound(TAGS.ITEM_ID));
             int targetAmount = tag.getInt(TAGS.TARGET_AMOUNT);
-            WithdrawCondition condition = WithdrawCondition.valueOf(tag.getString(TAGS.CONDITION));
+            WithdrawCondition condition;
+            try {
+                condition = WithdrawCondition.valueOf(tag.getString(TAGS.CONDITION));
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
             long conditionValue = tag.getLong(TAGS.CONDITION_VALUE);
             return new WithdrawOrder(itemID, targetAmount, condition, conditionValue);
         }
@@ -609,7 +614,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             return 0;
 
         ItemStack exampleStack = item.getStack();
-        if(exampleStack == null)
+        if(exampleStack == null || exampleStack.isEmpty())
             return 0;
 
         int stackSize = exampleStack.getMaxStackSize();

@@ -18,7 +18,10 @@ public enum BankPermission
         return (permissions & permission.getValue()) != 0;
     }
     public static boolean hasPermission(int permissions, int permission) {
-        return (permissions & permission) == permission;
+        return (permissions & permission) != 0;
+    }
+    public static boolean hasAllPermissions(int permissions, int requiredPermissions) {
+        return (permissions & requiredPermissions) == requiredPermissions;
     }
     public static boolean hasAnyPermission(int permissions, int permission) {
         return (permissions & permission) > 0;

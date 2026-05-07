@@ -157,11 +157,8 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
             }
             account.setUsers(userList);
         }
-        if(input.accountIcon == null)
+        if(input.accountIcon != null)
         {
-            account.setAccountIcon(null);
-        }
-        else {
             ItemID iconID = ItemID.getOrRegisterFromItemStackServerSide_direct(input.accountIcon);
             account.setAccountIcon(iconID);
         }

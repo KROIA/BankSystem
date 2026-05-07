@@ -117,15 +117,15 @@ public class NetworkingValidationTests extends TestSuite {
 
         // Using ordinal() = 0 in hasPermission means checking for permission bit 0,
         // which is not a valid permission bit. The hasPermission method does:
-        //   (permissions & permission) == permission
-        // With permission=0: (anything & 0) == 0 is always true.
-        // This means the permission check ALWAYS passes, bypassing security.
-        boolean anyPermissionPasses = BankPermission.hasPermission(0, depositOrdinal);
+        //   (permissions & permission) != 0
+        // With permission=0: (anything & 0) != 0 is always false.
+        // This means the permission check ALWAYS fails when ordinal is used instead of getValue.
+        boolean ordinalCheckResult = BankPermission.hasPermission(0, depositOrdinal);
         boolean correctCheckWithNoPerms = BankPermission.hasPermission(0, depositGetValue);
 
-        // With ordinal (0): any permission set passes
-        if (!anyPermissionPasses) {
-            return fail("hasPermission(0, 0) should return true (ordinal bug means always passes)");
+        // With ordinal (0): (0 & 0) != 0 is false -- correctly rejects
+        if (ordinalCheckResult) {
+            return fail("hasPermission(0, 0) should return false (no bits set)");
         }
 
         // With getValue (1): no permission should fail
@@ -141,7 +141,7 @@ public class NetworkingValidationTests extends TestSuite {
         }
 
         return pass("DEPOSIT.ordinal()=" + depositOrdinal + " != DEPOSIT.getValue()=" + depositGetValue + ". " +
-                "Using ordinal() in permission check means check always passes (permission & 0 == 0). " +
+                "Using ordinal() in permission check means check always fails (permission & 0 != 0 is false). " +
                 "Bug in DepositItemsInBankRequest.java:97 and WithdrawItemsFromBankRequest.java:97");
     }
 

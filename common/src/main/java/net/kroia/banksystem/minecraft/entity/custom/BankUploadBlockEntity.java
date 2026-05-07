@@ -290,12 +290,12 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         if(playerOwner == null || !hasItemsInInventory())
             return;
         CompletableFuture<IAsyncBankAccount> accountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(bankAccountNumber);
-        accountFuture.thenAcceptAsync(account->{
+        accountFuture.thenAccept(account->{
             if(account == null)
                 return;
 
             CompletableFuture<Boolean> hasPermissionFuture = account.hasPermissionAsync(playerOwner, BankPermission.DEPOSIT.getValue());
-            hasPermissionFuture.thenAcceptAsync(hasPermission->{
+            hasPermissionFuture.thenAccept(hasPermission->{
                 if(!hasPermission)
                 {
                     return; // Player does not have permission to deposit
@@ -321,7 +321,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                         ItemID itemID = ItemID.of(stack);
                         CompletableFuture<@Nullable IAsyncBank> itemBankFuture = account.getOrCreateBankAsync(itemID);
 
-                        itemBankFuture.thenAcceptAsync(itemBank->{
+                        itemBankFuture.thenAccept(itemBank->{
                             if(itemBank == null)
                             {
                                 if(dropIfNotBankable){
@@ -336,7 +336,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                 amount *= ((MoneyItem)stack.getItem()).worth();
                                 CompletableFuture<@Nullable IAsyncBank> moneyBankFuture = account.getOrCreateBankAsync(MoneyItem.getItemID());
                                 final long finalAmount = amount;
-                                moneyBankFuture.thenAcceptAsync(moneyBank->{
+                                moneyBankFuture.thenAccept(moneyBank->{
                                     if(moneyBank != null) {
                                         CompletableFuture<BankStatus> depositStatusFuture = moneyBank.depositAsync(finalAmount);
                                         depositStatusFuture.thenAccept(depositStatus->{

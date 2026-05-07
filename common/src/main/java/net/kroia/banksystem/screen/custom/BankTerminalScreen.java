@@ -119,7 +119,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             //saveAmount();
             return targetAmount;
         }
-        public void setTargetAmount(int amount)
+        public void setTargetAmount(long amount)
         {
             this.targetAmount = amount;
             if(targetAmount > wholeBankBalance) {
@@ -133,7 +133,12 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             amountBox.setText(targetAmount);
         }
         private void saveAmount() {
-            targetAmount = this.amountBox.getInt();
+            try {
+                String text = this.amountBox.getText();
+                targetAmount = (text == null || text.isEmpty()) ? 0 : Long.parseLong(text);
+            } catch (NumberFormatException e) {
+                targetAmount = 0;
+            }
             if(targetAmount > wholeBankBalance) {
                 targetAmount = wholeBankBalance;
             }
@@ -146,7 +151,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         private void addAmountFromButton(long amount)
         {
-            setTargetAmount((int)(getTargetAmount() + amount));
+            setTargetAmount(getTargetAmount() + amount);
         }
     }
 
@@ -348,7 +353,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             if(bankData != null)
                 sortedBankAccounts.add(new Pair<>(itemID, bankData));
         }
-        sortedBankAccounts.sort((a, b) -> Float.compare(b.getSecond().balance(), a.getSecond().balance()));
+        sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance(), a.getSecond().balance()));
 
         int x = 0;
         int y = 0;

@@ -77,7 +77,7 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
 
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
-        if (!level.isClientSide()) {
+        if (!state.is(newState.getBlock()) && !level.isClientSide()) {
             // Drop all items from the terminal inventories that have not been transfered to the bank
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof MoneyStockpileBlockEntity blockEntity) {

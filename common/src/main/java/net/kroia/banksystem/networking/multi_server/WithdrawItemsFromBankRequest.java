@@ -53,8 +53,12 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
     {
         WithdrawItemsFromBankRequest.InputData inputData = new WithdrawItemsFromBankRequest.InputData(bankAccount, executor, items);
         CompletableFuture<Map<ItemID, Long>> future = new CompletableFuture<>();
-        BankSystemNetworking.WITHDRAW_ITEMS_FROM_BANK_REQUEST.sendRequestToMaster(inputData).thenAccept(response -> {
-            future.complete(response.items);
+        BankSystemNetworking.WITHDRAW_ITEMS_FROM_BANK_REQUEST.sendRequestToMaster(inputData).whenComplete((response, ex) -> {
+            if (ex != null || response == null) {
+                future.complete(new HashMap<>()); // Return empty map on error
+            } else {
+                future.complete(response.items);
+            }
         });
         return future;
     }

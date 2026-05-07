@@ -450,10 +450,12 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         }
 
         // Only adds items that are not damaged or enchanted
-        public long addItem(ItemID ItemID, long amount)
+        public long addItem(ItemID itemID, long amount)
         {
             if(amount <=0)
                 return 0;
+            ItemStack templateStack = itemID.getStack();
+            if (templateStack == null || templateStack.isEmpty()) return 0;
             long orgAmount = amount;
             for (int i = 0; i < this.getContainerSize(); i++) {
                 if(amount <= 0)
@@ -462,9 +464,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
                 // If the slot is empty, it has space
                 if (stack.isEmpty()) {
-                    int stackSize = (int)Math.min(amount, 64);
+                    ItemStack itemStack = templateStack.copy();
+                    int stackSize = (int)Math.min(amount, itemStack.getMaxStackSize());
                     amount -= stackSize;
-                    ItemStack itemStack = ItemID.getStack().copy();
                     itemStack.setCount(stackSize);
                     this.setStackInSlot(i, itemStack);
                     continue;
@@ -472,10 +474,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     continue;
 
                 // Get the item's ResourceLocation
-                ItemID itemID = ItemID.of(stack);
+                ItemID stackItemID = ItemID.of(stack);
 
                 // Compare the ResourceLocation to the provided string
-                if (itemID.isValid() && itemID.equals(ItemID)) {
+                if (stackItemID.isValid() && stackItemID.equals(itemID)) {
                     // Check if the stack can fit the amount
                     int freeSpace = stack.getMaxStackSize() - stack.getCount();
                     int stackSize = (int)Math.min(amount, freeSpace);

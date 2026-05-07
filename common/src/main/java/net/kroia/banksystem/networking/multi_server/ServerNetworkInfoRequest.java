@@ -57,7 +57,10 @@ public class ServerNetworkInfoRequest extends BankSystemGenericRequest<ServerNet
 
         for(String slave : slaves)
         {
-            slavesFutures.add(ServerInfoRequest.sendRequest(slave));
+            // Wrap each slave future so a single failure doesn't cancel everything
+            slavesFutures.add(ServerInfoRequest.sendRequest(slave).exceptionally(ex ->
+                    new ServerInfoRequest.ServerInfo(false, false, "unknown", slave, "", 0, List.of(), "Error: " + ex.getMessage())
+            ));
         }
 
         Set<String> trustedSlaves = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getTrustedSlaveServers();
@@ -66,12 +69,17 @@ public class ServerNetworkInfoRequest extends BankSystemGenericRequest<ServerNet
                         .map(CompletableFuture::join)
                         .collect(Collectors.toList())
                 )
-                .thenAccept(results ->
+                .whenComplete((results, ex) ->
                 {
-                    for(ServerInfoRequest.ServerInfo info : results)
-                        info.isTrusted = trustedSlaves.contains(info.slaveID);
-                    results.addFirst(ServerInfoRequest.createInfo(UtilitiesPlatform.getServer()));
-                    future.complete(new OutputData(results));
+                    if (ex != null || results == null) {
+                        // Fallback: return just the master info
+                        future.complete(new OutputData(List.of(ServerInfoRequest.createInfo(UtilitiesPlatform.getServer()))));
+                    } else {
+                        for (ServerInfoRequest.ServerInfo info : results)
+                            info.isTrusted = trustedSlaves.contains(info.slaveID);
+                        results.addFirst(ServerInfoRequest.createInfo(UtilitiesPlatform.getServer()));
+                        future.complete(new OutputData(results));
+                    }
                 });
 
         return future;

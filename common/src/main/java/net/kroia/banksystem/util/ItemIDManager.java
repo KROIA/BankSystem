@@ -22,6 +22,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class ItemIDManager implements ServerSaveable {
 
@@ -29,7 +30,7 @@ public class ItemIDManager implements ServerSaveable {
 
     private static ConcurrentHashMap<ItemID, ItemStack> singlePlayerServerBackupOnPlayerLeave = null;
     private static Map<ItemStack, CompletableFuture<ItemID>> pendingItemIDs = new ConcurrentHashMap<>();
-    private static List<Pair<List<ItemStack>, CompletableFuture<List<ItemID>>>> pendingItemIDGroups = new ArrayList<>();
+    private static List<Pair<List<ItemStack>, CompletableFuture<List<ItemID>>>> pendingItemIDGroups = new CopyOnWriteArrayList<>();
 
     public static void clear()
     {
@@ -170,30 +171,29 @@ public class ItemIDManager implements ServerSaveable {
     {
         List<ItemID> ids = new ArrayList<>();
         Map<ItemID, ItemStack> newItemIDMap = new ConcurrentHashMap<>();
-        for(ItemStack stack : itemStacks)
-        {
-            // Search the entire list to check if the same item stack already is registered
-            ItemID id = getItemID(stack);
-            if(id != null && id.isValid())
-            {
-                ids.add(id);
-                continue;
+        synchronized (itemIDMap) {
+            for (ItemStack stack : itemStacks) {
+                // Search the entire list to check if the same item stack already is registered
+                ItemID id = getItemID(stack);
+                if (id != null && id.isValid()) {
+                    ids.add(id);
+                    continue;
+                }
+
+                if (stack.isEmpty()) {
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
+
+                short newID = (short) (itemIDMap.size() + 1);
+
+                ItemStack cpy = stack.copy();
+                String name = ItemUtilities.getItemIDStr(cpy.getItem());
+                id = new ItemID(newID, name);
+                cpy.setCount(1);
+                newItemIDMap.put(id, cpy);
+                itemIDMap.put(id, cpy);
             }
-
-            if(stack.isEmpty())
-            {
-                ids.add(ItemID.INVALID_ID);
-                continue;
-            }
-
-            short newID = (short)(itemIDMap.size()+1);
-
-            ItemStack cpy = stack.copy();
-            String name = ItemUtilities.getItemIDStr(cpy.getItem());
-            id = new ItemID(newID, name);
-            cpy.setCount(1);
-            newItemIDMap.put(id, cpy);
-            itemIDMap.put(id, cpy);
         }
         if(!newItemIDMap.isEmpty())
             onNewItemAdded(newItemIDMap);

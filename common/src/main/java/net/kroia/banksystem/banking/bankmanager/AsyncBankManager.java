@@ -24,6 +24,7 @@ import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingReques
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionOutputData;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.minecraft.core.UUIDUtil;
@@ -327,7 +328,11 @@ public class AsyncBankManager implements IAsyncBankManager {
                 case FunctionType.GetBankManagerBankAccountsDataAsync -> OutputData.of(input.function, bankManager.getBankManagerBankAccountsData());
                 case FunctionType.SetBanksystemAdminModeAsync -> {
                     ParamGroup_UUID_bool param = input.decodeParams();
-                    yield OutputData.of(input.function, bankManager.setBanksystemAdminMode(param.uuid, param.bool));
+                    ServerPlayer serverPlayer = ServerPlayerUtilities.getOnlinePlayer(playerSender);
+                    if(serverPlayer != null && serverPlayer.hasPermissions(2)) {
+                        yield OutputData.of(input.function, bankManager.setBanksystemAdminMode(param.uuid, param.bool));
+                    }
+                    yield OutputData.of(input.function, false);
                 }
                 case FunctionType.IsBanksystemAdminAsync -> OutputData.of(input.function, bankManager.isBanksystemAdmin(input.decodeParams()));
                 case FunctionType.IsSlaveServerTrustedAsync -> OutputData.of(input.function, bankManager.isSlaveServerTrusted(input.decodeParams()));
@@ -522,12 +527,12 @@ public class AsyncBankManager implements IAsyncBankManager {
                      FunctionType.GetPersonalBankAccountDataAsync_1,
                      FunctionType.GetPersonalBankAccountDataAsync_2,
                      FunctionType.UserHasPersonalBankAccountAsync,
-                     FunctionType.DeleteBankAccountAsync,
+                     //FunctionType.DeleteBankAccountAsync,
                      FunctionType.PersonalBankExistsAsync_1,
                      FunctionType.PersonalBankExistsAsync_2,
                      FunctionType.IsItemIDAllowedAsync,
-                     FunctionType.AllowItemIDAsync,
-                     FunctionType.DisallowItemIDAsync,
+                     //FunctionType.AllowItemIDAsync,
+                     //FunctionType.DisallowItemIDAsync,
                      FunctionType.IsItemIDNotRemovableAsync,
                      FunctionType.IsItemIDBlacklistedAsync,
                      FunctionType.GetItemFractionScaleFactorAsync,

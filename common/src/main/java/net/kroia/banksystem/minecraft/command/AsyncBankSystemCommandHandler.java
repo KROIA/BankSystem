@@ -801,13 +801,17 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
     private static void handleResponse(CompletableFuture<OutputData> response, UUID executor)
     {
         response.whenComplete((result, throwable) -> {
-            boolean success = throwable == null && (Boolean)result.decodeResult();
             String playerName = Request.tryGetPlayerName(executor);
-            String text = "Async command execution result for command "+result.function.name()+" from player: "+playerName+" Result: "+(success?"Success":"Failure");
-            if(throwable!=null)
+            if(throwable != null)
+            {
+                String text = "Async command execution failed for player: "+playerName;
                 error(text, throwable);
-            else
-                info(text);
+                ServerPlayerUtilities.printToClientConsole(executor, text);
+                return;
+            }
+            boolean success = (Boolean)result.decodeResult();
+            String text = "Async command execution result for command "+result.function.name()+" from player: "+playerName+" Result: "+(success?"Success":"Failure");
+            info(text);
 
             if(!success)
             {

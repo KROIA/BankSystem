@@ -7,6 +7,8 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 
+import java.util.concurrent.ConcurrentLinkedQueue;
+
 public class BankAccountChangeStream extends BankSystemGenericStream<BankAccountChangeStream.InputData, BankAccountChangeStream.OutputData> {
     public record InputData(int accountNr)
     {
@@ -24,11 +26,11 @@ public class BankAccountChangeStream extends BankSystemGenericStream<BankAccount
         );
     }
 
-    volatile OutputData nextPacket = null;
+    private final ConcurrentLinkedQueue<OutputData> pendingPackets = new ConcurrentLinkedQueue<>();
 
     private void onChangesCallback(BankAccountData changeData)
     {
-        nextPacket = new OutputData(changeData);
+        pendingPackets.add(new OutputData(changeData));
     }
 
     @Override
@@ -40,11 +42,13 @@ public class BankAccountChangeStream extends BankSystemGenericStream<BankAccount
     public void onStopStreamSendingOnServer() {
         InputData inputData = getContextData();
         getBankManager().unsubscribeBankChanges(inputData.accountNr, this::onChangesCallback);
+        pendingPackets.clear();
     }
 
     @Override
     protected void updateOnServer(){
-        if(nextPacket != null)
+        // Drain all queued events so rapid changes are not delayed across ticks
+        while(!pendingPackets.isEmpty())
         {
             sendPacket();
         }
@@ -52,9 +56,7 @@ public class BankAccountChangeStream extends BankSystemGenericStream<BankAccount
 
     @Override
     public OutputData provideStreamPacketOnServer()  {
-        OutputData outputData = nextPacket;
-        nextPacket = null;
-        return outputData;
+        return pendingPackets.poll();
     }
 
 

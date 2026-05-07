@@ -24,7 +24,7 @@ public class LifecycleTests extends TestSuite {
 
     @Override
     public void registerTests() {
-        addTest("bankAccountChangeStream_nextPacket_is_volatile", this::testNextPacketIsVolatile);
+        addTest("bankAccountChangeStream_pendingPackets_is_thread_safe", this::testPendingPacketsIsThreadSafe);
         addTest("bankSystemMod_init_is_thread_safe", this::testInitIsThreadSafe);
         addTest("asyncFunctionData_does_not_leak_buffers", this::testAsyncFunctionDataDoesNotLeakBuffers);
     }
@@ -35,21 +35,17 @@ public class LifecycleTests extends TestSuite {
     @Override
     public void teardown() {}
 
-    /**
-     * Regression for Issue #46: nextPacket is written by the change-callback thread
-     * and read by the server tick thread. Without volatile, the tick thread may never
-     * see updates or see them reordered.
-     */
-    private TestResult testNextPacketIsVolatile() {
+    private TestResult testPendingPacketsIsThreadSafe() {
         try {
-            Field field = BankAccountChangeStream.class.getDeclaredField("nextPacket");
-            if (!Modifier.isVolatile(field.getModifiers())) {
-                return fail("BankAccountChangeStream.nextPacket is not volatile — " +
-                        "cross-thread visibility is broken (Issue #46)");
+            Field field = BankAccountChangeStream.class.getDeclaredField("pendingPackets");
+            Class<?> type = field.getType();
+            if (!java.util.concurrent.ConcurrentLinkedQueue.class.isAssignableFrom(type)) {
+                return fail("BankAccountChangeStream.pendingPackets is " + type.getSimpleName() +
+                        ", expected ConcurrentLinkedQueue for thread-safe cross-thread access");
             }
-            return pass("BankAccountChangeStream.nextPacket is correctly declared volatile");
+            return pass("BankAccountChangeStream.pendingPackets is ConcurrentLinkedQueue — thread-safe");
         } catch (NoSuchFieldException e) {
-            return fail("Field 'nextPacket' not found on BankAccountChangeStream: " + e.getMessage());
+            return fail("Field 'pendingPackets' not found on BankAccountChangeStream: " + e.getMessage());
         }
     }
 
