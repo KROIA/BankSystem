@@ -35,4 +35,12 @@ public class BankSystemTestCategories {
     public static final TestCategory DATA_PERSISTENCE = new TestCategory(
             "data_persistence", "Save/load data persistence tests",
             TestCategory.ServerType.MASTER_ONLY, true);
+
+    public static final TestCategory SERIALIZATION = new TestCategory(
+            "serialization", "Codec round-trip serialization tests",
+            TestCategory.ServerType.BOTH, false);
+
+    public static final TestCategory LIFECYCLE = new TestCategory(
+            "lifecycle", "Memory, threading, and lifecycle regression tests",
+            TestCategory.ServerType.BOTH, false);
 }

@@ -257,9 +257,14 @@ public class MultiServerSecurityTests extends TestSuite {
             return fail("Test account missing");
         }
         ItemID dirt = ItemID.of(Items.DIRT.getDefaultInstance());
+        boolean wasAllowed = manager.isItemIDAllowed(dirt);
+        if (!wasAllowed) {
+            manager.allowItemID(dirt);
+        }
         // Seed the bank with a known balance, then attempt a negative deposit.
         var preBank = account.getOrCreateBank(dirt);
         if (preBank == null) {
+            if (!wasAllowed) manager.disallowItemID(dirt);
             return fail("Failed to create test bank for DIRT");
         }
         preBank.deposit(100L);
@@ -281,6 +286,9 @@ public class MultiServerSecurityTests extends TestSuite {
         // Cleanup
         preBank.withdraw(balanceAfter);
         account.removeBank(dirt);
+        if (!wasAllowed) {
+            manager.disallowItemID(dirt);
+        }
         return pass("Negative deposit was clamped — balance unchanged at " + balanceBefore);
     }
 }

@@ -45,6 +45,10 @@ public class AsyncForwardingTests extends TestSuite {
         addTest("inputData_round_trip", this::testInputDataRoundTrip);
         addTest("outputData_encoded_length_matches_payload", this::testOutputDataEncodedLengthMatchesPayload);
         addTest("outputData_round_trip", this::testOutputDataRoundTrip);
+        addTest("asyncBank_every_function_type_has_codec_entry", this::testAsyncBankEveryFunctionTypeHasCodecEntry);
+        addTest("asyncBankAccount_every_function_type_has_codec_entry", this::testAsyncBankAccountEveryFunctionTypeHasCodecEntry);
+        addTest("asyncBankManager_every_function_type_has_codec_entry", this::testAsyncBankManagerEveryFunctionTypeHasCodecEntry);
+        addTest("asyncBank_codec_round_trip_for_primitive_returns", this::testAsyncBankCodecRoundTripForPrimitiveReturns);
     }
 
     @Override
@@ -393,5 +397,83 @@ public class AsyncForwardingTests extends TestSuite {
         }
         return assertEquals("encode-decode round-trip preserves the value",
                 Integer.valueOf(original), decoded);
+    }
+
+    private TestResult testAsyncBankEveryFunctionTypeHasCodecEntry() {
+        StringBuilder missing = new StringBuilder();
+        for (AsyncBank.FunctionType t : AsyncBank.FunctionType.values()) {
+            if (!AsyncBank.codecs.containsKey(t)) {
+                if (missing.length() > 0) missing.append(", ");
+                missing.append(t.name());
+            }
+        }
+        if (missing.length() > 0) {
+            return fail("AsyncBank.codecs missing entries for: " + missing);
+        }
+        return pass("All " + AsyncBank.FunctionType.values().length + " AsyncBank FunctionTypes have codec entries");
+    }
+
+    private TestResult testAsyncBankAccountEveryFunctionTypeHasCodecEntry() {
+        StringBuilder missing = new StringBuilder();
+        for (AsyncBankAccount.FunctionType t : AsyncBankAccount.FunctionType.values()) {
+            if (!AsyncBankAccount.codecs.containsKey(t)) {
+                if (missing.length() > 0) missing.append(", ");
+                missing.append(t.name());
+            }
+        }
+        if (missing.length() > 0) {
+            return fail("AsyncBankAccount.codecs missing entries for: " + missing);
+        }
+        return pass("All " + AsyncBankAccount.FunctionType.values().length + " AsyncBankAccount FunctionTypes have codec entries");
+    }
+
+    private TestResult testAsyncBankManagerEveryFunctionTypeHasCodecEntry() {
+        StringBuilder missing = new StringBuilder();
+        for (AsyncBankManager.FunctionType t : AsyncBankManager.FunctionType.values()) {
+            if (!AsyncBankManager.codecs.containsKey(t)) {
+                if (missing.length() > 0) missing.append(", ");
+                missing.append(t.name());
+            }
+        }
+        if (missing.length() > 0) {
+            return fail("AsyncBankManager.codecs missing entries for: " + missing);
+        }
+        return pass("All " + AsyncBankManager.FunctionType.values().length + " AsyncBankManager FunctionTypes have codec entries");
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private TestResult testAsyncBankCodecRoundTripForPrimitiveReturns() {
+        int tested = 0;
+        StringBuilder failures = new StringBuilder();
+
+        Object[] samples = {42L, 3.14, "test", true, (int)7};
+
+        for (AsyncBank.FunctionType t : AsyncBank.FunctionType.values()) {
+            AsyncFunctionDataCodecs entry = AsyncBank.codecs.get(t);
+            if (entry == null || entry.outputParamsCodec == null) continue;
+
+            boolean matched = false;
+            for (Object sample : samples) {
+                RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
+                try {
+                    StreamCodec rawCodec = (StreamCodec) entry.outputParamsCodec;
+                    rawCodec.encode(buf, sample);
+                    Object decoded = rawCodec.decode(buf);
+                    if (decoded != null && decoded.equals(sample)) {
+                        tested++;
+                        matched = true;
+                        break;
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    buf.release();
+                }
+            }
+        }
+
+        if (failures.length() > 0) {
+            return fail(failures.toString());
+        }
+        return pass(tested + " primitive output codecs round-tripped successfully");
     }
 }

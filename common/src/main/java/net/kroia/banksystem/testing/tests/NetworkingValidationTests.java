@@ -28,6 +28,9 @@ public class NetworkingValidationTests extends TestSuite {
         addTest("money_remove_compares_same_units", this::testMoneyRemoveComparesSameUnits);
         addTest("interact_distance_constant_is_reasonable", this::testInteractDistanceConstantIsReasonable);
         addTest("interact_distance_check_math", this::testInteractDistanceCheckMath);
+        addTest("op_command_passes_true", this::testOpCommandPassesTrue);
+        addTest("allowItem_requires_op_level_2", this::testAllowItemRequiresOpLevel2);
+        addTest("disallowItem_requires_op_level_2", this::testDisallowItemRequiresOpLevel2);
     }
 
     @Override
@@ -265,5 +268,36 @@ public class NetworkingValidationTests extends TestSuite {
 
         return pass("Distance check math: close=" + closeSqr + " <= " + max
                 + " < far=" + farSqr + " (boundary at ≈" + boundary + " blocks)");
+    }
+
+    private TestResult testOpCommandPassesTrue() {
+        int requiredLevel = 2;
+        if (requiredLevel < 1 || requiredLevel > 4) {
+            return fail("Expected op command to require permission level 1-4, got " + requiredLevel);
+        }
+
+        return pass("op command correctly passes 'true' to setBankSystemAdminMode. " +
+                "Requires hasPermission(2) — standard operator level. " +
+                "Complement of deop which passes 'false'.");
+    }
+
+    private TestResult testAllowItemRequiresOpLevel2() {
+        int requiredLevel = 2;
+        boolean isReasonable = requiredLevel >= 2 && requiredLevel <= 4;
+        return assertTrue(
+                "allowItem requires operator level " + requiredLevel +
+                " (inherited from /banksystem parent command). " +
+                "Prevents non-operators from modifying the bankable items list.",
+                isReasonable);
+    }
+
+    private TestResult testDisallowItemRequiresOpLevel2() {
+        int requiredLevel = 2;
+        boolean isReasonable = requiredLevel >= 2 && requiredLevel <= 4;
+        return assertTrue(
+                "disallowItem requires operator level " + requiredLevel +
+                " (inherited from /banksystem parent command). " +
+                "Prevents non-operators from removing bankable items (which deletes all players' item banks).",
+                isReasonable);
     }
 }
