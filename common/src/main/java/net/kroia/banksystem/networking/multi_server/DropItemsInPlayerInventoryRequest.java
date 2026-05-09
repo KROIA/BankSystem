@@ -113,7 +113,7 @@ public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<
                 int nextStackSize = 0;
                 do
                 {
-                    nextStackSize = Math.min(stack.getMaxStackSize(), (int)amount);
+                    nextStackSize = (int)Math.min(amount, stack.getMaxStackSize());
                     stack.setCount(nextStackSize);
                     remaining = ServerPlayerUtilities.addToPlayerInventory(player, stack);
                     amount -= (nextStackSize-remaining);
@@ -124,7 +124,7 @@ public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<
                     // Drop remaining items at the player's feet
                     while(amount > 0)
                     {
-                        nextStackSize = Math.min(stack.getMaxStackSize(), (int)amount);
+                        nextStackSize = (int)Math.min(amount, stack.getMaxStackSize());
                         ItemStack dropStack = stack.copy();
                         dropStack.setCount(nextStackSize);
                         player.drop(dropStack, false);

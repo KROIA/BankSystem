@@ -278,6 +278,7 @@ public class ATMScreen extends BankSystemGuiScreen {
     private final ListView moneyListView;
 
     private static ATMScreen instance = null;
+    private static boolean tickListenerRegistered = false;
     private static long lastTickCount = 0;
     private long currentBalanceWeekVar = 0;
     private int currentSelectedAccountNumber = 0; // This is not used in the ATM screen, but kept for consistency with other screens
@@ -329,7 +330,10 @@ public class ATMScreen extends BankSystemGuiScreen {
         rootElement.addChild(receiveButton);
 
         lastTickCount = System.currentTimeMillis();
-        TickEvent.PLAYER_POST.register(ATMScreen::onClientTick);
+        if (!tickListenerRegistered) {
+            TickEvent.PLAYER_POST.register(ATMScreen::onClientTick);
+            tickListenerRegistered = true;
+        }
         instance = this;
         updateBalanceView();
         calculateSum();
@@ -354,8 +358,6 @@ public class ATMScreen extends BankSystemGuiScreen {
     public void onClose() {
         super.onClose();
         instance = null;
-        // Unregister the event listener when the screen is closed
-        TickEvent.PLAYER_POST.unregister(ATMScreen::onClientTick);
     }
 
     @Override

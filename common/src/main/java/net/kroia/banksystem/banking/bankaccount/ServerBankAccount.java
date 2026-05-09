@@ -512,7 +512,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         }
         BankUser existingUser = users.get(user.getUUID());
         if (existingUser != null) {
-            existingUser.setPermission(permission); // Update existing user's permission
+            existingUser.setPermission(permission);
+            hasChanges = true;
             return;
         }
         users.put(user.getUUID(), new BankUser(user, permission)); // Add new user
@@ -672,8 +673,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         List<ItemID> emptyBanks = new ArrayList<>();
         for (Map.Entry<ItemID, ServerBank> entry : banks.entrySet()) {
             ServerBank bank = entry.getValue();
-            if (bank.getTotalBalance() <= 0) {
-                emptyBanks.add(entry.getKey()); // Collect empty banks
+            if (bank.getTotalBalance() <= 0 && !BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isItemIDNotRemovable(entry.getKey())) {
+                emptyBanks.add(entry.getKey());
             }
         }
         for (ItemID itemID : emptyBanks) {

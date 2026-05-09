@@ -97,7 +97,7 @@ public class AmountButtonGroup extends BankSystemGuiElement {
                     onAddValue.accept(buttons.amount);
                     updateButtons();
                 });
-                maxWidth += Math.max(maxWidth, buttons.addButton.getWidth());
+                maxWidth = Math.max(maxWidth, buttons.addButton.getWidth());
                 addChild(buttons.addButton);
             }
             if(buttons.removeButton != null)
@@ -108,7 +108,7 @@ public class AmountButtonGroup extends BankSystemGuiElement {
                     onAddValue.accept(-buttons.amount);
                     updateButtons();
                 });
-                maxWidth += Math.max(maxWidth, buttons.removeButton.getWidth());
+                maxWidth = Math.max(maxWidth, buttons.removeButton.getWidth());
                 addChild(buttons.removeButton);
             }
             sumWidth += maxWidth;

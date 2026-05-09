@@ -232,6 +232,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
 
     public void redstoneSignalChanged(boolean isPowered) {
         this.sendingEnabled = isPowered;
+        if (level == null) return;
         BlockState blockState = level.getBlockState(worldPosition);
         if (blockState.getBlock() instanceof BankUploadBlock) {
             level.setBlock(worldPosition, blockState.setValue(BankUploadBlock.SENDING_STATE, (this.sendingEnabled?BankUploadBlock.SendingState.SENDING:BankUploadBlock.SendingState.NOT_SENDING)), 3);
@@ -318,6 +319,9 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             }
                         }
 
+                        // Clear the slot immediately to prevent double-read on next tick
+                        inventory.setItem(i, ItemStack.EMPTY);
+
                         ItemID itemID = ItemID.of(stack);
                         CompletableFuture<@Nullable IAsyncBank> itemBankFuture = account.getOrCreateBankAsync(itemID);
 
@@ -326,7 +330,8 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             {
                                 if(dropIfNotBankable){
                                     dropItem(stack);
-                                    inventory.setItem(finalI, ItemStack.EMPTY);
+                                } else {
+                                    inventory.setItem(finalI, stack); // Restore item on failure
                                 }
                                 return;
                             }
@@ -340,12 +345,14 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                     if(moneyBank != null) {
                                         CompletableFuture<BankStatus> depositStatusFuture = moneyBank.depositAsync(finalAmount);
                                         depositStatusFuture.thenAccept(depositStatus->{
-                                            if(depositStatus== BankStatus.SUCCESS)
-                                                inventory.setItem(finalI, ItemStack.EMPTY);
+                                            if(depositStatus != BankStatus.SUCCESS) {
+                                                inventory.setItem(finalI, stack); // Restore item on failure
+                                            }
                                         });
                                     }else if(dropIfNotBankable){
                                         dropItem(stack);
-                                        inventory.setItem(finalI, ItemStack.EMPTY);
+                                    } else {
+                                        inventory.setItem(finalI, stack); // Restore item on failure
                                     }
                                 });
                             }
@@ -353,8 +360,9 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             {
                                 CompletableFuture<BankStatus> depositStatusFuture = itemBank.depositRealAsync((double)amount);
                                 depositStatusFuture.thenAccept(depositStatus->{
-                                    if(depositStatus == BankStatus.SUCCESS)
-                                        inventory.setItem(finalI, ItemStack.EMPTY);
+                                    if(depositStatus != BankStatus.SUCCESS) {
+                                        inventory.setItem(finalI, stack); // Restore item on failure
+                                    }
                                 });
                             }
 

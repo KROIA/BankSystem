@@ -377,7 +377,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
                      FunctionType.GetPersonalBankOwnerDataAsync,
                      //FunctionType.SetAccountNameAsync,
                      FunctionType.GetAccountNameAsync,
-                     FunctionType.SetAccountIconAsync,
+                     //FunctionType.SetAccountIconAsync,
                      FunctionType.GetAccountIconAsync,
                      FunctionType.GetPermissionAsync,
                      FunctionType.HasPermissionAsync,

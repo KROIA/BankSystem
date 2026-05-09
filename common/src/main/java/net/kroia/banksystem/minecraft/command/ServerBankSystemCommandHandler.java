@@ -28,7 +28,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
-import java.util.Objects;
+
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -238,7 +238,12 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         ISyncServerBank bank = bankManager.getOrCreatePersonalBank(executor, MoneyItem.getItemID());
         if(bank == null)
         {
-            String playerName = Objects.requireNonNull(bankManager.getUserByUUID(executor)).getName();
+            User user = bankManager.getUserByUUID(executor);
+            if (user == null) {
+                sendMessage(executor, BankSystemTextMessages.getUserNotFoundMessage(executor.toString()));
+                return false;
+            }
+            String playerName = user.getName();
             sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(playerName, MoneyItem.getName()));
             return false;
         }
@@ -325,7 +330,12 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
         bank.setRealBalance(amount);
-        UUID bankOwner = Objects.requireNonNull(bankManager.getUserByName(userName)).getUUID();
+        User owner = bankManager.getUserByName(userName);
+        if (owner == null) {
+            sendMessage(executor, BankSystemTextMessages.getUserNotFoundMessage(userName));
+            return true;
+        }
+        UUID bankOwner = owner.getUUID();
         String message = BankSystemTextMessages.getSetBalanceMessage(bank.getFormattedAmount(amount), MoneyItem.getName(), userName);
         sendMessage(executor, message);
         if(!executor.equals(bankOwner))
@@ -406,7 +416,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         }
         BankStatus status = fromBank.transfer(fromBank.convertToRawAmount(amount), toBank);
         if(status != BankStatus.SUCCESS) {
-            if (fromBank.getBalance() < amount)
+            if (fromBank.getRealBalance() < amount)
                 sendMessage(executor, BankSystemTextMessages.getNotEnoughMoneyForTransfer(fromUserName, toUserName, fromBank.getFormattedAmount(amount), MoneyItem.getName()));
             else
                 sendMessage(executor, BankSystemTextMessages.getTransferFailedMessage(fromUserName, toUserName, fromBank.getFormattedAmount(amount), MoneyItem.getName(), status.toString()));
@@ -478,7 +488,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
         bankUser.setEnableBankNotifications(false);
-        sendMessage(executor, BankSystemTextMessages.getBankUserNotificationEnabledMessage());
+        sendMessage(executor, BankSystemTextMessages.getBankUserNotificationDisabledMessage());
         return true;
     }
     @Override

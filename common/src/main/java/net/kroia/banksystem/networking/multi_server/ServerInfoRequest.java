@@ -128,6 +128,8 @@ public class ServerInfoRequest extends BankSystemGenericRequest<ServerInfoReques
 
     public static ServerInfo createInfo(MinecraftServer server)
     {
+        if (server == null)
+            return new ServerInfo(false, false, "unknown", "", "", 0, List.of(), "Server unavailable");
         String customText = "";
         if(MultiServerManager.isInUse())
         {

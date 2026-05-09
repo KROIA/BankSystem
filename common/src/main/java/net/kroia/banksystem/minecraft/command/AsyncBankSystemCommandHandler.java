@@ -673,6 +673,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
             }
             isAdmin.thenAccept(bool -> {
                 ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
+                if (player == null) { future.complete(false); return; }
                 SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), result.getAccountNumberAsync(), bool);
                 future.complete(true);
             });
@@ -705,6 +706,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
                         return;
                     }
                     ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
+                    if (player == null) { future.complete(false); return; }
                     SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), result.getAccountNumberAsync(), isAdminResult);
                     future.complete(true);
                 });
@@ -740,6 +742,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
                         return;
                     }
                     ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
+                    if (player == null) { future.complete(false); return; }
                     SyncOpenGUIPacket.send_openBankAccountScreen(player, player.getUUID(), result.getAccountNumberAsync(), isAdminResult);
                     future.complete(true);
                 });

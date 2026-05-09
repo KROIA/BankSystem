@@ -60,7 +60,8 @@ public class TerminalBlock extends Block {
         {
             if(!pLevel.isClientSide())
             {
-                MultiServerUtils.canInteractWithBankSystem(pPlayer.getUUID());
+                if (!MultiServerUtils.canInteractWithBankSystem(pPlayer.getUUID()))
+                    return ItemInteractionResult.FAIL;
             }
 
             // Open the GUI
@@ -72,7 +73,8 @@ public class TerminalBlock extends Block {
     protected InteractionResult useWithoutItem(BlockState pState, Level pLevel, BlockPos pPos, Player pPlayer, BlockHitResult pHitResult) {
         if(!pLevel.isClientSide())
         {
-            MultiServerUtils.canInteractWithBankSystem(pPlayer.getUUID());
+            if (!MultiServerUtils.canInteractWithBankSystem(pPlayer.getUUID()))
+                return InteractionResult.FAIL;
         }
         openGui(pState, pLevel, pPos, pPlayer, pPlayer.getUsedItemHand(), pHitResult);
         return InteractionResult.PASS;

@@ -522,6 +522,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
         @Override
         public boolean save(CompoundTag tag) {
+            if (pRegistries == null) return false;
             ListTag inventoryTag = new ListTag();
             for(int i = 0; i < inventory.size(); i++)
             {
@@ -994,28 +995,70 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             return;
                         }
 
-                        //long withdrawAmount = amount;
                         final long withdrawAmountFinal = BankManager.convertToRawAmountStatic(amount);
 
-                        CompletableFuture<Long> balanceFuture = bank.getBalanceAsync();
-
-                        balanceFuture.thenAccept(balance -> {
-                            long withdrawAmount = Math.min(withdrawAmountFinal, balance);
-                            if (withdrawAmount > 0) {
-                                long itemsToDepositInInventory = (long)Math.floor(BankManager.convertToRealAmountStatic(withdrawAmount));
-                                long addedAmount = inventory.addItem(itemID, itemsToDepositInInventory);
-                                if (addedAmount > 0) {
-
-                                    CompletableFuture<BankStatus> withdrawResult = bank.withdrawAsync(BankManager.convertToRawAmountStatic(addedAmount));
-                                    withdrawResult.thenAccept(withdraw -> {
-                                        if (withdraw != BankStatus.SUCCESS) {
-                                            // error
-                                            error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(BankManager.convertToRawAmountStatic(addedAmount)) +
-                                                    " " + itemID + " from bank account of user " + playerID +" : "+withdraw);
-                                            inventory.removeItem(itemID, addedAmount);
+                        // Use lock-withdraw pattern to prevent TOCTOU race
+                        CompletableFuture<BankStatus> lockStatusFuture = bank.lockAmountAsync(withdrawAmountFinal);
+                        lockStatusFuture.thenAccept(lockStatus -> {
+                            if (lockStatus != BankStatus.SUCCESS) {
+                                // Could not lock the full amount; try locking what's available
+                                CompletableFuture<Long> balanceFuture = bank.getBalanceAsync();
+                                balanceFuture.thenAccept(balance -> {
+                                    long reducedAmount = Math.min(withdrawAmountFinal, balance);
+                                    if (reducedAmount <= 0)
+                                        return;
+                                    CompletableFuture<BankStatus> retryLockFuture = bank.lockAmountAsync(reducedAmount);
+                                    retryLockFuture.thenAccept(retryLockStatus -> {
+                                        if (retryLockStatus != BankStatus.SUCCESS)
+                                            return;
+                                        long itemsToDeposit = (long) Math.floor(BankManager.convertToRealAmountStatic(reducedAmount));
+                                        long addedAmount = inventory.addItem(itemID, itemsToDeposit);
+                                        if (addedAmount > 0) {
+                                            long rawToWithdraw = BankManager.convertToRawAmountStatic(addedAmount);
+                                            CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
+                                            withdrawResult.thenAccept(withdraw -> {
+                                                if (withdraw != BankStatus.SUCCESS) {
+                                                    error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
+                                                            " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
+                                                    inventory.removeItem(itemID, addedAmount);
+                                                    bank.unlockAmountAsync(reducedAmount);
+                                                } else {
+                                                    // Unlock any remainder that was not withdrawn
+                                                    long remainder = reducedAmount - rawToWithdraw;
+                                                    if (remainder > 0)
+                                                        bank.unlockAmountAsync(remainder);
+                                                    setChanged();
+                                                }
+                                            });
+                                        } else {
+                                            bank.unlockAmountAsync(reducedAmount);
                                         }
                                     });
-                                }
+                                });
+                                return;
+                            }
+                            // Lock succeeded for the full amount
+                            long itemsToDeposit = (long) Math.floor(BankManager.convertToRealAmountStatic(withdrawAmountFinal));
+                            long addedAmount = inventory.addItem(itemID, itemsToDeposit);
+                            if (addedAmount > 0) {
+                                long rawToWithdraw = BankManager.convertToRawAmountStatic(addedAmount);
+                                CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
+                                withdrawResult.thenAccept(withdraw -> {
+                                    if (withdraw != BankStatus.SUCCESS) {
+                                        error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
+                                                " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
+                                        inventory.removeItem(itemID, addedAmount);
+                                        bank.unlockAmountAsync(withdrawAmountFinal);
+                                    } else {
+                                        // Unlock any remainder that was not withdrawn
+                                        long remainder = withdrawAmountFinal - rawToWithdraw;
+                                        if (remainder > 0)
+                                            bank.unlockAmountAsync(remainder);
+                                        setChanged();
+                                    }
+                                });
+                            } else {
+                                bank.unlockAmountAsync(withdrawAmountFinal);
                             }
                         });
                     });

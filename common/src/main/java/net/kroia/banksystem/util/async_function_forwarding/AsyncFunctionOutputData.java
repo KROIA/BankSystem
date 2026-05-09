@@ -68,6 +68,10 @@ public class AsyncFunctionOutputData <FuncEnumType extends Enum<FuncEnumType>> {
         if (outputParamsCodec == null || encodedResult.length == 0)
             return null;
         RegistryFriendlyByteBuf resultBuf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(encodedResult), null);
-        return (T) outputParamsCodec.decode(resultBuf);
+        try {
+            return (T) outputParamsCodec.decode(resultBuf);
+        } finally {
+            resultBuf.release();
+        }
     }
 }

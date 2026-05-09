@@ -8,6 +8,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.Consumer;
 
 public class BankAccountChangeStream extends BankSystemGenericStream<BankAccountChangeStream.InputData, BankAccountChangeStream.OutputData> {
     public record InputData(int accountNr)
@@ -27,6 +28,7 @@ public class BankAccountChangeStream extends BankSystemGenericStream<BankAccount
     }
 
     private final ConcurrentLinkedQueue<OutputData> pendingPackets = new ConcurrentLinkedQueue<>();
+    private final Consumer<BankAccountData> callbackRef = this::onChangesCallback;
 
     private void onChangesCallback(BankAccountData changeData)
     {
@@ -36,12 +38,12 @@ public class BankAccountChangeStream extends BankSystemGenericStream<BankAccount
     @Override
     public void onStartStreamSendingOnSever() {
         InputData inputData = getContextData();
-        getBankManager().subscribeBankChanges(inputData.accountNr, this::onChangesCallback);
+        getBankManager().subscribeBankChanges(inputData.accountNr, callbackRef);
     }
     @Override
     public void onStopStreamSendingOnServer() {
         InputData inputData = getContextData();
-        getBankManager().unsubscribeBankChanges(inputData.accountNr, this::onChangesCallback);
+        getBankManager().unsubscribeBankChanges(inputData.accountNr, callbackRef);
         pendingPackets.clear();
     }
 

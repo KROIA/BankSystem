@@ -943,7 +943,10 @@ public class ServerBank implements ServerSaveable, IServerBank {
             long origTo2LockedBalance2 = castedTo2.lockedBalance;
             long origTo1Balance1 = castedTo1.balance;
             long origTo2Balance2 = castedTo2.balance;
-
+            boolean origFrom1ChangeFlag = castedFrom1.changeFlag;
+            boolean origFrom2ChangeFlag = castedFrom2.changeFlag;
+            boolean origTo1ChangeFlag = castedTo1.changeFlag;
+            boolean origTo2ChangeFlag = castedTo2.changeFlag;
 
             // Try to transfer from locked balance
             BankStatus BankStatus1 = from1.transferFromLockedPrefered(amount1, to1);
@@ -961,10 +964,10 @@ public class ServerBank implements ServerSaveable, IServerBank {
             castedTo2.lockedBalance = origTo2LockedBalance2;
             castedTo1.balance = origTo1Balance1;
             castedTo2.balance = origTo2Balance2;
-            castedTo2.changeFlag = true;
-            castedTo1.changeFlag = true;
-            castedFrom1.changeFlag = true;
-            castedFrom2.changeFlag = true;
+            castedTo2.changeFlag = origTo2ChangeFlag;
+            castedTo1.changeFlag = origTo1ChangeFlag;
+            castedFrom1.changeFlag = origFrom1ChangeFlag;
+            castedFrom2.changeFlag = origFrom2ChangeFlag;
 
             if(BankStatus1 == BankStatus.SUCCESS)
                 return BankStatus2;
@@ -1020,6 +1023,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
         }catch (NumberFormatException ignored) {
 
         }
+        if (A < 0)
+            return A - B;
         return A + B;
     }
 

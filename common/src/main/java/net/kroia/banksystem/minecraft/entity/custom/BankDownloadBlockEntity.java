@@ -403,12 +403,14 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     private void setBockstate_connected(boolean isConnected)
     {
+        if (level == null) return;
         BlockState blockState = level.getBlockState(worldPosition);
         if (blockState.getBlock() instanceof BankDownloadBlock) {
             level.setBlock(worldPosition, blockState.setValue(BankDownloadBlock.CONNECTION_STATE, isConnected ? BankDownloadBlock.ConnectionState.CONNECTED : BankDownloadBlock.ConnectionState.NOT_CONNECTED), 3);
         }
     }
     private void setBlockState_receiving(boolean isReceiving) {
+        if (level == null) return;
         BlockState blockState = level.getBlockState(worldPosition);
         if (blockState.getBlock() instanceof BankDownloadBlock) {
             level.setBlock(worldPosition, blockState.setValue(BankDownloadBlock.RECEIVING_STATE, isReceiving ? BankDownloadBlock.ReceivingState.RECEIVING : BankDownloadBlock.ReceivingState.NOT_RECEIVING), 3);
@@ -492,16 +494,18 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             }
 
             currentlyReceiving = true;
+            List<CompletableFuture<Boolean>> futures = new ArrayList<>();
             for( WithdrawOrder order : withdrawOrders)
             {
                 if(order != null) {
-                    currentlyReceiving = true;
-                    processWithdrawOrder(order, accountResult);
+                    futures.add(processWithdrawOrder(order, accountResult));
                 }
             }
 
-            setChanged();
-            currentlyReceiving = false;
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenRun(() -> {
+                currentlyReceiving = false;
+                setChanged();
+            });
         });
     }
 
@@ -595,12 +599,14 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                             return; // Successfully withdrew and filled the inventory
                         } else {
                             itemBank.unlockAmountAsync(amountToReserveFinal); // Unlock the amount if withdrawal failed
+                            result.complete(0);
                         }
                     });
                 }
                 else
                 {
                     itemBank.unlockAmountAsync(amountToReserveFinal); // Unlock the amount if nothing was filled
+                    result.complete(0);
                 }
             });
         });

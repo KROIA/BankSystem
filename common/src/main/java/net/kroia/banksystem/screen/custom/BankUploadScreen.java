@@ -135,7 +135,7 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
     private void onConnectDisconnectButtonClicked(int accountNr)
     {
         this.accountNr = accountNr;
-        isOwned = !isOwned;
+        isOwned = accountNr > 0;
         sendUpdatePacket();
     }
     private void onDoDropIfNotBankableCheckBoxClicked(Boolean checked)

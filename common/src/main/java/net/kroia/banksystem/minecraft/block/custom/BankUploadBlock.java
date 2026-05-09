@@ -140,7 +140,8 @@ public class BankUploadBlock extends Block implements EntityBlock {
         if (level.isClientSide())
             return InteractionResult.SUCCESS;
 
-        MultiServerUtils.canInteractWithBankSystem(player.getUUID());
+        if (!MultiServerUtils.canInteractWithBankSystem(player.getUUID()))
+            return InteractionResult.FAIL;
 
         // open screen
         if (player instanceof ServerPlayer sPlayer) {

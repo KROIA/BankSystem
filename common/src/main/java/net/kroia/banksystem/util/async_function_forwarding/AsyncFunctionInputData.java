@@ -63,6 +63,10 @@ public class AsyncFunctionInputData <FuncEnumType extends Enum<FuncEnumType>>{
         if (inputParamsCodec == null || encodedParams.length == 0)
             return null;
         RegistryFriendlyByteBuf paramBuf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(encodedParams), null);
-        return (T) inputParamsCodec.decode(paramBuf);
+        try {
+            return (T) inputParamsCodec.decode(paramBuf);
+        } finally {
+            paramBuf.release();
+        }
     }
 }

@@ -65,7 +65,7 @@ public class MoneyItem extends Item{
 
     @Override
     public int hashCode() {
-        long worth = (int) worth();
+        long worth = worth();
         return (int) (worth ^ (worth >>> 32)) ^ getClass().hashCode(); // Use worth as hash code
     }
 

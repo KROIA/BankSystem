@@ -270,11 +270,18 @@ public class ItemIDManager implements ServerSaveable {
             String name = ItemUtilities.getItemIDStr(cpy.getItem());
             entry.getKey().setNameCache_internal(name);
 
-            CompletableFuture<ItemID> pendingItemID = pendingItemIDs.get(itemStack);
-            if(pendingItemID != null)
-            {
+            CompletableFuture<ItemID> pendingItemID = null;
+            ItemStack matchedKey = null;
+            for (Map.Entry<ItemStack, CompletableFuture<ItemID>> pendingEntry : pendingItemIDs.entrySet()) {
+                if (ItemStack.isSameItemSameComponents(itemStack, pendingEntry.getKey())) {
+                    pendingItemID = pendingEntry.getValue();
+                    matchedKey = pendingEntry.getKey();
+                    break;
+                }
+            }
+            if (pendingItemID != null) {
                 pendingItemID.complete(id);
-                pendingItemIDs.remove(itemStack);
+                pendingItemIDs.remove(matchedKey);
             }
 
 

@@ -253,19 +253,17 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         for(Map.Entry<ItemID, Long> entry : items.entrySet()) {
             ItemID  itemID = entry.getKey();
             ItemStack itemStack = itemID.getStack();
-            if(itemStack != null) {
-                if (itemStack.getItem() instanceof MoneyItem moneyItem) {
-                    long worth = moneyItem.worth();
-                    long count = entry.getValue();
-                    if (worth <= 0 || count <= 0)
-                        continue;
-                    if (count > Long.MAX_VALUE / worth)
-                        continue; // skip: multiplication would overflow
-                    long product = worth * count;
-                    if (toDepositMoney > Long.MAX_VALUE - product)
-                        continue; // skip: running sum would overflow
-                    toDepositMoney += product;
-                }
+            if (itemStack.getItem() instanceof MoneyItem moneyItem) {
+                long worth = moneyItem.worth();
+                long count = entry.getValue();
+                if (worth <= 0 || count <= 0)
+                    continue;
+                if (count > Long.MAX_VALUE / worth)
+                    continue; // skip: multiplication would overflow
+                long product = worth * count;
+                if (toDepositMoney > Long.MAX_VALUE - product)
+                    continue; // skip: running sum would overflow
+                toDepositMoney += product;
             }
         }
         redepositMoneyBank.deposit(toDepositMoney);

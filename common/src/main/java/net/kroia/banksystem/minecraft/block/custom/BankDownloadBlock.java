@@ -140,19 +140,18 @@ public class BankDownloadBlock extends Block implements EntityBlock {
         if (level.isClientSide())
             return InteractionResult.SUCCESS;
 
-        MultiServerUtils.canInteractWithBankSystem(player.getUUID());
+        if (!MultiServerUtils.canInteractWithBankSystem(player.getUUID()))
+            return InteractionResult.FAIL;
 
         // open screen
         if (player instanceof ServerPlayer sPlayer) {
             CompletableFuture<Boolean> hasPermission = blockEntity.hasPermissionToOpenBlock(sPlayer);
             hasPermission.thenAccept(hasPermissionResult -> {
                 if(hasPermissionResult) {
-                    sPlayer.server.execute(() -> {
-                        MenuProvider menuProvider = blockEntity.getMenuProvider();
-                        SyncBankDownloadDataPacket.sendPacket(sPlayer, blockEntity);
-                        openExtendedMenu(sPlayer, menuProvider, (menu) -> {
-                            menu.writeBlockPos(pos);
-                        });
+                    MenuProvider menuProvider = blockEntity.getMenuProvider();
+                    SyncBankDownloadDataPacket.sendPacket(sPlayer, blockEntity);
+                    openExtendedMenu(sPlayer, menuProvider, (menu) -> {
+                        menu.writeBlockPos(pos);
                     });
                 }
             });
