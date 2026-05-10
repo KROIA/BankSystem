@@ -621,7 +621,11 @@ The window shows all items which are currently stored on the players bank accoun
 
 All notable changes are documented in version-specific files under `changelog/`.
 
-### Alpha
+### Current
+
+- [2.0.1](changelog/v2.0.1.md) — In Development
+
+### Previous
 
 - [1.5.0_ALPHA_3](changelog/v1.5.0_ALPHA_3.md) — Security & stability: 50 fixes across permissions, async, concurrency, block entities
 - [1.5.0_ALPHA_2](changelog/v1.5.0_ALPHA_2.md) — Trusted slave servers, package reorganization, UI improvements
@@ -629,7 +633,7 @@ All notable changes are documented in version-specific files under `changelog/`.
 
 ### Stable
 
-- [1.4.1](changelog/v1.4.1.md) — Latest stable (CurseForge)
+- [1.4.1](changelog/v1.4.1.md) — Stable (CurseForge)
 - 1.4.0
 - 1.3.0
 - 1.2.0

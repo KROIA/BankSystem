@@ -7,6 +7,7 @@ import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -17,7 +18,7 @@ public abstract class AsyncForwardingRequest<
         IN extends AsyncFunctionInputData<FuncEnumType>,
         OUT extends AsyncFunctionOutputData<FuncEnumType>> extends BankSystemGenericRequest<IN, OUT> {
 
-    public static final boolean DEBUG_ENABLE_LOGS = false;
+    public static final boolean DEBUG_ENABLE_LOGS = true;
 
     private final BiFunction<FuncEnumType, byte[], IN> inputConstructor;
     private final BiFunction<FuncEnumType, byte[], OUT> outputConstructor;
@@ -97,6 +98,24 @@ public abstract class AsyncForwardingRequest<
     protected boolean isAllowedToCallByUntrustedSlaveServer(IN input)
     {
         return isAllowedToCallByClient(input);
+    }
+
+    protected boolean isRequestAllowed(IN input, String slaveID, @Nullable UUID playerSender, String playerName) {
+        if (!slaveID.isEmpty()) {
+            if (!isAllowedToCallByUntrustedSlaveServer(input)) {
+                if (!BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isSlaveServerTrusted(slaveID)) {
+                    warn("The slave server: '" + slaveID + "' try's to call the function: '" + input.function.toString() + "' which is not allowed for an untrusted slave server!");
+                    return false;
+                }
+            }
+        }
+        if (playerSender != null) {
+            if (!isAllowedToCallByClient(input)) {
+                warn("The player '" + playerName + "' try's to call the function: '" + input.function.toString() + "' which is not allowed from the client side!");
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
