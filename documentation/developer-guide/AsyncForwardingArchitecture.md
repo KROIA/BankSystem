@@ -38,7 +38,7 @@ The async forwarding system solves this by providing **a single unified API** (`
                     │  AsyncBank (forwarding implementations)     │
                     │    ├─ encode InputData                      │
                     │    ├─ sendRequestToMaster()                 │
-                    │    └─ return CompletableFuture               │
+                    │    └─ return CompletableFuture              │
                     │                      │                      │
                     │               Minecraft client              │
                     │                 sendRequestToServer()       │
