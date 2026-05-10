@@ -1,19 +1,6 @@
 package net.kroia.banksystem.networking.multi_server;
 
-import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
-import net.kroia.banksystem.util.BankSystemNetworkPacket;
-import net.kroia.modutilities.networking.multi_server.ForwardPacketContext;
-import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
-import org.jetbrains.annotations.NotNull;
-
-import java.util.UUID;
-
+/*
 public class PlayerJoinPacket extends BankSystemNetworkPacket {
 
     public static final Type<PlayerJoinPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "player_join_packet"));
@@ -50,3 +37,4 @@ public class PlayerJoinPacket extends BankSystemNetworkPacket {
         bankManager.onPlayerJoin(playerUUID, playerName);
     };
 }
+*/

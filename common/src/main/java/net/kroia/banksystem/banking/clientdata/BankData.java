@@ -1,6 +1,7 @@
 package net.kroia.banksystem.banking.clientdata;
 
 import net.kroia.banksystem.banking.bank.ServerBank;
+import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -50,7 +51,7 @@ public record BankData(ItemID itemID, long balance, long lockedBalance) {
     }
 
     public double getRealBalance() {
-        return ServerBank.convertToRealAmountStatic(balance);
+        return BankManager.convertToRealAmountStatic(balance);
     }
 
 }

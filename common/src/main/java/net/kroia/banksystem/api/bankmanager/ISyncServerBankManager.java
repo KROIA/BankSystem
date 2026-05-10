@@ -13,9 +13,16 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public interface ISyncServerBankManager {
+
+
+    void subscribeBankChanges(int accountNr, Consumer<BankAccountData> callback);
+    void unsubscribeBankChanges(int accountNr, Consumer<BankAccountData> callback);
+
     /**
      * Contains all data about the bank manager.
      * @return Data packet containing all data about the bank manager.
@@ -54,6 +61,33 @@ public interface ISyncServerBankManager {
      *          false: if the given player is not an admin or the player is not known by the banksystem.
      */
     boolean isBanksystemAdmin(UUID playerUUID);
+
+
+    /**
+     * Checks if the given slave server ID is in the trusted list.
+     * A trusted server has the permission to deposit and withdraw items on banks
+     * @param slaveID to check for
+     * @return true: if the given ID is trusted, otherwise false
+     */
+    boolean isSlaveServerTrusted(String slaveID);
+
+    /**
+     * @return The Set of trusted slave ID's
+     */
+    Set<String> getTrustedSlaveServers();
+
+    /**
+     * Adds the given slaveID to the trusted list
+     * @param slaveID to add
+     */
+    void trustSlaveServer(String slaveID);
+
+    /**
+     * Removes the given slaveID from the trusted list
+     * @param slaveID to remove
+     */
+    void untrustSlaveServer(String slaveID);
+
 
     /**
      * Returns a list of all allowed items that can be stored in the bank.
@@ -472,6 +506,12 @@ public interface ISyncServerBankManager {
     boolean isItemIDBlacklisted(ItemID itemID);
 
 
+    /**
+     * Gets the scaling factor used for backend item amounts.
+     * A scaling factor of 100 means that a raw bank value of 1 represents 0.01 Items
+     * @return global scaling factor, used for all items
+     */
+    int getItemFractionScaleFactor();
 
 
 
@@ -514,6 +554,9 @@ public interface ISyncServerBankManager {
      */
     String getCirculationDataJsonString();
 
+
+    long convertToRawAmount(double realAmount);
+    double convertToRealAmount(long rawAmount);
 
 
 

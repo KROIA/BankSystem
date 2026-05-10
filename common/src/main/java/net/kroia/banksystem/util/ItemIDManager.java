@@ -1,8 +1,8 @@
 package net.kroia.banksystem.util;
 
 import com.ibm.icu.impl.Pair;
-import net.kroia.banksystem.item.BankSystemItems;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.general.RegisterItemIDPacket;
 import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
 import net.kroia.modutilities.ItemUtilities;
@@ -22,6 +22,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class ItemIDManager implements ServerSaveable {
 
@@ -29,7 +30,7 @@ public class ItemIDManager implements ServerSaveable {
 
     private static ConcurrentHashMap<ItemID, ItemStack> singlePlayerServerBackupOnPlayerLeave = null;
     private static Map<ItemStack, CompletableFuture<ItemID>> pendingItemIDs = new ConcurrentHashMap<>();
-    private static List<Pair<List<ItemStack>, CompletableFuture<List<ItemID>>>> pendingItemIDGroups = new ArrayList<>();
+    private static List<Pair<List<ItemStack>, CompletableFuture<List<ItemID>>>> pendingItemIDGroups = new CopyOnWriteArrayList<>();
 
     public static void clear()
     {
@@ -56,7 +57,14 @@ public class ItemIDManager implements ServerSaveable {
         ItemStack cpy =  itemStack.copy();
         cpy.setCount(1);
         CompletableFuture<ItemID>  future = new CompletableFuture<>();
-        if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
+        ItemID itemID = getItemID(cpy);
+        if(itemID.isValid())
+        {
+            future.complete(itemID);
+            return future;
+        }
+
+        if(MultiServerUtils.canInteractWithBankSystem())
         {
             future.complete(registerItemStackServerSide_direct(cpy));
         }
@@ -67,14 +75,14 @@ public class ItemIDManager implements ServerSaveable {
         }
         return future;
     }
-    public static CompletableFuture<List<ItemID>> registerItemStackServerSide(List<ItemStack> itemStacks) {
+    /*public static CompletableFuture<List<ItemID>> registerItemStackServerSide(List<ItemStack> itemStacks) {
         List<ItemStack> cpyStacks = new ArrayList<>();
         CompletableFuture<List<ItemID>> groupFuture = new CompletableFuture<>();
         List<ItemID> foundItemIDs = new ArrayList<>();
         for (ItemStack itemStack : itemStacks)
         {
             ItemID itemID = getItemID(itemStack);
-            if(itemID == null) {
+            if(!itemID.isValid()) {
                 ItemStack cpy = itemStack.copy();
                 cpy.setCount(1);
                 cpyStacks.add(cpy);
@@ -91,11 +99,20 @@ public class ItemIDManager implements ServerSaveable {
             groupFuture.complete(foundItemIDs);
         }
         else {
-            pendingItemIDGroups.add(Pair.of(cpyStacks, groupFuture));
-            RegisterItemIDPacket.sendRegisterItemIDPacketToMaster(cpyStacks);
+            if(MultiServerManager.isRunning() && MultiServerManager.isMaster()) {
+                pendingItemIDGroups.add(Pair.of(cpyStacks, groupFuture));
+                RegisterItemIDPacket.sendRegisterItemIDPacketToMaster(cpyStacks);
+            }
+            else
+            {
+                for(ItemStack stack : cpyStacks)
+                {
+                    foundItemIDs.add(registerItemStackServerSide_direct(stack));
+                }
+            }
         }
         return groupFuture;
-    }
+    }*/
 
 
     public static CompletableFuture<ItemID> registerItemStackClientSide(@NotNull ItemStack itemStack)
@@ -154,30 +171,29 @@ public class ItemIDManager implements ServerSaveable {
     {
         List<ItemID> ids = new ArrayList<>();
         Map<ItemID, ItemStack> newItemIDMap = new ConcurrentHashMap<>();
-        for(ItemStack stack : itemStacks)
-        {
-            // Search the entire list to check if the same item stack already is registered
-            ItemID id = getItemID(stack);
-            if(id != null && id.isValid())
-            {
-                ids.add(id);
-                continue;
+        synchronized (itemIDMap) {
+            for (ItemStack stack : itemStacks) {
+                // Search the entire list to check if the same item stack already is registered
+                ItemID id = getItemID(stack);
+                if (id != null && id.isValid()) {
+                    ids.add(id);
+                    continue;
+                }
+
+                if (stack.isEmpty()) {
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
+
+                short newID = (short) (itemIDMap.size() + 1);
+
+                ItemStack cpy = stack.copy();
+                String name = ItemUtilities.getItemIDStr(cpy.getItem());
+                id = new ItemID(newID, name);
+                cpy.setCount(1);
+                newItemIDMap.put(id, cpy);
+                itemIDMap.put(id, cpy);
             }
-
-            if(stack.isEmpty())
-            {
-                ids.add(ItemID.INVALID_ID);
-                continue;
-            }
-
-            short newID = (short)(itemIDMap.size()+1);
-
-            ItemStack cpy = stack.copy();
-            String name = ItemUtilities.getItemIDStr(cpy.getItem());
-            id = new ItemID(newID, name);
-            cpy.setCount(1);
-            newItemIDMap.put(id, cpy);
-            itemIDMap.put(id, cpy);
         }
         if(!newItemIDMap.isEmpty())
             onNewItemAdded(newItemIDMap);
@@ -254,11 +270,18 @@ public class ItemIDManager implements ServerSaveable {
             String name = ItemUtilities.getItemIDStr(cpy.getItem());
             entry.getKey().setNameCache_internal(name);
 
-            CompletableFuture<ItemID> pendingItemID = pendingItemIDs.get(itemStack);
-            if(pendingItemID != null)
-            {
+            CompletableFuture<ItemID> pendingItemID = null;
+            ItemStack matchedKey = null;
+            for (Map.Entry<ItemStack, CompletableFuture<ItemID>> pendingEntry : pendingItemIDs.entrySet()) {
+                if (ItemStack.isSameItemSameComponents(itemStack, pendingEntry.getKey())) {
+                    pendingItemID = pendingEntry.getValue();
+                    matchedKey = pendingEntry.getKey();
+                    break;
+                }
+            }
+            if (pendingItemID != null) {
                 pendingItemID.complete(id);
-                pendingItemIDs.remove(itemStack);
+                pendingItemIDs.remove(matchedKey);
             }
 
 

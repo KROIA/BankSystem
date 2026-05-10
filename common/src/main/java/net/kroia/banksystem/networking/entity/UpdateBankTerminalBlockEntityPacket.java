@@ -2,7 +2,7 @@ package net.kroia.banksystem.networking.entity;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
@@ -36,6 +36,15 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     private boolean sendItemsToBank;
     private int selectedBankAccount; // This can be used to specify which bank account is being updated
 
+    /**
+     *
+     *
+     * @param pos
+     * @param itemTransferToMarketAmounts map of items and amount. The amount is not the backend value but whole item counts
+     *                                    Only whole items can be withdrawn
+     * @param sendItemsToMarket
+     * @param selectedBankAccount
+     */
     public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<ItemID, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket, int selectedBankAccount) {
         super();
         this.pos = pos;
@@ -72,9 +81,12 @@ public class UpdateBankTerminalBlockEntityPacket extends BankSystemNetworkPacket
     @Override
     protected void handleOnServer(NetworkManager.PacketContext context)
     {
-        BlockEntity blockEntity = context.getPlayer().level().getBlockEntity(this.pos);
+        ServerPlayer player = (ServerPlayer) context.getPlayer();
+        if (player.distanceToSqr(this.pos.getX() + 0.5, this.pos.getY() + 0.5, this.pos.getZ() + 0.5) > BankSystemMod.MAX_INTERACT_DISTANCE_SQR)
+            return;
+        BlockEntity blockEntity = player.level().getBlockEntity(this.pos);
         if(blockEntity instanceof BankTerminalBlockEntity bankTerminalBlockEntity) {
-            bankTerminalBlockEntity.handlePacket(this, (ServerPlayer) context.getPlayer());
+            bankTerminalBlockEntity.handlePacket(this, player);
         }else
         {
             BACKEND_INSTANCES.LOGGER.error("BankTerminalBlockEntity not found at position "+this.pos);

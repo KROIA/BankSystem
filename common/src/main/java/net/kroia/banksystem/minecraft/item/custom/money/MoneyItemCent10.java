@@ -1,0 +1,16 @@
+package net.kroia.banksystem.minecraft.item.custom.money;
+
+import net.kroia.banksystem.BankSystemModSettings;
+
+public class MoneyItemCent10 extends MoneyItem{
+    public static final String NAME = "money_cent10";
+
+    public MoneyItemCent10() {
+        super();
+    }
+
+    @Override
+    public long worth() {
+        return 1000L/ BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR; // 10 cents
+    }
+}

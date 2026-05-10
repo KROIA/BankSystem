@@ -46,7 +46,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
     boolean isAdminMode;
 
 
-    public SyncOpenGUIPacket() {
+    private SyncOpenGUIPacket() {
         super();
     }
 
@@ -72,19 +72,14 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
             return;
         }
 
-        SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
-        packet.guiType = GUIType.BANK_SYSTEM_MANAGE;
+        SyncOpenGUIPacket packet = new SyncOpenGUIPacket(GUIType.BANK_SYSTEM_MANAGE, null, 0, false);
         packet.sendToClient(player);
     }
     public static void send_openBankAccountScreen(ServerPlayer player, UUID targetPlayerUUID, int accountNumber, boolean isAdminMode)
     {
         if(player == null)
             return;
-        SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
-        packet.guiType = GUIType.BANK_ACCOUNT;
-        packet.targetPlayerUUID = targetPlayerUUID;
-        packet.accountNumber = accountNumber;
-        packet.isAdminMode = isAdminMode;
+        SyncOpenGUIPacket packet = new SyncOpenGUIPacket(GUIType.BANK_ACCOUNT, targetPlayerUUID, accountNumber, isAdminMode);
         packet.sendToClient(player);
     }
 
@@ -92,16 +87,14 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
     {
         if(player == null)
             return;
-        SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
-        packet.guiType = GUIType.ATM_SCREEN;
+        SyncOpenGUIPacket packet = new SyncOpenGUIPacket(GUIType.ATM_SCREEN, null, 0, false);
         packet.sendToClient(player);
     }
     public static void send_openTestScreen(ServerPlayer player)
     {
         if(player == null)
             return;
-        SyncOpenGUIPacket packet = new SyncOpenGUIPacket();
-        packet.guiType = GUIType.TEST_SCREEN;
+        SyncOpenGUIPacket packet = new SyncOpenGUIPacket(GUIType.TEST_SCREEN, null, 0, false);
         packet.sendToClient(player);
     }
 

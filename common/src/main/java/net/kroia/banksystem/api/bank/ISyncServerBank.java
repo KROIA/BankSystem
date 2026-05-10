@@ -13,6 +13,14 @@ import org.jetbrains.annotations.NotNull;
 public interface ISyncServerBank {
 
     /**
+     * @return true if the balance has changed since the last reset of the change flag
+     */
+    boolean hasChanges();
+
+    void clearChangeFlag();
+
+
+    /**
      * Returns minimalistic data about this bank.
      * Can be requested by the client using the ClientBankManager.
      *
@@ -286,7 +294,6 @@ public interface ISyncServerBank {
      * @return The real amount that the user sees in the bank GUI.
      */
     double convertToRealAmount(long rawAmount);
-
 
     /**
      * @return the normalized balance of this bank.

@@ -2,7 +2,7 @@ package net.kroia.banksystem.networking.entity;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -48,9 +48,12 @@ public class UpdateBankUploadBlockEntityPacket extends BankSystemNetworkPacket {
 
     @Override
     protected void handleOnServer(NetworkManager.PacketContext context) {
-        BlockEntity blockEntity = context.getPlayer().level().getBlockEntity(pos);
+        ServerPlayer player = (ServerPlayer) context.getPlayer();
+        if (player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) > BankSystemMod.MAX_INTERACT_DISTANCE_SQR)
+            return;
+        BlockEntity blockEntity = player.level().getBlockEntity(pos);
         if (blockEntity instanceof BankUploadBlockEntity be) {
-            be.handlePacket((ServerPlayer) context.getPlayer(),this);
+            be.handlePacket(player, this);
         }
     }
 

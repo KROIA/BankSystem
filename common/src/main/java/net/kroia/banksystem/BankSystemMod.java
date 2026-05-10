@@ -6,9 +6,17 @@ public final class BankSystemMod {
 
     public static final String MOD_ID = "banksystem";
     public static final String VERSION = "1.5.0_ALPHA";
-    private static BankSystemModBackend backend;
 
-    public static void init() {
+    /**
+     * Maximum squared distance (in blocks²) between a player and a block-entity position
+     * before client-sent block-entity packets are rejected. 64.0 == 8 blocks, chosen to
+     * cover vanilla reach plus a buffer for in-flight movement.
+     */
+    public static final double MAX_INTERACT_DISTANCE_SQR = 64.0;
+
+    private static volatile BankSystemModBackend backend;
+
+    public static synchronized void init() {
         if(backend == null)
             backend = new BankSystemModBackend();
     }
@@ -16,7 +24,7 @@ public final class BankSystemMod {
 
     public static BankSystemAPI getAPI() {
         if(backend == null)
-            backend = new BankSystemModBackend();
+            init();
         return backend;
     }
 }

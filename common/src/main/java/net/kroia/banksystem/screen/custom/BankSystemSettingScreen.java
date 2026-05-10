@@ -88,19 +88,21 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
 
         removeBankingItemButton = new Button(TEXT.REMOVE_BANKING_ITEM_BUTTON.getString(), () -> {
             if(currentBankingItemID != null) {
+                ItemStack stack = currentBankingItemID.getStack();
+                String name = (stack != null && !stack.isEmpty()) ? ItemUtilities.getItemName(stack.getItem()) : currentBankingItemID.getName();
                 AskPopupScreen popup = new AskPopupScreen(this, () -> {
                     getBankManager().disallowItemIDAsync(currentBankingItemID).thenAccept((success)->{
                         if(success)
                             setCurrentBankingItemID(null);
                         updateCurrentBankingItemsView();
                     });
-                }, () -> {}, TEXT.ASK_TITLE.getString() + " " + ItemUtilities.getItemName(currentBankingItemID.getStack().getItem())  + "?", TEXT.ASK_MSG.getString());
+                }, () -> {}, TEXT.ASK_TITLE.getString() + " " + name  + "?", TEXT.ASK_MSG.getString());
                 popup.setSize(400,100);
                 popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
                 minecraft.setScreen(popup);
             }
         });
-        removeBankingItemButton.setIdleColor(0xFFe8711c);
+        removeBankingItemButton.setBackgroundColor(0xFFe8711c);
         removeBankingItemButton.setHoverColor(0xFFe04c12);
         removeBankingItemButton.setPressedColor(0xFFe04c12);
 

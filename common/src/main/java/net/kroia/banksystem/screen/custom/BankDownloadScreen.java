@@ -4,8 +4,8 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
-import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.menu.custom.BankDownloadContainerMenu;
+import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
+import net.kroia.banksystem.minecraft.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.entity.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
@@ -77,9 +77,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             itemView.setSize(16, 16);
             bankBalanceLabel = new Label("0");
             amountTextBox = new TextBox();
-            amountTextBox.setAllowNumbers(true, false);
-            amountTextBox.setAllowLetters(false);
-            amountTextBox.setAllowNegativeNumbers(false);
+            amountTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 100,0));
             amountTextBox.setText("1");
             conditionSelectionDropDown = new DropDownMenu(TEXT.CONDITION.getString());
             //conditionSelectionDropDown.setZ(1000);
@@ -122,9 +120,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             });
 
             conditionAmountTextBox = new TextBox();
-            conditionAmountTextBox.setAllowNumbers(true, false);
-            conditionAmountTextBox.setAllowLetters(false);
-            conditionAmountTextBox.setAllowNegativeNumbers(false);
+            conditionAmountTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 100,0));
             conditionAmountTextBox.setText("0");
             deleteButton = new Button("X", () -> onRemoveOrder.accept(this));
 

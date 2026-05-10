@@ -111,7 +111,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
             future.complete(null);
             return future;
         }
-        boolean canManage = account.hasPermission(sender, BankPermission.MANAGE.getValue());
+        boolean canManage = account.hasPermission(sender, BankPermission.MANAGE);
         if (!isAdmin && !canManage) {
             future.complete(null);
             return future;
@@ -142,10 +142,14 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         }
 
         if (input.setUsers != null) {
+            int validMask = BankPermission.getAllPermissions();
+            User owner = account.getPersonalBankOwner();
             Map<User, Integer> userList = new HashMap<>(input.setUsers.size());
             for (Map.Entry<UUID, Integer> entry : input.setUsers.entrySet()) {
                 UUID userUUID = entry.getKey();
-                int permissions = entry.getValue();
+                int permissions = entry.getValue() & validMask;
+                if (owner != null && owner.getUUID().equals(userUUID))
+                    continue;
                 User userToSet = bankManager.getUserByUUID(userUUID);
                 if (userToSet != null) {
                     userList.put(userToSet, permissions);
@@ -153,11 +157,8 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
             }
             account.setUsers(userList);
         }
-        if(input.accountIcon == null)
+        if(input.accountIcon != null)
         {
-            account.setAccountIcon(null);
-        }
-        else {
             ItemID iconID = ItemID.getOrRegisterFromItemStackServerSide_direct(input.accountIcon);
             account.setAccountIcon(iconID);
         }

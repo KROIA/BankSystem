@@ -12,21 +12,34 @@ import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.api.command.IBankSystemCommands;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.bankmanager.ClientBankManager;
-import net.kroia.banksystem.block.BankSystemBlocks;
-import net.kroia.banksystem.command.BankSystemCommands;
-import net.kroia.banksystem.compat.NEZNAMY_TAB_Placeholders;
-import net.kroia.banksystem.compat.OldBankDataLoader;
-import net.kroia.banksystem.entity.BankSystemEntities;
-import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
-import net.kroia.banksystem.entity.custom.BankUploadBlockEntity;
-import net.kroia.banksystem.item.BankSystemCreativeModeTab;
-import net.kroia.banksystem.item.BankSystemItems;
-import net.kroia.banksystem.item.custom.software.Software;
-import net.kroia.banksystem.menu.BankSystemMenus;
+import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
+import net.kroia.banksystem.minecraft.command.BankSystemCommands;
+import net.kroia.banksystem.minecraft.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.banksystem.minecraft.compat.OldBankDataLoader;
+import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
+import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
+import net.kroia.banksystem.minecraft.item.BankSystemCreativeModeTab;
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
+import net.kroia.banksystem.minecraft.item.custom.software.Software;
+import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.multi_server.BanksystemMetadataRequest;
+import net.kroia.modutilities.testing.TestRegistry;
+import net.kroia.banksystem.testing.tests.ArithmeticTests;
+import net.kroia.banksystem.testing.tests.AsyncForwardingTests;
+import net.kroia.banksystem.testing.tests.AsyncMethodAuditTests;
+import net.kroia.banksystem.testing.tests.BankAccountTests;
+import net.kroia.banksystem.testing.tests.BankManagerTests;
+import net.kroia.banksystem.testing.tests.BankPermissionTests;
+import net.kroia.banksystem.testing.tests.ExampleTests;
+import net.kroia.banksystem.testing.tests.MultiServerSecurityTests;
+import net.kroia.banksystem.testing.tests.NetworkingValidationTests;
+import net.kroia.banksystem.testing.tests.SerializationTests;
+import net.kroia.banksystem.testing.tests.LifecycleTests;
+import net.kroia.banksystem.testing.tests.ServerBankTests;
 import net.kroia.banksystem.util.*;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.multi_server.MultiServerConfig;
@@ -88,8 +101,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         Software.setBackend(INSTANCES);
         ItemID.setBackend(INSTANCES);
 
-        BankSystemNetworkPacket.setBackend(INSTANCES);
-        BankSystemGenericRequest.setBackend(INSTANCES);
+        BankSystemNetworking.setBackend(INSTANCES);
         BankSystemTextMessages.setBackend(INSTANCES);
 
 
@@ -107,7 +119,26 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.NETWORKING = new BankSystemNetworking();
         INSTANCES.SERVER_EVENTS = new BankSystemEvents();
 
+        if (TestRegistry.ENABLE_TESTS) {
+            registerTestSuites();
+        }
 
+    }
+
+    private static void registerTestSuites()
+    {
+        TestRegistry.register(new ExampleTests());
+        TestRegistry.register(new BankPermissionTests());
+        TestRegistry.register(new ArithmeticTests());
+        TestRegistry.register(new ServerBankTests());
+        TestRegistry.register(new AsyncMethodAuditTests());
+        TestRegistry.register(new BankAccountTests());
+        TestRegistry.register(new BankManagerTests());
+        TestRegistry.register(new AsyncForwardingTests());
+        TestRegistry.register(new NetworkingValidationTests());
+        TestRegistry.register(new MultiServerSecurityTests());
+        TestRegistry.register(new SerializationTests());
+        TestRegistry.register(new LifecycleTests());
     }
 
     // Called from the client side
@@ -194,7 +225,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         //BankSystemConfig.Settings settings = INSTANCES.CONFIG.getSettings();
         //settings.bank.items.add(MoneyItem.getItemID());
         //INSTANCES.CONFIG.save();
-        INSTANCES.SERVER_EVENTS.removeListeners();
+        //INSTANCES.SERVER_EVENTS.removeListeners();
     }
 
     // Called from the server side
@@ -225,6 +256,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the client side
     private static void onPlayerJoinClientSide(@Nullable LocalPlayer localPlayer)
     {
+        INSTANCES.CLIENT_BANK_MANAGER.getItemFractionScaleFactorAsync();
         //ItemIDManager.clear();
     }
 
@@ -297,6 +329,11 @@ public class BankSystemModBackend implements BankSystemAPI {
     public IBankSystemDataHandler getDataHandler()
     {
         return INSTANCES.SERVER_DATA_HANDLER;
+    }
+    @Override
+    public boolean isSlave()
+    {
+        return INSTANCES.isSlaveServer;
     }
 
 

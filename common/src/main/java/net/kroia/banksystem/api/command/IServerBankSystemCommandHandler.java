@@ -11,6 +11,7 @@ public interface IServerBankSystemCommandHandler {
     //boolean banksystem_testScreen(@NotNull UUID executor);
     boolean banksystem_setBankSystemAdminMode(@NotNull UUID executor, boolean isAdmin);
     boolean banksystem_setBankSystemAdminMode_user(@NotNull UUID executor, String userName, boolean isAdmin);
+    boolean banksystem_setSlaveServerTrusted(@NotNull UUID executor, String slaveID, boolean isTrusted);
     boolean banksystem_allowItem(@NotNull UUID executor, ItemID itemID);
     boolean banksystem_disallowItem(@NotNull UUID executor, ItemID itemID);
 

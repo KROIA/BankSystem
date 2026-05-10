@@ -1,7 +1,7 @@
 package net.kroia.banksystem.networking.entity;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.entity.custom.BankDownloadBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.core.BlockPos;
@@ -47,6 +47,8 @@ public class UpdateBankDownloadBlockEntityPacket extends BankSystemNetworkPacket
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {
+        if (sender.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) > BankSystemMod.MAX_INTERACT_DISTANCE_SQR)
+            return;
         BlockEntity blockEntity = sender.level().getBlockEntity(pos);
         if (blockEntity instanceof BankDownloadBlockEntity be) {
             be.handlePacket(sender,this);

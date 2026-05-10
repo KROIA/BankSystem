@@ -53,8 +53,12 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
     {
         WithdrawItemsFromBankRequest.InputData inputData = new WithdrawItemsFromBankRequest.InputData(bankAccount, executor, items);
         CompletableFuture<Map<ItemID, Long>> future = new CompletableFuture<>();
-        BankSystemNetworking.WITHDRAW_ITEMS_FROM_BANK_REQUEST.sendRequestToMaster(inputData).thenAccept(response -> {
-            future.complete(response.items);
+        BankSystemNetworking.WITHDRAW_ITEMS_FROM_BANK_REQUEST.sendRequestToMaster(inputData).whenComplete((response, ex) -> {
+            if (ex != null || response == null) {
+                future.complete(new HashMap<>()); // Return empty map on error
+            } else {
+                future.complete(response.items);
+            }
         });
         return future;
     }
@@ -81,20 +85,20 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
         if(playerSender != null)
         {
             warn("This request is not allowed to be sent from a client");
-            return CompletableFuture.completedFuture(new OutputData(input.items));
+            return CompletableFuture.completedFuture(new OutputData(new HashMap<>()));
         }
 
         IServerBankAccount account = getServerBankManager().getBankAccount(input.bankAccount);
         if(account == null)
         {
             error("The bank account: "+input.bankAccount+" does not exist");
-            return CompletableFuture.completedFuture(new OutputData(input.items));
+            return CompletableFuture.completedFuture(new OutputData(new HashMap<>()));
         }
 
         // Check permission
         if(input.executor != null)
         {
-            if(!account.hasPermission(input.executor, BankPermission.WITHDRAW.ordinal()))
+            if(!account.hasPermission(input.executor, BankPermission.WITHDRAW))
             {
                 User user = getServerBankManager().getUserByUUID(input.executor);
                 String playerName;
@@ -103,7 +107,7 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
                 else
                     playerName = input.executor.toString();
                 warn("Player: "+playerName + " has not the right to withdraw items from the bank account: "+input.bankAccount);
-                return CompletableFuture.completedFuture(new OutputData(input.items));
+                return CompletableFuture.completedFuture(new OutputData(new HashMap<>()));
             }
         }
 
@@ -111,7 +115,7 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
         for(Map.Entry<ItemID, Long> entry : input.items.entrySet())
         {
             long toWithdraw = Math.max(0, entry.getValue());
-            IServerBank itemBank = account.getOrCreateBank(entry.getKey());
+            IServerBank itemBank = account.getBank(entry.getKey());
             if(itemBank != null)
             {
                 toWithdraw = Math.min(toWithdraw, itemBank.getBalance());

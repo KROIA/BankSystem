@@ -53,8 +53,12 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
     {
         DepositItemsInBankRequest.InputData inputData = new DepositItemsInBankRequest.InputData(bankAccount, executor, items);
         CompletableFuture<Map<ItemID, Long>> future = new CompletableFuture<>();
-        BankSystemNetworking.DEPOSIT_ITEMS_IN_BANK_REQUEST.sendRequestToMaster(inputData).thenAccept(response -> {
-            future.complete(response.items);
+        BankSystemNetworking.DEPOSIT_ITEMS_IN_BANK_REQUEST.sendRequestToMaster(inputData).whenComplete((response, ex) -> {
+            if (ex != null || response == null) {
+                future.complete(new HashMap<>()); // Return empty map on error
+            } else {
+                future.complete(response.items);
+            }
         });
         return future;
     }
@@ -94,7 +98,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
         // Check permission
         if(input.executor != null)
         {
-            if(!account.hasPermission(input.executor, BankPermission.DEPOSIT.ordinal()))
+            if(!account.hasPermission(input.executor, BankPermission.DEPOSIT))
             {
                 User user = getServerBankManager().getUserByUUID(input.executor);
                 String playerName;
@@ -110,7 +114,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
         Map<ItemID, Long> notDepositedItems = new HashMap<>();
         for(Map.Entry<ItemID, Long> entry : input.items.entrySet())
         {
-            long toDeposit = entry.getValue();
+            long toDeposit = Math.max(0, entry.getValue());
             IServerBank itemBank = account.getOrCreateBank(entry.getKey());
             if(itemBank != null)
             {

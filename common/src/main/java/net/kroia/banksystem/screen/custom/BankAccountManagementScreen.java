@@ -140,7 +140,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         {
             if(userData.userUUID.equals(thisPlayerUUID))
             {
-                isEditingPlayer = BankPermission.hasPermission(userData.permissions, BankPermission.MANAGE.getValue());
+                isEditingPlayer = BankPermission.hasPermission(userData.permissions, BankPermission.MANAGE);
                 break;
             }
         }
@@ -201,7 +201,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
 
         closeButton = new CloseButton(this::onClose);
-        closeButton.setIdleColor(0xFFf55a42);
+        closeButton.setBackgroundColor(0xFFf55a42);
         closeButton.setHoverColor(0xFFe03d24);
         closeButton.setPressedColor(0xFFde2b10);
         closeButton.setOutlineColor(0xFFde2510);
@@ -488,7 +488,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             return;
         }
 
-        this.canManage = isAdminMode || bankAccountData.hasPermission(getThisPlayerUUID(),BankPermission.MANAGE.getValue());
+        this.canManage = isAdminMode || bankAccountData.hasPermission(getThisPlayerUUID(), BankPermission.MANAGE);
         this.personalBankOwnerData = bankAccountData.personalBankOwnerData;
         this.bankAccountName = bankAccountData.accountName;
         Map<UUID, BankUserWidget> toRemoveUsers = new HashMap<>(bankUserWidgets);

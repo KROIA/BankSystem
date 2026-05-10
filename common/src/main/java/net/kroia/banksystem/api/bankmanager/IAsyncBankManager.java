@@ -59,6 +59,14 @@ public interface IAsyncBankManager {
     CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID);
 
     /**
+     * Checks if the given slave server ID is in the trusted list.
+     * A trusted server has the permission to deposit and withdraw items on banks
+     * @param slaveID to check for
+     * @return true: if the given ID is trusted, otherwise false
+     */
+    CompletableFuture<Boolean> isSlaveServerTrustedAsync(String slaveID);
+
+    /**
      * Returns a list of all allowed items that can be stored in the bank.
      * @return A list of allowed items that can be stored in the bank.
      */
@@ -477,8 +485,12 @@ public interface IAsyncBankManager {
      */
     CompletableFuture<Boolean> isItemIDBlacklistedAsync(ItemID itemID);
 
-
-
+    /**
+     * Gets the scaling factor used for backend item amounts.
+     * A scaling factor of 100 means that a raw bank value of 1 represents 0.01 Items
+     * @return global scaling factor, used for all items
+     */
+    CompletableFuture<Integer> getItemFractionScaleFactorAsync();
 
 
 

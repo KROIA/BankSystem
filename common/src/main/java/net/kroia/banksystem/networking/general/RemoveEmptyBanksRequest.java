@@ -34,7 +34,7 @@ public class RemoveEmptyBanksRequest extends BankSystemGenericRequest<Integer, L
             return future;
         }
 
-        boolean canEdit = playerIsAdmin(sender) || account.hasPermission(sender, BankPermission.MANAGE.getValue());
+        boolean canEdit = playerIsAdmin(sender) || account.hasPermission(sender, BankPermission.MANAGE);
 
         if(canEdit) {
             future.complete(account.removeEmptyBanks());

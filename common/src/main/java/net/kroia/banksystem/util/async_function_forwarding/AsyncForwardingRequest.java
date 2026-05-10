@@ -82,6 +82,23 @@ public abstract class AsyncForwardingRequest<
      */
     protected abstract boolean isAllowedToCallByClient(IN input);
 
+
+    /**
+     * Important function:
+     * Add each methode that is allowed to be called from a slave server that is not marked as "trusted" directly.
+     * Do not allow methods to manipulate data that could be exploited by cheating.
+     * An exploit can be done by manually compiling this mod with a custom access methode,
+     * that calls for example a bank deposit methode which then deposits items for free.
+     * Depositing should only be possible under the control of a trusted server instance and never by an untrusted slave!
+     * @param input used to get the function which the requestor wants to access.
+     * @return true if the call is safe to use from the slave side directly.
+     *         false if the call could be as exploit by a slave.
+     */
+    protected boolean isAllowedToCallByUntrustedSlaveServer(IN input)
+    {
+        return isAllowedToCallByClient(input);
+    }
+
     @Override
     public CompletableFuture<OUT> handleOnServer(IN input, ServerPlayer sender) {
         return handleOnMasterServer(input, "", sender.getUUID());

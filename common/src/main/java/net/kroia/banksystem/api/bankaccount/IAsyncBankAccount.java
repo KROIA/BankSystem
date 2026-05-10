@@ -2,6 +2,7 @@ package net.kroia.banksystem.api.bankaccount;
 
 import com.google.gson.JsonElement;
 import net.kroia.banksystem.api.bank.IAsyncBank;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
@@ -71,6 +72,7 @@ public interface IAsyncBankAccount {
      * Gets the account number of this bank account.
      * @return the account number
      */
+    // Returns int directly (not Future) — shared with sync interface for identity forwarding
     int getAccountNumberAsync();
 
     /**
@@ -124,6 +126,14 @@ public interface IAsyncBankAccount {
      * @return true if the user has the specified permission, false otherwise
      */
     CompletableFuture<Boolean> hasPermissionAsync(UUID userUUID, int permission);
+
+    /**
+     * Type-safe overload of {@link #hasPermissionAsync(UUID, int)} taking a {@link BankPermission} enum.
+     * Prefer this overload over the int variant.
+     */
+    default CompletableFuture<Boolean> hasPermissionAsync(UUID userUUID, BankPermission permission) {
+        return hasPermissionAsync(userUUID, permission.getValue());
+    }
 
     /**
      * Sets the permission level of the user with the specified UUID.

@@ -64,10 +64,10 @@ public class AskPopupScreen extends BankSystemGuiScreen {
     {
         frame.setBackgroundColor(background);
         frame.setOutlineColor(outline);
-        this.yesButton.setIdleColor(yesButton);
+        this.yesButton.setBackgroundColor(yesButton);
         this.yesButton.setHoverColor((yesButton*3/4) | 0xFF000000);
         this.yesButton.setPressedColor((yesButton/2) | 0xFF000000);
-        this.noButton.setIdleColor(noButton);
+        this.noButton.setBackgroundColor(noButton);
         this.noButton.setHoverColor((noButton*3/4) | 0xFF000000);
         this.noButton.setPressedColor((noButton/2) | 0xFF000000);
     }

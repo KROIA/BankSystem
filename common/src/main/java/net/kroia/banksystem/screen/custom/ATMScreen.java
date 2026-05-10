@@ -3,9 +3,10 @@ package net.kroia.banksystem.screen.custom;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.clientdata.BankData;
-import net.kroia.banksystem.item.BankSystemItems;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.entity.WithdrawMoneyPacket;
+import net.kroia.banksystem.screen.uiElements.AmountButtonGroup;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -36,6 +37,20 @@ public class ATMScreen extends BankSystemGuiScreen {
         private final ItemView itemView;
         private final TextBox amountTextBox;
 
+        private final AmountButtonGroup addAmountButtonGroup;
+
+        /*private final Button zeroButton;
+
+        private final Button add1Button;
+        private final Button add10Button;
+        private final Button add32Button;
+        private final Button add64Button;
+
+        private final Button remove1Button;
+        private final Button remove10Button;
+        private final Button remove32Button;
+        private final Button remove64Button;*/
+
         public MoneyElement(ItemStack moneyItem)
         {
             super();
@@ -43,14 +58,45 @@ public class ATMScreen extends BankSystemGuiScreen {
 
             itemView = new ItemView(this.itemStack);
             amountTextBox = new TextBox();
-            amountTextBox.setAllowLetters(false);
-            amountTextBox.setAllowNumbers(true, false);
-            amountTextBox.setAllowNegativeNumbers(false);
+            amountTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 100, 0));
+
+            addAmountButtonGroup = AmountButtonGroup.create(new long[]{1L, 10L, 32L, 64L},
+                    this::addAmountFromButton,
+                    ()->{addAmountFromButton(-getAmount());},
+                    this::getAmount);
+            addChild(addAmountButtonGroup);
 
             amountTextBox.setOnTextChanged((text -> {
-                // Send signal to root GuiElement
+                addAmountButtonGroup.updateButtons();
                 onRequestedAmountChanged(this);
             }));
+
+
+
+            /*float addRemoveButtonFontScale = 0.8f;
+            int colorGreen = ColorUtilities.getRGB(50,204,111);
+            int colorRed = ColorUtilities.getRGB(204,90,86);
+            zeroButton = new Button("=0", ()->addAmountFromButton(-getAmount()));
+            add1Button = new Button("+1", ()->addAmountFromButton(1));
+            add10Button = new Button("+10", ()->addAmountFromButton(10));
+            add32Button = new Button("+32", ()->addAmountFromButton(32));
+            add64Button = new Button("+64", ()->addAmountFromButton(64));
+            remove1Button = new Button("-1", ()->addAmountFromButton(-1));
+            remove10Button = new Button("-10", ()->addAmountFromButton(-10));
+            remove32Button = new Button("-32", ()->addAmountFromButton(-32));
+            remove64Button = new Button("-64", ()->addAmountFromButton(-64));
+            formatButton(zeroButton, addRemoveButtonFontScale, colorRed);
+            zeroButton.setHeight(zeroButton.getHeight()*2);
+
+            formatButton(add1Button, addRemoveButtonFontScale, colorGreen);
+            formatButton(add10Button, addRemoveButtonFontScale, colorGreen);
+            formatButton(add32Button, addRemoveButtonFontScale, colorGreen);
+            formatButton(add64Button, addRemoveButtonFontScale, colorGreen);
+
+            formatButton(remove1Button, addRemoveButtonFontScale, colorRed);
+            formatButton(remove10Button, addRemoveButtonFontScale, colorRed);
+            formatButton(remove32Button, addRemoveButtonFontScale, colorRed);
+            formatButton(remove64Button, addRemoveButtonFontScale, colorRed);*/
 
             LayoutHorizontal layout = new LayoutHorizontal();
             this.setLayout(layout);
@@ -59,9 +105,32 @@ public class ATMScreen extends BankSystemGuiScreen {
             addChild(itemView);
             addChild(amountTextBox);
 
+            /*addChild(zeroButton);
+            addChild(add1Button);
+            addChild(add10Button);
+            addChild(add32Button);
+            addChild(add64Button);
+            addChild(remove1Button);
+            addChild(remove10Button);
+            addChild(remove32Button);
+            addChild(remove64Button);*/
+
+
             setAmount(0); // Initialize with 0 amount
-            setHeight(20);
+            setHeight(addAmountButtonGroup.getHeight());
+            //setHeight(add10Button.getHeight()*2+2);
         }
+        /*private void formatButton(Button button, float fontscale, int color)
+        {
+            button.setTextFontScale(fontscale);
+            button.setBackgroundColor(color);
+            button.setHoverColor(ColorUtilities.setBrightness(color, 0.7f));
+            button.setPressedColor(ColorUtilities.setBrightness(color, 0.6f));
+            //button.setOutlineColor(ColorUtilities.setBrightness(color, 0.5f));
+            button.setEnableOutline(false);
+            button.setWidth(button.getTextWidth(button.getText()) + padding-2);
+            button.setHeight(button.getTextHeight() + padding-4);
+        }*/
 
         @Override
         protected void render() {
@@ -71,7 +140,24 @@ public class ATMScreen extends BankSystemGuiScreen {
         @Override
         protected void layoutChanged() {
             itemView.setBounds(0, 0, this.getHeight(), this.getHeight());
-            amountTextBox.setBounds(itemView.getWidth(), 0, this.getWidth() - itemView.getWidth(), this.getHeight());
+
+            //int buttonWidthSum = zeroButton.getWidth() + add1Button.getWidth() + add10Button.getWidth() + add32Button.getWidth() + add64Button.getWidth()+1;
+            amountTextBox.setBounds(itemView.getWidth(), 0, this.getWidth()/2 - itemView.getWidth(), this.getHeight());
+
+            addAmountButtonGroup.setBounds(amountTextBox.getRight(), amountTextBox.getTop(), this.getWidth() - amountTextBox.getRight(), this.getHeight());
+            //addAmountButtonGroup.setPosition(amountTextBox.getRight(), amountTextBox.getTop());
+            //addAmountButtonGroup.setHeight(getHeight());
+            /*zeroButton.setPosition(amountTextBox.getRight(), amountTextBox.getTop()+1);
+
+            add1Button.setPosition(zeroButton.getRight(), zeroButton.getTop());
+            add10Button.setPosition(add1Button.getRight(), add1Button.getTop());
+            add32Button.setPosition(add10Button.getRight(), add10Button.getTop());
+            add64Button.setPosition(add32Button.getRight(), add32Button.getTop());
+
+            remove1Button.setPosition(add1Button.getLeft(), add1Button.getBottom());
+            remove10Button.setPosition(remove1Button.getRight(), remove1Button.getTop());
+            remove32Button.setPosition(remove10Button.getRight(), remove10Button.getTop());
+            remove64Button.setPosition(remove32Button.getRight(), remove32Button.getTop());*/
         }
 
         public ItemStack getItemStack() {
@@ -93,10 +179,31 @@ public class ATMScreen extends BankSystemGuiScreen {
             return value;
         }
         public void setAmount(long amount) {
+            setAmountInternal(amount);
+            addAmountButtonGroup.updateButtons();
+            //updateButtons(amount);
+        }
+        public void setAmountInternal(long amount)
+        {
             if(amount < 0)
                 amount = 0;
             amountTextBox.setText(String.valueOf(amount));
         }
+        private void addAmountFromButton(long amount)
+        {
+            long newAmount = Math.max(0, getAmount() + amount);
+            setAmountInternal(newAmount);
+            onRequestedAmountChanged(this);
+        }
+        /*private void updateButtons(long amount)
+        {
+            zeroButton.setEnabled(amount > 0);
+            remove1Button.setEnabled(amount >= 1);
+            remove10Button.setEnabled(amount >= 10);
+            remove32Button.setEnabled(amount >= 32);
+            remove64Button.setEnabled(amount >= 64);
+
+        }*/
     }
 
     private static class BalanceView extends BankSystemGuiElement {
@@ -171,6 +278,7 @@ public class ATMScreen extends BankSystemGuiScreen {
     private final ListView moneyListView;
 
     private static ATMScreen instance = null;
+    private static boolean tickListenerRegistered = false;
     private static long lastTickCount = 0;
     private long currentBalanceWeekVar = 0;
     private int currentSelectedAccountNumber = 0; // This is not used in the ATM screen, but kept for consistency with other screens
@@ -222,7 +330,10 @@ public class ATMScreen extends BankSystemGuiScreen {
         rootElement.addChild(receiveButton);
 
         lastTickCount = System.currentTimeMillis();
-        TickEvent.PLAYER_POST.register(ATMScreen::onClientTick);
+        if (!tickListenerRegistered) {
+            TickEvent.PLAYER_POST.register(ATMScreen::onClientTick);
+            tickListenerRegistered = true;
+        }
         instance = this;
         updateBalanceView();
         calculateSum();
@@ -247,27 +358,29 @@ public class ATMScreen extends BankSystemGuiScreen {
     public void onClose() {
         super.onClose();
         instance = null;
-        // Unregister the event listener when the screen is closed
-        TickEvent.PLAYER_POST.unregister(ATMScreen::onClientTick);
     }
 
     @Override
     protected void updateLayout(Gui gui) {
-        int width = getWidth();
+        int width = (getWidth()*3)/4;
         int height = getHeight();
+
 
         int padding = 10;
         int spacing = 5;
 
+        int leftEdget = (getWidth() - width)/2+padding;
 
-        rootElement.setBounds(padding, padding, width-2*padding, height-2*padding);
+
+        rootElement.setBounds(leftEdget, padding, width-2*padding, height-2*padding);
         padding = 5;
         width = rootElement.getWidth() - 2*padding;
         height = rootElement.getHeight()-2*padding;
 
         selectAccountButton.setBounds(padding, padding, width/2, 20);
         balanceView.setBounds(padding, selectAccountButton.getBottom()+spacing, width, 20);
-        receiveButton.setBounds(padding, height+padding-20, width, 20);
+        int receiveButtonWidth = rootElement.getWidth()/2;
+        receiveButton.setBounds((rootElement.getWidth()-receiveButtonWidth)/2, height+padding-20, receiveButtonWidth, 20);
         moneyListView.setBounds(padding, balanceView.getBottom() + padding, width, receiveButton.getTop() - balanceView.getBottom() - padding*2);
 
         //receiveButton.setBounds(rootElement.getLeft(), rootElement.getBottom()+5,rootElement.getWidth(), 20);
@@ -352,8 +465,13 @@ public class ATMScreen extends BankSystemGuiScreen {
             long amount = moneyElement.getAmount();
             ItemStack itemStack = moneyElement.getItemStack();
             MoneyItem moneyItem = (MoneyItem) itemStack.getItem();
-            amount *= moneyItem.worth(); // Assuming getValue() returns the value of the money item
-            sum += amount;
+            try {
+                amount = Math.multiplyExact(amount, moneyItem.worth());
+                sum = Math.addExact(sum, amount);
+            } catch (ArithmeticException e) {
+                sum = Long.MAX_VALUE;
+                break;
+            }
         }
         balanceView.updateSum(sum);
         balanceView.enableWarning(currentBalanceWeekVar < sum);

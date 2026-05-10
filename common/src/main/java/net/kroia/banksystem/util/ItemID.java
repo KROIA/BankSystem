@@ -60,7 +60,7 @@ public class ItemID implements ServerSaveable {
     public void tryUpdateNameCache()
     {
         ItemStack stack = getStack();
-        if(stack == null || stack.isEmpty() || stack.getItem() == Items.AIR) {
+        if(stack.isEmpty() || stack.getItem() == Items.AIR) {
             name_cache = String.valueOf(id);
             return;
         }
@@ -100,10 +100,10 @@ public class ItemID implements ServerSaveable {
     {
         return ItemIDManager.registerItemStackServerSide(itemStack);
     }
-    public static @NotNull CompletableFuture<List<ItemID>> getOrRegisterFromItemStackServerSide(@NotNull List<ItemStack> itemStacks)
-    {
-        return ItemIDManager.registerItemStackServerSide(itemStacks);
-    }
+    //public static @NotNull CompletableFuture<List<ItemID>> getOrRegisterFromItemStackServerSide(@NotNull List<ItemStack> itemStacks)
+    //{
+    //    return ItemIDManager.registerItemStackServerSide(itemStacks);
+    //}
 
     /**
      * Do not call this from the server side
@@ -160,7 +160,7 @@ public class ItemID implements ServerSaveable {
         return id;
     }
 
-    public @Nullable ItemStack getStack() {
+    public @NotNull ItemStack getStack() {
         return ItemIDManager.getItemStack(this);
     }
     public @NotNull String getName() {
@@ -168,7 +168,7 @@ public class ItemID implements ServerSaveable {
             return name_cache;
 
         ItemStack stack = getStack();
-        if(stack == null) {
+        if(stack.isEmpty()) {
             name_cache = String.valueOf(id);
             return name_cache;
         }
@@ -182,7 +182,7 @@ public class ItemID implements ServerSaveable {
     }
     public boolean isAir() {
         ItemStack stack = getStack();
-        return stack == null || stack.isEmpty() || stack.is(Items.AIR);
+        return stack.isEmpty() || stack.is(Items.AIR);
     }
 
     @Override
@@ -216,7 +216,7 @@ public class ItemID implements ServerSaveable {
         if(id == INVALID_ID.id)
             return false;
         ItemStack stack = getStack();
-        return stack != null;
+        return !stack.isEmpty();
     }
 
     @Override

@@ -32,6 +32,7 @@ You want to support me?<br>
     * [Creating a new bank account](#creating-a-new-bank-account)
     * [For admins / single player](#for-admins--single-player)
 * [Commands](#commands)
+* [Changelog](#changelog)
 
 
 ---
@@ -613,3 +614,24 @@ The window shows all items which are currently stored on the players bank accoun
     Check the check box if you want to release the locked amount for a specific item. This may affect other mods which have locked the money/item in the first place.<br>
     Click the <b>Save changes</b> button to apply your changes.<br>
 </details>
+
+---
+
+## Changelog
+
+All notable changes are documented in version-specific files under `changelog/`.
+
+### Alpha
+
+- [1.5.0_ALPHA_3](changelog/v1.5.0_ALPHA_3.md) — Security & stability: 50 fixes across permissions, async, concurrency, block entities
+- [1.5.0_ALPHA_2](changelog/v1.5.0_ALPHA_2.md) — Trusted slave servers, package reorganization, UI improvements
+- 1.5.0_ALPHA_1 — Initial alpha
+
+### Stable
+
+- [1.4.1](changelog/v1.4.1.md) — Latest stable (CurseForge)
+- 1.4.0
+- 1.3.0
+- 1.2.0
+- 1.1.0
+- 1.0.0 — Initial release

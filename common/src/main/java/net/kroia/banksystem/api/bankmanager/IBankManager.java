@@ -46,4 +46,8 @@ public interface IBankManager {
 
     boolean isMaster();
 
+
+
+
+
 }

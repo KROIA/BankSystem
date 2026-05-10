@@ -6,8 +6,11 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
-import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
+import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
+import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.entity.UpdateBankTerminalBlockEntityPacket;
+import net.kroia.banksystem.networking.general.BankAccountChangeStream;
+import net.kroia.banksystem.screen.uiElements.AmountButtonGroup;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.ItemID;
@@ -16,6 +19,7 @@ import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
+import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -32,30 +36,36 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         public static final int HEIGHT = 20;
         private long targetAmount = 0;
         private ItemStack stack;
-        public long stackSize;
+        private long wholeBankBalance;
         private final Rectangle itemStackHitBox;
         public final ItemID itemID;
 
         private final TextBox amountBox;
         private final Label balanceLabel;
+        private final AmountButtonGroup addAmountButtonGroup;
 
         BankTerminalScreen parent;
 
-        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long stackSize) {
+        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long rawBalance) {
             super(0, 0, 100, HEIGHT);
             this.parent = parent;
             this.stack = stack;
             this.itemID = itemID;
-            this.stackSize = stackSize;
 
-            int boxPadding = 2;
+            //int boxPadding = 2;
+
+            addAmountButtonGroup = AmountButtonGroup.create(new long[]{1L, 10L, 32L, 64L},
+                    this::addAmountFromButton,
+                    ()->{setTargetAmount(0);},
+                    this::getTargetAmount);
+            addChild(addAmountButtonGroup);
 
             balanceLabel = new Label("");
+            balanceLabel.setTextFontScale(0.8f);
             itemStackHitBox = new Rectangle(1,1,16,16);
 
             this.amountBox = new TextBox(0,0,0);
-            this.amountBox.setMaxChars(10); // Max length of input
-            this.amountBox.setAllowLetters(false); // Allow only digits
+            this.amountBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10,0));
 
             addChild(balanceLabel);
             addChild(amountBox);
@@ -63,14 +73,19 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
                 saveAmount();
             });
             amountBox.setText(0);
+            setHeight(addAmountButtonGroup.getHeight());
+            addAmountButtonGroup.updateButtons();
+
+            wholeBankBalance = (long)getBankManager().convertToRealAmount(rawBalance);
+            String amountStr = ServerBank.getFormattedAmountStatic(rawBalance);
+            balanceLabel.setText(amountStr);
             //addChild(receiveItemsFromMarketButton);
         }
 
         @Override
         protected void render() {
             drawItem(stack, itemStackHitBox.x, itemStackHitBox.y);
-            String amountStr = ServerBank.getFormattedAmountStatic(stackSize);
-            balanceLabel.setText(amountStr);
+
             if(itemStackHitBox.contains(getMousePos().x, getMousePos().y))
                 drawTooltip(stack, getMousePos());
         }
@@ -80,34 +95,63 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             int width = getWidth()-17;
             int height = getHeight();
             int padding = 2;
-            int balanceLabelWidth = width/2;
+            int balanceLabelWidth = width/4;
             itemStackHitBox.y = (height-16)/2;
 
             balanceLabel.setBounds(padding+17, padding, balanceLabelWidth, height-padding*2);
-            amountBox.setBounds(balanceLabel.getRight(), padding, getWidth()-balanceLabel.getRight()-padding, height-padding*2);
+            amountBox.setBounds(balanceLabel.getRight(), padding, width/3, height-padding*2);
+            addAmountButtonGroup.setBounds(amountBox.getRight()+1, 0, getWidth()-amountBox.getRight()-1, height);
+        }
+        public void setBankBalance(long amount) {
+            wholeBankBalance = (long)getBankManager().convertToRealAmount(amount);
+            String amountStr = ServerBank.getFormattedAmountStatic(amount);
+            balanceLabel.setText(amountStr);
+
+            if(targetAmount > wholeBankBalance) {
+                targetAmount = wholeBankBalance;
+                amountBox.setText(targetAmount);
+                addAmountButtonGroup.updateButtons();
+            }
 
         }
         public long getTargetAmount()
         {
-            saveAmount();
+            //saveAmount();
             return targetAmount;
         }
-        public void setTargetAmount(int amount)
+        public void setTargetAmount(long amount)
         {
             this.targetAmount = amount;
-            amountBox.setText(amount);
+            if(targetAmount > wholeBankBalance) {
+                targetAmount = wholeBankBalance;
+            }
+            else if(targetAmount < 0)
+            {
+                targetAmount = 0;
+            }
+
+            amountBox.setText(targetAmount);
         }
         private void saveAmount() {
-            targetAmount = this.amountBox.getInt();
-            if(targetAmount > stackSize) {
-                targetAmount = stackSize;
+            try {
+                String text = this.amountBox.getText();
+                targetAmount = (text == null || text.isEmpty()) ? 0 : Long.parseLong(text);
+            } catch (NumberFormatException e) {
+                targetAmount = 0;
+            }
+            if(targetAmount > wholeBankBalance) {
+                targetAmount = wholeBankBalance;
             }
             else if(targetAmount < 0)
             {
                 targetAmount = 0;
             }
             amountBox.setText(targetAmount);
+        }
 
+        private void addAmountFromButton(long amount)
+        {
+            setTargetAmount(getTargetAmount() + amount);
         }
     }
 
@@ -138,6 +182,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private int selectedBankAccountNr = -1;
     //private int userPermission = 0;
 
+    private UUID bankChangeStreamID = null;
 
 
     public BankTerminalScreen(BankTerminalContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
@@ -166,7 +211,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             }
         });
         sendItemsToBankButton = new Button(SEND_ITEMS_TO_BANK_BUTTON_TEXT.getString());
-        sendItemsToBankButton.setOnFallingEdge(this::onTransmittItemsToBank);
+        sendItemsToBankButton.setOnFallingEdge(this::onTransmitItemsToBank);
 
         receiveItemsFromBankButton = new Button(RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT.getString());
         receiveItemsFromBankButton.setOnFallingEdge(this::onReceiveItemsFromBank);
@@ -174,7 +219,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         itemListView = new VerticalListView(0, 0, 100, 100);
         LayoutGrid layoutGrid = new LayoutGrid();
         layoutGrid.stretchX = true;
-        layoutGrid.columns = 3;
+        layoutGrid.columns = 2;
         itemListView.setLayout(layoutGrid);
         inventoryView = new ContainerView<>(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 256, 256));
         inventoryView.setSize(176, 166);
@@ -188,7 +233,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
 
         getBankManager().requestBankTerminalData(pMenu.getBlockPos()).thenAccept((bankTerminalData) -> {
-            selectedBankAccountNr = bankTerminalData.selectedBankAccount();
+            setSelectedBankAccountNr(bankTerminalData.selectedBankAccount());
 
             //userPermission = bankTerminalData.userPermission;
 
@@ -201,6 +246,8 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
                 getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID()).thenAccept(this::updateBankList);
             }
         });
+
+
     }
 
     @Override
@@ -228,6 +275,11 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     public void onClose() {
         super.onClose();
         screenIsOpen = false;
+        if(bankChangeStreamID != null)
+        {
+            StreamSystem.stopStream(bankChangeStreamID);
+            bankChangeStreamID = null;
+        }
     }
     @Override
     public void containerTick() {
@@ -236,12 +288,34 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     }
 
     public void handleTick() {
-        tickCount++;
+        /*tickCount++;
         if(tickCount - lastTickCount > 10)
         {
             lastTickCount = tickCount;
             updateBankList();
+        }*/
+    }
+
+    private void setSelectedBankAccountNr(int selectedBankAccountNr) {
+        if(selectedBankAccountNr == this.selectedBankAccountNr)
+            return;
+        if(bankChangeStreamID != null)
+        {
+            StreamSystem.stopStream(bankChangeStreamID);
+            bankChangeStreamID = null;
         }
+
+        this.selectedBankAccountNr = selectedBankAccountNr;
+
+        BankAccountChangeStream.InputData inputData = new BankAccountChangeStream.InputData(selectedBankAccountNr);
+        bankChangeStreamID = BankSystemNetworking.BANKSYSTEM_ACCOUNT_CHANGE_STREAM.startServerToClient(inputData, (changedData)->
+                {
+                    updateBankList(changedData.changedData());
+                },
+                ()->
+                {
+                    bankChangeStreamID = null;
+                });
     }
 
     private void updateBankList()
@@ -259,16 +333,16 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             error("Failed to update bank data for player: " + playerName + ". BankAccountData is null.");
             getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID()).thenAccept((data)->{
                 if(data != null)
-                    selectedBankAccountNr = data.accountNumber;
+                    setSelectedBankAccountNr(data.accountNumber);
             });
             return;
         }
         selectAccountButton.setAccountData(minimalBankUserData);
-        selectedBankAccountNr = minimalBankUserData.accountNumber;
+        setSelectedBankAccountNr(minimalBankUserData.accountNumber);
         UUID thisPlayer = getThisPlayerUUID();
 
-        receiveItemsFromBankButton.setEnabled(minimalBankUserData.hasPermission(thisPlayer, BankPermission.WITHDRAW.getValue()));
-        sendItemsToBankButton.setEnabled(minimalBankUserData.hasPermission(thisPlayer, BankPermission.DEPOSIT.getValue()));
+        receiveItemsFromBankButton.setEnabled(minimalBankUserData.hasPermission(thisPlayer, BankPermission.WITHDRAW));
+        sendItemsToBankButton.setEnabled(minimalBankUserData.hasPermission(thisPlayer, BankPermission.DEPOSIT));
 
         Map<ItemID, BankData> bankMap = minimalBankUserData.bankData;
         ArrayList<Pair<ItemID, BankData>> sortedBankAccounts = new ArrayList<>();
@@ -279,7 +353,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             if(bankData != null)
                 sortedBankAccounts.add(new Pair<>(itemID, bankData));
         }
-        sortedBankAccounts.sort((a, b) -> Float.compare(b.getSecond().balance(), a.getSecond().balance()));
+        sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance(), a.getSecond().balance()));
 
         int x = 0;
         int y = 0;
@@ -296,7 +370,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
                 bankElements.add(element);
                 itemListView.addChild(element);
             } else {
-                element.stackSize = balance;
+                element.setBankBalance(balance);
             }
             if (needsResize)
                 availableItems.put(pair.getFirst(), pair.getFirst());
@@ -327,7 +401,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         return null;
     }
 
-    private void onTransmittItemsToBank() {
+    private void onTransmitItemsToBank() {
 
         /*for(BankElement element : bankElements)
         {
@@ -337,6 +411,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         HashMap<ItemID, Long> itemTransferToBankAmounts = new HashMap<>();
         UpdateBankTerminalBlockEntityPacket.sendPacketToServer(this.menu.getBlockPos(), itemTransferToBankAmounts, true, selectedBankAccountNr);
+        updateBankList();
     }
     private void onReceiveItemsFromBank() {
         for(BankElement element : bankElements)
@@ -355,12 +430,13 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             }
         }
         UpdateBankTerminalBlockEntityPacket.sendPacketToServer(this.menu.getBlockPos(), itemTransferToMarketAmounts, false, selectedBankAccountNr);
+        updateBankList();
     }
     private void onBankaccountSelected(int accountNumber)
     {
         if(!screenIsOpen)
             return;
-        this.selectedBankAccountNr = accountNumber;
+        setSelectedBankAccountNr(accountNumber);
         bankElements.clear();
         itemListView.removeChilds();
         updateBankList();

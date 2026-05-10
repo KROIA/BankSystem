@@ -28,7 +28,11 @@ public interface IClientBankManager {
     CompletableFuture<Boolean> disallowItemIDAsync(ItemID itemID);
     CompletableFuture<List<BankAccountData>> getBankAccountsDataAsync(UUID userUUID);
     CompletableFuture<Boolean> deleteBankAccountAsync(int accountNumber);
-
+    CompletableFuture<Integer> getItemFractionScaleFactorAsync();
+    int getItemFractionScaleFactor();
+    int getItemFractionDigitsCount();
+    long convertToRawAmount(double realAmount);
+    double convertToRealAmount(long rawAmount);
 
 
     /**

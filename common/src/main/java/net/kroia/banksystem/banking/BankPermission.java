@@ -18,10 +18,13 @@ public enum BankPermission
         return (permissions & permission.getValue()) != 0;
     }
     public static boolean hasPermission(int permissions, int permission) {
-        return (permissions & permission) == permission;
+        return (permissions & permission) != 0;
+    }
+    public static boolean hasAllPermissions(int permissions, int requiredPermissions) {
+        return (permissions & requiredPermissions) == requiredPermissions;
     }
     public static boolean hasAnyPermission(int permissions, int permission) {
-        return (permissions & permission) > 0;
+        return (permissions & permission) != 0;
     }
     public static int addPermission(int permissions, BankPermission permission) {
         return permissions | permission.getValue();
@@ -32,6 +35,14 @@ public enum BankPermission
     public static int togglePermission(int permissions, BankPermission permission) {
         return permissions ^ permission.getValue();
     }
+    /**
+     * Clears all permissions, returning zero.
+     * <p>Note: the {@code permissions} parameter is ignored — this method
+     * unconditionally returns {@code 0} regardless of input.</p>
+     *
+     * @param permissions unused; present only for API consistency
+     * @return 0 (no permissions)
+     */
     public static int clearPermissions(int permissions) {
         return 0;
     }

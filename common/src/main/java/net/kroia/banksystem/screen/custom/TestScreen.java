@@ -3,7 +3,7 @@ package net.kroia.banksystem.screen.custom;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.banking.bankmanager.AsyncBankManager;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;

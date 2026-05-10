@@ -4,7 +4,7 @@ import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.platform.Platform;
 import dev.architectury.utils.Env;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.banksystem.minecraft.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.modutilities.ModUtilitiesMod;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;

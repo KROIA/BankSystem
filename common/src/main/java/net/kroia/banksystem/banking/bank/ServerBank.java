@@ -10,8 +10,9 @@ import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.clientdata.BankData;
-import net.kroia.banksystem.item.BankSystemItems;
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
@@ -38,8 +39,11 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     }
 
+
+
     protected long balance;
     protected long lockedBalance;
+    protected boolean changeFlag = false;
     private ItemID itemID;
 
     private ServerBank()
@@ -54,7 +58,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
 
     public static @Nullable ServerBank create(ItemID itemID, long balance) {
-        if (itemID == null || balance < 0) {
+        if (itemID == null || !itemID.isValid() || balance < 0) {
             return null; // Invalid parameters
         }
         IServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
@@ -73,6 +77,17 @@ public class ServerBank implements ServerSaveable, IServerBank {
         return null; // Invalid data
     }
 
+    @Override
+    public boolean hasChanges()
+    {
+        return changeFlag;
+    }
+
+    @Override
+    public void clearChangeFlag()
+    {
+        changeFlag = false;
+    }
 
     @Override
     public BankData getMinimalData() {
@@ -183,6 +198,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
 
 
+    // Weak-lock semantics — lockedBalance is advisory; callers verify before withdrawing locked funds
     @Override
     public boolean setBalance(long balance) {
         if(balance < 0)
@@ -289,11 +305,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
             return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
         }
         lockedBalance -= amount;
+        changeFlag = true;
         return BankStatus.SUCCESS;
     }
     @Override
     public CompletableFuture<BankStatus> withdrawLockedAsync(long amount) {
-        return CompletableFuture.completedFuture(withdraw(amount));
+        return CompletableFuture.completedFuture(withdrawLocked(amount));
     }
 
 
@@ -324,6 +341,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         }
 
         lockedBalance -= amount;
+        changeFlag = true;
         return BankStatus.SUCCESS;
     }
     @Override
@@ -417,6 +435,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         lockedBalance -= amount;
         BankStatus otherBankStatus = other.deposit(amount);
         if(otherBankStatus == BankStatus.SUCCESS) {
+            changeFlag = true;
             return BankStatus.SUCCESS;
         }
         lockedBalance += amount;
@@ -489,6 +508,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         lockedBalance -= amount;
         BankStatus otherBankStatus = other.deposit(amount);
         if(otherBankStatus == BankStatus.SUCCESS) {
+            changeFlag = true;
             return BankStatus.SUCCESS;
         }
         lockedBalance = lastLocked;
@@ -620,7 +640,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public long convertToRawAmount(double realAmount)
     {
-        return convertToRawAmountStatic(realAmount);
+        return BankManager.convertToRawAmountStatic(realAmount);
     }
     @Override
     public CompletableFuture<Long> convertToRawAmountAsync(double realAmount)
@@ -634,13 +654,17 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public double convertToRealAmount(long rawAmount)
     {
-        return convertToRealAmountStatic(rawAmount);
+        return BankManager.convertToRealAmountStatic(rawAmount);
     }
     @Override
     public CompletableFuture<Double> convertToRealAmountAsync(long rawAmount)
     {
-        return CompletableFuture.completedFuture(convertToRealAmountStatic(rawAmount));
+        return CompletableFuture.completedFuture(BankManager.convertToRealAmountStatic(rawAmount));
     }
+
+
+
+
 
 
 
@@ -681,7 +705,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getNormalizedTotalBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getNormalizedAmount(lockedBalance));
+        return CompletableFuture.completedFuture(getNormalizedAmount(balance + lockedBalance));
     }
 
 
@@ -723,7 +747,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getFormattedTotalBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getFormattedAmount(lockedBalance));
+        return CompletableFuture.completedFuture(getFormattedAmount(balance + lockedBalance));
     }
 
 
@@ -731,7 +755,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public String getNormalizedAmount(double realAmount)
     {
-        long amount = convertToRawAmountStatic(realAmount);
+        long amount = BankManager.convertToRawAmountStatic(realAmount);
         return getNormalizedAmountStatic(amount);
     }
     @Override
@@ -760,7 +784,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public String getFormattedAmount(double realAmount)
     {
-        long amount = convertToRawAmountStatic(realAmount);
+        long amount = BankManager.convertToRawAmountStatic(realAmount);
         return getFormattedAmountStatic(amount);
     }
     @Override
@@ -813,7 +837,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> toStringNoOwnerAsync()
     {
-        return CompletableFuture.completedFuture(toJsonString());
+        return CompletableFuture.completedFuture(toStringNoOwner());
     }
 
 
@@ -870,23 +894,20 @@ public class ServerBank implements ServerSaveable, IServerBank {
                 !tag.contains("lockedBalance"))
             return false;
 
+        itemID = ItemID.INVALID_ID;
         if(tag.contains("itemID",Tag.TAG_STRING))
         {
             String itemIDStr = tag.getString("itemID");
-            itemID = null; // Reset itemID
             if(itemIDStr.equals("$") || itemIDStr.equals("money")) {
                 itemID = ItemID.getFromItemStack(BankSystemItems.MONEY.get().getDefaultInstance());
             }
             else {
                 ItemStack itemStack = ItemUtilities.createItemStackFromId(itemIDStr);
-                if (itemStack == ItemStack.EMPTY || itemStack == null || itemStack.is(Items.AIR))
-                    itemID = null; // Invalid item ID
-                else {
+                if (itemStack != null && itemStack != ItemStack.EMPTY && !itemStack.is(Items.AIR))
                     itemID = ItemID.getFromItemStack(itemStack);
-                }
             }
         }
-        if(itemID == null)
+        else
         {
             CompoundTag itemTag = tag.getCompound("itemID");
             itemID = ItemID.createFromTag(itemTag);
@@ -896,7 +917,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         long balance = tag.getLong("balance");
         lockedBalance = tag.getLong("lockedBalance");
         setBalanceInternal(balance);
-        return balance >= 0 && lockedBalance >= 0 && itemID != null;
+        return balance >= 0 && lockedBalance >= 0 && itemID.isValid();
     }
 
 
@@ -923,7 +944,10 @@ public class ServerBank implements ServerSaveable, IServerBank {
             long origTo2LockedBalance2 = castedTo2.lockedBalance;
             long origTo1Balance1 = castedTo1.balance;
             long origTo2Balance2 = castedTo2.balance;
-
+            boolean origFrom1ChangeFlag = castedFrom1.changeFlag;
+            boolean origFrom2ChangeFlag = castedFrom2.changeFlag;
+            boolean origTo1ChangeFlag = castedTo1.changeFlag;
+            boolean origTo2ChangeFlag = castedTo2.changeFlag;
 
             // Try to transfer from locked balance
             BankStatus BankStatus1 = from1.transferFromLockedPrefered(amount1, to1);
@@ -941,6 +965,11 @@ public class ServerBank implements ServerSaveable, IServerBank {
             castedTo2.lockedBalance = origTo2LockedBalance2;
             castedTo1.balance = origTo1Balance1;
             castedTo2.balance = origTo2Balance2;
+            castedTo2.changeFlag = origTo2ChangeFlag;
+            castedTo1.changeFlag = origTo1ChangeFlag;
+            castedFrom1.changeFlag = origFrom1ChangeFlag;
+            castedFrom2.changeFlag = origFrom2ChangeFlag;
+
             if(BankStatus1 == BankStatus.SUCCESS)
                 return BankStatus2;
             return BankStatus1;
@@ -952,14 +981,14 @@ public class ServerBank implements ServerSaveable, IServerBank {
         setBalanceInternal(this.balance + balance);
     }
     private void setBalanceInternal(long balance) {
-        this.balance = balance;
+        if(balance != this.balance) {
+            this.balance = balance;
+            changeFlag = true;
+        }
     }
 
 
-    public static long convertToRawAmountStatic(double realAmount)
-    {
-        return Math.round(realAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
-    }
+
     public static long convertToRawAmountStatic(String realTextboxText) // 1864165.05
     {
         if(realTextboxText == null)
@@ -980,19 +1009,26 @@ public class ServerBank implements ServerSaveable, IServerBank {
         try{
             A = Long.parseLong(realTextboxText.substring(0, decimalPlaces)) * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
         }catch (NumberFormatException ignored) {
-
+            if (!realTextboxText.substring(0, decimalPlaces).isEmpty()) {
+                return 0;
+            }
         }
         try {
-            B = Long.parseLong(realTextboxText.substring(decimalPlaces + 1));
+            String fracStr = realTextboxText.substring(decimalPlaces + 1);
+            int scaleDigits = String.valueOf(BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR).length() - 1;
+            if (fracStr.length() > scaleDigits)
+                fracStr = fracStr.substring(0, scaleDigits);
+            while (fracStr.length() < scaleDigits)
+                fracStr = fracStr + "0";
+            B = Long.parseLong(fracStr);
         }catch (NumberFormatException ignored) {
 
         }
+        if (A < 0)
+            return A - B;
         return A + B;
     }
-    public static double convertToRealAmountStatic(long rawAmount)
-    {
-        return (float)rawAmount / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
-    }
+
 
     // (1000 means 10.00 currency units)
     public static String getNormalizedAmountStatic(long amount)
@@ -1006,12 +1042,29 @@ public class ServerBank implements ServerSaveable, IServerBank {
         // 1.0e18 = 1E
         String exponents = "kMGTPEZY";
 
+        if(amount < 0) {
+            BACKEND_INSTANCES.LOGGER.warn("[ServerBank] getNormalizedAmountStatic called with negative amount: " + amount);
+            return "0";
+        }
+        if(amount == 0)
+            return "0";
+
         long wholeUnits = amount / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
-
-
         String amountString = String.valueOf(wholeUnits);
-        int exponent = (int)(Math.log((double)wholeUnits)/Math.log(10));
+        if(wholeUnits <= 0)
+        {
+            double cents = (amount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (double)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            String centsString = String.valueOf(cents);
+            if(centsString.startsWith("0."))
+                centsString = centsString.substring(2);
+            if(BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR > 1)
+                return "0." + centsString;
+            return "0";
+        }
+
+        double logResult = Math.log10(wholeUnits);
+        int exponent = (int)logResult;
         int exponent3 = exponent/3;
         if(exponent3 > 0)
         {
@@ -1019,17 +1072,17 @@ public class ServerBank implements ServerSaveable, IServerBank {
             String firstPart = amountString.substring(0, modValue);
             if(firstPart.isEmpty())
                 firstPart = "0";
-            String secondPart = amountString.substring(modValue, modValue+2);
+            int endIdx = Math.min(modValue+2, amountString.length());
+            String secondPart = amountString.substring(modValue, endIdx);
 
             amountString = firstPart+"."+secondPart + exponents.charAt(exponent3-1);
         }
         else
         {
-            float cents = (amount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR; // Convert to cents
+            double cents = (amount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (double)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
-            String centsString = String.valueOf((cents));
+            String centsString = String.valueOf(cents);
 
-            // Remove "0." prefix if cents are zero
             if(centsString.startsWith("0.")) {
                 centsString = centsString.substring(2);
             }
@@ -1040,13 +1093,13 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     public static String getNormalizedAmountStatic(double realAmount)
     {
-        long amount = convertToRawAmountStatic(realAmount);
+        long amount = BankManager.convertToRawAmountStatic(realAmount);
         return getNormalizedAmountStatic(amount);
     }
 
     public static String getFormattedAmountStatic(double realAmount)
     {
-        long amount = convertToRawAmountStatic(realAmount);
+        long amount = BankManager.convertToRawAmountStatic(realAmount);
         return getFormattedAmountStatic(amount);
     }
 
@@ -1067,7 +1120,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         if(rawAmount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR != 0)
         {
 
-            float cents = (rawAmount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (float)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR; // Convert to cents
+            double cents = (rawAmount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (double)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR; // Convert to cents
 
             String centsString = String.valueOf(cents);
 
@@ -1104,6 +1157,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     private boolean willOverflow(long tryToAddAmount)
     {
+        if (willAdditionOverflow(balance, lockedBalance)) return true;
         return willAdditionOverflow(balance + lockedBalance, tryToAddAmount);
     }
     private static boolean willAdditionOverflow(long a, long b) {

@@ -1,5 +1,7 @@
 package net.kroia.banksystem.util.async_function_forwarding;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -37,16 +39,16 @@ public class AsyncFunctionInputData <FuncEnumType extends Enum<FuncEnumType>>{
             FuncEnumType functionType,
             T params,
             BiFunction<FuncEnumType, byte[], AsyncFunctionInputData<FuncEnumType>> constructor) {
-        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
-        if(inputParamsCodec != null) { //ExtraCodecUtils.nullable(
+        if(inputParamsCodec == null)
+            return constructor.apply(functionType, new byte[0]);
+        ByteBuf rawBuf = Unpooled.buffer();
+        try {
+            RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(rawBuf, null);
             StreamCodec<RegistryFriendlyByteBuf, T> castedCodec = (StreamCodec<RegistryFriendlyByteBuf, T>)inputParamsCodec;
             castedCodec.encode(buf, params);
-            return constructor.apply(functionType, buf.array());
-            //return new AsyncFunctionInputData<FuncEnumType>(functionType, codec, buf.array());
-        }
-        else {
-            return constructor.apply(functionType, new byte[0]);
-            //return new AsyncFunctionInputData<FuncEnumType>(functionType);
+            return constructor.apply(functionType, ByteBufUtil.getBytes(buf));
+        } finally {
+            rawBuf.release();
         }
     }
     public static <T, FuncEnumType extends Enum<FuncEnumType>> AsyncFunctionInputData<FuncEnumType> of(
@@ -61,6 +63,10 @@ public class AsyncFunctionInputData <FuncEnumType extends Enum<FuncEnumType>>{
         if (inputParamsCodec == null || encodedParams.length == 0)
             return null;
         RegistryFriendlyByteBuf paramBuf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(encodedParams), null);
-        return (T) inputParamsCodec.decode(paramBuf);
+        try {
+            return (T) inputParamsCodec.decode(paramBuf);
+        } finally {
+            paramBuf.release();
+        }
     }
 }

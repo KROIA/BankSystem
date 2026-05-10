@@ -82,6 +82,7 @@ public interface IAsyncBank {
      *
      * @return The type of this bank.
      */
+    // Returns ItemID directly (not Future) — shared with sync interface for type forwarding
     ItemID getItemIDAsync();
 
     /**

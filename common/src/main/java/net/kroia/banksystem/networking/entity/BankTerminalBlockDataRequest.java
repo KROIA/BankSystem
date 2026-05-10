@@ -1,8 +1,10 @@
 package net.kroia.banksystem.networking.entity;
 
 
-import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -33,8 +35,13 @@ public class BankTerminalBlockDataRequest extends BankSystemGenericRequest<Block
     public CompletableFuture<Output> handleOnServer(BlockPos input, ServerPlayer sender) {
         CompletableFuture<Output> future = new CompletableFuture<>();
 
-        BankTerminalBlockEntity blockEntity = (BankTerminalBlockEntity) sender.level().getBlockEntity(input);
-        if(blockEntity == null) {
+        if (sender.distanceToSqr(input.getX() + 0.5, input.getY() + 0.5, input.getZ() + 0.5) > BankSystemMod.MAX_INTERACT_DISTANCE_SQR) {
+            future.complete(new Output(0));
+            return future;
+        }
+
+        BlockEntity be = sender.level().getBlockEntity(input);
+        if(!(be instanceof BankTerminalBlockEntity blockEntity)) {
             future.complete(new Output(0));
             return future;
         }

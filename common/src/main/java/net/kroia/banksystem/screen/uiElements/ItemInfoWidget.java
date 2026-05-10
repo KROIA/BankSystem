@@ -147,9 +147,13 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         if(bankData == null)
             return;
         // sort by total balance
-        bankData = bankData.stream().sorted((a, b) -> Long.compare(
-                b.bankData.get(info.itemID()).balance() + b.bankData.get(info.itemID()).lockedBalance(),
-                a.bankData.get(info.itemID()).balance() + a.bankData.get(info.itemID()).lockedBalance())).toList();
+        bankData = bankData.stream().sorted((a, b) -> {
+            BankData bData = b.bankData.get(info.itemID());
+            BankData aData = a.bankData.get(info.itemID());
+            long bTotal = bData != null ? bData.balance() + bData.lockedBalance() : 0;
+            long aTotal = aData != null ? aData.balance() + aData.lockedBalance() : 0;
+            return Long.compare(bTotal, aTotal);
+        }).toList();
 
         playerDataView.getLayout().enabled = false;
         HashMap<Integer, ItemInfoUserWidget> toRemoveItems = new HashMap<>(playerDataWidgets);
@@ -157,6 +161,7 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         for(BankAccountData account : bankData)
         {
             BankData bankDataItem = account.bankData.get(itemID);
+            if(bankDataItem == null) continue;
             ItemInfoUserWidget userWidget = toRemoveItems.get(account.accountNumber);
             if(userWidget == null)
             {

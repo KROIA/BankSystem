@@ -3,7 +3,9 @@ package net.kroia.banksystem.banking.bankmanager;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
@@ -17,13 +19,18 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.banking.clientdata.UserData;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.JsonUtilities;
+import net.kroia.modutilities.UtilitiesPlatform;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -32,6 +39,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 public class ServerBankManager implements ServerSaveableChunked, IServerBankManager {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -59,7 +67,10 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      */
     private final Map<Integer, ServerBankAccount> bankAccounts = new HashMap<>();
 
+    private final Set<String> trustedSlaveServers = new HashSet<>();
+
     private int nextAccountNumber = 1; // Start with account number 1
+    private int tickCounter = 0;
 
 
     public ServerBankManager() {
@@ -68,6 +79,40 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         getNotRemovableItems();
 
         setupDefaultItems();
+
+
+        TickEvent.SERVER_POST.register(this::update);
+    }
+
+    public void update(MinecraftServer server)
+    {
+        tickCounter++;
+        if(tickCounter < 20)
+            return; // Only process bank updates once per second to save some performance
+        tickCounter = 0;
+
+        for(ServerBankAccount account : bankAccounts.values())
+            account.update(server);
+    }
+
+
+    @Override
+    public void subscribeBankChanges(int accountNr, Consumer<BankAccountData> callback)
+    {
+        ServerBankAccount account = bankAccounts.get(accountNr);
+        if(account != null)
+        {
+            account.subscribeBankChanges(callback);
+        }
+    }
+    @Override
+    public void unsubscribeBankChanges(int accountNr, Consumer<BankAccountData> callback)
+    {
+        ServerBankAccount account = bankAccounts.get(accountNr);
+        if(account != null)
+        {
+            account.unsubscribeBankChanges(callback);
+        }
     }
 
     @Override
@@ -137,13 +182,45 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return false;
         return user.isBanksystemAdmin();
     }
-
     @Override
     public CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID) {
         User user = userMap.get(playerUUID);
         if (user == null)
             return CompletableFuture.completedFuture(false);
         return CompletableFuture.completedFuture(user.isBanksystemAdmin());
+    }
+
+
+
+    @Override
+    public boolean isSlaveServerTrusted(String slaveID)
+    {
+        return trustedSlaveServers.contains(slaveID);
+    }
+    @Override
+    public CompletableFuture<Boolean> isSlaveServerTrustedAsync(String slaveID)
+    {
+        return CompletableFuture.completedFuture(isSlaveServerTrusted(slaveID));
+    }
+
+
+    @Override
+    public Set<String> getTrustedSlaveServers()
+    {
+        return Collections.unmodifiableSet(trustedSlaveServers);
+    }
+
+
+
+    @Override
+    public void trustSlaveServer(String slaveID)
+    {
+        trustedSlaveServers.add(slaveID);
+    }
+    @Override
+    public void untrustSlaveServer(String slaveID)
+    {
+        trustedSlaveServers.remove(slaveID);
     }
 
 
@@ -171,7 +248,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public List<ItemID> getNotRemovableItems() {
-        List<ItemID> ids = ItemIDManager.registerItemStackServerSide_direct(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS);
+        List<ItemID> ids = ItemIDManager.registerItemStackServerSide_direct(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_NOT_REMOVABLE_ITEMS);
         return ids;
     }
 
@@ -244,23 +321,107 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public boolean removeUser(UUID userUUID) {
         if (userMap.containsKey(userUUID)) {
             User user = userMap.remove(userUUID);
+
+            // Collect non-zero balances from accounts that will be deleted or are personal accounts of the removed user
+            Map<ItemID, Long> itemsToDrop = new HashMap<>();
+            List<Integer> emptyAccounts = new ArrayList<>();
+            List<Integer> personalAccountsToDrop = new ArrayList<>();
+
             for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
                 ServerBankAccount account = entry.getValue();
+
+                // Check if this is the user's personal bank account
+                User personalOwner = account.getPersonalBankOwner();
+                if (personalOwner != null && personalOwner.getUUID().equals(userUUID)) {
+                    collectAccountBalances(account, itemsToDrop);
+                    personalAccountsToDrop.add(entry.getKey());
+                    continue;
+                }
+
                 if (account.hasUser(userUUID)) {
                     account.removeUser(userUUID);
                     if (!account.hasAnyUser()) {
-                        int accountNr = entry.getKey();
-                        deleteBankAccount(accountNr); // Remove the account if it has no users left
-                        info("Removed empty bank account with number: " + accountNr);
+                        collectAccountBalances(account, itemsToDrop);
+                        emptyAccounts.add(entry.getKey());
                     }
                 }
             }
+
+            // Drop collected items to the player before deleting accounts
+            if (!itemsToDrop.isEmpty()) {
+                dropItemsToPlayer(userUUID, itemsToDrop);
+            }
+
+            // Delete empty non-personal accounts
+            for (int accountNr : emptyAccounts) {
+                deleteBankAccount(accountNr);
+                info("Removed empty bank account with number: " + accountNr);
+            }
+
+            // Force-delete personal accounts (bypass the personal account protection since the user is being removed)
+            for (int accountNr : personalAccountsToDrop) {
+                ServerBankAccount removed = bankAccounts.remove(accountNr);
+                if (removed != null) {
+                    BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_DELETED.notifyListeners(removed);
+                }
+                info("Removed personal bank account with number: " + accountNr + " for deleted user: " + userUUID);
+            }
+
             BACKEND_INSTANCES.SERVER_EVENTS.USER_REMOVED.notifyListeners(user);
             info("Removed user with UUID: " + userUUID);
             return true;
         } else {
             warn("No user found with UUID: " + userUUID);
             return false;
+        }
+    }
+
+    /**
+     * Collects all non-zero balances (free + locked) from the given bank account into the target map.
+     */
+    private void collectAccountBalances(ServerBankAccount account, Map<ItemID, Long> target) {
+        for (Map.Entry<ItemID, IServerBank> bankEntry : account.getAllBanks().entrySet()) {
+            ItemID itemID = bankEntry.getKey();
+            ISyncServerBank bank = bankEntry.getValue();
+            if (bank == null) continue;
+            long totalBalance = bank.getTotalBalance();
+            if (totalBalance > 0) {
+                target.merge(itemID, totalBalance, Long::sum);
+            }
+        }
+    }
+
+    /**
+     * Drops items to the player using DropItemsInPlayerInventoryRequest with forceDrop=true.
+     * Tries locally first, then sends to all connected slave servers for remaining items.
+     */
+    private void dropItemsToPlayer(UUID playerUUID, Map<ItemID, Long> items) {
+        // Try to drop locally first (player might be on the master server)
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        Map<ItemID, Long> remaining = DropItemsInPlayerInventoryRequest.dropItems(server, playerUUID, items, true);
+
+        // Remove zero-amount entries
+        remaining.entrySet().removeIf(e -> e.getValue() <= 0);
+
+        if (remaining.isEmpty()) {
+            return;
+        }
+
+        // Player not on master server; try all connected slave servers
+        if (MultiServerManager.isRunning() && MultiServerManager.isMaster()) {
+            List<String> slaves = MultiServerManager.getConnectedSlaveIDs();
+            for (String slaveID : slaves) {
+                final Map<ItemID, Long> itemsToSend = new HashMap<>(remaining);
+                DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, playerUUID, itemsToSend, true)
+                        .whenComplete((notDropped, ex) -> {
+                            if (ex != null) {
+                                warn("Failed to drop items to player " + playerUUID + " on slave " + slaveID + ": " + ex.getMessage());
+                            }
+                        });
+            }
+        } else {
+            // Not in multi-server mode and player not on this server — items are lost
+            warn("Could not drop items to offline player " + playerUUID + " during account deletion. Lost items: " + remaining);
         }
     }
 
@@ -482,7 +643,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         if(account == null)
         {
             warn("Failed to create bank account with number: " + accountNumber);
-            CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(null);
         }
         account.setAccountName(accountName);
         account.setAccountIcon(ItemIDManager.registerItemStackServerSide_direct(Items.CHEST.getDefaultInstance()));
@@ -780,13 +941,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getOrCreatePersonalBankAccountAsync(UUID userUUID) {
-        CompletableFuture<@Nullable IAsyncBankAccount> account = getPersonalBankAccountAsync(userUUID);
-        if(account != null) {
-            return account;
-        }
-        else {
-            return createPersonalBankAccountAsync(userUUID);
-        }
+        IServerBankAccount account = getOrCreatePersonalBankAccount_internal(userUUID);
+        return CompletableFuture.completedFuture(account);
     }
 
 
@@ -938,7 +1094,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         if(bank != null)
             return bank;
         else
-            return account.createBank(itemID, ServerBankAccount.INVALID_ACCOUNT_NUMBER);
+            return account.createBank(itemID, 0);
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getOrCreatePersonalBankAsync(UUID owner, ItemID itemID) {
@@ -986,7 +1142,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean allowItemID(ItemID itemID)
     {
-        if(itemID == null)
+        if(itemID == null || !itemID.isValid())
             return false;
         if(isItemIDBlacklisted(itemID))
         {
@@ -1002,10 +1158,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         return CompletableFuture.completedFuture(allowItemID(itemID));
     }
 
+    // No refund on disallow — multi-server item mapping makes refunds unreliable; admin responsibility
     @Override
     public boolean disallowItemID(ItemID itemID)
     {
-        if(itemID == null)
+        if(itemID == null || !itemID.isValid())
             return false;
         if(isItemIDNotRemovable(itemID))
         {
@@ -1064,6 +1221,22 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public CompletableFuture<Boolean> isItemIDBlacklistedAsync(ItemID itemID) {
         return CompletableFuture.completedFuture(isItemIDBlacklisted(itemID));
     }
+
+
+
+    @Override
+    public int getItemFractionScaleFactor()
+    {
+        return BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+    }
+    @Override
+    public CompletableFuture<Integer> getItemFractionScaleFactorAsync()
+    {
+        return CompletableFuture.completedFuture(getItemFractionScaleFactor());
+    }
+
+
+
 
     @Override
     public double getRealMoneyCirculation()
@@ -1192,6 +1365,17 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
 
 
+    @Override
+    public long convertToRawAmount(double realAmount)
+    {
+        return BankManager.convertToRawAmountStatic(realAmount);
+    }
+    @Override
+    public double convertToRealAmount(long rawAmount)
+    {
+        return BankManager.convertToRealAmountStatic(rawAmount);
+    }
+
 
     @Override
     public JsonElement toJson()
@@ -1295,7 +1479,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         listTags.put("users", userList);
 
-        // Save item cent scale factors
+
         ListTag allowedItems = new ListTag();
         for (ItemID itemID : allowedItemIDs) {
             CompoundTag pairTag = new CompoundTag();
@@ -1313,6 +1497,14 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             accountsList.add(accountTag);
         }
         listTags.put("bankAccounts", accountsList);
+
+
+        ListTag trustedSlaves = new ListTag();
+        for(String slaveID : trustedSlaveServers)
+        {
+            trustedSlaves.add(StringTag.valueOf(slaveID));
+        }
+        listTags.put("trustedSlaves", trustedSlaves);
 
 
 
@@ -1375,6 +1567,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 }
             }
         }
+
+        if(listTags.containsKey("trustedSlaves")) {
+            ListTag trustedSlaves = listTags.get("trustedSlaves");
+            trustedSlaveServers.clear();
+            for (net.minecraft.nbt.Tag trustedSlave : trustedSlaves) {
+                String slaveID = trustedSlave.getAsString();
+                trustedSlaveServers.add(slaveID);
+            }
+        }
+
         return true;
     }
 

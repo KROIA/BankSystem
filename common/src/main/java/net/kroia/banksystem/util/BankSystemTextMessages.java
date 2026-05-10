@@ -512,6 +512,7 @@ public class BankSystemTextMessages {
     {
         if(!message.contains(variable))
         {
+            // BACKEND_INSTANCES is always initialized before replaceVariable is called
             BACKEND_INSTANCES.LOGGER.debug("[BankSystemTextMessages] Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
             return message;
             //throw new IllegalArgumentException("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
