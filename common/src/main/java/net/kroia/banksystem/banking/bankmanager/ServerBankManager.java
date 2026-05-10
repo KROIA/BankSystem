@@ -1158,6 +1158,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         return CompletableFuture.completedFuture(allowItemID(itemID));
     }
 
+    // No refund on disallow — multi-server item mapping makes refunds unreliable; admin responsibility
     @Override
     public boolean disallowItemID(ItemID itemID)
     {

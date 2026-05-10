@@ -293,7 +293,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     @Override
     protected @NotNull AbstractContainerMenu createMenu(int containerId, Inventory inventory) {
-        return null;
+        return createMenu(containerId, inventory, null);
     }
 
     @Override

@@ -72,6 +72,7 @@ public interface IAsyncBankAccount {
      * Gets the account number of this bank account.
      * @return the account number
      */
+    // Returns int directly (not Future) — shared with sync interface for identity forwarding
     int getAccountNumberAsync();
 
     /**

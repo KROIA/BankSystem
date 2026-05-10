@@ -40,6 +40,7 @@ import java.util.concurrent.CompletableFuture;
 
 public class BankUploadBlockEntity extends BaseContainerBlockEntity implements MenuProvider {
 
+    // Single-instance project convention; set once during mod initialization
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     private class ControlledContainer extends SimpleContainer {
         public ControlledContainer(int size) {
@@ -154,7 +155,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
 
     @Override
     protected AbstractContainerMenu createMenu(int containerId, Inventory inventory) {
-        return null;
+        return createMenu(containerId, inventory, null);
     }
 
     @Override

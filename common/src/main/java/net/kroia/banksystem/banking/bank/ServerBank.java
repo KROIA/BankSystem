@@ -198,6 +198,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
 
 
+    // Weak-lock semantics — lockedBalance is advisory; callers verify before withdrawing locked funds
     @Override
     public boolean setBalance(long balance) {
         if(balance < 0)
