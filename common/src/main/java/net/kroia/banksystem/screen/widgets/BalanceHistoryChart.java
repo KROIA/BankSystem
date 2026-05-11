@@ -144,8 +144,9 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
 
         viewWidth = timeRange;
         viewX = minTime;
-        viewY = Math.max(0, minVal - valRange * 0.1);
         viewHeight = valRange * 1.2;
+        // Ensure 0 is visible with small padding below, but don't show negatives
+        viewY = Math.max(-viewHeight * 0.05, minVal - valRange * 0.1);
     }
 
     // ── Rendering ──
@@ -196,8 +197,8 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
         canvasRect.height = Math.max(2, getHeight() - maxTimeLabelHeight - 5);
         canvasScissorRect.x = canvasRect.x + 1;
         canvasScissorRect.y = canvasRect.y + 1;
-        canvasScissorRect.width = Math.max(1, canvasRect.width - 2);
-        canvasScissorRect.height = Math.max(1, canvasRect.height - 2);
+        canvasScissorRect.width = Math.max(1, canvasRect.width - 1);
+        canvasScissorRect.height = Math.max(1, canvasRect.height - 1);
     }
 
     /**
@@ -376,7 +377,7 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
             double oldHeight = viewHeight;
             viewHeight = Math.max(0.1, viewHeight * zoomFactor);
             double mouseNormY = (mouseWorldY - viewY) / oldHeight;
-            viewY = Math.max(0, mouseWorldY - mouseNormY * viewHeight);
+            viewY = mouseWorldY - mouseNormY * viewHeight;
             consumed = true;
         }
 
@@ -413,7 +414,7 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
             double worldDeltaY = dy * viewHeight / canvasRect.height;
 
             viewX += worldDeltaX;
-            viewY = Math.max(0, viewY - worldDeltaY);
+            viewY -= worldDeltaY;
             clampView();
             return true;
         }
@@ -460,7 +461,11 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
             viewX = maxTime - viewWidth;
         }
 
-        if (viewY < 0) viewY = 0;
+        // Allow small negative padding so zero-value lines are visible, but no further
+        double minY = -viewHeight * 0.05;
+        if (viewY < minY) {
+            viewY = minY;
+        }
     }
 
     // ── Coordinate conversion (double precision to avoid epoch-millis jitter) ──
