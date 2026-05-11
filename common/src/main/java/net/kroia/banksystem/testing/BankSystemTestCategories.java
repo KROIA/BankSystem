@@ -43,4 +43,8 @@ public class BankSystemTestCategories {
     public static final TestCategory LIFECYCLE = new TestCategory(
             "lifecycle", "Memory, threading, and lifecycle regression tests",
             TestCategory.ServerType.BOTH, false);
+
+    public static final TestCategory DATABASE = new TestCategory(
+            "database", "SQL balance history persistence tests",
+            TestCategory.ServerType.MASTER_ONLY, false);
 }

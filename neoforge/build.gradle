@@ -56,6 +56,13 @@ dependencies {
 
     modImplementation("net.kroia:modutilities-neoforge:$rootProject.modutilities_version")
     include("net.kroia:modutilities-neoforge:$rootProject.modutilities_version")
+
+    implementation('org.xerial:sqlite-jdbc:3.46.0.0'){
+        exclude group: "org.slf4j"
+    }
+    shadowBundle('org.xerial:sqlite-jdbc:3.46.0.0'){
+        exclude group: "org.slf4j"
+    }
 }
 
 processResources {
@@ -69,8 +76,12 @@ processResources {
 shadowJar {
     configurations = [project.configurations.shadowBundle]
     archiveClassifier = 'dev-shadow'
+    mergeServiceFiles()
+    exclude 'META-INF/jars/**'
+    exclude 'META-INF/maven/org.xerial/**'
 }
 
 remapJar {
     inputFile.set shadowJar.archiveFile
+    dependsOn shadowJar
 }

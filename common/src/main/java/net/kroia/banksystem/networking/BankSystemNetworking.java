@@ -37,6 +37,9 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public static ServerInfoRequest SERVER_INFO_REQUEST = (ServerInfoRequest)AsynchronousRequestResponseSystem.register(new ServerInfoRequest());
     public static ServerNetworkInfoRequest SERVER_NETWORK_INFO_REQUEST = (ServerNetworkInfoRequest)AsynchronousRequestResponseSystem.register(new ServerNetworkInfoRequest());
     public static BanksystemMetadataRequest BANKSYSTEM_METADATA_REQUEST = (BanksystemMetadataRequest)AsynchronousRequestResponseSystem.register(new BanksystemMetadataRequest());
+    public static BalanceHistoryRequest BALANCE_HISTORY_REQUEST = (BalanceHistoryRequest)AsynchronousRequestResponseSystem.register(new BalanceHistoryRequest());
+    public static GetUserCustomDataRequest GET_USER_CUSTOM_DATA_REQUEST = (GetUserCustomDataRequest)AsynchronousRequestResponseSystem.register(new GetUserCustomDataRequest());
+    public static UpdateUserCustomDataRequest UPDATE_USER_CUSTOM_DATA_REQUEST = (UpdateUserCustomDataRequest)AsynchronousRequestResponseSystem.register(new UpdateUserCustomDataRequest());
 
     public static BankAccountChangeStream BANKSYSTEM_ACCOUNT_CHANGE_STREAM = (BankAccountChangeStream) StreamSystem.register(new BankAccountChangeStream());
 

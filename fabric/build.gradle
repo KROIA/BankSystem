@@ -50,6 +50,10 @@ dependencies {
     common(project(path: ':common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':common', configuration: 'transformProductionFabric')
 
+    shadowBundle('org.xerial:sqlite-jdbc:3.46.0.0'){
+        exclude group: "org.slf4j"
+    }
+
     modImplementation("net.kroia:modutilities-fabric:$rootProject.modutilities_version")
     include("net.kroia:modutilities-fabric:$rootProject.modutilities_version")
 
@@ -68,8 +72,11 @@ processResources {
 shadowJar {
     configurations = [project.configurations.shadowBundle]
     archiveClassifier = 'dev-shadow'
+    mergeServiceFiles()
+    exclude 'META-INF/maven/org.xerial/**'
 }
 
 remapJar {
     inputFile.set shadowJar.archiveFile
+    dependsOn shadowJar
 }

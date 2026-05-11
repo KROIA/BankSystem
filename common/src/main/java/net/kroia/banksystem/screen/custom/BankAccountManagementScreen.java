@@ -129,7 +129,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     }
     private void setupGui(@Nullable BankAccountData bankAccountData)
     {
-        if(bankAccountData == null)
+        if(bankAccountData == null || !screenIsOpen)
         {
             return;
         }
@@ -290,10 +290,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         int width = getWidth()-2*padding;
         int height = getHeight()-2*padding;
 
-        if(getElements().isEmpty())
+        if(getElements().isEmpty() || closeButton == null)
             return; // Not initialized yet
-
-
 
         closeButton.setBounds(getWidth() - 20-padding, padding,20,20);
         int textWidth = closeButton.getTextWidth(SAVE_CHANGES.getString())+10;
@@ -304,11 +302,11 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         selectAccountButton.setBounds(padding, padding, nameWidth, 20);
         int accountNameY = selectAccountButton.getBottom()+spacing;
         accountIconButton.setBounds(padding, accountNameY, 20, 20);
-        if(canManage) {
+        if(canManage && deleteBankAccountButton != null && accountNameTextBox != null) {
             textWidth = deleteBankAccountButton.getTextWidth(DELETE_ACCOUNT.getString())+10;
             deleteBankAccountButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
             accountNameTextBox.setBounds(accountIconButton.getRight()+spacing, accountNameY, nameWidth-(accountIconButton.getRight()), 20);
-        }else {
+        }else if(accountNameLabel != null) {
             accountNameLabel.setBounds(accountIconButton.getRight()+spacing, accountNameY, nameWidth-(accountIconButton.getRight()), 20);
         }
 
@@ -396,11 +394,11 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         }
 
         personalBankOwnerData = bankAccountData.personalBankOwnerData;
-        if(personalBankOwnerData != null)
+        if(personalBankOwnerData != null && deleteBankAccountButton != null)
         {
             deleteBankAccountButton.setEnabled(false);
         }
-        if(!this.canManage)
+        if(!this.canManage && accountNameLabel != null)
         {
             accountNameLabel.setText(bankAccountData.accountName);
         }

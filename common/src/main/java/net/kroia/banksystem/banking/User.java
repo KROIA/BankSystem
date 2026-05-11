@@ -27,6 +27,7 @@ public class User implements ServerSaveable {
             ByteBufCodecs.STRING_UTF8, p -> p.userName,
             ByteBufCodecs.BOOL, p -> p.enableBankNotifications,
             ByteBufCodecs.BOOL, p -> p.isBanksystemAdmin,
+            ByteBufCodecs.TRUSTED_COMPOUND_TAG, p -> p.customData,
             User::new
     );
 
@@ -34,17 +35,19 @@ public class User implements ServerSaveable {
     private String userName;
     private boolean enableBankNotifications = true;
     private boolean isBanksystemAdmin = false;
+    private CompoundTag customData = new CompoundTag();
 
     private User()
     {
 
     }
-    private User(UUID userUUID, String userName, boolean enableBankNotifications, boolean isBankModAdmin)
+    private User(UUID userUUID, String userName, boolean enableBankNotifications, boolean isBankModAdmin, CompoundTag customData)
     {
         this.userUUID = userUUID;
         this.userName = userName;
         this.enableBankNotifications = enableBankNotifications;
         this.isBanksystemAdmin = isBankModAdmin;
+        this.customData = customData != null ? customData : new CompoundTag();
     }
     public User(UUID userUUID, String userName, boolean enableBankNotifications) {
         this.userUUID = userUUID;
@@ -53,7 +56,7 @@ public class User implements ServerSaveable {
     }
     public static User createWithChangedName(User oldUser, String newName)
     {
-        return new User(oldUser.userUUID, newName, oldUser.enableBankNotifications, oldUser.isBanksystemAdmin);
+        return new User(oldUser.userUUID, newName, oldUser.enableBankNotifications, oldUser.isBanksystemAdmin, oldUser.customData.copy());
     }
     public static @Nullable User createFromTag(CompoundTag tag)
     {
@@ -65,7 +68,7 @@ public class User implements ServerSaveable {
     }
 
     public UserData getUserData() {
-        return new UserData(userUUID, userName, enableBankNotifications);
+        return new UserData(userUUID, userName, enableBankNotifications, customData.copy());
     }
 
     public UUID getUUID() {
@@ -86,6 +89,12 @@ public class User implements ServerSaveable {
     public void setBanksystemAdmin(boolean isBankModAdmin) {
         this.isBanksystemAdmin = isBankModAdmin;
     }
+    public CompoundTag getCustomData() {
+        return customData;
+    }
+    public void setCustomData(CompoundTag customData) {
+        this.customData = customData != null ? customData : new CompoundTag();
+    }
 
     @Override
     public boolean save(CompoundTag tag) {
@@ -93,6 +102,7 @@ public class User implements ServerSaveable {
         tag.putString("userName", userName);
         tag.putBoolean("enableBankNotifications", enableBankNotifications);
         tag.putBoolean("isBanksystemAdmin", isBanksystemAdmin);
+        tag.put("customData", customData);
         return true;
     }
 
@@ -108,6 +118,10 @@ public class User implements ServerSaveable {
             this.isBanksystemAdmin = tag.getBoolean("isBanksystemAdmin");
         else
             this.isBanksystemAdmin = false;
+        if(tag.contains("customData"))
+            this.customData = tag.getCompound("customData");
+        else
+            this.customData = new CompoundTag();
         return true;
     }
 

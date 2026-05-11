@@ -145,6 +145,7 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
 
     private void sendUpdatePacket()
     {
+        if (settingsMenu == null) return;
         UpdateBankUploadBlockEntityPacket.sendPacket(pos, isOwned, settingsMenu.doDropIfNotBankableCheckBox.isChecked(), accountNr);
     }
 }
