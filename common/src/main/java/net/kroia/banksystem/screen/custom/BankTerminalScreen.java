@@ -2,6 +2,7 @@ package net.kroia.banksystem.screen.custom;
 
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
@@ -77,8 +78,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             addAmountButtonGroup.updateButtons();
 
             wholeBankBalance = (long)getBankManager().convertToRealAmount(rawBalance);
-            String amountStr = ServerBank.getFormattedAmountStatic(rawBalance);
-            balanceLabel.setText(amountStr);
+            balanceLabel.setText(formatCompactBalance(rawBalance));
             //addChild(receiveItemsFromMarketButton);
         }
 
@@ -104,8 +104,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         }
         public void setBankBalance(long amount) {
             wholeBankBalance = (long)getBankManager().convertToRealAmount(amount);
-            String amountStr = ServerBank.getFormattedAmountStatic(amount);
-            balanceLabel.setText(amountStr);
+            balanceLabel.setText(formatCompactBalance(amount));
 
             if(targetAmount > wholeBankBalance) {
                 targetAmount = wholeBankBalance;
@@ -114,6 +113,14 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             }
 
         }
+        private static String formatCompactBalance(long rawAmount) {
+            double real = (double) rawAmount / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            if (real >= 1_000_000_000) return String.format("%.3fB", real / 1_000_000_000);
+            if (real >= 1_000_000) return String.format("%.3fM", real / 1_000_000);
+            if (real >= 10_000) return String.format("%.3fk", real / 1_000);
+            return ServerBank.getFormattedAmountStatic(rawAmount);
+        }
+
         public long getTargetAmount()
         {
             //saveAmount();

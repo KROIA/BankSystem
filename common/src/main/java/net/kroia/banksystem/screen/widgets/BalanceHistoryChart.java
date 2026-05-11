@@ -99,8 +99,8 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
         double valRange = maxVal - minVal;
         if (valRange <= 0) valRange = 100;
 
-        viewX = minTime - timeRange * 0.05;
-        viewWidth = timeRange * 1.1;
+        viewWidth = timeRange;
+        viewX = minTime;
         viewY = Math.max(0, minVal - valRange * 0.1);
         viewHeight = valRange * 1.2;
     }
@@ -369,17 +369,15 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
         double dataRange = maxTime - minTime;
         if (dataRange <= 0) dataRange = 60_000;
 
-        double maxWidth = dataRange * 1.1;
-        if (viewWidth > maxWidth) {
-            viewWidth = maxWidth;
+        if (viewWidth > dataRange) {
+            viewWidth = dataRange;
         }
 
-        double rightEdge = viewX + viewWidth;
-        if (rightEdge > maxTime) {
-            viewX = maxTime - viewWidth;
-        }
         if (viewX < minTime) {
             viewX = minTime;
+        }
+        if (viewX + viewWidth > maxTime) {
+            viewX = maxTime - viewWidth;
         }
 
         if (viewY < 0) viewY = 0;
