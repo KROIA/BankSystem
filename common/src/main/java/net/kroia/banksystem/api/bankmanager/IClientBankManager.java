@@ -1,6 +1,8 @@
 package net.kroia.banksystem.api.bankmanager;
 
+import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.minecraft.nbt.CompoundTag;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.networking.entity.BankTerminalBlockDataRequest;
@@ -149,4 +151,9 @@ public interface IClientBankManager {
     //CompletableFuture<BankSelectionScreenDataRequest.Output> requestBankAccounts(UUID playerUUID);
     //CompletableFuture<Boolean> requestDeleteBankAccount(int accountNumber);
     CompletableFuture<List<ItemID>> requestAllowdItems();
+
+    CompletableFuture<List<BalanceHistoryRecord>> requestBalanceHistory(int accountNumber);
+
+    CompletableFuture<CompoundTag> getUserCustomData();
+    CompletableFuture<Boolean> updateUserCustomData(CompoundTag data);
 }

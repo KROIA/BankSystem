@@ -5,7 +5,9 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.minecraft.nbt.CompoundTag;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.networking.BankSystemNetworking;
@@ -209,5 +211,20 @@ public class ClientBankManager implements IClientBankManager {
     @Override
     public CompletableFuture<List<ItemID>> requestAllowdItems() {
         return BankSystemNetworking.ALLOWED_ITEMS_REQUEST.sendRequestToServer(0);
+    }
+
+    @Override
+    public CompletableFuture<List<BalanceHistoryRecord>> requestBalanceHistory(int accountNumber) {
+        return BankSystemNetworking.BALANCE_HISTORY_REQUEST.sendRequestToServer(accountNumber);
+    }
+
+    @Override
+    public CompletableFuture<CompoundTag> getUserCustomData() {
+        return BankSystemNetworking.GET_USER_CUSTOM_DATA_REQUEST.sendRequestToServer(true);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> updateUserCustomData(CompoundTag data) {
+        return BankSystemNetworking.UPDATE_USER_CUSTOM_DATA_REQUEST.sendRequestToServer(data);
     }
 }

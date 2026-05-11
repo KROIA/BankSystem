@@ -151,7 +151,7 @@ public class SerializationTests extends TestSuite {
     private TestResult testUserDataCodecRoundTrip() {
         @SuppressWarnings({"rawtypes", "unchecked"})
         StreamCodec rawCodec = (StreamCodec) UserData.STREAM_CODEC;
-        UserData original = new UserData(UUID.randomUUID(), "TestUser", false);
+        UserData original = new UserData(UUID.randomUUID(), "TestUser", false, new net.minecraft.nbt.CompoundTag());
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
         try {
             rawCodec.encode(buf, original);

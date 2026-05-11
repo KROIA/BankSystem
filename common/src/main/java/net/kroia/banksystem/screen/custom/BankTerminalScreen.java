@@ -172,6 +172,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private final Button removeEmptyBankAccountsButton;
     private final Button sendItemsToBankButton;
     private final Button receiveItemsFromBankButton;
+    private final Button balanceHistoryButton;
     private final VerticalListView itemListView;
     private final ContainerView<BankTerminalContainerMenu> inventoryView;
 
@@ -216,6 +217,14 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         receiveItemsFromBankButton = new Button(RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT.getString());
         receiveItemsFromBankButton.setOnFallingEdge(this::onReceiveItemsFromBank);
 
+        balanceHistoryButton = new Button("History");
+        balanceHistoryButton.setOnFallingEdge(() -> {
+            if (selectedBankAccountNr > 0) {
+                BalanceHistoryScreen historyScreen = new BalanceHistoryScreen(this, selectedBankAccountNr);
+                minecraft.setScreen(historyScreen);
+            }
+        });
+
         itemListView = new VerticalListView(0, 0, 100, 100);
         LayoutGrid layoutGrid = new LayoutGrid();
         layoutGrid.stretchX = true;
@@ -228,6 +237,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         addElement(removeEmptyBankAccountsButton);
         addElement(sendItemsToBankButton);
         addElement(receiveItemsFromBankButton);
+        addElement(balanceHistoryButton);
         addElement(itemListView);
         addElement(inventoryView);
 
@@ -261,7 +271,9 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         int inventoryHeight = inventoryView.getHeight();
         inventoryView.setPosition(width - inventoryWidth - padding, (height - inventoryHeight) / 2);
 
-        sendItemsToBankButton.setBounds(inventoryView.getX(), padding, inventoryView.getWidth(), 20);
+        int historyButtonWidth = 50;
+        sendItemsToBankButton.setBounds(inventoryView.getX(), padding, inventoryView.getWidth() - historyButtonWidth - spacing, 20);
+        balanceHistoryButton.setBounds(sendItemsToBankButton.getRight() + spacing, padding, historyButtonWidth, 20);
 
         int itemListViewWidth = inventoryView.getX()-padding*2;
         selectAccountButton.setBounds(padding, padding, itemListViewWidth, 20);
