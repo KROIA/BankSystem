@@ -41,6 +41,9 @@ public final class BankSystemModSettings extends ModSettings {
     {
         public final Setting<Long> SAVE_INTERVAL_MINUTES = registerSetting("SAVE_INTERVAL_MINUTES",5L, Long.class); // 5 minutes
         public final Setting<Long> BALANCE_SNAPSHOT_INTERVAL_MINUTES = registerSetting("BALANCE_SNAPSHOT_INTERVAL_MINUTES",1L, Long.class); // 1 minute (for testing)
+        // Max snapshot records per item per account. Oldest records are pruned when exceeded.
+        // 0 = unlimited (WARNING: database file can grow extremely large over time)
+        public final Setting<Long> BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM = registerSetting("BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM", 1440L, Long.class);
         public final Setting<Boolean> LOGGING_ENABLE_INFO = registerSetting("LOGGING_ENABLE_INFO",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_WARNING = registerSetting("LOGGING_ENABLE_WARNING",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_ERROR = registerSetting("LOGGING_ENABLE_ERROR",true, Boolean.class);

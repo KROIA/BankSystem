@@ -216,6 +216,12 @@ public class BankSystemModBackend implements BankSystemAPI {
             INSTANCES.DATABASE_MANAGER.connectToDatabase(server);
             INSTANCES.BALANCE_HISTORY_MANAGER = new BalanceHistoryManager(INSTANCES.DATABASE_MANAGER);
 
+            if (INSTANCES.SERVER_SETTINGS.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.get() <= 0) {
+                INSTANCES.LOGGER.warn("BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM is 0 (unlimited). " +
+                        "The balance history database file can grow extremely large over time. " +
+                        "Set a positive value to enable automatic pruning of old records.");
+            }
+
             TickEvent.SERVER_POST.register(BankSystemModBackend::onServerTick);
 
             // Save the data when the game saves the world
@@ -312,6 +318,11 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         if (!records.isEmpty()) {
             INSTANCES.BALANCE_HISTORY_MANAGER.save(records);
+
+            long maxRecords = INSTANCES.SERVER_SETTINGS.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.get();
+            if (maxRecords > 0) {
+                INSTANCES.BALANCE_HISTORY_MANAGER.pruneOldRecords(maxRecords);
+            }
         }
     }
 

@@ -167,6 +167,31 @@ public class BalanceHistoryManager implements ITableManager<BalanceHistoryRecord
         }
     }
 
+    /**
+     * Prunes old records so that each (account_number, item_id) pair keeps at most
+     * {@code maxRecordsPerItem} entries (newest retained). Runs async on the DB thread.
+     *
+     * @param maxRecordsPerItem max records to keep per account+item. If <= 0, no pruning occurs.
+     */
+    public CompletableFuture<Void> pruneOldRecords(long maxRecordsPerItem) {
+        if (maxRecordsPerItem <= 0) return CompletableFuture.completedFuture(null);
+        return CompletableFuture.runAsync(() -> {
+            try {
+                String sql = "DELETE FROM BalanceHistory WHERE id NOT IN (" +
+                        "SELECT id FROM (" +
+                        "SELECT id, ROW_NUMBER() OVER (PARTITION BY account_number, item_id ORDER BY time DESC) AS rn " +
+                        "FROM BalanceHistory) WHERE rn <= ?)";
+                try (PreparedStatement stmt = databaseManager.getConnection().prepareStatement(sql)) {
+                    stmt.setLong(1, maxRecordsPerItem);
+                    stmt.executeUpdate();
+                    databaseManager.commitTransaction();
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }, databaseManager.getDatabaseThread());
+    }
+
     private String buildFilteredStatement(
             String base,
             Optional<DateFilter> dateFilter,
