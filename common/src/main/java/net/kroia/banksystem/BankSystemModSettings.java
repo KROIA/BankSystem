@@ -40,6 +40,7 @@ public final class BankSystemModSettings extends ModSettings {
     public static final class Utilities extends SettingsGroup
     {
         public final Setting<Long> SAVE_INTERVAL_MINUTES = registerSetting("SAVE_INTERVAL_MINUTES",5L, Long.class); // 5 minutes
+        public final Setting<Long> BALANCE_SNAPSHOT_INTERVAL_MINUTES = registerSetting("BALANCE_SNAPSHOT_INTERVAL_MINUTES",1L, Long.class); // 1 minute (for testing)
         public final Setting<Boolean> LOGGING_ENABLE_INFO = registerSetting("LOGGING_ENABLE_INFO",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_WARNING = registerSetting("LOGGING_ENABLE_WARNING",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_ERROR = registerSetting("LOGGING_ENABLE_ERROR",true, Boolean.class);

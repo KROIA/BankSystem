@@ -12,6 +12,10 @@ import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.api.command.IBankSystemCommands;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.bankmanager.ClientBankManager;
+import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
+import net.kroia.banksystem.data.DatabaseManager;
+import net.kroia.banksystem.data.table.BalanceHistoryManager;
+import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.command.BankSystemCommands;
 import net.kroia.banksystem.minecraft.compat.NEZNAMY_TAB_Placeholders;
@@ -38,6 +42,7 @@ import net.kroia.banksystem.testing.tests.ExampleTests;
 import net.kroia.banksystem.testing.tests.MultiServerSecurityTests;
 import net.kroia.banksystem.testing.tests.NetworkingValidationTests;
 import net.kroia.banksystem.testing.tests.SerializationTests;
+import net.kroia.banksystem.testing.tests.DatabaseTests;
 import net.kroia.banksystem.testing.tests.LifecycleTests;
 import net.kroia.banksystem.testing.tests.ServerBankTests;
 import net.kroia.banksystem.util.*;
@@ -55,6 +60,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.List;
 
 public class BankSystemModBackend implements BankSystemAPI {
     public static class Instances
@@ -71,9 +77,12 @@ public class BankSystemModBackend implements BankSystemAPI {
         public IBankSystemCommands COMMAND_HANDLER;
 
         public BankSystemLogger LOGGER;
+        public DatabaseManager DATABASE_MANAGER;
+        public BalanceHistoryManager BALANCE_HISTORY_MANAGER;
     }
 
     private static Instances INSTANCES = new Instances();
+    private static long snapshotTickCounter = 0;
 
 
     BankSystemModBackend()
@@ -139,6 +148,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         TestRegistry.register(new MultiServerSecurityTests());
         TestRegistry.register(new SerializationTests());
         TestRegistry.register(new LifecycleTests());
+        TestRegistry.register(new DatabaseTests());
     }
 
     // Called from the client side
@@ -196,6 +206,13 @@ public class BankSystemModBackend implements BankSystemAPI {
 
             INSTANCES.SERVER_BANK_MANAGER = BankManager.createMaster();
             INSTANCES.COMMAND_HANDLER = BankSystemCommands.createMaster();
+
+            snapshotTickCounter = 0;
+            DatabaseManager.setBackend(INSTANCES);
+            INSTANCES.DATABASE_MANAGER = new DatabaseManager();
+            INSTANCES.DATABASE_MANAGER.connectToDatabase(server);
+            INSTANCES.BALANCE_HISTORY_MANAGER = new BalanceHistoryManager(INSTANCES.DATABASE_MANAGER);
+
             TickEvent.SERVER_POST.register(BankSystemModBackend::onServerTick);
 
             // Save the data when the game saves the world
@@ -218,6 +235,12 @@ public class BankSystemModBackend implements BankSystemAPI {
         if(!INSTANCES.isSlaveServer) {
             TickEvent.SERVER_POST.unregister(BankSystemModBackend::onServerTick);
             saveDataToFiles(server);
+
+            if (INSTANCES.DATABASE_MANAGER != null) {
+                INSTANCES.DATABASE_MANAGER.close();
+                INSTANCES.DATABASE_MANAGER = null;
+                INSTANCES.BALANCE_HISTORY_MANAGER = null;
+            }
 
             BankSystemDataHandler.resetBankDataLoaded();
             BankSystemDataHandler.resetGlobalDataLoaded();
@@ -265,6 +288,28 @@ public class BankSystemModBackend implements BankSystemAPI {
     {
         if(INSTANCES.SERVER_DATA_HANDLER != null)
             INSTANCES.SERVER_DATA_HANDLER.tickUpdate();
+
+        if (INSTANCES.BALANCE_HISTORY_MANAGER != null && INSTANCES.SERVER_SETTINGS != null) {
+            snapshotTickCounter++;
+            long intervalTicks = INSTANCES.SERVER_SETTINGS.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.get() * 1200L;
+            if (intervalTicks > 0 && snapshotTickCounter >= intervalTicks) {
+                snapshotTickCounter = 0;
+                takeBalanceSnapshot();
+            }
+        }
+    }
+
+    private static void takeBalanceSnapshot() {
+        if (INSTANCES.SERVER_BANK_MANAGER == null) return;
+        ServerBankManager bankManager = (ServerBankManager) INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if (bankManager == null) return;
+
+        long now = System.currentTimeMillis();
+        List<BalanceHistoryRecord> records = bankManager.collectBalanceSnapshot(now);
+
+        if (!records.isEmpty()) {
+            INSTANCES.BALANCE_HISTORY_MANAGER.save(records);
+        }
     }
 
     public static void loadDataFromFiles(MinecraftServer server)

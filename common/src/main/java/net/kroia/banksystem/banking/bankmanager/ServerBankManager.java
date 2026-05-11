@@ -15,6 +15,7 @@ import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
@@ -389,6 +390,27 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 target.merge(itemID, totalBalance, Long::sum);
             }
         }
+    }
+
+    public List<BalanceHistoryRecord> collectBalanceSnapshot(long timestamp) {
+        List<BalanceHistoryRecord> records = new ArrayList<>();
+        for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            int accountNumber = entry.getKey();
+            ServerBankAccount account = entry.getValue();
+            for (Map.Entry<ItemID, IServerBank> bankEntry : account.getAllBanks().entrySet()) {
+                ISyncServerBank bank = bankEntry.getValue();
+                if (bank != null) {
+                    records.add(new BalanceHistoryRecord(
+                            accountNumber,
+                            bankEntry.getKey().getShort(),
+                            bank.getBalance(),
+                            bank.getLockedBalance(),
+                            timestamp
+                    ));
+                }
+            }
+        }
+        return records;
     }
 
     /**
