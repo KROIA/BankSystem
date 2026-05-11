@@ -6,6 +6,7 @@ import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
 import net.kroia.banksystem.api.IBankSystemEvents;
+import net.kroia.banksystem.api.ItemPriceProvider;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
@@ -83,6 +84,8 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     private static Instances INSTANCES = new Instances();
     private static long snapshotTickCounter = 0;
+    private static @Nullable ItemPriceProvider itemPriceProvider = null;
+    private static short priceCurrencyItemId = 0;
 
 
     BankSystemModBackend()
@@ -305,7 +308,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         if (bankManager == null) return;
 
         long now = System.currentTimeMillis();
-        List<BalanceHistoryRecord> records = bankManager.collectBalanceSnapshot(now);
+        List<BalanceHistoryRecord> records = bankManager.collectBalanceSnapshot(now, itemPriceProvider, priceCurrencyItemId);
 
         if (!records.isEmpty()) {
             INSTANCES.BALANCE_HISTORY_MANAGER.save(records);
@@ -381,8 +384,25 @@ public class BankSystemModBackend implements BankSystemAPI {
         return INSTANCES.isSlaveServer;
     }
 
+    @Override
+    public void setItemPriceProvider(@Nullable ItemPriceProvider provider) {
+        itemPriceProvider = provider;
+    }
 
+    @Override
+    public @Nullable ItemPriceProvider getItemPriceProvider() {
+        return itemPriceProvider;
+    }
 
+    @Override
+    public void setPriceCurrencyItem(short currencyItemId) {
+        priceCurrencyItemId = currencyItemId;
+    }
+
+    @Override
+    public short getPriceCurrencyItem() {
+        return priceCurrencyItemId;
+    }
 
     private static void setupMultiServerInfrastructure(MultiServerConfig config, MinecraftServer server)
     {

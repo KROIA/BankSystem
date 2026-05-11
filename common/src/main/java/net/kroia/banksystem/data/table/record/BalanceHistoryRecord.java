@@ -11,6 +11,8 @@ public record BalanceHistoryRecord(
     long lockedBalance,
     long time
 ) {
+    public static final short WEALTH_ITEM_ID = Short.MAX_VALUE;
+
     public static final StreamCodec<RegistryFriendlyByteBuf, BalanceHistoryRecord> STREAM_CODEC =
             StreamCodec.composite(
                     ByteBufCodecs.INT, BalanceHistoryRecord::accountNumber,

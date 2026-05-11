@@ -15,6 +15,7 @@ import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.api.ItemPriceProvider;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
@@ -392,22 +393,35 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
     }
 
-    public List<BalanceHistoryRecord> collectBalanceSnapshot(long timestamp) {
+    public List<BalanceHistoryRecord> collectBalanceSnapshot(long timestamp, ItemPriceProvider priceProvider, short currencyItemId) {
         List<BalanceHistoryRecord> records = new ArrayList<>();
         for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
             int accountNumber = entry.getKey();
             ServerBankAccount account = entry.getValue();
+            long totalWealth = 0;
+            boolean hasWealth = priceProvider != null && currencyItemId != 0;
             for (Map.Entry<ItemID, IServerBank> bankEntry : account.getAllBanks().entrySet()) {
                 ISyncServerBank bank = bankEntry.getValue();
-                if (bank != null) {
-                    records.add(new BalanceHistoryRecord(
-                            accountNumber,
-                            bankEntry.getKey().getShort(),
-                            bank.getBalance(),
-                            bank.getLockedBalance(),
-                            timestamp
-                    ));
+                if (bank == null) continue;
+                short itemId = bankEntry.getKey().getShort();
+                long balance = bank.getBalance();
+                long lockedBalance = bank.getLockedBalance();
+                records.add(new BalanceHistoryRecord(accountNumber, itemId, balance, lockedBalance, timestamp));
+                if (hasWealth) {
+                    long totalBalance = balance + lockedBalance;
+                    if (itemId == currencyItemId) {
+                        totalWealth += totalBalance;
+                    } else {
+                        long price = priceProvider.getItemPrice(itemId);
+                        if (price > 0) {
+                            totalWealth += totalBalance * price / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                        }
+                    }
                 }
+            }
+            if (hasWealth) {
+                records.add(new BalanceHistoryRecord(
+                        accountNumber, BalanceHistoryRecord.WEALTH_ITEM_ID, totalWealth, 0, timestamp));
             }
         }
         return records;

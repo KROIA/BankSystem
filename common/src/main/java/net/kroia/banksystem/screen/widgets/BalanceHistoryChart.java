@@ -10,6 +10,27 @@ import java.awt.Point;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+/**
+ * Interactive line chart widget for visualizing balance history over time.
+ * <p>
+ * Supports multiple overlapping line series with distinct colors, mouse-driven
+ * pan/zoom on both axes, and three rendering tiers:
+ * <ol>
+ *   <li><b>Normal series</b> — drawn first at 1.5px, dimmed to 40% alpha when a highlight is active</li>
+ *   <li><b>Highlighted series</b> — drawn second at 3.0px with 1.4x brightness (set via hover bindings)</li>
+ *   <li><b>Pinned series</b> — drawn last (always on top) at 2.0px, never dimmed by highlights</li>
+ * </ol>
+ * <p>
+ * The view uses {@code double} precision for all coordinates to avoid floating-point
+ * jitter with epoch-millisecond timestamps (~13 digits).
+ * <p>
+ * <b>Controls:</b>
+ * <ul>
+ *   <li>Mouse drag — pan</li>
+ *   <li>Scroll wheel — zoom both axes (Shift = Y-only, Ctrl = X-only)</li>
+ *   <li>Space — auto-center to fit all visible data</li>
+ * </ul>
+ */
 public class BalanceHistoryChart extends BankSystemGuiElement {
 
     public record DataPoint(long time, double value) {}
@@ -38,6 +59,7 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
     private final Rectangle canvasRect = new Rectangle(1, 1, 0, 0);
     private final Rectangle canvasScissorRect = new Rectangle(1, 1, 0, 0);
 
+    // View window in world/data space (double precision for epoch millis accuracy)
     private double viewX = 0, viewY = 0, viewWidth = 1, viewHeight = 1;
 
     private final Point lastDragMousePos = new Point();
@@ -45,6 +67,8 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
     private int maxValueLabelWidth = 0;
     private int maxTimeLabelHeight = 0;
     private LineSeries highlightedSeries = null;
+    private LineSeries pinnedSeries = null;
+    // Maps external GUI elements to series — checked each frame to resolve hover highlight
     private final Map<GuiElement, LineSeries> hoverBindings = new LinkedHashMap<>();
 
     public BalanceHistoryChart() {
@@ -67,6 +91,12 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
         this.highlightedSeries = series;
     }
 
+    /**
+     * Binds an external GUI element (e.g. a toggle row) to a series.
+     * Each frame, the chart checks if any bound element is hovered and
+     * highlights the corresponding series. This avoids cross-frame timing
+     * issues that cause flickering.
+     */
     public void bindHoverElement(GuiElement element, LineSeries series) {
         hoverBindings.put(element, series);
     }
@@ -75,6 +105,19 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
         hoverBindings.clear();
     }
 
+    /**
+     * Sets a series to be pinned — always drawn on top of all other series,
+     * never dimmed by hover highlights. Used for the "Total Wealth" line.
+     */
+    public void setPinnedSeries(LineSeries series) {
+        this.pinnedSeries = series;
+    }
+
+    /**
+     * Fits the view to show all visible data points exactly within the canvas.
+     * X axis spans the full data time range with no future padding.
+     * Y axis gets 10% padding above and below for readability.
+     */
     public void autoCenterView() {
         long minTime = Long.MAX_VALUE;
         long maxTime = Long.MIN_VALUE;
@@ -112,6 +155,7 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
         super.renderBackground();
         if (seriesList.isEmpty()) return;
 
+        // Resolve hover highlight from bound elements within this frame
         highlightedSeries = null;
         for (var entry : hoverBindings.entrySet()) {
             if (entry.getKey().isMouseOver()) {
@@ -156,6 +200,10 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
         canvasScissorRect.height = Math.max(1, canvasRect.height - 2);
     }
 
+    /**
+     * Draws Y-axis labels and horizontal gridlines using "nice" step rounding
+     * (1, 2, 5 × 10^n) to produce clean label values.
+     */
     private void renderHorizontalGrid() {
         int targetLines = 8;
         if (viewHeight <= 0) return;
@@ -187,6 +235,10 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
         maxValueLabelWidth = localMaxWidth + 10;
     }
 
+    /**
+     * Draws X-axis time labels and vertical gridlines.
+     * Shows date transitions (year/month/day) only when they change.
+     */
     private void renderVerticalGrid() {
         int targetLines = 8;
         if (viewWidth <= 0) return;
@@ -227,9 +279,16 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
         maxTimeLabelHeight = localMaxHeight;
     }
 
+    /**
+     * Renders all line series in three tiers:
+     * 1. Normal series (dimmed if a highlight is active)
+     * 2. Highlighted series (bright, thick, drawn on top of normal)
+     * 3. Pinned series (always on top, never dimmed)
+     */
     private void renderLines() {
         for (LineSeries series : seriesList) {
-            if (!series.visible || series.points.size() < 2 || series == highlightedSeries) continue;
+            if (!series.visible || series.points.size() < 2) continue;
+            if (series == highlightedSeries || series == pinnedSeries) continue;
             float thickness = 1.5f;
             int color = (highlightedSeries != null) ? ColorUtilities.setAlpha(series.color, 0.4f) : series.color;
             renderSeries(series, thickness, color);
@@ -238,8 +297,17 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
             int brightColor = ColorUtilities.setBrightness(highlightedSeries.color, 1.4f);
             renderSeries(highlightedSeries, 3.0f, brightColor);
         }
+        if (pinnedSeries != null && pinnedSeries.visible && pinnedSeries.points.size() >= 2) {
+            renderSeries(pinnedSeries, 2.0f, pinnedSeries.color);
+        }
     }
 
+    /**
+     * Draws a single series as connected line segments with joint fillers at
+     * direction changes. Consecutive same-Y points are merged into single
+     * horizontal segments. Joint fillers are skipped when the color has alpha
+     * to prevent double-blend artifacts.
+     */
     private void renderSeries(LineSeries series, float thickness, int color) {
         List<int[]> pts = buildOptimizedPoints(series);
         if (pts.size() < 2) return;
@@ -253,6 +321,7 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
             int[] curr = pts.get(i);
             drawLine(prev[0], prev[1], curr[0], curr[1], thickness, color);
 
+            // Fill joint gaps only at Y-direction changes and only for opaque colors
             if (opaque && i >= 2) {
                 int[] pp = pts.get(i - 2);
                 int dy1 = prev[1] - pp[1];
@@ -264,6 +333,10 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
         }
     }
 
+    /**
+     * Collapses runs of consecutive same-Y screen-space points into just the
+     * first and last point, reducing draw calls for flat balance periods.
+     */
     private List<int[]> buildOptimizedPoints(LineSeries series) {
         List<int[]> pts = new ArrayList<>();
         for (int i = 0; i < series.points.size(); i++) {
@@ -289,6 +362,7 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
         double mouseWorldY = fromCanvasSpaceY(getMouseY());
         boolean consumed = false;
 
+        // Horizontal zoom (hold Ctrl to lock to vertical-only)
         if (!isKeyPressed(GLFW.GLFW_KEY_LEFT_CONTROL)) {
             double oldWidth = viewWidth;
             viewWidth = Math.max(1000, viewWidth * zoomFactor);
@@ -297,6 +371,7 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
             consumed = true;
         }
 
+        // Vertical zoom (hold Shift to lock to horizontal-only)
         if (!isKeyPressed(GLFW.GLFW_KEY_LEFT_SHIFT)) {
             double oldHeight = viewHeight;
             viewHeight = Math.max(0.1, viewHeight * zoomFactor);
@@ -356,6 +431,11 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
 
     // ── View clamping ──
 
+    /**
+     * Constrains the view so no future time or pre-data time is visible.
+     * Width is capped to the actual data range; edges are clamped to
+     * [minTime, maxTime].
+     */
     private void clampView() {
         long minTime = Long.MAX_VALUE;
         long maxTime = Long.MIN_VALUE;
@@ -383,7 +463,7 @@ public class BalanceHistoryChart extends BankSystemGuiElement {
         if (viewY < 0) viewY = 0;
     }
 
-    // ── Coordinate conversion ──
+    // ── Coordinate conversion (double precision to avoid epoch-millis jitter) ──
 
     private int toCanvasSpaceX(long time) {
         if (viewWidth == 0) return canvasRect.x;
