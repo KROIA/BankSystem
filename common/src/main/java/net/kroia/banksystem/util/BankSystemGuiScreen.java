@@ -2,7 +2,7 @@ package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
-import net.kroia.modutilities.gui.GuiScreen;
+import net.kroia.modutilities.gui.client.GuiScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;

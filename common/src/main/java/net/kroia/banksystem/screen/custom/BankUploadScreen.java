@@ -11,7 +11,7 @@ import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
-import net.kroia.modutilities.gui.elements.ContainerView;
+import net.kroia.modutilities.gui.client.ContainerView;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;

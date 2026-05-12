@@ -108,8 +108,8 @@ public class ItemInfoWidget extends BankSystemGuiElement {
         int widthHalf = width/2;
         totalSuplyTextLabel.setBounds(padding, padding, width, elementHeight);
         totalLockedTextLabel.setBounds(padding, totalSuplyTextLabel.getBottom(), width, elementHeight);
-        int textWidth = getFont().width(SEARCH_PLAYER.getString())+10;
-        int xPos = Math.max(width/3, getFont().width(totalSuplyTextLabel.getText())+10);
+        int textWidth = getTextWidth(SEARCH_PLAYER.getString())+10;
+        int xPos = Math.max(width/3, getTextWidth(totalSuplyTextLabel.getText())+10);
         searchLabel.setBounds(xPos, padding, textWidth, elementHeight);
         searchTextBox.setBounds(searchLabel.getRight(), searchLabel.getTop(), width-searchLabel.getRight(), elementHeight);
 

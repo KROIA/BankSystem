@@ -5,8 +5,9 @@ import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.gui.GuiScreen;
+import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.*;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 public class BankAccountManagementItem extends BankSystemGuiElement {
@@ -106,10 +107,10 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
             closeBankButton = new Button(CLOSE_BANK_BUTTON.getString(), () -> {
                 String askTitle = BankSystemTextMessages.getBankAccountManagementItemAskRemoveTitleMessage(itemID.getName());
                 String askMessage = BankSystemTextMessages.getBankAccountManagementItemAskRemoveMessage(itemID.getName(), accountNumber);
-                AskPopupScreen popup = new AskPopupScreen((GuiScreen)getRoot().getScreen(), this::onCloseAccountButtonClicked, () -> {}, askTitle, askMessage);
+                AskPopupScreen popup = new AskPopupScreen((GuiScreen) Minecraft.getInstance().screen, this::onCloseAccountButtonClicked, () -> {}, askTitle, askMessage);
                 popup.setSize(400,100);
                 popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
-                getMinecraft().setScreen(popup);
+                Minecraft.getInstance().setScreen(popup);
             });
             closeBankButton.setHoverTooltipSupplier(CLOSE_BANK_BUTTON_TOOLTIP::getString);
             closeBankButton.setHoverTooltipFontScale(0.8f);

@@ -4,9 +4,10 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
-import net.kroia.modutilities.gui.GuiScreen;
+import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -133,7 +134,7 @@ public class ItemInfoUserWidget extends BankSystemGuiElement {
 
     private void onManageButtonClicked()
     {
-        BankAccountManagementScreen.openScreen(accountNumber, (GuiScreen)getRoot().getScreen(), true);
+        BankAccountManagementScreen.openScreen(accountNumber, (GuiScreen) Minecraft.getInstance().screen, true);
     }
 
 }
