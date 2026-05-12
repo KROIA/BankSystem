@@ -6,10 +6,11 @@ import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiScreen;
+import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.Label;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
@@ -192,7 +193,7 @@ public class BankUserWidget extends BankSystemGuiElement {
                 userData.permissions = permission;
 
             }, parentScreen);
-            getMinecraft().setScreen(permissionEditScreen);
+            Minecraft.getInstance().setScreen(permissionEditScreen);
         }
     }
     private void onRemoveButtonClicked() {

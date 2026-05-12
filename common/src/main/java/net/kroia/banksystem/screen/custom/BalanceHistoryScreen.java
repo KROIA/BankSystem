@@ -224,9 +224,11 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             chart.bindHoverElement(row, series);
 
             int activeColor = ColorUtilities.setAlpha(color, 0.8f);
+            int hoverColor = ColorUtilities.setBrightness(color, 1.4f);
             int inactiveColor = ColorUtilities.getRGB(60, 60, 60);
             Button toggleButton = new Button(name);
             toggleButton.setBackgroundColor(series.visible ? activeColor : inactiveColor);
+            toggleButton.setHoverColor(hoverColor);
             final short fItemId = itemId;
             final BalanceHistoryChart.LineSeries toggleSeries = series;
             toggleButton.setOnFallingEdge(() -> {
@@ -286,9 +288,11 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         chart.bindHoverElement(wealthRow, wealthSeries);
 
         int wealthActive = ColorUtilities.setAlpha(wealthColor, 0.8f);
+        int wealthHover = ColorUtilities.setBrightness(wealthColor, 1.4f);
         int wealthInactive = ColorUtilities.getRGB(60, 60, 60);
         Button wealthToggle = new Button(wealthName);
         wealthToggle.setBackgroundColor(wealthSeries.visible ? wealthActive : wealthInactive);
+        wealthToggle.setHoverColor(wealthHover);
         wealthToggle.setOnFallingEdge(() -> {
             wealthSeries.visible = !wealthSeries.visible;
             wealthToggle.setBackgroundColor(wealthSeries.visible ? wealthActive : wealthInactive);
