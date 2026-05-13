@@ -699,6 +699,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
         boolean firstLoad = historyChart.getSeries().isEmpty();
         historyChart.clearSeries();
+        historyChart.clearHoverBindings();
         double scale = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
         legendOutlineColors = new int[sortedItems.size()];
@@ -731,10 +732,12 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
                 f.setBackgroundColor(bgColor);
                 f.setEnableOutline(true);
                 f.setEnableBackground(true);
+                historyChart.bindHoverElement(f, s);
             }
             if (ci < legendIcons.size()) {
                 ItemID id = new ItemID(itemId);
                 legendIcons.get(ci).setItemStack(id.getStack());
+                historyChart.bindHoverElement(legendIcons.get(ci), s);
             }
             ci++;
         }
