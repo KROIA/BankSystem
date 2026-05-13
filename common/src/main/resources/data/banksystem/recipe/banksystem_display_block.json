@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "D": {"item": "banksystem:display"},
+    "G": {"item": "minecraft:glass_pane"},
+    "I": {"item": "minecraft:iron_nugget"}
+  },
+  "pattern": [
+    "IGI",
+    "GDG",
+    "IGI"
+  ],
+  "result": {
+    "count": 1,
+    "id": "banksystem:banksystem_display_block"
+  },
+  "show_notification": true
+}
