@@ -23,8 +23,11 @@ import net.kroia.banksystem.minecraft.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.banksystem.minecraft.compat.OldBankDataLoader;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.BalanceDisplayBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.BalanceHistoryDisplayBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
+import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
 import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.minecraft.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
@@ -33,6 +36,7 @@ import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.multi_server.BanksystemMetadataRequest;
+import net.kroia.modutilities.gui.GuiElementRegistry;
 import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.banksystem.testing.tests.ArithmeticTests;
 import net.kroia.banksystem.testing.tests.AsyncForwardingTests;
@@ -112,6 +116,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankDownloadBlockEntity.setBackend(INSTANCES);
         BankUploadBlockEntity.setBackend(INSTANCES);
         BankSystemDisplayBlockEntity.setBackend(INSTANCES);
+        BalanceHistoryDisplayBlockEntity.setBackend(INSTANCES);
+        BalanceDisplayBlockEntity.setBackend(INSTANCES);
         Software.setBackend(INSTANCES);
         ItemID.setBackend(INSTANCES);
 
@@ -129,6 +135,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemCreativeModeTab.init();
         BankSystemTextMessages.init();
 
+
+        GuiElementRegistry.register("balance_history_chart", BalanceHistoryChart.class, BalanceHistoryChart::new);
 
         INSTANCES.NETWORKING = new BankSystemNetworking();
         INSTANCES.SERVER_EVENTS = new BankSystemEvents();

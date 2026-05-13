@@ -4,10 +4,9 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
+import net.kroia.banksystem.util.ItemColorUtil;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.ShortTag;
@@ -48,20 +47,6 @@ import java.util.*;
  * Colors are cached per ItemID for the session.
  */
 public class BalanceHistoryScreen extends BankSystemGuiScreen {
-
-    /** Fallback color palette when texture extraction fails. */
-    private static final int[] SERIES_COLORS = {
-            ColorUtilities.getRGB(63, 255, 139),
-            ColorUtilities.getRGB(255, 113, 108),
-            ColorUtilities.getRGB(100, 149, 237),
-            ColorUtilities.getRGB(255, 215, 0),
-            ColorUtilities.getRGB(186, 85, 211),
-            ColorUtilities.getRGB(0, 206, 209),
-            ColorUtilities.getRGB(255, 165, 0),
-            ColorUtilities.getRGB(144, 238, 144),
-            ColorUtilities.getRGB(255, 105, 180),
-            ColorUtilities.getRGB(176, 196, 222),
-    };
 
     // NBT keys for filter persistence inside User.customData
     private static final String CUSTOM_DATA_KEY = "balanceHistory";
@@ -189,7 +174,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             List<BalanceHistoryRecord> itemRecords = entry.getValue();
 
             ItemStack itemStack = getItemStack(itemId);
-            int color = getItemColor(itemStack, colorIndex);
+            int color = ItemColorUtil.getColor(itemId, itemStack, colorIndex);
             String name = getItemName(itemId);
 
             BalanceHistoryChart.LineSeries series = new BalanceHistoryChart.LineSeries(name, color);
@@ -346,91 +331,6 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private ItemStack getItemStack(short itemId) {
         ItemID id = new ItemID(itemId);
         return id.getStack();
-    }
-
-    // ── Item color extraction ──
-    // Derives line colors from item textures so chart lines visually match the items.
-    // Samples the first quad's texture sprite, averages non-transparent pixel RGB,
-    // boosts saturation 50% and enforces min brightness for readability.
-    // Cached per ItemID short for the session (static map survives screen reopens).
-
-    private static final Map<Short, Integer> itemColorCache = new HashMap<>();
-
-    /**
-     * Returns a chart line color for the given item. Tries texture extraction first;
-     * falls back to the static SERIES_COLORS palette on failure.
-     */
-    private int getItemColor(ItemStack stack, int fallbackIndex) {
-        if (stack == null || stack.isEmpty()) {
-            return SERIES_COLORS[fallbackIndex % SERIES_COLORS.length];
-        }
-        short key = ItemID.getOrRegisterFromItemStackServerSide_direct(stack).getShort();
-        Integer cached = itemColorCache.get(key);
-        if (cached != null) return cached;
-
-        int color = extractColorFromTexture(stack);
-        if (color == 0) {
-            color = SERIES_COLORS[fallbackIndex % SERIES_COLORS.length];
-        }
-        itemColorCache.put(key, color);
-        return color;
-    }
-
-    /**
-     * Extracts the average color from an item's baked model texture sprite.
-     * <p>
-     * Accesses the NativeImage via reflection on SpriteContents.originalImage,
-     * then averages all non-transparent pixels (alpha >= 128). The result is
-     * adjusted in HSB space: saturation boosted 1.5x, brightness clamped to
-     * [0.4, 1.0] so dark or gray textures still produce visible chart lines.
-     *
-     * @return 0xAARRGGBB color, or 0 on failure
-     */
-    private int extractColorFromTexture(ItemStack stack) {
-        try {
-            BakedModel model = Minecraft.getInstance().getItemRenderer().getModel(stack, null, null, 0);
-            var quads = model.getQuads(null, null, net.minecraft.util.RandomSource.create());
-            if (quads.isEmpty()) return 0;
-
-            TextureAtlasSprite sprite = quads.get(0).getSprite();
-            int width = sprite.contents().width();
-            int height = sprite.contents().height();
-
-            var field = sprite.contents().getClass().getDeclaredField("originalImage");
-            field.setAccessible(true);
-            var nativeImage = (com.mojang.blaze3d.platform.NativeImage) field.get(sprite.contents());
-            if (nativeImage == null) return 0;
-
-            long rSum = 0, gSum = 0, bSum = 0;
-            int count = 0;
-
-            for (int x = 0; x < width; x++) {
-                for (int y = 0; y < height; y++) {
-                    int pixel = nativeImage.getPixelRGBA(x, y);
-                    int a = (pixel >> 24) & 0xFF;
-                    if (a < 128) continue;
-                    int r = pixel & 0xFF;
-                    int g = (pixel >> 8) & 0xFF;
-                    int b = (pixel >> 16) & 0xFF;
-                    rSum += r;
-                    gSum += g;
-                    bSum += b;
-                    count++;
-                }
-            }
-            if (count == 0) return 0;
-
-            int r = (int) (rSum / count);
-            int g = (int) (gSum / count);
-            int b = (int) (bSum / count);
-
-            float[] hsb = java.awt.Color.RGBtoHSB(r, g, b, null);
-            hsb[1] = Math.min(1.0f, hsb[1] * 1.5f);
-            hsb[2] = Math.min(1.0f, Math.max(0.4f, hsb[2]));
-            return java.awt.Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]) | 0xFF000000;
-        } catch (Exception e) {
-            return 0;
-        }
     }
 
     /**
