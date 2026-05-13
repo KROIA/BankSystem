@@ -2,6 +2,7 @@ package net.kroia.banksystem.minecraft.entity;
 
 import com.google.common.base.Suppliers;
 import dev.architectury.registry.client.rendering.BlockEntityRendererRegistry;
+import dev.architectury.registry.client.rendering.RenderTypeRegistry;
 import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
@@ -10,9 +11,12 @@ import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.MoneyStockpileBlockEntity;
 import net.kroia.banksystem.minecraft.entity.renderer.MoneyStockpileEntityRenderer;
+import net.kroia.modutilities.gui.display.client.AbstractDisplayBlockEntityRenderer;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
@@ -51,12 +55,17 @@ public class BankSystemEntities {
             registerBlockEntity("money_stockpile_block_entity",
                     () -> BlockEntityType.Builder.of(MoneyStockpileBlockEntity::new, BankSystemBlocks.MONEY_STOCKPILE_BLOCK.get()).build(null));
 
+    public static final RegistrySupplier<BlockEntityType<?>> BANKSYSTEM_DISPLAY_BLOCK_ENTITY =
+            registerBlockEntity("banksystem_display_block_entity",
+                    () -> BlockEntityType.Builder.of(BankSystemDisplayBlockEntity::new, BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get()).build(null));
 
 
     public static void registerRenderers()
     {
         // Architectury API method to register BlockEntityRenderer in a platform-neutral way
         BlockEntityRendererRegistry.register((BlockEntityType<MoneyStockpileBlockEntity>) MONEY_STOCKPILE_BLOCK_ENTITY.get(), MoneyStockpileEntityRenderer::new);
+        BlockEntityRendererRegistry.register((BlockEntityType<BankSystemDisplayBlockEntity>) BANKSYSTEM_DISPLAY_BLOCK_ENTITY.get(), AbstractDisplayBlockEntityRenderer::new);
+        RenderTypeRegistry.register(RenderType.cutout(), BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get());
     }
 
 
