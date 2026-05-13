@@ -2,11 +2,8 @@ package net.kroia.banksystem.minecraft.block.custom;
 
 import com.mojang.serialization.MapCodec;
 import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
-import net.kroia.banksystem.screen.custom.DisplayConfigScreen;
 import net.kroia.modutilities.gui.display.AbstractDisplayBlock;
 import net.kroia.modutilities.gui.display.AbstractDisplayBlockEntity;
-import net.kroia.modutilities.gui.display.client.DisplayInteractionScreen;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -100,27 +97,30 @@ public class BankSystemDisplayBlock extends AbstractDisplayBlock {
                     return InteractionResult.FAIL;
                 }
             } else {
-                openSyncedScreen(ctrl.getBlockPos());
+                ClientScreenHelper.openSyncedScreen(ctrl.getBlockPos());
             }
             return InteractionResult.SUCCESS;
         }
 
         if (level.isClientSide()) {
-            openConfigScreen(ctrl.getBlockPos(), ctrl.getDisplayType(), ctrl.getAccountNumber());
+            ClientScreenHelper.openConfigScreen(ctrl.getBlockPos(), ctrl.getDisplayType(), ctrl.getAccountNumber());
         }
         return InteractionResult.SUCCESS;
-    }
-
-    private static void openSyncedScreen(BlockPos controllerPos) {
-        DisplayInteractionScreen.open(controllerPos);
-    }
-
-    private static void openConfigScreen(BlockPos pos, BankSystemDisplayBlockEntity.DisplayType type, int account) {
-        Minecraft.getInstance().setScreen(new DisplayConfigScreen(pos, type, account));
     }
 
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new BankSystemDisplayBlockEntity(pos, state);
+    }
+
+    private static class ClientScreenHelper {
+        static void openSyncedScreen(BlockPos controllerPos) {
+            net.kroia.modutilities.gui.display.client.DisplayInteractionScreen.open(controllerPos);
+        }
+
+        static void openConfigScreen(BlockPos pos, BankSystemDisplayBlockEntity.DisplayType type, int account) {
+            net.minecraft.client.Minecraft.getInstance().setScreen(
+                    new net.kroia.banksystem.screen.custom.DisplayConfigScreen(pos, type, account));
+        }
     }
 }

@@ -55,6 +55,8 @@ public class BalanceHistoryChart extends GuiElement {
     private LineSeries pinnedSeries = null;
     private int pinnedSeriesIndex = -1;
     private final Map<GuiElement, LineSeries> hoverBindings = new LinkedHashMap<>();
+    private final Map<String, Integer> pendingHoverBindingIds = new LinkedHashMap<>();
+    private boolean hoverBindingsResolved = false;
 
     public BalanceHistoryChart() {
         setTextFontScale(0.8f);
@@ -95,6 +97,22 @@ public class BalanceHistoryChart extends GuiElement {
             seriesTag.add(st);
         }
         tag.put("series", seriesTag);
+
+        ListTag hoverTag = new ListTag();
+        for (var entry : hoverBindings.entrySet()) {
+            String elId = entry.getKey().getId();
+            int idx = seriesList.indexOf(entry.getValue());
+            if (elId != null && idx >= 0) {
+                CompoundTag ht = new CompoundTag();
+                ht.putString("id", elId);
+                ht.putInt("idx", idx);
+                hoverTag.add(ht);
+            }
+        }
+        if (!hoverTag.isEmpty()) {
+            tag.put("hoverBindings", hoverTag);
+        }
+
         return tag;
     }
 
@@ -126,6 +144,15 @@ public class BalanceHistoryChart extends GuiElement {
             }
             pinnedSeries = (pinnedSeriesIndex >= 0 && pinnedSeriesIndex < seriesList.size())
                     ? seriesList.get(pinnedSeriesIndex) : null;
+        }
+        pendingHoverBindingIds.clear();
+        hoverBindingsResolved = false;
+        if (tag.contains("hoverBindings")) {
+            ListTag hoverTag = tag.getList("hoverBindings", 10);
+            for (int i = 0; i < hoverTag.size(); i++) {
+                CompoundTag ht = hoverTag.getCompound(i);
+                pendingHoverBindingIds.put(ht.getString("id"), ht.getInt("idx"));
+            }
         }
         markDirty();
     }
@@ -161,6 +188,23 @@ public class BalanceHistoryChart extends GuiElement {
 
     public void clearHoverBindings() {
         hoverBindings.clear();
+        pendingHoverBindingIds.clear();
+        hoverBindingsResolved = false;
+    }
+
+    private void resolvePendingHoverBindings() {
+        hoverBindingsResolved = true;
+        if (getRoot() == null || seriesList.isEmpty()) return;
+        for (GuiElement el : getRoot().getElements()) {
+            String elId = el.getId();
+            if (elId != null && pendingHoverBindingIds.containsKey(elId)) {
+                int idx = pendingHoverBindingIds.get(elId);
+                if (idx >= 0 && idx < seriesList.size()) {
+                    hoverBindings.put(el, seriesList.get(idx));
+                }
+            }
+        }
+        pendingHoverBindingIds.clear();
     }
 
     public void setPinnedSeries(LineSeries series) {
@@ -211,6 +255,10 @@ public class BalanceHistoryChart extends GuiElement {
     protected void renderBackground() {
         super.renderBackground();
         if (seriesList.isEmpty()) return;
+
+        if (!hoverBindingsResolved && !pendingHoverBindingIds.isEmpty()) {
+            resolvePendingHoverBindings();
+        }
 
         highlightedSeries = null;
         for (var entry : hoverBindings.entrySet()) {

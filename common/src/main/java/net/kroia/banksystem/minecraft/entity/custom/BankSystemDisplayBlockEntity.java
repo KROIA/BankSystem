@@ -114,6 +114,8 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     // ── Balance overview state ──
 
     private int slotCount = 0;
+    private boolean overviewDataPending = false;
+    private volatile BankAccountData pendingOverviewData = null;
     private Label overviewAccountLabel;
     private final List<ItemView> overviewIcons = new ArrayList<>();
     private final List<Label> overviewLabels = new ArrayList<>();
@@ -161,9 +163,8 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             if (oldType != type) {
                 net.minecraft.core.Direction facing = getBlockState().getValue(HorizontalDirectionalBlock.FACING);
                 AbstractDisplayBlockEntity.recalculateGroups(level, getBlockPos(), facing);
-            } else {
-                rebuildGui();
             }
+            rebuildGui();
         }
     }
 
@@ -250,8 +251,14 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         tickCounter++;
 
         if (displayType == DisplayType.BALANCE_OVERVIEW && accountNumber != 0) {
+            BankAccountData ovData = pendingOverviewData;
+            if (ovData != null) {
+                pendingOverviewData = null;
+                overviewDataPending = false;
+                applyOverviewData(ovData);
+            }
             if (tickCounter % 20 == 0 || tickCounter == 1) {
-                updateBalances();
+                requestOverviewData();
             }
         } else if (displayType == DisplayType.BALANCE_HISTORY && accountNumber != 0) {
             List<BalanceHistoryRecord> records = pendingHistoryRecords;
@@ -262,10 +269,6 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             }
             if (tickCounter % 1200 == 0 || tickCounter == 1) {
                 requestHistoryData();
-            }
-            if (historyChart != null && tickCounter % 20 == 0) {
-                historyChart.scrollToPresent();
-                syncToClientPublic();
             }
         }
     }
@@ -320,6 +323,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         overviewAccountLabel = null;
         overviewIcons.clear();
         overviewLabels.clear();
+        overviewDataPending = false;
         historyChart = null;
         historyStatusLabel = null;
         legendFrames.clear();
@@ -384,6 +388,35 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             }
             pendingLegendData = null;
         }
+
+        if (level != null && level.isClientSide() && historyChart != null) {
+            recalculateClientColors();
+        }
+    }
+
+    private void recalculateClientColors() {
+        List<BalanceHistoryChart.LineSeries> series = historyChart.getSeries();
+        int count = Math.min(series.size(), legendIcons.size());
+        for (int i = 0; i < count; i++) {
+            ItemStack stack = legendIcons.get(i).getItemStack();
+            if (stack == null || stack.isEmpty()) continue;
+            ItemID itemId = ItemID.getFromItemStack(stack);
+            if (itemId == null) continue;
+            int color = ItemColorUtil.getColor(itemId.getShort(), stack, i);
+            series.get(i).color = color;
+            int bgColor = ColorUtilities.getRGB(
+                    (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, 40);
+            if (i < legendFrames.size()) {
+                legendFrames.get(i).setOutlineColor(color);
+                legendFrames.get(i).setBackgroundColor(bgColor);
+            }
+            if (i < legendOutlineColors.length) {
+                legendOutlineColors[i] = color;
+            }
+            if (i < legendBgColors.length) {
+                legendBgColors[i] = bgColor;
+            }
+        }
     }
 
     private static int parseIndex(String id) {
@@ -440,18 +473,21 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         overviewIcons.sort(Comparator.comparingInt(a -> parseIndex(a.getId())));
         overviewLabels.sort(Comparator.comparingInt(a -> parseIndex(a.getId())));
         if (level == null || !level.isClientSide()) {
-            updateBalances();
+            requestOverviewData();
         }
     }
 
     private int queryItemCount() {
         if (BACKEND == null || BACKEND.SERVER_BANK_MANAGER == null) return 0;
         ISyncServerBankManager mgr = BACKEND.SERVER_BANK_MANAGER.getSync();
-        if (mgr == null) return 0;
-        var account = mgr.getBankAccount(accountNumber);
-        if (account == null) return 0;
-        int maxSlots = calculateMaxSlots();
-        return Math.min(account.getAccountData().bankData.size(), maxSlots);
+        if (mgr != null) {
+            var account = mgr.getBankAccount(accountNumber);
+            if (account != null) {
+                int maxSlots = calculateMaxSlots();
+                return Math.min(account.getAccountData().bankData.size(), maxSlots);
+            }
+        }
+        return slotCount;
     }
 
     private int calculateMaxSlots() {
@@ -463,26 +499,31 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         return totalCols * maxRows;
     }
 
-    private void updateBalances() {
+    private void requestOverviewData() {
         if (BACKEND == null || BACKEND.SERVER_BANK_MANAGER == null) return;
-        ISyncServerBankManager syncManager = BACKEND.SERVER_BANK_MANAGER.getSync();
-        if (syncManager == null) return;
+        if (overviewDataPending) return;
+        overviewDataPending = true;
 
-        var account = syncManager.getBankAccount(accountNumber);
-        if (account == null) {
+        BACKEND.SERVER_BANK_MANAGER.getAsync().getBankAccountDataAsync(accountNumber)
+                .thenAccept(data -> {
+                    pendingOverviewData = data;
+                });
+    }
+
+    private void applyOverviewData(BankAccountData data) {
+        if (data == null) {
             if (slotCount != 0) {
                 slotCount = 0;
                 pendingRebuild = true;
                 return;
             }
-            if (overviewAccountLabel != null) {
-                overviewAccountLabel.setText("Account #" + accountNumber + " (not found)");
+            String notFoundText = "Account #" + accountNumber + " (not found)";
+            if (overviewAccountLabel != null && !notFoundText.equals(overviewAccountLabel.getText())) {
+                overviewAccountLabel.setText(notFoundText);
+                syncToClientPublic();
             }
-            syncToClientPublic();
             return;
         }
-
-        BankAccountData data = account.getAccountData();
 
         List<Map.Entry<ItemID, BankData>> sorted = new ArrayList<>(data.bankData.entrySet());
         sorted.sort((a, b) -> Long.compare(b.getValue().balance(), a.getValue().balance()));
@@ -495,8 +536,11 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             return;
         }
 
-        if (overviewAccountLabel != null) {
+        boolean changed = false;
+
+        if (overviewAccountLabel != null && !data.accountName.equals(overviewAccountLabel.getText())) {
             overviewAccountLabel.setText(data.accountName);
+            changed = true;
         }
 
         for (int i = 0; i < needed; i++) {
@@ -505,13 +549,24 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             BankData bankData = entry.getValue();
 
             if (i < overviewIcons.size()) {
-                overviewIcons.get(i).setItemStack(itemId.getStack());
+                ItemStack current = overviewIcons.get(i).getItemStack();
+                ItemStack next = itemId.getStack();
+                if (current == null || !ItemStack.isSameItem(current, next)) {
+                    overviewIcons.get(i).setItemStack(next);
+                    changed = true;
+                }
             }
             if (i < overviewLabels.size()) {
-                overviewLabels.get(i).setText(formatCompact(bankData.balance()));
+                String newText = formatCompact(bankData.balance());
+                if (!newText.equals(overviewLabels.get(i).getText())) {
+                    overviewLabels.get(i).setText(newText);
+                    changed = true;
+                }
             }
         }
-        syncToClientPublic();
+        if (changed) {
+            syncToClientPublic();
+        }
     }
 
     private void saveOverviewData(CompoundTag tag) {

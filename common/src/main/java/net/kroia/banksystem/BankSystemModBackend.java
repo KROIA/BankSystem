@@ -247,23 +247,29 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the server side
     public static void onServerStop(MinecraftServer server) {
         MultiServerManager.cleanup();
-        if(!INSTANCES.isSlaveServer) {
+
+        if (!INSTANCES.isSlaveServer) {
             TickEvent.SERVER_POST.unregister(BankSystemModBackend::onServerTick);
             saveDataToFiles(server);
 
             if (INSTANCES.DATABASE_MANAGER != null) {
                 INSTANCES.DATABASE_MANAGER.close();
-                INSTANCES.DATABASE_MANAGER = null;
-                INSTANCES.BALANCE_HISTORY_MANAGER = null;
             }
 
             BankSystemDataHandler.resetBankDataLoaded();
             BankSystemDataHandler.resetGlobalDataLoaded();
         }
-        //BankSystemConfig.Settings settings = INSTANCES.CONFIG.getSettings();
-        //settings.bank.items.add(MoneyItem.getItemID());
-        //INSTANCES.CONFIG.save();
-        //INSTANCES.SERVER_EVENTS.removeListeners();
+
+        INSTANCES.SERVER_BANK_MANAGER = null;
+        INSTANCES.SERVER_DATA_HANDLER = null;
+        INSTANCES.SERVER_SETTINGS = null;
+        INSTANCES.COMMAND_HANDLER = null;
+        INSTANCES.DATABASE_MANAGER = null;
+        INSTANCES.BALANCE_HISTORY_MANAGER = null;
+        INSTANCES.isSlaveServer = false;
+        snapshotTickCounter = 0;
+        ItemIDManager.clear();
+        ItemColorUtil.clearCache();
     }
 
     // Called from the server side
