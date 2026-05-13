@@ -600,8 +600,11 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         int rows = (int) Math.ceil((double) itemCount / totalCols);
         int frameH = rows * OV_ROW_HEIGHT + OV_FRAME_PAD * 2;
 
+        int gridWidth = displaysWide * DISPLAY_UNIT;
+        int offsetX = (w - gridWidth) / 2;
+
         Frame frame = new Frame();
-        frame.setBounds(OV_MARGIN, y, w - OV_MARGIN * 2, frameH);
+        frame.setBounds(offsetX, y, gridWidth, frameH);
         frame.setEnableBackground(true);
         frame.setBackgroundColor(OV_FRAME_BG);
         frame.setEnableOutline(true);
@@ -619,7 +622,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             int displayIdx = col / COLS_PER_DISPLAY;
             int colInDisplay = col % COLS_PER_DISPLAY;
 
-            int cellX = displayIdx * DISPLAY_UNIT + colInDisplay * slotW + slotOffset;
+            int cellX = offsetX + displayIdx * DISPLAY_UNIT + colInDisplay * slotW + slotOffset;
             int cellY = y + OV_FRAME_PAD + row * OV_ROW_HEIGHT;
 
             ItemView icon = new ItemView(cellX, cellY + 2, iconSize, iconSize);
