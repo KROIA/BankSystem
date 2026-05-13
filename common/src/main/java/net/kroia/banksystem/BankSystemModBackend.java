@@ -232,7 +232,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
             // Save the data when the game saves the world
             LifecycleEvent.SERVER_LEVEL_SAVE.register((ServerLevel level) -> {
-                if (level.dimension() == Level.OVERWORLD) {
+                if (level.dimension() == Level.OVERWORLD && INSTANCES.SERVER_DATA_HANDLER != null) {
                     INSTANCES.SERVER_DATA_HANDLER.saveAll();
                 }
             });

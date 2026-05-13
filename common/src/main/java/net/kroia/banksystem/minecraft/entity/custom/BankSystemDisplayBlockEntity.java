@@ -9,6 +9,7 @@ import net.kroia.banksystem.data.filter.EqualityFilter;
 import net.kroia.banksystem.data.table.BalanceHistoryManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
+import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
 import net.kroia.banksystem.util.ItemColorUtil;
 import net.kroia.banksystem.util.ItemID;
@@ -716,19 +717,26 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     }
 
     private void requestHistoryData() {
-        if (BACKEND == null || BACKEND.BALANCE_HISTORY_MANAGER == null) return;
+        if (BACKEND == null || BACKEND.SERVER_BANK_MANAGER == null) return;
         if (historyDataPending) return;
         historyDataPending = true;
 
-        BalanceHistoryManager mgr = BACKEND.BALANCE_HISTORY_MANAGER;
-        mgr.getHistory(
-                Optional.empty(),
-                Optional.of(new EqualityFilter(accountNumber)),
-                Optional.empty(),
-                0
-        ).thenAccept(records -> {
-            pendingHistoryRecords = (records != null) ? records : List.of();
-        });
+        if (BACKEND.BALANCE_HISTORY_MANAGER != null) {
+            BACKEND.BALANCE_HISTORY_MANAGER.getHistory(
+                    Optional.empty(),
+                    Optional.of(new EqualityFilter(accountNumber)),
+                    Optional.empty(),
+                    0
+            ).thenAccept(records -> {
+                pendingHistoryRecords = (records != null) ? records : List.of();
+            });
+        } else if (BACKEND.isSlaveServer) {
+            BankSystemNetworking.BALANCE_HISTORY_REQUEST
+                    .sendRequestToMaster(accountNumber)
+                    .thenAccept(records -> {
+                        pendingHistoryRecords = (records != null) ? records : List.of();
+                    });
+        }
     }
 
     private void applyHistoryData(List<BalanceHistoryRecord> records) {
