@@ -23,8 +23,6 @@ import net.kroia.banksystem.minecraft.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.banksystem.minecraft.compat.OldBankDataLoader;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
-import net.kroia.banksystem.minecraft.entity.custom.BalanceDisplayBlockEntity;
-import net.kroia.banksystem.minecraft.entity.custom.BalanceHistoryDisplayBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
@@ -116,8 +114,6 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankDownloadBlockEntity.setBackend(INSTANCES);
         BankUploadBlockEntity.setBackend(INSTANCES);
         BankSystemDisplayBlockEntity.setBackend(INSTANCES);
-        BalanceHistoryDisplayBlockEntity.setBackend(INSTANCES);
-        BalanceDisplayBlockEntity.setBackend(INSTANCES);
         Software.setBackend(INSTANCES);
         ItemID.setBackend(INSTANCES);
 

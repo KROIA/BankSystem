@@ -153,8 +153,6 @@
   "message.banksystem.need_creative_mode_for_this_screen": "You need to be in creative mode to access this screen",
 
   "block.banksystem.banksystem_display_block": "Bank Display",
-  "block.banksystem.balance_history_display_block": "Balance History Display",
-  "block.banksystem.balance_display_block": "Balance Display",
   "block.banksystem.atm_block": "ATM",
   "gui.banksystem.atm_screen.receive_button": "Withdraw money",
   "gui.banksystem.atm_screen.sum_text": "Current withdrawal sum: {amount}",

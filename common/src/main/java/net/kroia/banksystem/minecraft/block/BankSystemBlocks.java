@@ -6,7 +6,6 @@ import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.block.custom.*;
-import net.kroia.banksystem.minecraft.block.custom.BalanceHistoryDisplayBlock;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -38,8 +37,6 @@ public class BankSystemBlocks {
     public static final RegistrySupplier<Block> BANK_DOWNLOAD_BLOCK = registerBlock(BankDownloadBlock.NAME, BankDownloadBlock::new);
     public static final RegistrySupplier<Block> MONEY_STOCKPILE_BLOCK = registerBlockNoItem(MoneyStockpileBlock.NAME, MoneyStockpileBlock::new);
     public static final RegistrySupplier<Block> BANKSYSTEM_DISPLAY_BLOCK = registerBlock(BankSystemDisplayBlock.NAME, BankSystemDisplayBlock::new);
-    public static final RegistrySupplier<Block> BALANCE_HISTORY_DISPLAY_BLOCK = registerBlock(BalanceHistoryDisplayBlock.NAME, BalanceHistoryDisplayBlock::new);
-    public static final RegistrySupplier<Block> BALANCE_DISPLAY_BLOCK = registerBlock(BalanceDisplayBlock.NAME, BalanceDisplayBlock::new);
 
 
     public static <T extends Block> RegistrySupplier<T> registerBlock(String name, Supplier<T> block)

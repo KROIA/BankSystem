@@ -2,17 +2,28 @@ package net.kroia.banksystem.minecraft.block.custom;
 
 import com.mojang.serialization.MapCodec;
 import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
+import net.kroia.banksystem.screen.custom.DisplayConfigScreen;
 import net.kroia.modutilities.gui.display.AbstractDisplayBlock;
+import net.kroia.modutilities.gui.display.AbstractDisplayBlockEntity;
+import net.kroia.modutilities.gui.display.client.DisplayInteractionScreen;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
+
+import static net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity.DisplayType;
 
 public class BankSystemDisplayBlock extends AbstractDisplayBlock {
 
@@ -44,6 +55,68 @@ public class BankSystemDisplayBlock extends AbstractDisplayBlock {
             case WEST  -> SHAPE_WEST;
             default -> SHAPE_NORTH;
         };
+    }
+
+    @Override
+    public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
+        if (!level.isClientSide()) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof BankSystemDisplayBlockEntity newEntity
+                    && newEntity.getDisplayType() == DisplayType.NONE) {
+                Direction facing = state.getValue(FACING);
+                for (Direction dir : new Direction[]{
+                        facing.getClockWise(), facing.getCounterClockWise(),
+                        Direction.UP, Direction.DOWN}) {
+                    BlockEntity neighbor = level.getBlockEntity(pos.relative(dir));
+                    if (neighbor instanceof BankSystemDisplayBlockEntity other
+                            && other.getDisplayType() != DisplayType.NONE
+                            && other.getBlockState().getValue(FACING) == facing) {
+                        newEntity.adoptConfig(other.getDisplayType(), other.getAccountNumber());
+                        break;
+                    }
+                }
+            }
+        }
+        super.onPlace(state, level, pos, oldState, movedByPiston);
+    }
+
+    @Override
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
+                                               Player player, BlockHitResult hit) {
+        BlockEntity be = level.getBlockEntity(pos);
+        if (!(be instanceof BankSystemDisplayBlockEntity displayBE) || !displayBE.isActive())
+            return InteractionResult.PASS;
+
+        AbstractDisplayBlockEntity controllerBase = displayBE.getControllerEntity();
+        if (!(controllerBase instanceof BankSystemDisplayBlockEntity ctrl))
+            return InteractionResult.PASS;
+
+        if (ctrl.opensSyncedScreenOnUse()) {
+            if (ctrl.getGui() == null) return InteractionResult.PASS;
+            if (!level.isClientSide()) {
+                if (!ctrl.tryAcquireEditor(player.getUUID())) {
+                    player.displayClientMessage(
+                            Component.literal("Display is being edited by another player."), true);
+                    return InteractionResult.FAIL;
+                }
+            } else {
+                openSyncedScreen(ctrl.getBlockPos());
+            }
+            return InteractionResult.SUCCESS;
+        }
+
+        if (level.isClientSide()) {
+            openConfigScreen(ctrl.getBlockPos(), ctrl.getDisplayType(), ctrl.getAccountNumber());
+        }
+        return InteractionResult.SUCCESS;
+    }
+
+    private static void openSyncedScreen(BlockPos controllerPos) {
+        DisplayInteractionScreen.open(controllerPos);
+    }
+
+    private static void openConfigScreen(BlockPos pos, BankSystemDisplayBlockEntity.DisplayType type, int account) {
+        Minecraft.getInstance().setScreen(new DisplayConfigScreen(pos, type, account));
     }
 
     @Override

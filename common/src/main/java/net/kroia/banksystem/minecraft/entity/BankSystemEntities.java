@@ -11,8 +11,6 @@ import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
-import net.kroia.banksystem.minecraft.entity.custom.BalanceDisplayBlockEntity;
-import net.kroia.banksystem.minecraft.entity.custom.BalanceHistoryDisplayBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.MoneyStockpileBlockEntity;
 import net.kroia.banksystem.minecraft.entity.renderer.MoneyStockpileEntityRenderer;
@@ -61,13 +59,6 @@ public class BankSystemEntities {
             registerBlockEntity("banksystem_display_block_entity",
                     () -> BlockEntityType.Builder.of(BankSystemDisplayBlockEntity::new, BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get()).build(null));
 
-    public static final RegistrySupplier<BlockEntityType<?>> BALANCE_HISTORY_DISPLAY_BLOCK_ENTITY =
-            registerBlockEntity("balance_history_display_block_entity",
-                    () -> BlockEntityType.Builder.of(BalanceHistoryDisplayBlockEntity::new, BankSystemBlocks.BALANCE_HISTORY_DISPLAY_BLOCK.get()).build(null));
-
-    public static final RegistrySupplier<BlockEntityType<?>> BALANCE_DISPLAY_BLOCK_ENTITY =
-            registerBlockEntity("balance_display_block_entity",
-                    () -> BlockEntityType.Builder.of(BalanceDisplayBlockEntity::new, BankSystemBlocks.BALANCE_DISPLAY_BLOCK.get()).build(null));
 
 
     public static void registerRenderers()
@@ -75,11 +66,7 @@ public class BankSystemEntities {
         // Architectury API method to register BlockEntityRenderer in a platform-neutral way
         BlockEntityRendererRegistry.register((BlockEntityType<MoneyStockpileBlockEntity>) MONEY_STOCKPILE_BLOCK_ENTITY.get(), MoneyStockpileEntityRenderer::new);
         BlockEntityRendererRegistry.register((BlockEntityType<BankSystemDisplayBlockEntity>) BANKSYSTEM_DISPLAY_BLOCK_ENTITY.get(), AbstractDisplayBlockEntityRenderer::new);
-        BlockEntityRendererRegistry.register((BlockEntityType<BalanceHistoryDisplayBlockEntity>) BALANCE_HISTORY_DISPLAY_BLOCK_ENTITY.get(), AbstractDisplayBlockEntityRenderer::new);
-        BlockEntityRendererRegistry.register((BlockEntityType<BalanceDisplayBlockEntity>) BALANCE_DISPLAY_BLOCK_ENTITY.get(), AbstractDisplayBlockEntityRenderer::new);
         RenderTypeRegistry.register(RenderType.cutout(), BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get());
-        RenderTypeRegistry.register(RenderType.cutout(), BankSystemBlocks.BALANCE_HISTORY_DISPLAY_BLOCK.get());
-        RenderTypeRegistry.register(RenderType.cutout(), BankSystemBlocks.BALANCE_DISPLAY_BLOCK.get());
     }
 
 
