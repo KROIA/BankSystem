@@ -18,7 +18,7 @@ public abstract class AsyncForwardingRequest<
         IN extends AsyncFunctionInputData<FuncEnumType>,
         OUT extends AsyncFunctionOutputData<FuncEnumType>> extends BankSystemGenericRequest<IN, OUT> {
 
-    public static final boolean DEBUG_ENABLE_LOGS = true;
+    public static final boolean DEBUG_ENABLE_LOGS = false;
 
     private final BiFunction<FuncEnumType, byte[], IN> inputConstructor;
     private final BiFunction<FuncEnumType, byte[], OUT> outputConstructor;

@@ -212,6 +212,42 @@ public class BalanceHistoryChart extends GuiElement {
         this.pinnedSeriesIndex = seriesList.indexOf(series);
     }
 
+    public double getViewX() { return viewX; }
+    public double getViewY() { return viewY; }
+    public double getViewWidth() { return viewWidth; }
+    public double getViewHeight() { return viewHeight; }
+
+    public void setView(double x, double y, double width, double height) {
+        this.viewX = x;
+        this.viewY = y;
+        this.viewWidth = width;
+        this.viewHeight = height;
+        clampView();
+        markDirty();
+    }
+
+    public boolean isAtPresent() {
+        long maxTime = Long.MIN_VALUE;
+        for (LineSeries s : seriesList) {
+            if (s.points.isEmpty()) continue;
+            maxTime = Math.max(maxTime, s.points.get(s.points.size() - 1).time());
+        }
+        if (maxTime == Long.MIN_VALUE) return true;
+        return (viewX + viewWidth) >= maxTime - 1000;
+    }
+
+    public void scrollToLatestData() {
+        long maxTime = Long.MIN_VALUE;
+        for (LineSeries s : seriesList) {
+            if (s.points.isEmpty()) continue;
+            maxTime = Math.max(maxTime, s.points.get(s.points.size() - 1).time());
+        }
+        if (maxTime == Long.MIN_VALUE) return;
+        viewX = maxTime - viewWidth;
+        clampView();
+        markDirty();
+    }
+
     public void scrollToPresent() {
         long now = System.currentTimeMillis();
         if (viewWidth <= 0) viewWidth = 3_600_000;
