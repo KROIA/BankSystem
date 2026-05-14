@@ -51,6 +51,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     // NBT keys for filter persistence inside User.customData
     private static final String CUSTOM_DATA_KEY = "balanceHistory";
     private static final String DISABLED_ITEMS_KEY = "disabledItems";
+    private static final String VIEWPORT_KEY = "viewport";
 
     private record ToggleRow(GuiElement element, String name) {}
 
@@ -69,6 +70,9 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private GuiElement wealthRow = null;
     /** Item toggle rows — filtered by the search field. */
     private final List<ToggleRow> toggleRows = new ArrayList<>();
+    /** Saved viewport from user custom data, applied once after data loads. */
+    private CompoundTag pendingViewport = null;
+    private boolean dataLoaded = false;
 
     public BalanceHistoryScreen(Screen parent, int accountNumber) {
         super(Component.literal("Balance History"), parent);
@@ -112,6 +116,12 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         toggleListView.setBounds(toggleX, toggleTop + searchHeight + p, toggleWidth, getHeight() - toggleTop - searchHeight - 2 * p);
     }
 
+    @Override
+    public void removed() {
+        if (dataLoaded) saveUserSettings();
+        super.removed();
+    }
+
     private void fetchAccountName() {
         getBankManager().getBankAccountDataAsync(accountNumber).thenAccept(data ->
                 Minecraft.getInstance().execute(() -> {
@@ -133,6 +143,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
                 Minecraft.getInstance().execute(() -> {
                     userCustomData = customData;
                     readDisabledItems(customData);
+                    readViewport(customData);
                     requestData();
                 })
         );
@@ -234,7 +245,21 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             colorIndex++;
         }
 
-        chart.autoCenterView();
+        if (pendingViewport != null) {
+            double y = pendingViewport.getDouble("y");
+            double w = pendingViewport.getDouble("w");
+            double h = pendingViewport.getDouble("h");
+            if (pendingViewport.getBoolean("atPresent")) {
+                chart.setView(0, y, w, h);
+                chart.scrollToLatestData();
+            } else {
+                chart.setView(pendingViewport.getDouble("x"), y, w, h);
+            }
+            pendingViewport = null;
+        } else {
+            chart.autoCenterView();
+        }
+        dataLoaded = true;
     }
 
     /**
@@ -303,6 +328,15 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         }
     }
 
+    private void readViewport(CompoundTag customData) {
+        pendingViewport = null;
+        if (customData == null || !customData.contains(CUSTOM_DATA_KEY)) return;
+        CompoundTag historyTag = customData.getCompound(CUSTOM_DATA_KEY);
+        if (historyTag.contains(VIEWPORT_KEY)) {
+            pendingViewport = historyTag.getCompound(VIEWPORT_KEY);
+        }
+    }
+
     /**
      * Persists the current disabled item set to the server.
      * Writes to customData["balanceHistory"]["disabledItems"] as a ListTag of ShortTags,
@@ -316,6 +350,20 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             list.add(ShortTag.valueOf(id));
         }
         historyTag.put(DISABLED_ITEMS_KEY, list);
+
+        if (dataLoaded) {
+            CompoundTag viewportTag = new CompoundTag();
+            boolean atPresent = chart.isAtPresent();
+            viewportTag.putBoolean("atPresent", atPresent);
+            if (!atPresent) {
+                viewportTag.putDouble("x", chart.getViewX());
+            }
+            viewportTag.putDouble("y", chart.getViewY());
+            viewportTag.putDouble("w", chart.getViewWidth());
+            viewportTag.putDouble("h", chart.getViewHeight());
+            historyTag.put(VIEWPORT_KEY, viewportTag);
+        }
+
         userCustomData.put(CUSTOM_DATA_KEY, historyTag);
         getBankManager().updateUserCustomData(userCustomData);
     }

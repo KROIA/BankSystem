@@ -239,7 +239,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         }
         loadDataFromFiles(server);
 
-
+        if (INSTANCES.BALANCE_HISTORY_MANAGER != null) {
+            takeBalanceSnapshot();
+        }
 
         INSTANCES.SERVER_EVENTS.BANKSYSTEM_SETUP_COMPLETED.notifyListeners();
     }
