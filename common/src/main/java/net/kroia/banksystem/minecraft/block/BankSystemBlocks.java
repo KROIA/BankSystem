@@ -36,6 +36,7 @@ public class BankSystemBlocks {
     public static final RegistrySupplier<Block> BANK_UPLOAD_BLOCK = registerBlock(BankUploadBlock.NAME, BankUploadBlock::new);
     public static final RegistrySupplier<Block> BANK_DOWNLOAD_BLOCK = registerBlock(BankDownloadBlock.NAME, BankDownloadBlock::new);
     public static final RegistrySupplier<Block> MONEY_STOCKPILE_BLOCK = registerBlockNoItem(MoneyStockpileBlock.NAME, MoneyStockpileBlock::new);
+    public static final RegistrySupplier<Block> BANKSYSTEM_DISPLAY_BLOCK = registerBlock(BankSystemDisplayBlock.NAME, BankSystemDisplayBlock::new);
 
 
     public static <T extends Block> RegistrySupplier<T> registerBlock(String name, Supplier<T> block)

@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "banksystem:block/banksystem_display_block" },
+    "facing=south": { "model": "banksystem:block/banksystem_display_block", "y": 180 },
+    "facing=west":  { "model": "banksystem:block/banksystem_display_block", "y": 270 },
+    "facing=east":  { "model": "banksystem:block/banksystem_display_block", "y": 90 }
+  }
+}

@@ -4,6 +4,7 @@
     "banksystem:atm_block",
     "banksystem:terminal_block",
     "banksystem:bank_upload_block",
-    "banksystem:bank_download_block"
+    "banksystem:bank_download_block",
+    "banksystem:banksystem_display_block"
   ]
 }

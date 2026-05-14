@@ -23,7 +23,9 @@ import net.kroia.banksystem.minecraft.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.banksystem.minecraft.compat.OldBankDataLoader;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
+import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
 import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.minecraft.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
@@ -32,6 +34,7 @@ import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.multi_server.BanksystemMetadataRequest;
+import net.kroia.modutilities.gui.GuiElementRegistry;
 import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.banksystem.testing.tests.ArithmeticTests;
 import net.kroia.banksystem.testing.tests.AsyncForwardingTests;
@@ -110,6 +113,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemCommands.setBackend(INSTANCES);
         BankDownloadBlockEntity.setBackend(INSTANCES);
         BankUploadBlockEntity.setBackend(INSTANCES);
+        BankSystemDisplayBlockEntity.setBackend(INSTANCES);
         Software.setBackend(INSTANCES);
         ItemID.setBackend(INSTANCES);
 
@@ -127,6 +131,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemCreativeModeTab.init();
         BankSystemTextMessages.init();
 
+
+        GuiElementRegistry.register("balance_history_chart", BalanceHistoryChart.class, BalanceHistoryChart::new);
 
         INSTANCES.NETWORKING = new BankSystemNetworking();
         INSTANCES.SERVER_EVENTS = new BankSystemEvents();
@@ -226,7 +232,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
             // Save the data when the game saves the world
             LifecycleEvent.SERVER_LEVEL_SAVE.register((ServerLevel level) -> {
-                if (level.dimension() == Level.OVERWORLD) {
+                if (level.dimension() == Level.OVERWORLD && INSTANCES.SERVER_DATA_HANDLER != null) {
                     INSTANCES.SERVER_DATA_HANDLER.saveAll();
                 }
             });
@@ -241,23 +247,29 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the server side
     public static void onServerStop(MinecraftServer server) {
         MultiServerManager.cleanup();
-        if(!INSTANCES.isSlaveServer) {
+
+        if (!INSTANCES.isSlaveServer) {
             TickEvent.SERVER_POST.unregister(BankSystemModBackend::onServerTick);
             saveDataToFiles(server);
 
             if (INSTANCES.DATABASE_MANAGER != null) {
                 INSTANCES.DATABASE_MANAGER.close();
-                INSTANCES.DATABASE_MANAGER = null;
-                INSTANCES.BALANCE_HISTORY_MANAGER = null;
             }
 
             BankSystemDataHandler.resetBankDataLoaded();
             BankSystemDataHandler.resetGlobalDataLoaded();
         }
-        //BankSystemConfig.Settings settings = INSTANCES.CONFIG.getSettings();
-        //settings.bank.items.add(MoneyItem.getItemID());
-        //INSTANCES.CONFIG.save();
-        //INSTANCES.SERVER_EVENTS.removeListeners();
+
+        INSTANCES.SERVER_BANK_MANAGER = null;
+        INSTANCES.SERVER_DATA_HANDLER = null;
+        INSTANCES.SERVER_SETTINGS = null;
+        INSTANCES.COMMAND_HANDLER = null;
+        INSTANCES.DATABASE_MANAGER = null;
+        INSTANCES.BALANCE_HISTORY_MANAGER = null;
+        INSTANCES.isSlaveServer = false;
+        snapshotTickCounter = 0;
+        ItemIDManager.clear();
+        ItemColorUtil.clearCache();
     }
 
     // Called from the server side

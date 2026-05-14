@@ -152,6 +152,7 @@
   "message.banksystem.bank_data_loaded": "Bank data loaded",
   "message.banksystem.need_creative_mode_for_this_screen": "You need to be in creative mode to access this screen",
 
+  "block.banksystem.banksystem_display_block": "Bank Display",
   "block.banksystem.atm_block": "ATM",
   "gui.banksystem.atm_screen.receive_button": "Withdraw money",
   "gui.banksystem.atm_screen.sum_text": "Current withdrawal sum: {amount}",
