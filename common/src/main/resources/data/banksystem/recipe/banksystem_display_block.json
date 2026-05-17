@@ -4,12 +4,13 @@
   "key": {
     "D": {"item": "banksystem:display"},
     "G": {"item": "minecraft:glass_pane"},
-    "I": {"item": "minecraft:iron_nugget"}
+    "I": {"item": "minecraft:iron_nugget"},
+    "M": {"item": "banksystem:money"}
   },
   "pattern": [
     "IGI",
     "GDG",
-    "IGI"
+    "IMI"
   ],
   "result": {
     "count": 1,
