@@ -681,8 +681,21 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     public void handlePacket(ServerPlayer sender, UpdateBankDownloadBlockEntityPacket packet)
     {
         final int finalAccountNr = packet.getAccountNr();
+        if(finalAccountNr <= 0) {
+            this.bankAccountNumber = 0;
+            this.withdrawOrders.clear();
+            List<WithdrawOrder> orders = packet.getWithdrawOrders();
+            for (WithdrawOrder order : orders) {
+                if(order != null) {
+                    this.withdrawOrders.add(order);
+                }
+            }
+            setChanged();
+            setBockstate_connected(false);
+            SyncBankDownloadDataPacket.sendPacket(sender, this);
+            return;
+        }
         UUID senderUUID = sender.getUUID();
-        // Check if the sender has permission to withdraw from that bank account
         CompletableFuture<@Nullable IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(finalAccountNr);
         account.thenAccept(bankAccount -> {
             if(bankAccount == null) {

@@ -282,13 +282,8 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         public void setBankAccountData(BankAccountData account)
         {
             currentAccount = account;
-            if(currentAccount == null) {
-                // remove all bank balances
-                toRemove.addAll(orderElements.values());
-            }else {
-                for (WithdrawOrderGuiElement element : orderElements.values()) {
-                    element.updateBankBalance(account);
-                }
+            for (WithdrawOrderGuiElement element : orderElements.values()) {
+                element.updateBankBalance(account);
             }
         }
         public List<BankDownloadBlockEntity.WithdrawOrder> getOrders()
@@ -565,6 +560,10 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     {
         BankDownloadScreen.accountNr = accountNr;
         settingsMenu.setBankAccountNumber(accountNr);
+        if(accountNr <= 0) {
+            sendUpdatePacket();
+            return;
+        }
         getBankManager().getBankAccountDataAsync(accountNr).thenAccept(settingsMenu::setBankAccountData);
     }
     private void applySettigns()
