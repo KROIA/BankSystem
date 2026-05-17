@@ -7,6 +7,9 @@ public final class BankSystemMod {
     public static final String MOD_ID = "banksystem";
     public static final String VERSION = "1.5.0_ALPHA";
 
+    // Set to false for release builds to hide dev-only commands (exportrecipes, testScreen, etc.)
+    public static final boolean ENABLE_DEV_FEATURES = true;
+
     /**
      * Maximum squared distance (in blocks²) between a player and a block-entity position
      * before client-sent block-entity packets are rejected. 64.0 == 8 blocks, chosen to
