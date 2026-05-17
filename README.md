@@ -138,10 +138,7 @@ You want to support me?<br>
 ### Money
 Money items can be converted between denominations using the crafting table.
 The server administrator controls how money enters circulation.
-
-<div align="center">
-    <img src="documentation/images/Money.png" width="500"> 
-</div>
+See [Money Conversions](#money-conversions) for all crafting recipes.
 
 ---
 ## Crafting Recipes
