@@ -25,6 +25,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         BANK_ACCOUNT,
         ATM_SCREEN,
         TEST_SCREEN,
+        EXPORT_RECIPES,
     }
 
     public static final Type<SyncOpenGUIPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "sync_open_gui_packet"));
@@ -98,6 +99,18 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         packet.sendToClient(player);
     }
 
+    /**
+     * Sends a packet to the client to trigger recipe image export.
+     * The client will render all BankSystem crafting recipes to PNG files.
+     */
+    public static void send_exportRecipes(ServerPlayer player)
+    {
+        if(player == null)
+            return;
+        SyncOpenGUIPacket packet = new SyncOpenGUIPacket(GUIType.EXPORT_RECIPES, null, 0, false);
+        packet.sendToClient(player);
+    }
+
     @Override
     protected void handleOnClient(NetworkManager.PacketContext context)
     {
@@ -114,6 +127,10 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
                 break;
             case TEST_SCREEN:
                 BankSystemClientHooks.openTestScreen();
+                break;
+            case EXPORT_RECIPES:
+                // Trigger client-side recipe image export
+                BankSystemClientHooks.exportRecipeImages();
                 break;
         }
     }

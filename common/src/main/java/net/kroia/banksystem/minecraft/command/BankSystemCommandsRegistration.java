@@ -6,10 +6,12 @@ import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
 import net.kroia.banksystem.api.command.IServerBankSystemCommandHandler;
+import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
 import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.modutilities.testing.TestRunner;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -59,9 +61,11 @@ public class BankSystemCommandsRegistration {
         // /banksystem allowItemInHand                                - Makes the item in the player's hand available for bank accounts
         // /banksystem disallowItem <itemID>                          - Makes the itemID unavailable for bank accounts
         // /banksystem disallowItemInHand                             - Makes the item in the player's hand unavailable for bank accounts
+        // /banksystem exportrecipes                                  - Export all crafting recipes as PNG images
         dispatcher.register(
                 Commands.literal("banksystem")
                 .then(Commands.literal("testScreen")
+                        .requires(source -> BankSystemMod.ENABLE_DEV_FEATURES)
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -280,6 +284,16 @@ public class BankSystemCommandsRegistration {
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
+                )
+                // Dev-only: export all BankSystem crafting recipes as PNG images
+                .then(Commands.literal("exportrecipes")
+                        .requires(source -> source.hasPermission(2) && BankSystemMod.ENABLE_DEV_FEATURES)
+                        .executes(context -> {
+                            CommandSourceStack source = context.getSource();
+                            ServerPlayer player = source.getPlayerOrException();
+                            SyncOpenGUIPacket.send_exportRecipes(player);
+                            return Command.SINGLE_SUCCESS;
+                        })
                 )
         );
 
