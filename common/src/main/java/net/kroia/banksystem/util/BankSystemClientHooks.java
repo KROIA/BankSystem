@@ -57,7 +57,7 @@ public class BankSystemClientHooks {
                     .resolve("recipe_exports/banksystem");
 
             int successCount = 0;
-            int totalRecipes = 12;
+            int totalRecipes = 50;
 
             // 1. Software
             if (RecipeImageExporter.exportShapedRecipe(
@@ -159,6 +159,102 @@ public class BankSystemClientHooks {
                     "banksystem:bank_upload_block",
                     outputDir.resolve("recipe_bank_upload_block.png")))
                 successCount++;
+
+            // === Money conversion recipes ===
+
+            // $1 from higher denominations
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money5"),
+                    "banksystem:money", 5, outputDir.resolve("recipe_money_1.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money10"),
+                    "banksystem:money", 10, outputDir.resolve("recipe_money_2.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money20"),
+                    "banksystem:money", 20, outputDir.resolve("recipe_money_3.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money50"),
+                    "banksystem:money", 50, outputDir.resolve("recipe_money_4.png"))) successCount++;
+
+            // $5
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SS ", "SSS"}, Map.of('S', "banksystem:money"),
+                    "banksystem:money5", 1, outputDir.resolve("recipe_money5_1.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money10"),
+                    "banksystem:money5", 2, outputDir.resolve("recipe_money5_2.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money20"),
+                    "banksystem:money5", 4, outputDir.resolve("recipe_money5_3.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money50"),
+                    "banksystem:money5", 10, outputDir.resolve("recipe_money5_4.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money100"),
+                    "banksystem:money5", 20, outputDir.resolve("recipe_money5_5.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money200"),
+                    "banksystem:money5", 40, outputDir.resolve("recipe_money5_6.png"))) successCount++;
+
+            // $10
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SS"}, Map.of('S', "banksystem:money5"),
+                    "banksystem:money10", 1, outputDir.resolve("recipe_money10_1.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money20"),
+                    "banksystem:money10", 2, outputDir.resolve("recipe_money10_2.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money50"),
+                    "banksystem:money10", 5, outputDir.resolve("recipe_money10_3.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money100"),
+                    "banksystem:money10", 10, outputDir.resolve("recipe_money10_4.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money200"),
+                    "banksystem:money10", 20, outputDir.resolve("recipe_money10_5.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money500"),
+                    "banksystem:money10", 50, outputDir.resolve("recipe_money10_6.png"))) successCount++;
+
+            // $20
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SS"}, Map.of('S', "banksystem:money10"),
+                    "banksystem:money20", 1, outputDir.resolve("recipe_money20_1.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SS", "SS"}, Map.of('S', "banksystem:money5"),
+                    "banksystem:money20", 1, outputDir.resolve("recipe_money20_2.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money100"),
+                    "banksystem:money20", 5, outputDir.resolve("recipe_money20_3.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money200"),
+                    "banksystem:money20", 10, outputDir.resolve("recipe_money20_4.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money1000"),
+                    "banksystem:money20", 20, outputDir.resolve("recipe_money20_5.png"))) successCount++;
+
+            // $50
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SSZ"}, Map.of('S', "banksystem:money20", 'Z', "banksystem:money10"),
+                    "banksystem:money50", 1, outputDir.resolve("recipe_money50_1.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money100"),
+                    "banksystem:money50", 2, outputDir.resolve("recipe_money50_2.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money200"),
+                    "banksystem:money50", 4, outputDir.resolve("recipe_money50_3.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money500"),
+                    "banksystem:money50", 10, outputDir.resolve("recipe_money50_4.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money1000"),
+                    "banksystem:money50", 20, outputDir.resolve("recipe_money50_5.png"))) successCount++;
+
+            // $100
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SS ", "SSS"}, Map.of('S', "banksystem:money20"),
+                    "banksystem:money100", 1, outputDir.resolve("recipe_money100_1.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SS"}, Map.of('S', "banksystem:money50"),
+                    "banksystem:money100", 1, outputDir.resolve("recipe_money100_2.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money200"),
+                    "banksystem:money100", 2, outputDir.resolve("recipe_money100_3.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money1000"),
+                    "banksystem:money100", 10, outputDir.resolve("recipe_money100_4.png"))) successCount++;
+
+            // $200
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SS"}, Map.of('S', "banksystem:money100"),
+                    "banksystem:money200", 1, outputDir.resolve("recipe_money200_1.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SS", "SS"}, Map.of('S', "banksystem:money50"),
+                    "banksystem:money200", 1, outputDir.resolve("recipe_money200_2.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money1000"),
+                    "banksystem:money200", 5, outputDir.resolve("recipe_money200_3.png"))) successCount++;
+
+            // $500
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SS ", "SSS"}, Map.of('S', "banksystem:money100"),
+                    "banksystem:money500", 1, outputDir.resolve("recipe_money500_1.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SSZ"}, Map.of('S', "banksystem:money200", 'Z', "banksystem:money100"),
+                    "banksystem:money500", 1, outputDir.resolve("recipe_money500_2.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money1000"),
+                    "banksystem:money500", 2, outputDir.resolve("recipe_money500_3.png"))) successCount++;
+
+            // $1000
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SS"}, Map.of('S', "banksystem:money500"),
+                    "banksystem:money1000", 1, outputDir.resolve("recipe_money1000_1.png"))) successCount++;
+            if (RecipeImageExporter.exportShapedRecipe(new String[]{"SS ", "SSS"}, Map.of('S', "banksystem:money200"),
+                    "banksystem:money1000", 1, outputDir.resolve("recipe_money1000_2.png"))) successCount++;
 
             // Print status summary
             LOGGER.info("[BankSystem] Recipe export complete: {}/{} recipes exported to {}",
