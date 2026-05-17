@@ -22,6 +22,7 @@ You want to support me?<br>
 * [Downloads](#downloads)
 * [Blocks](#blocks)
 * [Items](#items)
+* [Crafting Recipes](#crafting-recipes)
 * [Usage](#usage)
 * [Commands](#commands)
 * [Documentation](#documentation)
@@ -353,6 +354,74 @@ The admin is responsible to bring money in to circulation.<br>
 
 </table>
 
+---
+## Crafting Recipes
+
+### Components
+<table>
+<tr>
+<td><b>Empty Software</b></td>
+<td><b>Circuit Board</b></td>
+<td><b>Display</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_software.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_circuit_board.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_display.png" width="350"></td>
+</tr>
+</table>
+
+### Software
+<table>
+<tr>
+<td><b>Banking Software</b></td>
+<td><b>ATM Software</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_banking_software.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_atm_software.png" width="350"></td>
+</tr>
+</table>
+
+### Modules
+<table>
+<tr>
+<td><b>Bank Transmitter Module</b></td>
+<td><b>Bank Receiver Module</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_bank_transmitter_module.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_bank_receiver_module.png" width="350"></td>
+</tr>
+</table>
+
+### Blocks
+<table>
+<tr>
+<td><b>Metal Case Block</b></td>
+<td><b>Terminal Block</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_metal_case_block.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_terminal_block.png" width="350"></td>
+</tr>
+<tr>
+<td><b>BankSystem Display Block</b></td>
+<td><b>Bank Upload Block</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_banksystem_display_block.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_bank_upload_block.png" width="350"></td>
+</tr>
+<tr>
+<td><b>Bank Download Block</b></td>
+<td></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_bank_download_block.png" width="350"></td>
+<td></td>
+</tr>
+</table>
 
 ---
 
