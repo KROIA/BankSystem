@@ -302,10 +302,11 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         DisplayType oldType = this.displayType;
         int oldAccount = this.accountNumber;
+        int oldSlotCount = this.slotCount;
         super.loadAdditional(tag, registries);
 
         if (level != null && level.isClientSide() && isController()) {
-            if (oldType != this.displayType || oldAccount != this.accountNumber) {
+            if (oldType != this.displayType || oldAccount != this.accountNumber || oldSlotCount != this.slotCount) {
                 rebuildGui();
             }
             if (gui != null) {
