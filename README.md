@@ -136,8 +136,8 @@ You want to support me?<br>
 | **Bank Receiver Module** | Component for the Bank Download Block. |
 
 ### Money
-A 1 Dollar coin can only be crafted using other money items such as the 5 Dollar bank note.
-This puts control over inflation in the hands of the server administrator.
+Money items can be converted between denominations using the crafting table.
+The server administrator controls how money enters circulation.
 
 <div align="center">
     <img src="documentation/images/Money.png" width="500"> 
@@ -209,6 +209,128 @@ This puts control over inflation in the hands of the server administrator.
 <tr>
 <td><img src="documentation/images/recipes/recipe_bank_download_block.png" width="350"></td>
 <td></td>
+</tr>
+</table>
+
+### Money Conversions
+
+#### $1
+<table>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money_1.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money_2.png" width="350"></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money_3.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money_4.png" width="350"></td>
+</tr>
+</table>
+
+#### $5
+<table>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money5_1.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money5_2.png" width="350"></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money5_3.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money5_4.png" width="350"></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money5_5.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money5_6.png" width="350"></td>
+</tr>
+</table>
+
+#### $10
+<table>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money10_1.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money10_2.png" width="350"></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money10_3.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money10_4.png" width="350"></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money10_5.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money10_6.png" width="350"></td>
+</tr>
+</table>
+
+#### $20
+<table>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money20_1.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money20_2.png" width="350"></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money20_3.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money20_4.png" width="350"></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money20_5.png" width="350"></td>
+<td></td>
+</tr>
+</table>
+
+#### $50
+<table>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money50_1.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money50_2.png" width="350"></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money50_3.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money50_4.png" width="350"></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money50_5.png" width="350"></td>
+<td></td>
+</tr>
+</table>
+
+#### $100
+<table>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money100_1.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money100_2.png" width="350"></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money100_3.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money100_4.png" width="350"></td>
+</tr>
+</table>
+
+#### $200
+<table>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money200_1.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money200_2.png" width="350"></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money200_3.png" width="350"></td>
+<td></td>
+</tr>
+</table>
+
+#### $500
+<table>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money500_1.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money500_2.png" width="350"></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money500_3.png" width="350"></td>
+<td></td>
+</tr>
+</table>
+
+#### $1000
+<table>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money1000_1.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money1000_2.png" width="350"></td>
 </tr>
 </table>
 
