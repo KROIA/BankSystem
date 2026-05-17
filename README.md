@@ -24,6 +24,7 @@ You want to support me?<br>
 * [Items](#items)
 * [Crafting Recipes](#crafting-recipes)
 * [Usage](#usage)
+
 * [Commands](#commands)
 * [Documentation](#documentation)
 * [Changelog](#changelog)
@@ -111,248 +112,36 @@ You want to support me?<br>
 
 ---
 ## Blocks
-<table>
-<tr>
-<td>
-<b>Metal Case Block</b><br>
-Casing for the Terminal block.<br>
-8 Iron ingots
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/metalCaseBlock.png" width="300"> 
-</div>
-</td>
-</tr>
 
-
-<tr>
-<td>
-<b>Terminal Block</b><br>
-Unprogrammed terminal.<br>
-Can be programmed using a software item.<br>
-4 Iron nuggets<br>
-1 Metal Case Block<br>
-1 Display<br>
-1 Circuit Board<br>
-2 Redstone
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/terminalBlock.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Bank Terminal Block</b><br>
-Used to get access to the bank account.<br>
-Interaction using right click.<br>
-Right click on a <b>Terminal Block</b> using a <b>Banking Software</b> to create this block.
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bankingTerminalBlock.png" width="100"> 
-</div>
-</td>
-</tr>
-
-
-
-<tr>
-<td>
-<b>ATM Block</b><br>
-Used to withdraw money.<br>
-Interaction using right click.<br>
-Right click on a <b>Terminal Block</b> using a <b>ATM Software</b> to create this block.
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/atmBlock.png" width="100"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Bank Upload Block</b><br>
-Used to send items to a specified bank account.<br>
-Change its settings by right clicking on it<br>
-Once the block is connected to a bank account, other players can't access it any more.<br>
-Can be connected to Pipes and hoppers.<br>
-Needs to be powered by redstone to send items to the bank.<br>
-6 Iron nuggets<br>
-1 Metal Case Block<br>
-1 Comparator<br>
-1 Bank Transmitter Module<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bank_upload_block.png" width="300"> 
-</div>
-</td>
-</tr>
-
-<tr>
-<td>
-<b>Bank Download Block</b><br>
-Used to receive items from a specified bank account.<br>
-Change its settings by right clicking on it<br>
-Once the block is connected to a bank account, other players can't access it any more.<br>
-Can be connected to Pipes and hoppers.<br>
-Needs to be powered by redstone to receive items to the bank.<br>
-6 Iron nuggets<br>
-1 Metal Case Block<br>
-1 Comparator<br>
-1 Bank Receiver Module<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bank_download_block.png" width="300"> 
-</div>
-</td>
-</tr>
-</table>
+| Block | Description |
+|-------|-------------|
+| **Metal Case Block** | Casing for the Terminal block. |
+| **Terminal Block** | Unprogrammed terminal. Can be programmed using a software item. |
+| **Bank Terminal Block** | Used to access the bank account. Right click on a **Terminal Block** using a **Banking Software** to create this block. |
+| **ATM Block** | Used to withdraw money. Right click on a **Terminal Block** using an **ATM Software** to create this block. |
+| **Bank Upload Block** | Sends items to a bank account. Can be connected to pipes and hoppers. Needs redstone power. |
+| **Bank Download Block** | Receives items from a bank account. Can be connected to pipes and hoppers. Needs redstone power. |
 
 ---
 ## Items
-<table>
-<tr>
-<td>
-<b>Circuit Board</b><br>
-Electronics for other Items.<br>
-1 Nether Quartz<br>
-3 Copper Ingots<br>
-3 Paper<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/circuitBoard.png" width="300"> 
-</div>
-</td>
-</tr>
 
+| Item | Description |
+|------|-------------|
+| **Circuit Board** | Electronics component for other items. |
+| **Display** | Display for the Terminal Block. |
+| **Empty Software** | Base software, used to create specific software variants. |
+| **Banking Software** | Programs a Terminal Block into a Bank Terminal Block. |
+| **ATM Software** | Programs a Terminal Block into an ATM Block. |
+| **Bank Transmitter Module** | Component for the Bank Upload Block. |
+| **Bank Receiver Module** | Component for the Bank Download Block. |
 
-<tr>
-<td>
-<b>Display</b><br>
-Display for the <b>Terminal Block</b><br>
-6 Glass Planes<br>
-2 Iron Ingots<br>
-1 Ciruit Board
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/display.png" width="300"> 
-</div>
-</td>
-</tr>
+### Money
+A 1 Dollar coin can only be crafted using other money items such as the 5 Dollar bank note.
+This puts control over inflation in the hands of the server administrator.
 
-
-<tr>
-<td>
-<b>Empty Software</b><br>
-Used to create a specific software<br>
-4 Iron nuggets<br>
-2 Ink Sacs<br>
-3 Paper
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/emptySoftware.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Banking Software</b><br>
-Used to programm the <b>Terminal Block</b> to be a <b>Bank Terminal Block</b><br>
-1 Empty Software<br>
-1 Gold Ingot<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bankingSoftware.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-
-<tr>
-<td>
-<b>ATM Software</b><br>
-Used to programm the <b>Terminal Block</b> to be a <b>ATM Block</b><br>
-1 Empty Software<br>
-1 Dispenser<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/atmSoftware.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Bank Transmitter Module</b><br>
-Used to craft the <b>Bank Upload Block</b>.<br>
-1 Iron ingot<br>
-1 circuit Board<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bank_transmitter_module.png" width="300"> 
-</div>
-</td>
-</tr>
-
-<tr>
-<td>
-<b>Bank Receiver Module</b><br>
-Used to craft the <b>Bank Download Block</b>.<br>
-1 Iron ingot<br>
-1 circuit Board<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bank_receiver_module.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>1 Dollar</b><br>
-A 1 Dollar coin can only be crafted, using other type of money items such as the 5 Dollar bank note.<br>
-This puts control over inflation in the hands of the server administrator.<br>
-The admin is responsible to bring money in to circulation.<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/1Dollar.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-
-<td>
 <div align="center">
     <img src="documentation/images/Money.png" width="500"> 
 </div>
-</td>
-</tr>
-
-</table>
 
 ---
 ## Crafting Recipes
