@@ -1,8 +1,8 @@
 {
   "ambientocclusion": false,
   "textures": {
-    "particle": "banksystem:block/banksystem_display_panel",
-    "pane": "banksystem:block/banksystem_display_panel",
+    "particle": "banksystem:block/metal_case_block",
+    "pane": "banksystem:block/metal_case_block",
     "front": "banksystem:block/banksystem_display_front",
     "edge": "banksystem:block/banksystem_display_side"
   },
