@@ -2,11 +2,10 @@ package net.kroia.banksystem.minecraft.entity.custom;
 
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
-import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.data.filter.EqualityFilter;
-import net.kroia.banksystem.data.table.BalanceHistoryManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.networking.BankSystemNetworking;
@@ -659,9 +658,10 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
         int gridWidth = displaysWide * DISPLAY_UNIT;
         int offsetX = (w - gridWidth) / 2;
+        int frameSideMargin = 10;
 
         Frame frame = new Frame();
-        frame.setBounds(offsetX, y, gridWidth, frameH);
+        frame.setBounds(offsetX + frameSideMargin, y, gridWidth - 2*frameSideMargin, frameH);
         frame.setEnableBackground(true);
         frame.setBackgroundColor(OV_FRAME_BG);
         frame.setEnableOutline(true);
