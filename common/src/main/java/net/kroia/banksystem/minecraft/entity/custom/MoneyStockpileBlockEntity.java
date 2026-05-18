@@ -5,6 +5,7 @@ import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -110,12 +111,23 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
     }
     private static final int maxGridSpaces = 36; // Maximum grid spaces for items in the stockpile
     private int sum = 0;
+    private Direction facing = Direction.NORTH;
     private final Map<ItemID, ItemData> items = new HashMap<>();
 
 
 
     public MoneyStockpileBlockEntity(BlockPos pos, BlockState state) {
         super(BankSystemEntities.MONEY_STOCKPILE_BLOCK_ENTITY.get(), pos, state);
+    }
+
+    public Direction getFacing() {
+        return facing;
+    }
+
+    public void setFacing(Direction facing) {
+        if (facing.getAxis().isHorizontal()) {
+            this.facing = facing;
+        }
     }
 
     public int addItems(ItemStack stack) {
@@ -305,6 +317,7 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider provider) {
         super.saveAdditional(tag, provider);
         tag.putInt("sum", sum);
+        tag.putString("facing", facing.getName());
         ListTag itemsTag = new ListTag();
         for (Map.Entry<ItemID, ItemData> entry : items.entrySet()) {
             CompoundTag itemTag = new CompoundTag();
@@ -318,6 +331,12 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
     public void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) {
         super.loadAdditional(tag, provider);
         sum = tag.getInt("sum");
+        if (tag.contains("facing")) {
+            Direction dir = Direction.byName(tag.getString("facing"));
+            if (dir != null && dir.getAxis().isHorizontal()) {
+                facing = dir;
+            }
+        }
         items.clear();
         ListTag itemsTag = tag.getList("items", 10); // 10 is the type ID for CompoundTag
         for (int i = 0; i < itemsTag.size(); i++) {

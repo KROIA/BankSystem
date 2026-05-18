@@ -7,6 +7,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Quaternionf;
@@ -56,13 +57,14 @@ public class MoneyStockpileEntityRenderer implements BlockEntityRenderer<MoneySt
 
         Map<ItemID, MoneyStockpileBlockEntity.ItemData> items = be.getItems();
 
-        //ItemStack stack = new ItemStack(BankSystemItems.MONEY.get());
-
         Minecraft mc = Minecraft.getInstance();
 
+        poseStack.pushPose();
+        poseStack.translate(0.5, 0, 0.5);
+        poseStack.mulPose(new Quaternionf().rotationY(getFacingAngle(be.getFacing())));
+        poseStack.translate(-0.5, 0, -0.5);
 
         // Render each item in the stockpile
-        float spacing = 0.25f; // Spacing between items in the grid
         int currentGridIndex = 0;
         for (Map.Entry<ItemID, MoneyStockpileBlockEntity.ItemData> entry : items.entrySet()) {
             ItemID itemID = entry.getKey();
@@ -111,6 +113,18 @@ public class MoneyStockpileEntityRenderer implements BlockEntityRenderer<MoneySt
                 currentGridIndex += gridIncrement;
             }
         }
+
+        poseStack.popPose();
+    }
+
+    private static float getFacingAngle(Direction facing) {
+        return switch (facing) {
+            case NORTH -> 0f;
+            case EAST -> (float) (Math.PI * 1.5);
+            case SOUTH -> (float) Math.PI;
+            case WEST -> (float) (Math.PI * 0.5);
+            default -> 0f;
+        };
     }
 
 
