@@ -36,19 +36,7 @@ import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.multi_server.BanksystemMetadataRequest;
 import net.kroia.modutilities.gui.GuiElementRegistry;
 import net.kroia.modutilities.testing.TestRegistry;
-import net.kroia.banksystem.testing.tests.ArithmeticTests;
-import net.kroia.banksystem.testing.tests.AsyncForwardingTests;
-import net.kroia.banksystem.testing.tests.AsyncMethodAuditTests;
-import net.kroia.banksystem.testing.tests.BankAccountTests;
-import net.kroia.banksystem.testing.tests.BankManagerTests;
-import net.kroia.banksystem.testing.tests.BankPermissionTests;
-import net.kroia.banksystem.testing.tests.ExampleTests;
-import net.kroia.banksystem.testing.tests.MultiServerSecurityTests;
-import net.kroia.banksystem.testing.tests.NetworkingValidationTests;
-import net.kroia.banksystem.testing.tests.SerializationTests;
-import net.kroia.banksystem.testing.tests.DatabaseTests;
-import net.kroia.banksystem.testing.tests.LifecycleTests;
-import net.kroia.banksystem.testing.tests.ServerBankTests;
+import net.kroia.banksystem.testing.BankSystemTestRegistration;
 import net.kroia.banksystem.util.*;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.multi_server.MultiServerConfig;
@@ -137,27 +125,10 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.NETWORKING = new BankSystemNetworking();
         INSTANCES.SERVER_EVENTS = new BankSystemEvents();
 
-        if (TestRegistry.ENABLE_TESTS) {
-            registerTestSuites();
+        if (TestRegistry.ENABLE_TESTS && BankSystemMod.ENABLE_DEV_FEATURES) {
+            BankSystemTestRegistration.register();
         }
 
-    }
-
-    private static void registerTestSuites()
-    {
-        TestRegistry.register(new ExampleTests());
-        TestRegistry.register(new BankPermissionTests());
-        TestRegistry.register(new ArithmeticTests());
-        TestRegistry.register(new ServerBankTests());
-        TestRegistry.register(new AsyncMethodAuditTests());
-        TestRegistry.register(new BankAccountTests());
-        TestRegistry.register(new BankManagerTests());
-        TestRegistry.register(new AsyncForwardingTests());
-        TestRegistry.register(new NetworkingValidationTests());
-        TestRegistry.register(new MultiServerSecurityTests());
-        TestRegistry.register(new SerializationTests());
-        TestRegistry.register(new LifecycleTests());
-        TestRegistry.register(new DatabaseTests());
     }
 
     // Called from the client side

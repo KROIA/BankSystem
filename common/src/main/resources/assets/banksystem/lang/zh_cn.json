@@ -152,6 +152,7 @@
   "message.banksystem.bank_data_loaded": "银行数据已加载",
   "message.banksystem.need_creative_mode_for_this_screen": "你需要处于创造模式才能访问此界面",
 
+  "block.banksystem.banksystem_display_block": "银行显示屏",
   "block.banksystem.atm_block": "自动取款机",
   "gui.banksystem.atm_screen.receive_button": "取款",
   "gui.banksystem.atm_screen.sum_text": "当前取款金额：{amount}",

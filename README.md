@@ -1,48 +1,50 @@
 # Bank System Mod
 
 ## About
-BankSystem is a Minecraft mod that brings money in to the game. Players can have a bankacount that can not only hold money but items too.
-Admins can define which items can be stored in the bank in order to prevent players from using the bank as infinite storage.
+BankSystem is a Minecraft mod that adds a full banking system to the game. Players get a bank account that can hold money and items. Create shared accounts with permissions, automate item transfers with redstone, and monitor balances on in-world displays. Connect multiple servers to share bank accounts across your network.
 
-
-<tr>
-<td>
 <div align="center">
-    <img src="documentation/images/overview.png" > 
+    <img src="documentation/images/overview.png"> 
 </div>
-</td>
 
 You want to support me?<br>
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/alexkrieg)
----
 
+---
 
 ## Chapters 
 * [Features](#features)
+* [Installation](#installation)
 * [Downloads](#downloads)
+* [Usage](#usage)
 * [Blocks](#blocks)
 * [Items](#items)
-* [Crafting Recipes](#crafting-recipes)
-* [Usage](#usage)
-
 * [Commands](#commands)
+* [Crafting Recipes](#crafting-recipes)
 * [Documentation](#documentation)
 * [Changelog](#changelog)
 
 
 ---
 ## Features
-- Adds a banking system to the game for money and items.
-- Adds new [blocks](#blocks) to interact with the bank account.
-- Money can be placed as a block for decorative and storage purposes.
-- Connect multiple servers to share bank accounts across multiple servers.
+- Bank accounts for money and items with deposit, withdrawal, and transfer support
+- Shared bank accounts with per-player permissions (deposit, withdraw, manage)
+- ATM block for withdrawing specific bank note denominations
+- Bank Upload / Download blocks for redstone-powered automation with hoppers and pipes
+- Bank Display blocks that show live balance overviews or history charts
+- Money system with coins and bills that can be placed as decorative blocks
+- Multi-server support to share bank accounts across connected servers
+- Mod API for developers to integrate with the banking system
 
-## Dependencies
-- [Architectury](https://www.curseforge.com/minecraft/mc-mods/architectury-api)
-- [Quilted Fabric API](https://www.curseforge.com/minecraft/mc-mods/qsl) (Only needed for Quilt)
-- [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities) (Only needed for Quilt)
-- [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api) (Only needed for Fabric)
+---
+## Installation
 
+1. Install [Architectury API](https://www.curseforge.com/minecraft/mc-mods/architectury-api) and the mod loader API for your platform:
+   - **Fabric**: [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api)
+   - **Quilt**: [Quilted Fabric API](https://www.curseforge.com/minecraft/mc-mods/qsl) + [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities)
+   - **NeoForge / Forge**: No additional API needed
+2. Download the BankSystem jar for your Minecraft version and mod loader from [CurseForge](https://www.curseforge.com/minecraft/mc-mods/banksystem) or the [Downloads](#downloads) table below.
+3. Place the jar in your `mods/` folder and launch the game.
 
 ---
 ## Downloads
@@ -67,9 +69,6 @@ You want to support me?<br>
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-green)    | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.19.4] | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-forge-1.19.4] |                                                                            |                                                                               |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-green)    | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.19.3] | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-forge-1.19.3] | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-quilt-1.19.3] |                                                                               |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-green)    | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.19.2] | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-forge-1.19.2] | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-quilt-1.19.2] |                                                                               |
-
-
-
 
 
 <!--	Links to Curse1.4.1-forge:	-->
@@ -101,14 +100,68 @@ You want to support me?<br>
 [1.4.1-neoforge-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6200595
 
 
+---
+## Usage
 
+### Bank Terminal Block
 
+<div align="center">
+    <img src="documentation/images/BankTerminalBlock.gif"> 
+</div>
 
+The Bank Terminal Block is used to deposit/withdraw items to/from the bank account.
 
+> [!NOTE]  
+> The block contains an inventory which is unique for every player. 
+> Like an ender chest, but when the block gets destroyed, 
+> items not stored in the bank account will be dropped.
 
+---
+### ATM Block
 
+<div align="center">
+    <img src="documentation/images/ATMBlock.gif"> 
+</div>
 
+The ATM Block lets you withdraw money as specific bank notes.
 
+---
+### Automation Blocks
+
+The **Bank Upload Block** and **Bank Download Block** connect to your bank account and allow automated item transfers via redstone signals. They can be connected to pipes and hoppers.
+
+<div align="center">
+    <img src="documentation/images/bank_upDownload_block.png"> 
+</div>
+
+For detailed usage of all blocks, bank accounts, and administration, see the [Documentation](#documentation) section.
+
+---
+### Money Stockpile
+
+<div align="center">
+    <img src="documentation/images/money_block.png"> 
+</div>
+
+Money items can be placed in the world as decorative blocks. Each denomination has its own block model. The blocks can also be used for physical storage of money outside the banking system.
+
+---
+### Bank Displays
+
+The **Bank Display** block shows live bank account data on its screen. Right-click to open the configuration screen, where you select a bank account and one of two display modes:
+
+<div align="center">
+    <img src="documentation/images/DisplayConfigScreen.png"> 
+</div>
+
+<div align="center">
+    <img src="documentation/images/BankDisplays.png"> 
+</div>
+
+| Display Mode | Description |
+|--------------|-------------|
+| **Balance History** | A line chart tracking balance changes over time for all items in the account. Each item is color-coded with a legend on the right. Updates every 60 seconds. |
+| **Balance Overview** | A compact grid showing the current balances of the highest-value items in the account. Displays item icons with their amounts. Updates every second. |
 
 ---
 ## Blocks
@@ -121,6 +174,7 @@ You want to support me?<br>
 | **ATM Block** | Used to withdraw money. Right click on a **Terminal Block** using an **ATM Software** to create this block. |
 | **Bank Upload Block** | Sends items to a bank account. Can be connected to pipes and hoppers. Needs redstone power. |
 | **Bank Download Block** | Receives items from a bank account. Can be connected to pipes and hoppers. Needs redstone power. |
+| **Bank Display** | Displays bank account information on its screen. Can show a balance overview or balance history chart. Right-click to configure. |
 
 ---
 ## Items
@@ -136,11 +190,51 @@ You want to support me?<br>
 | **Bank Receiver Module** | Component for the Bank Download Block. |
 
 ### Money
-Money items can be converted between denominations using the crafting table.
+
+<div align="center">
+    <img src="documentation/images/moneyCollection.png"> 
+</div>
+
+Money comes in coins ($1-$50) and bills ($5-$1000). All denominations can be converted between each other using the crafting table. Money can also be placed in the world as decorative blocks.
 The server administrator controls how money enters circulation.
 See [Money Conversions](#money-conversions) for all crafting recipes.
 
 ---
+
+## Commands
+
+Key commands for players and admins:
+
+| Command | Description |
+|---------|-------------|
+| `/money` | Show your money balance |
+| `/money send <user> <amount>` | Send money to another player |
+| `/bank` | Show your full bank balance (money and items) |
+| `/bank manage` | Open the bank account management GUI |
+| `/bank create <accountname>` | Create a new bank account |
+| `/banksystem manage` | Open the banking settings (admin only) |
+
+For the full command reference, see [Commands](documentation/user-guide/Commands.md).
+
+---
+
+## Documentation
+
+Detailed guides are available in the [documentation](documentation/README.md) folder:
+
+**For Mod Users:**
+- [Block Usage](documentation/user-guide/Usage.md) — How to use the Bank Terminal, ATM, automation blocks, bank displays, and money stockpiles
+- [Bank Accounts](documentation/user-guide/BankAccounts.md) — Shared accounts, creating accounts, permissions
+- [Administration](documentation/user-guide/Administration.md) — Managing banking items, player accounts, locked amounts
+- [Multi-Server Setup](documentation/user-guide/MultiserverSetup.md) — Master-slave architecture for cross-server banking
+- [Commands](documentation/user-guide/Commands.md) — Full command reference
+
+**For Mod Developers:**
+- [API Reference](documentation/developer-guide/API.md) — Public API overview and usage examples
+- [Async Forwarding Architecture](documentation/developer-guide/AsyncForwardingArchitecture.md) — Internal RPC system documentation
+
+---
+
 ## Crafting Recipes
 
 ### Components
@@ -330,88 +424,6 @@ See [Money Conversions](#money-conversions) for all crafting recipes.
 <td><img src="documentation/images/recipes/recipe_money1000_2.png" width="350"></td>
 </tr>
 </table>
-
----
-
-## Usage
-
-### Bank Terminal Block
-<table>
-<tr>
-<td width = 500 valign="top">
-The Bank Terminal Block is used to deposit/withdraw items to/from the bank account.
-
-> [!NOTE]  
-> The block contains an inventory which is unique for every player. 
-> Like an ender chest, but when the block gets destroyed, 
-> items not stored in the bank account will be dropped.
-
-</td>
-<td width = 600>
-<div align="center">
-    <img src="documentation/images/BankTerminalBlock.gif" width=600> 
-</div>
-</td>
-</tr>
-</table>
-
-### ATM Block
-<table>
-<tr>
-<td width = 500 valign="top">
-The ATM Block lets you withdraw money as specific bank notes.
-</td>
-<td width = 600>
-<div align="center">
-    <img src="documentation/images/ATMBlock.gif" width=600> 
-</div>
-</td>
-</tr>
-</table>
-
-### Automation Blocks
-
-The **Bank Upload Block** and **Bank Download Block** connect to your bank account and allow automated item transfers via redstone signals. They can be connected to pipes and hoppers.
-
-<div align="center">
-    <img src="documentation/images/bank_upDownload_block.png" > 
-</div>
-
-For detailed usage of all blocks, bank accounts, and administration, see the [Documentation](#documentation) section.
-
----
-
-## Commands
-
-Key commands for players and admins:
-
-| Command | Description |
-|---------|-------------|
-| `/money` | Show your money balance |
-| `/money send <user> <amount>` | Send money to another player |
-| `/bank` | Show your full bank balance (money and items) |
-| `/bank manage` | Open the bank account management GUI |
-| `/bank create <accountname>` | Create a new bank account |
-| `/banksystem manage` | Open the banking settings (admin only) |
-
-For the full command reference, see [Commands](documentation/user-guide/Commands.md).
-
----
-
-## Documentation
-
-Detailed guides are available in the [documentation](documentation/README.md) folder:
-
-**For Mod Users:**
-- [Block Usage](documentation/user-guide/Usage.md) — How to use the Bank Terminal, ATM, and automation blocks
-- [Bank Accounts](documentation/user-guide/BankAccounts.md) — Shared accounts, creating accounts, permissions
-- [Administration](documentation/user-guide/Administration.md) — Managing banking items, player accounts, locked amounts
-- [Multi-Server Setup](documentation/user-guide/MultiserverSetup.md) — Master-slave architecture for cross-server banking
-- [Commands](documentation/user-guide/Commands.md) — Full command reference
-
-**For Mod Developers:**
-- [API Reference](documentation/developer-guide/API.md) — Public API overview and usage examples
-- [Async Forwarding Architecture](documentation/developer-guide/AsyncForwardingArchitecture.md) — Internal RPC system documentation
 
 ---
 

@@ -119,23 +119,23 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
     {
         BlockEntity be = level.getBlockEntity(pos);
         if (be instanceof MoneyStockpileBlockEntity stockpile) {
-            // Return the shape based on the number of items in the stockpile
             int usedGridSpaces = stockpile.getUsedGridSpaces();
             float height = stockpile.getHighestColumnHeight();
 
-
             int columns = usedGridSpaces % 6;
-            int rows = usedGridSpaces/6 + (columns == 0 ? 0 : 1);
+            int rows = usedGridSpaces / 6 + (columns == 0 ? 0 : 1);
+            int maxColumns = Math.min(6, usedGridSpaces);
 
-            int maxColumns = Math.min(6,usedGridSpaces);
+            double w = (16.0 * maxColumns) / 6;
+            double d = (16.0 * rows) / 6;
 
-            //VoxelShape shapeA = Block.box(0,0,0, (double) (16 * columns) /6, 16, (double) (16 * rows) /6);
-            VoxelShape shapeB = Block.box(0,0,0, (double) (16 * maxColumns) /6, height, (double) (16 * rows) /6);
-
-            return shapeB;
-            //return Shapes.join(shapeA, shapeB, BooleanOp.AND);
+            return switch (stockpile.getFacing()) {
+                case EAST  -> Block.box(16 - d, 0, 0, 16, height, w);
+                case SOUTH -> Block.box(16 - w, 0, 16 - d, 16, height, 16);
+                case WEST  -> Block.box(0, 0, 16 - w, d, height, 16);
+                default    -> Block.box(0, 0, 0, w, height, d); // NORTH
+            };
         }
-        // No collision shape when looking at the block
         return Shapes.empty();
     }
 }

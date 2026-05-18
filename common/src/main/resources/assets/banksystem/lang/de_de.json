@@ -152,6 +152,7 @@
   "message.banksystem.bank_data_loaded": "Bankdaten geladen",
   "message.banksystem.need_creative_mode_for_this_screen": "Du musst im Kreativmodus sein um auf diesen Bildschirm zuzugreifen",
 
+  "block.banksystem.banksystem_display_block": "Bank Anzeige",
   "block.banksystem.atm_block": "Geldautomat",
   "gui.banksystem.atm_screen.receive_button": "Geld abheben",
   "gui.banksystem.atm_screen.sum_text": "{amount} wird ausbezahlt",

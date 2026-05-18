@@ -6,34 +6,28 @@ Every player has one personal bank account that is created automatically. Person
 
 ## Creating a New Bank Account
 
-<table>
-<tr>
-<td width = 500 valign="top">
-A player can create additional bank accounts using the command:<br>
+<div align="center">
+    <img src="../images/createBankaccount.gif"> 
+</div>
+
+A player can create additional bank accounts using the command:
 
 ```
 /bank create <accountname>
 ```
 
 After the bank has been created, the management GUI opens automatically.
-</td>
-<td width = 600>
-<div align="center">
-    <img src="../images/createBankaccount.gif" width=600> 
-</div>
-</td>
-</tr>
-</table>
 
 
 ---
 ## Shared Bank Accounts
 
-<table>
-<tr>
-<td width = 500 valign="top">
-A player can add other players to their bank account through the management GUI.<br>
-Open it using the command:<br>
+<div align="center">
+    <img src="../images/addToOwnBankaccount.gif"> 
+</div>
+
+A player can add other players to their bank account through the management GUI.
+Open it using the command:
 
 ```
 /bank manage
@@ -52,15 +46,6 @@ Permissions for each player can be configured individually:
 
 > [!NOTE]
 > Only manually created bank accounts can be deleted. The personal bank account cannot be deleted.
-
-</td>
-<td width = 600>
-<div align="center">
-    <img src="../images/addToOwnBankaccount.gif" width=600> 
-</div>
-</td>
-</tr>
-</table>
 
 ---
 ## Selecting a Bank Account

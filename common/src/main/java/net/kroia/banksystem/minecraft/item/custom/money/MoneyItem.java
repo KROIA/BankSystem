@@ -130,6 +130,9 @@ public class MoneyItem extends Item{
                 // Get the block entity and set the item
                 blockEntity = level.getBlockEntity(pos);
                 if (blockEntity instanceof MoneyStockpileBlockEntity stockpile) {
+                    if (player != null) {
+                        stockpile.setFacing(player.getDirection().getOpposite());
+                    }
                     ItemStack itemStack = context.getItemInHand();
                     if (MoneyItem.isMoney(itemStack)) {
                         int added = stockpile.addItems(itemStack);
