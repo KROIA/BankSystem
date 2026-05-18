@@ -2,6 +2,7 @@ package net.kroia.banksystem.banking.bankaccount;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
@@ -212,7 +213,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         @Override
         public CompletableFuture<OutputData> sendRequestToServer(InputData input)
         {
-            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+            if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Sending request to server for function: "+input.function.toString());
             return super.sendRequestToServer(input);
         }
@@ -231,7 +232,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
                 playerName = tryGetPlayerName(playerSender);
                 playerInfo = " from player: " + playerName;
             }
-            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+            if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             if(!isRequestAllowed(input, slaveID, playerSender, playerName))
                 return CompletableFuture.completedFuture(OutputData.of(input.function));
@@ -399,7 +400,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
             tmpFuture = Request.instance.sendRequestToMaster(input);
 
         tmpFuture.thenAccept(outputData ->{
-            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+            if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Response received for request: "+ input.function.toString());
             future.complete(outputData);
         });

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.menu.custom;
 
+import com.mojang.logging.LogUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.Container;
@@ -12,10 +13,13 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import org.slf4j.Logger;
 
 import java.util.Objects;
 
 public abstract class AbstractBankContainerMenu extends AbstractContainerMenu {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     protected final ContainerLevelAccess levelAccess;
     protected final Block block;
@@ -98,7 +102,7 @@ public abstract class AbstractBankContainerMenu extends AbstractContainerMenu {
             if(!moveItemStackTo(fromStack, 0, 36, false))
                 return ItemStack.EMPTY;
         } else {
-            System.err.println("Invalid slot index: " + pIndex);
+            LOGGER.warn("Invalid slot index: {}", pIndex);
             return ItemStack.EMPTY;
         }
 

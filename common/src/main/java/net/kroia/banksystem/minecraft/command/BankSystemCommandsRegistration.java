@@ -12,8 +12,7 @@ import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
 import net.kroia.banksystem.api.command.IServerBankSystemCommandHandler;
 import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
-import net.kroia.modutilities.testing.TestRegistry;
-import net.kroia.modutilities.testing.TestRunner;
+import net.kroia.modutilities.testing.TestCommandRegistration;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
@@ -252,39 +251,6 @@ public class BankSystemCommandsRegistration {
                             return Command.SINGLE_SUCCESS;
                         })
                 )
-                .then(Commands.literal("test")
-                        .requires(source -> TestRegistry.ENABLE_TESTS && source.hasPermission(2))
-                        .executes(context -> {
-                            // /banksystem test — Run all tests
-                            ServerPlayer player = context.getSource().getPlayerOrException();
-                            boolean isSlave = BACKEND_INSTANCES.isSlaveServer;
-                            TestRunner runner = new TestRunner("BankSystem", isSlave, player.getServer());
-                            runner.runAll(player);
-                            return Command.SINGLE_SUCCESS;
-                        })
-                        .then(Commands.literal("list")
-                                .executes(context -> {
-                                    // /banksystem test list — List available categories
-                                    ServerPlayer player = context.getSource().getPlayerOrException();
-                                    boolean isSlave = BACKEND_INSTANCES.isSlaveServer;
-                                    TestRunner runner = new TestRunner("BankSystem", isSlave, player.getServer());
-                                    runner.listCategories(player);
-                                    return Command.SINGLE_SUCCESS;
-                                })
-                        )
-                        .then(Commands.argument("category", StringArgumentType.string())
-                                .suggests((context, builder) -> getTestCategorySuggestion(builder))
-                                .executes(context -> {
-                                    // /banksystem test <category> — Run specific category
-                                    ServerPlayer player = context.getSource().getPlayerOrException();
-                                    String categoryName = StringArgumentType.getString(context, "category");
-                                    boolean isSlave = BACKEND_INSTANCES.isSlaveServer;
-                                    TestRunner runner = new TestRunner("BankSystem", isSlave, player.getServer());
-                                    runner.runCategory(player, categoryName);
-                                    return Command.SINGLE_SUCCESS;
-                                })
-                        )
-                )
                 // Dev-only: export all BankSystem crafting recipes as PNG images
                 .then(Commands.literal("exportrecipes")
                         .requires(source -> source.hasPermission(2) && BankSystemMod.ENABLE_DEV_FEATURES)
@@ -511,17 +477,10 @@ public class BankSystemCommandsRegistration {
                                         )
                         )
         );
-    }
 
-
-    private static CompletableFuture<Suggestions> getTestCategorySuggestion(SuggestionsBuilder builder)
-    {
-        boolean isSlave = BACKEND_INSTANCES.isSlaveServer;
-        List<String> categories = TestRegistry.getAvailableCategories(isSlave);
-        for (String category : categories) {
-            builder.suggest(category);
-        }
-        return CompletableFuture.completedFuture(builder.build());
+        boolean isSlave = BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer;
+        if (BankSystemMod.ENABLE_DEV_FEATURES)
+            TestCommandRegistration.register(dispatcher, "banksystem", "BankSystem", isSlave);
     }
 
     private static CompletableFuture<Suggestions> getPlayerNamesSuggestion(SuggestionsBuilder builder)

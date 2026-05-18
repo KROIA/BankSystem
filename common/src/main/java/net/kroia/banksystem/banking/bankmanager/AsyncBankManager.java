@@ -2,6 +2,7 @@ package net.kroia.banksystem.banking.bankmanager;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.IAsyncBank;
@@ -274,7 +275,7 @@ public class AsyncBankManager implements IAsyncBankManager {
         @Override
         public CompletableFuture<OutputData> sendRequestToServer(InputData input)
         {
-            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+            if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Sending request to server for function: "+input.function.toString());
             return super.sendRequestToServer(input);
         }
@@ -296,7 +297,7 @@ public class AsyncBankManager implements IAsyncBankManager {
             if(!isRequestAllowed(input, slaveID, playerSender, playerName))
                 return CompletableFuture.completedFuture(OutputData.of(input.function));
 
-            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+            if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             IServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
             if(bankManager == null) {
@@ -555,7 +556,7 @@ public class AsyncBankManager implements IAsyncBankManager {
             tmpFuture = Request.instance.sendRequestToMaster(input);
 
         tmpFuture.thenAccept(outputData ->{
-            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+            if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Response received for request: "+ input.function.toString());
             future.complete(outputData);
         });
