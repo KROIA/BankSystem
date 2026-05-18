@@ -1,5 +1,7 @@
 package net.kroia.banksystem.util;
 
+import dev.architectury.platform.Platform;
+import dev.architectury.utils.Env;
 import net.kroia.modutilities.ColorUtilities;
 import net.minecraft.world.item.ItemStack;
 
@@ -28,8 +30,9 @@ public class ItemColorUtil {
         if (cached != null) return cached;
 
         int color = 0;
-        if (stack != null && !stack.isEmpty()) {
-            color = tryExtractFromTexture(stack);
+        if (stack != null && !stack.isEmpty() && Platform.getEnvironment() == Env.CLIENT) {
+            // Delegate to a separate class so the server JVM never loads client rendering classes
+            color = ClientTextureHelper.tryExtractFromTexture(stack);
         }
         if (color == 0) {
             color = FALLBACK_COLORS[fallbackIndex % FALLBACK_COLORS.length];
@@ -51,56 +54,60 @@ public class ItemColorUtil {
         colorCache.clear();
     }
 
-    @SuppressWarnings("JavaReflectionMemberAccess")
-    private static int tryExtractFromTexture(ItemStack stack) {
-        try {
-            var mc = net.minecraft.client.Minecraft.getInstance();
-            if (mc == null) return 0;
-            var random = net.minecraft.util.RandomSource.create();
-            var model = mc.getItemRenderer().getModel(stack, null, null, 0);
-            var quads = model.getQuads(null, null, random);
-            if (quads.isEmpty()) {
-                for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
-                    quads = model.getQuads(null, dir, random);
-                    if (!quads.isEmpty()) break;
+    // Isolated in its own class so the server never loads Minecraft/renderer classes.
+    // The JVM only loads this class when the code path above actually calls it (client only).
+    private static class ClientTextureHelper {
+        @SuppressWarnings("JavaReflectionMemberAccess")
+        static int tryExtractFromTexture(ItemStack stack) {
+            try {
+                var mc = net.minecraft.client.Minecraft.getInstance();
+                if (mc == null) return 0;
+                var random = net.minecraft.util.RandomSource.create();
+                var model = mc.getItemRenderer().getModel(stack, null, null, 0);
+                var quads = model.getQuads(null, null, random);
+                if (quads.isEmpty()) {
+                    for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
+                        quads = model.getQuads(null, dir, random);
+                        if (!quads.isEmpty()) break;
+                    }
                 }
-            }
-            if (quads.isEmpty()) return 0;
+                if (quads.isEmpty()) return 0;
 
-            var sprite = quads.get(0).getSprite();
-            int width = sprite.contents().width();
-            int height = sprite.contents().height();
+                var sprite = quads.get(0).getSprite();
+                int width = sprite.contents().width();
+                int height = sprite.contents().height();
 
-            var field = sprite.contents().getClass().getDeclaredField("originalImage");
-            field.setAccessible(true);
-            var nativeImage = (com.mojang.blaze3d.platform.NativeImage) field.get(sprite.contents());
-            if (nativeImage == null) return 0;
+                var field = sprite.contents().getClass().getDeclaredField("originalImage");
+                field.setAccessible(true);
+                var nativeImage = (com.mojang.blaze3d.platform.NativeImage) field.get(sprite.contents());
+                if (nativeImage == null) return 0;
 
-            long rSum = 0, gSum = 0, bSum = 0;
-            int count = 0;
-            for (int x = 0; x < width; x++) {
-                for (int y = 0; y < height; y++) {
-                    int pixel = nativeImage.getPixelRGBA(x, y);
-                    int a = (pixel >> 24) & 0xFF;
-                    if (a < 128) continue;
-                    rSum += pixel & 0xFF;
-                    gSum += (pixel >> 8) & 0xFF;
-                    bSum += (pixel >> 16) & 0xFF;
-                    count++;
+                long rSum = 0, gSum = 0, bSum = 0;
+                int count = 0;
+                for (int x = 0; x < width; x++) {
+                    for (int y = 0; y < height; y++) {
+                        int pixel = nativeImage.getPixelRGBA(x, y);
+                        int a = (pixel >> 24) & 0xFF;
+                        if (a < 128) continue;
+                        rSum += pixel & 0xFF;
+                        gSum += (pixel >> 8) & 0xFF;
+                        bSum += (pixel >> 16) & 0xFF;
+                        count++;
+                    }
                 }
+                if (count == 0) return 0;
+
+                int r = (int) (rSum / count);
+                int g = (int) (gSum / count);
+                int b = (int) (bSum / count);
+
+                float[] hsb = java.awt.Color.RGBtoHSB(r, g, b, null);
+                hsb[1] = Math.min(1.0f, hsb[1] * 1.5f);
+                hsb[2] = Math.min(1.0f, Math.max(0.4f, hsb[2]));
+                return java.awt.Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]) | 0xFF000000;
+            } catch (Throwable t) {
+                return 0;
             }
-            if (count == 0) return 0;
-
-            int r = (int) (rSum / count);
-            int g = (int) (gSum / count);
-            int b = (int) (bSum / count);
-
-            float[] hsb = java.awt.Color.RGBtoHSB(r, g, b, null);
-            hsb[1] = Math.min(1.0f, hsb[1] * 1.5f);
-            hsb[2] = Math.min(1.0f, Math.max(0.4f, hsb[2]));
-            return java.awt.Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]) | 0xFF000000;
-        } catch (Throwable t) {
-            return 0;
         }
     }
 }
