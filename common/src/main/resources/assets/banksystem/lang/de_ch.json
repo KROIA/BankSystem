@@ -152,6 +152,7 @@
   "message.banksystem.bank_data_loaded": "Bankdatä glade",
   "message.banksystem.need_creative_mode_for_this_screen": "Du muesch im Kreativmodus si zum uf dä Bildschirm z'zugreife",
 
+  "block.banksystem.banksystem_display_block": "Bank Azeig",
   "block.banksystem.atm_block": "Geldautomat",
   "gui.banksystem.atm_screen.receive_button": "Geld abhebä",
   "gui.banksystem.atm_screen.sum_text": "{amount} wird uszahlt",
