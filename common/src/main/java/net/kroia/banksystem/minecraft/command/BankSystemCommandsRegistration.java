@@ -480,7 +480,7 @@ public class BankSystemCommandsRegistration {
 
         boolean isSlave = BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer;
         if (BankSystemMod.ENABLE_DEV_FEATURES)
-            TestCommandRegistration.register(dispatcher, "banksystem", "BankSystem", isSlave);
+            TestCommandRegistration.register(dispatcher, "banksystem", "BankSystem", "banksystem", isSlave);
     }
 
     private static CompletableFuture<Suggestions> getPlayerNamesSuggestion(SuggestionsBuilder builder)
