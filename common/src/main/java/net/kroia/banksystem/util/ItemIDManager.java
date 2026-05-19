@@ -1,6 +1,7 @@
 package net.kroia.banksystem.util;
 
 import com.ibm.icu.impl.Pair;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.general.RegisterItemIDPacket;
@@ -25,6 +26,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class ItemIDManager implements ServerSaveable {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
     private static final ConcurrentHashMap<ItemID, ItemStack> itemIDMap = new ConcurrentHashMap<>();
 
@@ -338,8 +343,16 @@ public class ItemIDManager implements ServerSaveable {
             itemID.save(idTag);
             pairTag.put("itemID", idTag);
             CompoundTag itemStackTag = new CompoundTag();
-            Tag stackTag = itemStack.save(access, itemStackTag);
-            pairTag.put("itemStack", stackTag);
+            try {
+                Tag stackTag = itemStack.save(access, itemStackTag);
+                pairTag.put("itemStack", stackTag);
+            } catch (Exception e) {
+                // Skip items whose ItemStack can't be serialized in the current registry context
+                // (e.g. enchanted books registered from a different registry context)
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Failed to save ItemStack for " + itemID + ": " + e.getMessage());
+                continue;
+            }
 
             listTag.add(pairTag);
         }
