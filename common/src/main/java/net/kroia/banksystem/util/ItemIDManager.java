@@ -1,6 +1,7 @@
 package net.kroia.banksystem.util;
 
 import com.ibm.icu.impl.Pair;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.general.RegisterItemIDPacket;
@@ -25,6 +26,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class ItemIDManager implements ServerSaveable {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
     private static final ConcurrentHashMap<ItemID, ItemStack> itemIDMap = new ConcurrentHashMap<>();
 
@@ -167,6 +172,7 @@ public class ItemIDManager implements ServerSaveable {
             return ItemID.INVALID_ID;
         return ids.getFirst();
     }
+
     public static List<ItemID> registerItemStackServerSide_direct(List<ItemStack> itemStacks)
     {
         List<ItemID> ids = new ArrayList<>();
@@ -185,7 +191,10 @@ public class ItemIDManager implements ServerSaveable {
                     continue;
                 }
 
-                short newID = (short) (itemIDMap.size() + 1);
+                short newID = (short)(itemIDMap.size() + 1);
+                do{
+                    newID++;
+                }while(itemIDMap.containsKey(new ItemID(newID)));
 
                 ItemStack cpy = stack.copy();
                 String name = ItemUtilities.getItemIDStr(cpy.getItem());
@@ -193,6 +202,7 @@ public class ItemIDManager implements ServerSaveable {
                 cpy.setCount(1);
                 newItemIDMap.put(id, cpy);
                 itemIDMap.put(id, cpy);
+                ids.add(id);
             }
         }
         if(!newItemIDMap.isEmpty())
@@ -204,15 +214,32 @@ public class ItemIDManager implements ServerSaveable {
     {
         int oldAmount = itemStack.getCount();
         itemStack.setCount(1);
+        // Fast path: exact component comparison (works for items without registry-backed holders)
         for(Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet())
         {
-            ItemID itemID = entry.getKey();
-            ItemStack item = entry.getValue();
-            if(ItemStack.isSameItemSameComponents(itemStack, item))
+            if(ItemStack.isSameItemSameComponents(itemStack, entry.getValue()))
             {
                 itemStack.setCount(oldAmount);
-                return itemID;
+                return entry.getKey();
             }
+        }
+        // Fallback: compare by serialized NBT using the server's registry.
+        // Tag.equals() compares string/int values, not Holder identity, so this
+        // correctly matches enchanted books, potions, etc. across registry instances.
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if (access != null) {
+            try {
+                Tag searchTag = itemStack.save(access);
+                for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet()) {
+                    try {
+                        Tag existingTag = entry.getValue().save(access);
+                        if (searchTag.equals(existingTag)) {
+                            itemStack.setCount(oldAmount);
+                            return entry.getKey();
+                        }
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {}
         }
         itemStack.setCount(oldAmount);
         return ItemID.INVALID_ID;
@@ -285,7 +312,11 @@ public class ItemIDManager implements ServerSaveable {
             }
 
 
-            itemIDMap.put(id, cpy);
+            // putIfAbsent: in singleplayer the server and client share the same static map.
+            // The server registers ItemStacks with correct server-registry Holders;
+            // the client sync must not overwrite them with client-decoded copies that
+            // have cross-registry Holder references (causes save failures).
+            itemIDMap.putIfAbsent(id, cpy);
             id.tryUpdateNameCache();
         }
         MoneyItem.resetItemID();
@@ -338,8 +369,16 @@ public class ItemIDManager implements ServerSaveable {
             itemID.save(idTag);
             pairTag.put("itemID", idTag);
             CompoundTag itemStackTag = new CompoundTag();
-            Tag stackTag = itemStack.save(access, itemStackTag);
-            pairTag.put("itemStack", stackTag);
+            try {
+                Tag stackTag = itemStack.save(access, itemStackTag);
+                pairTag.put("itemStack", stackTag);
+            } catch (Exception e) {
+                // Skip items whose ItemStack can't be serialized in the current registry context
+                // (e.g. enchanted books registered from a different registry context)
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Failed to save ItemStack for " + itemID + ": " + e.getMessage());
+                continue;
+            }
 
             listTag.add(pairTag);
         }

@@ -23,12 +23,15 @@ import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -88,6 +91,8 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     private static final int OV_FRAME_BG = ColorUtilities.getRGB(20, 20, 30, 180);
     private static final int OV_FRAME_OUTLINE = ColorUtilities.getRGB(80, 100, 140);
     private static final int OV_LABEL_COLOR = ColorUtilities.getRGB(220, 220, 220);
+    private static final int OV_COMP_COLOR = ColorUtilities.getRGB(160, 170, 200);
+    private static final float OV_COMP_FONT_SCALE = 0.55f;
 
     // ── Balance history constants ──
 
@@ -119,6 +124,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     private Label overviewAccountLabel;
     private final List<ItemView> overviewIcons = new ArrayList<>();
     private final List<Label> overviewLabels = new ArrayList<>();
+    private final List<Label> overviewCompLabels = new ArrayList<>();
     private String pendingOverviewAccountText = null;
     private ListTag pendingOverviewSlotData = null;
 
@@ -279,9 +285,9 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         tag.putInt("accountNumber", accountNumber);
 
         if (displayType == DisplayType.BALANCE_OVERVIEW) {
-            saveOverviewData(tag);
+            saveOverviewData(tag, registries);
         } else if (displayType == DisplayType.BALANCE_HISTORY) {
-            saveHistoryData(tag);
+            saveHistoryData(tag, registries);
         }
     }
 
@@ -305,6 +311,13 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         super.loadAdditional(tag, registries);
 
         if (level != null && level.isClientSide() && isController()) {
+            // Re-load pending data: super.loadAdditional calls buildAndInitGui→wireCallbacks
+            // →applyPendingState which consumes it, then gui.deserializeTree replaces all
+            // elements with componentless copies. Re-loading ensures the data is available
+            // for the final applyPendingState below.
+            loadOverviewData(tag);
+            loadHistoryData(tag);
+
             if (oldType != this.displayType || oldAccount != this.accountNumber || oldSlotCount != this.slotCount) {
                 rebuildGui();
             }
@@ -324,6 +337,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         overviewAccountLabel = null;
         overviewIcons.clear();
         overviewLabels.clear();
+        overviewCompLabels.clear();
         overviewDataPending = false;
         historyChart = null;
         historyStatusLabel = null;
@@ -342,14 +356,11 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             int count = Math.min(pendingOverviewSlotData.size(), Math.min(overviewIcons.size(), overviewLabels.size()));
             for (int i = 0; i < count; i++) {
                 CompoundTag entry = pendingOverviewSlotData.getCompound(i);
-                if (entry.contains("item")) {
-                    var item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(entry.getString("item")));
-                    if (item != Items.AIR) {
-                        overviewIcons.get(i).setItemStack(new ItemStack(item));
-                    }
-                }
                 if (entry.contains("text")) {
                     overviewLabels.get(i).setText(entry.getString("text"));
+                }
+                if (i < overviewCompLabels.size()) {
+                    overviewCompLabels.get(i).setText(entry.contains("compText") ? entry.getString("compText") : "");
                 }
             }
             pendingOverviewSlotData = null;
@@ -373,12 +384,6 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
                 f.setBackgroundColor(entry.getInt("bgColor"));
                 f.setEnableOutline(entry.getBoolean("visible"));
                 f.setEnableBackground(entry.getBoolean("visible"));
-                if (entry.contains("item")) {
-                    var item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(entry.getString("item")));
-                    if (item != Items.AIR) {
-                        legendIcons.get(i).setItemStack(new ItemStack(item));
-                    }
-                }
             }
             for (int i = count; i < legendFrames.size(); i++) {
                 legendFrames.get(i).setEnableOutline(false);
@@ -429,8 +434,47 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
     private static String getItemDisplayName(short itemId) {
         ItemID id = new ItemID(itemId);
-        String name = id.getName();
-        return name != null ? name : "Item#" + itemId;
+        ItemStack stack = id.getStack();
+        String baseName = stack.isEmpty() ? id.getName() : stack.getHoverName().getString();
+        if (baseName == null) baseName = "Item#" + itemId;
+        String comp = getComponentDescription(stack);
+        if (comp != null) baseName += " (" + comp + ")";
+        return baseName;
+    }
+
+    private static String getComponentDescription(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return null;
+
+        ItemEnchantments stored = stack.get(DataComponents.STORED_ENCHANTMENTS);
+        if (stored != null && !stored.isEmpty()) {
+            return formatEnchantments(stored);
+        }
+
+        ItemEnchantments enchants = stack.get(DataComponents.ENCHANTMENTS);
+        if (enchants != null && !enchants.isEmpty()) {
+            return formatEnchantments(enchants);
+        }
+
+        PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
+        if (contents != null) {
+            StringBuilder sb = new StringBuilder();
+            for (MobEffectInstance effect : contents.getAllEffects()) {
+                if (!sb.isEmpty()) sb.append(", ");
+                sb.append(effect.getEffect().value().getDisplayName().getString());
+            }
+            if (!sb.isEmpty()) return sb.toString();
+        }
+
+        return null;
+    }
+
+    private static String formatEnchantments(ItemEnchantments enchantments) {
+        StringBuilder sb = new StringBuilder();
+        for (var entry : enchantments.entrySet()) {
+            if (!sb.isEmpty()) sb.append(", ");
+            sb.append(Enchantment.getFullname(entry.getKey(), entry.getIntValue()).getString());
+        }
+        return sb.toString();
     }
 
     // =========================================================================
@@ -463,6 +507,8 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
                     overviewAccountLabel = l;
                 } else if (id != null && id.startsWith("bal_")) {
                     overviewLabels.add(l);
+                } else if (id != null && id.startsWith("comp_")) {
+                    overviewCompLabels.add(l);
                 }
             } else if (el instanceof ItemView iv) {
                 String id = iv.getId();
@@ -473,6 +519,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         }
         overviewIcons.sort(Comparator.comparingInt(a -> parseIndex(a.getId())));
         overviewLabels.sort(Comparator.comparingInt(a -> parseIndex(a.getId())));
+        overviewCompLabels.sort(Comparator.comparingInt(a -> parseIndex(a.getId())));
         if (level == null || !level.isClientSide()) {
             requestOverviewData();
         }
@@ -552,7 +599,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             if (i < overviewIcons.size()) {
                 ItemStack current = overviewIcons.get(i).getItemStack();
                 ItemStack next = itemId.getStack();
-                if (current == null || !ItemStack.isSameItem(current, next)) {
+                if (current == null || !ItemStack.isSameItemSameComponents(current, next)) {
                     overviewIcons.get(i).setItemStack(next);
                     changed = true;
                 }
@@ -564,13 +611,21 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
                     changed = true;
                 }
             }
+            if (i < overviewCompLabels.size()) {
+                String compText = getComponentDescription(itemId.getStack());
+                String newCompText = compText != null ? compText : "";
+                if (!newCompText.equals(overviewCompLabels.get(i).getText())) {
+                    overviewCompLabels.get(i).setText(newCompText);
+                    changed = true;
+                }
+            }
         }
         if (changed) {
             syncToClientPublic();
         }
     }
 
-    private void saveOverviewData(CompoundTag tag) {
+    private void saveOverviewData(CompoundTag tag, HolderLookup.Provider registries) {
         tag.putInt("slotCount", slotCount);
         if (overviewAccountLabel != null) {
             tag.putString("ovAccountText", overviewAccountLabel.getText());
@@ -584,6 +639,9 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
                 entry.putString("item", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
             }
             entry.putString("text", overviewLabels.get(i).getText());
+            if (i < overviewCompLabels.size()) {
+                entry.putString("compText", overviewCompLabels.get(i).getText());
+            }
             slots.add(entry);
         }
         tag.put("ovSlots", slots);
@@ -685,14 +743,26 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             ItemView icon = new ItemView(cellX, cellY + 2, iconSize, iconSize);
             icon.setId("icon_" + i);
             icon.setShowTooltip(true);
+            icon.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
             gui.addElement(icon);
+
+            int labelW = slotW - iconSize - iconLabelGap - slotOffset;
+            int labelX = cellX + iconSize + iconLabelGap;
 
             Label label = new Label("");
             label.setId("bal_" + i);
-            label.setBounds(cellX + iconSize + iconLabelGap, cellY, slotW - iconSize - iconLabelGap - slotOffset, OV_ROW_HEIGHT);
+            label.setBounds(labelX, cellY, labelW, 11);
             label.setAlignment(GuiElement.Alignment.LEFT);
             label.setTextColor(OV_LABEL_COLOR);
             gui.addElement(label);
+
+            Label compLabel = new Label("");
+            compLabel.setId("comp_" + i);
+            compLabel.setBounds(labelX, cellY + 11, labelW, 9);
+            compLabel.setAlignment(GuiElement.Alignment.LEFT);
+            compLabel.setTextColor(OV_COMP_COLOR);
+            compLabel.setTextFontScale(OV_COMP_FONT_SCALE);
+            gui.addElement(compLabel);
         }
     }
 
@@ -833,7 +903,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         }
     }
 
-    private void saveHistoryData(CompoundTag tag) {
+    private void saveHistoryData(CompoundTag tag, HolderLookup.Provider registries) {
         if (historyChart != null && !historyChart.getSeries().isEmpty()) {
             tag.put("chartState", historyChart.serializeState());
         }
@@ -925,6 +995,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             ItemView icon = new ItemView(legendX + iconPad, entryY + iconYPad, 16, 16);
             icon.setId("li_" + i);
             icon.setShowTooltip(true);
+            icon.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
             gui.addElement(icon);
         }
     }
