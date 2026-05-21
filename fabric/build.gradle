@@ -11,9 +11,9 @@ repositories {
     flatDir {
         dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/fabric/build/libs"
     }
+    maven { url 'https://jitpack.io' }
 
     //mavenLocal()
-    //maven { url 'https://jitpack.io' }
 
 }
 architectury {
@@ -54,8 +54,8 @@ dependencies {
         exclude group: "org.slf4j"
     }
 
-    modImplementation("net.kroia:modutilities-fabric:$rootProject.modutilities_version")
-    include("net.kroia:modutilities-fabric:$rootProject.modutilities_version")
+    modImplementation("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version")
+    include("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version")
 
     modCompileOnlyApi("mezz.jei:jei-${rootProject.minecraft_version}-fabric-api:${rootProject.jei_version}")
     //modRuntimeOnly("mezz.jei:jei-${minecraft_version}-fabric:${jei_version}")
