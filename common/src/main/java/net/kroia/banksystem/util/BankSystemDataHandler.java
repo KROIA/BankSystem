@@ -26,12 +26,14 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     private final String BANK_DATA_FOLDER_NAME = "Bank_data";
     private final String META_DATA_FILE_NAME = "Meta_data.nbt";
     private final String BANK_SETTINGS_FILE_NAME = "settings.json";
+    public static final Path BASE_PATH = Path.of("data", "BankSystem");
+    private static final Path OLD_PATH = Path.of("Finance", "BankSystem");
     private long tickCounter = 0;
     private int lastPlayerCount = 0;
     private static boolean globalSettingsLoaded = false;
     private static boolean bankDataLoaded = false;
     public BankSystemDataHandler() {
-        super(JsonFormat.PRETTY, NbtFormat.COMPRESSED, Paths.get("Finance/BankSystem"));
+        super(JsonFormat.PRETTY, NbtFormat.COMPRESSED, BASE_PATH);
         bankDataLoaded = false;
         globalSettingsLoaded = false;
         setLogger(this::error, this::error, this::info, this::warn);
@@ -72,8 +74,47 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
     @Override
     public void setLevelSavePath(Path path) {
+        migrateFromOldPath(path);
         super.setLevelSavePath(path);
         createSaveFolder();
+    }
+
+    private void migrateFromOldPath(Path worldRoot) {
+        Path oldDir = worldRoot.resolve(OLD_PATH);
+        if (!Files.isDirectory(oldDir)) {
+            return;
+        }
+
+        info("Found old data at " + oldDir + ", migrating to new location...");
+
+        Path backupDir = worldRoot.resolve("Finance").resolve("BankSystemBackup_" + System.currentTimeMillis());
+        try {
+            copyFolder(oldDir, backupDir);
+            info("Created backup of old data at: " + backupDir);
+        } catch (IOException e) {
+            error("Failed to backup old data, aborting migration", e);
+            return;
+        }
+
+        Path newDir = worldRoot.resolve(BASE_PATH);
+        try {
+            if (!Files.exists(newDir)) {
+                Files.createDirectories(newDir);
+            }
+            copyFolder(oldDir, newDir);
+            info("Migrated old data from " + oldDir + " to " + newDir);
+        } catch (IOException e) {
+            error("Failed to copy old data to new location", e);
+            return;
+        }
+
+        try {
+            deleteFolderContents(oldDir);
+            Files.deleteIfExists(oldDir);
+            info("Deleted old data directory: " + oldDir);
+        } catch (IOException e) {
+            error("Failed to delete old data directory: " + oldDir, e);
+        }
     }
 
     @Override
@@ -138,10 +179,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
                     }
                 }
 
-                success &= save_globalSettings(getGlobalSettingsFilePath());
-
                 if (success) {
-                    debug("BankSystem Mod data loaded successfully.");
+                    saveAll();
+                    debug("BankSystem Mod data loaded and saved in new format.");
                 } else
                     error("Failed to load BankSystem Mod data.");
                 return success;
@@ -312,38 +352,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         CompoundTag data = readDataCompound(getMetaDataFilePath());
         if(data == null)
         {
-            boolean backupSuccess = true;
-            // copy stockmarket folder to a backup folder
-            Path backupPath = getAbsoluteSavePath("../BankSystemBackup_" + System.currentTimeMillis());
-            // create path
-            if(!createFolder(backupPath)) {
-                error("Failed to create backup folder: " + backupPath);
-                backupSuccess = false;
-            }
-            // copy folder
-            Path bankSystemFolder = getAbsoluteSavePath();
-            try{
-                copyFolder(bankSystemFolder, backupPath);
-            }catch (IOException e) {
-                error("Failed to copy BankSystem folder to backup folder: " + backupPath, e);
-                backupSuccess = false;
-            }
-            String msg = "Market data file is missing version information. This means you updated the mod to a newer version.\n";
-            if(backupSuccess)
-                msg += "To prevent losing the save with the old bank data, a copy is created at:\n" + backupPath + "\n";
-            else {
-                msg += "The backup folder could not be created.";
-            }
-            error(msg);
-            if(backupSuccess)
-            {
-                /*// Delete all files and paths in the market data folder recursively
-                try {
-                    deleteFolderContents(getAbsoluteSavePath());
-                } catch (IOException e) {
-                    error("Failed to delete old banksystem data files.", e);
-                }*/
-            }
+            error("Metadata file is missing version information. This means you updated the mod to a newer version.");
             return false;
         }
         return true;

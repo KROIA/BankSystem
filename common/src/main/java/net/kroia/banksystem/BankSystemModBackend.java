@@ -165,7 +165,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.SERVER_SETTINGS = new BankSystemModSettings();
         INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
 
-        //Path configPath = server.getWorldPath(LevelResource.ROOT).resolve("Finance/BankSystem/BankSystemConfig.json");
+        //Path configPath = server.getWorldPath(LevelResource.ROOT).resolve("data/BankSystem/BankSystemConfig.json");
         //INSTANCES.CONFIG = BankSystemConfig.create(configPath);
         INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
 
