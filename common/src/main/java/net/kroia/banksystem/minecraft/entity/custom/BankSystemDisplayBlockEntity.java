@@ -672,13 +672,13 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             if (d == Math.floor(d)) {
                 result = String.valueOf((long) d);
             } else {
-                result = String.format("%.2f", d);
+                result = String.format(Locale.ROOT, "%.2f", d);
                 result = result.replaceAll("0+$", "").replaceAll("\\.$", "");
             }
         } else {
-            if (d >= 100) result = String.format("%.0f", d);
-            else if (d >= 10) result = String.format("%.1f", d);
-            else result = String.format("%.2f", d);
+            if (d >= 100) result = String.format(Locale.ROOT, "%.0f", d);
+            else if (d >= 10) result = String.format(Locale.ROOT, "%.1f", d);
+            else result = String.format(Locale.ROOT, "%.2f", d);
             if (result.contains(".")) {
                 result = result.replaceAll("0+$", "").replaceAll("\\.$", "");
             }

@@ -591,10 +591,10 @@ public class BalanceHistoryChart extends GuiElement {
     // ── Formatting ──
 
     private String formatValue(double value) {
-        if (value >= 1_000_000_000) return String.format("%.1fB", value / 1_000_000_000);
-        else if (value >= 1_000_000) return String.format("%.1fM", value / 1_000_000);
-        else if (value >= 1_000) return String.format("%.1fk", value / 1_000);
-        else return String.format("%.2f", value);
+        if (value >= 1_000_000_000) return String.format(Locale.ROOT, "%.1fB", value / 1_000_000_000);
+        else if (value >= 1_000_000) return String.format(Locale.ROOT, "%.1fM", value / 1_000_000);
+        else if (value >= 1_000) return String.format(Locale.ROOT, "%.1fk", value / 1_000);
+        else return String.format(Locale.ROOT, "%.2f", value);
     }
 
     private String[] timestampToLabels(Date current, Date last) {
