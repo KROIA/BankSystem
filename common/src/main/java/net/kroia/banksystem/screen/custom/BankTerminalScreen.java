@@ -28,6 +28,7 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -116,9 +117,9 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         }
         private static String formatCompactBalance(long rawAmount) {
             double real = (double) rawAmount / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
-            if (real >= 1_000_000_000) return String.format("%.3fB", real / 1_000_000_000);
-            if (real >= 1_000_000) return String.format("%.3fM", real / 1_000_000);
-            if (real >= 10_000) return String.format("%.3fk", real / 1_000);
+            if (real >= 1_000_000_000) return String.format(Locale.ROOT, "%.3fB", real / 1_000_000_000);
+            if (real >= 1_000_000) return String.format(Locale.ROOT, "%.3fM", real / 1_000_000);
+            if (real >= 10_000) return String.format(Locale.ROOT, "%.3fk", real / 1_000);
             return ServerBank.getFormattedAmountStatic(rawAmount);
         }
 
