@@ -317,12 +317,39 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         if(BACKEND_INSTANCES.SERVER_SETTINGS.loadSettings(filePath.toString()))
         {
             globalSettingsLoaded = true;
+            applyVolatileComponentSettings();
             return true;
         }
         else
         {
             globalSettingsLoaded = false;
             return false;
+        }
+    }
+
+    /**
+     * Applies the config-sourced volatile and deposit-gated component lists
+     * ({@code ServerBank.ADDITIONAL_VOLATILE_COMPONENTS} /
+     * {@code ServerBank.ADDITIONAL_DEPOSIT_GATED_COMPONENTS}) to {@link VolatileItemComponents}.
+     * If either effective set changed, all registered ItemID templates are re-normalized and
+     * colliding IDs are merged (see {@link ItemIDManager#renormalizeAndMerge()}) — gated
+     * components are stripped at the identity boundary too, so both sets affect identity.
+     * <p>
+     * Note: on slave servers and clients these local values are later overwritten by the lists
+     * carried in the master's SyncItemIDsPacket, so all sides normalize identically.
+     */
+    private void applyVolatileComponentSettings()
+    {
+        if(BACKEND_INSTANCES.SERVER_SETTINGS == null)
+            return;
+        // Non-short-circuiting |: both lists must always be applied.
+        boolean changed = VolatileItemComponents.setConfigComponentIds(
+                BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ADDITIONAL_VOLATILE_COMPONENTS.get());
+        changed |= VolatileItemComponents.setGatedConfigComponentIds(
+                BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ADDITIONAL_DEPOSIT_GATED_COMPONENTS.get());
+        if(changed)
+        {
+            ItemIDManager.renormalizeAndMerge();
         }
     }
     @Override

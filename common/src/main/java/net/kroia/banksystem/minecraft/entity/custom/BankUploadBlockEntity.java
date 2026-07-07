@@ -13,6 +13,7 @@ import net.kroia.banksystem.minecraft.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.networking.entity.SyncBankUploadDataPacket;
 import net.kroia.banksystem.networking.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.VolatileItemComponents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
@@ -315,15 +316,30 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                 dropItem(stack);
                                 inventory.setItem(i, ItemStack.EMPTY);
                             }
-                            else {
-                                continue;
+                            // Skip in both cases — a dropped stack must never fall through
+                            // to the deposit below (it would be dropped AND credited).
+                            continue;
+                        }
+
+                        ItemID itemID = ItemID.of(stack);
+
+                        // Deposit gate: automation uploads are a credit boundary too — hoppers
+                        // must not launder state-gated components (e.g. spoiled tfc:food) into
+                        // fresh bank credit. Rejected stacks stay visibly in the block (or are
+                        // dropped, matching the not-bankable behavior above); there is no
+                        // player to message here, matching how damaged items are handled.
+                        if(itemID.isValid() && !VolatileItemComponents.isDepositEquivalent(stack, itemID))
+                        {
+                            if(dropIfNotBankable){
+                                dropItem(stack);
+                                inventory.setItem(i, ItemStack.EMPTY);
                             }
+                            continue;
                         }
 
                         // Clear the slot immediately to prevent double-read on next tick
                         inventory.setItem(i, ItemStack.EMPTY);
 
-                        ItemID itemID = ItemID.of(stack);
                         CompletableFuture<@Nullable IAsyncBank> itemBankFuture = account.getOrCreateBankAsync(itemID);
 
                         itemBankFuture.thenAccept(itemBank->{

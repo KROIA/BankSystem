@@ -4,6 +4,7 @@ package net.kroia.banksystem;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.reflect.TypeToken;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
@@ -124,6 +125,35 @@ public final class BankSystemModSettings extends ModSettings {
             }
         }*/
         public final Setting<Integer> ITEM_TRANSFER_TICK_INTERVAL = registerSetting("ITEM_TRANSFER_TICK_INTERVAL", 2, Integer.class); // Interval in ticks for item transfer operations
+
+        /**
+         * Additional <b>volatile item component</b> type ids (e.g. {@code "tfc:food"}) that are
+         * stripped from ItemStacks before they participate in ItemID identity.
+         * This list extends the datapack tag {@code banksystem:volatile_item_components}
+         * (see {@code data/banksystem/tags/data_component_type/volatile_item_components.json})
+         * and is meant for server admins who cannot ship a datapack.
+         * The list is synced to clients and forwarded to slave servers automatically.
+         */
+        public final Setting<List<String>> ADDITIONAL_VOLATILE_COMPONENTS = registerSetting(
+                "ADDITIONAL_VOLATILE_COMPONENTS",
+                new ArrayList<>(),
+                new TypeToken<List<String>>() {}.getType());
+
+        /**
+         * Additional <b>deposit-gated item component</b> type ids (e.g. {@code "tfc:food"}).
+         * Gated components are ignored for ItemID identity (like volatile components), but a
+         * physical stack carrying one may only be deposited if it is equivalent to the fresh
+         * stack the bank would hand back — this blocks laundering item state through the bank
+         * (deposit rotten food, withdraw fresh).
+         * This list extends the datapack tag {@code banksystem:deposit_gated_components}
+         * (see {@code data/banksystem/tags/data_component_type/deposit_gated_components.json})
+         * and is meant for server admins who cannot ship a datapack.
+         * The list is synced to clients and forwarded to slave servers automatically.
+         */
+        public final Setting<List<String>> ADDITIONAL_DEPOSIT_GATED_COMPONENTS = registerSetting(
+                "ADDITIONAL_DEPOSIT_GATED_COMPONENTS",
+                new ArrayList<>(),
+                new TypeToken<List<String>>() {}.getType());
 
 
         public final List<ItemStack> INITIAL_ALLOWED_ITEMS = List.of(

@@ -47,4 +47,8 @@ public class BankSystemTestCategories {
     public static final TestCategory DATABASE = new TestCategory(
             "banksystem", "database", "SQL balance history persistence tests",
             TestCategory.ServerType.MASTER_ONLY, false);
+
+    public static final TestCategory ITEM_ID = new TestCategory(
+            "banksystem", "item_id", "ItemID identity and volatile-component normalization tests",
+            TestCategory.ServerType.MASTER_ONLY, true);
 }

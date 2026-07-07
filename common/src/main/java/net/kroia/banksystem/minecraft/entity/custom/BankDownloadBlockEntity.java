@@ -15,6 +15,7 @@ import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.entity.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.networking.entity.UpdateBankDownloadBlockEntityPacket;
+import net.kroia.banksystem.util.ContainerItemInsertion;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.core.BlockPos;
@@ -614,43 +615,36 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         return result;
     }
 
+    /**
+     * Materializes up to {@code amountToFill} withdrawn items into the block inventory and
+     * returns how many were actually placed (the remainder stays locked in the bank and is
+     * unlocked by the caller).
+     * <p>
+     * Placement must NOT merge by ItemID equality: identity deliberately ignores
+     * volatile/deposit-gated components, so an ItemID-equal stack in a slot can still be
+     * component-distinct (e.g. spoiled food) — merging onto it would silently rewrite the
+     * withdrawn items' state. {@link ContainerItemInsertion} merges only into
+     * component-equal stacks ({@code ItemStack.isSameItemSameComponents}) and places full
+     * template copies into empty slots (the previous {@code new ItemStack(item, count)}
+     * dropped the template's data components entirely).
+     */
     private int tryFillInventory(ItemID item, int amountToFill)
     {
         if(item == null || amountToFill <= 0)
             return 0;
-
-        ItemStack exampleStack = item.getStack();
-        if(exampleStack == null || exampleStack.isEmpty())
-            return 0;
-
-        int stackSize = exampleStack.getMaxStackSize();
-        int filledAmount = 0;
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
-            ItemStack stack = inventory.getItem(i);
-            if (ItemID.of(stack).equals(item)) {
-                //if (stack.isDamaged() || stack.isEnchanted())
-                //    continue;
-                int fillInStackAmount = stackSize - stack.getCount();
-                int amountToFillInStack = Math.min(fillInStackAmount, amountToFill);
-                if (amountToFillInStack > 0) {
-                    stack.grow(amountToFillInStack);
-                    filledAmount += amountToFillInStack;
-                    amountToFill -= amountToFillInStack;
-                }
-            } else if (stack.isEmpty()) {
-                int amountToFillInStack = Math.min(stackSize, amountToFill);
-                if (amountToFillInStack > 0) {
-                    inventory.setItem(i, new ItemStack(exampleStack.getItem(), amountToFillInStack));
-                    filledAmount += amountToFillInStack;
-                    amountToFill -= amountToFillInStack;
-                }
-            }
-            if(amountToFill <= 0)
-                break;
-        }
-        return filledAmount;
+        return (int) ContainerItemInsertion.insertWithdrawnItems(inventory, item, amountToFill);
     }
 
+    /**
+     * Counts how many items of the given ItemID the block inventory holds, to decide how
+     * far a withdraw order is from its target amount.
+     * <p>
+     * ItemID equality is intentional here: this is a ledger-style quantity check, not
+     * physical stack placement. Component-distinct variants that share the ItemID (e.g. a
+     * spoiled stack next to fresh ones) count toward the target — consistent with the
+     * bank's identity semantics, and it prevents the block from endlessly topping up a
+     * container that already holds the target quantity in "other-state" stacks.
+     */
     private int countItemsInInventory(ItemID itemID)
     {
         int count = 0;

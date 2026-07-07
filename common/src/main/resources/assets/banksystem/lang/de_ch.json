@@ -136,6 +136,7 @@
   "message.banksystem.bank_already_exists": "{user_name} het bereits es Bankkonto für {item_name}",
   "message.banksystem.money_bank_access_help": "Mit em Bank Terminal block chasch du uf dis Bankkonto zuegrife\nOder mit em Befehl /bank.",
 
+  "message.banksystem.deposit_rejected_item_condition": "De Zuestand vo {item_name} verhinderet s lagere i de Bank",
   "message.banksystem.item_not_allowed": "Es isch nöd erlaubt {item_name} i de Bank z lagere",
   "message.banksystem.item_not_allowed_failed": "S lagere vo {item_name} cha nöd verbotte werde",
   "message.banksystem.item_now_allowed": "{item_name} cha ab ez i dä Bank gelagert werden.\nDie chlinst möglich Mängi wo glageret werde cha isch {amount}",

@@ -59,7 +59,9 @@ public class ItemID implements ServerSaveable {
     }
     public void tryUpdateNameCache()
     {
-        ItemStack stack = getStack();
+        // Read-only access: the template is only inspected, never mutated,
+        // so the defensive copy of getStack() is not needed here.
+        ItemStack stack = getStackTemplate();
         if(stack.isEmpty() || stack.getItem() == Items.AIR) {
             name_cache = String.valueOf(id);
             return;
@@ -160,14 +162,36 @@ public class ItemID implements ServerSaveable {
         return id;
     }
 
+    /**
+     * Returns a <b>defensive copy</b> of the template stack registered for this ItemID.
+     * Callers may freely mutate the result (set counts, apply components, ...).
+     * Aliased IDs (merged during volatile-component migration) resolve to their canonical entry.
+     *
+     * @return a copy of the registered template, or {@link ItemStack#EMPTY} if unknown
+     */
     public @NotNull ItemStack getStack() {
         return ItemIDManager.getItemStack(this);
     }
+
+    /**
+     * Returns the <b>live template stack</b> for this ItemID without copying.
+     * <p>
+     * <b>Read-only!</b> Never mutate the returned stack — it is the registry's internal
+     * template. Only use this on hot paths (e.g. per-frame rendering) where the defensive
+     * copy of {@link #getStack()} would cause needless allocations.
+     *
+     * @return the live template stack, or {@link ItemStack#EMPTY} if unknown
+     */
+    public @NotNull ItemStack getStackTemplate() {
+        return ItemIDManager.getItemStackTemplate(this);
+    }
+
     public @NotNull String getName() {
         if(name_cache != null)
             return name_cache;
 
-        ItemStack stack = getStack();
+        // Read-only access, no copy needed.
+        ItemStack stack = getStackTemplate();
         if(stack.isEmpty()) {
             name_cache = String.valueOf(id);
             return name_cache;
@@ -181,7 +205,8 @@ public class ItemID implements ServerSaveable {
         return name_cache;
     }
     public boolean isAir() {
-        ItemStack stack = getStack();
+        // Read-only access, no copy needed.
+        ItemStack stack = getStackTemplate();
         return stack.isEmpty() || stack.is(Items.AIR);
     }
 
@@ -215,7 +240,8 @@ public class ItemID implements ServerSaveable {
     public boolean isValid() {
         if(id == INVALID_ID.id)
             return false;
-        ItemStack stack = getStack();
+        // Read-only access, no copy needed.
+        ItemStack stack = getStackTemplate();
         return !stack.isEmpty();
     }
 

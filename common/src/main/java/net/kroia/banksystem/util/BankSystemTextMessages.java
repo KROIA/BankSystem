@@ -305,6 +305,17 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
+    private static final Component DEPOSIT_REJECTED_ITEM_CONDITION = Component.translatable(prefix+"deposit_rejected_item_condition");
+    /**
+     * Message shown when the deposit gate refuses an item because its state-gated
+     * components (e.g. spoiled food) don't match what the bank would hand back.
+     */
+    public static String getDepositRejectedItemConditionMessage(String itemName)
+    {
+        String msg = DEPOSIT_REJECTED_ITEM_CONDITION.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
     private static final Component ITEM_NOT_ALLOWED_FAILED = Component.translatable(prefix+"item_not_allowed_failed");
     public static String getItemNotAllowedFailedMessage(String itemName)
     {

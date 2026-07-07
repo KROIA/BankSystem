@@ -16,7 +16,9 @@ import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ContainerItemInsertion;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.VolatileItemComponents;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.persistence.ServerSaveable;
@@ -365,6 +367,20 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         // Only counts items that are not damaged or enchanted
         public CompletableFuture<HashMap<ItemID, Long>> getItemCount()
         {
+            return getItemCount((List<ItemStack>) null);
+        }
+
+        /**
+         * Counts the depositable items in this inventory, grouped by ItemID.
+         * Only counts items that are not damaged or enchanted and that pass the
+         * deposit gate (see {@link VolatileItemComponents#isDepositEquivalent}).
+         *
+         * @param rejectedDeposits when non-null, receives the stacks that were refused
+         *                         by the deposit gate so the caller can inform the player
+         *                         (rejections must never be silent)
+         */
+        public CompletableFuture<HashMap<ItemID, Long>> getItemCount(@Nullable List<ItemStack> rejectedDeposits)
+        {
             CompletableFuture<HashMap<ItemID, Long>> futureResult = new CompletableFuture<>();
 
             List<ItemStack> stacks = new ArrayList<>();
@@ -383,6 +399,17 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 if(itemID == null || !itemID.isValid())
                 {
                     warn("ItemStack: "+stack+" is not registered for ItemID. Skipping this item");
+                    continue;
+                }
+
+                // Deposit gate: this count is what "send items to bank" turns into credit.
+                // ItemID identity ignores state-gated components (e.g. tfc:food), so without
+                // this per-stack check a spoiled item would be credited as — and later
+                // withdrawn as — a fresh one (state laundering). Rejected stacks stay in the
+                // terminal inventory; the caller reports them to the player.
+                if (!VolatileItemComponents.isDepositEquivalent(stack, itemID)) {
+                    if (rejectedDeposits != null)
+                        rejectedDeposits.add(stack);
                     continue;
                 }
 
@@ -449,44 +476,24 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             return count;
         }
 
-        // Only adds items that are not damaged or enchanted
+        /**
+         * Materializes {@code amount} withdrawn items of the given ItemID into this
+         * inventory and returns how many were actually placed (the caller keeps the
+         * remainder in the bank).
+         * <p>
+         * Placement must NOT merge by ItemID equality: identity deliberately ignores
+         * volatile/deposit-gated components (see {@link VolatileItemComponents}), so an
+         * ItemID-equal stack in a slot can still be component-distinct (e.g. spoiled food)
+         * — merging onto it would silently rewrite the withdrawn items' state.
+         * {@link ContainerItemInsertion} merges only into component-equal stacks (the
+         * game's own {@code ItemStack.isSameItemSameComponents}, which mods like TFC hook)
+         * and uses empty slots otherwise. Damaged/enchanted stacks are inherently excluded
+         * from merging: damage and enchantments are data components, so they never compare
+         * equal to an undamaged/unenchanted withdrawal stack.
+         */
         public long addItem(ItemID itemID, long amount)
         {
-            if(amount <=0)
-                return 0;
-            ItemStack templateStack = itemID.getStack();
-            if (templateStack == null || templateStack.isEmpty()) return 0;
-            long orgAmount = amount;
-            for (int i = 0; i < this.getContainerSize(); i++) {
-                if(amount <= 0)
-                    return orgAmount;
-                ItemStack stack = this.getItem(i);
-
-                // If the slot is empty, it has space
-                if (stack.isEmpty()) {
-                    ItemStack itemStack = templateStack.copy();
-                    int stackSize = (int)Math.min(amount, itemStack.getMaxStackSize());
-                    amount -= stackSize;
-                    itemStack.setCount(stackSize);
-                    this.setStackInSlot(i, itemStack);
-                    continue;
-                }else if(stack.isDamaged() || stack.isEnchanted())
-                    continue;
-
-                // Get the item's ResourceLocation
-                ItemID stackItemID = ItemID.of(stack);
-
-                // Compare the ResourceLocation to the provided string
-                if (stackItemID.isValid() && stackItemID.equals(itemID)) {
-                    // Check if the stack can fit the amount
-                    int freeSpace = stack.getMaxStackSize() - stack.getCount();
-                    int stackSize = (int)Math.min(amount, freeSpace);
-                    stack.setCount(stack.getCount() + stackSize);
-                    amount -= stackSize;
-                }
-            }
-            setChanged();
-            return orgAmount - amount;
+            return ContainerItemInsertion.insertWithdrawnItems(this, itemID, amount);
         }
 
         // Only removes items that are not damaged or enchanted
@@ -508,6 +515,13 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
                 // Compare the ResourceLocation to the provided string
                 if (_itemID.equals(itemID)) {
+                    // Deposit gate (mirror of getItemCount): identity ignores gated
+                    // components, so a gate-rejected stack (e.g. spoiled food) resolves to
+                    // the same ItemID as an accepted fresh one. Without this check the
+                    // rejected stack could be consumed as payment for the fresh stack's
+                    // credit — laundering it after all. Rejected stacks are never removed.
+                    if (!VolatileItemComponents.isDepositEquivalent(stack, _itemID))
+                        continue;
                     // Check if the stack can fit the amount
                     int stackSize = (int)Math.min(amount, stack.getCount());
                     stack.shrink(stackSize);
@@ -892,10 +906,25 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
         PlayerData playerData = getPlayerData(playerID);
         TerminalInventory inventory = playerData.getInventory();
-        CompletableFuture<HashMap<ItemID, Long>> itemsFuture = inventory.getItemCount();
+        // Credit boundary: physical stacks in the terminal become bank credit here.
+        // The deposit gate inside getItemCount filters out stacks whose state-gated
+        // components (e.g. spoiled tfc:food) don't match a fresh withdrawal, blocking
+        // the deposit-rotten/withdraw-fresh laundering exploit.
+        List<ItemStack> rejectedDeposits = new ArrayList<>();
+        CompletableFuture<HashMap<ItemID, Long>> itemsFuture = inventory.getItemCount(rejectedDeposits);
 
         itemsFuture.thenAccept((items)->
         {
+            // Gate rejections must never be silent: tell the player which items stay in
+            // the terminal because their condition prevents banking them.
+            if (!rejectedDeposits.isEmpty()) {
+                Set<String> rejectedNames = new LinkedHashSet<>();
+                for (ItemStack rejected : rejectedDeposits)
+                    rejectedNames.add(rejected.getHoverName().getString());
+                for (String itemName : rejectedNames)
+                    ServerPlayerUtilities.printToClientConsole(playerID,
+                            BankSystemTextMessages.getDepositRejectedItemConditionMessage(itemName));
+            }
             CompletableFuture<IAsyncBankAccount> bankAccountFuture = bankManager.getBankAccountAsync(accountNr);
             bankAccountFuture.thenAccept(bankAccount -> {
                 if (bankAccount == null) {

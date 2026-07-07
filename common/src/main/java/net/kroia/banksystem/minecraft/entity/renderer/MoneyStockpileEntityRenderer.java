@@ -70,10 +70,10 @@ public class MoneyStockpileEntityRenderer implements BlockEntityRenderer<MoneySt
             ItemID itemID = entry.getKey();
             MoneyStockpileBlockEntity.ItemData itemData = entry.getValue();
 
-            // Create a stack from the item ID
-            //ItemStack stack = itemID.getStack();
-            // For now, we use a placeholder stack
-            ItemStack stack = itemID.getStack();
+            // Create a stack from the item ID.
+            // Hot path (runs every frame): use the read-only template instead of the
+            // defensive copy of getStack() — the stack is only rendered, never mutated.
+            ItemStack stack = itemID.getStackTemplate();
             boolean isBankNote = false;
             int gridIncrement = 1;
             float xOffset = 0;
