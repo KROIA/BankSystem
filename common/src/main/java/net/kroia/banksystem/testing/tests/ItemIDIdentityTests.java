@@ -4,6 +4,7 @@ import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.VolatileItemComponents;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -20,6 +21,7 @@ import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -53,6 +55,8 @@ public class ItemIDIdentityTests extends TestSuite {
         addTest("alias_resolution_after_merge", this::testAliasResolutionAfterMerge);
         addTest("getItemID_does_not_mutate_argument", this::testGetItemIDDoesNotMutateArgument);
         addTest("getStack_returns_defensive_copy", this::testGetStackReturnsDefensiveCopy);
+        addTest("load_resolves_name_when_registry_ready", this::testLoadResolvesNameWhenRegistryReady);
+        addTest("placeholder_name_self_heals", this::testPlaceholderNameSelfHeals);
     }
 
     @Override
@@ -243,5 +247,76 @@ public class ItemIDIdentityTests extends TestSuite {
         r = assertFalse("template components unaffected by caller mutation", again.has(DataComponents.CUSTOM_DATA));
         if (!r.passed()) return r;
         return pass("getStack() returns defensive copies; the registry template is protected");
+    }
+
+    /**
+     * Regression (numeric-name bug): an ItemID loaded from NBT while the ItemIDManager is
+     * already populated must resolve its real registry name immediately instead of caching
+     * the numeric placeholder forever. Previously load() unconditionally wrote
+     * {@code String.valueOf(id)} into the name cache and getName() never re-resolved, so every
+     * persisted ItemID reported a bare number as its name on the server (surfaced as numeric
+     * command tab suggestions).
+     */
+    private TestResult testLoadResolvesNameWhenRegistryReady() {
+        ItemID paperId = ItemIDManager.getItemID(new ItemStack(Items.PAPER));
+        if (!paperId.isValid())
+            return fail("Plain paper is not registered — default ItemIDs missing on this server?");
+        CompoundTag tag = new CompoundTag();
+        paperId.save(tag);
+
+        ItemID loaded = ItemID.createFromTag(tag);
+        TestResult r = assertTrue("loaded ItemID is valid", loaded.isValid());
+        if (!r.passed()) return r;
+        r = assertFalse("loaded name is not the numeric placeholder",
+                String.valueOf(loaded.getShort()).equals(loaded.getName()));
+        if (!r.passed()) return r;
+        return assertEquals("loaded ItemID resolves the real registry name",
+                ItemUtilities.getItemIDStr(Items.PAPER), loaded.getName());
+    }
+
+    /**
+     * Regression (numeric-name bug, lazy self-heal): an ItemID loaded from NBT while its id is
+     * <b>not yet resolvable</b> must report the numeric placeholder, but heal to the real name
+     * on the next {@link ItemID#getName()} call once resolution becomes possible. Resolution is
+     * made possible here through the alias table ({@link ItemIDManager#applyAliases}), which
+     * also proves that alias-resolved (merged) IDs heal their names.
+     * <p>
+     * Note: leaves one synthetic alias entry (unused id → paper) in the live alias table of the
+     * dev/test server — harmless, it just resolves to paper if ever referenced.
+     */
+    private TestResult testPlaceholderNameSelfHeals() {
+        ItemID paperId = ItemIDManager.getItemID(new ItemStack(Items.PAPER));
+        if (!paperId.isValid())
+            return fail("Plain paper is not registered — default ItemIDs missing on this server?");
+
+        // Pick a short that is neither registered nor referenced by the alias table.
+        short maxId = 0;
+        for (ItemID id : ItemIDManager.getItemIDMap().keySet())
+            maxId = (short) Math.max(maxId, id.getShort());
+        for (Map.Entry<ItemID, ItemID> e : ItemIDManager.getItemIDAliasMap().entrySet()) {
+            maxId = (short) Math.max(maxId, e.getKey().getShort());
+            maxId = (short) Math.max(maxId, e.getValue().getShort());
+        }
+        if (maxId > Short.MAX_VALUE - 200)
+            return fail("No free ItemID short available for the self-heal test");
+        short unusedId = (short) (maxId + 100);
+
+        CompoundTag tag = new CompoundTag();
+        ItemID unused = new ItemID(unusedId, null);
+        unused.save(tag);
+        ItemID loaded = ItemID.createFromTag(tag);
+
+        TestResult r = assertEquals("unresolvable ItemID reports the numeric placeholder",
+                String.valueOf(unusedId), loaded.getName());
+        if (!r.passed()) return r;
+
+        // Make the id resolvable via the alias table — exactly what the volatile-component
+        // merge does for IDs that were collapsed into a canonical one.
+        ItemIDManager.applyAliases(Map.of(new ItemID(unusedId, null), paperId));
+
+        r = assertEquals("placeholder self-heals to the real name once resolvable",
+                ItemUtilities.getItemIDStr(Items.PAPER), loaded.getName());
+        if (!r.passed()) return r;
+        return pass("ItemID name placeholder self-heals after late resolution");
     }
 }
