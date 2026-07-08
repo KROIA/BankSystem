@@ -33,6 +33,8 @@ public class ItemIDManager implements ServerSaveable {
 
     private static final ConcurrentHashMap<ItemID, ItemStack> itemIDMap = new ConcurrentHashMap<>();
 
+    // INVARIANT: source shorts MUST NOT be present in itemIDMap — write-side enforced
+    // via putAlias(...); violations logged with stack trace and rejected.
     /**
      * Alias table: maps obsolete ItemIDs to their canonical replacement.
      * Entries are created by {@link #renormalizeAndMerge()} when several stored IDs collapse
@@ -42,6 +44,13 @@ public class ItemIDManager implements ServerSaveable {
      * {@link #getItemStack(ItemID)} / {@link #getItemStackTemplate(ItemID)}.
      * Alias chains are always flattened: every value in this map is a canonical ID
      * that is present in {@link #itemIDMap}.
+     * <p>
+     * <b>Write invariant (Task #14):</b> for every entry {@code source -> target}, the
+     * {@code source} short MUST NOT also be present in {@link #itemIDMap}. Every production
+     * write path funnels through {@link #putAlias(ItemID, ItemID)} which enforces this
+     * invariant, logs an ERROR with the calling stack trace on violation, and rejects the
+     * insertion. Removals are safe (see {@link #repairCorruptAliasEntries()}) and go
+     * through direct {@code remove(...)} calls — the invariant only constrains inserts.
      */
     private static final ConcurrentHashMap<ItemID, ItemID> itemIDAliasMap = new ConcurrentHashMap<>();
 
@@ -246,6 +255,12 @@ public class ItemIDManager implements ServerSaveable {
      * Adopts alias entries received from the master/server sync.
      * Existing local aliases are kept and updated; entries are never removed here
      * (a full re-sync happens on every player join / slave connect).
+     * <p>
+     * Every entry is inserted via {@link #putAlias(ItemID, ItemID)} so the write-side
+     * invariant is checked even for aliases arriving from a remote source. If the master
+     * ever produces a corrupt alias (source also present in {@link #itemIDMap}), the
+     * rejection is logged with a stack trace and the slave/client stays consistent — a
+     * corrupt state does not silently propagate across the network.
      *
      * @param aliases alias entries (merged ID → canonical ID) from a sync packet
      */
@@ -253,7 +268,110 @@ public class ItemIDManager implements ServerSaveable {
     {
         if(aliases == null || aliases.isEmpty())
             return;
-        itemIDAliasMap.putAll(aliases);
+        for(Map.Entry<ItemID, ItemID> entry : aliases.entrySet())
+        {
+            putAlias(entry.getKey(), entry.getValue());
+        }
+    }
+
+    /**
+     * Invariant-checked insertion into {@link #itemIDAliasMap} — the single sanctioned
+     * write path for the alias table (Task #14).
+     * <p>
+     * <b>Invariant:</b> for every alias {@code source -> target}, the {@code source} short
+     * MUST NOT also be present in {@link #itemIDMap}. Historically an ID present in BOTH
+     * maps at once broke {@link #resolveAlias(ItemID)}'s one-hop pre-Fix-C behavior and
+     * cascaded into misrouted bank reads (2,809 such entries surfaced in a user's test
+     * world, 2026-07-08). {@link #repairCorruptAliasEntries()} heals such states at load
+     * time; this helper prevents new ones from being created in the first place.
+     * <p>
+     * <b>On violation:</b> an ERROR is logged with the source/target shorts, the source's
+     * cached registry name (or {@code <unknown>} if the name has not resolved yet), the
+     * current sizes of both maps, and a snapshot of the calling stack trace. The
+     * insertion is <b>rejected</b> — {@code itemIDAliasMap} is left unchanged. A missing
+     * alias is always safer than a corrupt one; the caller receives {@code false} so it
+     * can adjust behavior if desired, but the default "ignore the return value" behavior
+     * is safe (a subsequent access to the source ID will resolve to itself instead of
+     * misrouting to an unrelated canonical).
+     * <p>
+     * <b>Not used by</b> {@link #repairCorruptAliasEntries()} — that pass only ever
+     * REMOVES entries (via direct {@code .remove(...)} calls), so the write-side
+     * invariant is trivially preserved. The repair pass and this helper form the two
+     * ends of the invariant's enforcement: the helper prevents new corrupt entries, the
+     * repair pass heals pre-existing ones surfaced from persisted world data.
+     * <p>
+     * <b>Test-only bypass:</b> {@link #putAliasRaw_forTesting(ItemID, ItemID)} inserts
+     * without the guard so tests can install intentional invariant violations for the
+     * repair-pass tests. Never call it from production code.
+     *
+     * @param source the alias's source ItemID (must not already be a key in
+     *               {@link #itemIDMap}); not {@code null}
+     * @param target the alias's target (canonical) ItemID; not {@code null}
+     * @return {@code true} if the alias was inserted; {@code false} if the invariant
+     *         was violated and the insertion was rejected (an ERROR log was emitted with
+     *         the calling stack trace)
+     */
+    public static boolean putAlias(@NotNull ItemID source, @NotNull ItemID target) {
+        if (itemIDMap.containsKey(source)) {
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                String sourceName = safeItemIDName(source);
+                String targetName = safeItemIDName(target);
+                // Snapshot the calling stack trace — the whole point of this guard is
+                // that a future occurrence produces an actionable trace so the trigger
+                // can be located. Pass the Throwable to LOGGER.error(String, Throwable)
+                // so slf4j formats the frames the same way as a real exception.
+                Throwable trace = new Throwable(
+                        "[ItemIDManager] putAlias invariant-violation stack trace (not thrown)");
+                BACKEND_INSTANCES.LOGGER.error(
+                        "[ItemIDManager] Rejected alias insertion — invariant violation: "
+                                + "source short is already present in itemIDMap. "
+                                + "source=#" + source.getShort() + " (" + sourceName + "), "
+                                + "target=#" + target.getShort() + " (" + targetName + "), "
+                                + "itemIDMap.size=" + itemIDMap.size() + ", "
+                                + "itemIDAliasMap.size=" + itemIDAliasMap.size()
+                                + ". No entry was added — the source ID will resolve to "
+                                + "itself. Task #13's repairCorruptAliasEntries() is the "
+                                + "sanctioned remover of pre-existing corrupt entries.",
+                        trace);
+            }
+            return false;
+        }
+        itemIDAliasMap.put(source, target);
+        return true;
+    }
+
+    /**
+     * Test-only escape hatch: inserts into {@link #itemIDAliasMap} <b>without</b> the
+     * {@link #putAlias(ItemID, ItemID)} invariant guard. Enables tests that must install
+     * an intentional invariant-violating alias entry (e.g. the repair-pass regression
+     * tests seed the exact corrupt state they then verify the repair pass heals).
+     * <p>
+     * Never call in production — this is the deliberate bypass of the Task #14 write-side
+     * guard. All production write paths must go through {@link #putAlias(ItemID, ItemID)}.
+     *
+     * @param source the alias's source ItemID
+     * @param target the alias's target (canonical) ItemID
+     */
+    public static void putAliasRaw_forTesting(@NotNull ItemID source, @NotNull ItemID target) {
+        itemIDAliasMap.put(source, target);
+    }
+
+    /**
+     * Resolves an ItemID to a human-readable name for log messages, falling back to
+     * {@code <unknown>} when the cached name is empty or is only the numeric-short
+     * placeholder (an ID whose registry name has not resolved yet — see
+     * {@link ItemID#getName()}). Never throws.
+     */
+    private static String safeItemIDName(ItemID id) {
+        if (id == null) return "<null>";
+        try {
+            String name = id.getName();
+            if (name == null || name.isEmpty() || name.equals(String.valueOf(id.getShort())))
+                return "<unknown>";
+            return name;
+        } catch (Throwable t) {
+            return "<unknown>";
+        }
     }
 
     public static CompletableFuture<ItemID> registerItemStackServerSide(@NotNull ItemStack itemStack)
@@ -771,13 +889,20 @@ public class ItemIDManager implements ServerSaveable {
         }
 
         // Restore previously persisted aliases (merged IDs from an earlier migration).
+        // Every entry goes through putAlias() (Task #14) — the load path is the first place
+        // a persisted invariant violation can surface (the user's test world had 2,809 such
+        // entries). Corrupt entries are logged with a stack trace + rejected at load time,
+        // so the in-memory alias map is guaranteed consistent before renormalizeAndMerge()
+        // and repairCorruptAliasEntries() run below.
+        int loadTimeGuardRejections = 0;
         ListTag aliasListTag = tag.getList("itemIDAliases", Tag.TAG_COMPOUND);
         for(Tag tagElement : aliasListTag)
         {
             CompoundTag aliasTag = (CompoundTag)tagElement;
             if(aliasTag == null || !aliasTag.contains("from") || !aliasTag.contains("to"))
                 continue;
-            itemIDAliasMap.put(new ItemID(aliasTag.getShort("from")), new ItemID(aliasTag.getShort("to")));
+            if(!putAlias(new ItemID(aliasTag.getShort("from")), new ItemID(aliasTag.getShort("to"))))
+                loadTimeGuardRejections++;
         }
 
         // Restore the monotonic short allocation counter (Task #11). Two branches:
@@ -814,7 +939,26 @@ public class ItemIDManager implements ServerSaveable {
         // orphan aliases whose chain terminates outside the registry, cycles). The count is
         // stashed for BankSystemDataHandler.load_itemIDs() to trigger a one-shot save when
         // any repair happened, so the cleaned-up state is durable on the very next tick.
-        lastLoadRepairCount = repairCorruptAliasEntries();
+        int repairPassCount = repairCorruptAliasEntries();
+
+        // Task #14 audit trail: pair the write-side load-time rejection count with the
+        // repair-pass count. When the load-time guard rejected N invariant-violating entries
+        // from the persisted alias table, they never entered itemIDAliasMap in the first
+        // place — repairCorruptAliasEntries() then finds them "already gone" and reports 0.
+        // Admins see BOTH counts side by side so it's clear that the corruption WAS detected
+        // (via the per-entry ERROR logs from putAlias) even though the repair-pass count is
+        // zero. Both counts feed the same durability trigger (BankSystemDataHandler reads
+        // lastLoadRepairCount to decide whether to persist the cleaned-up state
+        // immediately) — a load-time rejection means the on-disk file still contains the
+        // corrupt entry, so we need to save even when the repair pass had nothing to do.
+        if (loadTimeGuardRejections > 0 && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Load-time guard rejected "
+                    + loadTimeGuardRejections + " corrupt alias entries during this world load. "
+                    + "See preceding ERROR log(s) for per-entry stack traces. "
+                    + "Alias-table repair on the resulting state: " + repairPassCount
+                    + " total repaired.");
+        }
+        lastLoadRepairCount = repairPassCount + loadTimeGuardRejections;
 
         singlePlayerServerBackupOnPlayerLeave = null;
         singlePlayerServerAliasBackupOnPlayerLeave = null;
@@ -1004,8 +1148,15 @@ public class ItemIDManager implements ServerSaveable {
             if (newItemMap != null)
                 itemIDMap.putAll(newItemMap);
             itemIDAliasMap.clear();
-            if (newAliasMap != null)
-                itemIDAliasMap.putAll(newAliasMap);
+            if (newAliasMap != null) {
+                // Route alias entries through putAlias so the write-side guard is
+                // exercised for test snapshots too (Task #14). Snapshots taken from a
+                // live production registry are guaranteed consistent (the guard enforced
+                // it at write time), so every entry is accepted; a test that intentionally
+                // installs a corrupt alias must use putAliasRaw_forTesting instead.
+                for (Map.Entry<ItemID, ItemID> entry : newAliasMap.entrySet())
+                    putAlias(entry.getKey(), entry.getValue());
+            }
             nextShortCounter = Math.max(counter, 1);
         }
     }
@@ -1122,8 +1273,13 @@ public class ItemIDManager implements ServerSaveable {
                     for (ItemID id : group) {
                         if (id.equals(canonical))
                             continue;
+                        // Remove from the item map FIRST so the write-side invariant
+                        // (source-not-in-itemIDMap) holds when putAlias runs. If putAlias
+                        // ever refuses the insert here it means the invariant was already
+                        // broken by an earlier code path — the ERROR log carries the stack
+                        // trace so the leak can be traced (Task #14).
                         itemIDMap.remove(id);
-                        itemIDAliasMap.put(id, canonical);
+                        putAlias(id, canonical);
                         newAliases.put(id, canonical);
                         mergedCount++;
                     }

@@ -640,10 +640,12 @@ public class ItemIDIdentityTests extends TestSuite {
             if (bankOther.lockAmount(200L) != BankStatus.SUCCESS)
                 return fail("Could not lock part of the other bank's balance");
 
-            // Install alias AFTER both banks exist — do not consolidate. Seeds the exact
-            // invariant-violating state (source `other` is present in both itemIDMap and
-            // itemIDAliasMap) that Fix B's duplicate-balance summing compensates for.
-            ItemIDManager.applyAliases(Map.of(other, canonical));
+            // Install alias AFTER both banks exist — do not consolidate. Uses the raw
+            // bypass helper (Task #14) because "other" is registered in itemIDMap and
+            // applyAliases now routes through putAlias, which would (correctly) reject the
+            // invariant-violating entry this test intentionally seeds to prove Fix B's
+            // duplicate-balance summing.
+            ItemIDManager.putAliasRaw_forTesting(other, canonical);
 
             BankAccountData snapshot = serverAcc.getAccountData();
             TestResult r = assertNotNull("getAccountData returned non-null snapshot", snapshot);

@@ -95,6 +95,10 @@ public class ItemIDMergeGuardTests extends TestSuite {
         addTest("repair_breaks_cycle", this::testRepairBreaksCycle);
         addTest("repair_is_idempotent", this::testRepairIsIdempotent);
         addTest("v2_0_2_world_upgrades_cleanly", this::testV202WorldUpgradesCleanly);
+        // Task #14 write-side guard tests
+        addTest("putAlias_succeeds_when_source_not_in_map", this::testPutAliasSucceedsWhenSourceNotInMap);
+        addTest("putAlias_rejects_when_source_in_map", this::testPutAliasRejectsWhenSourceInMap);
+        addTest("renormalize_still_produces_aliases_via_guarded_path", this::testRenormalizeStillProducesAliasesViaGuardedPath);
     }
 
     @Override
@@ -555,7 +559,9 @@ public class ItemIDMergeGuardTests extends TestSuite {
         if (!canonical.isValid()) return fail("Could not register canonical template");
         // Install a bogus alias whose SOURCE key is the same as the canonical's short — this
         // is the invariant violation shape (source present in BOTH itemIDMap and itemIDAliasMap).
-        ItemIDManager.applyAliases(Map.of(canonical, canonical));
+        // Uses the raw bypass helper because applyAliases now routes through the Task #14
+        // putAlias guard, which would (correctly) reject this exact insertion.
+        ItemIDManager.putAliasRaw_forTesting(canonical, canonical);
         try {
             TestResult r = assertTrue("test precondition: alias installed",
                     ItemIDManager.getItemIDAliasMap().containsKey(canonical));
@@ -810,6 +816,130 @@ public class ItemIDMergeGuardTests extends TestSuite {
                 ItemIDManager.consumeLastLoadRepairCount();
             }
         }
+    }
+
+    // ========================================================================================
+    // Task #14 — Write-side invariant guard tests
+    // ========================================================================================
+
+    /**
+     * Positive path: {@link ItemIDManager#putAlias(ItemID, ItemID)} inserts the alias when
+     * the source ItemID is not present in {@code itemIDMap} (the invariant holds). Asserts
+     * the return value is {@code true} and the alias becomes visible in
+     * {@code itemIDAliasMap} with the correct target.
+     */
+    private TestResult testPutAliasSucceedsWhenSourceNotInMap() {
+        // Register B in itemIDMap so it's a real canonical target.
+        ItemID b = ItemIDManager.registerItemStackServerSide_direct(
+                paperWithCustomData("putAlias-success-" + UUID.randomUUID()));
+        if (!b.isValid()) return fail("Could not register target template B");
+        // Pick an unused short for A — must NOT be a key in itemIDMap.
+        short base = pickUnusedShortBase(1);
+        if (base < 0) return fail("No free short range available");
+        ItemID a = new ItemID(base, null);
+        try {
+            boolean inserted = ItemIDManager.putAlias(a, b);
+            TestResult r = assertTrue("putAlias returned true (invariant held, source not in itemIDMap)",
+                    inserted);
+            if (!r.passed()) return r;
+            Map<ItemID, ItemID> aliasSnapshot = ItemIDManager.getItemIDAliasMap();
+            r = assertTrue("alias entry A -> B is present in itemIDAliasMap",
+                    aliasSnapshot.containsKey(a));
+            if (!r.passed()) return r;
+            r = assertEquals("alias entry A -> B has correct target",
+                    b, aliasSnapshot.get(a));
+            if (!r.passed()) return r;
+            return pass("putAlias inserts alias when source is absent from itemIDMap");
+        } finally {
+            ItemIDManager.removeAliasEntries_forTesting(List.of(a));
+        }
+    }
+
+    /**
+     * Rejection path: {@link ItemIDManager#putAlias(ItemID, ItemID)} refuses the insertion
+     * when the source is already present in {@code itemIDMap} (invariant violation) —
+     * returns {@code false} and leaves {@code itemIDAliasMap} unchanged. The ERROR log
+     * emission cannot be captured programmatically (no test hook on {@code BankSystemLogger}),
+     * so this test asserts the observable map-state contract; the ERROR log content is
+     * verified visually against the expected format documented on {@code putAlias}.
+     */
+    private TestResult testPutAliasRejectsWhenSourceInMap() {
+        // Register A in itemIDMap — A is now a real canonical, so putAlias(A, ...) MUST
+        // reject (source would be in both maps).
+        ItemID a = ItemIDManager.registerItemStackServerSide_direct(
+                paperWithCustomData("putAlias-reject-" + UUID.randomUUID()));
+        if (!a.isValid()) return fail("Could not register source template A");
+        // B is any other ItemID — doesn't need to be in the map for the rejection logic.
+        short base = pickUnusedShortBase(1);
+        if (base < 0) return fail("No free short range available");
+        ItemID b = new ItemID(base, null);
+        boolean aliasWasPresentBefore = ItemIDManager.getItemIDAliasMap().containsKey(a);
+        try {
+            boolean inserted = ItemIDManager.putAlias(a, b);
+            TestResult r = assertFalse("putAlias returned false (invariant violated: source in itemIDMap)",
+                    inserted);
+            if (!r.passed()) return r;
+            // Post-condition: the alias-map state for A is exactly what it was before.
+            boolean aliasIsPresentAfter = ItemIDManager.getItemIDAliasMap().containsKey(a);
+            r = assertEquals("alias entry for A was NOT inserted (map state unchanged)",
+                    aliasWasPresentBefore, aliasIsPresentAfter);
+            if (!r.passed()) return r;
+            r = assertTrue("A stays registered in itemIDMap (rejection does not touch itemIDMap)",
+                    ItemIDManager.getItemIDMap().containsKey(a));
+            if (!r.passed()) return r;
+            return pass("putAlias rejects insertion when source is present in itemIDMap");
+        } finally {
+            // Belt-and-suspenders: if the guard somehow accepted the insert, clean up.
+            ItemIDManager.removeAliasEntries_forTesting(List.of(a));
+        }
+    }
+
+    /**
+     * Sanity check that {@link ItemIDManager#renormalizeAndMerge(java.util.Collection)}
+     * still produces alias entries after being refactored to route through
+     * {@link ItemIDManager#putAlias(ItemID, ItemID)} (Task #14). Mirrors the setup used by
+     * {@link #testConfirmedMergeConsolidatesBankState()}: register two synthetic paper
+     * variants that collapse under a hypothetical {@code repair_cost}-volatile set, then
+     * assert the alias landed in {@code itemIDAliasMap} with the correct canonical target
+     * and that the merged source is no longer in {@code itemIDMap} (invariant preserved).
+     * <p>
+     * Applies a real merge to the live registry — same production-safe pattern as the
+     * other applied-merge tests; skips when {@code minecraft:repair_cost} is already
+     * volatile on this server.
+     */
+    private TestResult testRenormalizeStillProducesAliasesViaGuardedPath() {
+        List<String> realSet = VolatileItemComponents.getEffectiveComponentIds();
+        if (realSet.contains("minecraft:repair_cost"))
+            return pass("skipped: minecraft:repair_cost is already volatile on this server — "
+                    + "the collapse scenario cannot be constructed");
+        ItemID[] pair = registerRepairCostPair();
+        if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
+            return fail("failed to register the two synthetic templates as distinct IDs");
+        ItemID canonical = pair[0].getShort() < pair[1].getShort() ? pair[0] : pair[1];
+        ItemID alias = canonical.equals(pair[0]) ? pair[1] : pair[0];
+
+        // APPLY the merge under the explicitly grown set — the guarded putAlias inside
+        // renormalizeAndMerge should accept the insert (source is removed from itemIDMap
+        // right before the putAlias call, so the invariant holds at insertion time).
+        ItemIDManager.renormalizeAndMerge(withRepairCost(realSet));
+
+        Map<ItemID, ItemID> aliasSnapshot = ItemIDManager.getItemIDAliasMap();
+        TestResult r = assertTrue("alias entry landed in itemIDAliasMap after merge",
+                aliasSnapshot.containsKey(alias));
+        if (!r.passed()) return r;
+        r = assertEquals("alias entry points at the canonical (lowest-short) target",
+                canonical, aliasSnapshot.get(alias));
+        if (!r.passed()) return r;
+        // Invariant proof: the alias's source short must NOT still be in itemIDMap —
+        // that would mean the guarded path failed and the invariant is broken.
+        r = assertFalse("alias source is NOT in itemIDMap (invariant preserved)",
+                ItemIDManager.getItemIDMap().containsKey(alias));
+        if (!r.passed()) return r;
+        // Canonical must remain in itemIDMap (the surviving entry).
+        r = assertTrue("canonical stays in itemIDMap after merge",
+                ItemIDManager.getItemIDMap().containsKey(canonical));
+        if (!r.passed()) return r;
+        return pass("renormalizeAndMerge produces aliases through the guarded putAlias path");
     }
 
     /**
