@@ -370,7 +370,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         setBlockState_receiving(this.blockIsPowered);
         if(this.blockIsPowered)
         {
-            this.tickCounter = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get();
+            this.tickCounter = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.get();
         }
     }
 
@@ -386,7 +386,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                 }
                 if(this.receivingEnabled)
                 {
-                    this.tickCounter = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get();
+                    this.tickCounter = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.get();
                 }
             }
         }

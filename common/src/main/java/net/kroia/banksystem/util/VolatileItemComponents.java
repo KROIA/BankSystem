@@ -47,8 +47,12 @@ import java.util.Set;
  * <ol>
  *     <li><b>Datapack tags</b> over the {@code minecraft:data_component_type} registry:
  *         {@code banksystem:volatile_item_components} and
- *         {@code banksystem:deposit_gated_components}
- *         ({@code data/<namespace>/tags/data_component_type/*.json}).
+ *         {@code banksystem:deposit_gated_components}.
+ *         To extend these tags, a datapack must place its tag file under BankSystem's
+ *         namespace — {@code data/banksystem/tags/data_component_type/volatile_item_components.json}
+ *         or {@code data/banksystem/tags/data_component_type/deposit_gated_components.json} —
+ *         <b>not</b> under the pack's own namespace (a tag in another namespace defines a
+ *         different tag that BankSystem never reads).
  *         BankSystem ships these tags with <b>optional</b> entries for known offenders;
  *         modpack authors extend them with their own datapacks. Vanilla tag syncing
  *         distributes the tags to clients automatically.</li>
