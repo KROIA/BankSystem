@@ -9,6 +9,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -165,6 +166,61 @@ public class BalanceHistoryManager implements ITableManager<BalanceHistoryRecord
         } catch (SQLException e) {
             return null;
         }
+    }
+
+    /**
+     * Batch-deletes every balance-history row whose {@code item_id} column matches one of the
+     * given ItemID shorts. Intended for the merge-consolidation path in
+     * {@link net.kroia.banksystem.util.ItemIDManager#consolidatePendingMerges()}: when several
+     * ItemIDs are collapsed into a canonical one, the alias shorts leave the registry and their
+     * chart-visible history is stale — a chart lookup by the deleted alias short would still
+     * find rows that no longer correspond to a live identity.
+     * <p>
+     * Runs async on the single-threaded DB executor and commits the pending transaction, mirroring
+     * the connection lifecycle used by {@link #save} / {@link #removeHistory}. Shorts are bound
+     * via {@code PreparedStatement.setShort} (no string concatenation into SQL) so any short
+     * value is safely passed.
+     * <p>
+     * <b>Master-only.</b> The balance-history DB lives on the master server; slave servers and
+     * clients never construct a {@code BalanceHistoryManager} (see
+     * {@code BankSystemModBackend#onServerStart}). Callers on non-master paths must skip this
+     * call — the guard in {@code consolidatePendingMerges()} already does so before it reaches
+     * here.
+     * <p>
+     * Empty collection is a no-op that returns a completed future — no SQL executed.
+     *
+     * @param aliasShorts ItemID shorts whose history rows should be purged.
+     *                    Null / empty → no-op.
+     * @return future that completes once the batch delete has been committed (or immediately for
+     *         a no-op input); completes exceptionally only on unrecoverable SQL errors.
+     */
+    public CompletableFuture<Void> deleteAllRowsForItemIDs(Collection<Short> aliasShorts) {
+        if (aliasShorts == null || aliasShorts.isEmpty())
+            return CompletableFuture.completedFuture(null);
+        // Copy defensively — the caller's collection could be mutated between now and the async
+        // DB thread executing the delete (the shorts are drained from ItemIDManager's pending
+        // consolidation map on the server thread, which is a different thread from the DB one).
+        final List<Short> shorts = new ArrayList<>(aliasShorts);
+        return CompletableFuture.runAsync(() -> {
+            // Build an IN (?, ?, ...) placeholder list of the exact size — safe against SQL
+            // injection (no user-controlled string concatenation) and lets a single statement
+            // remove every row in one round trip regardless of batch size.
+            StringBuilder sql = new StringBuilder("DELETE FROM BalanceHistory WHERE item_id IN (");
+            for (int i = 0; i < shorts.size(); i++) {
+                if (i > 0) sql.append(',');
+                sql.append('?');
+            }
+            sql.append(')');
+            try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(sql.toString())) {
+                for (int i = 0; i < shorts.size(); i++) {
+                    preparedStatement.setShort(i + 1, shorts.get(i));
+                }
+                preparedStatement.executeUpdate();
+                databaseManager.commitTransaction();
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }, databaseManager.getDatabaseThread());
     }
 
     /**

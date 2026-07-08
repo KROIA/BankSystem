@@ -1,12 +1,17 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.data.DatabaseManager;
+import net.kroia.banksystem.data.filter.EqualityFilter;
+import net.kroia.banksystem.data.table.BalanceHistoryManager;
+import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
@@ -24,7 +29,9 @@ import net.minecraft.world.item.component.CustomData;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -75,6 +82,7 @@ public class ItemIDMergeGuardTests extends TestSuite {
         addTest("dry_run_classifies_healing_merge_as_safe", this::testDryRunClassifiesHealingMergeAsSafe);
         addTest("merge_report_lists_ids_and_components", this::testMergeReportListsIdsAndComponents);
         addTest("confirmed_merge_consolidates_bank_state", this::testConfirmedMergeConsolidatesBankState);
+        addTest("confirmed_merge_purges_alias_balance_history", this::testConfirmedMergePurgesAliasBalanceHistory);
     }
 
     @Override
@@ -400,6 +408,110 @@ public class ItemIDMergeGuardTests extends TestSuite {
             // Remove the synthetic item from the allowed set again (also removes any
             // leftover banks referencing it on other accounts — there are none).
             manager.disallowItemID(canonical);
+        }
+    }
+
+    /**
+     * Task #12 regression test: an <b>applied</b> merge must purge the balance-history rows
+     * keyed to the alias short. Canonical-keyed rows must stay intact (canonical history
+     * continues fresh from the merge point; the alias identity is discarded, so its old chart
+     * data would refer to an ID that no longer resolves to a live item).
+     * <p>
+     * Follows the same production-safe explicit-set merge pattern as
+     * {@link #testConfirmedMergeConsolidatesBankState()} — the globally applied component set is
+     * never mutated.
+     * <p>
+     * The DB executor is a single-threaded {@link java.util.concurrent.ExecutorService}, so
+     * awaiting a fresh no-op runnable submitted after the merge flushes every async DB
+     * operation queued by {@code consolidatePendingMerges()} (including our fire-and-forget
+     * {@link BalanceHistoryManager#deleteAllRowsForItemIDs deleteAllRowsForItemIDs}).
+     */
+    private TestResult testConfirmedMergePurgesAliasBalanceHistory() {
+        List<String> realSet = VolatileItemComponents.getEffectiveComponentIds();
+        if (realSet.contains("minecraft:repair_cost"))
+            return pass("skipped: minecraft:repair_cost is already volatile on this server — "
+                    + "the collapse scenario cannot be constructed");
+
+        BalanceHistoryManager historyManager = BankSystemModBackend.getBalanceHistoryManager();
+        DatabaseManager dbManager = BankSystemModBackend.getDatabaseManager();
+        if (historyManager == null || dbManager == null)
+            return pass("skipped: no balance-history DB present (slave server or DB not initialized)");
+
+        ItemID[] pair = registerRepairCostPair();
+        if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
+            return fail("failed to register the two synthetic templates as distinct IDs");
+        // Same canonical-choice rule as renormalizeAndMerge: lowest short wins.
+        ItemID canonical = pair[0].getShort() < pair[1].getShort() ? pair[0] : pair[1];
+        ItemID alias = canonical.equals(pair[0]) ? pair[1] : pair[0];
+        // Use a synthetic account number well outside the id range typical worlds allocate,
+        // so the test rows are trivially identifiable and cleanup by (account, item) is safe.
+        final int syntheticAccount = 987654;
+        final long now = System.currentTimeMillis();
+
+        try {
+            // Populate history rows for both IDs directly (bypasses the tick-driven snapshotter,
+            // which requires a live bank account and would introduce a lot of noise). The point
+            // is only to prove that alias rows are purged and canonical rows are not.
+            List<BalanceHistoryRecord> seed = List.of(
+                    new BalanceHistoryRecord(syntheticAccount, canonical.getShort(), 100L, 0L, now),
+                    new BalanceHistoryRecord(syntheticAccount, canonical.getShort(), 150L, 0L, now + 1000L),
+                    new BalanceHistoryRecord(syntheticAccount, alias.getShort(), 200L, 0L, now),
+                    new BalanceHistoryRecord(syntheticAccount, alias.getShort(), 250L, 0L, now + 1000L)
+            );
+            historyManager.save(seed).get(10, TimeUnit.SECONDS);
+
+            int canonicalBefore = historyManager.getRecordCount(
+                    Optional.empty(), Optional.empty(),
+                    Optional.of(new EqualityFilter(canonical.getShort()))
+            ).get(10, TimeUnit.SECONDS);
+            int aliasBefore = historyManager.getRecordCount(
+                    Optional.empty(), Optional.empty(),
+                    Optional.of(new EqualityFilter(alias.getShort()))
+            ).get(10, TimeUnit.SECONDS);
+            TestResult r = assertTrue("seeded canonical rows exist", canonicalBefore >= 2);
+            if (!r.passed()) return r;
+            r = assertTrue("seeded alias rows exist", aliasBefore >= 2);
+            if (!r.passed()) return r;
+
+            // APPLY the merge under the explicitly grown set — same production-safe pattern as
+            // the bank-consolidation test above. The delete of alias-keyed history rows is
+            // queued on the DB executor from ItemIDManager#consolidatePendingMerges().
+            ItemIDManager.renormalizeAndMerge(withRepairCost(realSet));
+
+            // Flush the DB executor: submitting an empty runnable and awaiting it guarantees
+            // every earlier async DB op (including the queued delete) has completed.
+            dbManager.getDatabaseThread().submit(() -> {}).get(10, TimeUnit.SECONDS);
+
+            int aliasAfter = historyManager.getRecordCount(
+                    Optional.empty(), Optional.empty(),
+                    Optional.of(new EqualityFilter(alias.getShort()))
+            ).get(10, TimeUnit.SECONDS);
+            r = assertEquals("alias-keyed history rows are purged after merge", 0, aliasAfter);
+            if (!r.passed()) return r;
+
+            int canonicalAfter = historyManager.getRecordCount(
+                    Optional.empty(), Optional.empty(),
+                    Optional.of(new EqualityFilter(canonical.getShort()))
+            ).get(10, TimeUnit.SECONDS);
+            r = assertEquals("canonical-keyed history rows are untouched by the merge",
+                    canonicalBefore, canonicalAfter);
+            if (!r.passed()) return r;
+
+            return pass("applied merge purges alias balance-history rows and preserves canonical rows");
+        } catch (Exception e) {
+            return fail("balance-history purge test threw: " + e.getMessage());
+        } finally {
+            // Cleanup: remove any residual history rows for the synthetic account (belt-and-
+            // suspenders — the merge path should already have cleaned alias-keyed rows, but
+            // the seeded canonical rows are ours to remove). Fire-and-forget: an executor
+            // shutdown between here and the next test would flush anyway.
+            try {
+                historyManager.removeHistory(
+                        Optional.empty(),
+                        Optional.of(new EqualityFilter(syntheticAccount)),
+                        Optional.empty()
+                ).get(10, TimeUnit.SECONDS);
+            } catch (Exception ignored) {}
         }
     }
 }

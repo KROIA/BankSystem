@@ -81,6 +81,33 @@ public class BankSystemModBackend implements BankSystemAPI {
     private static @Nullable ItemPriceProvider itemPriceProvider = null;
     private static short priceCurrencyItemId = 0;
 
+    /**
+     * Master-only accessor for the balance-history SQLite manager.
+     * <p>
+     * Only used by internal callers that need direct access to the DB layer (e.g. the in-game
+     * merge-guard tests exercising the on-merge history purge from Task #12). Public API
+     * consumers should query balance history via {@code BalanceHistoryRequest} instead.
+     *
+     * @return the balance-history manager on the master server, or {@code null} on slave
+     *         servers / pre-startup / after shutdown.
+     */
+    public static @Nullable BalanceHistoryManager getBalanceHistoryManager() {
+        return INSTANCES.BALANCE_HISTORY_MANAGER;
+    }
+
+    /**
+     * Master-only accessor for the {@link DatabaseManager}.
+     * <p>
+     * Same audience as {@link #getBalanceHistoryManager()} — the in-game tests need the shared
+     * DB executor to await queued async work (single-thread executor: submitting a runnable
+     * and awaiting its future flushes all previously queued DB ops).
+     *
+     * @return the DB manager on the master server, or {@code null} otherwise.
+     */
+    public static @Nullable DatabaseManager getDatabaseManager() {
+        return INSTANCES.DATABASE_MANAGER;
+    }
+
 
     BankSystemModBackend()
     {

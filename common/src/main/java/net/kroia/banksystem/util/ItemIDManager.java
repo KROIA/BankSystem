@@ -929,6 +929,23 @@ public class ItemIDManager implements ServerSaveable {
         Object syncManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if (syncManager instanceof net.kroia.banksystem.banking.bankmanager.ServerBankManager bankManager)
             bankManager.consolidateMergedItemIDs(aliases);
+        // Purge balance-history rows keyed to the merged-away alias shorts. These rows would
+        // otherwise persist under IDs that no longer resolve to a live identity, and the
+        // BalanceHistoryScreen would still render a chart for each dropped alias (user report
+        // 2026-07-08, Task #12). Canonical rows are intentionally left untouched — the
+        // canonical ID's history continues fresh from the merge point.
+        // Master-only path: BALANCE_HISTORY_MANAGER is only constructed on the master server
+        // (see BankSystemModBackend#onServerStart), so a null check is enough — no extra
+        // isSlaveServer guard needed (already handled above).
+        if (BACKEND_INSTANCES.BALANCE_HISTORY_MANAGER != null && !aliases.isEmpty()) {
+            List<Short> aliasShorts = new ArrayList<>(aliases.size());
+            for (ItemID aliasId : aliases.keySet())
+                aliasShorts.add(aliasId.getShort());
+            // Fire-and-forget: the delete runs async on the DB executor, matching the pattern
+            // used by takeBalanceSnapshot() (BankSystemModBackend). The listener dispatch below
+            // does not depend on the deletion completing.
+            BACKEND_INSTANCES.BALANCE_HISTORY_MANAGER.deleteAllRowsForItemIDs(aliasShorts);
+        }
         // Notify dependent mods AFTER BankSystem's own state is consistent again.
         if (BACKEND_INSTANCES.SERVER_EVENTS != null)
             BACKEND_INSTANCES.SERVER_EVENTS.ITEM_IDS_MERGED.notifyListeners(Collections.unmodifiableMap(aliases));

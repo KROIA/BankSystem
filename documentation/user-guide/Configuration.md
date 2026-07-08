@@ -260,6 +260,8 @@ To tell the two apart, BankSystem records the effective component set that was l
 
 A confirmed merge (and any healing merge) also **consolidates existing bank data under the canonical IDs**: bank balances and locked balances that were stored under a merged ID are added onto the canonical item's bank in every account, the allowed-items list is rewritten to the canonical IDs, and account icons referencing a merged ID are updated. No amounts are lost — the totals per merge group are identical before and after. Dependent mods (e.g. StockMarket) are notified through a post-merge event so they can consolidate their own item-keyed data the same way.
 
+The consolidation additionally **purges balance-history rows keyed to the merged-away alias shorts** from the SQLite snapshot store, so a Balance History chart never renders a series for an ID that no longer resolves to a live item. The canonical ID's own history rows are preserved — the canonical series continues fresh from the merge point onward (alias history is not rewritten to the canonical short, to avoid overlapping time series).
+
 > [!NOTE]
 > The guard only runs on the **master server** (or a normal single server). Slave servers and clients always follow the master's item registry unconditionally — the master already made the informed decision.
 
