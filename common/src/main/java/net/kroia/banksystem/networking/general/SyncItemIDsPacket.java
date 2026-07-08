@@ -146,7 +146,14 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
     @Override
     public void handleOnClient(NetworkManager.PacketContext context)
     {
-        ItemIDManager.receiveSyncPacket(this);
+        // Adopt the sender's component lists only on REMOTE clients. In singleplayer the
+        // client shares VolatileItemComponents' static state with the integrated server —
+        // this packet's lists are a snapshot from send time and may be OLDER than the shared
+        // state by the time the client thread processes the packet. Adopting them would
+        // asynchronously roll back the server's applied set (observed tearing a
+        // renormalize pass running concurrently on the server thread).
+        boolean isRemoteClient = UtilitiesPlatform.getServer() == null;
+        ItemIDManager.receiveSyncPacket(this, isRemoteClient);
     }
 
     @Override

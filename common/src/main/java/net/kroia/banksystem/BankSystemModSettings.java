@@ -155,6 +155,22 @@ public final class BankSystemModSettings extends ModSettings {
                 new ArrayList<>(),
                 new TypeToken<List<String>>() {}.getType());
 
+        /**
+         * <b>One-shot confirmation flag for the ItemID merge guard.</b>
+         * <p>
+         * When the effective volatile/deposit-gated component set (datapack tags + the two
+         * config lists above) changed since the world was last normalized AND applying the
+         * new set would irreversibly merge genuinely distinct ItemIDs (e.g. two different
+         * bank items or markets becoming one), the master server <b>refuses to start</b> and
+         * logs a report listing every merge. Setting this flag to {@code true} approves that
+         * exact merge on the next startup; after the merge is applied the flag is
+         * automatically reset to {@code false} and saved, so it can never act as a standing
+         * bypass. Harmless <i>healing</i> merges (duplicates collapsing under an unchanged
+         * set) never require confirmation. See {@code ItemIDManager.detectCollapseCollisions}.
+         */
+        public final Setting<Boolean> CONFIRM_ITEMID_MERGE = registerSetting(
+                "CONFIRM_ITEMID_MERGE", false, Boolean.class);
+
 
         public final List<ItemStack> INITIAL_ALLOWED_ITEMS = List.of(
                         BankSystemItems.MONEY.get().getDefaultInstance(),

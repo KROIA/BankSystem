@@ -11,6 +11,7 @@ import net.kroia.banksystem.testing.tests.DatabaseTests;
 import net.kroia.banksystem.testing.tests.DepositGateTests;
 import net.kroia.banksystem.testing.tests.ExampleTests;
 import net.kroia.banksystem.testing.tests.ItemIDIdentityTests;
+import net.kroia.banksystem.testing.tests.ItemIDMergeGuardTests;
 import net.kroia.banksystem.testing.tests.LifecycleTests;
 import net.kroia.banksystem.testing.tests.MultiServerSecurityTests;
 import net.kroia.banksystem.testing.tests.NetworkingValidationTests;
@@ -40,6 +41,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new LifecycleTests());
         TestRegistry.register(new DatabaseTests());
         TestRegistry.register(new ItemIDIdentityTests());
+        TestRegistry.register(new ItemIDMergeGuardTests());
         TestRegistry.register(new DepositGateTests());
         TestRegistry.register(new WithdrawMergeTests());
     }

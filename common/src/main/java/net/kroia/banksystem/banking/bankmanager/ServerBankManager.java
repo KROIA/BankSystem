@@ -1168,7 +1168,10 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean isItemIDAllowed(ItemID itemID)
     {
-        return allowedItemIDs.contains(itemID);
+        // Alias safety net: an ID merged into a canonical ID stays "allowed" iff its
+        // canonical ID is allowed (the allowed set only stores canonical IDs after a
+        // merge consolidation). O(1) map lookup.
+        return itemID != null && allowedItemIDs.contains(ItemIDManager.resolveAlias(itemID));
     }
     @Override
     public CompletableFuture<Boolean> isItemIDAllowedAsync(ItemID itemID) {
@@ -1180,6 +1183,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     {
         if(itemID == null || !itemID.isValid())
             return false;
+        // Only ever store canonical IDs in the allowed set (see isItemIDAllowed).
+        itemID = ItemIDManager.resolveAlias(itemID);
         if(isItemIDBlacklisted(itemID))
         {
             warn("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
@@ -1200,6 +1205,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     {
         if(itemID == null || !itemID.isValid())
             return false;
+        // The allowed set and the account banks are keyed by canonical IDs only.
+        itemID = ItemIDManager.resolveAlias(itemID);
         if(isItemIDNotRemovable(itemID))
         {
             warn("It is not allowed to remove the itemID: " + itemID);
@@ -1497,6 +1504,50 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         allowedItemIDs.addAll(itemIDs);
     }
 
+    /**
+     * Consolidates all per-ItemID state of this (master) bank manager after an ItemID
+     * alias merge (see {@code ItemIDManager.renormalizeAndMerge()}):
+     * <ol>
+     *   <li>the allowed-item set: aliased entries are replaced by their canonical ID
+     *       (the {@code Set} dedupes automatically) — done FIRST so subsequent
+     *       allowed-checks already see the canonical entries,</li>
+     *   <li>every bank account: banks keyed by an alias are merged into the canonical
+     *       bank, preserving both free and locked balances, and aliased account icons
+     *       are rewritten (see {@link ServerBankAccount#consolidateMergedItemIDs}).</li>
+     * </ol>
+     * Called by {@code ItemIDManager.consolidatePendingMerges()} on the server thread,
+     * master side only. Idempotent: re-running with the same map is a no-op because no
+     * bank/entry is keyed by an alias anymore.
+     *
+     * @param aliasToCanonical merged ItemID (alias) → canonical ItemID pairs
+     */
+    public void consolidateMergedItemIDs(Map<ItemID, ItemID> aliasToCanonical)
+    {
+        if (aliasToCanonical == null || aliasToCanonical.isEmpty())
+            return;
+
+        // 1) Allowed-item set: alias entries become their canonical ID.
+        int remappedAllowed = 0;
+        for (Map.Entry<ItemID, ItemID> entry : aliasToCanonical.entrySet()) {
+            if (allowedItemIDs.remove(entry.getKey())) {
+                allowedItemIDs.add(entry.getValue());
+                remappedAllowed++;
+            }
+        }
+
+        // 2) Bank accounts: merge alias-keyed banks into the canonical bank.
+        int mergedBanks = 0;
+        for (ServerBankAccount account : bankAccounts.values()) {
+            mergedBanks += account.consolidateMergedItemIDs(aliasToCanonical);
+        }
+
+        if (remappedAllowed > 0 || mergedBanks > 0) {
+            info("Consolidated ItemID merge: " + mergedBanks + " bank(s) merged into their canonical ItemID, "
+                    + remappedAllowed + " allowed-item entr(y/ies) remapped (" + aliasToCanonical.size()
+                    + " alias pair(s)). Balances and locked balances were preserved.");
+        }
+    }
+
     @Override
     public boolean save(Map<String, ListTag> listTags) {
         CompoundTag metaData = new CompoundTag();
@@ -1565,7 +1616,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 }
 
                 ItemID itemID = ItemID.createFromTag(idTag.getCompound("itemID"));
-                allowedItemIDs.add(itemID);
+                // Canonicalize at load time: a saved allowed-entry may reference an ID that
+                // was merged into a canonical ID (possibly in an earlier session). The Set
+                // dedupes collapsing entries automatically. This also heals worlds merged
+                // before consolidation existed.
+                allowedItemIDs.add(ItemIDManager.resolveAlias(itemID));
             }
         }
         else {

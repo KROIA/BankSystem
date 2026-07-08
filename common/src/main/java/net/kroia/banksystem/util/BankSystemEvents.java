@@ -6,6 +6,8 @@ import net.kroia.banksystem.banking.User;
 import net.kroia.modutilities.event.DataEvent;
 import net.kroia.modutilities.event.Signal;
 
+import java.util.Map;
+
 public class BankSystemEvents implements IBankSystemEvents {
 
     public final DataEvent<User> USER_ADDED = new DataEvent<>();
@@ -16,6 +18,17 @@ public class BankSystemEvents implements IBankSystemEvents {
 
     public final DataEvent<ISyncServerBankAccount> BANK_ACCOUNT_CREATED = new DataEvent<>();
     public final DataEvent<ISyncServerBankAccount> BANK_ACCOUNT_DELETED = new DataEvent<>();
+
+    /**
+     * Fired on the master server after an ItemID merge (see
+     * {@code ItemIDManager.renormalizeAndMerge()}) has been fully consolidated into
+     * BankSystem's own state (bank balances/locked balances, allowed items, account
+     * icons). Payload: an <b>unmodifiable</b> map of merged ItemID (alias) → canonical
+     * ItemID. Dependent mods (e.g. StockMarket) should consolidate their own
+     * ItemID-keyed state (markets, orders, ...) when this fires.
+     * Always dispatched on the server thread, master side only.
+     */
+    public final DataEvent<Map<ItemID, ItemID>> ITEM_IDS_MERGED = new DataEvent<>();
 
 
 
@@ -36,6 +49,7 @@ public class BankSystemEvents implements IBankSystemEvents {
         USER_REMOVED.removeListeners();
         BANK_ACCOUNT_CREATED.removeListeners();
         BANK_ACCOUNT_DELETED.removeListeners();
+        ITEM_IDS_MERGED.removeListeners();
         BANK_DATA_SAVED_TO_FILE.removeListeners();
         BANK_DATA_LOADED_FROM_FILE.removeListeners();
         SETTINGS_SAVED_TO_FILE.removeListeners();
@@ -68,6 +82,12 @@ public class BankSystemEvents implements IBankSystemEvents {
     public DataEvent<ISyncServerBankAccount> getBankAccountDeletedEvent()
     {
         return BANK_ACCOUNT_DELETED;
+    }
+
+    @Override
+    public DataEvent<Map<ItemID, ItemID>> getItemIDsMergedEvent()
+    {
+        return ITEM_IDS_MERGED;
     }
 
     @Override

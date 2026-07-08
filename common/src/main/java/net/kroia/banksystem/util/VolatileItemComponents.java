@@ -17,6 +17,7 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Registry of the two data-driven <b>item component sets</b> that control how ItemStack
@@ -106,6 +107,35 @@ public final class VolatileItemComponents {
      */
     private static volatile Set<ResourceLocation> gatedConfigComponentIds = Set.of();
 
+    /**
+     * Snapshot of the ids contained in {@link #VOLATILE_COMPONENTS_TAG} at the moment the
+     * world was loaded (or the client joined). {@code null} = not captured yet — all tag
+     * lookups then fall back to the live registry tag.
+     * <p>
+     * <b>Why a snapshot:</b> datapack tags can be rebound at runtime ({@code /reload},
+     * {@code /datapack enable}). If the tag contents were read live, a runtime tag change
+     * would silently change ItemID identity on a running server, bypassing the startup
+     * merge guard (see {@link ItemIDManager#detectCollapseCollisions}). By normalizing
+     * against the snapshot, a runtime tag change is <b>rejected</b>: the server keeps using
+     * the set it applied at world load, and the change is evaluated (and guarded) at the
+     * next restart. {@link #onServerResourcesReloaded()} logs an error when it detects
+     * such a rejected change.
+     */
+    private static volatile Set<ResourceLocation> tagVolatileSnapshot = null;
+
+    /** Snapshot of {@link #DEPOSIT_GATED_COMPONENTS_TAG}; same semantics as {@link #tagVolatileSnapshot}. */
+    private static volatile Set<ResourceLocation> tagGatedSnapshot = null;
+
+    /**
+     * Tick countdown started by {@link #onServerResourcesReloaded()}. Tag rebinding happens
+     * a few scheduler tasks after the reload listeners run, so the comparison against the
+     * snapshot is deferred by a couple of server ticks (see {@link #serverTick()}).
+     */
+    private static int pendingTagCheckTicks = 0;
+
+    /** Last live tag set we already warned about, to avoid log spam on repeated reloads. */
+    private static Set<ResourceLocation> lastRejectedTagUnion = null;
+
     private VolatileItemComponents() {}
 
     /**
@@ -161,6 +191,154 @@ public final class VolatileItemComponents {
         return newSet;
     }
 
+    // ------------------------------------------------------------------------------------
+    // Tag snapshot (world-load-time view of the datapack tags)
+    // ------------------------------------------------------------------------------------
+
+    /** Reads the ids currently bound to the given data-component-type tag from the live registry. */
+    private static @NotNull Set<ResourceLocation> readTagIds(@NotNull TagKey<DataComponentType<?>> tag) {
+        Set<ResourceLocation> ids = new LinkedHashSet<>();
+        for (Holder<DataComponentType<?>> holder : BuiltInRegistries.DATA_COMPONENT_TYPE.getTagOrEmpty(tag)) {
+            ResourceLocation id = holder.unwrapKey().map(k -> k.location()).orElse(null);
+            if (id == null)
+                id = BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(holder.value());
+            if (id != null)
+                ids.add(id);
+        }
+        return ids;
+    }
+
+    /**
+     * Captures the current contents of the two datapack tags as the <b>applied</b> tag sets.
+     * From this point on, all normalization uses the snapshot instead of the live tags, so
+     * runtime tag rebinds ({@code /reload}) cannot change ItemID identity until the next
+     * restart (see {@link #tagVolatileSnapshot}).
+     * <p>
+     * Called at world load on servers (master and slave, before the startup merge guard runs)
+     * and — via {@link #captureTagSnapshotIfAbsent()} — on clients when the first
+     * {@link net.kroia.banksystem.networking.general.SyncItemIDsPacket} arrives.
+     */
+    public static void captureTagSnapshot() {
+        tagVolatileSnapshot = Set.copyOf(readTagIds(VOLATILE_COMPONENTS_TAG));
+        tagGatedSnapshot = Set.copyOf(readTagIds(DEPOSIT_GATED_COMPONENTS_TAG));
+        lastRejectedTagUnion = null;
+    }
+
+    /**
+     * Captures the tag snapshot only if none was captured yet. Used on the client side:
+     * the first sync after joining captures the (freshly synced) tags, while later syncs on
+     * the same connection must NOT re-capture — if the server rejected a runtime tag change,
+     * the client has to keep normalizing with the same (old) set as the server.
+     */
+    public static void captureTagSnapshotIfAbsent() {
+        if (tagVolatileSnapshot == null || tagGatedSnapshot == null)
+            captureTagSnapshot();
+    }
+
+    /**
+     * Drops the tag snapshot (back to live tag reads until the next capture).
+     * Called when the server stops and when the client disconnects, so the next
+     * world/server uses its own freshly bound tags.
+     */
+    public static void resetTagSnapshot() {
+        tagVolatileSnapshot = null;
+        tagGatedSnapshot = null;
+        lastRejectedTagUnion = null;
+        pendingTagCheckTicks = 0;
+    }
+
+    /** @return the applied volatile tag ids: the snapshot if captured, otherwise the live tag. */
+    private static @NotNull Set<ResourceLocation> effectiveVolatileTagIds() {
+        Set<ResourceLocation> snapshot = tagVolatileSnapshot;
+        return snapshot != null ? snapshot : readTagIds(VOLATILE_COMPONENTS_TAG);
+    }
+
+    /** @return the applied deposit-gated tag ids: the snapshot if captured, otherwise the live tag. */
+    private static @NotNull Set<ResourceLocation> effectiveGatedTagIds() {
+        Set<ResourceLocation> snapshot = tagGatedSnapshot;
+        return snapshot != null ? snapshot : readTagIds(DEPOSIT_GATED_COMPONENTS_TAG);
+    }
+
+    /**
+     * Returns the <b>effective component set</b> actually applied to ItemID identity:
+     * the union of both datapack tags (snapshot view if captured) and both config lists,
+     * as a <b>sorted</b> list of id strings.
+     * <p>
+     * This is the value the startup merge guard persists in {@code Meta_data.nbt} and
+     * compares across restarts to distinguish healing merges (unchanged set) from
+     * collapse merges (changed set) — see {@link ItemIDManager#detectCollapseCollisions}.
+     * Config ids whose owning mod is absent are included on purpose: they describe the
+     * configured intent and keep the comparison stable across mod-list changes.
+     *
+     * @return sorted, de-duplicated list of component type id strings. Never null.
+     */
+    public static @NotNull List<String> getEffectiveComponentIds() {
+        TreeSet<String> ids = new TreeSet<>();
+        for (ResourceLocation id : effectiveVolatileTagIds())
+            ids.add(id.toString());
+        for (ResourceLocation id : effectiveGatedTagIds())
+            ids.add(id.toString());
+        for (ResourceLocation id : configComponentIds)
+            ids.add(id.toString());
+        for (ResourceLocation id : gatedConfigComponentIds)
+            ids.add(id.toString());
+        return new ArrayList<>(ids);
+    }
+
+    /**
+     * Notifies this registry that the server's datapack resources were (re)loaded.
+     * During initial server startup the snapshot is not captured yet, so this is a no-op.
+     * On a <b>running</b> server ({@code /reload}, {@code /datapack enable ...}) it schedules
+     * a deferred comparison of the freshly bound tags against the applied snapshot
+     * (deferred because vanilla rebinds registry tags a few scheduler tasks after the
+     * reload listeners run). If the tags changed, {@link #serverTick()} logs an error —
+     * the change itself is automatically rejected, because normalization keeps using the
+     * snapshot until the next restart, where the startup merge guard evaluates it.
+     */
+    public static void onServerResourcesReloaded() {
+        if (tagVolatileSnapshot != null || tagGatedSnapshot != null)
+            pendingTagCheckTicks = 3;
+    }
+
+    /**
+     * Per-server-tick hook (cheap: a single int check). Performs the deferred
+     * tag-change detection scheduled by {@link #onServerResourcesReloaded()}.
+     */
+    public static void serverTick() {
+        if (pendingTagCheckTicks <= 0)
+            return;
+        if (--pendingTagCheckTicks == 0)
+            checkForRuntimeTagChange();
+    }
+
+    /**
+     * Compares the live tag contents against the applied snapshot and logs an error if a
+     * runtime tag change was detected (and therefore rejected). Never mutates the snapshot —
+     * rejecting the change IS the point (see {@link #tagVolatileSnapshot}).
+     */
+    private static void checkForRuntimeTagChange() {
+        Set<ResourceLocation> snapshotVolatile = tagVolatileSnapshot;
+        Set<ResourceLocation> snapshotGated = tagGatedSnapshot;
+        if (snapshotVolatile == null || snapshotGated == null)
+            return;
+        Set<ResourceLocation> liveVolatile = readTagIds(VOLATILE_COMPONENTS_TAG);
+        Set<ResourceLocation> liveGated = readTagIds(DEPOSIT_GATED_COMPONENTS_TAG);
+        if (liveVolatile.equals(snapshotVolatile) && liveGated.equals(snapshotGated))
+            return;
+        Set<ResourceLocation> liveUnion = new LinkedHashSet<>(liveVolatile);
+        liveUnion.addAll(liveGated);
+        if (liveUnion.equals(lastRejectedTagUnion))
+            return; // already warned about exactly this change
+        lastRejectedTagUnion = liveUnion;
+        error("A datapack reload changed the contents of the '" + VOLATILE_COMPONENTS_TAG.location()
+                + "' / '" + DEPOSIT_GATED_COMPONENTS_TAG.location() + "' tags on a RUNNING server. "
+                + "The change was REJECTED: item identification keeps using the component set that was "
+                + "applied when the world was loaded, so no items merge mid-session. "
+                + "The new tag contents will be evaluated by the ItemID merge guard at the next server restart. "
+                + "(Applied volatile set: " + snapshotVolatile + ", applied gated set: " + snapshotGated
+                + "; new volatile set: " + liveVolatile + ", new gated set: " + liveGated + ")");
+    }
+
     /**
      * @return the config-sourced volatile component ids as strings, for syncing to
      *         clients and slave servers. Never null.
@@ -198,6 +376,11 @@ public final class VolatileItemComponents {
      * that (re-)attach volatile components (this is exactly TFC's behavior) — the removal
      * below runs after the copy, so the result is always free of volatile components
      * regardless of what such hooks do.
+     * <p>
+     * "Removed" means <i>reset to the item's prototype default</i>: component types that are
+     * part of the item's default component map (e.g. {@code minecraft:repair_cost}) are set
+     * back to their prototype value rather than removal-marked, so a normalized stack always
+     * compares equal to a normalized default instance — see {@link #resetComponentToPrototype}.
      *
      * @param stack the stack to normalize (not mutated)
      * @return a normalized copy; {@link ItemStack#EMPTY} for empty inputs
@@ -207,15 +390,37 @@ public final class VolatileItemComponents {
             return ItemStack.EMPTY;
         ItemStack copy = stack.copy();
         // Strip everything listed in the datapack tags (volatile + deposit-gated).
-        for (Holder<DataComponentType<?>> holder : BuiltInRegistries.DATA_COMPONENT_TYPE.getTagOrEmpty(VOLATILE_COMPONENTS_TAG)) {
-            copy.remove(holder.value());
-        }
-        for (Holder<DataComponentType<?>> holder : BuiltInRegistries.DATA_COMPONENT_TYPE.getTagOrEmpty(DEPOSIT_GATED_COMPONENTS_TAG)) {
-            copy.remove(holder.value());
-        }
+        // Uses the world-load snapshot when captured, so runtime tag rebinds cannot
+        // change identity mid-session (see tagVolatileSnapshot).
+        removeByIds(copy, effectiveVolatileTagIds());
+        removeByIds(copy, effectiveGatedTagIds());
         // Strip everything listed in the (synced) server config lists.
         removeByIds(copy, configComponentIds);
         removeByIds(copy, gatedConfigComponentIds);
+        return copy;
+    }
+
+    /**
+     * Returns a copy of the given stack with exactly the component types listed in
+     * {@code ids} removed (unresolvable ids — owning mod absent — are skipped).
+     * The input stack is never mutated.
+     * <p>
+     * Used by the startup merge guard to reconstruct an item's identity under a
+     * <b>previous</b> effective component set (the set persisted in {@code Meta_data.nbt}),
+     * which is how healing merges are told apart from collapse merges — see
+     * {@link ItemIDManager#detectCollapseCollisions}.
+     *
+     * @param stack the stack to strip (not mutated)
+     * @param ids   the component type ids to remove
+     * @return a stripped copy; {@link ItemStack#EMPTY} for empty inputs
+     */
+    public static @NotNull ItemStack stripComponentsByIds(@NotNull ItemStack stack, @NotNull Set<ResourceLocation> ids) {
+        if (stack.isEmpty())
+            return ItemStack.EMPTY;
+        // Note: copy() may re-attach volatile components via third-party constructor hooks
+        // (TFC does this) — removal runs after the copy, exactly like in normalize().
+        ItemStack copy = stack.copy();
+        removeByIds(copy, ids);
         return copy;
     }
 
@@ -223,8 +428,41 @@ public final class VolatileItemComponents {
         for (ResourceLocation id : ids) {
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
             if (type != null)
-                stack.remove(type);
+                resetComponentToPrototype(stack, type);
         }
+    }
+
+    /**
+     * Strips a single component type from the stack <b>without ever poisoning the component
+     * patch</b>.
+     * <p>
+     * Why not simply {@link ItemStack#remove}: every item carries a set of <i>prototype</i>
+     * (default) components — e.g. {@code minecraft:repair_cost} is present with value 0 on
+     * <b>every</b> item in the game. For such types {@code remove()} does not clear the patch,
+     * it writes an explicit <i>removal marker</i> ({@code "!minecraft:repair_cost"}) into the
+     * patch, which makes the stack compare <b>unequal</b> to a pristine default instance in
+     * {@link ItemStack#isSameItemSameComponents}. A registry template normalized that way
+     * would no longer match any real stack of the same item — every lookup would fail and
+     * mint spurious new ItemIDs (this corrupted a live world when {@code minecraft:repair_cost}
+     * was temporarily declared volatile).
+     * <p>
+     * Instead, the component is reset to its prototype value: for prototype-backed types,
+     * {@code set(type, prototypeValue)} collapses the patch entry entirely (vanilla's
+     * {@code PatchedDataComponentMap.set} removes the patch when the value equals the
+     * prototype); for non-prototype types, {@code remove()} is safe and just clears the patch.
+     * Either way the result is "this component no longer distinguishes the stack from a
+     * default instance", which is exactly what volatile-component identity requires.
+     *
+     * @param stack the stack to strip (mutated in place — callers pass defensive copies)
+     * @param type  the component type to reset
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void resetComponentToPrototype(ItemStack stack, DataComponentType<?> type) {
+        Object prototypeValue = stack.getPrototype().get((DataComponentType) type);
+        if (prototypeValue != null)
+            stack.set((DataComponentType) type, prototypeValue);
+        else
+            stack.remove(type);
     }
 
     /**
@@ -306,8 +544,10 @@ public final class VolatileItemComponents {
      */
     private static @NotNull List<DataComponentType<?>> effectiveGatedTypes() {
         List<DataComponentType<?>> types = new ArrayList<>();
-        for (Holder<DataComponentType<?>> holder : BuiltInRegistries.DATA_COMPONENT_TYPE.getTagOrEmpty(DEPOSIT_GATED_COMPONENTS_TAG)) {
-            types.add(holder.value());
+        for (ResourceLocation id : effectiveGatedTagIds()) {
+            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
+            if (type != null && !types.contains(type))
+                types.add(type);
         }
         for (ResourceLocation id : gatedConfigComponentIds) {
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
@@ -326,14 +566,17 @@ public final class VolatileItemComponents {
     private static @NotNull ItemStack stripNonGatedVolatile(@NotNull ItemStack stack) {
         List<DataComponentType<?>> gatedTypes = effectiveGatedTypes();
         ItemStack copy = stack.copy();
-        for (Holder<DataComponentType<?>> holder : BuiltInRegistries.DATA_COMPONENT_TYPE.getTagOrEmpty(VOLATILE_COMPONENTS_TAG)) {
-            if (!gatedTypes.contains(holder.value()))
-                copy.remove(holder.value());
+        // Reset instead of remove — see resetComponentToPrototype() for why plain remove()
+        // would poison the patch of prototype-backed component types.
+        for (ResourceLocation id : effectiveVolatileTagIds()) {
+            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
+            if (type != null && !gatedTypes.contains(type))
+                resetComponentToPrototype(copy, type);
         }
         for (ResourceLocation id : configComponentIds) {
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
             if (type != null && !gatedTypes.contains(type))
-                copy.remove(type);
+                resetComponentToPrototype(copy, type);
         }
         return copy;
     }
@@ -341,5 +584,10 @@ public final class VolatileItemComponents {
     private static void warn(String msg) {
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
             BACKEND_INSTANCES.LOGGER.warn("[VolatileItemComponents] " + msg);
+    }
+
+    private static void error(String msg) {
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.error("[VolatileItemComponents] " + msg);
     }
 }

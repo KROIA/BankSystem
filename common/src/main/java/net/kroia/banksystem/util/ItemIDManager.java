@@ -45,6 +45,16 @@ public class ItemIDManager implements ServerSaveable {
      */
     private static final ConcurrentHashMap<ItemID, ItemID> itemIDAliasMap = new ConcurrentHashMap<>();
 
+    /**
+     * Alias→canonical pairs created by {@link #renormalizeAndMerge(Collection)} that have not
+     * yet been consolidated into per-ItemID state (bank balances/locked balances, the
+     * allowed-item set, account icons) and announced to dependent mods.
+     * Filled by the merge pass; drained by {@link #consolidatePendingMerges()} — immediately
+     * for runtime merges, or right after {@code load_bank()} when the merge happened during
+     * world load (bank data is not available yet at that point).
+     */
+    private static final ConcurrentHashMap<ItemID, ItemID> pendingMergeConsolidation = new ConcurrentHashMap<>();
+
     private static ConcurrentHashMap<ItemID, ItemStack> singlePlayerServerBackupOnPlayerLeave = null;
     private static ConcurrentHashMap<ItemID, ItemID> singlePlayerServerAliasBackupOnPlayerLeave = null;
     private static Map<ItemStack, CompletableFuture<ItemID>> pendingItemIDs = new ConcurrentHashMap<>();
@@ -56,6 +66,8 @@ public class ItemIDManager implements ServerSaveable {
         singlePlayerServerAliasBackupOnPlayerLeave = new ConcurrentHashMap<>(itemIDAliasMap);
         itemIDMap.clear();
         itemIDAliasMap.clear();
+        // Never carry unconsolidated merge pairs into the next session/world.
+        pendingMergeConsolidation.clear();
     }
 
     /**
@@ -391,15 +403,44 @@ public class ItemIDManager implements ServerSaveable {
     }
     public static void receiveSyncPacket(SyncItemIDsPacket packet)
     {
-        // Adopt the sender's config-sourced volatile + deposit-gated component lists first,
-        // so this side normalizes (and deposit-gates) exactly like the master/server that
-        // produced the packet. Non-short-circuiting |: both lists must always be applied.
-        // (The datapack-tag part of both sets is distributed by vanilla tag sync.)
-        boolean componentSetsChanged = VolatileItemComponents.setConfigComponentIds(packet.getVolatileComponentIds());
-        componentSetsChanged |= VolatileItemComponents.setGatedConfigComponentIds(packet.getDepositGatedComponentIds());
-        if(componentSetsChanged)
+        receiveSyncPacket(packet, true);
+    }
+
+    /**
+     * Handles an incoming ItemID sync packet.
+     *
+     * @param packet             the sync packet
+     * @param adoptComponentLists whether to adopt the sender's config-sourced volatile /
+     *                            deposit-gated component lists. {@code true} for remote
+     *                            clients and slave servers (the sender's lists are
+     *                            authoritative there). {@code false} on a singleplayer /
+     *                            integrated-server client: both sides share the static
+     *                            {@link VolatileItemComponents} state, so the packet's lists
+     *                            are a possibly STALE snapshot of this side's own state —
+     *                            adopting them would asynchronously roll back the applied
+     *                            set and trigger spurious renormalize/merge passes
+     *                            (observed corrupting a live registry).
+     */
+    public static void receiveSyncPacket(SyncItemIDsPacket packet, boolean adoptComponentLists)
+    {
+        // First sync after joining: snapshot the (vanilla-synced) datapack tags so later
+        // runtime tag rebinds on this side cannot diverge from the master's applied set.
+        // Later syncs on the same connection intentionally keep the existing snapshot.
+        // NOTE: no merge guard here — clients and slave servers follow the master's
+        // decision unconditionally (the master already ran the startup guard).
+        VolatileItemComponents.captureTagSnapshotIfAbsent();
+        if(adoptComponentLists)
         {
-            renormalizeAndMerge();
+            // Adopt the sender's config-sourced volatile + deposit-gated component lists first,
+            // so this side normalizes (and deposit-gates) exactly like the master/server that
+            // produced the packet. Non-short-circuiting |: both lists must always be applied.
+            // (The datapack-tag part of both sets is distributed by vanilla tag sync.)
+            boolean componentSetsChanged = VolatileItemComponents.setConfigComponentIds(packet.getVolatileComponentIds());
+            componentSetsChanged |= VolatileItemComponents.setGatedConfigComponentIds(packet.getDepositGatedComponentIds());
+            if(componentSetsChanged)
+            {
+                renormalizeAndMerge();
+            }
         }
         // Adopt the sender's alias table so bank balances / markets keyed by a merged ID
         // resolve on this side as well.
@@ -442,7 +483,12 @@ public class ItemIDManager implements ServerSaveable {
             // The server registers ItemStacks with correct server-registry Holders;
             // the client sync must not overwrite them with client-decoded copies that
             // have cross-registry Holder references (causes save failures).
-            itemIDMap.putIfAbsent(id, cpy);
+            // Alias guard: never resurrect an ID that was merged away. Sync packets can sit
+            // in the network queue while a renormalize pass merges the ID into a canonical
+            // one — re-inserting it here would leave the ID both aliased AND registered
+            // (an inconsistent registry that would even be saved to disk in singleplayer).
+            if (!itemIDAliasMap.containsKey(id))
+                itemIDMap.putIfAbsent(id, cpy);
             id.tryUpdateNameCache();
         }
         MoneyItem.resetItemID();
@@ -555,9 +601,12 @@ public class ItemIDManager implements ServerSaveable {
             if(itemStackOptional.isEmpty())
                 continue;
 
-            // Migration for worlds saved before volatile-component normalization existed:
-            // templates saved with volatile data (e.g. a rotten tfc:food state) become clean here.
-            ItemStack itemStack = VolatileItemComponents.normalize(itemStackOptional.get());
+            // Store the template RAW (un-normalized) for now: the startup merge guard below
+            // needs the saved component data to tell healing merges apart from collapse
+            // merges and to report the differing components. The guard's renormalizeAndMerge
+            // pass normalizes every template in place before load() returns (this also
+            // migrates worlds saved before volatile-component normalization existed).
+            ItemStack itemStack = itemStackOptional.get();
             itemStack.setCount(1);
 
             itemIDMap.put(id, itemStack);
@@ -574,10 +623,11 @@ public class ItemIDManager implements ServerSaveable {
             itemIDAliasMap.put(new ItemID(aliasTag.getShort("from")), new ItemID(aliasTag.getShort("to")));
         }
 
-        // Merge entries that collapse to the same normalized identity (e.g. spurious IDs
-        // minted by decaying food before this fix). Keeps the lowest ID as canonical and
-        // aliases the rest, so bank balances / markets keyed by old IDs keep resolving.
-        renormalizeAndMerge();
+        // Merge entries that collapse to the same normalized identity, guarded against
+        // silent collapses caused by a CHANGED volatile/deposit-gated component set.
+        // May throw ItemIDMergeAbortedException to abort server startup (nothing has been
+        // mutated on disk at that point).
+        applyStartupMergeGuard();
 
         singlePlayerServerBackupOnPlayerLeave = null;
         singlePlayerServerAliasBackupOnPlayerLeave = null;
@@ -598,14 +648,48 @@ public class ItemIDManager implements ServerSaveable {
      * Called after loading a world (migration of pre-fix data) and whenever the config-sourced
      * volatile component list changes (settings load on the server, sync packet on
      * clients/slaves). Safe to call repeatedly — a fully normalized registry is a no-op.
+     * <p>
+     * The effective component set is snapshotted <b>once</b> at entry. {@code normalize()}
+     * reads live volatile fields, so a concurrent set change (e.g. a sync packet handled on
+     * the client/render thread while this pass runs on the server thread — both sides share
+     * the static state in singleplayer) could otherwise tear the pass: half the registry
+     * normalized under the old set, half under the new one. A concurrent change is instead
+     * applied wholly by its own follow-up renormalize call.
      */
     public static void renormalizeAndMerge()
     {
+        renormalizeAndMerge(VolatileItemComponents.getEffectiveComponentIds());
+    }
+
+    /**
+     * Variant of {@link #renormalizeAndMerge()} that normalizes and merges under an
+     * <b>explicit</b> component set instead of the globally applied effective set.
+     * <p>
+     * The no-arg overload delegates here with the applied effective set (snapshotted once,
+     * see above). The explicit form additionally allows the in-game test suite to apply a
+     * grown set atomically without mutating the globally shared
+     * {@link VolatileItemComponents} configuration (which in singleplayer is shared between
+     * client and server and must not be flipped around mid-session).
+     * <b>Caution:</b> normalizing the registry under a set that is not the applied effective
+     * set desyncs template identity from query-side normalization — production code should
+     * always use the no-arg overload.
+     *
+     * @param componentIds component type ids to strip while normalizing
+     *                     (unparsable entries are skipped)
+     */
+    public static void renormalizeAndMerge(Collection<String> componentIds)
+    {
+        Set<net.minecraft.resources.ResourceLocation> strippedIds = parseComponentIdStrings(componentIds);
         int mergedCount = 0;
+        // Alias→canonical pairs created by THIS pass — consumed below to consolidate
+        // per-ItemID state (bank balances, allowed items, ...) and notify dependent mods.
+        Map<ItemID, ItemID> newAliases = new HashMap<>();
         synchronized (itemIDMap) {
             // Pass 1: re-normalize all templates in place (cheap no-op when already normalized).
+            // stripComponentsByIds == normalize() when strippedIds is the applied effective set,
+            // but reads no shared mutable state — the whole pass sees ONE consistent set.
             for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet()) {
-                ItemStack normalized = VolatileItemComponents.normalize(entry.getValue());
+                ItemStack normalized = VolatileItemComponents.stripComponentsByIds(entry.getValue(), strippedIds);
                 normalized.setCount(1);
                 entry.setValue(normalized);
             }
@@ -650,6 +734,7 @@ public class ItemIDManager implements ServerSaveable {
                             continue;
                         itemIDMap.remove(id);
                         itemIDAliasMap.put(id, canonical);
+                        newAliases.put(id, canonical);
                         mergedCount++;
                     }
                 }
@@ -665,11 +750,394 @@ public class ItemIDManager implements ServerSaveable {
                 }
                 entry.setValue(target);
             }
+
+            // The newly created pairs must reflect the flattened chains as well, so that
+            // consumers (bank consolidation, dependent mods) always see a canonical ID
+            // that is actually present in the registry.
+            for (Map.Entry<ItemID, ItemID> entry : newAliases.entrySet()) {
+                ItemID flattened = itemIDAliasMap.get(entry.getKey());
+                if (flattened != null)
+                    entry.setValue(flattened);
+            }
         }
         if (mergedCount > 0 && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
             BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Merged " + mergedCount +
                     " duplicate ItemID(s) that collapsed to the same identity after removing volatile item components. " +
                     "Old IDs remain valid as aliases of their canonical ID.");
+        }
+        if (!newAliases.isEmpty()) {
+            // Queue consolidation of per-ItemID state and the dependent-mod notification.
+            // Runs immediately when bank data is already loaded (runtime merges); during
+            // world load the pairs stay queued until BankSystemDataHandler.loadAll() has
+            // finished load_bank() and drains them.
+            pendingMergeConsolidation.putAll(newAliases);
+            consolidatePendingMerges();
+        }
+    }
+
+    /**
+     * Drains the alias→canonical pairs recorded by {@link #renormalizeAndMerge(Collection)}
+     * and consolidates all per-ItemID state under the canonical IDs:
+     * <ul>
+     *   <li>bank balances and locked balances of every bank account (merged into the
+     *       canonical bank, see
+     *       {@link net.kroia.banksystem.banking.bankmanager.ServerBankManager#consolidateMergedItemIDs}),</li>
+     *   <li>the allowed-item set (aliased entries replaced by their canonical ID),</li>
+     *   <li>account icons referencing an aliased ID.</li>
+     * </ul>
+     * Afterwards the {@code ITEM_IDS_MERGED} event
+     * ({@link net.kroia.banksystem.api.IBankSystemEvents#getItemIDsMergedEvent()}) is fired
+     * with the drained (unmodifiable) map so dependent mods (e.g. StockMarket) can
+     * consolidate their own ItemID-keyed state. The event fires on the calling (server)
+     * thread, master side only, and always AFTER BankSystem's own consolidation completed.
+     * <p>
+     * Master server only: clients and slave servers hold no authoritative per-ItemID bank
+     * state — their pending pairs are discarded (they follow the master's registry and
+     * resolve aliases through the accessors). When the bank data has not been loaded yet
+     * (merge during world load), the pairs stay pending and
+     * {@code BankSystemDataHandler.loadAll()} calls this again right after the bank data is
+     * loaded. Safe to call at any time; a no-op when nothing is pending.
+     */
+    public static void consolidatePendingMerges() {
+        if (pendingMergeConsolidation.isEmpty() || BACKEND_INSTANCES == null)
+            return;
+        if (BACKEND_INSTANCES.isSlaveServer || BACKEND_INSTANCES.SERVER_BANK_MANAGER == null) {
+            // Not the master side (slave server or pure client) — no server bank state here.
+            pendingMergeConsolidation.clear();
+            return;
+        }
+        if (!BankSystemDataHandler.isBankDataLoaded())
+            return; // world load in progress — loadAll() drains the queue after load_bank()
+
+        Map<ItemID, ItemID> aliases = new HashMap<>(pendingMergeConsolidation);
+        pendingMergeConsolidation.clear();
+        Object syncManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if (syncManager instanceof net.kroia.banksystem.banking.bankmanager.ServerBankManager bankManager)
+            bankManager.consolidateMergedItemIDs(aliases);
+        // Notify dependent mods AFTER BankSystem's own state is consistent again.
+        if (BACKEND_INSTANCES.SERVER_EVENTS != null)
+            BACKEND_INSTANCES.SERVER_EVENTS.ITEM_IDS_MERGED.notifyListeners(Collections.unmodifiableMap(aliases));
+    }
+
+    // ========================================================================================
+    // Startup merge guard (CONFIRM_ITEMID_MERGE)
+    // ========================================================================================
+
+    /**
+     * One group of ItemIDs that would be merged by {@link #renormalizeAndMerge()} <b>and</b>
+     * whose members are genuinely distinct under the previously applied component set
+     * (a <i>collapse</i> merge, as opposed to a harmless <i>healing</i> merge of duplicates).
+     * Produced by {@link #detectCollapseCollisions(Collection)} — a pure dry run, nothing
+     * is mutated.
+     *
+     * @param canonicalId      the ID that would survive the merge (lowest short in the group)
+     * @param mergedIds        the IDs that would be removed and become aliases of the canonical ID
+     * @param currentTemplates the registry templates (defensive copies) of every group member,
+     *                         keyed by ID — used to report the components that distinguish them
+     */
+    public record MergeCollisionGroup(ItemID canonicalId,
+                                      List<ItemID> mergedIds,
+                                      Map<ItemID, ItemStack> currentTemplates) {
+    }
+
+    /**
+     * <b>Dry run</b> of {@link #renormalizeAndMerge()}'s grouping pass: computes which
+     * registered ItemIDs would collapse to the same normalized identity under the
+     * <b>current</b> effective component set, then keeps only the groups that represent a
+     * dangerous <i>collapse</i> (as opposed to a harmless <i>healing</i> merge).
+     * Neither {@code itemIDMap} nor {@code itemIDAliasMap} is mutated.
+     * <p>
+     * <b>Healing vs. collapse:</b> a group is a <i>healing</i> merge when all of its members
+     * are already identical after stripping only the <b>previously applied</b> component set
+     * ({@code previousComponentIds}) — i.e. they are duplicates that should always have been
+     * one ID (e.g. spurious IDs minted by decaying food before the volatile-component fix, or
+     * registry-order duplicates). Those merge automatically, exactly like before this guard
+     * existed. A group is a <i>collapse</i> when at least two members remain distinct under
+     * the previous set and only become equal under the current set — meaning the admin's
+     * component-list change is what fuses genuinely different items (e.g. two markets/bank
+     * entries becoming the same item). Only collapse groups are returned.
+     *
+     * @param previousComponentIds the effective component set that was applied when the world
+     *                             was last normalized (id strings; unparsable entries are skipped)
+     * @return every collapse group the current set would create; empty if applying the current
+     *         set is safe (only healing merges, or no merges at all)
+     */
+    public static List<MergeCollisionGroup> detectCollapseCollisions(Collection<String> previousComponentIds) {
+        return detectCollapseCollisions(previousComponentIds, VolatileItemComponents.getEffectiveComponentIds());
+    }
+
+    /**
+     * Variant of {@link #detectCollapseCollisions(Collection)} with an <b>explicit</b>
+     * "current" component set instead of the globally applied effective set.
+     * <p>
+     * The startup merge guard uses the single-argument overload (current = the applied
+     * effective set). This overload exists so callers (in particular the in-game test suite)
+     * can evaluate a hypothetical set change as a pure function — without mutating the
+     * globally shared {@link VolatileItemComponents} configuration, which on a singleplayer
+     * server is shared between the client and server side and must not be flipped around
+     * while play continues.
+     *
+     * @param previousComponentIds the set the registry was last normalized with
+     * @param currentComponentIds  the (hypothetical or applied) new set to evaluate
+     * @return every collapse group the given current set would create
+     */
+    public static List<MergeCollisionGroup> detectCollapseCollisions(Collection<String> previousComponentIds,
+                                                                     Collection<String> currentComponentIds) {
+        // Parse both sets into resource locations (unknown/absent mods are fine —
+        // stripComponentsByIds skips unresolvable ids).
+        Set<net.minecraft.resources.ResourceLocation> previousIds = parseComponentIdStrings(previousComponentIds);
+        Set<net.minecraft.resources.ResourceLocation> currentIds = parseComponentIdStrings(currentComponentIds);
+
+        List<MergeCollisionGroup> collisions = new ArrayList<>();
+        synchronized (itemIDMap) {
+            // Normalize COPIES under the given current set — the live templates stay untouched.
+            // (stripComponentsByIds == normalize() when currentIds is the applied effective set.)
+            Map<ItemID, ItemStack> normalized = new HashMap<>();
+            for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet()) {
+                ItemStack n = VolatileItemComponents.stripComponentsByIds(entry.getValue(), currentIds);
+                n.setCount(1);
+                normalized.put(entry.getKey(), n);
+            }
+
+            // Same bucketing/grouping as renormalizeAndMerge() pass 2, on the copies.
+            Map<Integer, List<ItemID>> buckets = new HashMap<>();
+            for (Map.Entry<ItemID, ItemStack> entry : normalized.entrySet()) {
+                int hash = ItemStack.hashItemAndComponents(entry.getValue());
+                buckets.computeIfAbsent(hash, k -> new ArrayList<>()).add(entry.getKey());
+            }
+            for (List<ItemID> bucket : buckets.values()) {
+                if (bucket.size() < 2)
+                    continue;
+                List<List<ItemID>> groups = new ArrayList<>();
+                for (ItemID id : bucket) {
+                    ItemStack stack = normalized.get(id);
+                    List<ItemID> match = null;
+                    for (List<ItemID> group : groups) {
+                        if (ItemStack.isSameItemSameComponents(stack, normalized.get(group.getFirst()))) {
+                            match = group;
+                            break;
+                        }
+                    }
+                    if (match == null) {
+                        match = new ArrayList<>();
+                        groups.add(match);
+                    }
+                    match.add(id);
+                }
+                for (List<ItemID> group : groups) {
+                    if (group.size() < 2)
+                        continue;
+
+                    // Classify: how many distinct identities does this group have under the
+                    // PREVIOUS set? 1 → healing (duplicates, merge silently). >1 → collapse.
+                    List<ItemStack> distinctUnderPreviousSet = new ArrayList<>();
+                    for (ItemID id : group) {
+                        ItemStack old = VolatileItemComponents.stripComponentsByIds(itemIDMap.get(id), previousIds);
+                        old.setCount(1);
+                        boolean found = false;
+                        for (ItemStack existing : distinctUnderPreviousSet) {
+                            if (ItemStack.isSameItemSameComponents(old, existing)) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found)
+                            distinctUnderPreviousSet.add(old);
+                    }
+                    if (distinctUnderPreviousSet.size() < 2)
+                        continue; // healing merge — stays automatic
+
+                    // Collapse group: canonical = lowest short (matches renormalizeAndMerge).
+                    ItemID canonical = group.getFirst();
+                    for (ItemID id : group)
+                        if (id.getShort() < canonical.getShort())
+                            canonical = id;
+                    List<ItemID> mergedIds = new ArrayList<>();
+                    Map<ItemID, ItemStack> templates = new HashMap<>();
+                    for (ItemID id : group) {
+                        templates.put(id, itemIDMap.get(id).copy());
+                        if (!id.equals(canonical))
+                            mergedIds.add(id);
+                    }
+                    mergedIds.sort(Comparator.comparingInt(ItemID::getShort));
+                    collisions.add(new MergeCollisionGroup(canonical, mergedIds, templates));
+                }
+            }
+        }
+        return collisions;
+    }
+
+    /** Parses component id strings into resource locations, silently skipping unparsable entries. */
+    private static Set<net.minecraft.resources.ResourceLocation> parseComponentIdStrings(Collection<String> idStrings) {
+        Set<net.minecraft.resources.ResourceLocation> ids = new HashSet<>();
+        if (idStrings != null) {
+            for (String idStr : idStrings) {
+                net.minecraft.resources.ResourceLocation id =
+                        idStr == null ? null : net.minecraft.resources.ResourceLocation.tryParse(idStr.trim());
+                if (id != null)
+                    ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * Builds the human-readable merge report shown to the admin — either as the message of
+     * the startup-aborting {@link ItemIDMergeAbortedException} (flag off) or as an INFO log
+     * before the confirmed merge is applied (flag on).
+     *
+     * @param collisions  collapse groups from {@link #detectCollapseCollisions(Collection)}
+     * @param previousSet the effective component set persisted at the last normalization
+     * @param currentSet  the effective component set of this startup
+     * @return multi-line report listing every merge group, the affected items, the
+     *         components that distinguish them today, and the admin's two options
+     */
+    public static String buildMergeReport(List<MergeCollisionGroup> collisions,
+                                          List<String> previousSet,
+                                          List<String> currentSet) {
+        Set<String> previous = previousSet == null ? Set.of() : new HashSet<>(previousSet);
+        Set<String> current = currentSet == null ? Set.of() : new HashSet<>(currentSet);
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n==================== BankSystem ItemID merge guard ====================\n");
+        sb.append("The effective volatile/deposit-gated component set changed since this world\n");
+        sb.append("was last normalized (config lists ADDITIONAL_VOLATILE_COMPONENTS /\n");
+        sb.append("ADDITIONAL_DEPOSIT_GATED_COMPONENTS in settings.json, or the datapack tags\n");
+        sb.append("banksystem:volatile_item_components / banksystem:deposit_gated_components).\n");
+        sb.append("  Previously applied set: ").append(previousSet).append('\n');
+        sb.append("  Current set:            ").append(currentSet).append('\n');
+        sb.append("Applying the current set would IRREVERSIBLY merge the following genuinely\n");
+        sb.append("distinct items (bank balances and market listings keyed by a merged ID\n");
+        sb.append("would all resolve to the canonical item afterwards):\n");
+        int groupNr = 0;
+        for (MergeCollisionGroup group : collisions) {
+            groupNr++;
+            sb.append("\nMerge group ").append(groupNr).append(" — canonical: ")
+                    .append(describeMember(group.canonicalId(), group.currentTemplates().get(group.canonicalId()), previous, current))
+                    .append('\n');
+            for (ItemID merged : group.mergedIds()) {
+                sb.append("  would become an alias: ")
+                        .append(describeMember(merged, group.currentTemplates().get(merged), previous, current))
+                        .append('\n');
+            }
+        }
+        sb.append("\nYour options:\n");
+        sb.append("  1) Keep the items distinct: revert the component-list change (settings.json\n");
+        sb.append("     config lists and/or datapack tags) and restart the server.\n");
+        sb.append("  2) Approve this merge once: set \"CONFIRM_ITEMID_MERGE\": true in the\n");
+        sb.append("     \"ServerBank\" section of <world>/data/BankSystem/settings.json and restart.\n");
+        sb.append("     The flag resets itself to false after the merge is applied.\n");
+        sb.append("Nothing has been changed or saved: BankSystem suppresses all of its data\n");
+        sb.append("saves for the remainder of this aborted session, so the world data on disk\n");
+        sb.append("stays exactly as it was. Back up your world before confirming.\n");
+        sb.append("========================================================================");
+        return sb.toString();
+    }
+
+    /**
+     * One report line for a merge-group member: ID, item registry name and the components
+     * that are stripped by the current set (the data that distinguishes the member today).
+     * Components that were NOT stripped by the previous set — i.e. the ones whose stripping
+     * is new and causes the collapse — are marked with {@code (NEW)}.
+     * <p>
+     * The current set is passed in (instead of re-reading the applied effective set) so the
+     * report always describes exactly the set the collision detection was run against.
+     */
+    private static String describeMember(ItemID id, ItemStack template, Set<String> previousSet, Set<String> currentSet) {
+        StringBuilder sb = new StringBuilder();
+        sb.append('#').append(id.getShort()).append(" (");
+        sb.append(template == null || template.isEmpty() ? "?" : ItemUtilities.getItemIDStr(template.getItem()));
+        sb.append(')');
+        if (template == null || template.isEmpty())
+            return sb.toString();
+        // List the components on this template that the CURRENT set strips.
+        List<String> stripped = new ArrayList<>();
+        for (net.minecraft.core.component.TypedDataComponent<?> typed : template.getComponents()) {
+            net.minecraft.resources.ResourceLocation typeId =
+                    net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(typed.type());
+            if (typeId == null || !currentSet.contains(typeId.toString()))
+                continue;
+            String value = String.valueOf(typed.value());
+            if (value.length() > 120)
+                value = value.substring(0, 117) + "...";
+            stripped.add(typeId + (previousSet.contains(typeId.toString()) ? "" : " (NEW)") + " = " + value);
+        }
+        if (!stripped.isEmpty())
+            sb.append(" stripped components: ").append(stripped);
+        return sb.toString();
+    }
+
+    /**
+     * Startup merge guard, run at the end of {@link #load(CompoundTag)} on the master server
+     * (slave servers never load ItemIDs from disk; clients never call load()).
+     * <p>
+     * Distinguishes two situations:
+     * <ul>
+     *   <li><b>Healing</b> (stored set equal to the current set, or no stored set yet →
+     *       first load after the mod update / migration): merges are duplicates collapsing
+     *       under an unchanged set — the intended self-repair. Merge silently, exactly like
+     *       before this guard existed.</li>
+     *   <li><b>Potential collapse</b> (stored set differs): dry-run the merge grouping.
+     *       Groups whose members are distinct under the OLD set would be fused by the
+     *       admin's component-list change — that is irreversible, so it requires an explicit
+     *       one-shot confirmation via the {@code CONFIRM_ITEMID_MERGE} setting; without it,
+     *       server startup is aborted with a full report
+     *       ({@link ItemIDMergeAbortedException}).</li>
+     * </ul>
+     * After a successful merge the applied effective set is persisted (via the data handler)
+     * so the next startup compares against it, and a consumed {@code CONFIRM_ITEMID_MERGE}
+     * flag is reset to {@code false} and saved (one-shot confirmation, never a standing
+     * bypass).
+     *
+     * @throws ItemIDMergeAbortedException if the set changed, distinct items would merge,
+     *                                     and the admin has not confirmed
+     */
+    private static void applyStartupMergeGuard() {
+        BankSystemDataHandler dataHandler = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.SERVER_DATA_HANDLER : null;
+        List<String> currentSet = VolatileItemComponents.getEffectiveComponentIds();
+        List<String> storedSet = dataHandler != null ? dataHandler.getStoredEffectiveComponentSet() : null;
+
+        if (storedSet == null || storedSet.equals(currentSet)) {
+            // Unchanged set (or no record yet → migration): every merge is a healing merge.
+            renormalizeAndMerge();
+        } else {
+            List<MergeCollisionGroup> collisions = detectCollapseCollisions(storedSet);
+            if (collisions.isEmpty()) {
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] The effective volatile/deposit-gated component set changed ("
+                            + storedSet + " -> " + currentSet + "), but no distinct ItemIDs collapse — applying the new set.");
+                renormalizeAndMerge();
+            } else {
+                String report = buildMergeReport(collisions, storedSet, currentSet);
+                boolean confirmed = BACKEND_INSTANCES != null
+                        && BACKEND_INSTANCES.SERVER_SETTINGS != null
+                        && Boolean.TRUE.equals(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_MERGE.get());
+                if (!confirmed) {
+                    // Abort startup. Nothing has been mutated on disk; the exception message
+                    // carries the full report into the log / crash report on both loaders.
+                    // BankSystemDataHandler.load_itemIDs() catches this exception in transit
+                    // to mark the whole session save-prohibited (the ItemID registry is only
+                    // half-initialized here and the bank manager is still empty), so neither
+                    // the vanilla crash-save nor the shutdown save can overwrite world data —
+                    // that is what makes the report's "nothing saved" guarantee true.
+                    throw new ItemIDMergeAbortedException(report
+                            + "\nServer startup was aborted by the BankSystem ItemID merge guard (CONFIRM_ITEMID_MERGE is false).");
+                }
+                if (BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] CONFIRM_ITEMID_MERGE is true — applying the confirmed merge."
+                            + report);
+                renormalizeAndMerge();
+                // One-shot confirmation: consume the flag and persist the reset immediately,
+                // so a later (unrelated) set change can never slip through unconfirmed.
+                BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_MERGE.set(false);
+                if (dataHandler != null)
+                    dataHandler.save_globalSettings();
+            }
+        }
+
+        // Record the set that is now in effect so the next startup can detect changes.
+        if (dataHandler != null) {
+            dataHandler.setAppliedEffectiveComponentSet(currentSet);
+            dataHandler.save_metadata();
         }
     }
 

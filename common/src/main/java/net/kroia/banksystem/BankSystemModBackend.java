@@ -3,6 +3,7 @@ package net.kroia.banksystem;
 import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
+import dev.architectury.registry.ReloadListenerRegistry;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
 import net.kroia.banksystem.api.IBankSystemEvents;
@@ -46,6 +47,8 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
@@ -126,6 +129,16 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         INSTANCES.NETWORKING = new BankSystemNetworking();
         INSTANCES.SERVER_EVENTS = new BankSystemEvents();
+
+        // Detect datapack reloads that change the volatile/deposit-gated component tags on a
+        // RUNNING server: the change is rejected (normalization keeps the world-load tag
+        // snapshot) and an error is logged; the new tags are evaluated by the ItemID merge
+        // guard at the next restart. The listener fires during resource apply — the actual
+        // tag rebind happens a few scheduler tasks later, so the comparison is deferred to
+        // the tick hook below (see VolatileItemComponents#onServerResourcesReloaded()).
+        ReloadListenerRegistry.register(PackType.SERVER_DATA,
+                (ResourceManagerReloadListener) resourceManager -> VolatileItemComponents.onServerResourcesReloaded());
+        TickEvent.SERVER_POST.register(server -> VolatileItemComponents.serverTick());
 
         if (TestRegistry.ENABLE_TESTS && BankSystemMod.ENABLE_DEV_FEATURES) {
             BankSystemTestRegistration.register();
@@ -244,6 +257,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.isSlaveServer = false;
         snapshotTickCounter = 0;
         ItemIDManager.clear();
+        // Drop the world-load tag snapshot: the next world/server captures its own freshly
+        // bound tags (see VolatileItemComponents#captureTagSnapshot()).
+        VolatileItemComponents.resetTagSnapshot();
         ItemColorUtil.clearCache();
     }
 
@@ -270,7 +286,10 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the client side
     private static void onPlayerLeaveClientSide(@Nullable LocalPlayer localPlayer)
     {
-
+        // A dedicated client leaving a server drops its tag snapshot so the next server it
+        // joins captures that server's tags. (In singleplayer the integrated server's stop
+        // handler resets it as well — resetting twice is harmless.)
+        VolatileItemComponents.resetTagSnapshot();
     }
     // Called from the client side
     private static void onPlayerJoinClientSide(@Nullable LocalPlayer localPlayer)
@@ -317,9 +336,20 @@ public class BankSystemModBackend implements BankSystemAPI {
     {
         if(INSTANCES.SERVER_DATA_HANDLER != null) {
             Path rootSaveFolder = server.getWorldPath(LevelResource.ROOT);
-            // Load data from the root save folder
+            // Load data from the root save folder.
+            // NOTE: an ItemIDMergeAbortedException thrown by the merge guard inside
+            // loadAll() intentionally propagates out of this method — it must abort
+            // server startup, and the data handler has already prohibited every save
+            // of this session at that point.
             INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder);
             if (!INSTANCES.SERVER_DATA_HANDLER.loadAll()) {
+                // Never blind-overwrite unreadable files with in-memory (possibly empty)
+                // state: move everything that failed to load aside first
+                // (<name>.corrupt-<timestamp>), then write fresh files and re-load.
+                // Fresh worlds (no files yet) skip the backup and just create their
+                // initial files here. Subsystems that failed to load AND could not be
+                // backed up remain save-prohibited inside the handler.
+                INSTANCES.SERVER_DATA_HANDLER.backupFailedSubsystemData();
                 INSTANCES.SERVER_DATA_HANDLER.saveAll();
                 INSTANCES.SERVER_DATA_HANDLER.loadAll(); // Try loading again after saving
             }

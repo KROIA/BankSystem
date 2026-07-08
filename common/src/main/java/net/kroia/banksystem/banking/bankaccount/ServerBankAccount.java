@@ -19,6 +19,7 @@ import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
@@ -253,6 +254,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (itemID == null || !itemID.isValid()) {
             return null; // Invalid item ID
         }
+        // Alias safety net: merged (aliased) ItemIDs resolve to their canonical entry,
+        // so callers still holding an old ID reach the consolidated bank. O(1) map lookup.
+        itemID = ItemIDManager.resolveAlias(itemID);
         UserData personalBankOwnerData = null;
         if (this.personalBankOwner != null) {
             personalBankOwnerData = this.personalBankOwner.getUserData(); // Convert User to UserData
@@ -291,6 +295,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (itemID == null || !itemID.isValid()) {
             return null; // Invalid item ID
         }
+        itemID = ItemIDManager.resolveAlias(itemID); // alias safety net (see getAccountData)
         ServerBank bank = banks.get(itemID);
         if (bank != null) {
             return bank.getMinimalData(); // Get minimal data for the bank with the given item ID
@@ -620,6 +625,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (itemID == null || !itemID.isValid()) {
             return null; // Invalid item ID
         }
+        itemID = ItemIDManager.resolveAlias(itemID); // alias safety net (see getAccountData)
         if (banks.containsKey(itemID)) {
             return banks.get(itemID); // Return existing bank if it already exists
         }
@@ -637,6 +643,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (itemID == null || !itemID.isValid()) {
             return CompletableFuture.completedFuture(null); // Invalid item ID
         }
+        itemID = ItemIDManager.resolveAlias(itemID); // alias safety net (see getAccountData)
         if (banks.containsKey(itemID)) {
             return CompletableFuture.completedFuture(banks.get(itemID)); // Return existing bank if it already exists
         }
@@ -658,6 +665,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (itemID == null || !itemID.isValid()) {
             return; // Invalid item ID
         }
+        itemID = ItemIDManager.resolveAlias(itemID); // alias safety net (see getAccountData)
         hasChanges |= banks.remove(itemID) != null; // Remove bank by item ID
     }
     @Override
@@ -716,7 +724,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
     @Override
     public boolean hasBank(ItemID itemID) {
-        return itemID != null && itemID.isValid() && banks.containsKey(itemID); // Check if bank exists for the item ID
+        // Alias safety net: merged IDs resolve to their canonical bank (see getAccountData).
+        return itemID != null && itemID.isValid() && banks.containsKey(ItemIDManager.resolveAlias(itemID));
     }
     @Override
     public CompletableFuture<Boolean> hasBankAsync(ItemID itemID) {
@@ -731,14 +740,16 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (itemID == null || !itemID.isValid()) {
             return null; // Invalid item ID
         }
-        return banks.get(itemID); // Get bank by item ID
+        // Alias safety net: merged IDs resolve to their canonical bank (see getAccountData).
+        return banks.get(ItemIDManager.resolveAlias(itemID)); // Get bank by item ID
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getBankAsync(ItemID itemID) {
         if (itemID == null) {
             return CompletableFuture.completedFuture(null); // Invalid item ID
         }
-        return CompletableFuture.completedFuture(banks.get(itemID)); // Get bank by item ID
+        // Alias safety net: merged IDs resolve to their canonical bank (see getAccountData).
+        return CompletableFuture.completedFuture(banks.get(ItemIDManager.resolveAlias(itemID))); // Get bank by item ID
     }
 
 
@@ -750,6 +761,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (itemID == null || !itemID.isValid()) {
             return null; // Invalid item ID
         }
+        itemID = ItemIDManager.resolveAlias(itemID); // alias safety net (see getAccountData)
         ServerBank bank = banks.get(itemID);
         if (bank == null) {
             bank = ServerBank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
@@ -765,6 +777,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (itemID == null) {
             return CompletableFuture.completedFuture(null); // Invalid item ID
         }
+        itemID = ItemIDManager.resolveAlias(itemID); // alias safety net (see getAccountData)
         ServerBank bank = banks.get(itemID);
         if (bank == null) {
             bank = ServerBank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
@@ -849,7 +862,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
         if(tag.contains("accountIcon")) {
             CompoundTag iconTag = tag.getCompound("accountIcon");
-            this.accountIcon = ItemID.createFromTag(iconTag); // Load account icon if set
+            // Canonicalize a possibly aliased icon ID (cosmetic — it would alias-resolve
+            // for rendering anyway, but persisted data should reference the canonical ID).
+            this.accountIcon = ItemIDManager.resolveAlias(ItemID.createFromTag(iconTag)); // Load account icon if set
         } else {
             this.accountIcon = null; // No account icon set
         }
@@ -872,10 +887,73 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             CompoundTag bankTag = banksTag.getCompound(i);
             ServerBank bank = ServerBank.createFromTag(bankTag);
             if (bank != null) {
-                banks.put(bank.getItemID(), bank);
+                // ServerBank.load() canonicalizes aliased ItemIDs, so two saved banks may
+                // resolve to the same key after an ItemID merge (confirmed volatile-
+                // component merge, possibly from an earlier session before consolidation
+                // existed). Merge their balances instead of silently dropping one — this
+                // heals fragmented holdings in pre-fix worlds on the next load.
+                ServerBank existing = banks.get(bank.getItemID());
+                if (existing != null) {
+                    existing.absorb(bank);
+                } else {
+                    banks.put(bank.getItemID(), bank);
+                }
             }
         }
         return true;
+    }
+
+    /**
+     * Consolidates this account's banks after an ItemID alias merge: every bank keyed by
+     * one of the given alias IDs is merged into the bank of its canonical ID — created by
+     * re-keying the alias bank in place when no canonical bank exists yet (deliberately
+     * NOT via {@link ServerBank#create}, whose allowed-item check must never be able to
+     * drop an existing balance). Both the free and the locked balance are preserved: the
+     * sum over each merge group is identical before and after (verified, mismatches are
+     * logged as errors).
+     * <p>
+     * Called by {@code ServerBankManager.consolidateMergedItemIDs} on the master server
+     * after {@code ItemIDManager.renormalizeAndMerge()} created new aliases.
+     *
+     * @param aliasToCanonical alias → canonical pairs from the ItemID merge pass
+     * @return the number of banks that were merged away or re-keyed
+     */
+    public int consolidateMergedItemIDs(Map<ItemID, ItemID> aliasToCanonical) {
+        int changed = 0;
+        for (Map.Entry<ItemID, ItemID> entry : aliasToCanonical.entrySet()) {
+            ServerBank aliasBank = banks.remove(entry.getKey());
+            if (aliasBank == null)
+                continue;
+            ItemID canonical = entry.getValue();
+            ServerBank canonicalBank = banks.get(canonical);
+            if (canonicalBank == null) {
+                // No bank under the canonical ID yet: re-key the alias bank in place.
+                aliasBank.rekeyForAliasMerge_internal(canonical);
+                banks.put(canonical, aliasBank);
+            } else {
+                // Invariant check: total over the pair must be unchanged by the merge.
+                long expectedTotal = canonicalBank.getTotalBalance() + aliasBank.getTotalBalance();
+                canonicalBank.absorb(aliasBank);
+                if (canonicalBank.getTotalBalance() != expectedTotal) {
+                    BACKEND_INSTANCES.LOGGER.error("[ServerBankAccount] Balance mismatch while consolidating "
+                            + entry.getKey() + " -> " + canonical + " on account " + accountNumber
+                            + " (overflow clamp): expected total " + expectedTotal
+                            + ", got " + canonicalBank.getTotalBalance());
+                }
+            }
+            changed++;
+            hasChanges = true;
+        }
+        // Cosmetic: an aliased account icon keeps rendering through alias resolution, but
+        // rewrite it so newly persisted data references the canonical ID.
+        if (accountIcon != null) {
+            ItemID canonicalIcon = aliasToCanonical.get(accountIcon);
+            if (canonicalIcon != null) {
+                accountIcon = canonicalIcon;
+                hasChanges = true;
+            }
+        }
+        return changed;
     }
 
     @Override
