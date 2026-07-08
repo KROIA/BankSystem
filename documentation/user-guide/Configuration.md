@@ -295,6 +295,17 @@ Advanced tooltips (`F3+H`) show item ids but **not** data components. To discove
 
 If you are unsure whether a component is safe to strip, test on a copy of your world first and watch the server log for the merge message described above.
 
+### The Monotonic ItemID Counter
+
+Every registered bank item is assigned an internal 16-bit short identifier. Since v2.0.3, BankSystem allocates these shorts from a **persisted monotonic counter** stored in the world's ItemID data (NBT key `nextShortCounter`). The counter has two guarantees you can rely on:
+
+- **Monotonic** — it only ever moves forward. Newly registered items always get a short strictly greater than every short that has ever been issued in this world.
+- **No reassignment of dropped shorts** — if a stored item template becomes unresolvable at world load (because the mod that added the item has been removed, or the stored NBT is corrupt), the entry is dropped with a `WARN` log line reporting the short and cached name. The dropped short remains **reserved** — the counter has already advanced past it, so the same short can never be handed out to a different item later. This prevents downstream state that is still keyed by that short (bank balances, StockMarket markets, plugin caches, ...) from silently rebinding to an unrelated new item.
+
+**Legacy worlds** (saved before v2.0.3) migrate automatically on the first load: the counter is seeded to `max(shortsInItemIDMap ∪ shortsInItemIDAliasMap) + 1` and persisted from that point on. No admin action needed.
+
+**Exhaustion** — the counter is a 32-bit int so the exhaustion point is explicit rather than a silent wraparound: once it passes `Short.MAX_VALUE` (32767), the allocator refuses to register new items and returns an invalid ID, logging an `ERROR` with the item's registry name. Existing ItemIDs and their bank balances are unaffected — only new registrations fail. In practice this is only reachable on worlds that have registered tens of thousands of distinct item templates over their lifetime.
+
 ### Multi-Server Behavior
 
 In a [master/slave network](MultiserverSetup.md) all sides must identify items identically:

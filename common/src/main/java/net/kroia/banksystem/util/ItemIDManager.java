@@ -57,15 +57,49 @@ public class ItemIDManager implements ServerSaveable {
 
     private static ConcurrentHashMap<ItemID, ItemStack> singlePlayerServerBackupOnPlayerLeave = null;
     private static ConcurrentHashMap<ItemID, ItemID> singlePlayerServerAliasBackupOnPlayerLeave = null;
+    /**
+     * Backup companion of {@link #singlePlayerServerBackupOnPlayerLeave} for the monotonic
+     * short counter. Kept in sync with the map backups so that
+     * {@link #save(CompoundTag)} — which falls back to the backups when the live map is
+     * empty (singleplayer server-leave path) — can still persist the correct counter value.
+     * {@code -1} marks "no backup taken yet"; anything &gt; 0 is a valid captured counter.
+     */
+    private static int singlePlayerServerBackupCounterOnPlayerLeave = -1;
     private static Map<ItemStack, CompletableFuture<ItemID>> pendingItemIDs = new ConcurrentHashMap<>();
     private static List<Pair<List<ItemStack>, CompletableFuture<List<ItemID>>>> pendingItemIDGroups = new CopyOnWriteArrayList<>();
+
+    /**
+     * Monotonic short allocation counter used by
+     * {@link #registerItemStackServerSide_direct(List)} to hand out fresh ItemID shorts.
+     * <p>
+     * <b>Persisted</b> under NBT key {@code "nextShortCounter"} in {@link #save(CompoundTag)},
+     * restored in {@link #load(CompoundTag)}. Starts at {@code 1} on a brand-new world
+     * (short {@code 0} is reserved for {@link ItemID#INVALID_ID}); on load of a legacy world
+     * without the key, seeded to {@code max(shortsInItemIDMap ∪ shortsInItemIDAliasMap) + 1}
+     * so no already-used short is ever re-issued.
+     * <p>
+     * <b>Never decrements.</b> Even when an entry is silently dropped at load (unresolvable
+     * ItemStack — mod removed / NBT corrupt) its short remains "burned": the counter has
+     * already moved past it and will never re-issue it. This is the whole point of the
+     * counter — a dropped short cannot silently rebind to a new item and poison downstream
+     * ItemID-keyed state (bank balances, StockMarket markets, plugin caches, ...).
+     * <p>
+     * Declared as {@code int}, not {@code short}, so overflow past {@link Short#MAX_VALUE}
+     * is explicit and observable rather than silently wrapping into negative shorts. The
+     * allocator returns {@link ItemID#INVALID_ID} once the counter exceeds the short range.
+     */
+    private static int nextShortCounter = 1;
 
     public static void clear()
     {
         singlePlayerServerBackupOnPlayerLeave = new ConcurrentHashMap<>(itemIDMap);
         singlePlayerServerAliasBackupOnPlayerLeave = new ConcurrentHashMap<>(itemIDAliasMap);
+        singlePlayerServerBackupCounterOnPlayerLeave = nextShortCounter;
         itemIDMap.clear();
         itemIDAliasMap.clear();
+        // Reset the counter to its blank-world default. The subsequent load() either
+        // restores the persisted value or seeds from the map maxima (migration).
+        nextShortCounter = 1;
         // Never carry unconsolidated merge pairs into the next session/world.
         pendingMergeConsolidation.clear();
     }
@@ -295,12 +329,35 @@ public class ItemIDManager implements ServerSaveable {
                     continue;
                 }
 
-                short newID = (short)(itemIDMap.size() + 1);
-                do{
-                    newID++;
-                    // Never reuse a short that is still referenced as an alias of a merged ID —
-                    // old saved data may still address it.
-                }while(itemIDMap.containsKey(new ItemID(newID)) || itemIDAliasMap.containsKey(new ItemID(newID)));
+                // Monotonic allocation: hand out the next unused short from the counter.
+                // The counter has already moved past every short that was ever allocated
+                // (including dropped-at-load shorts — see #load()), so a fresh short is
+                // guaranteed never to collide with old saved data.
+                //
+                // Overflow: the counter is an int so exceeding Short.MAX_VALUE is explicit
+                // rather than a silent wraparound into negative shorts. When the ItemID
+                // space is exhausted we return INVALID_ID and refuse to touch the registry;
+                // callers are expected to check id.isValid() (see criterion 5 in Task #11).
+                if (nextShortCounter > Short.MAX_VALUE) {
+                    logSpaceExhausted(stack);
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
+                short newID = (short) nextShortCounter++;
+                // Belt-and-suspenders: on a migrated legacy world the seed could theoretically
+                // collide with an unrelated legacy alias short — skip past any occupied ID
+                // and check the overflow bound again each time.
+                while (itemIDMap.containsKey(new ItemID(newID)) || itemIDAliasMap.containsKey(new ItemID(newID))) {
+                    if (nextShortCounter > Short.MAX_VALUE) {
+                        logSpaceExhausted(stack);
+                        ids.add(ItemID.INVALID_ID);
+                        newID = 0; // signal outer branch to skip the put
+                        break;
+                    }
+                    newID = (short) nextShortCounter++;
+                }
+                if (newID == 0)
+                    continue; // overflow inside the belt-and-suspenders loop
 
                 // Store a normalized template (volatile components stripped, count 1) so the
                 // registry never contains time-varying component data.
@@ -527,12 +584,18 @@ public class ItemIDManager implements ServerSaveable {
     public boolean save(CompoundTag tag) {
         ConcurrentHashMap<ItemID, ItemStack> usedMap = itemIDMap;
         Map<ItemID, ItemID> usedAliasMap = itemIDAliasMap;
+        int usedCounter = nextShortCounter;
         if(usedMap.isEmpty())
         {
             if(singlePlayerServerBackupOnPlayerLeave != null)
                 usedMap = singlePlayerServerBackupOnPlayerLeave;
             if(singlePlayerServerAliasBackupOnPlayerLeave != null)
                 usedAliasMap = singlePlayerServerAliasBackupOnPlayerLeave;
+            // Persist the counter captured alongside the maps on the last clear() so a
+            // singleplayer save that fires after the server-leave clear keeps the counter's
+            // monotonic guarantee across the restart.
+            if(singlePlayerServerBackupCounterOnPlayerLeave > 0)
+                usedCounter = singlePlayerServerBackupCounterOnPlayerLeave;
         }
         RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
         if(access == null)
@@ -574,6 +637,11 @@ public class ItemIDManager implements ServerSaveable {
             aliasListTag.add(aliasTag);
         }
         tag.put("itemIDAliases", aliasListTag);
+
+        // Persist the monotonic short allocation counter. Ensures a dropped-at-load short is
+        // never re-issued (Task #11 / ISSUES.md #56). Stored as an int so an admin can spot
+        // the value approaching Short.MAX_VALUE (32767) in the world data.
+        tag.putInt("nextShortCounter", usedCounter);
         return true;
     }
 
@@ -598,8 +666,31 @@ public class ItemIDManager implements ServerSaveable {
                 continue;
 
             Optional<ItemStack> itemStackOptional = ItemStack.parse(access, itemStackTag);
-            if(itemStackOptional.isEmpty())
+            if(itemStackOptional.isEmpty()) {
+                // Silent-drop hazard (Task #11 / ISSUES.md #56): the ItemStack no longer
+                // resolves — its host mod may have been removed, or the stored NBT is
+                // corrupt. The entry is dropped, but the short remains RESERVED — the
+                // persisted monotonic nextShortCounter has already advanced past it, so
+                // this short can never be re-issued to a different item. Logging at WARN
+                // gives admins a hint when downstream ItemID-keyed data (bank balances,
+                // StockMarket markets, plugin caches) references an ID that no longer
+                // exists in the registry.
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                    // ItemID.getName() falls back to the numeric short (as string) when the
+                    // real registry name cannot be resolved — at the load-time drop site
+                    // the registry is only partially populated, so a numeric fallback is
+                    // usual. Distinguish real names from the placeholder and report the
+                    // placeholder as "<unknown>" per Task #11 criterion 6.
+                    String cachedName = id.getName();
+                    if (cachedName == null || cachedName.isEmpty() || cachedName.equals(String.valueOf(id.getShort())))
+                        cachedName = "<unknown>";
+                    BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Dropped ItemID entry (short="
+                            + id.getShort() + ", cached-name=" + cachedName + ") — stored ItemStack "
+                            + "no longer resolves (mod possibly removed or NBT corrupt). "
+                            + "Short remains reserved (will not be reassigned).");
+                }
                 continue;
+            }
 
             // Store the template RAW (un-normalized) for now: the startup merge guard below
             // needs the saved component data to tell healing merges apart from collapse
@@ -623,6 +714,29 @@ public class ItemIDManager implements ServerSaveable {
             itemIDAliasMap.put(new ItemID(aliasTag.getShort("from")), new ItemID(aliasTag.getShort("to")));
         }
 
+        // Restore the monotonic short allocation counter (Task #11). Two branches:
+        //   - Key present  → adopt the persisted value verbatim. Every subsequent save
+        //                     persists it again, so this is the steady-state path.
+        //   - Key absent   → legacy migration. Seed to max(shortsInItemIDMap ∪
+        //                     shortsInItemIDAliasMap) + 1 so allocation cannot re-issue any
+        //                     short that is currently referenced. One-shot: the next save
+        //                     writes the key and this branch is never taken again on the
+        //                     same world.
+        if (tag.contains("nextShortCounter"))
+        {
+            nextShortCounter = tag.getInt("nextShortCounter");
+            if (nextShortCounter < 1)
+                nextShortCounter = 1;
+        }
+        else
+        {
+            nextShortCounter = computeMigrationSeed(itemIDMap.keySet(), itemIDAliasMap.keySet());
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Legacy world: seeded monotonic "
+                        + "nextShortCounter to " + nextShortCounter + " (max used short + 1). "
+                        + "Subsequent saves persist the counter under NBT key 'nextShortCounter'.");
+        }
+
         // Merge entries that collapse to the same normalized identity, guarded against
         // silent collapses caused by a CHANGED volatile/deposit-gated component set.
         // May throw ItemIDMergeAbortedException to abort server startup (nothing has been
@@ -631,6 +745,7 @@ public class ItemIDManager implements ServerSaveable {
 
         singlePlayerServerBackupOnPlayerLeave = null;
         singlePlayerServerAliasBackupOnPlayerLeave = null;
+        singlePlayerServerBackupCounterOnPlayerLeave = -1;
         return true;
     }
 
@@ -1141,6 +1256,80 @@ public class ItemIDManager implements ServerSaveable {
         }
     }
 
+
+    /**
+     * Computes the migration seed for {@link #nextShortCounter} on a legacy world (a world
+     * saved before the counter existed): {@code max(shortsInItemIDMap ∪ shortsInItemIDAliasMap) + 1}.
+     * <p>
+     * Returned as an {@code int} (not {@code short}) so a fully-saturated legacy world (max
+     * short == {@link Short#MAX_VALUE}) seeds to {@code Short.MAX_VALUE + 1 = 32768}, at which
+     * point {@link #registerItemStackServerSide_direct(List)} returns {@link ItemID#INVALID_ID}
+     * on the next registration attempt — the exhaustion is reported cleanly instead of
+     * silently wrapping.
+     * <p>
+     * Callable from tests via {@link #computeMigrationSeed_forTesting} which delegates here.
+     *
+     * @param mapShorts   ItemIDs currently in {@code itemIDMap}
+     * @param aliasShorts ItemIDs currently referenced by {@code itemIDAliasMap}
+     *                    (the {@code from} side — canonical shorts are already in {@code mapShorts})
+     * @return one past the largest short present in either collection, or {@code 1} if both are empty
+     */
+    static int computeMigrationSeed(Collection<ItemID> mapShorts, Collection<ItemID> aliasShorts) {
+        int maxShort = 0;
+        if (mapShorts != null)
+            for (ItemID id : mapShorts)
+                if ((id.getShort() & 0xFFFF) > maxShort)
+                    maxShort = id.getShort() & 0xFFFF;
+        if (aliasShorts != null)
+            for (ItemID id : aliasShorts)
+                if ((id.getShort() & 0xFFFF) > maxShort)
+                    maxShort = id.getShort() & 0xFFFF;
+        return maxShort + 1;
+    }
+
+    /**
+     * Public delegate to {@link #computeMigrationSeed(Collection, Collection)} for the
+     * in-game test suite (Task #11 test 1). Not intended for production use.
+     */
+    public static int computeMigrationSeed_forTesting(Collection<ItemID> mapShorts, Collection<ItemID> aliasShorts) {
+        return computeMigrationSeed(mapShorts, aliasShorts);
+    }
+
+    /**
+     * Emits the ERROR log required by Task #11 criterion 5 when the allocator refuses to
+     * hand out a new short because {@link #nextShortCounter} has passed
+     * {@link Short#MAX_VALUE}. Kept as a helper so the counter allocator stays compact and
+     * both overflow branches (the initial check and the belt-and-suspenders loop) use the
+     * same wording.
+     *
+     * @param stack the stack whose registration is being aborted — its registry name is
+     *              included in the log line so admins can trace the failing operation.
+     */
+    private static void logSpaceExhausted(ItemStack stack) {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.LOGGER == null)
+            return;
+        String name = stack != null && !stack.isEmpty() ? ItemUtilities.getItemIDStr(stack.getItem()) : "<empty>";
+        BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] BankSystem ItemID space exhausted — "
+                + "cannot register new item " + name + ". The monotonic short counter has "
+                + "passed Short.MAX_VALUE (" + Short.MAX_VALUE + "); no fresh shorts remain. "
+                + "This affects registration only — existing ItemIDs and their bank balances "
+                + "are unaffected. Contact the mod maintainer.");
+    }
+
+    /** Read-only accessor to {@link #nextShortCounter} for the in-game test suite. */
+    public static int getNextShortCounter_forTesting() {
+        return nextShortCounter;
+    }
+
+    /**
+     * Explicit setter for {@link #nextShortCounter}, exclusively for the in-game test suite
+     * (Task #11 tests 5 and 6 need to force the counter to overflow). Never call in
+     * production code — the counter is otherwise only mutated by the allocator itself and
+     * by {@link #load(CompoundTag)}.
+     */
+    public static void setNextShortCounter_forTesting(int value) {
+        nextShortCounter = value;
+    }
 
     public void createDefaultItemIDs(MinecraftServer server)
     {
