@@ -356,8 +356,20 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         CompoundTag tag = fileWasPresent ? readDataCompound(filePath) : null;
         try {
             boolean success = tag != null && BACKEND_INSTANCES.ITEM_ID_MANAGER.load(tag);
-            if (success)
+            if (success) {
                 itemIDsLoadState = LoadState.LOADED;
+                // Task #13 Fix D one-shot durability: if the load-time alias-table repair
+                // touched any entries, persist the cleaned-up state immediately so a crash
+                // between now and the next periodic save doesn't lose the healing work.
+                // consumeLastLoadRepairCount() clears the counter after reading — idempotent
+                // across multiple loadAll() invocations in the same session.
+                int repaired = ItemIDManager.consumeLastLoadRepairCount();
+                if (repaired > 0) {
+                    info("Persisting ItemID alias-table repairs (" + repaired
+                            + " entries) via one-shot save_itemIDs().");
+                    save_itemIDs();
+                }
+            }
             else
                 // Absent file → fresh world (saving may create it); present but
                 // unreadable/invalid → never overwrite it with in-memory state.
@@ -618,6 +630,19 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public void setAppliedEffectiveComponentSet(List<String> set)
     {
         appliedEffectiveComponentSet = set == null ? null : new ArrayList<>(set);
+    }
+
+    /**
+     * Read-only view of the effective component set that the ItemID registry has been
+     * normalized with in this session (as assigned by the startup merge guard).
+     * Intended for in-game tests only — production code has no need to inspect it.
+     *
+     * @return an unmodifiable copy of the applied effective component set, or {@code null}
+     *         if the guard has not yet written the field this session
+     */
+    public List<String> getAppliedEffectiveComponentSet_forTesting()
+    {
+        return appliedEffectiveComponentSet == null ? null : List.copyOf(appliedEffectiveComponentSet);
     }
 
     /**

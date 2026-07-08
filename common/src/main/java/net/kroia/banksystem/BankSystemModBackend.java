@@ -108,6 +108,20 @@ public class BankSystemModBackend implements BankSystemAPI {
         return INSTANCES.DATABASE_MANAGER;
     }
 
+    /**
+     * Test-only accessor for the shared {@link Instances} container. Same audience as
+     * {@link #getBalanceHistoryManager()} — the in-game merge-guard tests use this to reach
+     * the data handler for the upgrade-safety assertion on {@code appliedComponentSet}.
+     * Production code should not use this — instances are internal state.
+     *
+     * @return the singleton instances container (never {@code null}, initialized at class
+     *         load), possibly with some individual fields still {@code null} depending on
+     *         the current lifecycle phase.
+     */
+    public static Instances getInstances_forTesting() {
+        return INSTANCES;
+    }
+
 
     BankSystemModBackend()
     {

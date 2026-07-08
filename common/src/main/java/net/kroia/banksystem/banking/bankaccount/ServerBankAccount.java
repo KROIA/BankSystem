@@ -167,6 +167,18 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         }
     }
 
+    /**
+     * Snapshots this account's client-visible state for streaming to consumers (ATM screen,
+     * BankTerminalScreen, block-entity displays, ...). Emits alias-resolved ItemIDs only
+     * (Task #13 Fix B): the raw {@code banks} map may hold entries keyed by an aliased ID
+     * under a legacy corrupt-alias state, and streaming those raw keys hides balances from
+     * consumers that look them up by canonical ID (concrete symptom: ATM shows "no money"
+     * while the bank terminal shows the balance). Duplicate resolutions (two source keys
+     * collapsing to the same canonical) sum both free and locked balances — never drop
+     * funds under a corrupt state.
+     *
+     * @return snapshot of account data with alias-resolved bank keys and deduplicated balances
+     */
     @Override
     public BankAccountData getAccountData()
     {
@@ -183,13 +195,45 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             users.put(userUUID, user.toBankUserData()); // Convert BankUser to BankUserData
         }
 
+        // Task #13 Fix B: emit alias-resolved keys, summing balances if two source shorts
+        // collapse to the same canonical (rare, only observable under Bug-A corrupt state).
+        // The emitted BankData record itself carries the resolved (canonical) ItemID so its
+        // own itemID field matches the map key.
         for(Map.Entry<ItemID, ServerBank> entry : this.banks.entrySet()) {
-            ItemID itemID = entry.getKey();
+            ItemID canonical = ItemIDManager.resolveAlias(entry.getKey());
             ServerBank bank = entry.getValue();
-            bankData.put(itemID, bank.getMinimalData()); // Convert ServerBank to BankData
+            long balance = bank.getBalance();
+            long lockedBalance = bank.getLockedBalance();
+            BankData existing = bankData.get(canonical);
+            if (existing != null) {
+                // Sum both source contributions — clamp against overflow the same way
+                // ServerBank#absorb does; a Long.MAX_VALUE clamp is the least surprising
+                // fallback for the pathological case of two near-max source balances.
+                balance = addClampedForAggregation(existing.balance(), balance);
+                lockedBalance = addClampedForAggregation(existing.lockedBalance(), lockedBalance);
+            }
+            bankData.put(canonical, new BankData(canonical, balance, lockedBalance));
         }
 
         return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
+    }
+
+    /**
+     * Overflow-safe {@code long} addition used by {@link #getAccountData()} when summing
+     * two alias-keyed balances into the same canonical entry.
+     * Matches {@code ServerBank#addClamped}'s clamp-at-{@link Long#MAX_VALUE} semantics —
+     * consistent with how bank absorption already handles the same theoretical overflow.
+     *
+     * @param a first addend (non-negative in practice)
+     * @param b second addend (non-negative in practice)
+     * @return {@code a + b}, or {@link Long#MAX_VALUE} if the sum would overflow
+     */
+    private static long addClampedForAggregation(long a, long b) {
+        long sum = a + b;
+        // If both are non-negative but the sum went negative → overflow.
+        if (((a ^ sum) & (b ^ sum)) < 0)
+            return Long.MAX_VALUE;
+        return sum;
     }
     @Override
     public CompletableFuture<BankAccountData> getAccountDataAsync()

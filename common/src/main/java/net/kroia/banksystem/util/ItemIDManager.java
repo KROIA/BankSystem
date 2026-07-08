@@ -105,15 +105,81 @@ public class ItemIDManager implements ServerSaveable {
     }
 
     /**
-     * Resolves an ItemID through the alias table to its canonical ID.
-     * IDs that were never merged resolve to themselves.
+     * Hard cap on {@link #resolveAlias(ItemID)} chain-walk iterations (Task #13 Fix C).
+     * <p>
+     * A properly maintained alias table is flattened by {@link #renormalizeAndMerge(Collection)}
+     * (every value already points at a canonical ID present in {@code itemIDMap}), so the walk
+     * exits after ONE hop in the common case. The bound only ever fires under a corrupt state
+     * — a chain longer than the short registry itself could ever produce (Short.MAX_VALUE is
+     * 32767, but 64 is far more than any realistic accidental chain, cheap to bound with, and
+     * matches the guard style used in {@link #renormalizeAndMerge(Collection)} pass 3).
+     */
+    private static final int MAX_ALIAS_CHAIN_HOPS = 64;
+
+    /**
+     * Repair counter recorded by the most recent {@link #load(CompoundTag)} — read by
+     * {@code BankSystemDataHandler.load_itemIDs()} to decide whether to persist the repaired
+     * state via {@code save_itemIDs()} (Task #13 Fix D one-shot durability). Cleared to
+     * {@code 0} at the start of every {@link #load(CompoundTag)} invocation.
+     */
+    private static int lastLoadRepairCount = 0;
+
+    /**
+     * Walks the alias table from the given ItemID to its canonical terminal (an ID that is
+     * <b>not</b> a key in {@code itemIDAliasMap}). IDs that were never merged resolve to
+     * themselves in zero hops.
+     * <p>
+     * <b>Chain-walking (Task #13 Fix C):</b> A merged ID may itself have been merged into a
+     * further canonical ID before {@link #renormalizeAndMerge(Collection)} flattened the
+     * table, or a corrupt state (see {@link #repairCorruptAliasEntries()}) may leave
+     * intermediate hops in {@code itemIDAliasMap}. This method follows every hop until the
+     * current short is no longer a key in the alias table — the alias table is the
+     * authoritative signal for "is this ID an alias?"; we do <b>not</b> gate on
+     * {@code itemIDMap} presence (intermediate hops may or may not be in the map depending
+     * on repair state).
+     * <p>
+     * <b>Cycle protection:</b> both a visited-set and a hard iteration bound
+     * ({@link #MAX_ALIAS_CHAIN_HOPS}) guard against an accidentally-cyclic table. On cycle
+     * detection or hop-bound exhaustion the method logs at ERROR with the chain traversed so
+     * far and returns the <b>original input</b> unchanged (safest fallback — refusing to
+     * pick a partially-resolved intermediate ID that could silently misroute reads/writes).
+     * The repair pass in {@link #repairCorruptAliasEntries()} breaks such cycles at
+     * load-time so this fallback is only ever a runtime safety net.
      *
-     * @param itemID the (possibly aliased) ItemID
-     * @return the canonical ItemID
+     * @param itemID the (possibly aliased) ItemID to resolve; must not be {@code null}
+     * @return the canonical (terminal) ItemID, or the original input if the chain contains
+     *         a cycle or exceeds {@link #MAX_ALIAS_CHAIN_HOPS} hops
      */
     public static @NotNull ItemID resolveAlias(@NotNull ItemID itemID) {
-        ItemID canonical = itemIDAliasMap.get(itemID);
-        return canonical != null ? canonical : itemID;
+        // Fast path: not an alias at all — return immediately, allocate nothing.
+        if (!itemIDAliasMap.containsKey(itemID))
+            return itemID;
+
+        Set<ItemID> visited = new HashSet<>();
+        visited.add(itemID);
+        ItemID current = itemID;
+        for (int hop = 0; hop < MAX_ALIAS_CHAIN_HOPS; hop++) {
+            ItemID next = itemIDAliasMap.get(current);
+            if (next == null)
+                return current; // terminal reached
+            if (!visited.add(next)) {
+                // Cycle: log the traversed chain, fall back to the original input.
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                    BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] Alias-chain cycle detected while resolving "
+                            + itemID + " (chain: " + visited + " -> " + next
+                            + "). Returning input unchanged; run repairCorruptAliasEntries() to break the cycle.");
+                }
+                return itemID;
+            }
+            current = next;
+        }
+        // Bound exhausted without finding a terminal — treat as pathological, fall back.
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] Alias-chain resolution exceeded "
+                    + MAX_ALIAS_CHAIN_HOPS + " hops for " + itemID + " (chain: " + visited
+                    + "). Returning input unchanged; run repairCorruptAliasEntries().");
+        }
+        return itemID;
     }
 
     /**
@@ -743,10 +809,219 @@ public class ItemIDManager implements ServerSaveable {
         // mutated on disk at that point).
         applyStartupMergeGuard();
 
+        // Task #13 Fix D: heal the alias table after every other load-time pass. Repairs
+        // pre-existing corrupt states (source present in BOTH itemIDMap and itemIDAliasMap,
+        // orphan aliases whose chain terminates outside the registry, cycles). The count is
+        // stashed for BankSystemDataHandler.load_itemIDs() to trigger a one-shot save when
+        // any repair happened, so the cleaned-up state is durable on the very next tick.
+        lastLoadRepairCount = repairCorruptAliasEntries();
+
         singlePlayerServerBackupOnPlayerLeave = null;
         singlePlayerServerAliasBackupOnPlayerLeave = null;
         singlePlayerServerBackupCounterOnPlayerLeave = -1;
         return true;
+    }
+
+    /**
+     * Reads and clears the repair count recorded by the most recent {@link #load(CompoundTag)}.
+     * Intended for {@code BankSystemDataHandler.load_itemIDs()} to decide whether the
+     * post-load {@code save_itemIDs()} is needed (only when {@code &gt; 0}).
+     *
+     * @return the number of alias entries repaired by the last load, or {@code 0} if none
+     */
+    public static int consumeLastLoadRepairCount() {
+        int v = lastLoadRepairCount;
+        lastLoadRepairCount = 0;
+        return v;
+    }
+
+    /**
+     * Read-only peek at the repair count recorded by the most recent {@link #load(CompoundTag)}.
+     * Consumes nothing — for tests that want to inspect the count without clearing it.
+     */
+    public static int getLastLoadRepairCount_forTesting() {
+        return lastLoadRepairCount;
+    }
+
+    /**
+     * Heals corrupt entries in {@code itemIDAliasMap} (Task #13 Fix D).
+     * <p>
+     * Runs at the end of {@link #load(CompoundTag)}, after every other pass (Task #8 guard,
+     * Task #10 consolidation, Task #11 counter migration). Idempotent — a second call on the
+     * same world is a no-op because run 1 already dropped everything that would be dropped.
+     * <p>
+     * <b>Detection criteria</b> (per {@code source -> target} entry, snapshotted before the
+     * loop starts so map mutation inside the loop is safe):
+     * <ul>
+     *   <li><b>invariant violation</b> — {@code source} is <b>also</b> present in
+     *       {@code itemIDMap}. Historically this state (both maps hold the same short)
+     *       broke {@link #resolveAlias(ItemID)}'s one-hop pre-Fix-C behavior and produced
+     *       misleading downstream reads. The alias entry is removed; the map entry is
+     *       preserved (the ID becomes a distinct canonical ID going forward).</li>
+     *   <li><b>orphan</b> — the alias chain from {@code source} terminates at a short that
+     *       is <b>not</b> in {@code itemIDMap} (target item never existed, or was purged).
+     *       The alias entry is removed — resolving through it would return a dangling ID.</li>
+     *   <li><b>cycle</b> — the chain from {@code source} enters a loop (detected via visited
+     *       set / bounded iterations). The <i>current source entry</i> is removed to break
+     *       the cycle; other members of the cycle are handled on their own snapshot passes.
+     *       Logged at ERROR because cycles indicate a serious past corruption event.</li>
+     * </ul>
+     * <b>Not touched:</b> alias entries whose chain reaches a canonical ID present in
+     * {@code itemIDMap} in {@code &lt;=} {@link #MAX_ALIAS_CHAIN_HOPS} hops with no cycle
+     * — those are healthy.
+     * <p>
+     * <b>Balance data is NEVER touched</b> — this pass only mutates the alias table.
+     * Rekeying live bank balances is out of scope (would risk further data loss under a
+     * misdiagnosed corrupt state).
+     *
+     * @return the total count of removed alias entries (sum of invariant violations,
+     *         orphans, and cycle breaks). {@code 0} on a clean alias table.
+     */
+    public static int repairCorruptAliasEntries() {
+        int invariantViolations = 0;
+        int orphans = 0;
+        int cycles = 0;
+
+        // Snapshot BEFORE mutating — map mutation during the outer iteration would either
+        // throw (fail-fast iterator) or skip entries silently under ConcurrentHashMap's
+        // weakly-consistent iterator. The snapshot is small (aliasMap is typically empty or
+        // a few dozen entries) so the copy cost is negligible.
+        List<Map.Entry<ItemID, ItemID>> snapshot;
+        synchronized (itemIDMap) {
+            snapshot = new ArrayList<>(itemIDAliasMap.entrySet());
+        }
+
+        for (Map.Entry<ItemID, ItemID> entry : snapshot) {
+            ItemID source = entry.getKey();
+            ItemID target = entry.getValue();
+
+            // The entry may already have been removed by an earlier iteration (e.g. we
+            // removed the tail of a cycle in a previous step) — skip such stale entries.
+            if (!itemIDAliasMap.containsKey(source))
+                continue;
+
+            // Rule 1: source is in BOTH maps → invariant violation. Remove the alias entry;
+            // the map entry stays as the canonical (the ID behaves as a distinct canonical
+            // ID from this point forward; balances at the ID remain in place).
+            if (itemIDMap.containsKey(source)) {
+                itemIDAliasMap.remove(source);
+                invariantViolations++;
+                logRepairDebug("invariant-violation", source, target, null);
+                continue;
+            }
+
+            // Rule 2 + 3: walk the chain from `target`, collecting hops in a visited set.
+            // Terminate on either a hop bound (cycle guard) or a hop that is not in the
+            // alias map (terminal reached).
+            Set<ItemID> visited = new HashSet<>();
+            visited.add(source);
+            ItemID current = target;
+            boolean cycleDetected = false;
+            for (int hop = 0; hop < MAX_ALIAS_CHAIN_HOPS; hop++) {
+                if (!visited.add(current)) {
+                    cycleDetected = true;
+                    break;
+                }
+                ItemID next = itemIDAliasMap.get(current);
+                if (next == null)
+                    break; // terminal reached — `current` is the chain's tail
+                current = next;
+            }
+            // If we exit the loop without breaking on a terminal, we exhausted the hop
+            // bound — treat as a cycle for reporting purposes.
+            if (!cycleDetected && itemIDAliasMap.containsKey(current))
+                cycleDetected = true;
+
+            if (cycleDetected) {
+                itemIDAliasMap.remove(source);
+                cycles++;
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                    BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] Alias-table repair: cycle detected at "
+                            + source + " -> " + target + " (visited: " + visited
+                            + "). Removed this entry to break the cycle.");
+                }
+                continue;
+            }
+
+            // At this point `current` is a terminal that is NOT in the alias map. If it is
+            // also not in the item map, the whole chain is orphaned and unresolvable — drop
+            // the source entry so callers stop resolving to a dangling ID.
+            if (!itemIDMap.containsKey(current)) {
+                itemIDAliasMap.remove(source);
+                orphans++;
+                logRepairDebug("orphan", source, target, current);
+            }
+        }
+
+        int total = invariantViolations + orphans + cycles;
+        if (total > 0 && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Alias-table repair: " + total
+                    + " total repaired (" + invariantViolations + " invariant violations, "
+                    + orphans + " orphans, " + cycles + " cycles). Details in DEBUG.");
+        }
+        return total;
+    }
+
+    /**
+     * DEBUG-level per-repair log line used by {@link #repairCorruptAliasEntries()}.
+     * Skips silently when no logger is available (tests without a backend).
+     *
+     * @param kind    short repair category tag: {@code invariant-violation}, {@code orphan}, {@code cycle}
+     * @param source  the alias source that was removed
+     * @param target  the alias's immediate target (as recorded before repair)
+     * @param terminal the terminal short the chain resolved to (orphan case only, {@code null} otherwise)
+     */
+    private static void logRepairDebug(String kind, ItemID source, ItemID target, ItemID terminal) {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.LOGGER == null)
+            return;
+        StringBuilder sb = new StringBuilder("[ItemIDManager] Alias-table repair (").append(kind)
+                .append("): removed ").append(source).append(" -> ").append(target);
+        if (terminal != null)
+            sb.append(" (terminal ").append(terminal).append(" not in itemIDMap)");
+        // Try to resolve a human-readable name for the source if the map entry survives.
+        ItemStack template = itemIDMap.get(source);
+        if (template != null && !template.isEmpty())
+            sb.append(" [source template: ").append(ItemUtilities.getItemIDStr(template.getItem())).append(']');
+        BACKEND_INSTANCES.LOGGER.debug(sb.toString());
+    }
+
+    /**
+     * Replaces the ItemIDManager's static state with the provided snapshots. Test-only —
+     * used by the upgrade-safety test in {@code ItemIDMergeGuardTests} to install a
+     * fixture registry before invoking {@link #load(CompoundTag)} on a v2.0.2-shaped tag.
+     * <p>
+     * Never call in production — bypasses every sync/broadcast path.
+     *
+     * @param newItemMap   snapshot to install as {@code itemIDMap} (may be empty)
+     * @param newAliasMap  snapshot to install as {@code itemIDAliasMap} (may be empty)
+     * @param counter      counter value to install as {@code nextShortCounter}
+     */
+    public static void replaceState_forTesting(Map<ItemID, ItemStack> newItemMap,
+                                                Map<ItemID, ItemID> newAliasMap,
+                                                int counter) {
+        synchronized (itemIDMap) {
+            itemIDMap.clear();
+            if (newItemMap != null)
+                itemIDMap.putAll(newItemMap);
+            itemIDAliasMap.clear();
+            if (newAliasMap != null)
+                itemIDAliasMap.putAll(newAliasMap);
+            nextShortCounter = Math.max(counter, 1);
+        }
+    }
+
+    /**
+     * Removes the given alias-map entries. Test-only cleanup hook used by tests that seed
+     * synthetic alias entries (including intentional cycles) and need to drop them before
+     * teardown so they don't leak into the live production alias table.
+     *
+     * @param keys alias-map keys to remove (missing keys are ignored)
+     */
+    public static void removeAliasEntries_forTesting(Collection<ItemID> keys) {
+        if (keys == null)
+            return;
+        for (ItemID key : keys)
+            itemIDAliasMap.remove(key);
     }
 
     /**
