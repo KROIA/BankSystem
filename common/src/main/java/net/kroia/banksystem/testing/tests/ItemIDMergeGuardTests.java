@@ -95,6 +95,9 @@ public class ItemIDMergeGuardTests extends TestSuite {
         addTest("repair_breaks_cycle", this::testRepairBreaksCycle);
         addTest("repair_is_idempotent", this::testRepairIsIdempotent);
         addTest("v2_0_2_world_upgrades_cleanly", this::testV202WorldUpgradesCleanly);
+        // Startup-reconciliation regression: persisted shorts survive default registration
+        addTest("drifted_persisted_shorts_survive_default_registration",
+                this::testDriftedPersistedShortsSurviveDefaultRegistration);
         // Task #14 write-side guard tests
         addTest("putAlias_succeeds_when_source_not_in_map", this::testPutAliasSucceedsWhenSourceNotInMap);
         addTest("putAlias_rejects_when_source_in_map", this::testPutAliasRejectsWhenSourceInMap);
@@ -940,6 +943,133 @@ public class ItemIDMergeGuardTests extends TestSuite {
                 ItemIDManager.getItemIDMap().containsKey(canonical));
         if (!r.passed()) return r;
         return pass("renormalizeAndMerge produces aliases through the guarded putAlias path");
+    }
+
+    // ========================================================================================
+    // Startup reconciliation — persisted shorts survive default/registry registration
+    // ========================================================================================
+
+    /**
+     * Root-cause regression test for the money-ItemID drift bugs (v2.0.3): a persisted
+     * ItemID short MUST survive the default/registry-item registration that runs during
+     * world load, and that registration MUST be register-if-absent (never mint a fresh short
+     * for an item that already has a persisted one, never advance the counter for it).
+     * <p>
+     * Reproduces the on-disk shape of a "drifted" world in miniature: a synthetic paper
+     * template {@code P} persisted at short {@code 7} with the monotonic allocation counter
+     * at {@code 2901}. The state is serialized through {@link ItemIDManager#save(CompoundTag)},
+     * cleared, and re-loaded via {@link ItemIDManager#load(CompoundTag)} (the real persistence
+     * round-trip). Then {@link ItemIDManager#registerItemStackServerSide_direct(ItemStack)} is
+     * invoked twice — once for {@code P} (standing in for a default/registry item that already
+     * has a persisted short) and once for a brand-new stack. The register-if-absent call for
+     * {@code P} must return short {@code 7} and leave the counter untouched; the brand-new
+     * stack must get the counter's value ({@code 2901}) and advance it to {@code 2902}. No
+     * alias entry may be created for short {@code 7} — the persisted identity is preserved,
+     * not merged.
+     * <p>
+     * <b>Isolation:</b> the live static state (item map, alias map, counter, last-load repair
+     * count) is snapshotted up-front and restored bit-exact in the {@code finally} block, the
+     * same convention as {@link #testV202WorldUpgradesCleanly()} — this suite isolates
+     * ItemID tests by restoring state.
+     * <p>
+     * <b>NOT covered by this unit test</b> (requires manual integration verification): the
+     * full boot ordering where {@code ItemIDManager.createDefaultItemIDs()} runs AFTER
+     * {@code load_itemIDs()} inside {@code BankSystemDataHandler.loadAll()}, and where the
+     * fresh-world fallback {@code saveAll()} persists a populated id map on first run. Verify
+     * manually by booting a saved world: the log must show
+     * {@code "Resolved money short = 7"} and must NOT emit a
+     * {@code "Merged N duplicate ItemID(s)"} line.
+     */
+    private TestResult testDriftedPersistedShortsSurviveDefaultRegistration() {
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if (access == null)
+            return pass("skipped: no server-side RegistryAccess (client-only / early-init)");
+
+        // Snapshot live state — restored bit-exact in finally (see testV202WorldUpgradesCleanly).
+        Map<ItemID, ItemStack> savedItemMap = new HashMap<>(ItemIDManager.getItemIDMap());
+        Map<ItemID, ItemID> savedAliasMap = new HashMap<>(ItemIDManager.getItemIDAliasMap());
+        int savedCounter = ItemIDManager.getNextShortCounter_forTesting();
+        int savedRepairCount = ItemIDManager.getLastLoadRepairCount_forTesting();
+
+        final short persistedShort = 7;
+        final int persistedCounter = 2901;
+
+        try {
+            // Register P once in the live map to obtain a correctly normalized template + name,
+            // then re-key that template at the persisted short (7) in a curated fixture.
+            ItemStack pStack = paperWithCustomData("startup-reconcile-P-" + UUID.randomUUID());
+            ItemID tempId = ItemIDManager.registerItemStackServerSide_direct(pStack);
+            if (!tempId.isValid())
+                return fail("Could not register the synthetic template P to obtain its normalized form");
+            ItemStack pTemplate = ItemIDManager.getItemStackTemplate(tempId).copy();
+            ItemID p = new ItemID(persistedShort, tempId.getName());
+
+            Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
+            fixture.put(p, pTemplate);
+
+            // Install the fixture as the live state, then persist it through save().
+            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), persistedCounter);
+            CompoundTag tag = new CompoundTag();
+            if (!new ItemIDManager().save(tag))
+                return fail("Could not serialize the drifted-world fixture");
+
+            // Clear and re-load through the real persistence path (exercises load_itemIDs's core).
+            ItemIDManager.clear();
+            boolean loaded;
+            try {
+                loaded = new ItemIDManager().load(tag);
+            } catch (Throwable t) {
+                return fail("load() of the drifted fixture threw: " + t.getClass().getSimpleName()
+                        + " — " + t.getMessage());
+            }
+            TestResult r = assertTrue("load() returned true (no merge abort, no exception)", loaded);
+            if (!r.passed()) return r;
+
+            // Persisted identity restored: P resolves to short 7, counter restored to 2901.
+            r = assertEquals("P is restored at the persisted short 7",
+                    persistedShort, ItemIDManager.getItemID(pStack).getShort());
+            if (!r.passed()) return r;
+            r = assertEquals("counter restored to the persisted value",
+                    persistedCounter, ItemIDManager.getNextShortCounter_forTesting());
+            if (!r.passed()) return r;
+
+            // --- Register-if-absent: default registration of an already-persisted item ---
+            int counterBeforeReRegister = ItemIDManager.getNextShortCounter_forTesting();
+            ItemID reRegistered = ItemIDManager.registerItemStackServerSide_direct(pStack);
+            r = assertEquals("register-if-absent returns the persisted short 7 for P",
+                    persistedShort, reRegistered.getShort());
+            if (!r.passed()) return r;
+            r = assertEquals("re-registering an existing item does NOT advance the counter",
+                    counterBeforeReRegister, ItemIDManager.getNextShortCounter_forTesting());
+            if (!r.passed()) return r;
+            r = assertFalse("no alias entry was created keyed at the persisted short 7",
+                    ItemIDManager.getItemIDAliasMap().containsKey(new ItemID(persistedShort)));
+            if (!r.passed()) return r;
+
+            // --- Brand-new item: mints the counter value and advances it ---
+            ItemStack brandNew = paperWithCustomData("startup-reconcile-NEW-" + UUID.randomUUID());
+            ItemID newId = ItemIDManager.registerItemStackServerSide_direct(brandNew);
+            r = assertTrue("brand-new item registered as a valid ID", newId.isValid());
+            if (!r.passed()) return r;
+            r = assertEquals("brand-new item gets the counter's short (2901)",
+                    (short) persistedCounter, newId.getShort());
+            if (!r.passed()) return r;
+            r = assertEquals("counter advanced to 2902 after minting the new short",
+                    persistedCounter + 1, ItemIDManager.getNextShortCounter_forTesting());
+            if (!r.passed()) return r;
+
+            return pass("persisted short 7 survives register-if-absent (no counter advance, no alias), "
+                    + "and a brand-new item mints 2901 and advances the counter to 2902");
+        } catch (Throwable t) {
+            return fail("startup-reconciliation test threw: " + t.getClass().getSimpleName()
+                    + " — " + t.getMessage());
+        } finally {
+            // Restore live state bit-exact so the rest of the suite continues unaffected.
+            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+            // load() above mutated lastLoadRepairCount; drain it back toward the pre-test value.
+            if (savedRepairCount == 0)
+                ItemIDManager.consumeLastLoadRepairCount();
+        }
     }
 
     /**

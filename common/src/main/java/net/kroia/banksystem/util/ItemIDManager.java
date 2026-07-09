@@ -1779,9 +1779,28 @@ public class ItemIDManager implements ServerSaveable {
         nextShortCounter = value;
     }
 
-    public void createDefaultItemIDs(MinecraftServer server)
+    /**
+     * Registers the default money items and every registry item as ItemIDs, in a
+     * <b>register-if-absent</b> fashion.
+     * <p>
+     * <b>Used during world load</b> ({@code BankSystemDataHandler.loadAll()}), invoked
+     * <i>after</i> the persisted ItemID map has been restored by {@code load_itemIDs()}.
+     * Because {@link #registerItemStackServerSide_direct(ItemStack)} first looks up an
+     * existing ItemID via {@link #getItemID(ItemStack)} and only mints a fresh short on a
+     * miss, every money/registry item that already has a persisted short KEEPS that short;
+     * only genuinely new items receive freshly minted, appended shorts. This is the
+     * root-cause fix for the money-ItemID bugs: running this pass BEFORE the persisted map
+     * loaded (the old behaviour) minted fresh low shorts that then collided/merged with the
+     * persisted shorts and corrupted item identity (e.g. money 7 becoming an alias of 6).
+     * <p>
+     * Obtains the registry via {@link UtilitiesPlatform#getRegistryAccessServerSide()} —
+     * the same accessor {@link #save(CompoundTag)} and {@link #load(CompoundTag)} use — and
+     * <b>returns early when it is {@code null}</b> (mirrors the save/load null-registry
+     * guards; never NPEs if the server-side registry is not yet available).
+     */
+    public void createDefaultItemIDs()
     {
-        RegistryAccess access = server.registryAccess();
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
         if(access == null)
             return;
 
@@ -1795,6 +1814,20 @@ public class ItemIDManager implements ServerSaveable {
         access.lookupOrThrow(Registries.ITEM).listElements().forEach(listElement -> {
             registerItemStackServerSide_direct(listElement.value().getDefaultInstance());
         });
+    }
+
+    /**
+     * Legacy overload retained for the slave-server call site in
+     * {@code BankSystemModBackend.onServerStart(...)}. The {@code server} parameter is no
+     * longer needed to obtain the registry (the no-arg {@link #createDefaultItemIDs()}
+     * resolves it via {@link UtilitiesPlatform#getRegistryAccessServerSide()}); this thin
+     * delegate simply preserves the existing call signature.
+     *
+     * @param server the running server (unused; kept for call-site compatibility)
+     */
+    public void createDefaultItemIDs(MinecraftServer server)
+    {
+        createDefaultItemIDs();
     }
 
     /*@Override

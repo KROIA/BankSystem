@@ -227,7 +227,6 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         ItemIDManager.clear();
         MultiServerConfig config = MultiServerConfig.get();
-        INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs(server);
         INSTANCES.isSlaveServer = false;
         if(config.enable)
         {
@@ -235,6 +234,12 @@ public class BankSystemModBackend implements BankSystemAPI {
         }
         if(INSTANCES.isSlaveServer)
         {
+            // Slaves keep the old pre-load default registration: they have no persisted
+            // ItemID map to load (the master's IDs arrive later via SyncItemIDsPacket), so
+            // registering local defaults here preserves their previous behaviour. Masters no
+            // longer register defaults here — that now happens inside loadAll() AFTER the
+            // persisted map has loaded, so persisted shorts survive (register-if-absent).
+            INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs(server);
             INSTANCES.SERVER_BANK_MANAGER = BankManager.createSlave();
             INSTANCES.COMMAND_HANDLER = BankSystemCommands.createSlave();
         }
@@ -269,17 +274,16 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         // Refresh the cached money ItemID AFTER the world's saved data is fully loaded.
         //
-        // WHY: MoneyItem.getItemID() caches a short the first time it is resolved. During
-        // startup that first resolution happens inside ItemIDManager.createDefaultItemIDs()
-        // (above, via MoneyItem.resetItemID()) — i.e. against the pre-load DEFAULT ItemID map,
-        // BEFORE loadDataFromFiles(server) below runs load_itemIDs()/load_bank() and
-        // consolidatePendingMerges(). On a saved dedicated world the persisted base-money short
-        // (e.g. banksystem:money = 7) can differ from that default-map short (e.g. money_cent50
-        // = 6). A stale cached short makes deposits target a wrong/blacklisted denomination, so
-        // ServerBank.create -> isItemIDAllowed(...) fails and the deposit is rejected.
-        //
-        // Recomputing here (resetItemID() sets the cache to INVALID then re-resolves via
-        // getItemID()) binds MoneyItem to the fully-loaded, persisted base-money short.
+        // WHY: MoneyItem.getItemID() caches a short the first time it is resolved. On the
+        // master, default/registry ItemIDs are now registered INSIDE loadAll() — AFTER
+        // load_itemIDs() has restored the persisted map — via register-if-absent, so the
+        // persisted base-money short (e.g. banksystem:money = 7) is kept rather than being
+        // overwritten by a freshly minted low short. This block remains as a safety net:
+        // resetItemID() sets the cache to INVALID then re-resolves via getItemID() against
+        // the fully-loaded, consolidated registry, guaranteeing MoneyItem binds to the
+        // correct persisted base-money short even if something resolved it earlier. A stale
+        // cached short would make deposits target a wrong/blacklisted denomination
+        // (ServerBank.create -> isItemIDAllowed(...) fails and the deposit is rejected).
         //
         // MASTER ONLY: the saved ItemID/bank data and the allowed-items set only exist on the
         // master. On a slave the ItemIDs arrive later via SyncItemIDsPacket, so there is nothing

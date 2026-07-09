@@ -267,6 +267,13 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             boolean loadInCompatibilityMode = !metadataLoaded;
             success &= load_itemIDs();
 
+            // Register default/registry ItemIDs AFTER the persisted map has loaded so
+            // existing items keep their saved shorts (register-if-absent) and only new
+            // items get freshly minted appended shorts. Running this before load (the old
+            // behaviour) minted fresh low shorts that then collided/merged with the
+            // persisted shorts, corrupting item identity (e.g. money 7 -> alias of 6).
+            BACKEND_INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs();
+
             // check if file exists
             loadInCompatibilityMode |= fileExists(getAbsoluteSavePath("Bank_data.dat"));
 
