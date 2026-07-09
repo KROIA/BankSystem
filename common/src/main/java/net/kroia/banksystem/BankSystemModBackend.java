@@ -267,6 +267,29 @@ public class BankSystemModBackend implements BankSystemAPI {
         }
         loadDataFromFiles(server);
 
+        // Refresh the cached money ItemID AFTER the world's saved data is fully loaded.
+        //
+        // WHY: MoneyItem.getItemID() caches a short the first time it is resolved. During
+        // startup that first resolution happens inside ItemIDManager.createDefaultItemIDs()
+        // (above, via MoneyItem.resetItemID()) — i.e. against the pre-load DEFAULT ItemID map,
+        // BEFORE loadDataFromFiles(server) below runs load_itemIDs()/load_bank() and
+        // consolidatePendingMerges(). On a saved dedicated world the persisted base-money short
+        // (e.g. banksystem:money = 7) can differ from that default-map short (e.g. money_cent50
+        // = 6). A stale cached short makes deposits target a wrong/blacklisted denomination, so
+        // ServerBank.create -> isItemIDAllowed(...) fails and the deposit is rejected.
+        //
+        // Recomputing here (resetItemID() sets the cache to INVALID then re-resolves via
+        // getItemID()) binds MoneyItem to the fully-loaded, persisted base-money short.
+        //
+        // MASTER ONLY: the saved ItemID/bank data and the allowed-items set only exist on the
+        // master. On a slave the ItemIDs arrive later via SyncItemIDsPacket, so there is nothing
+        // to re-resolve against here. This mirrors the isSlaveServer guarding used above.
+        if (!INSTANCES.isSlaveServer) {
+            MoneyItem.resetItemID();
+            INSTANCES.LOGGER.info("Refreshed cached money ItemID after world-data load. "
+                    + "Resolved money short = " + MoneyItem.getItemID().getShort());
+        }
+
         if (INSTANCES.BALANCE_HISTORY_MANAGER != null) {
             takeBalanceSnapshot();
         }

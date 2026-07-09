@@ -954,7 +954,32 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         CompletableFuture<@Nullable IAsyncBank> bankFuture;
                         boolean isMoney = MoneyItem.isMoney(itemID);
                         if (isMoney) {
-                            bankFuture = bankAccount.getOrCreateBankAsync(MoneyItem.getItemID());
+                            // Denomination-agnostic money targeting: credit the account's
+                            // ALREADY-EXISTING money bank when it has one, regardless of which
+                            // money denomination short is currently cached in MoneyItem.
+                            //
+                            // WHY: cash must never be split across two different money shorts.
+                            // If the cached money short is momentarily wrong (e.g. resolved
+                            // against the default map before saved world data loaded), blindly
+                            // using MoneyItem.getItemID() could create/target a second money
+                            // bank under a different short — or a blacklisted denomination that
+                            // fails isItemIDAllowed and rejects the deposit. Instead we look for
+                            // the account's existing money bank (any ItemID satisfying the
+                            // denomination-agnostic MoneyItem.isMoney predicate) and deposit
+                            // into that one.
+                            //
+                            // Fallback: a brand-new account has no money bank yet, so we create
+                            // one under MoneyItem.getItemID(). After the startup resetItemID()
+                            // refresh (BankSystemModBackend.onServerStart) that resolves to the
+                            // correct allowed base-money short, so creation succeeds.
+                            bankFuture = bankAccount.getAllBanksAsync().thenCompose(banks -> {
+                                for (ItemID bankItemID : banks.keySet()) {
+                                    if (MoneyItem.isMoney(bankItemID)) {
+                                        return bankAccount.getOrCreateBankAsync(bankItemID);
+                                    }
+                                }
+                                return bankAccount.getOrCreateBankAsync(MoneyItem.getItemID());
+                            });
                         } else {
                             bankFuture = bankAccount.getOrCreateBankAsync(itemID);
                         }
@@ -970,7 +995,18 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             CompletableFuture<BankStatus> depositResult = bank.depositAsync(amountToDeposit);
                             depositResult.thenAccept(deposit -> {
                                 if (deposit == BankStatus.SUCCESS) {
-                                    inventory.removeItem(itemID, amount);
+                                    // WHY main thread: removeItem() mutates the terminal's
+                                    // TerminalInventory, which is shared with the open menu. Vanilla
+                                    // only emits slot-sync packets from broadcastChanges(), run on the
+                                    // MAIN server thread once per tick. This callback fires from an
+                                    // async bank-op completion that, on a dedicated server, runs OFF
+                                    // the main thread, so broadcastChanges() never observes the change
+                                    // and the client GUI never updates. Hop the mutation (+ setChanged
+                                    // for persistence) onto the main thread so the next tick syncs it.
+                                    runOnMainThread(() -> {
+                                        inventory.removeItem(itemID, amount);
+                                        setChanged();
+                                    });
                                 }
                             });
                         });
@@ -1040,55 +1076,78 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                     retryLockFuture.thenAccept(retryLockStatus -> {
                                         if (retryLockStatus != BankStatus.SUCCESS)
                                             return;
-                                        long itemsToDeposit = (long) Math.floor(BankManager.convertToRealAmountStatic(reducedAmount));
-                                        long addedAmount = inventory.addItem(itemID, itemsToDeposit);
-                                        if (addedAmount > 0) {
-                                            long rawToWithdraw = BankManager.convertToRawAmountStatic(addedAmount);
-                                            CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
-                                            withdrawResult.thenAccept(withdraw -> {
-                                                if (withdraw != BankStatus.SUCCESS) {
-                                                    error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
-                                                            " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
-                                                    inventory.removeItem(itemID, addedAmount);
-                                                    bank.unlockAmountAsync(reducedAmount);
-                                                } else {
-                                                    // Unlock any remainder that was not withdrawn
-                                                    long remainder = reducedAmount - rawToWithdraw;
-                                                    if (remainder > 0)
-                                                        bank.unlockAmountAsync(remainder);
-                                                    setChanged();
-                                                }
-                                            });
-                                        } else {
-                                            bank.unlockAmountAsync(reducedAmount);
-                                        }
+                                        // WHY main thread: the "insert -> decide -> debit/unlock" region
+                                        // touches the menu-shared TerminalInventory via addItem(). Only
+                                        // main-thread mutations are seen by the menu's per-tick
+                                        // broadcastChanges() and synced to a dedicated client; this async
+                                        // bank-op callback otherwise runs off-thread on a dedicated server.
+                                        // The whole decision must stay together because the addItem()
+                                        // return value (addedAmount) determines whether we debit or unlock,
+                                        // so we cannot split addItem from the branch it drives. Bank ops
+                                        // invoked here are safe: on a master they complete inline (still
+                                        // main thread); on a slave they forward and their callbacks may run
+                                        // off-thread, so container writes inside them are re-marshaled.
+                                        runOnMainThread(() -> {
+                                            long itemsToDeposit = (long) Math.floor(BankManager.convertToRealAmountStatic(reducedAmount));
+                                            long addedAmount = inventory.addItem(itemID, itemsToDeposit);
+                                            if (addedAmount > 0) {
+                                                long rawToWithdraw = BankManager.convertToRawAmountStatic(addedAmount);
+                                                CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
+                                                withdrawResult.thenAccept(withdraw -> {
+                                                    if (withdraw != BankStatus.SUCCESS) {
+                                                        error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
+                                                                " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
+                                                        // Roll back the inserted stack on the main thread so the
+                                                        // client sees the reversal (slave callbacks run off-thread).
+                                                        runOnMainThread(() -> inventory.removeItem(itemID, addedAmount));
+                                                        bank.unlockAmountAsync(reducedAmount);
+                                                    } else {
+                                                        // Unlock any remainder that was not withdrawn
+                                                        long remainder = reducedAmount - rawToWithdraw;
+                                                        if (remainder > 0)
+                                                            bank.unlockAmountAsync(remainder);
+                                                        runOnMainThread(() -> setChanged());
+                                                    }
+                                                });
+                                            } else {
+                                                bank.unlockAmountAsync(reducedAmount);
+                                            }
+                                        });
                                     });
                                 });
                                 return;
                             }
-                            // Lock succeeded for the full amount
-                            long itemsToDeposit = (long) Math.floor(BankManager.convertToRealAmountStatic(withdrawAmountFinal));
-                            long addedAmount = inventory.addItem(itemID, itemsToDeposit);
-                            if (addedAmount > 0) {
-                                long rawToWithdraw = BankManager.convertToRawAmountStatic(addedAmount);
-                                CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
-                                withdrawResult.thenAccept(withdraw -> {
-                                    if (withdraw != BankStatus.SUCCESS) {
-                                        error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
-                                                " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
-                                        inventory.removeItem(itemID, addedAmount);
-                                        bank.unlockAmountAsync(withdrawAmountFinal);
-                                    } else {
-                                        // Unlock any remainder that was not withdrawn
-                                        long remainder = withdrawAmountFinal - rawToWithdraw;
-                                        if (remainder > 0)
-                                            bank.unlockAmountAsync(remainder);
-                                        setChanged();
-                                    }
-                                });
-                            } else {
-                                bank.unlockAmountAsync(withdrawAmountFinal);
-                            }
+                            // Lock succeeded for the full amount.
+                            // WHY main thread: same rationale as the reduced-lock branch above -
+                            // addItem() mutates the menu-shared TerminalInventory and its return value
+                            // drives the debit/unlock decision, so the whole region runs on the main
+                            // server thread so broadcastChanges() can sync the new slots to the client.
+                            runOnMainThread(() -> {
+                                long itemsToDeposit = (long) Math.floor(BankManager.convertToRealAmountStatic(withdrawAmountFinal));
+                                long addedAmount = inventory.addItem(itemID, itemsToDeposit);
+                                if (addedAmount > 0) {
+                                    long rawToWithdraw = BankManager.convertToRawAmountStatic(addedAmount);
+                                    CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
+                                    withdrawResult.thenAccept(withdraw -> {
+                                        if (withdraw != BankStatus.SUCCESS) {
+                                            error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
+                                                    " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
+                                            // Roll back the inserted stack on the main thread so the
+                                            // client sees the reversal (slave callbacks run off-thread).
+                                            runOnMainThread(() -> inventory.removeItem(itemID, addedAmount));
+                                            bank.unlockAmountAsync(withdrawAmountFinal);
+                                        } else {
+                                            // Unlock any remainder that was not withdrawn
+                                            long remainder = withdrawAmountFinal - rawToWithdraw;
+                                            if (remainder > 0)
+                                                bank.unlockAmountAsync(remainder);
+                                            runOnMainThread(() -> setChanged());
+                                        }
+                                    });
+                                } else {
+                                    bank.unlockAmountAsync(withdrawAmountFinal);
+                                }
+                            });
                         });
                     });
                 }
@@ -1096,6 +1155,42 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 setChanged();
             });
         });
+    }
+
+    /**
+     * Runs the given action on the MAIN server thread.
+     * <p>
+     * WHY this exists: the terminal's {@link TerminalInventory} is shared with the
+     * currently open {@code AbstractContainerMenu}. Vanilla only emits slot-sync
+     * packets ({@code ClientboundContainerSetSlotPacket}/{@code SetContentPacket})
+     * from {@code AbstractContainerMenu#broadcastChanges()}, which the server invokes
+     * on the MAIN thread once per tick. The bank operations in this class complete via
+     * async {@code CompletableFuture} callbacks that, on a dedicated server, run OFF
+     * the main thread. If we mutate the inventory from such an off-thread callback,
+     * {@code broadcastChanges()} never observes the slot change and no packet is sent -
+     * the item silently fails to appear in the client GUI (it is still persisted
+     * server-side, so it shows up on reopen). Marshaling every container mutation onto
+     * the main thread lets the next {@code broadcastChanges()} tick pick it up and sync.
+     *
+     * @param action the container-touching / {@code setChanged} action to marshal onto
+     *               the main server thread
+     */
+    private void runOnMainThread(Runnable action)
+    {
+        Level lvl = getLevel();
+        if (lvl != null && lvl.getServer() != null)
+        {
+            // Queue onto the server's main-thread task queue. Even when already called
+            // from the main thread this simply runs on the current/next tick drain,
+            // which is before/at broadcastChanges() - exactly what we need.
+            lvl.getServer().execute(action);
+        }
+        else
+        {
+            // Fallback: no server available (should not happen server-side). Run inline
+            // rather than dropping the action, to avoid leaking locks or losing state.
+            action.run();
+        }
     }
 
 
