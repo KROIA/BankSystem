@@ -393,12 +393,41 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
     }
 
+    /**
+     * Snapshots every account's per-item balances and (when a price provider and currency are
+     * configured) a synthetic "Total Wealth" record for the balance-history screen.
+     * <p>
+     * <b>Cash detection uses BankSystem's own money predicate</b>, not a single cached currency
+     * short. {@code currencyItemId} is supplied once by StockMarket (via {@code setPriceCurrencyItem})
+     * and is fragile: it can point at the WRONG money denomination or go stale after an ItemID
+     * remap. If a bank's cash balance is mis-classified as a non-cash item, it falls into the
+     * market-price branch — money has no market, so its price is 0 and the player's entire cash
+     * balance contributes 0 to wealth (the reported "wealth rapidly decreasing / cash missing" bug).
+     * <p>
+     * To stay robust, a bank is recognized as CASH when {@link MoneyItem#isMoney(ItemID)} is true
+     * for the bank's key. {@code isMoney} matches ANY money denomination against
+     * {@code BankSystemItems.getMoneyItems()} and is the authoritative, denomination-agnostic
+     * source used elsewhere server-side. All money-denomination balances are stored in scaled
+     * base-money units, so treating any money bank as face-value cash is correct. As an additional
+     * accept, a bank whose canonical key equals the caller-supplied {@code currencyItemId} is also
+     * treated as cash (fallback for a future non-{@code MoneyItem} currency). The wealth
+     * formula/units are unchanged — only the "is this the money bank?" decision was hardened.
+     *
+     * @param timestamp      snapshot timestamp (ms) stamped on every produced record
+     * @param priceProvider  StockMarket-supplied per-item price source; {@code null} disables wealth
+     * @param currencyItemId currency short from {@code setPriceCurrencyItem}; used only as a
+     *                       secondary accept — cash is primarily detected via {@code isMoney}
+     * @return the balance records plus one wealth record per account (only when wealth is enabled)
+     */
     public List<BalanceHistoryRecord> collectBalanceSnapshot(long timestamp, ItemPriceProvider priceProvider, short currencyItemId) {
         List<BalanceHistoryRecord> records = new ArrayList<>();
+
         for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
             int accountNumber = entry.getKey();
             ServerBankAccount account = entry.getValue();
             long totalWealth = 0;
+            // Wealth is only computed when a price provider AND a currency were configured
+            // (preserves the original "no provider/currency -> no wealth record" behavior).
             boolean hasWealth = priceProvider != null && currencyItemId != 0;
             for (Map.Entry<ItemID, IServerBank> bankEntry : account.getAllBanks().entrySet()) {
                 ISyncServerBank bank = bankEntry.getValue();
@@ -409,7 +438,17 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 records.add(new BalanceHistoryRecord(accountNumber, itemId, balance, lockedBalance, timestamp));
                 if (hasWealth) {
                     long totalBalance = balance + lockedBalance;
-                    if (itemId == currencyItemId) {
+                    ItemID bankItemID = bankEntry.getKey();
+                    // Primary cash test: BankSystem's denomination-agnostic money predicate.
+                    // This is robust against the currency short pointing at the wrong money
+                    // denomination or going stale after an ItemID remap — any money bank is
+                    // stored in scaled base-money units and counts as face-value cash.
+                    // Secondary accept: exact match against the caller-supplied currency short
+                    // (canonicalized) as a fallback for a future non-MoneyItem currency.
+                    boolean isCash = MoneyItem.isMoney(bankItemID)
+                            || (currencyItemId != 0
+                                && ItemIDManager.resolveAlias(bankItemID).getShort() == currencyItemId);
+                    if (isCash) {
                         totalWealth += totalBalance;
                     } else {
                         long price = priceProvider.getItemPrice(itemId);

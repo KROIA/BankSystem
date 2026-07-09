@@ -30,6 +30,7 @@ import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
 import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.minecraft.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.minecraft.item.custom.software.Software;
 import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
@@ -359,6 +360,25 @@ public class BankSystemModBackend implements BankSystemAPI {
         if (INSTANCES.SERVER_BANK_MANAGER == null) return;
         ServerBankManager bankManager = (ServerBankManager) INSTANCES.SERVER_BANK_MANAGER.getSync();
         if (bankManager == null) return;
+
+        // Diagnostic (fires on the snapshot timer, once every BALANCE_SNAPSHOT_INTERVAL_MINUTES,
+        // plus once at server start): surfaces the cached price-currency short handed to us by
+        // StockMarket (setPriceCurrencyItem) alongside the LIVE money ItemID shorts, and — most
+        // importantly — confirms that the money bank is now recognised as CASH via BankSystem's
+        // own denomination-agnostic predicate (MoneyItem.isMoney) rather than the fragile cached
+        // short. 'moneyDetectedAsCash' is the check collectBalanceSnapshot() actually performs
+        // for the money bank; if it is true, cash contributes to "Total Wealth" regardless of
+        // whether the cached currency short is correct. Diagnostic kept at DEBUG: silent at
+        // normal log levels but available for future diagnosis (one line per snapshot interval).
+        ItemID liveMoneyItemID = MoneyItem.getItemID();
+        boolean moneyValid = liveMoneyItemID != null && liveMoneyItemID.isValid();
+        short liveMoneyShort = moneyValid ? liveMoneyItemID.getShort() : 0;
+        short canonicalMoneyShort = moneyValid ? ItemIDManager.resolveAlias(liveMoneyItemID).getShort() : 0;
+        boolean moneyDetectedAsCash = moneyValid && MoneyItem.isMoney(liveMoneyItemID);
+        INSTANCES.LOGGER.debug("[BalanceSnapshot][diag] priceCurrencyItemId(cached)=" + priceCurrencyItemId
+                + ", liveMoneyShort=" + liveMoneyShort + ", canonicalMoneyShort=" + canonicalMoneyShort
+                + ", moneyDetectedAsCash(isMoney)=" + moneyDetectedAsCash
+                + " (cash is detected via MoneyItem.isMoney — denomination-agnostic; the cached currency short is only a secondary accept)");
 
         long now = System.currentTimeMillis();
         List<BalanceHistoryRecord> records = bankManager.collectBalanceSnapshot(now, itemPriceProvider, priceCurrencyItemId);
