@@ -82,6 +82,30 @@ The [Stock Market Mod](https://github.com/KROIA/StockMarket) for example uses th
 > Releasing locked amounts without knowing which mod reserved them may cause problems with pending transactions in those mods.
 
 ---
+## Server Settings File
+
+BankSystem stores its per-world server configuration in `<world>/data/BankSystem/settings.json` (auto-save interval, balance-history snapshots, starting balance, automation block intervals, and the item component lists described below).
+
+See the [Configuration guide](Configuration.md) for the full annotated reference of every setting, including when the file is created and rewritten by the server.
+
+---
+## Volatile Item Components
+
+Some mods attach **time-varying data components** to item stacks — for example TerraFirmaCraft's food-decay timestamp (`tfc:food`) or heat state (`tfc:heat`). Because BankSystem identifies items by their full component data, such components would make identical items look different over time (e.g. every freshly caught fish would count as a "new" item, and stored food templates could rot inside the bank's item registry).
+
+BankSystem therefore strips a configurable set of **volatile component types** from all items before they take part in item identification. Items are stored and compared *without* these components; when an item is handed back to a player, the owning mod re-attaches a fresh component automatically (e.g. TFC food withdrawn from a bank starts with a fresh creation date).
+
+### Deposit-Gated Components
+
+Ignoring a state-carrying component for identification makes differently-aged items fungible inside the bank — which would allow *state laundering*: deposit a rotten TFC food, withdraw a fresh one. To prevent this, a second component set marks components as **deposit-gated**: such items may only be deposited in a condition equivalent to what the bank would hand back (non-fresh TFC food is rejected with a message and stays where it is).
+
+Both sets ship pre-configured for TerraFirmaCraft and can be extended via the settings file or a datapack. See the Configuration guide for the full deep-dive:
+
+- [Configuring the component sets](Configuration.md#configuring-the-component-sets) (config list and datapack routes)
+- [Consequences of changing the lists on an existing world](Configuration.md#changing-the-lists-on-an-existing-world)
+- [Which components can be listed](Configuration.md#which-components-can-be-listed) and [how to find component ids](Configuration.md#finding-component-ids-for-other-mods)
+
+---
 ## BankSystem Admin Role
 
 BankSystem has its own admin role separate from Minecraft's operator system. Server operators can promote/demote BankSystem admins:

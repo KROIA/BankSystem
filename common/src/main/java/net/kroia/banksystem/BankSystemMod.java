@@ -5,7 +5,7 @@ import net.kroia.banksystem.api.BankSystemAPI;
 public final class BankSystemMod {
 
     public static final String MOD_ID = "banksystem";
-    public static final String VERSION = "2.0.3";
+    public static final String VERSION = "2.0.4";
 
     // Set to false for release builds to hide dev-only commands (exportrecipes, testScreen, etc.)
     public static final boolean ENABLE_DEV_FEATURES = true;

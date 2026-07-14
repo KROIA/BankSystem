@@ -136,6 +136,7 @@
   "message.banksystem.bank_already_exists": "{user_name} 已拥有 {item_name} 对应的银行账户",
   "message.banksystem.money_bank_access_help": "你可以通过银行终端方块\n或 /bank 指令访问你的账户。",
 
+  "message.banksystem.deposit_rejected_item_condition": "{item_name} 的当前状态无法存入银行",
   "message.banksystem.item_not_allowed": "{item_name} 不允许存入银行",
   "message.banksystem.item_not_allowed_failed": "无法禁止 {item_name} 存入银行",
   "message.banksystem.item_now_allowed": "{item_name} 现已允许存入银行。\n可存储的最小单位为 {amount}。",

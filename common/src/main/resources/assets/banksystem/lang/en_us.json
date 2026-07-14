@@ -136,6 +136,7 @@
   "message.banksystem.bank_already_exists": "{user_name} already has a bank for item {item_name}",
   "message.banksystem.money_bank_access_help": "You can access your account using the Bank Terminal block\nor the /bank command.",
 
+  "message.banksystem.deposit_rejected_item_condition": "The condition of {item_name} prevents banking it",
   "message.banksystem.item_not_allowed": "{item_name} is not allowed to be stored in the bank",
   "message.banksystem.item_not_allowed_failed": "Failed to disallow {item_name} for banking",
   "message.banksystem.item_now_allowed": "{item_name} is now allowed to be stored in the bank.\nThe smallest unit of this item that can be stored in the bank is {amount}.",

@@ -436,10 +436,11 @@ All notable changes are documented in version-specific files under `changelog/`.
 
 ### Current
 
-- [2.0.3](changelog/v2.0.3.md) — In Development
+- [2.0.4](changelog/v2.0.4.md) — In Development
 
 ### Previous
 
+- [2.0.3](changelog/v2.0.3.md) — Released 2026-07-14
 - [2.0.2](changelog/v2.0.2.md) — Released 2026-06-07
 - [2.0.1](changelog/v2.0.1.md) — Released 2026-05-21
 - [1.5.0_ALPHA_3](changelog/v1.5.0_ALPHA_3.md) — Security & stability: 50 fixes across permissions, async, concurrency, block entities

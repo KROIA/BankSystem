@@ -15,6 +15,7 @@ import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveable;
@@ -911,6 +912,13 @@ public class ServerBank implements ServerSaveable, IServerBank {
         {
             CompoundTag itemTag = tag.getCompound("itemID");
             itemID = ItemID.createFromTag(itemTag);
+            // Canonicalize at load time: the saved ID may have been merged into another ID
+            // (alias) by a volatile-component merge — possibly in an EARLIER session, before
+            // consolidation existed. Resolving here keys every freshly loaded bank by its
+            // canonical ID; ServerBankAccount.load() then merges banks that collapse onto
+            // the same canonical ID instead of dropping one. This also heals worlds that
+            // were merged before this fix.
+            itemID = ItemIDManager.resolveAlias(itemID);
         }
 
 
@@ -975,6 +983,51 @@ public class ServerBank implements ServerSaveable, IServerBank {
             return BankStatus1;
         }
         return BankStatus.FAILED_WRONG_INSTANCE_TYPE;
+    }
+
+    /**
+     * Absorbs the balances of {@code other} into this bank and empties {@code other}.
+     * Used exclusively when two banks collapse onto the same canonical ItemID after an
+     * ItemID alias merge (volatile-component merge): both the free and the locked balance
+     * are preserved, so the sum over the pair is identical before and after (unless a
+     * — practically impossible — long overflow forces a clamp, which is logged as an error).
+     *
+     * @param other the bank whose balances are merged into this one (emptied afterwards)
+     */
+    public void absorb(@NotNull ServerBank other) {
+        this.balance = addClamped(this.balance, other.balance, "balance");
+        this.lockedBalance = addClamped(this.lockedBalance, other.lockedBalance, "lockedBalance");
+        other.balance = 0;
+        other.lockedBalance = 0;
+        this.changeFlag = true;
+    }
+
+    /**
+     * <b>Internal — ItemID alias-merge consolidation only.</b>
+     * Rewrites this bank's ItemID to the given canonical ID after its previous ID was
+     * merged away as an alias. Deliberately bypasses {@link #create(ItemID, long)}'s
+     * allowed-item check: an existing balance must never be droppable by a failed
+     * re-creation. Do not use for anything else — a bank's ItemID is otherwise immutable.
+     *
+     * @param canonical the canonical ItemID that replaced this bank's aliased ID
+     */
+    public void rekeyForAliasMerge_internal(@NotNull ItemID canonical) {
+        this.itemID = canonical;
+        this.changeFlag = true;
+    }
+
+    /**
+     * Overflow-safe addition of two non-negative balances; clamps to {@link Long#MAX_VALUE}
+     * and logs an error when the (practically impossible) overflow occurs.
+     */
+    private long addClamped(long a, long b, String what) {
+        if (willAdditionOverflow(a, b)) {
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                BACKEND_INSTANCES.LOGGER.error("[ServerBank] Overflow while merging " + what +
+                        " of ItemID " + itemID + " during alias consolidation — clamping to Long.MAX_VALUE.");
+            return Long.MAX_VALUE;
+        }
+        return a + b;
     }
 
     private void addBalanceInternal(long balance) {

@@ -36,6 +36,23 @@ public class ItemID implements ServerSaveable {
     private short id;
     private @Nullable String name_cache = null;
 
+    /**
+     * True while {@link #name_cache} holds the numeric fallback ({@code String.valueOf(id)})
+     * instead of a real item registry name.
+     * <p>
+     * Why this exists: NBT {@link #load(CompoundTag)} can run before the item registry /
+     * {@link ItemIDManager} is populated (e.g. world data referencing ItemIDs is loaded before
+     * or while the ItemID table itself loads). In that situation the numeric name is only a
+     * <b>provisional placeholder</b> and must be replaced as soon as resolution becomes
+     * possible — {@link #getName()} retries the (cheap) resolution while this flag is set.
+     * Previously the placeholder was cached forever, which misled server-side consumers
+     * (e.g. command tab suggestions) into showing bare numeric IDs instead of item names.
+     * <p>
+     * This flag is intentionally <b>not persisted</b> — the serialization format only contains
+     * the id, and the flag is re-derived on load from whether resolution succeeds.
+     */
+    private boolean nameIsPlaceholder = false;
+
 
     public ItemID(short id)
     {
@@ -46,25 +63,50 @@ public class ItemID implements ServerSaveable {
     public ItemID(short id, @Nullable String name_cache)
     {
         this.id = id;
+        // The caller supplies a trusted, real registry name (or null, in which case
+        // getName() resolves lazily) — never a numeric placeholder.
         this.name_cache = name_cache;
     }
     public ItemID(ItemID other)
     {
         this.id = other.id;
         this.name_cache = other.name_cache;
+        this.nameIsPlaceholder = other.nameIsPlaceholder;
     }
+
+    /**
+     * Overwrites the cached name with a real registry name (or null to force lazy
+     * re-resolution in {@link #getName()}). Must never be called with a numeric placeholder —
+     * placeholders are only ever written internally together with {@link #nameIsPlaceholder}.
+     *
+     * @param name_cache the real item registry name, or null
+     */
     public void setNameCache_internal(String name_cache)
     {
         this.name_cache = name_cache;
+        this.nameIsPlaceholder = false;
     }
     public void tryUpdateNameCache()
     {
-        ItemStack stack = getStack();
+        // Read-only access: the template is only inspected, never mutated,
+        // so the defensive copy of getStack() is not needed here.
+        ItemStack stack = getStackTemplate();
         if(stack.isEmpty() || stack.getItem() == Items.AIR) {
+            // Not resolvable (yet): registry/manager may simply not be populated.
+            // Cache the numeric id as a marked placeholder so getName() retries later.
             name_cache = String.valueOf(id);
+            nameIsPlaceholder = true;
             return;
         }
-        name_cache = ItemUtilities.getItemIDStr(stack.getItem());
+        String name = ItemUtilities.getItemIDStr(stack.getItem());
+        if(name == null) {
+            // The platform registry can't name the item (yet) — same provisional fallback.
+            name_cache = String.valueOf(id);
+            nameIsPlaceholder = true;
+            return;
+        }
+        name_cache = name;
+        nameIsPlaceholder = false;
     }
     public static @NotNull ItemID fromJson(JsonElement jsonElement)
     {
@@ -160,28 +202,69 @@ public class ItemID implements ServerSaveable {
         return id;
     }
 
+    /**
+     * Returns a <b>defensive copy</b> of the template stack registered for this ItemID.
+     * Callers may freely mutate the result (set counts, apply components, ...).
+     * Aliased IDs (merged during volatile-component migration) resolve to their canonical entry.
+     *
+     * @return a copy of the registered template, or {@link ItemStack#EMPTY} if unknown
+     */
     public @NotNull ItemStack getStack() {
         return ItemIDManager.getItemStack(this);
     }
+
+    /**
+     * Returns the <b>live template stack</b> for this ItemID without copying.
+     * <p>
+     * <b>Read-only!</b> Never mutate the returned stack — it is the registry's internal
+     * template. Only use this on hot paths (e.g. per-frame rendering) where the defensive
+     * copy of {@link #getStack()} would cause needless allocations.
+     *
+     * @return the live template stack, or {@link ItemStack#EMPTY} if unknown
+     */
+    public @NotNull ItemStack getStackTemplate() {
+        return ItemIDManager.getItemStackTemplate(this);
+    }
+
+    /**
+     * Returns the item registry name (e.g. {@code "minecraft:paper"}) for this ItemID, or the
+     * numeric id as a string while the name cannot be resolved.
+     * <p>
+     * <b>Lazy self-heal:</b> when the cache only holds the numeric placeholder (see
+     * {@link #nameIsPlaceholder}), every call retries the real resolution before returning.
+     * The retry is cheap — a single map lookup in {@link ItemIDManager} (including alias
+     * resolution for merged IDs) — so it is safe on hot paths. On success the real name is
+     * cached and the flag cleared; on failure the placeholder is returned as before. A failed
+     * retry is <i>normal</i> while the registry/manager is not yet populated, so it is silent
+     * by design: no exceptions, no log spam.
+     *
+     * @return the resolved item name, or the numeric id as a provisional fallback
+     */
     public @NotNull String getName() {
-        if(name_cache != null)
+        // Fast path: a real (non-placeholder) cached name never changes.
+        if(name_cache != null && !nameIsPlaceholder)
             return name_cache;
 
-        ItemStack stack = getStack();
+        // Resolve, or retry a provisional placeholder. Read-only access, no copy needed.
+        ItemStack stack = getStackTemplate();
         if(stack.isEmpty()) {
             name_cache = String.valueOf(id);
+            nameIsPlaceholder = true;
             return name_cache;
         }
         String name = ItemUtilities.getItemIDStr(stack.getItem());
         if(name == null) {
             name_cache = String.valueOf(id);
+            nameIsPlaceholder = true;
             return name_cache;
         }
         name_cache = name;
+        nameIsPlaceholder = false;
         return name_cache;
     }
     public boolean isAir() {
-        ItemStack stack = getStack();
+        // Read-only access, no copy needed.
+        ItemStack stack = getStackTemplate();
         return stack.isEmpty() || stack.is(Items.AIR);
     }
 
@@ -196,7 +279,13 @@ public class ItemID implements ServerSaveable {
         if(!tag.contains(compoundTagKey_ID))
             return false;
         id = tag.getShort(compoundTagKey_ID);
-        name_cache = String.valueOf(id);
+        // Resolve the real name immediately if possible. NBT load can run before the item
+        // registry / ItemIDManager is populated — in that case tryUpdateNameCache() stores the
+        // numeric id as a marked placeholder (see nameIsPlaceholder) and getName() self-heals
+        // once resolution becomes possible. Previously the placeholder was written
+        // unconditionally and cached forever, so server-side consumers (e.g. command tab
+        // suggestions) showed bare numbers instead of item names for every loaded ItemID.
+        tryUpdateNameCache();
         return true;
     }
 
@@ -215,7 +304,8 @@ public class ItemID implements ServerSaveable {
     public boolean isValid() {
         if(id == INVALID_ID.id)
             return false;
-        ItemStack stack = getStack();
+        // Read-only access, no copy needed.
+        ItemStack stack = getStackTemplate();
         return !stack.isEmpty();
     }
 

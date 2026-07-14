@@ -114,8 +114,18 @@ public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<
                 do
                 {
                     nextStackSize = (int)Math.min(amount, stack.getMaxStackSize());
-                    stack.setCount(nextStackSize);
-                    remaining = ServerPlayerUtilities.addToPlayerInventory(player, stack);
+                    // Insert via vanilla Inventory.add: it merges only into stacks that are
+                    // component-equal (ItemStack.isSameItemSameComponents, which mods like
+                    // TFC hook so e.g. rotten never merges with fresh). ItemID/item-type
+                    // matching must not drive this placement — identity ignores volatile/
+                    // gated components, so a same-ID stack in the player inventory can be
+                    // component-distinct (e.g. spoiled) and merging onto it would silently
+                    // rewrite the withdrawn items' state.
+                    // Inventory.add mutates the passed stack's count to the leftover amount.
+                    ItemStack insertStack = stack.copy();
+                    insertStack.setCount(nextStackSize);
+                    player.getInventory().add(insertStack);
+                    remaining = insertStack.getCount();
                     amount -= (nextStackSize-remaining);
                 }while(remaining != nextStackSize && amount > 0);
 

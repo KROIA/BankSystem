@@ -3,6 +3,7 @@ package net.kroia.banksystem;
 import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
+import dev.architectury.registry.ReloadListenerRegistry;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
 import net.kroia.banksystem.api.IBankSystemEvents;
@@ -29,6 +30,7 @@ import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
 import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.minecraft.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.minecraft.item.custom.software.Software;
 import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.networking.BankSystemNetworking;
@@ -46,6 +48,8 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
@@ -78,6 +82,47 @@ public class BankSystemModBackend implements BankSystemAPI {
     private static @Nullable ItemPriceProvider itemPriceProvider = null;
     private static short priceCurrencyItemId = 0;
 
+    /**
+     * Master-only accessor for the balance-history SQLite manager.
+     * <p>
+     * Only used by internal callers that need direct access to the DB layer (e.g. the in-game
+     * merge-guard tests exercising the on-merge history purge from Task #12). Public API
+     * consumers should query balance history via {@code BalanceHistoryRequest} instead.
+     *
+     * @return the balance-history manager on the master server, or {@code null} on slave
+     *         servers / pre-startup / after shutdown.
+     */
+    public static @Nullable BalanceHistoryManager getBalanceHistoryManager() {
+        return INSTANCES.BALANCE_HISTORY_MANAGER;
+    }
+
+    /**
+     * Master-only accessor for the {@link DatabaseManager}.
+     * <p>
+     * Same audience as {@link #getBalanceHistoryManager()} — the in-game tests need the shared
+     * DB executor to await queued async work (single-thread executor: submitting a runnable
+     * and awaiting its future flushes all previously queued DB ops).
+     *
+     * @return the DB manager on the master server, or {@code null} otherwise.
+     */
+    public static @Nullable DatabaseManager getDatabaseManager() {
+        return INSTANCES.DATABASE_MANAGER;
+    }
+
+    /**
+     * Test-only accessor for the shared {@link Instances} container. Same audience as
+     * {@link #getBalanceHistoryManager()} — the in-game merge-guard tests use this to reach
+     * the data handler for the upgrade-safety assertion on {@code appliedComponentSet}.
+     * Production code should not use this — instances are internal state.
+     *
+     * @return the singleton instances container (never {@code null}, initialized at class
+     *         load), possibly with some individual fields still {@code null} depending on
+     *         the current lifecycle phase.
+     */
+    public static Instances getInstances_forTesting() {
+        return INSTANCES;
+    }
+
 
     BankSystemModBackend()
     {
@@ -91,6 +136,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.NETWORKING = null;
         INSTANCES.ITEM_ID_MANAGER = new ItemIDManager();
         ItemIDManager.setBackend(INSTANCES);
+        VolatileItemComponents.setBackend(INSTANCES);
         MultiServerUtils.setBackend(INSTANCES);
         BankSystemDataHandler.setBackend(INSTANCES);
         BankTerminalBlockEntity.setBackend(INSTANCES);
@@ -125,6 +171,16 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         INSTANCES.NETWORKING = new BankSystemNetworking();
         INSTANCES.SERVER_EVENTS = new BankSystemEvents();
+
+        // Detect datapack reloads that change the volatile/deposit-gated component tags on a
+        // RUNNING server: the change is rejected (normalization keeps the world-load tag
+        // snapshot) and an error is logged; the new tags are evaluated by the ItemID merge
+        // guard at the next restart. The listener fires during resource apply — the actual
+        // tag rebind happens a few scheduler tasks later, so the comparison is deferred to
+        // the tick hook below (see VolatileItemComponents#onServerResourcesReloaded()).
+        ReloadListenerRegistry.register(PackType.SERVER_DATA,
+                (ResourceManagerReloadListener) resourceManager -> VolatileItemComponents.onServerResourcesReloaded());
+        TickEvent.SERVER_POST.register(server -> VolatileItemComponents.serverTick());
 
         if (TestRegistry.ENABLE_TESTS && BankSystemMod.ENABLE_DEV_FEATURES) {
             BankSystemTestRegistration.register();
@@ -171,7 +227,6 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         ItemIDManager.clear();
         MultiServerConfig config = MultiServerConfig.get();
-        INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs(server);
         INSTANCES.isSlaveServer = false;
         if(config.enable)
         {
@@ -179,6 +234,12 @@ public class BankSystemModBackend implements BankSystemAPI {
         }
         if(INSTANCES.isSlaveServer)
         {
+            // Slaves keep the old pre-load default registration: they have no persisted
+            // ItemID map to load (the master's IDs arrive later via SyncItemIDsPacket), so
+            // registering local defaults here preserves their previous behaviour. Masters no
+            // longer register defaults here — that now happens inside loadAll() AFTER the
+            // persisted map has loaded, so persisted shorts survive (register-if-absent).
+            INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs(server);
             INSTANCES.SERVER_BANK_MANAGER = BankManager.createSlave();
             INSTANCES.COMMAND_HANDLER = BankSystemCommands.createSlave();
         }
@@ -210,6 +271,28 @@ public class BankSystemModBackend implements BankSystemAPI {
             });
         }
         loadDataFromFiles(server);
+
+        // Refresh the cached money ItemID AFTER the world's saved data is fully loaded.
+        //
+        // WHY: MoneyItem.getItemID() caches a short the first time it is resolved. On the
+        // master, default/registry ItemIDs are now registered INSIDE loadAll() — AFTER
+        // load_itemIDs() has restored the persisted map — via register-if-absent, so the
+        // persisted base-money short (e.g. banksystem:money = 7) is kept rather than being
+        // overwritten by a freshly minted low short. This block remains as a safety net:
+        // resetItemID() sets the cache to INVALID then re-resolves via getItemID() against
+        // the fully-loaded, consolidated registry, guaranteeing MoneyItem binds to the
+        // correct persisted base-money short even if something resolved it earlier. A stale
+        // cached short would make deposits target a wrong/blacklisted denomination
+        // (ServerBank.create -> isItemIDAllowed(...) fails and the deposit is rejected).
+        //
+        // MASTER ONLY: the saved ItemID/bank data and the allowed-items set only exist on the
+        // master. On a slave the ItemIDs arrive later via SyncItemIDsPacket, so there is nothing
+        // to re-resolve against here. This mirrors the isSlaveServer guarding used above.
+        if (!INSTANCES.isSlaveServer) {
+            MoneyItem.resetItemID();
+            INSTANCES.LOGGER.info("Refreshed cached money ItemID after world-data load. "
+                    + "Resolved money short = " + MoneyItem.getItemID().getShort());
+        }
 
         if (INSTANCES.BALANCE_HISTORY_MANAGER != null) {
             takeBalanceSnapshot();
@@ -243,6 +326,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.isSlaveServer = false;
         snapshotTickCounter = 0;
         ItemIDManager.clear();
+        // Drop the world-load tag snapshot: the next world/server captures its own freshly
+        // bound tags (see VolatileItemComponents#captureTagSnapshot()).
+        VolatileItemComponents.resetTagSnapshot();
         ItemColorUtil.clearCache();
     }
 
@@ -269,7 +355,10 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the client side
     private static void onPlayerLeaveClientSide(@Nullable LocalPlayer localPlayer)
     {
-
+        // A dedicated client leaving a server drops its tag snapshot so the next server it
+        // joins captures that server's tags. (In singleplayer the integrated server's stop
+        // handler resets it as well — resetting twice is harmless.)
+        VolatileItemComponents.resetTagSnapshot();
     }
     // Called from the client side
     private static void onPlayerJoinClientSide(@Nullable LocalPlayer localPlayer)
@@ -299,6 +388,25 @@ public class BankSystemModBackend implements BankSystemAPI {
         ServerBankManager bankManager = (ServerBankManager) INSTANCES.SERVER_BANK_MANAGER.getSync();
         if (bankManager == null) return;
 
+        // Diagnostic (fires on the snapshot timer, once every BALANCE_SNAPSHOT_INTERVAL_MINUTES,
+        // plus once at server start): surfaces the cached price-currency short handed to us by
+        // StockMarket (setPriceCurrencyItem) alongside the LIVE money ItemID shorts, and — most
+        // importantly — confirms that the money bank is now recognised as CASH via BankSystem's
+        // own denomination-agnostic predicate (MoneyItem.isMoney) rather than the fragile cached
+        // short. 'moneyDetectedAsCash' is the check collectBalanceSnapshot() actually performs
+        // for the money bank; if it is true, cash contributes to "Total Wealth" regardless of
+        // whether the cached currency short is correct. Diagnostic kept at DEBUG: silent at
+        // normal log levels but available for future diagnosis (one line per snapshot interval).
+        ItemID liveMoneyItemID = MoneyItem.getItemID();
+        boolean moneyValid = liveMoneyItemID != null && liveMoneyItemID.isValid();
+        short liveMoneyShort = moneyValid ? liveMoneyItemID.getShort() : 0;
+        short canonicalMoneyShort = moneyValid ? ItemIDManager.resolveAlias(liveMoneyItemID).getShort() : 0;
+        boolean moneyDetectedAsCash = moneyValid && MoneyItem.isMoney(liveMoneyItemID);
+        INSTANCES.LOGGER.debug("[BalanceSnapshot][diag] priceCurrencyItemId(cached)=" + priceCurrencyItemId
+                + ", liveMoneyShort=" + liveMoneyShort + ", canonicalMoneyShort=" + canonicalMoneyShort
+                + ", moneyDetectedAsCash(isMoney)=" + moneyDetectedAsCash
+                + " (cash is detected via MoneyItem.isMoney — denomination-agnostic; the cached currency short is only a secondary accept)");
+
         long now = System.currentTimeMillis();
         List<BalanceHistoryRecord> records = bankManager.collectBalanceSnapshot(now, itemPriceProvider, priceCurrencyItemId);
 
@@ -316,9 +424,20 @@ public class BankSystemModBackend implements BankSystemAPI {
     {
         if(INSTANCES.SERVER_DATA_HANDLER != null) {
             Path rootSaveFolder = server.getWorldPath(LevelResource.ROOT);
-            // Load data from the root save folder
+            // Load data from the root save folder.
+            // NOTE: an ItemIDMergeAbortedException thrown by the merge guard inside
+            // loadAll() intentionally propagates out of this method — it must abort
+            // server startup, and the data handler has already prohibited every save
+            // of this session at that point.
             INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder);
             if (!INSTANCES.SERVER_DATA_HANDLER.loadAll()) {
+                // Never blind-overwrite unreadable files with in-memory (possibly empty)
+                // state: move everything that failed to load aside first
+                // (<name>.corrupt-<timestamp>), then write fresh files and re-load.
+                // Fresh worlds (no files yet) skip the backup and just create their
+                // initial files here. Subsystems that failed to load AND could not be
+                // backed up remain save-prohibited inside the handler.
+                INSTANCES.SERVER_DATA_HANDLER.backupFailedSubsystemData();
                 INSTANCES.SERVER_DATA_HANDLER.saveAll();
                 INSTANCES.SERVER_DATA_HANDLER.loadAll(); // Try loading again after saving
             }

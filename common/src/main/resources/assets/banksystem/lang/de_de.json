@@ -136,6 +136,7 @@
   "message.banksystem.bank_already_exists": "{user_name} hat bereits ein Bankkonto für {item_name}",
   "message.banksystem.money_bank_access_help": "Mit dem Bank Terminal block kannst du auf dein Bankkonto zugreifen\nOder mit dem Befehl /bank.",
 
+  "message.banksystem.deposit_rejected_item_condition": "Der Zustand von {item_name} verhindert das Einlagern in der Bank",
   "message.banksystem.item_not_allowed": "{item_name} ist nicht für das lagern in der Bank zugelassen",
   "message.banksystem.item_not_allowed_failed": "Das lagern von {item_name} kann nicht verboten werden",
   "message.banksystem.item_now_allowed": "{item_name} kann nun in der Bank gelagert werden.\nDie kleistmögliche Mänge die gelagert werden kann ist {amount}",

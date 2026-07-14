@@ -393,12 +393,41 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
     }
 
+    /**
+     * Snapshots every account's per-item balances and (when a price provider and currency are
+     * configured) a synthetic "Total Wealth" record for the balance-history screen.
+     * <p>
+     * <b>Cash detection uses BankSystem's own money predicate</b>, not a single cached currency
+     * short. {@code currencyItemId} is supplied once by StockMarket (via {@code setPriceCurrencyItem})
+     * and is fragile: it can point at the WRONG money denomination or go stale after an ItemID
+     * remap. If a bank's cash balance is mis-classified as a non-cash item, it falls into the
+     * market-price branch — money has no market, so its price is 0 and the player's entire cash
+     * balance contributes 0 to wealth (the reported "wealth rapidly decreasing / cash missing" bug).
+     * <p>
+     * To stay robust, a bank is recognized as CASH when {@link MoneyItem#isMoney(ItemID)} is true
+     * for the bank's key. {@code isMoney} matches ANY money denomination against
+     * {@code BankSystemItems.getMoneyItems()} and is the authoritative, denomination-agnostic
+     * source used elsewhere server-side. All money-denomination balances are stored in scaled
+     * base-money units, so treating any money bank as face-value cash is correct. As an additional
+     * accept, a bank whose canonical key equals the caller-supplied {@code currencyItemId} is also
+     * treated as cash (fallback for a future non-{@code MoneyItem} currency). The wealth
+     * formula/units are unchanged — only the "is this the money bank?" decision was hardened.
+     *
+     * @param timestamp      snapshot timestamp (ms) stamped on every produced record
+     * @param priceProvider  StockMarket-supplied per-item price source; {@code null} disables wealth
+     * @param currencyItemId currency short from {@code setPriceCurrencyItem}; used only as a
+     *                       secondary accept — cash is primarily detected via {@code isMoney}
+     * @return the balance records plus one wealth record per account (only when wealth is enabled)
+     */
     public List<BalanceHistoryRecord> collectBalanceSnapshot(long timestamp, ItemPriceProvider priceProvider, short currencyItemId) {
         List<BalanceHistoryRecord> records = new ArrayList<>();
+
         for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
             int accountNumber = entry.getKey();
             ServerBankAccount account = entry.getValue();
             long totalWealth = 0;
+            // Wealth is only computed when a price provider AND a currency were configured
+            // (preserves the original "no provider/currency -> no wealth record" behavior).
             boolean hasWealth = priceProvider != null && currencyItemId != 0;
             for (Map.Entry<ItemID, IServerBank> bankEntry : account.getAllBanks().entrySet()) {
                 ISyncServerBank bank = bankEntry.getValue();
@@ -409,7 +438,17 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 records.add(new BalanceHistoryRecord(accountNumber, itemId, balance, lockedBalance, timestamp));
                 if (hasWealth) {
                     long totalBalance = balance + lockedBalance;
-                    if (itemId == currencyItemId) {
+                    ItemID bankItemID = bankEntry.getKey();
+                    // Primary cash test: BankSystem's denomination-agnostic money predicate.
+                    // This is robust against the currency short pointing at the wrong money
+                    // denomination or going stale after an ItemID remap — any money bank is
+                    // stored in scaled base-money units and counts as face-value cash.
+                    // Secondary accept: exact match against the caller-supplied currency short
+                    // (canonicalized) as a fallback for a future non-MoneyItem currency.
+                    boolean isCash = MoneyItem.isMoney(bankItemID)
+                            || (currencyItemId != 0
+                                && ItemIDManager.resolveAlias(bankItemID).getShort() == currencyItemId);
+                    if (isCash) {
                         totalWealth += totalBalance;
                     } else {
                         long price = priceProvider.getItemPrice(itemId);
@@ -1168,7 +1207,10 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean isItemIDAllowed(ItemID itemID)
     {
-        return allowedItemIDs.contains(itemID);
+        // Alias safety net: an ID merged into a canonical ID stays "allowed" iff its
+        // canonical ID is allowed (the allowed set only stores canonical IDs after a
+        // merge consolidation). O(1) map lookup.
+        return itemID != null && allowedItemIDs.contains(ItemIDManager.resolveAlias(itemID));
     }
     @Override
     public CompletableFuture<Boolean> isItemIDAllowedAsync(ItemID itemID) {
@@ -1180,6 +1222,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     {
         if(itemID == null || !itemID.isValid())
             return false;
+        // Only ever store canonical IDs in the allowed set (see isItemIDAllowed).
+        itemID = ItemIDManager.resolveAlias(itemID);
         if(isItemIDBlacklisted(itemID))
         {
             warn("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
@@ -1200,6 +1244,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     {
         if(itemID == null || !itemID.isValid())
             return false;
+        // The allowed set and the account banks are keyed by canonical IDs only.
+        itemID = ItemIDManager.resolveAlias(itemID);
         if(isItemIDNotRemovable(itemID))
         {
             warn("It is not allowed to remove the itemID: " + itemID);
@@ -1497,6 +1543,50 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         allowedItemIDs.addAll(itemIDs);
     }
 
+    /**
+     * Consolidates all per-ItemID state of this (master) bank manager after an ItemID
+     * alias merge (see {@code ItemIDManager.renormalizeAndMerge()}):
+     * <ol>
+     *   <li>the allowed-item set: aliased entries are replaced by their canonical ID
+     *       (the {@code Set} dedupes automatically) — done FIRST so subsequent
+     *       allowed-checks already see the canonical entries,</li>
+     *   <li>every bank account: banks keyed by an alias are merged into the canonical
+     *       bank, preserving both free and locked balances, and aliased account icons
+     *       are rewritten (see {@link ServerBankAccount#consolidateMergedItemIDs}).</li>
+     * </ol>
+     * Called by {@code ItemIDManager.consolidatePendingMerges()} on the server thread,
+     * master side only. Idempotent: re-running with the same map is a no-op because no
+     * bank/entry is keyed by an alias anymore.
+     *
+     * @param aliasToCanonical merged ItemID (alias) → canonical ItemID pairs
+     */
+    public void consolidateMergedItemIDs(Map<ItemID, ItemID> aliasToCanonical)
+    {
+        if (aliasToCanonical == null || aliasToCanonical.isEmpty())
+            return;
+
+        // 1) Allowed-item set: alias entries become their canonical ID.
+        int remappedAllowed = 0;
+        for (Map.Entry<ItemID, ItemID> entry : aliasToCanonical.entrySet()) {
+            if (allowedItemIDs.remove(entry.getKey())) {
+                allowedItemIDs.add(entry.getValue());
+                remappedAllowed++;
+            }
+        }
+
+        // 2) Bank accounts: merge alias-keyed banks into the canonical bank.
+        int mergedBanks = 0;
+        for (ServerBankAccount account : bankAccounts.values()) {
+            mergedBanks += account.consolidateMergedItemIDs(aliasToCanonical);
+        }
+
+        if (remappedAllowed > 0 || mergedBanks > 0) {
+            info("Consolidated ItemID merge: " + mergedBanks + " bank(s) merged into their canonical ItemID, "
+                    + remappedAllowed + " allowed-item entr(y/ies) remapped (" + aliasToCanonical.size()
+                    + " alias pair(s)). Balances and locked balances were preserved.");
+        }
+    }
+
     @Override
     public boolean save(Map<String, ListTag> listTags) {
         CompoundTag metaData = new CompoundTag();
@@ -1565,7 +1655,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 }
 
                 ItemID itemID = ItemID.createFromTag(idTag.getCompound("itemID"));
-                allowedItemIDs.add(itemID);
+                // Canonicalize at load time: a saved allowed-entry may reference an ID that
+                // was merged into a canonical ID (possibly in an earlier session). The Set
+                // dedupes collapsing entries automatically. This also heals worlds merged
+                // before consolidation existed.
+                allowedItemIDs.add(ItemIDManager.resolveAlias(itemID));
             }
         }
         else {
