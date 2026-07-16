@@ -613,9 +613,17 @@ public class BankCraftingMatcherTests extends TestSuite {
     }
 
     /**
-     * Physical-first with a ghost recipe: an iron placed in slot 0 anchors the
-     * top-left placement and is consumed physically — only the two remaining
-     * cells (2 and 4) are bank-filled.
+     * Physical-first with a ghost recipe: irons placed in slots 0 and 2 anchor
+     * the top-left placement and are consumed physically — only the remaining
+     * cell (4) is bank-filled, and the match is the SELECTED recipe.
+     * <p>
+     * FIXTURE TRAP (why two seeds, not one): a single lone iron ingot is itself
+     * a complete vanilla recipe ({@code minecraft:iron_nugget}, shapeless
+     * 1 ingot -> 9 nuggets), so stage 1's physical-first matching — which by
+     * documented design has precedence over the ghost selection — returns the
+     * nugget match before the ghost path is ever consulted. The click-to-craft
+     * satisfiability check guards against exactly this by comparing recipe ids.
+     * Physical seeds for ghost-path tests must not form a standalone recipe.
      */
     private TestResult testGhostRecipePhysicalFirst() {
         Level level = level();
@@ -623,20 +631,27 @@ public class BankCraftingMatcherTests extends TestSuite {
         RecipeHolder<CraftingRecipe> bucket = craftingRecipe(level, "bucket");
         if (bucket == null) return fail("vanilla bucket recipe not found");
         ItemID iron = id(Items.IRON_INGOT);
-        List<ItemStack> grid = gridWith(Items.IRON_INGOT, 0);
+        List<ItemStack> grid = gridWith(Items.IRON_INGOT, 0, 2);
         BankCraftingMatcher.Match match = BankCraftingMatcher.findMatch(
-                level, grid, true, bank(iron, 2L * ONE_ITEM), bucket);
-        if (match == null) return fail("ghost bucket + physical iron at slot 0 produced no match");
+                level, grid, true, bank(iron, ONE_ITEM), bucket);
+        if (match == null) return fail("ghost bucket + physical irons at slots 0/2 produced no match");
         TestResult r = assertTrue("result is a bucket", match.result().is(Items.BUCKET));
+        if (!r.passed()) return r;
+        r = assertEquals("the SELECTED ghost recipe is matched", bucket.id(), match.recipe().id());
         if (!r.passed()) return r;
         r = assertNull("the physically seeded slot 0 is not bank-filled", match.bankPerSlot()[0]);
         if (!r.passed()) return r;
-        r = assertEquals("only two whole iron are reserved",
-                Integer.valueOf(2), match.bankCountsPerCraft().get(iron));
+        r = assertNull("the physically seeded slot 2 is not bank-filled", match.bankPerSlot()[2]);
         if (!r.passed()) return r;
-        r = assertEquals("exactly two slots are bank-filled", 2, countBankSlots(match, iron));
+        r = assertEquals("only one whole iron is reserved",
+                Integer.valueOf(1), match.bankCountsPerCraft().get(iron));
         if (!r.passed()) return r;
-        r = assertTrue("virtualGrid[0] keeps the physical iron", match.virtualGrid()[0].is(Items.IRON_INGOT));
+        r = assertEquals("exactly one slot is bank-filled", 1, countBankSlots(match, iron));
+        if (!r.passed()) return r;
+        r = assertEquals("the bank fill lands on the remaining cell (4)", iron, match.bankPerSlot()[4]);
+        if (!r.passed()) return r;
+        r = assertTrue("virtualGrid keeps the physical irons",
+                match.virtualGrid()[0].is(Items.IRON_INGOT) && match.virtualGrid()[2].is(Items.IRON_INGOT));
         if (!r.passed()) return r;
         return pass("physical items take per-slot precedence over bank sourcing in the ghost path");
     }
