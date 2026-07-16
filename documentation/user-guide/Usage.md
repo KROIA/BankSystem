@@ -7,12 +7,46 @@
 </div>
 
 The Bank Terminal Block is used to deposit/withdraw items to/from the bank account.
+Use the **Filter** box above the bank item list to quickly find an item by name.
 
 > [!NOTE]  
 > The block contains an inventory which is unique for every player. 
 > Like an ender chest, but when the block gets destroyed, 
 > items not stored in the bank account will be dropped.
 
+### Crafting in the Bank Terminal
+
+The Bank Terminal screen includes a 3×3 crafting grid with a result slot, located above the container inventory.
+All standard crafting recipes work in it — vanilla, datapack, and modded shaped or shapeless recipes.
+
+With both checkboxes turned off, the grid behaves exactly like a vanilla crafting table:
+pick up the result with the cursor, or shift-click the result slot to craft a whole batch (up to one full output stack per click).
+
+Two checkboxes connect the crafting grid to your bank account:
+
+- **Use Bank Items** — Missing ingredients in the grid are supplied from the selected bank account automatically.
+  Place at least one physical item in the grid to start the recipe; faded "ghost" icons then preview which items the bank will provide.
+  Money items are never used as crafting ingredients.
+  This option requires **withdraw** permission on the account — the checkbox is disabled without it.
+
+- **Auto-deposit output** — Crafted items are deposited directly into the bank account instead of going to your inventory or cursor.
+  This option requires **deposit** permission on the account.
+  If a crafted item cannot be stored in the bank, it is moved to your inventory instead and a message explains why.
+
+Both checkbox states are remembered per player on that terminal, so your setup is restored the next time you open it.
+
+> [!NOTE]  
+> Items left in the crafting grid are returned to your inventory when you close the screen —
+> they are never deposited into the bank automatically.
+
+Crafting with bank items also works on multi-server setups (player on one server, bank account on the master server), just like all other bank operations.
+
+### JEI Integration
+
+If [JEI](https://www.curseforge.com/minecraft/mc-mods/jei) is installed:
+
+- The **+** button in the JEI recipe view fills the crafting grid with the ingredients from your inventory.
+- The JEI item panel sits beside the Bank Terminal screen without overlapping it.
 
 ---
 ## ATM Block

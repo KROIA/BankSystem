@@ -51,4 +51,8 @@ public class BankSystemTestCategories {
     public static final TestCategory ITEM_ID = new TestCategory(
             "banksystem", "item_id", "ItemID identity and volatile-component normalization tests",
             TestCategory.ServerType.MASTER_ONLY, true);
+
+    public static final TestCategory MOD_SETTINGS = new TestCategory(
+            "banksystem", "mod_settings", "Mod settings JSON round-trip and sanitize-bounds tests",
+            TestCategory.ServerType.BOTH, false);
 }

@@ -3,7 +3,10 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.modutilities.gui.client.GuiScreen;
+import net.kroia.modutilities.gui.elements.TextBox;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
@@ -33,6 +36,32 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
 
     protected IClientBankManager getBankManager() {
         return BACKEND_INSTANCES.CLIENT_BANK_MANAGER;
+    }
+
+    /**
+     * @return true if the server this client is connected to is the MASTER server
+     *         (or a regular single server, which acts as its own master). Synced at
+     *         player join via {@code PlayerJoinSyncPacket}; used to gate master-only
+     *         UI such as the "Mod Settings" button. UI gating only — the server
+     *         independently enforces admin + master status in {@code ModSettingsRequest}.
+     */
+    protected static boolean isMasterServer() {
+        return BACKEND_INSTANCES.CLIENT_SETTINGS.isMasterServer();
+    }
+
+    /**
+     * Invisible vanilla {@link EditBox} that mirrors the focus state of the
+     * ModUtilities text-input elements for OTHER mods' benefit — same mechanism
+     * as in {@code BankSystemGuiContainerScreen}, see the detailed javadoc
+     * there. Covers the standalone screens (e.g. the BalanceHistory search box).
+     */
+    private final EditBox modTextInputFocusProxy =
+            new EditBox(Minecraft.getInstance().font, 0, 0, 0, 0, Component.empty());
+
+    @Override
+    public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) {
+        modTextInputFocusProxy.setFocused(getGui().getFocusedElement() instanceof TextBox);
+        super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
     }
 
     protected LocalPlayer getThisPlayer()

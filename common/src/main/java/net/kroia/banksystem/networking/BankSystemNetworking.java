@@ -40,6 +40,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public static BalanceHistoryRequest BALANCE_HISTORY_REQUEST = (BalanceHistoryRequest)AsynchronousRequestResponseSystem.register(new BalanceHistoryRequest());
     public static GetUserCustomDataRequest GET_USER_CUSTOM_DATA_REQUEST = (GetUserCustomDataRequest)AsynchronousRequestResponseSystem.register(new GetUserCustomDataRequest());
     public static UpdateUserCustomDataRequest UPDATE_USER_CUSTOM_DATA_REQUEST = (UpdateUserCustomDataRequest)AsynchronousRequestResponseSystem.register(new UpdateUserCustomDataRequest());
+    public static ModSettingsRequest MOD_SETTINGS_REQUEST = (ModSettingsRequest)AsynchronousRequestResponseSystem.register(new ModSettingsRequest());
 
     public static BankAccountChangeStream BANKSYSTEM_ACCOUNT_CHANGE_STREAM = (BankAccountChangeStream) StreamSystem.register(new BankAccountChangeStream());
 
@@ -70,6 +71,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerS2C(SyncBankUploadDataPacket.TYPE, SyncBankUploadDataPacket.STREAM_CODEC);
         registerS2C(SyncBankDownloadDataPacket.TYPE, SyncBankDownloadDataPacket.STREAM_CODEC);
         registerS2C(SyncItemIDsPacket.TYPE, SyncItemIDsPacket.STREAM_CODEC);
+        registerS2C(PlayerJoinSyncPacket.TYPE, PlayerJoinSyncPacket.STREAM_CODEC);
 
     }
 
@@ -77,6 +79,9 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public void setupServerReceiverPackets()
     {
         registerC2S(UpdateBankTerminalBlockEntityPacket.TYPE, UpdateBankTerminalBlockEntityPacket.STREAM_CODEC);
+        registerC2S(UpdateBankTerminalCraftingSettingsPacket.TYPE, UpdateBankTerminalCraftingSettingsPacket.STREAM_CODEC);
+        registerC2S(SetBankTerminalGhostRecipePacket.TYPE, SetBankTerminalGhostRecipePacket.STREAM_CODEC);
+        registerC2S(FillBankTerminalCraftingGridPacket.TYPE, FillBankTerminalCraftingGridPacket.STREAM_CODEC);
         registerC2S(UpdateBankUploadBlockEntityPacket.TYPE, UpdateBankUploadBlockEntityPacket.STREAM_CODEC);
         registerC2S(UpdateBankDownloadBlockEntityPacket.TYPE, UpdateBankDownloadBlockEntityPacket.STREAM_CODEC);
         registerC2S(UpdateDisplayBlockConfigPacket.TYPE, UpdateDisplayBlockConfigPacket.STREAM_CODEC);

@@ -712,6 +712,11 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             //CompoundTag transferTaskTag = new CompoundTag();
             //tag.put("TransferTask", transferTaskTag);
             tag.putInt("SelectedBankAccount", selectedBankAccount);
+            // NOTE: the crafting checkbox flags (formerly "CraftUseBankItems" /
+            // "CraftDepositOutput") moved to the per-player User.customData store
+            // (they are global player preferences, not per-block state). Old
+            // worlds may still carry those keys here — they are simply no longer
+            // read and disappear on the next save of this block entity.
             return true;
         }
 

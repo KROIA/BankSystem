@@ -31,6 +31,8 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         public static final Component BANKING_ITEMS = Component.translatable(PREFIX + "banking_items");
         public static final Component ASK_TITLE = Component.translatable(PREFIX + "ask_remove_title");
         public static final Component ASK_MSG = Component.translatable(PREFIX + "ask_remove_message");
+        public static final Component MOD_SETTINGS_BUTTON = Component.translatable("gui." + BankSystemMod.MOD_ID + ".mod_settings_screen.open_button");
+        public static final Component MOD_SETTINGS_BUTTON_TOOLTIP = Component.translatable("gui." + BankSystemMod.MOD_ID + ".mod_settings_screen.open_button.tooltip");
 
         //public static final Component ASK_ITEM_FRACTION_SCALE_FACTOR_SCREEN_TITLE = Component.translatable(PREFIX + "ask_item_fraction_scale_factor_screen.title");
         //public static final Component ASK_ITEM_FRACTION_SCALE_FACTOR_SCREEN_LABEL = Component.translatable(PREFIX + "ask_item_fraction_scale_factor_screen.label");
@@ -45,6 +47,15 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
     private final CloseButton closeButton;
     private final Button newBankingItemButton;
     private final Button removeBankingItemButton;
+
+    /**
+     * Master-only: opens the {@link ModSettingsScreen} for editing the master's
+     * settings.json in-game. Only created/added when the client is connected to the
+     * MASTER server (synced isMasterServer flag, see PlayerJoinSyncPacket) — this is
+     * UI gating only; the server independently enforces admin + master status in
+     * {@code ModSettingsRequest}.
+     */
+    private final Button modSettingsButton;
     private final ItemSelectionView currentBankingItemsView;
     private final ItemView currentBankingItemView;
 
@@ -110,10 +121,23 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
 
         itemInfoWidget = new ItemInfoWidget();
 
+        // Master-only "Mod Settings" button (see field javadoc). On slave servers the
+        // button is not created at all — editing settings is only possible against
+        // the master's settings.json.
+        if (isMasterServer()) {
+            modSettingsButton = new Button(TEXT.MOD_SETTINGS_BUTTON.getString(), () ->
+                    Minecraft.getInstance().setScreen(new ModSettingsScreen(this)));
+            modSettingsButton.setHoverTooltipSupplier(TEXT.MOD_SETTINGS_BUTTON_TOOLTIP::getString);
+        } else {
+            modSettingsButton = null;
+        }
+
 
         addElement(closeButton);
         addElement(newBankingItemButton);
         addElement(removeBankingItemButton);
+        if (modSettingsButton != null)
+            addElement(modSettingsButton);
         addElement(currentBankingItemsView);
         addElement(currentBankingItemView);
         addElement(itemInfoWidget);
@@ -146,8 +170,14 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         removeBankingItemButton.setBounds(newBankingItemButton.getLeft(), newBankingItemButton.getBottom()+spacing, newBankingItemButton.getWidth(), newBankingItemButton.getHeight());
         currentBankingItemView.setBounds(newBankingItemButton.getRight()+spacing, padding, 20, 20);
 
-        itemInfoWidget.setPosition(currentBankingItemsView.getRight()+spacing, removeBankingItemButton.getBottom()+spacing);
-        itemInfoWidget.setSize(closeButton.getRight()-itemInfoWidget.getLeft(),height- removeBankingItemButton.getBottom()+spacing);
+        int itemInfoTop = removeBankingItemButton.getBottom();
+        if (modSettingsButton != null) {
+            modSettingsButton.setBounds(removeBankingItemButton.getLeft(), removeBankingItemButton.getBottom()+spacing, removeBankingItemButton.getWidth(), removeBankingItemButton.getHeight());
+            itemInfoTop = modSettingsButton.getBottom();
+        }
+
+        itemInfoWidget.setPosition(currentBankingItemsView.getRight()+spacing, itemInfoTop+spacing);
+        itemInfoWidget.setSize(closeButton.getRight()-itemInfoWidget.getLeft(),height- itemInfoTop+spacing);
     }
 
 

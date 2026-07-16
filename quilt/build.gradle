@@ -62,6 +62,12 @@ dependencies {
     shadowBundle('org.xerial:sqlite-jdbc:3.46.0.0'){
         exclude group: "org.slf4j"
     }
+    // Dev-runtime-only copy of the JDBC driver (see fabric/build.gradle for the
+    // full rationale): shadowBundle is release-jar-only, so without this the
+    // driver is missing from the dev run classpath.
+    localRuntime('org.xerial:sqlite-jdbc:3.46.0.0'){
+        exclude group: "org.slf4j"
+    }
 
     modImplementation("net.kroia:modutilities-quilt:$rootProject.modutilities_version")
     //include("net.kroia:modutilities-quilt:1.0.0")

@@ -15,6 +15,13 @@ import java.util.concurrent.CompletableFuture;
 
 public class BankTerminalBlockDataRequest extends BankSystemGenericRequest<BlockPos, BankTerminalBlockDataRequest.Output> {
 
+    /**
+     * @param selectedBankAccount the player's persisted account selection at this
+     *                            terminal. (The crafting checkbox flags are NOT
+     *                            carried here — they are per-player preferences
+     *                            in User.customData, fetched by the screen via
+     *                            {@code getUserCustomData()}.)
+     */
     public record Output(int selectedBankAccount)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, Output> STREAM_CODEC = StreamCodec.composite(

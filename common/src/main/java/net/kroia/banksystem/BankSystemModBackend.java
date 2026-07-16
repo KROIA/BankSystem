@@ -33,7 +33,9 @@ import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.minecraft.item.custom.software.Software;
 import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
+import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.general.PlayerJoinSyncPacket;
 import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.multi_server.BanksystemMetadataRequest;
 import net.kroia.modutilities.gui.GuiElementRegistry;
@@ -75,6 +77,14 @@ public class BankSystemModBackend implements BankSystemAPI {
         public BankSystemLogger LOGGER;
         public DatabaseManager DATABASE_MANAGER;
         public BalanceHistoryManager BALANCE_HISTORY_MANAGER;
+
+        /**
+         * Client-held settings snapshot synced from the server at player join
+         * (see {@link net.kroia.banksystem.networking.general.PlayerJoinSyncPacket}).
+         * Only meaningful on the client side; carries the isMasterServer flag used
+         * to gate master-only UI (the "Mod Settings" button).
+         */
+        public ClientSettings CLIENT_SETTINGS = new ClientSettings();
     }
 
     private static Instances INSTANCES = new Instances();
@@ -140,6 +150,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         MultiServerUtils.setBackend(INSTANCES);
         BankSystemDataHandler.setBackend(INSTANCES);
         BankTerminalBlockEntity.setBackend(INSTANCES);
+        BankTerminalContainerMenu.setBackend(INSTANCES);
 
         BankManager.setBackend(INSTANCES);
 
@@ -337,6 +348,9 @@ public class BankSystemModBackend implements BankSystemAPI {
     {
         INSTANCES.SERVER_BANK_MANAGER.getAsync().onPlayerJoinAsync(player.getUUID(), player.getName().getString());
         ItemIDManager.onPlayerJoined(player);
+        // Sync the ClientSettings snapshot (isMasterServer flag) to the joining
+        // client — used to gate master-only UI such as the "Mod Settings" button.
+        PlayerJoinSyncPacket.send(player);
         /*
         INSTANCES.SERVER_BANK_MANAGER.createUser(
                 player,
@@ -359,6 +373,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         // joins captures that server's tags. (In singleplayer the integrated server's stop
         // handler resets it as well — resetting twice is harmless.)
         VolatileItemComponents.resetTagSnapshot();
+        // Reset the synced isMasterServer flag to its safe default (false) — the next
+        // server the client joins re-syncs it via PlayerJoinSyncPacket.
+        INSTANCES.CLIENT_SETTINGS.setMasterServer(false);
     }
     // Called from the client side
     private static void onPlayerJoinClientSide(@Nullable LocalPlayer localPlayer)

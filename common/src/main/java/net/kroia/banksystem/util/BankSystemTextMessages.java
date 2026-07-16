@@ -316,6 +316,29 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
+    private static final Component CRAFTING_MISSING_BANK_ITEMS = Component.translatable(prefix+"crafting_missing_bank_items");
+    /**
+     * Message shown when a bank-assisted craft is aborted because a required
+     * ingredient could not be locked in the bank (all-or-nothing deduction).
+     */
+    public static String getCraftingMissingBankItemsMessage(String itemName)
+    {
+        String msg = CRAFTING_MISSING_BANK_ITEMS.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+    private static final Component CRAFTING_DEPOSIT_FALLBACK = Component.translatable(prefix+"crafting_deposit_fallback");
+    /**
+     * Message shown when the crafted output could not be auto-deposited into the
+     * bank and was handed to the player inventory instead (never blocked, never
+     * silently dropped).
+     */
+    public static String getCraftingDepositFallbackMessage(String itemName)
+    {
+        String msg = CRAFTING_DEPOSIT_FALLBACK.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
     private static final Component ITEM_NOT_ALLOWED_FAILED = Component.translatable(prefix+"item_not_allowed_failed");
     public static String getItemNotAllowedFailedMessage(String itemName)
     {

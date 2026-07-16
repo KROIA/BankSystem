@@ -757,7 +757,16 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             // Absent file → fresh/pre-2.0 world (compat mode creates it); present but
             // unreadable → never overwrite it with in-memory state (see LoadState).
             metadataLoadState = fileWasPresent ? LoadState.NOT_LOADED : LoadState.FRESH;
-            error("Metadata file is missing version information. This means you updated the mod to a newer version.");
+            if (fileWasPresent)
+                error("Metadata file exists but could not be read. Loading in compatibility mode; "
+                        + "the unreadable file is not overwritten (see load-state save gate).");
+            else
+                // A brand-new world (or a pre-2.0 one) simply has no metadata yet — this is
+                // the expected first start, NOT an error. The file is created on the first
+                // save. (Previously this logged a misleading "you updated the mod" ERROR on
+                // every world creation.)
+                info("No BankSystem metadata file found - fresh world or pre-2.0 data. "
+                        + "The metadata file is created on the first save.");
             return false;
         }
         // Save-format gate (BankSystemSaveFormat): a missing key is the implicit legacy

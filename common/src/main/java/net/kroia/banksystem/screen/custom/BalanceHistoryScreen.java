@@ -1,5 +1,6 @@
 package net.kroia.banksystem.screen.custom;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
@@ -53,10 +54,13 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private static final String DISABLED_ITEMS_KEY = "disabledItems";
     private static final String VIEWPORT_KEY = "viewport";
 
+    private static final Component FILTER_LABEL_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".filter");
+
     private record ToggleRow(GuiElement element, String name) {}
 
     private final int accountNumber;
     private final BalanceHistoryChart chart;
+    private final Label searchLabel;
     private final TextBox searchField;
     private final VerticalListView toggleListView;
     private final Label titleLabel;
@@ -85,6 +89,9 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         chart = new BalanceHistoryChart();
         addElement(chart);
 
+        searchLabel = new Label(FILTER_LABEL_TEXT.getString());
+        addElement(searchLabel);
+
         searchField = new TextBox();
         searchField.setOnTextChanged(this::onSearchChanged);
         addElement(searchField);
@@ -112,7 +119,9 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
 
         titleLabel.setBounds(p, p, getWidth() - 2 * p, titleHeight);
         chart.setBounds(p, toggleTop, toggleX - 2 * p, getHeight() - titleHeight - 3 * p);
-        searchField.setBounds(toggleX, toggleTop, toggleWidth, searchHeight);
+        int searchLabelWidth = searchLabel.getTextWidth(searchLabel.getText()) + searchLabel.getPadding() * 2;
+        searchLabel.setBounds(toggleX, toggleTop, searchLabelWidth, searchHeight);
+        searchField.setBounds(toggleX + searchLabelWidth, toggleTop, toggleWidth - searchLabelWidth, searchHeight);
         toggleListView.setBounds(toggleX, toggleTop + searchHeight + p, toggleWidth, getHeight() - toggleTop - searchHeight - 2 * p);
     }
 

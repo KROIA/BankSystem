@@ -18,7 +18,10 @@
     "main": [
       "net.kroia.banksystem.fabric.BankSystemFabric"
     ],
-    "client": []
+    "client": [],
+    "jei_mod_plugin": [
+      "net.kroia.banksystem.minecraft.compat.BankSystemJeiPlugin"
+    ]
   },
   "mixins": [
     "banksystem.mixins.json"

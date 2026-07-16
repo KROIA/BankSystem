@@ -5,6 +5,7 @@ import net.kroia.banksystem.testing.tests.ArithmeticTests;
 import net.kroia.banksystem.testing.tests.AsyncForwardingTests;
 import net.kroia.banksystem.testing.tests.AsyncMethodAuditTests;
 import net.kroia.banksystem.testing.tests.BankAccountTests;
+import net.kroia.banksystem.testing.tests.BankCraftingMatcherTests;
 import net.kroia.banksystem.testing.tests.BankManagerTests;
 import net.kroia.banksystem.testing.tests.BankPermissionTests;
 import net.kroia.banksystem.testing.tests.DatabaseTests;
@@ -15,6 +16,7 @@ import net.kroia.banksystem.testing.tests.ItemIDFormatAndRepairTests;
 import net.kroia.banksystem.testing.tests.ItemIDIdentityTests;
 import net.kroia.banksystem.testing.tests.ItemIDMergeGuardTests;
 import net.kroia.banksystem.testing.tests.LifecycleTests;
+import net.kroia.banksystem.testing.tests.ModSettingsTests;
 import net.kroia.banksystem.testing.tests.MultiServerSecurityTests;
 import net.kroia.banksystem.testing.tests.NetworkingValidationTests;
 import net.kroia.banksystem.testing.tests.SerializationTests;
@@ -48,5 +50,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new ItemIDFormatAndRepairTests());
         TestRegistry.register(new DepositGateTests());
         TestRegistry.register(new WithdrawMergeTests());
+        TestRegistry.register(new BankCraftingMatcherTests());
+        TestRegistry.register(new ModSettingsTests());
     }
 }

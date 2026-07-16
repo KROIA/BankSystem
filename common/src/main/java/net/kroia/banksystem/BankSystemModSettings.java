@@ -17,6 +17,35 @@ import net.minecraft.world.item.Items;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * All server-side settings of the BankSystem mod, persisted to
+ * {@code world/data/BankSystem/settings.json}. The file is loaded at startup by
+ * {@link net.kroia.banksystem.util.BankSystemDataHandler}; every server (master AND
+ * slave) loads its own local file, but only the MASTER's file is editable in-game.
+ * <p>
+ * Admins can edit these settings in-game via the "Mod Settings" screen
+ * ({@code net.kroia.banksystem.screen.custom.ModSettingsScreen}, reachable from the
+ * {@code BankSystemSettingScreen} on the master server).
+ * <p>
+ * <b>DEVELOPER NOTE — when adding a new setting:</b>
+ * <ol>
+ *   <li>You MUST also add a matching editing field to the Mod Settings screen
+ *       ({@code ModSettingsScreen}). The screen builds its fields generically from
+ *       {@link #getEditableGroups()}, so a setting in a registered group with a
+ *       supported type (Boolean/Integer/Long/Float/ItemStack/List&lt;String&gt;/
+ *       PlaceholderSettingData) appears automatically — but you still must add its
+ *       label/tooltip lang keys
+ *       ({@code gui.banksystem.mod_settings_screen.setting.<Group>.<NAME>[.tooltip]})
+ *       and verify the field renders and applies correctly. Unsupported types need
+ *       a dedicated editor row.</li>
+ *   <li>If the new setting is only read ONCE (at startup / world load / construction
+ *       and cached for the server lifetime), mark the field as restart-required in
+ *       {@code ModSettingsScreen.RESTART_REQUIRED_SETTINGS}.</li>
+ *   <li>Consider whether the value must be propagated to slave servers after a
+ *       change (see the per-group propagation decision documented in
+ *       {@code ModSettingsRequest.handleOnMasterServer}).</li>
+ * </ol>
+ */
 public final class BankSystemModSettings extends ModSettings {
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -362,6 +391,23 @@ public final class BankSystemModSettings extends ModSettings {
 
 
 
+
+    /**
+     * Returns the list of settings groups that are editable through the in-game
+     * "Mod Settings" screen and the {@code ModSettingsRequest} GET/SET payloads.
+     * <p>
+     * This is exactly the set of groups registered via {@code createGroup(...)}:
+     * Utilities, Player, ServerBank and Placeholder — unlike StockMarket, BankSystem
+     * has no dead (never-registered) group, so ALL groups are listed here. If a
+     * group is ever added without being registered through {@code createGroup},
+     * it must NOT be added to this list (it would not be part of settings.json).
+     *
+     * @return the registered, editable settings groups in display order
+     */
+    public List<SettingsGroup> getEditableGroups()
+    {
+        return List.of(UTILITIES, PLAYER, BANK, PLACEHOLDER);
+    }
 
     /**
      * ---------------------------------------------------------------------------------------

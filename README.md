@@ -28,6 +28,7 @@ You want to support me?<br>
 ---
 ## Features
 - Bank accounts for money and items with deposit, withdrawal, and transfer support
+- Built-in crafting grid in the Bank Terminal that can pull missing ingredients from the bank and deposit crafted items back automatically
 - Shared bank accounts with per-player permissions (deposit, withdraw, manage)
 - ATM block for withdrawing specific bank note denominations
 - Bank Upload / Download blocks for redstone-powered automation with hoppers and pipes
@@ -113,6 +114,13 @@ You want to support me?<br>
 </div>
 
 The Bank Terminal Block is used to deposit/withdraw items to/from the bank account.
+A **Filter** box above the bank item list helps you find items quickly.
+
+The terminal also features a built-in 3×3 crafting grid that supports all standard crafting recipes.
+Enable **Use Bank Items** to pull missing ingredients straight from the selected bank account,
+and **Auto-deposit output** to send crafted items directly back into the bank.
+With JEI installed, recipes can be filled into the grid with one click.
+See [Block Usage](documentation/user-guide/Usage.md#bank-terminal-block) for details.
 
 > [!NOTE]  
 > The block contains an inventory which is unique for every player. 
@@ -165,6 +173,21 @@ The **Bank Display** block shows live bank account data on its screen. Right-cli
 |--------------|-------------|
 | **Balance History** | A line chart tracking balance changes over time for all items in the account. Each item is color-coded with a legend on the right. Updates every 60 seconds. |
 | **Balance Overview** | A compact grid showing the current balances of the highest-value items in the account. Displays item icons with their amounts. Updates every second. |
+
+### Mod Settings Screen
+
+Server admins can edit the mod's `settings.json` in-game, without touching the file:
+
+1. Run `/banksystem manage` (admin only) to open the banking settings window.
+2. Click **Mod Settings**.
+
+The screen lists every setting of the mod, grouped by category (Utilities, Player, Bank, TAB Placeholders), with a matching editor per setting type (checkboxes, number fields, text fields). **Apply** validates and saves the values on the server (out-of-range values are clamped and the corrected values are shown), **Reload** re-fetches the current server state and **Defaults** resets the fields to the built-in defaults (nothing is saved until Apply is pressed).
+
+Notes:
+
+- **Master-only:** the button is only shown when you are connected to the master server (or a regular single server). Only the master's `settings.json` can be edited; the server additionally rejects requests from non-admins regardless of the UI.
+- **Permission:** requires BankSystem admin status (the same permission as the other `/banksystem` admin commands).
+- **Restart markers:** settings that are only read once at server startup show an orange "⟳ Restart required" marker — the change is saved immediately but only takes effect after a server restart. This includes the volatile/deposit-gated component lists and the one-shot `CONFIRM_ITEMID_MERGE` / `CONFIRM_ITEMID_REPAIR` flags, which can be armed from this screen to approve a pending ItemID merge or world repair on the next restart.
 
 ---
 ## Blocks
@@ -226,7 +249,7 @@ For the full command reference, see [Commands](documentation/user-guide/Commands
 Detailed guides are available in the [documentation](documentation/README.md) folder:
 
 **For Mod Users:**
-- [Block Usage](documentation/user-guide/Usage.md) — How to use the Bank Terminal, ATM, automation blocks, bank displays, and money stockpiles
+- [Block Usage](documentation/user-guide/Usage.md) — How to use the Bank Terminal (including its crafting grid), ATM, automation blocks, bank displays, and money stockpiles
 - [Bank Accounts](documentation/user-guide/BankAccounts.md) — Shared accounts, creating accounts, permissions
 - [Administration](documentation/user-guide/Administration.md) — Managing banking items, player accounts, locked amounts
 - [Multi-Server Setup](documentation/user-guide/MultiserverSetup.md) — Master-slave architecture for cross-server banking

@@ -6,7 +6,7 @@ Guides for players and server administrators on how to use the BankSystem mod.
 
 | Guide | Description |
 |-------|-------------|
-| [Usage](user-guide/Usage.md) | How to use the Bank Terminal, ATM, automation blocks, bank displays, and money stockpiles |
+| [Usage](user-guide/Usage.md) | How to use the Bank Terminal (including its crafting grid), ATM, automation blocks, bank displays, and money stockpiles |
 | [Bank Accounts](user-guide/BankAccounts.md) | Shared bank accounts, creating accounts, permissions |
 | [Administration](user-guide/Administration.md) | Server admin guide: managing banking items, player accounts, locked amounts |
 | [Configuration](user-guide/Configuration.md) | Per-world `settings.json` reference; volatile & deposit-gated item components |
