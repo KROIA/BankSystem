@@ -12,16 +12,19 @@ package net.kroia.banksystem.util;
  * revert the component-list change, or set {@code CONFIRM_ITEMID_MERGE: true} in
  * {@code settings.json} to approve the merge once).
  * <p>
- * It is intentionally a {@link RuntimeException}: it propagates out of
- * {@code BankSystemDataHandler.loadAll()} through the {@code SERVER_STARTED} lifecycle
- * handler and aborts server startup with a crash report on both Fabric and NeoForge.
- * Nothing has been mutated or saved at the point it is thrown — and
- * {@code BankSystemDataHandler.load_itemIDs()} additionally marks the whole session
- * <b>save-prohibited</b> while this exception passes through it, so the vanilla
+ * It propagates out of {@code BankSystemDataHandler.loadAll()} through the
+ * {@code SERVER_STARTED} lifecycle handler and aborts server startup with a crash report
+ * on both Fabric and NeoForge. Nothing has been mutated or saved at the point it is
+ * thrown — and {@code BankSystemDataHandler.load_itemIDs()} additionally marks the whole
+ * session <b>save-prohibited</b> while this exception passes through it, so the vanilla
  * crash-save ("Saving worlds" after the startup failure) and the shutdown save are
  * suppressed as well. The world data on disk therefore stays exactly as it was.
+ * <p>
+ * Extends {@link BankSystemStartupAbortException}, the shared supertype of every
+ * startup-aborting BankSystem load exception — the data handler collapses its handling
+ * (NOT_LOADED + save-prohibited + rethrow) onto the supertype.
  */
-public class ItemIDMergeAbortedException extends RuntimeException {
+public class ItemIDMergeAbortedException extends BankSystemStartupAbortException {
 
     /**
      * @param report the human-readable merge report (becomes the exception/crash message)

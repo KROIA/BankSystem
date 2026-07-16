@@ -64,13 +64,14 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     private LoadState bankLoadState = LoadState.NOT_LOADED;
 
     /**
-     * Session-wide save kill-switch, set when the ItemID merge guard aborts startup
-     * ({@link ItemIDMergeAbortedException}). At that point the ItemID registry is
-     * half-initialized in memory (raw templates, merge NOT applied) and the bank manager
-     * is still empty, so NOTHING of this session may ever be saved — including the vanilla
-     * crash-save ({@code SERVER_LEVEL_SAVE} during "Saving worlds") and the shutdown save.
-     * This flag is what makes the abort report's "Nothing has been changed or saved"
-     * guarantee actually true.
+     * Session-wide save kill-switch, set when any startup-abort guard fires
+     * ({@link BankSystemStartupAbortException}: the ItemID merge guard, the save-format
+     * gate on files written by a newer BankSystem, or the world-repair guard). At that
+     * point the ItemID registry is absent or half-initialized in memory and the bank
+     * manager is still empty, so NOTHING of this session may ever be saved — including the
+     * vanilla crash-save ({@code SERVER_LEVEL_SAVE} during "Saving worlds") and the
+     * shutdown save. This flag is what makes the abort reports' "Nothing has been changed
+     * or saved" guarantee actually true.
      */
     private boolean savingProhibited = false;
 
@@ -189,7 +190,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     private boolean canSave(String subsystemName, LoadState state) {
         if (savingProhibited) {
             warn("Skipping save of '" + subsystemName + "': all saves are prohibited for this session " +
-                    "(startup was aborted by the ItemID merge guard; on-disk data is left untouched).");
+                    "(startup was aborted by a BankSystem load guard — ItemID merge guard, save-format " +
+                    "gate, or world-repair guard; see the startup log. On-disk data is left untouched).");
             return false;
         }
         if (state == LoadState.NOT_LOADED) {
@@ -208,8 +210,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         // periodic save-interval path in one place; the individual save_* methods repeat
         // the check for callers that bypass saveAll().
         if (savingProhibited) {
-            warn("Skipping BankSystem data save: startup was aborted by the ItemID merge guard — " +
-                    "nothing is written so the world data on disk stays exactly as it was.");
+            warn("Skipping BankSystem data save: startup was aborted by a BankSystem load guard " +
+                    "(ItemID merge guard, save-format gate, or world-repair guard — see the startup " +
+                    "log). Nothing is written so the world data on disk stays exactly as it was.");
             return false;
         }
         debug("Saving BankSystem Mod data...");
@@ -272,7 +275,22 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             // items get freshly minted appended shorts. Running this before load (the old
             // behaviour) minted fresh low shorts that then collided/merged with the
             // persisted shorts, corrupting item identity (e.g. money 7 -> alias of 6).
-            BACKEND_INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs();
+            //
+            // Skipped while the registration latch is still armed (Task #16): that only
+            // happens when ItemIDs.nbt exists but failed to load — minting fresh shorts
+            // against a world whose real assignment could not be read is exactly what the
+            // latch prevents, and running the pass would just produce ~one refusal per
+            // registry item. The recovery flow (backupFailedSubsystemData + saveAll +
+            // loadAll retry in BankSystemModBackend.loadDataFromFiles) re-runs this with
+            // the latch released.
+            if (ItemIDManager.isRegistrationReady()) {
+                BACKEND_INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs();
+            } else {
+                warn("Skipping default ItemID registration: ItemIDs.nbt exists but failed to "
+                        + "load, so the registration latch is still armed. No fresh shorts are "
+                        + "minted against the unreadable assignment; the load-failure recovery "
+                        + "re-runs this after the unreadable file has been backed up.");
+            }
 
             // check if file exists
             loadInCompatibilityMode |= fileExists(getAbsoluteSavePath("Bank_data.dat"));
@@ -325,6 +343,12 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             // IDs and fire the ITEM_IDS_MERGED event for dependent mods (no-op when nothing
             // was merged).
             ItemIDManager.consolidatePendingMerges();
+            // Renumbering tripwire (Task #16): the load — including default registration,
+            // merges and consolidation — is complete; diff the live registry against last
+            // session's short→item-name digest and ERROR-report every persisted short that
+            // now resolves to a different item. Report-only; silent when identical or when
+            // no digest exists yet (older saves / fresh worlds).
+            ItemIDManager.reportShortNameDigestMismatches(storedItemIDDigest);
         }
 
 
@@ -365,35 +389,88 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             boolean success = tag != null && BACKEND_INSTANCES.ITEM_ID_MANAGER.load(tag);
             if (success) {
                 itemIDsLoadState = LoadState.LOADED;
-                // Task #13 Fix D one-shot durability: if the load-time alias-table repair
-                // touched any entries, persist the cleaned-up state immediately so a crash
-                // between now and the next periodic save doesn't lose the healing work.
-                // consumeLastLoadRepairCount() clears the counter after reading — idempotent
-                // across multiple loadAll() invocations in the same session.
+                // Pre-repair backup: when a CONFIRMED world repair was applied during
+                // load(), COPY the still-corrupted ItemIDs.nbt aside before the one-shot
+                // re-save below overwrites it with the repaired state. A copy (not a move)
+                // — the live file must remain in place until the new one is written, so a
+                // crash between here and the save leaves a loadable file either way.
+                if (ItemIDManager.consumeRepairWasApplied()) {
+                    backupPreRepairItemIDs(filePath);
+                    // Deferred one-shot flag persist: the repair guard consumed
+                    // CONFIRM_ITEMID_REPAIR in memory only — persisting the reset is
+                    // deliberately delayed until HERE, after the whole load (including the
+                    // merge guard, which can still abort) succeeded. If the load had
+                    // aborted, the settings file would keep the flag true and the admin's
+                    // confirmation would not be burned without the repair persisting.
+                    save_globalSettings();
+                }
+                // One-shot durability: persist the post-load state immediately when either
+                // the alias-table repair pass touched entries (Task #13 Fix D) or the load
+                // requires a format-conversion re-save (legacy version-less file,
+                // migration-seeded counter, applied world repair). Both consume* helpers
+                // clear their flag after reading — idempotent across multiple loadAll()
+                // invocations in the same session.
                 int repaired = ItemIDManager.consumeLastLoadRepairCount();
-                if (repaired > 0) {
-                    info("Persisting ItemID alias-table repairs (" + repaired
-                            + " entries) via one-shot save_itemIDs().");
+                boolean formatResave = ItemIDManager.consumeLastLoadRequiresResave();
+                if (repaired > 0 || formatResave) {
+                    info("Persisting ItemIDs via one-shot save_itemIDs() ("
+                            + (repaired > 0 ? repaired + " alias-table repairs" : "no alias repairs")
+                            + (formatResave ? ", format/repair conversion re-save" : "") + ").");
                     save_itemIDs();
                 }
             }
-            else
+            else {
                 // Absent file → fresh world (saving may create it); present but
                 // unreadable/invalid → never overwrite it with in-memory state.
                 itemIDsLoadState = fileWasPresent ? LoadState.NOT_LOADED : LoadState.FRESH;
+                // Fresh world: there is nothing to load, so the load phase is complete —
+                // release the master-side registration latch so the default registration
+                // that follows (createDefaultItemIDs / setupDefaultItems) may mint shorts.
+                // A PRESENT but unreadable file keeps the latch armed: its subsystem is
+                // save-prohibited anyway, and minting fresh shorts against a world whose
+                // real assignment could not be read is exactly what the latch prevents.
+                if (!fileWasPresent)
+                    ItemIDManager.markRegistryReady();
+            }
             return success;
-        } catch (ItemIDMergeAbortedException e) {
-            // The merge guard aborted startup. The ItemID registry is fully populated in
-            // memory but the merge was NOT applied (raw un-normalized templates, undecided
-            // alias state), so ItemIDs deliberately do NOT count as "loaded" — and because
-            // the bank data was never loaded either (load_bank runs after load_itemIDs),
-            // the whole session is marked save-prohibited. This keeps the vanilla
-            // crash-save ("Saving worlds" after the startup failure) and the shutdown save
-            // from writing the empty bank manager or the half-initialized registry over
-            // the world data on disk.
+        } catch (BankSystemStartupAbortException e) {
+            // A startup-abort guard fired: the merge guard (unconfirmed collapse merge),
+            // the format gate (file written by a newer BankSystem), or the world-repair
+            // guard (unconfirmed cent-shift repair). In every case the in-memory registry
+            // is absent or half-initialized, so ItemIDs deliberately do NOT count as
+            // "loaded" — and because the bank data was never loaded either (load_bank runs
+            // after load_itemIDs), the whole session is marked save-prohibited. This keeps
+            // the vanilla crash-save ("Saving worlds" after the startup failure) and the
+            // shutdown save from writing the empty bank manager or the half-initialized
+            // registry over the world data on disk.
             itemIDsLoadState = LoadState.NOT_LOADED;
             savingProhibited = true;
             throw e;
+        }
+    }
+
+    /**
+     * Copies the current (still-corrupted) {@code ItemIDs.nbt} to
+     * {@code ItemIDs.nbt.pre-repair-<timestamp>} right before a confirmed world repair's
+     * one-shot re-save overwrites it. Copy failures are logged but do not abort the repair
+     * — the admin explicitly confirmed via {@code CONFIRM_ITEMID_REPAIR}, and the repair
+     * report has already instructed them to take a full world backup first.
+     *
+     * @param filePath the live {@code ItemIDs.nbt} path
+     */
+    private void backupPreRepairItemIDs(Path filePath) {
+        if (!Files.exists(filePath))
+            return; // nothing to back up (should not happen — repair implies a loaded file)
+        Path backupPath = filePath.resolveSibling(
+                filePath.getFileName().toString() + ".pre-repair-" + System.currentTimeMillis());
+        try {
+            Files.copy(filePath, backupPath, StandardCopyOption.REPLACE_EXISTING);
+            info("World repair: copied the pre-repair ItemIDs.nbt aside to " + backupPath
+                    + " (restore it to undo the repair mapping).");
+        } catch (IOException e) {
+            error("World repair: failed to copy the pre-repair ItemIDs.nbt to " + backupPath
+                    + " — continuing with the repair (the admin-confirmed repair takes precedence; "
+                    + "a full world backup was requested by the repair report).", e);
         }
     }
 
@@ -564,6 +641,57 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
     /** NBT key inside {@code Meta_data.nbt} holding the applied effective component set. */
     private static final String APPLIED_COMPONENT_SET_KEY = "appliedComponentSet";
+    /** NBT key inside {@code Meta_data.nbt} holding the world-repair audit record. */
+    private static final String REPAIR_APPLIED_KEY = "repairApplied";
+    /** NBT key inside {@code Meta_data.nbt} holding the warn-path evidence acknowledgment hash. */
+    private static final String REPAIR_EVIDENCE_ACK_KEY = "repairEvidenceAcknowledged";
+
+    /**
+     * The mod version string read from {@code Meta_data.nbt} at load time — i.e. the
+     * BankSystem version that last saved this world. {@code null} until a metadata file
+     * with a {@code version} entry has been loaded this session. Report/diagnostic context
+     * only (e.g. the world-repair report names it); never used for load decisions.
+     */
+    private String lastSavedByModVersion = null;
+
+    // World-repair audit record (see recordRepairApplied): loaded from and re-persisted to
+    // Meta_data.nbt so the fact that a repair ran survives forever in the world data.
+    private long repairAppliedTimestamp = -1;
+    private String repairAppliedModVersion = null;
+    private int repairAppliedChangedShortCount = -1;
+
+    /**
+     * The renumbering-tripwire digest (short→item-name, see
+     * {@link ItemIDManager#buildShortNameDigest()}) read from {@code Meta_data.nbt} at load
+     * time — i.e. the mapping of the LAST session. {@code null} until a metadata file with
+     * a digest has been loaded this session (worlds saved before the tripwire existed, or
+     * fresh worlds). Diffed against the live registry by {@link #loadAll()} after the whole
+     * load completed; every subsequent {@link #save_metadata()} replaces the on-disk digest
+     * with the CURRENT registry state, so healthy renames (confirmed merges, applied world
+     * repairs) warn at most once.
+     * <p>
+     * <b>Retention across loads (Task #16 review):</b> {@code load_metadata()} only
+     * OVERWRITES this field when the file actually carries a digest — it never resets it to
+     * {@code null}. Safe: the data handler is constructed fresh in every
+     * {@code onServerStart} (one instance per world/session), so a stale digest can never
+     * leak across worlds. Necessary: on the unreadable-{@code ItemIDs.nbt} recovery path
+     * ({@code BankSystemModBackend.loadDataFromFiles()} backup → {@code saveAll()} →
+     * second {@code loadAll()}), the intermediate save writes a metadata file WITHOUT a
+     * digest (the registry is still empty at that point), so the second pass would
+     * otherwise diff against nothing — silencing the tripwire on the one path where every
+     * short can change meaning. With retention, the second pass diffs the freshly
+     * re-created registry against the PRE-recovery digest and reports the remapping.
+     */
+    private ListTag storedItemIDDigest = null;
+
+    /**
+     * Evidence hash of a cent-shift corruption signature whose repair plan failed
+     * cross-validation and was therefore only WARNED about (warn-and-continue path of the
+     * world-repair guard). Once recorded, later startups with the SAME evidence log a
+     * single WARN line instead of the full ERROR report. Persisted in {@code Meta_data.nbt};
+     * cleared (set {@code null}) when a confirmed repair is applied.
+     */
+    private String acknowledgedRepairEvidenceHash = null;
 
     public boolean save_metadata()
     {
@@ -572,6 +700,13 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         if (!canSave("Meta_data", metadataLoadState))
             return false;
         CompoundTag data = new CompoundTag();
+        // Save-format stamp (BankSystemSaveFormat): legacy files carry no such key and are
+        // re-stamped by this very call on their first post-update save (save_metadata()
+        // already runs at the end of every startup merge-guard pass).
+        data.putInt(BankSystemSaveFormat.KEY_FORMAT_VERSION, BankSystemSaveFormat.META_DATA_FORMAT_CURRENT);
+        // The mod version string is kept alongside the format version: the format version
+        // gates loading, the mod version provides human-readable provenance ("world last
+        // saved by BankSystem x.y.z") for logs and repair reports.
         data.putString("version", BankSystemMod.VERSION);
         // Persist the effective volatile/deposit-gated component set that the ItemID
         // registry was last normalized with. The startup merge guard compares it against
@@ -583,6 +718,28 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
                 setTag.add(StringTag.valueOf(id));
             data.put(APPLIED_COMPONENT_SET_KEY, setTag);
         }
+        // World-repair audit record: persisted forever once a repair ran on this world.
+        if (repairAppliedTimestamp > 0)
+        {
+            CompoundTag repairTag = new CompoundTag();
+            repairTag.putLong("timestamp", repairAppliedTimestamp);
+            repairTag.putString("modVersion", repairAppliedModVersion == null ? "" : repairAppliedModVersion);
+            repairTag.putInt("changedShortCount", repairAppliedChangedShortCount);
+            data.put(REPAIR_APPLIED_KEY, repairTag);
+        }
+        // Warn-path acknowledgment: suppresses the repeated full ERROR report for an
+        // already-reported (validation-failed) evidence state — see the field Javadoc.
+        if (acknowledgedRepairEvidenceHash != null)
+            data.putString(REPAIR_EVIDENCE_ACK_KEY, acknowledgedRepairEvidenceHash);
+        // Renumbering tripwire (Task #16): persist the CURRENT short→item-name digest on
+        // every save so the next load can detect shorts that silently changed meaning.
+        // Master only — slaves never load ItemIDs from disk, so a slave-side digest would
+        // describe the master's synced registry and could never be meaningfully diffed.
+        if (BACKEND_INSTANCES == null || !BACKEND_INSTANCES.isSlaveServer) {
+            ListTag digest = ItemIDManager.buildShortNameDigest();
+            if (!digest.isEmpty())
+                data.put(BankSystemSaveFormat.KEY_ITEM_ID_DIGEST, digest);
+        }
         // Save metadata to a separate file
         return saveDataCompound(getMetaDataFilePath(), data);
     }
@@ -590,6 +747,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     {
         storedEffectiveComponentSet = null;
         appliedEffectiveComponentSet = null;
+        // NOTE: storedItemIDDigest is deliberately NOT reset here — see its Javadoc. The
+        // handler is constructed fresh per server start, so retention cannot leak across
+        // worlds; it exists to bridge the unreadable-file recovery retry.
         boolean fileWasPresent = fileExists(getMetaDataFilePath());
         CompoundTag data = readDataCompound(getMetaDataFilePath());
         if(data == null)
@@ -600,7 +760,39 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             error("Metadata file is missing version information. This means you updated the mod to a newer version.");
             return false;
         }
+        // Save-format gate (BankSystemSaveFormat): a missing key is the implicit legacy
+        // format 1; anything above this build's supported version means the world was
+        // saved by a NEWER BankSystem — abort startup exactly like a newer ItemIDs.nbt
+        // (save-prohibited so the newer file on disk stays byte-identical).
+        int formatVersion = data.contains(BankSystemSaveFormat.KEY_FORMAT_VERSION)
+                ? data.getInt(BankSystemSaveFormat.KEY_FORMAT_VERSION)
+                : 1;
+        if (formatVersion > BankSystemSaveFormat.META_DATA_FORMAT_CURRENT)
+        {
+            metadataLoadState = LoadState.NOT_LOADED;
+            savingProhibited = true;
+            throw new BankSystemStartupAbortException(
+                    "Meta_data.nbt has save-format version " + formatVersion
+                            + ", but this BankSystem build (v" + BankSystemMod.VERSION
+                            + ") only supports versions up to " + BankSystemSaveFormat.META_DATA_FORMAT_CURRENT
+                            + ". This world was saved by a newer BankSystem — update the mod. "
+                            + "Nothing was loaded or saved; the world data on disk is untouched.");
+        }
         metadataLoadState = LoadState.LOADED;
+        // Provenance: which BankSystem build last saved this world. INFO on every load;
+        // WARN when the saved version is above the running one (likely mod downgrade —
+        // the format gate above still guarantees the files are readable, but newer-build
+        // behavior differences may surface).
+        if (data.contains("version", Tag.TAG_STRING))
+        {
+            lastSavedByModVersion = data.getString("version");
+            info("World last saved by BankSystem " + lastSavedByModVersion + ".");
+            if (isVersionNewerThan(lastSavedByModVersion, BankSystemMod.VERSION))
+                warn("This world was last saved by BankSystem " + lastSavedByModVersion
+                        + " but the running build is v" + BankSystemMod.VERSION
+                        + " — a mod DOWNGRADE is likely. The data formats are compatible, "
+                        + "but consider updating the mod back to avoid behavior differences.");
+        }
         // Worlds saved before the merge guard existed have no stored set: null signals the
         // guard to treat this load as a migration (silent healing merge + store the set).
         if(data.contains(APPLIED_COMPONENT_SET_KEY, Tag.TAG_LIST))
@@ -614,7 +806,111 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             // never run the guard but must not drop the master-era record from the file).
             appliedEffectiveComponentSet = set;
         }
+        // World-repair audit record: adopt what we read so every subsequent save_metadata()
+        // re-persists it (the record must never be dropped by an unrelated save).
+        if (data.contains(REPAIR_APPLIED_KEY, Tag.TAG_COMPOUND))
+        {
+            CompoundTag repairTag = data.getCompound(REPAIR_APPLIED_KEY);
+            repairAppliedTimestamp = repairTag.getLong("timestamp");
+            repairAppliedModVersion = repairTag.getString("modVersion");
+            repairAppliedChangedShortCount = repairTag.getInt("changedShortCount");
+        }
+        // Warn-path acknowledgment (reset first: a world without the key must not inherit a
+        // previously loaded world's acknowledgment in the same session).
+        acknowledgedRepairEvidenceHash = data.contains(REPAIR_EVIDENCE_ACK_KEY, Tag.TAG_STRING)
+                ? data.getString(REPAIR_EVIDENCE_ACK_KEY)
+                : null;
+        // Renumbering-tripwire digest of the LAST session. Only OVERWRITTEN when the file
+        // carries the key; a key-less file RETAINS the previously read digest (see the
+        // field Javadoc: per-session handler instance, so no cross-world leakage — the
+        // retention bridges the unreadable-ItemIDs recovery retry, where the intermediate
+        // saveAll() drops the digest from disk before the second loadAll() pass). Consumed
+        // by loadAll() after the whole load completed; null = no record yet (older save) →
+        // the tripwire stays silent.
+        if (data.contains(BankSystemSaveFormat.KEY_ITEM_ID_DIGEST, Tag.TAG_LIST))
+            storedItemIDDigest = data.getList(BankSystemSaveFormat.KEY_ITEM_ID_DIGEST, Tag.TAG_COMPOUND);
         return true;
+    }
+
+    /**
+     * @return the acknowledged evidence hash of an already-reported, validation-failed
+     *         cent-shift signature (see the field Javadoc), or {@code null} when no such
+     *         report was acknowledged yet. Consumed by the world-repair guard to decide
+     *         between the one-time full ERROR report and the recurring single WARN line.
+     */
+    public String getAcknowledgedRepairEvidenceHash()
+    {
+        return acknowledgedRepairEvidenceHash;
+    }
+
+    /**
+     * Records (or clears, with {@code null}) the warn-path evidence acknowledgment hash.
+     * Persisted by the next {@link #save_metadata()} — the startup merge guard invokes that
+     * at the end of every load, so the acknowledgment is durable before the first tick.
+     *
+     * @param hash the evidence hash from {@code ItemIDWorldRepair.evidenceFingerprint},
+     *             or {@code null} to clear (after a confirmed repair consumed the evidence)
+     */
+    public void setAcknowledgedRepairEvidenceHash(String hash)
+    {
+        acknowledgedRepairEvidenceHash = hash;
+    }
+
+    /**
+     * @return the BankSystem version string that last saved this world (read from
+     *         {@code Meta_data.nbt}), or {@code null} if not known this session.
+     *         Consumed by the world-repair guard for report provenance.
+     */
+    public String getLastSavedByModVersion()
+    {
+        return lastSavedByModVersion;
+    }
+
+    /**
+     * Records the audit entry for an applied ItemID world repair; persisted into
+     * {@code Meta_data.nbt} by the next {@link #save_metadata()} (the startup merge guard
+     * calls it at the end of every load) and re-persisted on every save thereafter.
+     * Called by {@code ItemIDManager.applyCorruptionRepairGuard()} right after a confirmed
+     * repair was applied.
+     *
+     * @param timestamp         epoch millis at which the repair was applied
+     * @param modVersion        the BankSystem version that applied the repair
+     * @param changedShortCount how many shorts changed meaning (the plan's changed-short set)
+     */
+    public void recordRepairApplied(long timestamp, String modVersion, int changedShortCount)
+    {
+        repairAppliedTimestamp = timestamp;
+        repairAppliedModVersion = modVersion;
+        repairAppliedChangedShortCount = changedShortCount;
+    }
+
+    /**
+     * Loose "is version A newer than version B" comparison on dotted version strings
+     * (numeric segment-wise; non-numeric segments compared lexicographically). Used only
+     * for the downgrade WARN — never for load decisions — so a parse oddity harmlessly
+     * suppresses or emits a warning and nothing else.
+     */
+    private static boolean isVersionNewerThan(String a, String b)
+    {
+        if (a == null || b == null)
+            return false;
+        String[] partsA = a.trim().split("\\.");
+        String[] partsB = b.trim().split("\\.");
+        int len = Math.max(partsA.length, partsB.length);
+        for (int i = 0; i < len; i++)
+        {
+            String segA = i < partsA.length ? partsA[i] : "0";
+            String segB = i < partsB.length ? partsB[i] : "0";
+            int cmp;
+            try {
+                cmp = Integer.compare(Integer.parseInt(segA), Integer.parseInt(segB));
+            } catch (NumberFormatException e) {
+                cmp = segA.compareTo(segB);
+            }
+            if (cmp != 0)
+                return cmp > 0;
+        }
+        return false;
     }
 
     /**
@@ -673,8 +969,13 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             metadataLoadState = LoadState.FRESH;
         if (settingsLoadState == LoadState.NOT_LOADED && backupPath(getGlobalSettingsFilePath(), suffix))
             settingsLoadState = LoadState.FRESH;
-        if (itemIDsLoadState == LoadState.NOT_LOADED && backupPath(getAbsoluteSavePath(ITEM_IDS_FILE_NAME), suffix))
+        if (itemIDsLoadState == LoadState.NOT_LOADED && backupPath(getAbsoluteSavePath(ITEM_IDS_FILE_NAME), suffix)) {
             itemIDsLoadState = LoadState.FRESH;
+            // The unreadable file was moved aside — the world is now officially fresh from
+            // the ItemID subsystem's perspective, so the load phase is complete: release
+            // the registration latch (same release the no-file path performs).
+            ItemIDManager.markRegistryReady();
+        }
         if (bankLoadState == LoadState.NOT_LOADED && backupPath(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME), suffix))
             bankLoadState = LoadState.FRESH;
     }

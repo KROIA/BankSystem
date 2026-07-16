@@ -425,10 +425,11 @@ public class BankSystemModBackend implements BankSystemAPI {
         if(INSTANCES.SERVER_DATA_HANDLER != null) {
             Path rootSaveFolder = server.getWorldPath(LevelResource.ROOT);
             // Load data from the root save folder.
-            // NOTE: an ItemIDMergeAbortedException thrown by the merge guard inside
-            // loadAll() intentionally propagates out of this method — it must abort
-            // server startup, and the data handler has already prohibited every save
-            // of this session at that point.
+            // NOTE: a BankSystemStartupAbortException thrown by a load guard inside
+            // loadAll() (ItemID merge guard, save-format gate on newer-mod files, or
+            // the world-repair guard) intentionally propagates out of this method —
+            // it must abort server startup, and the data handler has already
+            // prohibited every save of this session at that point.
             INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder);
             if (!INSTANCES.SERVER_DATA_HANDLER.loadAll()) {
                 // Never blind-overwrite unreadable files with in-memory (possibly empty)

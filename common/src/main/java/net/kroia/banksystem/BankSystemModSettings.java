@@ -171,14 +171,43 @@ public final class BankSystemModSettings extends ModSettings {
         public final Setting<Boolean> CONFIRM_ITEMID_MERGE = registerSetting(
                 "CONFIRM_ITEMID_MERGE", false, Boolean.class);
 
+        /**
+         * <b>One-shot confirmation flag for the ItemID world-repair guard.</b>
+         * <p>
+         * When world load detects the cent-shift corruption signature (an
+         * {@code ItemIDs.nbt} overwritten by a pre-v2.0.3 buggy build with a fresh
+         * cent-shifted default mapping while all other world data still references the old
+         * shorts — see {@code ItemIDWorldRepair}), the master server <b>refuses to start</b>
+         * and logs a full repair report with the proposed short→item remap table. Setting
+         * this flag to {@code true} approves that exact repair on the next startup: the old
+         * mapping is restored, the previous {@code ItemIDs.nbt} is copied aside as
+         * {@code ItemIDs.nbt.pre-repair-<timestamp>}, and the repaired state is persisted.
+         * After the repair is applied the flag is automatically reset to {@code false} and
+         * saved, so it can never act as a standing bypass — the exact same one-shot contract
+         * as {@link #CONFIRM_ITEMID_MERGE}. Healthy worlds never trigger the guard.
+         */
+        public final Setting<Boolean> CONFIRM_ITEMID_REPAIR = registerSetting(
+                "CONFIRM_ITEMID_REPAIR", false, Boolean.class);
 
-        public final List<ItemStack> INITIAL_ALLOWED_ITEMS = List.of(
-                        BankSystemItems.MONEY.get().getDefaultInstance(),
-                        Items.IRON_INGOT.getDefaultInstance(),
-                        Items.GOLD_INGOT.getDefaultInstance(),
-                        Items.DIAMOND.getDefaultInstance(),
-                        Items.EMERALD.getDefaultInstance(),
-                        Items.COAL.getDefaultInstance());
+
+        public final List<ItemStack> INITIAL_ALLOWED_ITEMS = createInitialAllowedItems();
+
+        /**
+         * Builds the initial allowed-items list. Static so pure consumers (in particular
+         * {@code ItemIDWorldRepair.simulateBootOrderAssignment()}, which reconstructs the
+         * historical boot-time ItemID registration order) can obtain the exact list content
+         * without a live settings instance. The instance field above is what production
+         * code reads; the list content is a build-time constant either way.
+         */
+        public static List<ItemStack> createInitialAllowedItems() {
+            return List.of(
+                    BankSystemItems.MONEY.get().getDefaultInstance(),
+                    Items.IRON_INGOT.getDefaultInstance(),
+                    Items.GOLD_INGOT.getDefaultInstance(),
+                    Items.DIAMOND.getDefaultInstance(),
+                    Items.EMERALD.getDefaultInstance(),
+                    Items.COAL.getDefaultInstance());
+        }
 
         //public final Setting<List<ItemIDAndScaleFactor>> INITIAL_ALLOWED_ITEM_IDS = registerSetting("INITIAL_ALLOWED_ITEM_IDS",
         //        new ArrayList<>(List.of(
@@ -192,30 +221,41 @@ public final class BankSystemModSettings extends ModSettings {
         //        new TypeToken<List<ItemIDAndScaleFactor>>() {}.getType(),
         //        new ItemIDAndScaleFactorListParser()); // List of allowed item IDs for bank transactions
 
-        public final List<ItemStack> INITIAL_BLACKLIST_ITEMS = List.of(
-                //Items.AIR.getDefaultInstance(),
-                Items.BEDROCK.getDefaultInstance(),
-                Items.BARRIER.getDefaultInstance(),
-                Items.STRUCTURE_VOID.getDefaultInstance(),
-                Items.COMMAND_BLOCK.getDefaultInstance(),
-                Items.REPEATING_COMMAND_BLOCK.getDefaultInstance(),
-                Items.CHAIN_COMMAND_BLOCK.getDefaultInstance(),
-                Items.DEBUG_STICK.getDefaultInstance(),
-                Items.KNOWLEDGE_BOOK.getDefaultInstance(),
-                BankSystemItems.MONEY_CENT1.get().getDefaultInstance(),
-                BankSystemItems.MONEY_CENT5.get().getDefaultInstance(),
-                BankSystemItems.MONEY_CENT10.get().getDefaultInstance(),
-                BankSystemItems.MONEY_CENT20.get().getDefaultInstance(),
-                BankSystemItems.MONEY_CENT50.get().getDefaultInstance(),
-                BankSystemItems.MONEY5.get().getDefaultInstance(),
-                BankSystemItems.MONEY10.get().getDefaultInstance(),
-                BankSystemItems.MONEY20.get().getDefaultInstance(),
-                BankSystemItems.MONEY50.get().getDefaultInstance(),
-                BankSystemItems.MONEY100.get().getDefaultInstance(),
-                BankSystemItems.MONEY200.get().getDefaultInstance(),
-                BankSystemItems.MONEY500.get().getDefaultInstance(),
-                BankSystemItems.MONEY1000.get().getDefaultInstance()
-        );
+        public final List<ItemStack> INITIAL_BLACKLIST_ITEMS = createInitialBlacklistItems();
+
+        /**
+         * Builds the initial blacklist list. Static for the same reason as
+         * {@link #createInitialAllowedItems()} — the list ORDER is load-bearing for
+         * {@code ItemIDWorldRepair}'s boot-order candidate mapping: builds that registered
+         * the blacklist pre-load minted shorts in exactly this sequence (bedrock=1, ...,
+         * money200=19, ...). Do not reorder without checking that consumer.
+         */
+        public static List<ItemStack> createInitialBlacklistItems() {
+            return List.of(
+                    //Items.AIR.getDefaultInstance(),
+                    Items.BEDROCK.getDefaultInstance(),
+                    Items.BARRIER.getDefaultInstance(),
+                    Items.STRUCTURE_VOID.getDefaultInstance(),
+                    Items.COMMAND_BLOCK.getDefaultInstance(),
+                    Items.REPEATING_COMMAND_BLOCK.getDefaultInstance(),
+                    Items.CHAIN_COMMAND_BLOCK.getDefaultInstance(),
+                    Items.DEBUG_STICK.getDefaultInstance(),
+                    Items.KNOWLEDGE_BOOK.getDefaultInstance(),
+                    BankSystemItems.MONEY_CENT1.get().getDefaultInstance(),
+                    BankSystemItems.MONEY_CENT5.get().getDefaultInstance(),
+                    BankSystemItems.MONEY_CENT10.get().getDefaultInstance(),
+                    BankSystemItems.MONEY_CENT20.get().getDefaultInstance(),
+                    BankSystemItems.MONEY_CENT50.get().getDefaultInstance(),
+                    BankSystemItems.MONEY5.get().getDefaultInstance(),
+                    BankSystemItems.MONEY10.get().getDefaultInstance(),
+                    BankSystemItems.MONEY20.get().getDefaultInstance(),
+                    BankSystemItems.MONEY50.get().getDefaultInstance(),
+                    BankSystemItems.MONEY100.get().getDefaultInstance(),
+                    BankSystemItems.MONEY200.get().getDefaultInstance(),
+                    BankSystemItems.MONEY500.get().getDefaultInstance(),
+                    BankSystemItems.MONEY1000.get().getDefaultInstance()
+            );
+        }
 
        /* public final Setting<List<ItemID>> BLACKLIST_ITEM_IDS = registerSetting("BLACKLIST_ITEM_IDS",
                 new ArrayList<>(List.of(new ItemID("minecraft:air"),
@@ -241,9 +281,18 @@ public final class BankSystemModSettings extends ModSettings {
                 new ItemIDArrayParser()); // List of allowed item IDs for bank transactions
 */
 
-        public final List<ItemStack> INITIAL_NOT_REMOVABLE_ITEMS = List.of(
-                BankSystemItems.MONEY.get().getDefaultInstance()
-        );
+        public final List<ItemStack> INITIAL_NOT_REMOVABLE_ITEMS = createInitialNotRemovableItems();
+
+        /**
+         * Builds the initial not-removable list. Static for the same reason as
+         * {@link #createInitialAllowedItems()} (boot-order reconstruction in
+         * {@code ItemIDWorldRepair}).
+         */
+        public static List<ItemStack> createInitialNotRemovableItems() {
+            return List.of(
+                    BankSystemItems.MONEY.get().getDefaultInstance()
+            );
+        }
 
         //public final Setting<List<ItemID>> NOT_REMOVABLE_ITEM_IDS = registerSetting("NOT_REMOVABLE_ITEM_IDS",
         //        new ArrayList<>(List.of(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME)
