@@ -670,6 +670,15 @@ public class BankSystemModBackend implements BankSystemAPI {
         {
             manager.onPlayerJoinAsync(player.getUUID(), player.getName().getString());
         }
+
+        // Notify dependent mods (e.g. StockMarket) that the slave→master
+        // handshake has completed and BankSystem's async forwarder is now
+        // usable. Fire AFTER the SERVER_BANK_MANAGER null guard above so
+        // listeners never see a partially torn-down state. Fired on a Netty
+        // event-loop thread — see IBankSystemEvents contract.
+        if (INSTANCES.SERVER_EVENTS != null) {
+            INSTANCES.SERVER_EVENTS.SLAVE_CONNECTION_ACCEPTED.notifyListeners();
+        }
     }
     private static void onSlaveConnectionFailed(SlaveServerClient.ConnectionEstablishState state)
     {
@@ -683,12 +692,23 @@ public class BankSystemModBackend implements BankSystemAPI {
         // registry (mod update on master while slave was disconnected), and we want a single
         // fresh retry per unknown item per reconnect. Idempotent on master (no-op).
         ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
+        // Pair to onSlaveConnectionAccepted: tell dependent mods that master is no longer
+        // reachable so any cache populated from the last handshake is now stale. On reconnect,
+        // SLAVE_CONNECTION_ACCEPTED fires again and caches can be re-fetched.
+        if (INSTANCES.SERVER_EVENTS != null) {
+            INSTANCES.SERVER_EVENTS.SLAVE_CONNECTION_LOST.notifyListeners();
+        }
     }
     private static void onSlaveDisconnected()
     {
         // Same rationale as onSlaveConnectionLost above — clear the negative cache so
         // reconnect retries formerly-INVALID lookups exactly once.
         ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
+        // Clean-disconnect path (local disconnect() call). Dependent mods invalidate their
+        // caches the same way — the semantics are identical: master is unreachable.
+        if (INSTANCES.SERVER_EVENTS != null) {
+            INSTANCES.SERVER_EVENTS.SLAVE_CONNECTION_LOST.notifyListeners();
+        }
     }
 
     private static void onMasterServerStartupComplete()
