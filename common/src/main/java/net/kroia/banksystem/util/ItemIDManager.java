@@ -100,23 +100,31 @@ public class ItemIDManager implements ServerSaveable {
     private static int nextShortCounter = 1;
 
     /**
-     * <b>Master-side registration latch</b> (Task #16 defense in depth): {@code true} while
-     * fresh-short allocation is forbidden because the persisted registry has not been
-     * restored yet this session.
+     * <b>Registration latch</b> (Task #16 master-side, Task #22 widened to slaves):
+     * {@code true} while fresh-short allocation is forbidden because the authoritative
+     * ItemID assignment has not been established yet this session.
      * <p>
      * Armed by {@link #clear()} (world start clears the registry) and released when the
-     * load phase completes — either by {@link #load(CompoundTag)} returning successfully
-     * (existing world) or by {@link #markRegistryReady()} (fresh world without an
-     * {@code ItemIDs.nbt}; called by {@code BankSystemDataHandler.load_itemIDs()}).
-     * <p>
+     * authoritative assignment is available:
+     * <ul>
+     *   <li><b>Master</b> — {@link #load(CompoundTag)} returns successfully (existing world)
+     *       or {@link #markRegistryReady()} is called on the fresh-world path
+     *       ({@code BankSystemDataHandler.load_itemIDs()}).</li>
+     *   <li><b>Slave</b> (Task #22) — {@link #finalizeSlaveSync()} is called by
+     *       {@code SyncItemIDsPacket.handleOnSlave} after the master's authoritative items +
+     *       aliases have been applied. Slaves used to register their defaults pre-sync in
+     *       {@code BankSystemModBackend.onServerStart}, which minted local shorts for
+     *       new-in-mod-update items that collided with the master's alias plan (observed on
+     *       neoforge 2026-07-17 for {@code bank_terminal_block}, {@code atm_block},
+     *       {@code display_demo_back_panel_block}) — hence the widening.</li>
+     * </ul>
      * While armed, {@link #registerItemStackServerSide_direct(List)} REFUSES to mint fresh
-     * shorts on the <b>master</b> side: pre-load registrations are exactly the bug class
-     * that corrupted persisted item identity (constructor warm-up minting bedrock=1 ...
+     * shorts on both master and slave: pre-authoritative registrations are exactly the bug
+     * class that corrupts persisted item identity (constructor warm-up minting bedrock=1 ...
      * money200=19 before {@code ItemIDs.nbt} was read — see Task #16). Each refusal logs an
      * ERROR naming the item and returns {@link ItemID#INVALID_ID}, mirroring the empty-stack
-     * refusal. Slave servers are exempt: they have no disk load and legitimately register
-     * their defaults pre-sync ({@code BankSystemModBackend.onServerStart}); lookups of
-     * already-registered stacks are always allowed — only the mint path is gated.
+     * refusal. Lookups of already-registered stacks are always allowed — only the mint path
+     * is gated.
      * <p>
      * Initialized {@code false} (released): before the first {@code clear()} of a session
      * nothing meaningful is registered, and client-only paths never call the allocator.
@@ -168,21 +176,25 @@ public class ItemIDManager implements ServerSaveable {
         pendingMergeConsolidation.clear();
         // Provenance tracking: the next load() re-records which shorts came from disk.
         persistedShorts.clear();
-        // Arm the master-side registration latch: from this point until load_itemIDs()
-        // completes (load() success or markRegistryReady() on a fresh world), master-side
-        // fresh-short allocation is refused — see the field Javadoc (Task #16).
+        // Arm the registration latch: from this point until the authoritative ItemID
+        // assignment is available (master: load_itemIDs() success or markRegistryReady() on
+        // a fresh world; slave: finalizeSlaveSync() after SyncItemIDsPacket), fresh-short
+        // allocation is refused on both master and slave — see the field Javadoc (Task #16,
+        // widened by Task #22).
         registrationLatchArmed = true;
         registrationLatchRejections = 0;
     }
 
     /**
-     * Releases the master-side registration latch (see {@link #registrationLatchArmed}).
+     * Releases the registration latch (see {@link #registrationLatchArmed}).
      * <p>
-     * Called from two places, both marking "the load phase of this session is complete":
+     * Called at each side's "authoritative assignment is now available" transition:
      * <ul>
-     *   <li>the end of a successful {@link #load(CompoundTag)} (existing world), and</li>
-     *   <li>{@code BankSystemDataHandler.load_itemIDs()} when no {@code ItemIDs.nbt} exists
-     *       (fresh world — there is nothing to load, so default registration may begin).</li>
+     *   <li>Master — the end of a successful {@link #load(CompoundTag)} (existing world),
+     *       or {@code BankSystemDataHandler.load_itemIDs()} when no {@code ItemIDs.nbt}
+     *       exists (fresh world — nothing to load, defaults may begin).</li>
+     *   <li>Slave (Task #22) — through {@link #finalizeSlaveSync()} after
+     *       {@code SyncItemIDsPacket} arrives from the master.</li>
      * </ul>
      * Idempotent. Test fixtures that call {@link #clear()} + {@link #load(CompoundTag)}
      * directly are released by the load itself; fixtures simulating a fresh world call this
@@ -193,11 +205,11 @@ public class ItemIDManager implements ServerSaveable {
     }
 
     /**
-     * @return {@code true} when master-side fresh-short allocation is currently permitted
-     *         (the registration latch is released — the load phase of this session is
-     *         complete). Production callers use this to SKIP bulk registration passes that
-     *         would otherwise only produce per-item refusals while the latch is armed —
-     *         the unreadable-{@code ItemIDs.nbt} case, where
+     * @return {@code true} when fresh-short allocation is currently permitted (the
+     *         registration latch is released — the authoritative assignment is available).
+     *         Production callers use this to SKIP bulk registration passes that would
+     *         otherwise only produce per-item refusals while the latch is armed — the
+     *         unreadable-{@code ItemIDs.nbt} case, where
      *         {@code BankSystemDataHandler.loadAll()} skips {@code createDefaultItemIDs()}
      *         for the failing pass (the recovery retry re-runs it with the latch released).
      */
@@ -205,9 +217,66 @@ public class ItemIDManager implements ServerSaveable {
         return !registrationLatchArmed;
     }
 
-    /** Read-only view of the master-side registration latch. In-game test suite only. */
+    /** Read-only view of the registration latch. In-game test suite only. */
     public static boolean isRegistrationLatchArmed_forTesting() {
         return registrationLatchArmed;
+    }
+
+    /**
+     * Slave-side counterpart of the master's "load phase complete" transition (Task #22):
+     * releases the registration latch after the master's authoritative items + aliases have
+     * been applied to this slave via {@link #receiveSyncPacket(SyncItemIDsPacket)}, then
+     * runs default registration via <b>register-if-absent</b> — every item the master already
+     * sent keeps its authoritative short, only genuinely new-in-mod-update items (that the
+     * master doesn't know about yet) mint fresh slave-local shorts. Finally refreshes the
+     * {@link MoneyItem} short cache, mirroring the master's post-load block at
+     * {@code BankSystemModBackend#onServerStart} lines 302-306.
+     * <p>
+     * Called exclusively from {@code SyncItemIDsPacket.handleOnSlave}. Idempotent by design:
+     * subsequent sync packets (incremental "new item added" broadcasts from master) find the
+     * latch already released and return immediately without re-iterating the registry.
+     * <p>
+     * <b>Not for master or client callers:</b> this method is a no-op on master (the master
+     * releases via {@link #load(CompoundTag)} / {@link #markRegistryReady()}) and on the
+     * client side (clients never mint shorts locally — sync arrives via a different code
+     * path with no registration latch to release).
+     */
+    public static void finalizeSlaveSync() {
+        if (BACKEND_INSTANCES == null || !BACKEND_INSTANCES.isSlaveServer)
+            return;
+        if (!registrationLatchArmed)
+            return; // idempotent: subsequent syncs on the same session skip
+        // Refuse to release the latch if ITEM_ID_MANAGER is somehow null: releasing WITHOUT
+        // running createDefaultItemIDs() would leave the slave in a "ready but empty"
+        // inconsistent state where subsequent registrations mint fresh shorts against a bare
+        // map. In practice ITEM_ID_MANAGER is set in the Instances ctor and never nulled
+        // outside onServerStop, so this branch guards against a boot-order regression rather
+        // than a live code path. Leaving the latch armed lets the timeout watchdog surface
+        // the fault to admins via WARN (see onSlaveLatchTimeoutTick).
+        if (BACKEND_INSTANCES.ITEM_ID_MANAGER == null) {
+            if (BACKEND_INSTANCES.LOGGER != null) {
+                BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] finalizeSlaveSync called but "
+                        + "ITEM_ID_MANAGER is null — leaving registration latch armed. This "
+                        + "indicates a boot-order regression; the slave-latch timeout watchdog "
+                        + "will fire shortly.");
+            }
+            return;
+        }
+        markRegistryReady();
+        BACKEND_INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs();
+        // Post-registration cache refresh: mirror the master-side block at
+        // BankSystemModBackend#onServerStart:302-306. createDefaultItemIDs() already resets
+        // the cache once between the money-items loop and the full registry loop; running
+        // this once more here is cheap (cache reset + re-resolve against the finalized map)
+        // and guarantees MoneyItem binds to the correct final short regardless of any
+        // earlier resolve triggered by the sync packet.
+        MoneyItem.resetItemID();
+        if (BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Slave registration latch released after "
+                    + "SyncItemIDsPacket. Default registration ran via register-if-absent — "
+                    + "master's authoritative shorts kept; any new-in-update items got "
+                    + "slave-local shorts. Resolved money short = " + MoneyItem.getItemID().getShort());
+        }
     }
 
     /**
@@ -676,16 +745,15 @@ public class ItemIDManager implements ServerSaveable {
                     continue;
                 }
 
-                // Master-side registration latch (Task #16): while the persisted registry
-                // has not been restored yet this session (clear() ran, load_itemIDs() has
-                // not completed), minting a fresh short would poison the just-cleared
-                // registry with a pre-load assignment that later collides with the
-                // persisted shorts (the constructor warm-up bug class). Refuse the mint,
-                // mirror the empty-stack refusal (INVALID_ID, no map mutation), and log an
-                // ERROR pointing at the caller. Slaves are exempt (no disk load; defaults
-                // are legitimately registered pre-sync). Lookups above are unaffected.
-                if (registrationLatchArmed
-                        && BACKEND_INSTANCES != null && !BACKEND_INSTANCES.isSlaveServer) {
+                // Registration latch (Task #16 master, Task #22 slave): while the
+                // authoritative ItemID assignment has not been established yet this session
+                // (clear() ran; master: load_itemIDs() has not completed; slave:
+                // SyncItemIDsPacket has not arrived), minting a fresh short would poison the
+                // just-cleared registry with a pre-authoritative assignment that later
+                // collides with the persisted / master-sent shorts. Refuse the mint, mirror
+                // the empty-stack refusal (INVALID_ID, no map mutation), and log an ERROR
+                // pointing at the caller. Lookups above are unaffected.
+                if (registrationLatchArmed && BACKEND_INSTANCES != null) {
                     registrationLatchRejections++;
                     if (BACKEND_INSTANCES.LOGGER != null) {
                         String itemName = ItemUtilities.getItemIDStr(stack.getItem());
@@ -693,18 +761,27 @@ public class ItemIDManager implements ServerSaveable {
                             // Full evidence only for the FIRST rejection of this arming
                             // cycle — a bulk caller must not flood the log (see field doc).
                             Throwable trace = new Throwable(
-                                    "[ItemIDManager] pre-load registration stack trace (not thrown)");
-                            BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] REJECTED master-side ItemID "
+                                    "[ItemIDManager] pre-authoritative registration stack trace (not thrown)");
+                            String sideLabel = BACKEND_INSTANCES.isSlaveServer ? "slave-side" : "master-side";
+                            String releaseHint = BACKEND_INSTANCES.isSlaveServer
+                                    ? "Two possible causes: (a) the caller runs BEFORE "
+                                        + "SyncItemIDsPacket has been received — defer registration until "
+                                        + "after the slave sync arrives; (b) the master is unreachable so "
+                                        + "no sync ever arrived — the latch then stays armed on purpose "
+                                        + "and the slave is not operational for ItemID-dependent flows. "
+                                    : "Two possible causes: (a) the caller runs BEFORE "
+                                        + "loadDataFromFiles() — move it after the load; (b) ItemIDs.nbt "
+                                        + "exists but FAILED to load — the latch then stays armed on "
+                                        + "purpose and the load-failure recovery (backup + retry) "
+                                        + "restores registration afterwards. ";
+                            BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] REJECTED " + sideLabel + " ItemID "
                                     + "registration of '" + itemName
-                                    + "' — the persisted ItemID registry has not been loaded this "
-                                    + "session (registration latch armed between clear() and "
-                                    + "load_itemIDs()). Minting a fresh short now could collide with "
-                                    + "the persisted assignment and corrupt item identity (Task #16). "
-                                    + "Two possible causes: (a) the caller runs BEFORE "
-                                    + "loadDataFromFiles() — move it after the load; (b) ItemIDs.nbt "
-                                    + "exists but FAILED to load — the latch then stays armed on "
-                                    + "purpose and the load-failure recovery (backup + retry) "
-                                    + "restores registration afterwards. Returning INVALID_ID. "
+                                    + "' — the authoritative ItemID registry has not been established this "
+                                    + "session (registration latch armed). Minting a fresh short now could "
+                                    + "collide with the authoritative assignment and corrupt item identity "
+                                    + "(Task #16 master, Task #22 slave). "
+                                    + releaseHint
+                                    + "Returning INVALID_ID. "
                                     + "Further rejections of this arming cycle are logged at DEBUG "
                                     + "only.", trace);
                         } else {

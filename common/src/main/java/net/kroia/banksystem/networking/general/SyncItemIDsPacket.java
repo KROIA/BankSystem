@@ -167,6 +167,12 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
     protected void handleOnSlave(ForwardPacketContext context)
     {
         ItemIDManager.receiveSyncPacket(this);
+        // Task #22: after applying the master's authoritative items + aliases, release the
+        // slave-side registration latch and run default registration via register-if-absent.
+        // Master's shorts stay untouched; only genuinely new-in-mod-update items (that the
+        // master doesn't yet know about) mint fresh slave-local shorts. Idempotent —
+        // subsequent incremental sync packets find the latch already released and return.
+        ItemIDManager.finalizeSlaveSync();
     }
 
     @Override

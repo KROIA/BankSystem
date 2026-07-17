@@ -93,6 +93,29 @@ public class BankSystemModBackend implements BankSystemAPI {
     private static short priceCurrencyItemId = 0;
 
     /**
+     * Slave-side watchdog counter for the Task #22 registration latch: ticks up every
+     * SERVER_POST while {@code INSTANCES.isSlaveServer && ItemIDManager.isRegistrationReady() == false}
+     * (i.e. we're a slave that has not yet received {@code SyncItemIDsPacket} from the master).
+     * Reset to {@code 0} on the slave branch of {@link #onServerStart(MinecraftServer)}.
+     */
+    private static int slaveLatchWatchTicks = 0;
+
+    /**
+     * One-shot flag so the slave-latch-still-armed WARN fires only once per boot when the
+     * master fails to answer within the timeout window (see
+     * {@link #onSlaveLatchTimeoutTick(MinecraftServer)}).
+     */
+    private static boolean slaveLatchTimeoutWarned = false;
+
+    /**
+     * Threshold (in server ticks @ 20 TPS) after which
+     * {@link #onSlaveLatchTimeoutTick(MinecraftServer)} logs the slave-latch WARN. 600 ticks
+     * = 30 seconds — long enough to cover reasonable master boot / handshake delay, short
+     * enough that admins notice a genuinely stuck slave.
+     */
+    private static final int SLAVE_LATCH_WARN_TICKS = 600;
+
+    /**
      * Master-only accessor for the balance-history SQLite manager.
      * <p>
      * Only used by internal callers that need direct access to the DB layer (e.g. the in-game
@@ -238,25 +261,41 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         ItemIDManager.clear();
         MultiServerConfig config = MultiServerConfig.get();
-        INSTANCES.isSlaveServer = false;
-        if(config.enable)
+        // Determine the multi-server role BEFORE creating the bank manager or bringing up
+        // MultiServerManager (Task #21). Historically INSTANCES.isSlaveServer was set inside
+        // setupMultiServerInfrastructure — but that call also starts the master connection
+        // on netty threads, whose callbacks can fire before setupMultiServerInfrastructure
+        // has even returned (observed: onSlaveConnectionAccepted at ~76 ms on localhost).
+        // Deciding the role up front lets us initialize SERVER_BANK_MANAGER / COMMAND_HANDLER
+        // before any callback can dereference them (see the null-check in
+        // onSlaveConnectionAccepted below for defense-in-depth against reconnect races).
+        boolean multiServerEnabled = config.enable;
+        boolean isSlave = multiServerEnabled && !config.isMaster;
+        INSTANCES.isSlaveServer = isSlave;
+
+        if(isSlave)
         {
-            setupMultiServerInfrastructure(config, server);
-        }
-        if(INSTANCES.isSlaveServer)
-        {
-            // Slaves keep the old pre-load default registration: they have no persisted
-            // ItemID map to load (the master's IDs arrive later via SyncItemIDsPacket), so
-            // registering local defaults here preserves their previous behaviour. Masters no
-            // longer register defaults here — that now happens inside loadAll() AFTER the
-            // persisted map has loaded, so persisted shorts survive (register-if-absent).
-            INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs(server);
+            // Slave init — order matters (Task #21):
+            //   1. SERVER_BANK_MANAGER / COMMAND_HANDLER first, so any netty callback fired
+            //      by setupMultiServerInfrastructure below observes a non-null backend.
+            //   2. Default ItemID registration is DEFERRED (Task #22): the registration
+            //      latch armed by ItemIDManager.clear() above stays armed until
+            //      SyncItemIDsPacket arrives from the master and finalizeSlaveSync()
+            //      releases it. This makes SyncItemIDsPacket the slave-side analog of the
+            //      master's ItemIDs.nbt load — master's authoritative shorts always win via
+            //      register-if-absent, and new-in-mod-update items no longer collide with
+            //      the master's alias plan (observed 2026-07-17 for bank_terminal_block,
+            //      atm_block, display_demo_back_panel_block).
             INSTANCES.SERVER_BANK_MANAGER = BankManager.createSlave();
             INSTANCES.COMMAND_HANDLER = BankSystemCommands.createSlave();
+            // Reset the slave-latch startup-timeout watcher so a fresh boot always gets a
+            // fresh 30-second window before warning.
+            slaveLatchWatchTicks = 0;
+            slaveLatchTimeoutWarned = false;
+            TickEvent.SERVER_POST.register(BankSystemModBackend::onSlaveLatchTimeoutTick);
         }
         else
         {
-
             INSTANCES.SERVER_BANK_MANAGER = BankManager.createMaster();
             INSTANCES.COMMAND_HANDLER = BankSystemCommands.createMaster();
 
@@ -281,6 +320,16 @@ public class BankSystemModBackend implements BankSystemAPI {
                 }
             });
         }
+
+        // Bring up multi-server infrastructure LAST (Task #21): MultiServerManager.start()
+        // fires-and-forgets the netty client/server bootstrap; on a slave the master
+        // connection completes on a netty thread while this method is still executing, and
+        // its onConnectionAccepted callback dereferences INSTANCES.SERVER_BANK_MANAGER.
+        // Every field the callback touches must be assigned before we get here.
+        if(multiServerEnabled)
+        {
+            setupMultiServerInfrastructure(config, server);
+        }
         loadDataFromFiles(server);
 
         // Refresh the cached money ItemID AFTER the world's saved data is fully loaded.
@@ -297,8 +346,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         // (ServerBank.create -> isItemIDAllowed(...) fails and the deposit is rejected).
         //
         // MASTER ONLY: the saved ItemID/bank data and the allowed-items set only exist on the
-        // master. On a slave the ItemIDs arrive later via SyncItemIDsPacket, so there is nothing
-        // to re-resolve against here. This mirrors the isSlaveServer guarding used above.
+        // master. On a slave the ItemIDs arrive later via SyncItemIDsPacket — the slave-side
+        // equivalent of this cache refresh is run by ItemIDManager.finalizeSlaveSync() from
+        // SyncItemIDsPacket.handleOnSlave (Task #22).
         if (!INSTANCES.isSlaveServer) {
             MoneyItem.resetItemID();
             INSTANCES.LOGGER.info("Refreshed cached money ItemID after world-data load. "
@@ -326,6 +376,11 @@ public class BankSystemModBackend implements BankSystemAPI {
 
             BankSystemDataHandler.resetBankDataLoaded();
             BankSystemDataHandler.resetGlobalDataLoaded();
+        } else {
+            // Mirror the master-side unregister above: the slave-latch watchdog is registered
+            // on every slave onServerStart, so it must be unregistered on every stop to avoid
+            // stacking a fresh handler on each session (see onSlaveLatchTimeoutTick Javadoc).
+            TickEvent.SERVER_POST.unregister(BankSystemModBackend::onSlaveLatchTimeoutTick);
         }
 
         INSTANCES.SERVER_BANK_MANAGER = null;
@@ -382,6 +437,36 @@ public class BankSystemModBackend implements BankSystemAPI {
     {
         INSTANCES.CLIENT_BANK_MANAGER.getItemFractionScaleFactorAsync();
         //ItemIDManager.clear();
+    }
+
+    /**
+     * Task #22 slave-latch startup-timeout watcher. Registered on the slave branch of
+     * {@link #onServerStart(MinecraftServer)}; logs a WARN once when the registration latch
+     * is still armed after {@link #SLAVE_LATCH_WARN_TICKS} ticks — i.e. no
+     * {@code SyncItemIDsPacket} has arrived from the master within ~30 seconds. Silent
+     * afterwards to avoid log spam. Auto-silences once the latch releases.
+     * <p>
+     * Unregistered on {@link #onServerStop(MinecraftServer)} (mirroring the master-side
+     * {@code onServerTick} pattern) so the handler does not stack across sessions. As
+     * belt-and-braces the handler also self-guards on {@code isSlaveServer} and
+     * {@code isRegistrationReady()}, staying a no-op on the master or after the sync has
+     * been received.
+     */
+    private static void onSlaveLatchTimeoutTick(MinecraftServer server) {
+        if (!INSTANCES.isSlaveServer) return;
+        if (ItemIDManager.isRegistrationReady()) return; // sync arrived, latch released — silent
+        slaveLatchWatchTicks++;
+        if (slaveLatchWatchTicks >= SLAVE_LATCH_WARN_TICKS && !slaveLatchTimeoutWarned) {
+            slaveLatchTimeoutWarned = true;
+            if (INSTANCES.LOGGER != null) {
+                INSTANCES.LOGGER.warn("[BankSystemModBackend] Slave has been waiting more than "
+                        + (SLAVE_LATCH_WARN_TICKS / 20) + " seconds for SyncItemIDsPacket from "
+                        + "master — the ItemID registration latch is still armed. New ItemID "
+                        + "registrations will be REJECTED with INVALID_ID until the master "
+                        + "responds. Check that the master server is running and reachable at "
+                        + "the configured host:port. This warning fires once per boot.");
+            }
+        }
     }
 
     // Called from the server side
@@ -563,6 +648,21 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
     private static void onSlaveConnectionAccepted()
     {
+        // Task #21 defense-in-depth: even with the fixed init ordering
+        // (SERVER_BANK_MANAGER set before setupMultiServerInfrastructure), a reconnect race
+        // can still fire this callback on a netty thread between onServerStop's
+        // SERVER_BANK_MANAGER=null (line ~331) and the next onServerStart's re-assignment.
+        // Skip cleanly with a distinct WARN — the alternative is an NPE inside a netty
+        // thread that only surfaces via the SlaveServerClient failed-callback log.
+        if (INSTANCES.SERVER_BANK_MANAGER == null) {
+            if (INSTANCES.LOGGER != null) {
+                INSTANCES.LOGGER.warn("[BankSystemModBackend] onSlaveConnectionAccepted fired "
+                        + "while SERVER_BANK_MANAGER is null — skipping player-join sync. "
+                        + "This should only happen during a reconnect while the server is "
+                        + "shutting down.");
+            }
+            return;
+        }
         // Notify the master that players are on this server to create the personal bank account if the players don't have one
         ArrayList<ServerPlayer> players = ServerPlayerUtilities.getOnlinePlayers();
         IAsyncBankManager manager = INSTANCES.SERVER_BANK_MANAGER.getAsync();
