@@ -41,6 +41,21 @@ public class ClientConsoleMessagePacket extends BankSystemNetworkPacket {
         sendMessageFromMaster(null, message);
     }
 
+    /**
+     * Sends a chat message from master to a specific slave, broadcast to all players
+     * currently online on that slave. Use when the master identifies the slave that
+     * originated a rejected/failing request but does not know which player on that
+     * slave initiated it (e.g. because ARRS does not propagate the player UUID from
+     * slave to master for server-initiated requests). All players on that slave will
+     * see the message — acceptable tradeoff for a rejection notification pending a
+     * proper UUID propagation.
+     */
+    public static void sendMessageFromMasterToSlave(String slaveID, String message)
+    {
+        ClientConsoleMessagePacket packet = new ClientConsoleMessagePacket(null, message);
+        packet.sendToSlave(slaveID);
+    }
+
 
     private final @Nullable UUID receivingPlayer;
     private final String message;
