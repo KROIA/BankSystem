@@ -19,6 +19,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -174,6 +175,97 @@ public class ItemIDManager implements ServerSaveable {
      */
     private static final Set<ItemID> unresolvableItemsLoggedOnce = ConcurrentHashMap.newKeySet();
 
+    /**
+     * Wrapper around an {@link ItemStack} that lets it act as a HashMap/HashSet key with
+     * BankSystem's <b>normalized-identity</b> semantics: two keys are equal iff their stacks
+     * compare equal under {@link ItemStack#isSameItemSameComponents(ItemStack, ItemStack)}, and
+     * the hash matches {@link ItemStack#hashItemAndComponents(ItemStack)}.
+     * <p>
+     * Used by the slave-side <b>negative cache</b>
+     * ({@link #slaveNegativeOrPendingCache}) so a normalized stack seen twice hashes to the
+     * same bucket even if the two {@code ItemStack} instances are different Java objects. The
+     * caller <b>must</b> pass a normalized copy (see
+     * {@link VolatileItemComponents#normalize(ItemStack)}); wrapping raw stacks would let
+     * volatile-component variants hash to different buckets and defeat dedup.
+     */
+    private static final class NormalizedStackKey {
+        private final ItemStack stack;
+        private final int hash;
+
+        NormalizedStackKey(ItemStack normalizedStack) {
+            this.stack = normalizedStack;
+            this.hash = ItemStack.hashItemAndComponents(normalizedStack);
+        }
+
+        ItemStack stack() { return stack; }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (!(obj instanceof NormalizedStackKey other)) return false;
+            if (hash != other.hash) return false;
+            return ItemStack.isSameItemSameComponents(stack, other.stack);
+        }
+
+        @Override
+        public int hashCode() { return hash; }
+    }
+
+    /**
+     * <b>Slave-side negative-cache / in-flight set (Task #23).</b>
+     * <p>
+     * On a slave (see {@link BankSystemModBackend.Instances#isSlaveServer}), the SOLE ItemID
+     * minter is the master. Local {@link #registerItemStackServerSide_direct(List)} calls no
+     * longer mint fresh shorts; on a positive-cache miss the slave fires a
+     * {@code RegisterItemStacksBatchRequest} to master, returns {@link ItemID#INVALID_ID} for
+     * the calling frame, and populates either the positive {@link #itemIDMap} (master returned
+     * a valid short) or this set (master returned {@code INVALID_ID}) when the response arrives.
+     * <p>
+     * This set also serves as an <b>in-flight guard</b>: a stack whose ARRS request has been
+     * sent but not yet answered stays in the set, so a burst of lookups for the same unknown
+     * item fires exactly ONE ARRS request (Design Q3, Acceptance Criterion C). On a positive
+     * response the entry is REMOVED (positive lookup in {@link #itemIDMap} now hits); on an
+     * INVALID_ID response the entry STAYS (permanent rejection for this session).
+     * <p>
+     * <b>Keys are normalized stacks</b> — every insert goes through
+     * {@link VolatileItemComponents#normalize(ItemStack)} first, mirroring how {@code itemIDMap}
+     * stores its templates. Two component-variants that master would treat as the same identity
+     * therefore share a single cache slot (Design Q1).
+     * <p>
+     * <b>Lifetime:</b> session-scoped. Cleared by
+     * <ul>
+     *   <li>{@link #clear()} — world stop; the reconnecting/next world may have a different
+     *       master with a different registry.</li>
+     *   <li>{@link #clearSlaveNegativeCacheOnDisconnect()} — slave lost its master connection;
+     *       preserves the positive {@code itemIDMap} (master re-sends full sync on reconnect)
+     *       but drops the negative cache so a formerly-INVALID item can be re-requested if a
+     *       reconnecting master added it (mod update on master while slave was offline).</li>
+     * </ul>
+     * The value is unused (map used as a set) — {@link ConcurrentHashMap} was chosen over
+     * {@link Collections#newSetFromMap(java.util.Map)} to keep the type signature explicit.
+     */
+    private static final ConcurrentHashMap<NormalizedStackKey, Boolean> slaveNegativeOrPendingCache = new ConcurrentHashMap<>();
+
+    /**
+     * INFO log dedup: a stack whose {@code INVALID_ID} response has ALREADY been INFO-logged
+     * this session — subsequent negative-cache-hit lookups stay silent. Distinct from the
+     * negative cache itself so a "master rejected" log fires only ONCE per stack (not once
+     * per ARRS response for that stack, and not once per lookup hitting the negative cache).
+     * Reset on {@link #clear()} and on {@link #clearSlaveNegativeCacheOnDisconnect()} —
+     * reconnect might resolve items master previously rejected, and we want to see a fresh
+     * INFO if the stack ends up rejected again.
+     */
+    private static final ConcurrentHashMap<NormalizedStackKey, Boolean> slaveRejectedLoggedOnce = new ConcurrentHashMap<>();
+
+    /**
+     * Counter of {@code RegisterItemStacksBatchRequest} calls fired by the slave-side
+     * delegation path this session. Advanced ONCE per {@link #sendToMasterAndPopulateCache}
+     * invocation (so a batch of N stacks counts as one ARRS call). Read by the in-game test
+     * suite via {@link #getSlaveArrsRequestsFired_forTesting()}; reset by {@link #clear()}
+     * and by {@link #resetSlaveArrsCounter_forTesting()}.
+     */
+    private static volatile int slaveArrsRequestsFired = 0;
+
     public static void clear()
     {
         singlePlayerServerBackupOnPlayerLeave = new ConcurrentHashMap<>(itemIDMap);
@@ -204,6 +296,13 @@ public class ItemIDManager implements ServerSaveable {
         // widened by Task #22).
         registrationLatchArmed = true;
         registrationLatchRejections = 0;
+        // Task #23: reset slave-side delegation state — the negative/in-flight cache, the
+        // "logged once" dedup, and the ARRS counter. On master this is a no-op-shaped clear
+        // (these fields are only written to on the slave path), but resetting unconditionally
+        // keeps the two branches in step and matches every other clear-on-world-stop field.
+        slaveNegativeOrPendingCache.clear();
+        slaveRejectedLoggedOnce.clear();
+        slaveArrsRequestsFired = 0;
     }
 
     /**
@@ -244,18 +343,25 @@ public class ItemIDManager implements ServerSaveable {
     }
 
     /**
-     * Slave-side counterpart of the master's "load phase complete" transition (Task #22):
-     * releases the registration latch after the master's authoritative items + aliases have
-     * been applied to this slave via {@link #receiveSyncPacket(SyncItemIDsPacket)}, then
-     * runs default registration via <b>register-if-absent</b> — every item the master already
-     * sent keeps its authoritative short, only genuinely new-in-mod-update items (that the
-     * master doesn't know about yet) mint fresh slave-local shorts. Finally refreshes the
-     * {@link MoneyItem} short cache, mirroring the master's post-load block at
-     * {@code BankSystemModBackend#onServerStart} lines 302-306.
+     * Slave-side counterpart of the master's "load phase complete" transition
+     * (Task #22, refined by Task #23): releases the registration latch after the master's
+     * authoritative items + aliases have been applied to this slave via
+     * {@link #receiveSyncPacket(SyncItemIDsPacket)}, then refreshes the {@link MoneyItem}
+     * short cache so it binds to the master's authoritative money short.
+     * <p>
+     * <b>Task #23 change:</b> this method NO LONGER calls
+     * {@code ITEM_ID_MANAGER.createDefaultItemIDs()}. Slaves must never mint local shorts —
+     * every non-{@link ItemID#INVALID_ID} short on a slave is guaranteed to come from master,
+     * either via the sync packet processed just before this call or via a
+     * {@code RegisterItemStacksBatchRequest} round-trip fired lazily from
+     * {@link #registerItemStackServerSide_direct(List)} on the first lookup of an unknown stack.
+     * Under Task #22 the same call used to run defaults via <i>register-if-absent</i>,
+     * which still left slave-only items (mod master doesn't have) minting local shorts and
+     * reopened the exact ID-collision class the task set out to close.
      * <p>
      * Called exclusively from {@code SyncItemIDsPacket.handleOnSlave}. Idempotent by design:
      * subsequent sync packets (incremental "new item added" broadcasts from master) find the
-     * latch already released and return immediately without re-iterating the registry.
+     * latch already released and return immediately.
      * <p>
      * <b>Not for master or client callers:</b> this method is a no-op on master (the master
      * releases via {@link #load(CompoundTag)} / {@link #markRegistryReady()}) and on the
@@ -267,36 +373,43 @@ public class ItemIDManager implements ServerSaveable {
             return;
         if (!registrationLatchArmed)
             return; // idempotent: subsequent syncs on the same session skip
-        // Refuse to release the latch if ITEM_ID_MANAGER is somehow null: releasing WITHOUT
-        // running createDefaultItemIDs() would leave the slave in a "ready but empty"
-        // inconsistent state where subsequent registrations mint fresh shorts against a bare
-        // map. In practice ITEM_ID_MANAGER is set in the Instances ctor and never nulled
-        // outside onServerStop, so this branch guards against a boot-order regression rather
-        // than a live code path. Leaving the latch armed lets the timeout watchdog surface
-        // the fault to admins via WARN (see onSlaveLatchTimeoutTick).
-        if (BACKEND_INSTANCES.ITEM_ID_MANAGER == null) {
-            if (BACKEND_INSTANCES.LOGGER != null) {
-                BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] finalizeSlaveSync called but "
-                        + "ITEM_ID_MANAGER is null — leaving registration latch armed. This "
-                        + "indicates a boot-order regression; the slave-latch timeout watchdog "
-                        + "will fire shortly.");
-            }
-            return;
-        }
         markRegistryReady();
-        BACKEND_INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs();
-        // Post-registration cache refresh: mirror the master-side block at
-        // BankSystemModBackend#onServerStart:302-306. createDefaultItemIDs() already resets
-        // the cache once between the money-items loop and the full registry loop; running
-        // this once more here is cheap (cache reset + re-resolve against the finalized map)
-        // and guarantees MoneyItem binds to the correct final short regardless of any
-        // earlier resolve triggered by the sync packet.
+        // Task #23: no more createDefaultItemIDs() on the slave — master is the SOLE ItemID
+        // minter. MoneyItem.resetItemID() must still run so the cached money short rebinds to
+        // whatever the master's SyncItemIDsPacket carried (the money short may have moved
+        // between sessions on the master side).
         MoneyItem.resetItemID();
         if (BACKEND_INSTANCES.LOGGER != null) {
             BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Slave registration latch released after "
-                    + "SyncItemIDsPacket. Default registration ran via register-if-absent — "
-                    + "master's authoritative shorts kept; any new-in-update items got "
-                    + "slave-local shorts. Resolved money short = " + MoneyItem.getItemID().getShort());
+                    + "SyncItemIDsPacket. Master is the sole ItemID minter (Task #23) — any "
+                    + "runtime registration on this slave now delegates to the master via "
+                    + "RegisterItemStacksBatchRequest. Resolved money short = "
+                    + MoneyItem.getItemID().getShort());
+        }
+    }
+
+    /**
+     * Drops the slave-side negative/in-flight cache and the "logged once" dedup on master
+     * disconnect (Task #23 reconnect handling). Preserves the positive {@link #itemIDMap} —
+     * the master re-sends a full {@link SyncItemIDsPacket} on reconnect, so keeping the
+     * existing map is safe (register-if-absent semantics apply on the sync path) AND avoids
+     * a flurry of re-registration ARRS calls the moment the reconnect happens.
+     * <p>
+     * The negative cache, in contrast, MUST clear: a formerly-{@code INVALID_ID} stack might
+     * now be known to a mod-updated master, and we want to give it exactly one retry per
+     * reconnect. Callers: {@code onSlaveConnectionLost} / {@code onSlaveDisconnected} in
+     * {@code BankSystemModBackend}. Idempotent — safe on master too (both fields stay empty).
+     */
+    public static void clearSlaveNegativeCacheOnDisconnect() {
+        if (slaveNegativeOrPendingCache.isEmpty() && slaveRejectedLoggedOnce.isEmpty())
+            return;
+        int rejectedCount = slaveNegativeOrPendingCache.size();
+        slaveNegativeOrPendingCache.clear();
+        slaveRejectedLoggedOnce.clear();
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null && rejectedCount > 0) {
+            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Slave disconnected from master — "
+                    + "cleared " + rejectedCount + " negative-cached ItemID(s). A reconnecting "
+                    + "master (possibly mod-updated) will be asked to resolve them again.");
         }
     }
 
@@ -750,6 +863,12 @@ public class ItemIDManager implements ServerSaveable {
 
     public static List<ItemID> registerItemStackServerSide_direct(List<ItemStack> itemStacks)
     {
+        // Task #23: on the slave, minting is delegated to the master via an ARRS round-trip.
+        // The slave-branch is a pure lookup-or-delegate — no fresh shorts are ever allocated
+        // locally, guaranteeing zero cross-server ID divergence (Acceptance Criterion A).
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer) {
+            return registerItemStackServerSide_direct_slave(itemStacks);
+        }
         List<ItemID> ids = new ArrayList<>();
         Map<ItemID, ItemStack> newItemIDMap = new ConcurrentHashMap<>();
         synchronized (itemIDMap) {
@@ -859,6 +978,282 @@ public class ItemIDManager implements ServerSaveable {
         if(!newItemIDMap.isEmpty())
             onNewItemAdded(newItemIDMap);
         return ids;
+    }
+
+    /**
+     * Slave-side branch of {@link #registerItemStackServerSide_direct(List)} (Task #23):
+     * <b>lookup-or-delegate</b> — never mints a local short.
+     * <p>
+     * <b>Per-stack decision ladder</b> (each stack in the input list is independently
+     * classified into one of these outcomes, so a mixed batch of known / rejected / unknown
+     * stacks all sees the right behavior in a single call):
+     * <ol>
+     *   <li><b>Empty stack</b> → {@link ItemID#INVALID_ID}. No cache touch. Mirrors the
+     *       master-branch empty-check.</li>
+     *   <li><b>Positive-cache hit</b> (already in {@link #itemIDMap}) → return the resolved
+     *       short. No ARRS. This is by far the hottest path — steady-state slave operation
+     *       only ever needs lookups against the master-synced map.</li>
+     *   <li><b>Latch armed</b> ({@link #registrationLatchArmed} = true, i.e.
+     *       {@code SyncItemIDsPacket} has not yet arrived) → {@link ItemID#INVALID_ID}, no
+     *       ARRS fired. The master connection is not guaranteed established yet at this
+     *       point (the sync packet is our "master is ready" signal); firing an ARRS from
+     *       this window can only fail. ERROR-logged for the first rejection per arming
+     *       cycle, DEBUG for subsequent ones — mirrors the master-side latch-refusal in
+     *       {@link #registerItemStackServerSide_direct(List)}.</li>
+     *   <li><b>Negative-cache / in-flight hit</b>
+     *       ({@link #slaveNegativeOrPendingCache} already contains the normalized stack) →
+     *       {@link ItemID#INVALID_ID}, no ARRS. The set acts as both a permanent negative
+     *       cache (master returned INVALID_ID earlier this session) and an in-flight guard
+     *       (ARRS already sent, awaiting response). Acceptance Criterion C.</li>
+     *   <li><b>Cache miss, latch released, negative-cache miss</b> — add every miss slot to
+     *       {@link #slaveNegativeOrPendingCache} (dedupe / in-flight mark), fire ONE ARRS
+     *       for the whole batch of misses via
+     *       {@link #sendToMasterAndPopulateCache(List, List)}, return
+     *       {@link ItemID#INVALID_ID} for the calling frame (Acceptance Criterion D:
+     *       fire-and-forget shape). The ARRS response asynchronously populates the positive
+     *       cache (map insert on the server thread) or leaves the entry in the negative
+     *       cache — the next lookup then resolves without another round-trip.</li>
+     * </ol>
+     * <p>
+     * <b>No local mint. No allocator touch. No monotonic counter change.</b> The counter
+     * ({@link #nextShortCounter}) is master-only concept on a slave; the slave only stores
+     * shorts master has minted for it, via {@link #receiveSyncPacket} (bulk sync) or via
+     * the async ARRS-response populator.
+     */
+    private static List<ItemID> registerItemStackServerSide_direct_slave(List<ItemStack> itemStacks) {
+        List<ItemID> ids = new ArrayList<>(itemStacks.size());
+        // Normalized copies for the ARRS payload. Kept aligned by index with the "miss keys"
+        // list below so the ARRS-response populator can map each returned short back to the
+        // right cache key. Not aligned with `ids` — this method returns INVALID_ID for every
+        // miss on the calling frame (Acceptance Criterion D: fire-and-forget shape); the
+        // second lookup on the caller's side reads the freshly populated positive cache.
+        List<ItemStack> missNormalizedStacks = new ArrayList<>();
+        List<NormalizedStackKey> missKeys = new ArrayList<>();
+
+        synchronized (itemIDMap) {
+            for (ItemStack stack : itemStacks) {
+                // Rule 1: empty stack → INVALID_ID.
+                if (stack == null || stack.isEmpty()) {
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
+
+                // Rule 2: positive-cache hit. getItemID() runs against the map and follows
+                // aliases — a stack whose short master sent via SyncItemIDsPacket resolves
+                // here without any network activity.
+                ItemID cached = getItemID(stack);
+                if (cached != null && cached.isValid()) {
+                    ids.add(cached);
+                    continue;
+                }
+
+                // Rule 3: latch armed → ERROR (first) / DEBUG (subsequent) + INVALID_ID, no
+                // ARRS. Mirrors the empty-stack refusal semantics and the master-side latch
+                // ERROR wording — see the field Javadoc of registrationLatchArmed for the
+                // arming/release contract on slaves.
+                if (registrationLatchArmed && BACKEND_INSTANCES != null) {
+                    registrationLatchRejections++;
+                    if (BACKEND_INSTANCES.LOGGER != null) {
+                        String itemName = ItemUtilities.getItemIDStr(stack.getItem());
+                        if (registrationLatchRejections == 1) {
+                            Throwable trace = new Throwable(
+                                    "[ItemIDManager] pre-sync slave registration stack trace (not thrown)");
+                            BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] REJECTED slave-side "
+                                    + "ItemID registration of '" + itemName + "' — the master's "
+                                    + "SyncItemIDsPacket has not arrived yet this session "
+                                    + "(registration latch armed). Firing a RegisterItemStacksBatchRequest "
+                                    + "from this window would race the master-ready signal. "
+                                    + "Deferring: returning INVALID_ID, NO ARRS sent. "
+                                    + "Further rejections of this arming cycle are logged at DEBUG only.",
+                                    trace);
+                        } else {
+                            BACKEND_INSTANCES.LOGGER.debug("[ItemIDManager] Slave registration latch rejected '"
+                                    + itemName + "' (rejection #" + registrationLatchRejections
+                                    + " of this arming cycle).");
+                        }
+                    }
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
+
+                // Normalize once for cache-key computation AND for the ARRS payload — matches
+                // the master's identity semantics (see VolatileItemComponents.normalize).
+                ItemStack normalized = VolatileItemComponents.normalize(stack);
+                normalized.setCount(1);
+                NormalizedStackKey key = new NormalizedStackKey(normalized);
+
+                // Rule 4: negative-cache / in-flight hit → INVALID_ID, no ARRS. Master already
+                // said INVALID (permanent rejection this session) OR an ARRS is in flight and
+                // has not returned yet (dedupe: we don't fire another ARRS for the same stack).
+                if (slaveNegativeOrPendingCache.containsKey(key)) {
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
+
+                // Rule 5: real miss → record for the batched ARRS below.
+                slaveNegativeOrPendingCache.put(key, Boolean.TRUE);
+                missNormalizedStacks.add(normalized);
+                missKeys.add(key);
+                ids.add(ItemID.INVALID_ID);
+            }
+        }
+
+        if (!missNormalizedStacks.isEmpty())
+            sendToMasterAndPopulateCache(missNormalizedStacks, missKeys);
+
+        return ids;
+    }
+
+    /**
+     * Batched slave→master ARRS dispatch + response populator (Task #23). Called once per
+     * {@link #registerItemStackServerSide_direct_slave} invocation whose classification pass
+     * produced at least one miss slot.
+     * <p>
+     * <b>Threading discipline — this is the important part:</b>
+     * <ul>
+     *   <li>The ARRS response {@code whenComplete} runs on a <b>netty thread</b> (the ARRS
+     *       system's inbound handler), NOT on the server tick thread. Mutating
+     *       {@link #itemIDMap} or {@link #slaveNegativeOrPendingCache} directly from that
+     *       thread would race the tick thread's reads (getItemID / getItemStackTemplate) that
+     *       run concurrently on every server tick.</li>
+     *   <li>Every mutation and every log emission is therefore hopped onto the server thread
+     *       via {@link net.minecraft.server.MinecraftServer#execute(Runnable)}. This matches
+     *       the {@code SyncItemIDsPacket.handleOnSlave} discipline (whose Architectury
+     *       {@code ForwardPacketContext} does the same marshalling on that packet path).</li>
+     *   <li>If the server reference is null at response time (world stopped between fire and
+     *       response), the mutation is skipped — the negative-cache entry is drained on
+     *       {@link #clear()} anyway, so leaving it in the "in-flight" state is safe.</li>
+     * </ul>
+     *
+     * @param normalizedStacks the miss-slot normalized stacks (index-aligned with {@code keys})
+     * @param keys             the {@link NormalizedStackKey} entries added to
+     *                         {@link #slaveNegativeOrPendingCache} for each miss slot — the
+     *                         populator uses these to remove entries on a positive response
+     *                         (positive-cache lookup wins from then on) and keep them for a
+     *                         negative response
+     */
+    private static void sendToMasterAndPopulateCache(List<ItemStack> normalizedStacks,
+                                                     List<NormalizedStackKey> keys) {
+        slaveArrsRequestsFired++;
+        net.kroia.banksystem.networking.multi_server.RegisterItemStacksBatchRequest
+                .sendToMaster(normalizedStacks)
+                .whenComplete((response, ex) -> {
+                    // Marshal onto the server thread before touching any static state — see
+                    // the Javadoc's "Threading discipline" block for why this is not optional.
+                    Runnable populator = () -> populateSlaveCacheFromResponse(normalizedStacks, keys, response, ex);
+                    net.minecraft.server.MinecraftServer server = UtilitiesPlatform.getServer();
+                    if (server != null) {
+                        server.execute(populator);
+                    } else {
+                        // No server (test harness / world stop race) — nothing to mutate
+                        // safely. clear() has already drained the negative cache anyway.
+                        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                            BACKEND_INSTANCES.LOGGER.debug("[ItemIDManager] Slave ARRS response arrived "
+                                    + "without a live server — skipping cache populate.");
+                    }
+                });
+    }
+
+    /**
+     * Server-thread body of the ARRS-response populator (Task #23). Called from
+     * {@link #sendToMasterAndPopulateCache}'s {@code server.execute(...)} hop — never call
+     * directly from a netty thread. See that method's Javadoc for the threading contract.
+     */
+    private static void populateSlaveCacheFromResponse(List<ItemStack> normalizedStacks,
+                                                       List<NormalizedStackKey> keys,
+                                                       @Nullable List<ItemID> response,
+                                                       @Nullable Throwable ex) {
+        Map<ItemID, ItemStack> newItemIDMap = new ConcurrentHashMap<>();
+        boolean transportFailure = ex != null || response == null;
+        synchronized (itemIDMap) {
+            for (int i = 0; i < normalizedStacks.size(); i++) {
+                NormalizedStackKey key = keys.get(i);
+                ItemStack normalized = normalizedStacks.get(i);
+                ItemID responseId = transportFailure || i >= response.size()
+                        ? ItemID.INVALID_ID
+                        : response.get(i);
+
+                if (responseId != null && responseId.isValid()) {
+                    // Positive response: master minted / already had a short. Remove the
+                    // in-flight marker so subsequent lookups hit the positive map. Insert the
+                    // template under the master-authoritative short via putIfAbsent — if the
+                    // sync packet arrived first with a different short mapping (shouldn't
+                    // happen but defensive), keep it. Otherwise install so the second lookup
+                    // succeeds (Acceptance Criterion D).
+                    slaveNegativeOrPendingCache.remove(key);
+                    // Aliased shorts should never come back from master (its own registry has
+                    // resolved them internally); but guard anyway — never install an alias
+                    // short as a live map entry (would violate the itemIDAliasMap invariant).
+                    if (!itemIDAliasMap.containsKey(responseId)) {
+                        ItemStack templateCopy = normalized.copy();
+                        templateCopy.setCount(1);
+                        ItemStack prev = itemIDMap.putIfAbsent(responseId, templateCopy);
+                        if (prev == null) {
+                            // Update the name cache on the master-supplied short. Not strictly
+                            // required — resolveAlias / getItemStackTemplate work by short
+                            // regardless of name_cache — but keeps log lines readable.
+                            responseId.tryUpdateNameCache();
+                            newItemIDMap.put(responseId, templateCopy);
+                        }
+                    }
+                } else {
+                    // Negative response (or transport failure): keep the entry in the
+                    // negative cache; the next lookup returns INVALID_ID immediately without
+                    // firing another ARRS. Optionally INFO-log the first rejection per stack
+                    // per session so mixed-mod setups leave a trail.
+                    if (!transportFailure && slaveRejectedLoggedOnce.putIfAbsent(key, Boolean.TRUE) == null) {
+                        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                            String itemName = ItemUtilities.getItemIDStr(normalized.getItem());
+                            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Master rejected registration "
+                                    + "of '" + itemName + "' — item is unknown to the master's "
+                                    + "registry (mod not installed on master?). BankSystem operations "
+                                    + "on this item will be unavailable on this slave.");
+                        }
+                    }
+                }
+            }
+        }
+        // Fire the same broadcast as the master-branch when new items landed — clients
+        // connected to this slave still need to know about the newly-populated shorts.
+        if (!newItemIDMap.isEmpty())
+            onNewItemAdded(newItemIDMap);
+    }
+
+    /**
+     * @return the count of {@code RegisterItemStacksBatchRequest} calls fired by the
+     *         slave-side delegation path since the current session's {@link #clear()}. Every
+     *         batch call counts as one, regardless of the number of miss slots inside it.
+     *         In-game test suite only.
+     */
+    public static int getSlaveArrsRequestsFired_forTesting() {
+        return slaveArrsRequestsFired;
+    }
+
+    /** Resets the ARRS-fired counter to 0. In-game test suite only. */
+    public static void resetSlaveArrsCounter_forTesting() {
+        slaveArrsRequestsFired = 0;
+    }
+
+    /**
+     * @return {@code true} iff the given stack is currently in the slave-side negative /
+     *         in-flight cache (see {@link #slaveNegativeOrPendingCache}). Uses the same
+     *         normalization the delegation path uses. In-game test suite only.
+     */
+    public static boolean isInSlaveNegativeCache_forTesting(ItemStack stack) {
+        if (stack == null || stack.isEmpty())
+            return false;
+        ItemStack normalized = VolatileItemComponents.normalize(stack);
+        normalized.setCount(1);
+        return slaveNegativeOrPendingCache.containsKey(new NormalizedStackKey(normalized));
+    }
+
+    /**
+     * Clears the slave-side negative / in-flight cache and the "logged once" dedup. In-game
+     * test suite only — teardown hook for tests that mutate this state.
+     */
+    public static void clearSlaveNegativeCache_forTesting() {
+        slaveNegativeOrPendingCache.clear();
+        slaveRejectedLoggedOnce.clear();
     }
 
     /**

@@ -677,11 +677,18 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
     private static void onSlaveConnectionLost(Throwable reason)
     {
-
+        // Task #23: preserve the positive itemIDMap (master re-sends full sync on reconnect
+        // via SyncItemIDsPacket, and register-if-absent semantics are idempotent), but drop
+        // the negative / in-flight cache: the reconnecting master might have a different
+        // registry (mod update on master while slave was disconnected), and we want a single
+        // fresh retry per unknown item per reconnect. Idempotent on master (no-op).
+        ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
     }
     private static void onSlaveDisconnected()
     {
-
+        // Same rationale as onSlaveConnectionLost above — clear the negative cache so
+        // reconnect retries formerly-INVALID lookups exactly once.
+        ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
     }
 
     private static void onMasterServerStartupComplete()

@@ -1126,8 +1126,13 @@ public class ItemIDMergeGuardTests extends TestSuite {
      * released the exact same registration must succeed. The release used here is the real
      * production release: a successful {@link ItemIDManager#load(CompoundTag)}.
      * <p>
-     * Master-only semantics: on a slave server the latch never applies (slaves legitimately
-     * register defaults pre-sync), so the test skips itself there.
+     * Master-only in scope: under Task #22 the latch was widened to slaves too, and under
+     * Task #23 slaves stopped minting shorts entirely (all registration delegates to master
+     * via ARRS). Slave-side latch behavior is exercised by the dedicated Task #23 suite
+     * ({@code ItemIDSlaveDelegationTests}); this test drives the master-side load-release
+     * flow directly by invoking {@link ItemIDManager#load(CompoundTag)}, which is
+     * meaningful only on master (slaves never load ItemIDs from disk), so the test skips
+     * itself on a slave.
      * <p>
      * Isolation: live static state (maps, counter, quarantine, persisted-shorts record) is
      * snapshotted and restored bit-exact, same convention as
@@ -1138,7 +1143,8 @@ public class ItemIDMergeGuardTests extends TestSuite {
         if (access == null)
             return pass("skipped: no server-side RegistryAccess (client-only / early-init)");
         if (BankSystemModBackend.getInstances_forTesting().isSlaveServer)
-            return pass("skipped: slave server — the registration latch is master-only by design");
+            return pass("skipped: slave server — slaves never call ItemIDManager.load() from disk. "
+                    + "Slave-side latch behavior is covered by ItemIDSlaveDelegationTests.");
 
         Map<ItemID, ItemStack> savedItemMap = new HashMap<>(ItemIDManager.getItemIDMap());
         Map<ItemID, ItemID> savedAliasMap = new HashMap<>(ItemIDManager.getItemIDAliasMap());
