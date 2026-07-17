@@ -157,6 +157,23 @@ public class ItemIDManager implements ServerSaveable {
      */
     private static final Set<ItemID> persistedShorts = ConcurrentHashMap.newKeySet();
 
+    /**
+     * Session-scoped dedup guard for the Task #25 "unresolvable sync entry" INFO log.
+     * When a slave (or remote client) receives a {@link SyncItemIDsPacket} whose NBT
+     * for a given short cannot be parsed against the local registry (mod not installed
+     * on this side), {@link #receiveSyncPacket(SyncItemIDsPacket, boolean)} logs one
+     * line naming the short and drops the entry. Repeat syncs on the same session
+     * would otherwise flood the log with the same line for every re-broadcast.
+     * <p>
+     * Thread-safety: mutated exclusively from {@link #receiveSyncPacket}, which runs
+     * on the network side's main thread (server thread on slave; render/main thread
+     * on client — Architectury auto-dispatches S2C handlers there). A plain
+     * {@link HashSet} would suffice; we use the concurrent variant for parity with
+     * the surrounding fields' declaration style. Cleared by {@link #clear()} so
+     * a rejoin against a possibly-different master gets a fresh log budget.
+     */
+    private static final Set<ItemID> unresolvableItemsLoggedOnce = ConcurrentHashMap.newKeySet();
+
     public static void clear()
     {
         singlePlayerServerBackupOnPlayerLeave = new ConcurrentHashMap<>(itemIDMap);
@@ -176,6 +193,10 @@ public class ItemIDManager implements ServerSaveable {
         pendingMergeConsolidation.clear();
         // Provenance tracking: the next load() re-records which shorts came from disk.
         persistedShorts.clear();
+        // Task #25 dedup guard: a rejoin against a possibly-different master gets a
+        // fresh log budget; without this, the second session on the same JVM would
+        // silently skip "still unresolvable" INFO lines.
+        unresolvableItemsLoggedOnce.clear();
         // Arm the registration latch: from this point until the authoritative ItemID
         // assignment is available (master: load_itemIDs() success or markRegistryReady() on
         // a fresh world; slave: finalizeSlaveSync() after SyncItemIDsPacket), fresh-short
@@ -967,16 +988,48 @@ public class ItemIDManager implements ServerSaveable {
         // Adopt the sender's alias table so bank balances / markets keyed by a merged ID
         // resolve on this side as well.
         applyAliases(packet.getAliases());
-        Map<ItemID, ItemStack> items = packet.getItems();
-        for(Map.Entry<ItemID, ItemStack> entry : items.entrySet())
+        // Task #25: the wire format is now Map<ItemID, CompoundTag> — inflate each entry
+        // via ItemStack.parseOptional against THIS side's RegistryAccess. Encoding by
+        // resource key means entries whose host mod is missing on this side surface
+        // gracefully as Optional.empty() (or an EMPTY stack); we log INFO once per
+        // short per session and skip the entry, instead of the pre-fix behavior where
+        // the numeric-ID codec silently bound the short to whatever item happened to
+        // sit at that slot on this side's runtime registry table.
+        RegistryAccess syncRegistryAccess = UtilitiesPlatform.getRegistryAccess();
+        Map<ItemID, CompoundTag> items = packet.getItems();
+        for(Map.Entry<ItemID, CompoundTag> entry : items.entrySet())
         {
-            // Search the entire list to check if the same item stack already is registered
-            ItemStack itemStack = entry.getValue();
-
-            //ItemID id = getItemID(itemStack);
-            //if(id != null)
-            //    continue;
             ItemID id = entry.getKey();
+            CompoundTag stackTag = entry.getValue();
+            ItemStack itemStack;
+            if(syncRegistryAccess == null)
+            {
+                // Defensive: without RegistryAccess we cannot inflate any tag. Skip the
+                // entry entirely rather than fall back to numeric-ID decoding — the whole
+                // point of the codec swap is to refuse silent divergence.
+                if(BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null && unresolvableItemsLoggedOnce.add(id))
+                {
+                    BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] SyncItemIDsPacket dropped entry short="
+                            + id.getShort() + " (no RegistryAccess available yet on this side).");
+                }
+                continue;
+            }
+            Optional<ItemStack> parsed = ItemStack.parse(syncRegistryAccess, stackTag);
+            if(parsed.isEmpty() || parsed.get().isEmpty())
+            {
+                if(BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null && unresolvableItemsLoggedOnce.add(id))
+                {
+                    // Try to surface the failing resource key so admins can tell WHICH
+                    // mod is missing — the tag's "id" entry carries it in NBT form.
+                    String resourceKey = (stackTag != null && stackTag.contains("id")) ? stackTag.getString("id") : "<unknown>";
+                    BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] SyncItemIDsPacket dropped entry short="
+                            + id.getShort() + " id=" + resourceKey
+                            + " (item unresolvable on this server — mod not installed here?)");
+                }
+                continue;
+            }
+            itemStack = parsed.get();
+
             // Re-normalize after network decode: stack construction during decode can
             // re-attach volatile components (e.g. TFC stamps a fresh creation date onto
             // any food stack built from the network stream).
@@ -1039,10 +1092,36 @@ public class ItemIDManager implements ServerSaveable {
     }
     public static void receiveRegisterItemIDPacket(RegisterItemIDPacket packet)
     {
-        // No explicit normalization needed here: network decode may re-attach volatile
-        // components (mod constructor hooks), but registerItemStackServerSide_direct
-        // normalizes both the identity lookup and the stored template.
-        registerItemStackServerSide_direct(packet.getItems());
+        // Task #25: wire format is now List<CompoundTag> — inflate each entry via
+        // ItemStack.parseOptional against THIS side's RegistryAccess. Entries whose host
+        // mod is missing on the receiver drop out here (parse returns EMPTY) rather than
+        // registering a wrong item under a numeric-ID collision.
+        // No explicit normalization needed on the surviving stacks: network decode may
+        // re-attach volatile components (mod constructor hooks), but
+        // registerItemStackServerSide_direct normalizes both the identity lookup and the
+        // stored template.
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        List<CompoundTag> tags = packet.getItems();
+        if(access == null || tags.isEmpty())
+            return;
+        List<ItemStack> stacks = new ArrayList<>(tags.size());
+        for(CompoundTag stackTag : tags)
+        {
+            Optional<ItemStack> parsed = ItemStack.parse(access, stackTag);
+            if(parsed.isEmpty() || parsed.get().isEmpty())
+            {
+                if(BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                {
+                    String resourceKey = (stackTag != null && stackTag.contains("id")) ? stackTag.getString("id") : "<unknown>";
+                    BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] RegisterItemIDPacket dropped entry id="
+                            + resourceKey + " (item unresolvable on this server — mod not installed here?)");
+                }
+                continue;
+            }
+            stacks.add(parsed.get());
+        }
+        if(!stacks.isEmpty())
+            registerItemStackServerSide_direct(stacks);
     }
 
     @Override

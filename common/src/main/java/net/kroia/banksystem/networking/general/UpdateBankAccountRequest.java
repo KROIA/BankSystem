@@ -10,6 +10,8 @@ import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -20,6 +22,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -51,10 +54,50 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
             );
         }
 
+        /**
+         * NBT-based codec for {@link #accountIcon} — see the class-level Javadoc on
+         * {@link net.kroia.banksystem.networking.general.SyncItemIDsPacket#STREAM_CODEC}
+         * for the underlying rationale (Task #25): vanilla's
+         * {@link ItemStack#STREAM_CODEC} encodes by runtime numeric registry ID, which
+         * is stable client↔server but NOT stable when this request is forwarded
+         * slave→master (each server has an independent numeric ID table). Encoding by
+         * resource key via {@link ItemStack#save(net.minecraft.core.HolderLookup.Provider, Tag)}
+         * is stable across processes; unresolvable icons (mod missing on the receiving
+         * side) decode to {@link ItemStack#EMPTY} and the {@code InputData} canonical
+         * constructor coerces that to {@code null} → account keeps its previous icon
+         * (or none) instead of silently binding to a wrong item.
+         */
+        private static final StreamCodec<RegistryFriendlyByteBuf, ItemStack> ITEM_STACK_NBT_CODEC = StreamCodec.of(
+                (buf, stack) -> {
+                    try
+                    {
+                        Tag stackTag = stack.save(buf.registryAccess(), new CompoundTag());
+                        if(stackTag instanceof CompoundTag compoundTag)
+                            ByteBufCodecs.TRUSTED_COMPOUND_TAG.encode(buf, compoundTag);
+                        else
+                            ByteBufCodecs.TRUSTED_COMPOUND_TAG.encode(buf, new CompoundTag());
+                    }
+                    catch(Exception ignored)
+                    {
+                        // Unserializable in the current registry context: send an empty
+                        // tag so the receiver's parseOptional degrades to EMPTY (→ null
+                        // icon via the canonical InputData ctor).
+                        ByteBufCodecs.TRUSTED_COMPOUND_TAG.encode(buf, new CompoundTag());
+                    }
+                },
+                buf -> {
+                    CompoundTag stackTag = ByteBufCodecs.TRUSTED_COMPOUND_TAG.decode(buf);
+                    if(stackTag.isEmpty())
+                        return ItemStack.EMPTY;
+                    Optional<ItemStack> parsed = ItemStack.parse(buf.registryAccess(), stackTag);
+                    return parsed.orElse(ItemStack.EMPTY);
+                }
+        );
+
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.INT, InputData::accountNumber,
                 ByteBufCodecs.STRING_UTF8, InputData::accountName,
-                ExtraCodecUtils.nullable(ItemStack.STREAM_CODEC), InputData::accountIcon,
+                ExtraCodecUtils.nullable(ITEM_STACK_NBT_CODEC), InputData::accountIcon,
                 ExtraCodecUtils.listStreamCodec(BankData.STREAM_CODEC), InputData::bankData,
                 ExtraCodecUtils.mapStreamCodec(UUIDUtil.STREAM_CODEC, ByteBufCodecs.INT, HashMap<UUID, Integer>::new), InputData::setUsers,
                 InputData::new
