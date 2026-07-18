@@ -608,6 +608,29 @@ public class ItemIDManager implements ServerSaveable {
     }
 
     /**
+     * Task #24: true iff this ItemID resolves to a real item template on <b>this side</b>
+     * (whichever JVM calls it — master, slave, or client), using the local
+     * {@link #itemIDMap}.
+     * <p>
+     * On the master (sole minter) every valid short resolves, so this is always {@code true}
+     * for non-{@link ItemID#INVALID_ID} ids. On a slave/client that lacks the mod for an item
+     * the master registered, the template is {@link ItemStack#EMPTY} (the resource key can't be
+     * parsed here) and this returns {@code false}. Callers use it to hide bank rows / balance
+     * series / command output for items that would otherwise render as {@code minecraft:air} or
+     * a wrong item on a mixed-mod master/slave setup. Filtering is display-only — the
+     * master-owned balance is untouched and stays visible on servers that can resolve the item.
+     *
+     * @param itemID the ItemID to test (null / {@link ItemID#INVALID_ID} → {@code false})
+     * @return {@code true} if the id resolves to a non-empty template locally
+     */
+    public static boolean isResolvableOnThisServer(ItemID itemID)
+    {
+        if (itemID == null || !itemID.isValid())
+            return false;
+        return !getItemStackTemplate(itemID).isEmpty();
+    }
+
+    /**
      * @return a copy of the alias table (merged ID → canonical ID).
      *         Used to sync aliases to clients and slave servers so that references
      *         keyed by a merged ID keep resolving on every side.

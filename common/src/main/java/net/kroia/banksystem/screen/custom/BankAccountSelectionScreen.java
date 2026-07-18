@@ -88,16 +88,30 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
     private final UUID playerUUID;
     private final Consumer<Integer> onAccountSelected;
     private final int permissionFilter;
+    private final boolean requireAllPermissions;
     public BankAccountSelectionScreen(Screen parent, UUID playerUUID, Consumer<Integer> onAccountSelected)
     {
         this(parent, playerUUID, onAccountSelected, BankPermission.getAllPermissions());
     }
     public BankAccountSelectionScreen(Screen parent, UUID playerUUID, Consumer<Integer> onAccountSelected, int permissionFilter)
     {
+        this(parent, playerUUID, onAccountSelected, permissionFilter, false);
+    }
+
+    /**
+     * @param permissionFilter      permission bit mask the listed accounts must satisfy
+     * @param requireAllPermissions FR-001: when {@code true}, an account is listed only if the
+     *                              player holds <b>every</b> bit in {@code permissionFilter}
+     *                              (AND); when {@code false} (default, unchanged behavior) an
+     *                              account is listed if the player holds <b>any</b> bit (OR).
+     */
+    public BankAccountSelectionScreen(Screen parent, UUID playerUUID, Consumer<Integer> onAccountSelected, int permissionFilter, boolean requireAllPermissions)
+    {
         super(TEXT.TITLE, parent);
         this.playerUUID = playerUUID;
         this.onAccountSelected = onAccountSelected;
         this.permissionFilter = permissionFilter;
+        this.requireAllPermissions = requireAllPermissions;
 
 
         titleLabel = new Label(TEXT.TITLE_LABEL.getString());
@@ -131,7 +145,10 @@ public class BankAccountSelectionScreen extends BankSystemGuiScreen {
         accountsListView.removeChilds();
         for(BankAccountData accountData : bankAccounts) {
 
-            if(!accountData.hasAnyPermission(playerUUID, permissionFilter)) {
+            boolean matchesFilter = requireAllPermissions
+                    ? accountData.hasAllPermissions(playerUUID, permissionFilter)   // FR-001: AND
+                    : accountData.hasAnyPermission(playerUUID, permissionFilter);   // default: OR
+            if(!matchesFilter) {
                 continue; // Skip accounts that do not match the permission filter
             }
 

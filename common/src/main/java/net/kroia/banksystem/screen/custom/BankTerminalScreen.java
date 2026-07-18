@@ -19,6 +19,7 @@ import net.kroia.banksystem.util.BankCraftingMatcher;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.elements.*;
@@ -667,7 +668,10 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         {
             ItemID itemID = entry.getKey();
             BankData bankData = entry.getValue();
-            if(bankData != null)
+            // Task #24: skip items this client can't resolve (a mod present on the master but
+            // not here) — they would render as minecraft:air / a wrong item. Display-only; the
+            // balance still exists on the master and shows on servers that have the item.
+            if(bankData != null && ItemIDManager.isResolvableOnThisServer(itemID))
                 sortedBankAccounts.add(new Pair<>(itemID, bankData));
         }
         sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance(), a.getSecond().balance()));

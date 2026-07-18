@@ -14,6 +14,7 @@ import net.kroia.banksystem.screen.uiElements.BankUserWidget;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.client.GuiScreen;
@@ -413,7 +414,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         {
             ItemID itemID = entry.getKey();
             BankData bankData = entry.getValue();
-            if(bankData != null)
+            // Task #24: hide items this client can't resolve (mod present on the master but not
+            // here) so the management list never shows air / wrong-item rows. Display-only.
+            if(bankData != null && ItemIDManager.isResolvableOnThisServer(itemID))
                 sortedBankAccounts.add(new Pair<>(itemID, bankData));
         }
         sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance(), a.getSecond().balance()));

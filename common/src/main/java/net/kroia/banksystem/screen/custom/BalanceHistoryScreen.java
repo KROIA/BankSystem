@@ -7,6 +7,7 @@ import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.ItemColorUtil;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -191,6 +192,10 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
 
         for (Map.Entry<Short, List<BalanceHistoryRecord>> entry : grouped.entrySet()) {
             short itemId = entry.getKey();
+            // Task #24: skip series for items this client can't resolve (a mod on the master but
+            // not here) — they would plot under an air / wrong-item icon. Display-only.
+            if (!ItemIDManager.isResolvableOnThisServer(new ItemID(itemId)))
+                continue;
             List<BalanceHistoryRecord> itemRecords = entry.getValue();
 
             ItemStack itemStack = getItemStack(itemId);

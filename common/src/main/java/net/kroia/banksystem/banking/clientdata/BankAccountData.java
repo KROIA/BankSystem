@@ -97,4 +97,25 @@ public class BankAccountData {
         }
         return personalBankOwnerData != null && personalBankOwnerData.userUUID().equals(userUUID); // Personal bank owner has all permissions
     }
+
+    /**
+     * AND-semantics permission check (FR-001): returns true only when the user holds
+     * <b>every</b> bit in {@code permission}. Contrast with {@link #hasAnyPermission(UUID, int)}
+     * (OR — at least one bit). The personal-bank owner implicitly holds all permissions.
+     *
+     * @param userUUID   the user to check
+     * @param permission a permission bit mask (e.g. {@code DEPOSIT | WITHDRAW})
+     * @return true iff the user has all requested permission bits on this account
+     */
+    public boolean hasAllPermissions(UUID userUUID, int permission)
+    {
+        if (userUUID == null || permission < 0) {
+            return false; // Invalid user UUID or permission
+        }
+        BankUserData user = users.get(userUUID);
+        if (user != null) {
+            return BankPermission.hasAllPermissions(user.permissions, permission);
+        }
+        return personalBankOwnerData != null && personalBankOwnerData.userUUID().equals(userUUID); // Personal bank owner has all permissions
+    }
 }
