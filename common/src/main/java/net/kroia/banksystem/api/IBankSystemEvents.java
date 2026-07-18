@@ -1,6 +1,7 @@
 package net.kroia.banksystem.api;
 
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.event.DataEvent;
@@ -111,6 +112,42 @@ public interface IBankSystemEvents {
      * @return the slave-connection-lost signal.
      */
     Signal getSlaveConnectionLostSignal();
+
+    /**
+     * Event emitted on the <b>master server</b> after
+     * {@code ServerBankManager.trustSlaveServer(String)} or
+     * {@code ServerBankManager.untrustSlaveServer(String)} has mutated the
+     * master's slave-trust set. The payload's {@link TrustChangeInfo#trusted()}
+     * reflects the post-mutation state — subscribers can propagate it directly
+     * without re-querying the master.
+     * <p>
+     * Dependent mods (e.g. StockMarket) subscribe to this event to push runtime
+     * trust-toggle updates to their connected slaves and downstream clients
+     * without polling and without waiting for the next reconnect handshake.
+     * <p>
+     * <b>Contract details:</b>
+     * <ul>
+     *   <li>Fires on the master JVM only. On the slave JVM this event never
+     *       fires — slaves learn about their own trust status through S2S
+     *       packets dispatched by mods that subscribe here on the master.
+     *       Keeping the event master-only avoids leaking BankSystem-internal
+     *       state ("which OTHER slaves does the master trust?") to slaves.</li>
+     *   <li>Fires AFTER the trust set has been mutated (subscribers observe
+     *       the new state either from the payload directly or by re-querying
+     *       the manager if they need cross-slave visibility).</li>
+     *   <li>Fires even when the write was a no-op set-to-same-value at the
+     *       manager level (idempotent contract). The command surface today
+     *       short-circuits before calling the mutator when the target state
+     *       already holds, so in practice the event only fires on real
+     *       transitions — but any caller of the manager mutators can rely on
+     *       the event firing once per call.</li>
+     *   <li>Fires on the server main thread (invoked from the mutator; not
+     *       from an async worker).</li>
+     * </ul>
+     *
+     * @return the trust-changed event.
+     */
+    DataEvent<TrustChangeInfo> getTrustChangedSignal();
 
     /**
      * Removes all listeners for the events and signals in this class.

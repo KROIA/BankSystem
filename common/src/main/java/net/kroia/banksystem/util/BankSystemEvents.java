@@ -1,6 +1,7 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.api.IBankSystemEvents;
 import net.kroia.banksystem.banking.User;
 import net.kroia.modutilities.event.DataEvent;
@@ -59,6 +60,15 @@ public class BankSystemEvents implements IBankSystemEvents {
      */
     public final Signal SLAVE_CONNECTION_LOST = new Signal();
 
+    /**
+     * Fired on the master after {@code ServerBankManager.trustSlaveServer} /
+     * {@code untrustSlaveServer} has mutated the trust set. Carries the affected
+     * slaveID and the new trust value. Dependent mods subscribe here to push
+     * runtime trust-toggle updates to their own slaves/clients — see
+     * {@link IBankSystemEvents#getTrustChangedSignal()} for the full contract.
+     */
+    public final DataEvent<TrustChangeInfo> TRUST_CHANGED = new DataEvent<>();
+
 
     @Override
     public void removeListeners() {
@@ -75,6 +85,7 @@ public class BankSystemEvents implements IBankSystemEvents {
         MASTER_SERVER_SLAVE_CONNECTED.removeListeners();
         SLAVE_CONNECTION_ACCEPTED.removeListeners();
         SLAVE_CONNECTION_LOST.removeListeners();
+        TRUST_CHANGED.removeListeners();
     }
 
 
@@ -151,5 +162,11 @@ public class BankSystemEvents implements IBankSystemEvents {
     public Signal getSlaveConnectionLostSignal()
     {
         return SLAVE_CONNECTION_LOST;
+    }
+
+    @Override
+    public DataEvent<TrustChangeInfo> getTrustChangedSignal()
+    {
+        return TRUST_CHANGED;
     }
 }

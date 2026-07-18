@@ -13,6 +13,7 @@ import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.api.ItemPriceProvider;
@@ -235,11 +236,27 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public void trustSlaveServer(String slaveID)
     {
         trustedSlaveServers.add(slaveID);
+        // T-128 (cross-repo): notify dependent mods (e.g. StockMarket) that the
+        // trust set changed so they can propagate the new state to their own
+        // connected slaves/clients without polling. Fired AFTER the mutation so
+        // listeners see the post-change state. Idempotent contract — the event
+        // fires even when the caller set-to-same-value; subscribers filter if
+        // that matters to them (in practice the admin-command surface
+        // short-circuits before calling us, so this only fires on real flips).
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_EVENTS != null) {
+            BACKEND_INSTANCES.SERVER_EVENTS.TRUST_CHANGED.notifyListeners(
+                    new TrustChangeInfo(slaveID, true));
+        }
     }
     @Override
     public void untrustSlaveServer(String slaveID)
     {
         trustedSlaveServers.remove(slaveID);
+        // T-128 (cross-repo): see trustSlaveServer above for the full rationale.
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_EVENTS != null) {
+            BACKEND_INSTANCES.SERVER_EVENTS.TRUST_CHANGED.notifyListeners(
+                    new TrustChangeInfo(slaveID, false));
+        }
     }
 
 
