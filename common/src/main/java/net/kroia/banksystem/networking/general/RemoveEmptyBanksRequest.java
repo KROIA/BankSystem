@@ -27,6 +27,12 @@ public class RemoveEmptyBanksRequest extends BankSystemGenericRequest<Integer, L
     @Override
     public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, String slaveID, UUID sender) {
         CompletableFuture<List<ItemID>>  future = new CompletableFuture<>();
+        // Task #26: untrusted slaves may not mutate accounts (the forwarded sender UUID is
+        // slave-controlled and cannot be trusted for the admin/permission check below).
+        if (isBlockedForUntrustedSlave(slaveID)) {
+            future.complete(List.of());
+            return future;
+        }
         ISyncServerBankManager bankManager = getServerBankManager();
         ISyncServerBankAccount account = bankManager.getBankAccount(input);
         if(account == null) {

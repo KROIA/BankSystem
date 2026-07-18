@@ -7,6 +7,8 @@ import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
 import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
 import net.kroia.banksystem.networking.multi_server.WithdrawItemsFromBankRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
@@ -16,7 +18,9 @@ import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.minecraft.world.item.Items;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -32,8 +36,10 @@ public class MultiServerSecurityTests extends TestSuite {
 
     private static final UUID TEST_OWNER = UUID.fromString("00000000-0000-0000-0000-00000000ee01");
     private static final UUID TEST_OUTSIDER = UUID.fromString("00000000-0000-0000-0000-00000000ee02");
+    private static final UUID TEST_ADMIN = UUID.fromString("00000000-0000-0000-0000-00000000ee03");
     private static final String TEST_OWNER_NAME = "MSSecOwner";
     private static final String TEST_OUTSIDER_NAME = "MSSecOutsider";
+    private static final String TEST_ADMIN_NAME = "MSSecAdmin";
 
     private IServerBankManager manager;
     private int testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
@@ -55,6 +61,12 @@ public class MultiServerSecurityTests extends TestSuite {
         addTest("withdrawItemsFromBankRequest_rejects_no_permission", this::testWithdrawRejectsNoPermission);
         addTest("withdrawItemsFromBankRequest_does_not_create_empty_bank", this::testWithdrawDoesNotCreateEmptyBank);
         addTest("depositItemsInBankRequest_clamps_negative", this::testDepositClampsNegative);
+
+        // Task #26 — untrusted-slave gate on write-side BankSystemGenericRequest handlers
+        addTest("depositItemsInBankRequest_rejects_untrusted_slave", this::testDepositRejectsUntrustedSlave);
+        addTest("withdrawItemsFromBankRequest_rejects_untrusted_slave", this::testWithdrawRejectsUntrustedSlave);
+        addTest("depositItemsInBankRequest_accepts_trusted_slave", this::testDepositAcceptsTrustedSlave);
+        addTest("updateBankAccountRequest_rejects_untrusted_slave_forged_admin", this::testUpdateBankAccountRejectsUntrustedSlaveForgedAdmin);
     }
 
     @Override
@@ -290,5 +302,266 @@ public class MultiServerSecurityTests extends TestSuite {
             manager.disallowItemID(dirt);
         }
         return pass("Negative deposit was clamped — balance unchanged at " + balanceBefore);
+    }
+
+    // ============== Task #26 — untrusted-slave gate ==============
+
+    /**
+     * Task #26: an untrusted slave (slaveID not in the trusted set) invoking
+     * DepositItemsInBankRequest.handleOnMasterServer must be rejected with a no-op —
+     * every requested item comes back in the "not deposited" map, master state unchanged.
+     * Log-capture is not currently wired into the test harness; the WARN emitted by the
+     * handler is verified manually in-game and by code inspection of the gate.
+     */
+    private TestResult testDepositRejectsUntrustedSlave() {
+        if (manager == null || testAccountNr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+            return fail("Test account not set up");
+        }
+        String untrustedSlaveID = "untrusted_slave_test";
+        // Sanity: make sure this ID is genuinely NOT in the trusted set
+        if (manager.isSlaveServerTrusted(untrustedSlaveID)) {
+            manager.untrustSlaveServer(untrustedSlaveID);
+        }
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) {
+            return fail("Test account missing");
+        }
+        ItemID diamond = ItemID.of(Items.DIAMOND.getDefaultInstance());
+        boolean wasAllowed = manager.isItemIDAllowed(diamond);
+        if (!wasAllowed) {
+            manager.allowItemID(diamond);
+        }
+        long balanceBefore = 0L;
+        var preBank = account.getBank(diamond);
+        if (preBank != null) {
+            balanceBefore = preBank.getBalance();
+        }
+
+        DepositItemsInBankRequest req = new DepositItemsInBankRequest();
+        Map<ItemID, Long> requested = new HashMap<>();
+        requested.put(diamond, 1000L);
+        DepositItemsInBankRequest.InputData input = new DepositItemsInBankRequest.InputData(
+                testAccountNr, null, requested);
+        DepositItemsInBankRequest.OutputData output = req.handleOnMasterServer(input, untrustedSlaveID, null).join();
+
+        try {
+            if (output.items() == null) {
+                return fail("Task #26: rejection output items() must not be null");
+            }
+            if (output.items().size() != 1 || !output.items().containsKey(diamond)) {
+                return fail("Task #26: untrusted-slave deposit rejection should return full requested map as not-deposited, got " + output.items());
+            }
+            long returned = output.items().get(diamond);
+            if (returned != 1000L) {
+                return fail("Task #26: untrusted-slave deposit should return 1000 as not-deposited, got " + returned);
+            }
+            long balanceAfter = 0L;
+            var postBank = account.getBank(diamond);
+            if (postBank != null) {
+                balanceAfter = postBank.getBalance();
+            }
+            if (balanceAfter != balanceBefore) {
+                return fail("Task #26: untrusted-slave deposit modified balance (" + balanceBefore + " -> " + balanceAfter + ")");
+            }
+        } finally {
+            // Cleanup: remove any bank entry that might have been left over
+            if (account.hasBank(diamond)) {
+                account.removeBank(diamond);
+            }
+            if (!wasAllowed) {
+                manager.disallowItemID(diamond);
+            }
+        }
+        return pass("Untrusted-slave deposit was rejected with full no-op OutputData");
+    }
+
+    /**
+     * Task #26: an untrusted slave (slaveID not in the trusted set) invoking
+     * WithdrawItemsFromBankRequest.handleOnMasterServer must be rejected with a no-op —
+     * the withdrawn-items map comes back empty and master balances are unchanged.
+     */
+    private TestResult testWithdrawRejectsUntrustedSlave() {
+        if (manager == null || testAccountNr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+            return fail("Test account not set up");
+        }
+        String untrustedSlaveID = "untrusted_slave_test";
+        if (manager.isSlaveServerTrusted(untrustedSlaveID)) {
+            manager.untrustSlaveServer(untrustedSlaveID);
+        }
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) {
+            return fail("Test account missing");
+        }
+        ItemID diamond = ItemID.of(Items.DIAMOND.getDefaultInstance());
+        boolean wasAllowed = manager.isItemIDAllowed(diamond);
+        if (!wasAllowed) {
+            manager.allowItemID(diamond);
+        }
+        // Seed a positive balance so a successful withdraw would be observable if the gate leaked
+        var preBank = account.getOrCreateBank(diamond);
+        if (preBank == null) {
+            if (!wasAllowed) manager.disallowItemID(diamond);
+            return fail("Failed to create test bank for DIAMOND");
+        }
+        preBank.deposit(500L);
+        long balanceBefore = preBank.getBalance();
+
+        WithdrawItemsFromBankRequest req = new WithdrawItemsFromBankRequest();
+        Map<ItemID, Long> requested = new HashMap<>();
+        requested.put(diamond, 500L);
+        WithdrawItemsFromBankRequest.InputData input = new WithdrawItemsFromBankRequest.InputData(
+                testAccountNr, null, requested);
+        WithdrawItemsFromBankRequest.OutputData output = req.handleOnMasterServer(input, untrustedSlaveID, null).join();
+
+        try {
+            if (output.items() == null) {
+                return fail("Task #26: rejection output items() must not be null");
+            }
+            if (!output.items().isEmpty()) {
+                return fail("Task #26: untrusted-slave withdraw should return empty withdrawnItems, got " + output.items());
+            }
+            long balanceAfter = preBank.getBalance();
+            if (balanceAfter != balanceBefore) {
+                return fail("Task #26: untrusted-slave withdraw modified balance (" + balanceBefore + " -> " + balanceAfter + ")");
+            }
+        } finally {
+            // Cleanup seeded balance
+            preBank.withdraw(preBank.getBalance());
+            account.removeBank(diamond);
+            if (!wasAllowed) {
+                manager.disallowItemID(diamond);
+            }
+        }
+        return pass("Untrusted-slave withdraw was rejected with empty OutputData");
+    }
+
+    /**
+     * Task #26: a TRUSTED slave (slaveID added to the trusted set via trustSlaveServer())
+     * must NOT be blocked by the untrusted-slave gate — the deposit proceeds normally and
+     * the returned OutputData reports 0 items as "not deposited".
+     */
+    private TestResult testDepositAcceptsTrustedSlave() {
+        if (manager == null || testAccountNr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+            return fail("Test account not set up");
+        }
+        String trustedSlaveID = "trusted_slave_test";
+        boolean wasTrusted = manager.isSlaveServerTrusted(trustedSlaveID);
+        if (!wasTrusted) {
+            manager.trustSlaveServer(trustedSlaveID);
+        }
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) {
+            if (!wasTrusted) manager.untrustSlaveServer(trustedSlaveID);
+            return fail("Test account missing");
+        }
+        ItemID diamond = ItemID.of(Items.DIAMOND.getDefaultInstance());
+        boolean wasAllowed = manager.isItemIDAllowed(diamond);
+        if (!wasAllowed) {
+            manager.allowItemID(diamond);
+        }
+
+        DepositItemsInBankRequest req = new DepositItemsInBankRequest();
+        Map<ItemID, Long> requested = new HashMap<>();
+        requested.put(diamond, 250L);
+        DepositItemsInBankRequest.InputData input = new DepositItemsInBankRequest.InputData(
+                testAccountNr, null, requested);
+        DepositItemsInBankRequest.OutputData output = req.handleOnMasterServer(input, trustedSlaveID, null).join();
+
+        try {
+            if (output.items() == null) {
+                return fail("Task #26: trusted-slave deposit output items() must not be null");
+            }
+            // Successful deposit → nothing returned in the "not deposited" map
+            if (!output.items().isEmpty()) {
+                return fail("Task #26: trusted-slave deposit should succeed (empty not-deposited map), got " + output.items());
+            }
+            var postBank = account.getBank(diamond);
+            if (postBank == null) {
+                return fail("Task #26: trusted-slave deposit did not create the bank entry");
+            }
+            if (postBank.getBalance() != 250L) {
+                return fail("Task #26: trusted-slave deposit expected balance 250, got " + postBank.getBalance());
+            }
+        } finally {
+            // Cleanup seeded balance
+            var postBank = account.getBank(diamond);
+            if (postBank != null) {
+                postBank.withdraw(postBank.getBalance());
+            }
+            if (account.hasBank(diamond)) {
+                account.removeBank(diamond);
+            }
+            if (!wasAllowed) {
+                manager.disallowItemID(diamond);
+            }
+            if (!wasTrusted) {
+                manager.untrustSlaveServer(trustedSlaveID);
+            }
+        }
+        return pass("Trusted-slave deposit succeeded — gate did not falsely reject");
+    }
+
+    /**
+     * Task #26: the management-write exploit. An untrusted slave forges a genuine BankSystem
+     * admin's UUID as the request sender and tries to set a bank balance via
+     * UpdateBankAccountRequest. The forged UUID would pass {@code playerIsAdmin()}, so the
+     * per-player check alone is not enough — the slave-trust gate must block it first. Verify
+     * the balance is untouched and the handler returns null.
+     */
+    private TestResult testUpdateBankAccountRejectsUntrustedSlaveForgedAdmin() {
+        if (manager == null || testAccountNr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+            return fail("Test account not set up");
+        }
+        String untrustedSlaveID = "untrusted_slave_test";
+        if (manager.isSlaveServerTrusted(untrustedSlaveID)) {
+            manager.untrustSlaveServer(untrustedSlaveID);
+        }
+        // A genuine admin whose UUID the untrusted slave forges as the request sender.
+        boolean adminCreated = false;
+        if (!manager.userExists(TEST_ADMIN)) {
+            manager.addUser(new User(TEST_ADMIN, TEST_ADMIN_NAME, true));
+            adminCreated = true;
+        }
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) {
+            if (adminCreated) manager.removeUser(TEST_ADMIN);
+            return fail("Test account missing");
+        }
+        ItemID diamond = ItemID.of(Items.DIAMOND.getDefaultInstance());
+        boolean wasAllowed = manager.isItemIDAllowed(diamond);
+        if (!wasAllowed) manager.allowItemID(diamond);
+        var bank = account.getOrCreateBank(diamond);
+        if (bank == null) {
+            if (!wasAllowed) manager.disallowItemID(diamond);
+            if (adminCreated) manager.removeUser(TEST_ADMIN);
+            return fail("Failed to create test bank for DIAMOND");
+        }
+        bank.deposit(100L);
+        long balanceBefore = bank.getBalance();
+
+        UpdateBankAccountRequest req = new UpdateBankAccountRequest();
+        List<UpdateBankAccountRequest.InputData.BankData> bankData = new ArrayList<>();
+        // setBalance = true, target a huge value — would succeed if the forged admin UUID were trusted.
+        bankData.add(new UpdateBankAccountRequest.InputData.BankData(diamond, 999_999L, true, false, false, false));
+        UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(
+                testAccountNr, "", null, bankData, new HashMap<>());
+        BankAccountData result = req.handleOnMasterServer(input, untrustedSlaveID, TEST_ADMIN).join();
+
+        try {
+            if (result != null) {
+                return fail("Task #26: untrusted-slave UpdateBankAccount should return null (rejected), got a result");
+            }
+            long balanceAfter = bank.getBalance();
+            if (balanceAfter != balanceBefore) {
+                return fail("Task #26: untrusted-slave forged-admin balance edit changed balance ("
+                        + balanceBefore + " -> " + balanceAfter + ")");
+            }
+        } finally {
+            bank.withdraw(bank.getBalance());
+            if (account.hasBank(diamond)) account.removeBank(diamond);
+            if (!wasAllowed) manager.disallowItemID(diamond);
+            if (adminCreated) manager.removeUser(TEST_ADMIN);
+        }
+        return pass("Untrusted-slave forged-admin bank-account edit was blocked — balance untouched");
     }
 }

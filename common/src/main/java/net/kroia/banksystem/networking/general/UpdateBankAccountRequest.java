@@ -144,6 +144,13 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
     @Override
     public CompletableFuture<@Nullable BankAccountData> handleOnMasterServer(InputData input, String slaveID, UUID sender) {
         CompletableFuture<@Nullable BankAccountData>  future = new CompletableFuture<>();
+        // Task #26: an untrusted slave must not perform bank-account writes. The per-player
+        // admin/permission checks below trust the forwarded sender UUID, which an untrusted
+        // slave can forge — so gate on the authenticated slaveID first.
+        if (isBlockedForUntrustedSlave(slaveID)) {
+            future.complete(null);
+            return future;
+        }
         ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         // Check if the player is a admin
         boolean isAdmin = playerIsAdmin(sender);
@@ -164,12 +171,20 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
             account.setAccountName(input.accountName);
         }
 
-        if(isAdmin && input.bankData != null) {
+        if(input.bankData != null) {
             for (InputData.BankData data : input.bankData) {
+                // Closing a bank destroys its balance but cannot create value, so an account
+                // manager (owner / MANAGE permission) may close their own banks — not just
+                // admins. Reaching this handler already guarantees isAdmin || canManage (checked
+                // above), so no further permission check is needed for the removal.
                 if (data.removeBank) {
                     account.removeBank(data.itemID);
                     continue;
                 }
+                // Balance manipulation (set balance, create a bank with a balance, or unlock
+                // locked funds) can create or launder value — restricted to BankSystem admins.
+                if (!isAdmin)
+                    continue;
                 ISyncServerBank bank = account.getBank(data.itemID);
                 if (bank != null) {
                     if (data.resetLockedBalance)

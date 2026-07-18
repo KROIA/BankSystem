@@ -152,6 +152,11 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
+        // Task #26: reject writes from untrusted slaves before the per-player admin check —
+        // the forwarded playerSender UUID is not authenticated for slave-forwarded requests.
+        if (isBlockedForUntrustedSlave(slaveID)) {
+            return CompletableFuture.completedFuture(new OutputData(false, "Untrusted slave server", ""));
+        }
         // --- Permission check: BankSystem admin (User.isBanksystemAdmin()), the same
         // gating used by the other admin requests. Enforced here regardless of the
         // client-side button gating.
