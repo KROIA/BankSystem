@@ -144,6 +144,7 @@
   "message.banksystem.money_bank_access_help": "You can access your account using the Bank Terminal block\nor the /bank command.",
 
   "message.banksystem.deposit_rejected_item_condition": "The condition of {item_name} prevents banking it",
+  "message.banksystem.deposit_item_unknown_on_master": "{item_name} does not exist on the master server and cannot be used with this bank system",
   "message.banksystem.crafting_missing_bank_items": "Crafting canceled: not enough {item_name} available in the bank",
   "message.banksystem.crafting_deposit_fallback": "Crafted {item_name} could not be deposited into the bank and was moved to your inventory",
   "message.banksystem.item_not_allowed": "{item_name} is not allowed to be stored in the bank",

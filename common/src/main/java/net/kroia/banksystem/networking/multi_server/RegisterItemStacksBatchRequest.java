@@ -216,21 +216,13 @@ public class RegisterItemStacksBatchRequest extends BankSystemGenericRequest<Reg
             ItemID id = ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
             result.add(id != null ? id : ItemID.INVALID_ID);
         }
-        int invalidSlots = 0;
-        for (ItemID r : result) {
-            if (r == null || !r.isValid()) invalidSlots++;
-        }
-
-        // Task #23 — user-facing chat notification when master rejects at least one item.
-        // Mirrors Task #27's pattern: master pushes a ClientConsoleMessagePacket back to the
-        // originating slave, which broadcasts to all local players (acceptable tradeoff — the
-        // master has no per-player context here). Deliberately omits the specific item name
-        // because the master's translation table is not authoritative for the failing item.
-        if (invalidSlots > 0 && slaveID != null && !slaveID.isEmpty()) {
-            ClientConsoleMessagePacket.sendMessageFromMasterToSlave(slaveID,
-                    "[BankSystem] The item you tried to bank does not exist on the master server — "
-                    + "it cannot be used with this bank system.");
-        }
+        // NOTE: the user-facing "item unknown to the master" chat notification is intentionally
+        // NOT sent from here. This registration ARRS is fired from many slave lookup paths
+        // (rendering, JEI scans, per-tick resolution) and is deduplicated by the slave's negative
+        // cache, so a message driven from it fires at most once per item per session — and not at
+        // all once a background lookup has already cached the item. The notification now lives on
+        // the deposit action (BankTerminalBlockEntity.sendItemsToBank), where it is reliable,
+        // per-attempt, per-player, and can name the specific item.
         return CompletableFuture.completedFuture(new OutputData(result));
     }
 

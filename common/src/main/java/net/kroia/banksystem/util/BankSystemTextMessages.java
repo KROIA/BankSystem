@@ -316,6 +316,20 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
+    private static final Component DEPOSIT_ITEM_UNKNOWN_ON_MASTER = Component.translatable(prefix+"deposit_item_unknown_on_master");
+    /**
+     * Message shown on a slave when a player tries to deposit an item whose identity is
+     * unknown to the master server's registry (e.g. a mod installed only on the slave).
+     * Unlike the deposit-gate rejection, such an item can never be banked on this setup at
+     * all. Emitted from the deposit action so it fires on every attempt, per player — not
+     * from the ID-registration path, which is deduplicated by the slave's negative cache.
+     */
+    public static String getDepositItemUnknownOnMasterMessage(String itemName)
+    {
+        String msg = DEPOSIT_ITEM_UNKNOWN_ON_MASTER.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
     private static final Component CRAFTING_MISSING_BANK_ITEMS = Component.translatable(prefix+"crafting_missing_bank_items");
     /**
      * Message shown when a bank-assisted craft is aborted because a required
