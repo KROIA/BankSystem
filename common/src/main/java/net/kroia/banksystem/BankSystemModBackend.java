@@ -59,6 +59,7 @@ import org.jetbrains.annotations.Nullable;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class BankSystemModBackend implements BankSystemAPI {
     public static class Instances
@@ -623,6 +624,17 @@ public class BankSystemModBackend implements BankSystemAPI {
         return priceCurrencyItemId;
     }
 
+    /**
+     * Issue #64: edge-latch for the slave&rarr;master connection so
+     * {@code SLAVE_CONNECTION_LOST} fires once per connected&rarr;disconnected
+     * transition instead of on every failed reconnect attempt. Set {@code true}
+     * only where {@code SLAVE_CONNECTION_ACCEPTED} actually fires; a CAS
+     * {@code true}&rarr;{@code false} in the loss paths gates the LOST signal so
+     * the auto-reconnect retry loop cannot re-fire it while the master stays down.
+     * Reset on each slave setup so a fresh world load starts disconnected.
+     */
+    private static final AtomicBoolean slaveConnectionActive = new AtomicBoolean(false);
+
     private static void setupMultiServerInfrastructure(MultiServerConfig config, MinecraftServer server)
     {
         if(config.isMaster)
@@ -638,6 +650,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         else
         {
             INSTANCES.isSlaveServer = true;
+            slaveConnectionActive.set(false);
             MultiServerManager.createSlave(server, config.sharedSecret, config.slaveID, config.masterHost, config.masterTcpPort,
                     BankSystemModBackend::onSlaveConnectionAccepted,
                     BankSystemModBackend::onSlaveConnectionFailed,
@@ -677,6 +690,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         // listeners never see a partially torn-down state. Fired on a Netty
         // event-loop thread — see IBankSystemEvents contract.
         if (INSTANCES.SERVER_EVENTS != null) {
+            // Arm the loss latch (Issue #64) so the next real disconnect fires
+            // SLAVE_CONNECTION_LOST exactly once. Fires again on every reconnect.
+            slaveConnectionActive.set(true);
             INSTANCES.SERVER_EVENTS.SLAVE_CONNECTION_ACCEPTED.notifyListeners();
         }
     }
@@ -695,7 +711,10 @@ public class BankSystemModBackend implements BankSystemAPI {
         // Pair to onSlaveConnectionAccepted: tell dependent mods that master is no longer
         // reachable so any cache populated from the last handshake is now stale. On reconnect,
         // SLAVE_CONNECTION_ACCEPTED fires again and caches can be re-fetched.
-        if (INSTANCES.SERVER_EVENTS != null) {
+        // Issue #64: the auto-reconnect loop re-enters this callback on every failed
+        // attempt; the CAS ensures SLAVE_CONNECTION_LOST fires only on the first
+        // connected->disconnected transition, not once per retry.
+        if (INSTANCES.SERVER_EVENTS != null && slaveConnectionActive.compareAndSet(true, false)) {
             INSTANCES.SERVER_EVENTS.SLAVE_CONNECTION_LOST.notifyListeners();
         }
     }
@@ -706,7 +725,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
         // Clean-disconnect path (local disconnect() call). Dependent mods invalidate their
         // caches the same way — the semantics are identical: master is unreachable.
-        if (INSTANCES.SERVER_EVENTS != null) {
+        // Issue #64: share the same edge-latch as onSlaveConnectionLost so a clean
+        // disconnect that follows a connection-lost storm doesn't double-fire.
+        if (INSTANCES.SERVER_EVENTS != null && slaveConnectionActive.compareAndSet(true, false)) {
             INSTANCES.SERVER_EVENTS.SLAVE_CONNECTION_LOST.notifyListeners();
         }
     }
@@ -741,6 +762,11 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
     private static void onMasterServerSlaveDisconnected(String slaveID)
     {
-
+        // Issue #65: counterpart to onMasterServerSlaveConnected — tell dependent
+        // mods on the master (e.g. StockMarket) that a slave left so they can evict
+        // any per-slave state keyed to it. Carries the departing slaveID.
+        if (INSTANCES.SERVER_EVENTS != null) {
+            INSTANCES.SERVER_EVENTS.MASTER_SERVER_SLAVE_DISCONNECTED.notifyListeners(slaveID);
+        }
     }
 }

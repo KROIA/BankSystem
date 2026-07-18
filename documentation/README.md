@@ -20,4 +20,5 @@ Technical documentation for developers integrating with or extending BankSystem.
 | Guide | Description |
 |-------|-------------|
 | [API Reference](developer-guide/API.md) | Public API overview, entry points, and usage examples |
+| [Events & Signals](developer-guide/EventsAndSignals.md) | Every event/signal for dependent mods: user/account changes, ItemID merges, multi-server connection lifecycle, slave-trust changes |
 | [Async Forwarding Architecture](developer-guide/AsyncForwardingArchitecture.md) | Internal RPC system for multi-server function forwarding |

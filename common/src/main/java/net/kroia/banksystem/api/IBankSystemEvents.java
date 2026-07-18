@@ -77,6 +77,22 @@ public interface IBankSystemEvents {
     Signal getMasterServerSlaveConnected();
 
     /**
+     * Event emitted on the <b>master server</b> when a connected slave
+     * disconnects (unexpected drop or clean shutdown). Counterpart to
+     * {@link #getMasterServerSlaveConnected()}.
+     * <p>
+     * Payload: the departing slave's ID, so dependent mods (e.g. StockMarket)
+     * can evict any per-slave state they built while the slave was connected.
+     * <p>
+     * Fires on the master JVM only. Note the asymmetry with the connect signal,
+     * which is a parameterless {@link Signal}: the disconnect event carries the
+     * slaveID because per-slave eviction needs to know which slave left.
+     *
+     * @return the master-side slave-disconnected event.
+     */
+    DataEvent<String> getMasterServerSlaveDisconnected();
+
+    /**
      * Signal emitted on the <b>slave server</b> once the slave&rarr;master TCP
      * handshake has completed and the master has accepted this slave — i.e. once
      * {@code MultiServerUtils.canInteractWithBankSystem()} genuinely returns
@@ -106,6 +122,13 @@ public interface IBankSystemEvents {
      * this signal to invalidate that cache. When the connection is
      * re-established, {@link #getSlaveConnectionAcceptedSignal()} fires again
      * and cached state can be re-fetched.
+     * <p>
+     * <b>Edge-triggered (Issue #64):</b> fires exactly once per
+     * connected&rarr;disconnected transition. The slave's auto-reconnect loop
+     * retries on a fixed cadence while the master is down, but this signal is
+     * gated by an internal latch so it does <em>not</em> re-fire on each failed
+     * reconnect attempt — it fires again only after a subsequent
+     * {@link #getSlaveConnectionAcceptedSignal()} re-arms the latch.
      * <p>
      * Fired on a Netty event-loop thread — listeners must not block.
      *

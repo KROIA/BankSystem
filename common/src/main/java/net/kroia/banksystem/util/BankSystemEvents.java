@@ -44,6 +44,15 @@ public class BankSystemEvents implements IBankSystemEvents {
     public final Signal MASTER_SERVER_SLAVE_CONNECTED = new Signal();
 
     /**
+     * Fired on the master when a slave disconnects (the
+     * {@code onMasterServerSlaveDisconnected} callback from {@code MultiServerManager}).
+     * Counterpart to {@link #MASTER_SERVER_SLAVE_CONNECTED}; carries the departing
+     * slaveID so dependent mods (e.g. StockMarket) can evict per-slave state.
+     * See {@link IBankSystemEvents#getMasterServerSlaveDisconnected()}.
+     */
+    public final DataEvent<String> MASTER_SERVER_SLAVE_DISCONNECTED = new DataEvent<>();
+
+    /**
      * Fired on the slave when the slave&rarr;master handshake completes (the
      * {@code onSlaveConnectionAccepted} callback from {@code SlaveServerClient}).
      * See {@link IBankSystemEvents#getSlaveConnectionAcceptedSignal()} for the
@@ -83,6 +92,7 @@ public class BankSystemEvents implements IBankSystemEvents {
         SETTINGS_LOADED_FROM_FILE.removeListeners();
         BANKSYSTEM_SETUP_COMPLETED.removeListeners();
         MASTER_SERVER_SLAVE_CONNECTED.removeListeners();
+        MASTER_SERVER_SLAVE_DISCONNECTED.removeListeners();
         SLAVE_CONNECTION_ACCEPTED.removeListeners();
         SLAVE_CONNECTION_LOST.removeListeners();
         TRUST_CHANGED.removeListeners();
@@ -150,6 +160,12 @@ public class BankSystemEvents implements IBankSystemEvents {
     public Signal getMasterServerSlaveConnected()
     {
         return MASTER_SERVER_SLAVE_CONNECTED;
+    }
+
+    @Override
+    public DataEvent<String> getMasterServerSlaveDisconnected()
+    {
+        return MASTER_SERVER_SLAVE_DISCONNECTED;
     }
 
     @Override
