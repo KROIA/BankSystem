@@ -1196,7 +1196,9 @@ public class ItemIDManager implements ServerSaveable {
                         ? ItemID.INVALID_ID
                         : response.get(i);
 
-                if (responseId != null && responseId.isValid()) {
+                boolean masterAccepted = responseId != null
+                        && responseId.getShort() != ItemID.INVALID_ID.getShort();
+                if (masterAccepted) {
                     // Positive response: master minted / already had a short. Remove the
                     // in-flight marker so subsequent lookups hit the positive map. Insert the
                     // template under the master-authoritative short via putIfAbsent — if the

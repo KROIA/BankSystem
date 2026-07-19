@@ -455,9 +455,10 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
             // Test premise: short 9999 must not already be registered (otherwise the
             // putIfAbsent inside the populator no-ops and the defensive-copy assertion
             // has nothing to verify).
-            if (ItemIDManager.getItemIDMap().containsKey(fabricatedId))
+            if (ItemIDManager.getItemIDMap().containsKey(fabricatedId)
+                    || ItemIDManager.getItemIDAliasMap().containsKey(fabricatedId))
                 return pass("skipped: fabricated short " + fabricatedShort
-                        + " is already registered — pick a different short if this recurs");
+                        + " is already registered or aliased — pick a different short if this recurs");
 
             // Normalize the stack exactly the way the production register-path does,
             // then seed the negative cache with a wire-consistent key so we can assert
