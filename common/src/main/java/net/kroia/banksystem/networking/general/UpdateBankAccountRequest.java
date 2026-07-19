@@ -5,13 +5,16 @@ import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -213,7 +216,38 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                     userList.put(userToSet, permissions);
                 }
             }
-            account.setUsers(userList);
+            // Invariant: a non-personal account must always keep at least one MANAGE holder.
+            // Personal accounts are already safe (owner implicitly holds MANAGE), so the helper
+            // short-circuits to OK when owner != null.
+            ServerBankAccount.ManageInvariantOutcome outcome =
+                    ServerBankAccount.enforceManageInvariant(userList, owner != null);
+            switch (outcome) {
+                case REFUSED_ORPHAN -> {
+                    // Removing the last user would orphan the account. Skip ONLY the user-set
+                    // mutation; the name/icon/bankData changes above/below still apply. The
+                    // pre-existing users therefore remain and hasAnyUser() below stays true,
+                    // so the account is not deleted.
+                    warn("Refused user-set change on account " + input.accountNumber
+                            + ": it would remove the last user and orphan the account "
+                            + "(no managing user would remain). User-set change skipped.");
+                    // Best-effort: tell the initiating player (local request only) why nothing changed.
+                    if (slaveID != null && slaveID.isEmpty()) {
+                        notifySender(sender,
+                                "gui.banksystem.bank_account_management_screen.must_keep_manager");
+                    }
+                }
+                case PROMOTED -> {
+                    String promotedName = userList.entrySet().stream()
+                            .filter(e -> BankPermission.hasPermission(e.getValue(), BankPermission.MANAGE.getValue()))
+                            .map(e -> e.getKey().getName())
+                            .findFirst().orElse("<unknown>");
+                    warn("Auto-granted MANAGE to '" + promotedName + "' on account "
+                            + input.accountNumber + " to keep the account manageable "
+                            + "(no managing user remained after the requested change).");
+                    account.setUsers(userList);
+                }
+                case OK -> account.setUsers(userList);
+            }
         }
         if(input.accountIcon != null)
         {
@@ -230,6 +264,26 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
 
         future.complete(account.getAccountData());
         return future;
+    }
+
+    /**
+     * Best-effort chat notice to the initiating player, if they are online on this (master)
+     * server. Used to explain a master-side rejection (e.g. the manage-invariant refusal).
+     * No-op if the player cannot be resolved — a WARN log has already been emitted.
+     *
+     * @param senderUUID       the initiating player's UUID
+     * @param translationKey   the lang key of the message to send
+     */
+    private void notifySender(UUID senderUUID, String translationKey) {
+        if (senderUUID == null) {
+            return;
+        }
+        for (ServerPlayer player : ServerPlayerUtilities.getOnlinePlayers()) {
+            if (player.getUUID().equals(senderUUID)) {
+                player.sendSystemMessage(Component.translatable(translationKey));
+                return;
+            }
+        }
     }
 
     @Override

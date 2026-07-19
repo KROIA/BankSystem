@@ -86,6 +86,7 @@
   "gui.banksystem.bank_account_management_screen.delete_account_ask_popup_message": "Do you realy want to delete the bank account\n\"{account_number}\"?\nAll items will be lost.",
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Create new bank",
   "gui.banksystem.bank_account_management_screen.add_user": "Add user",
+  "gui.banksystem.bank_account_management_screen.must_keep_manager": "An account must always keep at least one user with Manage permission — the change was not applied.",
 
   "gui.banksystem.bank_upload_screen.inventory_name": "Bank Upload Inventory",
   "gui.banksystem.bank_upload_screen.connect_button": "Connect to Bank",
@@ -184,6 +185,7 @@
   "gui.banksystem.bank_account_selection_screen.title": "Bank Account Selection Screen",
   "gui.banksystem.bank_account_selection_screen.title_label": "Select a bank account",
   "gui.banksystem.bank_account_selection_screen.select_account_button": "Select Account",
+  "gui.banksystem.bank_account_selection_screen.insufficient_rights": "Insufficient rights — missing: {permissions}",
 
   "gui.banksystem.mod_settings_screen.open_button": "Mod Settings",
   "gui.banksystem.mod_settings_screen.open_button.tooltip": "Edit the BankSystem settings.json of the master server in-game (BankSystem admins only).",

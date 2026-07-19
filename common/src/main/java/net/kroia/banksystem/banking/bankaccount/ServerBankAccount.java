@@ -603,6 +603,75 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
 
 
+    /**
+     * Result of {@link #enforceManageInvariant(Map, boolean)}.
+     */
+    public enum ManageInvariantOutcome {
+        /** The proposed user set already satisfies the invariant; no mutation performed. */
+        OK,
+        /** No user held MANAGE; one retained user was auto-granted MANAGE (map mutated). */
+        PROMOTED,
+        /** The proposed set is empty; applying it would orphan the account — caller must refuse. */
+        REFUSED_ORPHAN
+    }
+
+    /**
+     * Enforces the "at least one MANAGE holder" invariant for a proposed complete user set
+     * (full-REPLACE semantics), for NON-personal accounts only.
+     * <p>
+     * Personal accounts ({@code hasOwner == true}) are always {@link ManageInvariantOutcome#OK}:
+     * the personal bank owner implicitly holds MANAGE and can never be removed, so no promotion
+     * is needed regardless of the proposed set.
+     * <p>
+     * For non-personal accounts:
+     * <ul>
+     *   <li>If {@code proposed} is empty → {@link ManageInvariantOutcome#REFUSED_ORPHAN}
+     *       (the caller must skip the user-set mutation so the account is not orphaned).</li>
+     *   <li>If any entry already holds MANAGE → {@link ManageInvariantOutcome#OK}.</li>
+     *   <li>Otherwise → {@link ManageInvariantOutcome#PROMOTED}: the MANAGE bit is added to the
+     *       deterministically-chosen retained user's mask (the map is mutated in place). The pick
+     *       is the retained user with the MOST set permission bits ({@link Integer#bitCount}),
+     *       tie-broken by lowest UUID.</li>
+     * </ul>
+     *
+     * @param proposed the complete proposed users→permission-mask map; mutated only on PROMOTED
+     * @param hasOwner  true if the account has a personal bank owner
+     * @return the outcome of the invariant check
+     */
+    public static ManageInvariantOutcome enforceManageInvariant(Map<User, Integer> proposed, boolean hasOwner) {
+        if (hasOwner) {
+            return ManageInvariantOutcome.OK; // Owner implicitly holds MANAGE and cannot be removed.
+        }
+        if (proposed == null || proposed.isEmpty()) {
+            return ManageInvariantOutcome.REFUSED_ORPHAN;
+        }
+        for (Integer mask : proposed.values()) {
+            if (mask != null && BankPermission.hasPermission(mask, BankPermission.MANAGE.getValue())) {
+                return ManageInvariantOutcome.OK;
+            }
+        }
+        // No retained user holds MANAGE — hand off to a deterministically chosen user.
+        Map.Entry<User, Integer> pick = null;
+        for (Map.Entry<User, Integer> entry : proposed.entrySet()) {
+            if (pick == null) {
+                pick = entry;
+                continue;
+            }
+            int entryBits = Integer.bitCount(entry.getValue() == null ? 0 : entry.getValue());
+            int pickBits = Integer.bitCount(pick.getValue() == null ? 0 : pick.getValue());
+            if (entryBits > pickBits) {
+                pick = entry;
+            } else if (entryBits == pickBits
+                    && entry.getKey().getUUID().compareTo(pick.getKey().getUUID()) < 0) {
+                pick = entry;
+            }
+        }
+        int promotedMask = (pick.getValue() == null ? 0 : pick.getValue()) | BankPermission.MANAGE.getValue();
+        proposed.put(pick.getKey(), promotedMask); // Key already present → value update, not structural.
+        return ManageInvariantOutcome.PROMOTED;
+    }
+
+
 
 
     @Override

@@ -42,6 +42,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private static final Component CREATE_NEW_BANK = Component.translatable(PREFIX+"create_new_bank");
     private static final Component ADD_USER = Component.translatable(PREFIX+"add_user");
+    private static final Component MUST_KEEP_MANAGER = Component.translatable(PREFIX+"must_keep_manager");
 
     private static class ItemViewButton extends Button{
 
@@ -367,6 +368,20 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         {
             BankUserData userData = userWidget.getUserData();
             setUsers.put(userData.userUUID, userData.permissions);
+        }
+
+        // Advisory pre-guard: a non-personal account must always keep at least one user (with
+        // MANAGE). Removing the last user would orphan the account, so block the save locally.
+        // A non-empty-but-no-MANAGE set is allowed through — the master auto-promotes a user and
+        // the refreshed account data reflects the new manager. Personal accounts are unaffected
+        // (the owner implicitly holds MANAGE and is never in this widget list).
+        if(personalBankOwnerData == null && setUsers.isEmpty())
+        {
+            if(minecraft != null && minecraft.player != null)
+            {
+                minecraft.player.sendSystemMessage(MUST_KEEP_MANAGER);
+            }
+            return;
         }
 
         String accountName = null;

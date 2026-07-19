@@ -86,6 +86,7 @@
   "gui.banksystem.bank_account_management_screen.delete_account_ask_popup_message": "你确定要删除银行账户\n\"{account_number}\" 吗？\n所有物品将会丢失。",
   "gui.banksystem.bank_account_management_screen.create_new_bank": "创建新银行账户",
   "gui.banksystem.bank_account_management_screen.add_user": "添加用户",
+  "gui.banksystem.bank_account_management_screen.must_keep_manager": "账户必须始终保留至少一名具有管理权限的用户——更改未被应用。",
 
   "gui.banksystem.bank_upload_screen.inventory_name": "银行上传储物栏",
   "gui.banksystem.bank_upload_screen.connect_button": "连接至银行",
@@ -183,6 +184,7 @@
   "gui.banksystem.bank_account_selection_screen.title": "银行账户选择",
   "gui.banksystem.bank_account_selection_screen.title_label": "请选择一个银行账户",
   "gui.banksystem.bank_account_selection_screen.select_account_button": "选择账户",
+  "gui.banksystem.bank_account_selection_screen.insufficient_rights": "权限不足 — 缺少：{permissions}",
 
   "gui.banksystem.mod_settings_screen.open_button": "Mod Settings",
   "gui.banksystem.mod_settings_screen.open_button.tooltip": "Edit the BankSystem settings.json of the master server in-game (BankSystem admins only).",

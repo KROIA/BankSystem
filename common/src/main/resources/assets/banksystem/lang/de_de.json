@@ -86,6 +86,7 @@
   "gui.banksystem.bank_account_management_screen.delete_account_ask_popup_message": "Willst du wirklich das Konto:\n\"{account_number}\" löschen?\nAlle Items gehen dabei verloren.",
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Bankkonto eröffnen",
   "gui.banksystem.bank_account_management_screen.add_user": "Benutzer hinzufügen",
+  "gui.banksystem.bank_account_management_screen.must_keep_manager": "Ein Konto muss immer mindestens einen Benutzer mit Verwalten-Berechtigung behalten — die Änderung wurde nicht übernommen.",
 
   "gui.banksystem.bank_upload_screen.inventory_name": "Bank Upload Inventar",
   "gui.banksystem.bank_upload_screen.connect_button": "Mit Bank verbinden",
@@ -183,6 +184,7 @@
   "gui.banksystem.bank_account_selection_screen.title": "Bankkonto Auswahl",
   "gui.banksystem.bank_account_selection_screen.title_label": "Wähle ein Bankkonto aus",
   "gui.banksystem.bank_account_selection_screen.select_account_button": "Wähle Bankkonto",
+  "gui.banksystem.bank_account_selection_screen.insufficient_rights": "Unzureichende Rechte — fehlend: {permissions}",
 
   "gui.banksystem.mod_settings_screen.open_button": "Mod Settings",
   "gui.banksystem.mod_settings_screen.open_button.tooltip": "Edit the BankSystem settings.json of the master server in-game (BankSystem admins only).",

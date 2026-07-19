@@ -86,6 +86,7 @@
   "gui.banksystem.bank_account_management_screen.delete_account_ask_popup_message": "Wötsch du würkli s Konto:\n\"{account_number}\" löschä?\nAlle Items gönd debi verlore.",
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Bankkonto eröffne",
   "gui.banksystem.bank_account_management_screen.add_user": "Benutzer hinzuefüege",
+  "gui.banksystem.bank_account_management_screen.must_keep_manager": "Es Konto mues immer mindeschtens ein Benutzer mit Verwalte-Berächtigung bhalte — d'Änderig isch nöd übernoh worde.",
 
   "gui.banksystem.bank_upload_screen.inventory_name": "Bank Upload Inventar",
   "gui.banksystem.bank_upload_screen.connect_button": "Mit Bank verbindä",
@@ -183,6 +184,7 @@
   "gui.banksystem.bank_account_selection_screen.title": "Bankkonto Uswahl",
   "gui.banksystem.bank_account_selection_screen.title_label": "Wähl ä Bankkonto us",
   "gui.banksystem.bank_account_selection_screen.select_account_button": "Wähl ä Konto",
+  "gui.banksystem.bank_account_selection_screen.insufficient_rights": "Ungenügendi Rächt — fählt: {permissions}",
 
   "gui.banksystem.mod_settings_screen.open_button": "Mod Settings",
   "gui.banksystem.mod_settings_screen.open_button.tooltip": "Edit the BankSystem settings.json of the master server in-game (BankSystem admins only).",

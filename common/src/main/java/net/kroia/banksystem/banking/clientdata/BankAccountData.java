@@ -66,6 +66,21 @@ public class BankAccountData {
         return texts;
     }
 
+    /**
+     * Returns the raw permission bit mask the given user holds on this account.
+     * The personal-bank owner implicitly holds all permissions; a non-member returns {@code 0}.
+     *
+     * @param userUUID the user to query
+     * @return the held permission bits (0 if the user is not a member of this account)
+     */
+    public int getPermissions(UUID userUUID) {
+        if (userUUID == null) return 0;
+        BankUserData user = users.get(userUUID);
+        if (user != null) return user.permissions;
+        return (personalBankOwnerData != null && personalBankOwnerData.userUUID().equals(userUUID))
+                ? BankPermission.getAllPermissions() : 0;
+    }
+
     public boolean hasPermission(UUID userUUID, int permission)
     {
         if (userUUID == null || permission < 0) {
