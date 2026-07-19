@@ -173,6 +173,7 @@
 
   "gui.banksystem.bank_user_widget.permission_edit_button": "Edit Permissions",
   "gui.banksystem.bank_user_widget.remove_button": "X",
+  "gui.banksystem.bank_user_widget.cannot_remove_last_manager": "This account must always keep at least one user with Manage permission.",
   "gui.banksystem.bank_user_widget.permission_screen": "Permissions",
   "gui.banksystem.bank_user_widget.permission_deposit": "Allowed to deposit",
   "gui.banksystem.bank_user_widget.permission_withdraw": "Allowed to withdraw",

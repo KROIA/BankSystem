@@ -172,6 +172,7 @@
 
   "gui.banksystem.bank_user_widget.permission_edit_button": "Berechtigung bearbeitä",
   "gui.banksystem.bank_user_widget.remove_button": "X",
+  "gui.banksystem.bank_user_widget.cannot_remove_last_manager": "Das Konto mues immer mindeschtens ei Benutzer mit Verwaltä-Rächt bhaltä.",
   "gui.banksystem.bank_user_widget.permission_screen": "Berechtigungä",
   "gui.banksystem.bank_user_widget.permission_deposit": "Erlaubt izahlig",
   "gui.banksystem.bank_user_widget.permission_withdraw": "Erlaubt abhebä",

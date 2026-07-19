@@ -529,6 +529,20 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             userElementListView.removeChild(userWidget);
             bankUserWidgets.remove(userWidget.getUserData().userUUID);
         }
+        refreshRemoveButtonStates();
+    }
+
+    /**
+     * Re-evaluates whether each user row's remove-X button should be clickable. Removing the last
+     * user of a non-personal account would orphan it, so in that single case the (only) row's
+     * remove button is disabled. Personal accounts and accounts with >=2 users keep all remove
+     * buttons enabled. Must be called after every mutation of {@link #bankUserWidgets}.
+     */
+    private void refreshRemoveButtonStates() {
+        boolean lockLastUser = (personalBankOwnerData == null) && (bankUserWidgets.size() == 1);
+        for (BankUserWidget w : bankUserWidgets.values()) {
+            w.setRemoveButtonEnabled(!lockLastUser);
+        }
     }
     private void onCreateNewBank(ItemStack item)
     {
@@ -570,6 +584,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                         BankUserWidget userWidget = new BankUserWidget(bankUserData, toRemoveUserWidgets::add, canManage, this);
                         bankUserWidgets.put(userData.userUUID(), userWidget);
                         userElementListView.addChild(userWidget);
+                        refreshRemoveButtonStates();
                     });
             List<UserData> userDataList = new ArrayList<>(bankManagerData.userMapData().userMap().values().stream().toList());
             // remove already added users
@@ -663,6 +678,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                 bankUserWidgets.remove(widget.getUserData().userUUID);
             }
             toRemoveUserWidgets.clear();
+            refreshRemoveButtonStates();
         }
         if(lastTickCount > 20)
         {

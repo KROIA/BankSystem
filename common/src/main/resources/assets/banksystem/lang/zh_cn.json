@@ -172,6 +172,7 @@
 
   "gui.banksystem.bank_user_widget.permission_edit_button": "编辑权限",
   "gui.banksystem.bank_user_widget.remove_button": "X",
+  "gui.banksystem.bank_user_widget.cannot_remove_last_manager": "此账户必须始终保留至少一位拥有管理权限的用户。",
   "gui.banksystem.bank_user_widget.permission_screen": "权限设置",
   "gui.banksystem.bank_user_widget.permission_deposit": "允许存款",
   "gui.banksystem.bank_user_widget.permission_withdraw": "允许取款",
