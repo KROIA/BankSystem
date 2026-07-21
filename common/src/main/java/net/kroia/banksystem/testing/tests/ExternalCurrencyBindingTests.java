@@ -78,11 +78,19 @@ public class ExternalCurrencyBindingTests extends TestSuite {
     @Override
     public void registerTests() {
         addTest("round_trip_bind_deposit_withdraw", this::testRoundTrip);
-        addTest("locked_balance_protocol_no_external_write", this::testLockedBalanceProtocol);
-        addTest("drift_clamp_when_external_drops_below_locked", this::testDriftClamp);
+        addTest("locked_balance_transactional_protocol", this::testLockedBalanceProtocol);
         addTest("overflow_guard_deposit_returns_failed_overflow", this::testOverflowGuard);
         addTest("provider_unavailable_degrades_reads_and_writes", this::testProviderUnavailable);
         addTest("shared_personal_ref_mismatch_rejected", this::testSharedPersonalMismatch);
+        addTest("unbind_user_choice_keep_on_banksystem_or_provider", this::testUnbindUserChoice);
+        // Hardening pass (5 additional cases; see doc-comment at each method):
+        addTest("default_slot_seeding_money_plus_provider_currency", this::testDefaultSlotSeeding);
+        addTest("bind_preserves_locked_balance_into_binding_row", this::testBindPreservesLocked);
+        addTest("bind_overflow_leaves_local_state_untouched", this::testBindOverflowAtomicity);
+        addTest("withdraw_refused_when_external_says_no", this::testWithdrawRefusedByExternal);
+        addTest("membership_sync_propagates_to_external_account", this::testMembershipSyncPropagates);
+        // Cascade cleanup must run LAST: it deletes the shared testAccountNr, which would
+        // strand any subsequent test that references it.
         addTest("cascade_cleanup_on_account_and_bank_removal", this::testCascadeCleanup);
     }
 
@@ -172,20 +180,27 @@ public class ExternalCurrencyBindingTests extends TestSuite {
             manager.deleteBankAccount(testAccountNr);
             testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
         }
-        // Reset the stub last so a lingering registration doesn't reach into future suites.
-        StubCurrencyProvider.reset();
+        // Drop the stub from the live registry so it does NOT leak into the
+        // production binding UI once the test suite finishes.
+        StubCurrencyProvider.teardown();
         manager.removeUser(TEST_OWNER);
         manager.removeUser(TEST_MEMBER);
     }
 
     // -----------------------------------------------------------------------
     // 1. Round-trip: bind → external deposits show up → BankSystem writes propagate
+    //    (Task #33 v2.0.5: also tests auto-transfer of local balance on bind)
     // -----------------------------------------------------------------------
     private TestResult testRoundTrip() {
         if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
         perTestReset();
         IServerBankAccount account = manager.getBankAccount(testAccountNr);
         if (account == null) return fail("Test account missing");
+
+        // Pre-populate local balance (200) to test auto-transfer on bind.
+        ISyncServerBank bank = account.getBank(slotItemA);
+        if (bank == null) return fail("Bank slot A missing before bind");
+        bank.setBalance(200L);
 
         StubCurrencyProvider.create(STUB_KEY_A, /*shared=*/true, /*initialBalance=*/0L);
         ExternalAccountRef ref = new ExternalAccountRef(
@@ -195,15 +210,23 @@ public class ExternalCurrencyBindingTests extends TestSuite {
             return fail("bindExternalAccount returned " + bindStatus + " (expected SUCCESS)");
         }
 
-        ISyncServerBank bank = account.getBank(slotItemA);
-        if (bank == null) return fail("Bank slot A missing after bind");
-
-        // External-side back-door deposit: BankSystem must read it through.
+        // Auto-transfer: local 200 should now be on the external side, local zeroed.
         StubCurrencyProvider.StubAccount stub = StubCurrencyProvider.getAccount(STUB_KEY_A);
         if (stub == null) return fail("Stub account was not created");
+        if (stub.getBalance() != 200L) {
+            return fail("After bind with local=200, stub balance = " + stub.getBalance()
+                    + " (expected 200 from auto-transfer)");
+        }
+        if (bank.getBalance() != 200L) {
+            // Bank reads stub external balance after bind, should see 200.
+            return fail("After bind with auto-transfer, BankSystem getBalance() = "
+                    + bank.getBalance() + " (expected 200)");
+        }
+
+        // External-side back-door deposit: BankSystem must read it through.
         stub.setBalance(100L);
         if (bank.getBalance() != 100L) {
-            return fail("After external deposit of 100, BankSystem getBalance() = "
+            return fail("After external setBalance(100), BankSystem getBalance() = "
                     + bank.getBalance() + " (expected 100)");
         }
 
@@ -226,12 +249,16 @@ public class ExternalCurrencyBindingTests extends TestSuite {
             return fail("After BankSystem withdraw(30), stub balance = "
                     + stub.getBalance() + " (expected 120)");
         }
-        return pass("Round-trip: bind + external deposit + BankSystem deposit + BankSystem withdraw all consistent");
+        return pass("Round-trip: auto-transfer on bind + external deposit + BankSystem deposit + withdraw all consistent");
     }
 
     // -----------------------------------------------------------------------
-    // 2. Locked-balance protocol: lock is local, withdrawLocked hits external,
-    //    unlock is local.
+    // 2. Locked-balance transactional protocol (Task #33 v2.0.5+):
+    //    - lockAmount physically withdraws from external (whole-native portion);
+    //      row.lockedBalance holds the reserved amount.
+    //    - withdrawLocked is a local decrement — external was already reduced at
+    //      lock time, so the funds are "consumed" without touching external.
+    //    - unlockAmount deposits back to external + zeros out row.lockedBalance.
     // -----------------------------------------------------------------------
     private TestResult testLockedBalanceProtocol() {
         if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
@@ -250,19 +277,20 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         StubCurrencyProvider.StubAccount stub = StubCurrencyProvider.getAccount(STUB_KEY_A);
         if (stub == null) return fail("Stub account was not created");
 
-        // lockAmount(40) — external must NOT be touched.
+        // lockAmount(40) — external is physically decreased by 40 (transactional lock).
         BankStatus lockStatus = bank.lockAmount(40L);
         if (lockStatus != BankStatus.SUCCESS) return fail("lockAmount(40) returned " + lockStatus);
         if (bank.getBalance() != 60L)
-            return fail("Post-lock free balance = " + bank.getBalance() + " (expected 60)");
+            return fail("Post-lock free = " + bank.getBalance() + " (expected 60 — reads external)");
         if (bank.getLockedBalance() != 40L)
-            return fail("Post-lock locked = " + bank.getLockedBalance() + " (expected 40)");
+            return fail("Post-lock locked = " + bank.getLockedBalance() + " (expected 40 — from row)");
         if (bank.getTotalBalance() != 100L)
-            return fail("Post-lock total = " + bank.getTotalBalance() + " (expected 100)");
-        if (stub.getBalance() != 100L)
-            return fail("Post-lock stub balance = " + stub.getBalance() + " (expected 100 — lock is local only)");
+            return fail("Post-lock total = " + bank.getTotalBalance() + " (expected 100 — external + locked)");
+        if (stub.getBalance() != 60L)
+            return fail("Post-lock stub balance = " + stub.getBalance()
+                    + " (expected 60 — lockAmount physically withdrew 40 under the transactional protocol)");
 
-        // withdrawLocked(30) — external must decrease by 30, locked drops by 30.
+        // withdrawLocked(30) — external stays put (already reduced at lock time); locked -30.
         BankStatus wlStatus = bank.withdrawLocked(30L);
         if (wlStatus != BankStatus.SUCCESS) return fail("withdrawLocked(30) returned " + wlStatus);
         if (bank.getBalance() != 60L)
@@ -271,10 +299,11 @@ public class ExternalCurrencyBindingTests extends TestSuite {
             return fail("Post-withdrawLocked locked = " + bank.getLockedBalance() + " (expected 10)");
         if (bank.getTotalBalance() != 70L)
             return fail("Post-withdrawLocked total = " + bank.getTotalBalance() + " (expected 70)");
-        if (stub.getBalance() != 70L)
-            return fail("Post-withdrawLocked stub balance = " + stub.getBalance() + " (expected 70)");
+        if (stub.getBalance() != 60L)
+            return fail("Post-withdrawLocked stub balance = " + stub.getBalance()
+                    + " (expected 60 — external unchanged, funds were already withdrawn at lock time)");
 
-        // unlockAmount(10) — external must NOT be touched.
+        // unlockAmount(10) — external gains 10 back (returned from the reserved pool).
         BankStatus unlockStatus = bank.unlockAmount(10L);
         if (unlockStatus != BankStatus.SUCCESS) return fail("unlockAmount(10) returned " + unlockStatus);
         if (bank.getBalance() != 70L)
@@ -282,58 +311,10 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         if (bank.getLockedBalance() != 0L)
             return fail("Post-unlock locked = " + bank.getLockedBalance() + " (expected 0)");
         if (stub.getBalance() != 70L)
-            return fail("Post-unlock stub balance = " + stub.getBalance() + " (expected 70)");
-        return pass("Locked-balance protocol observed: lock/unlock local, withdrawLocked routed externally");
-    }
-
-    // -----------------------------------------------------------------------
-    // 3. Drift-clamp: external balance drops below locked → clamp to external
-    //    on the next read + WARN.
-    // -----------------------------------------------------------------------
-    private TestResult testDriftClamp() {
-        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
-        perTestReset();
-        IServerBankAccount account = manager.getBankAccount(testAccountNr);
-        if (account == null) return fail("Test account missing");
-        BankAccountBindings bindings = BankAccountBindings.get();
-        if (bindings == null) return fail("BankAccountBindings backend is not available");
-
-        StubCurrencyProvider.create(STUB_KEY_A, true, 100L);
-        ExternalAccountRef ref = new ExternalAccountRef(
-                StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "Drift-Clamp", true);
-        BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, slotItemA, ref);
-        if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
-
-        ISyncServerBank bank = account.getBank(slotItemA);
-        if (bank == null) return fail("Bank slot A missing after bind");
-        StubCurrencyProvider.StubAccount stub = StubCurrencyProvider.getAccount(STUB_KEY_A);
-        if (stub == null) return fail("Stub account was not created");
-
-        BankStatus lockStatus = bank.lockAmount(80L);
-        if (lockStatus != BankStatus.SUCCESS) return fail("lockAmount(80) returned " + lockStatus);
-        if (bindings.getLocked(testAccountNr, slotItemA) != 80L) {
-            return fail("Pre-drift locked in binding row = "
-                    + bindings.getLocked(testAccountNr, slotItemA) + " (expected 80)");
-        }
-
-        // Player used the external mod's UI behind our back — stub drops to 20.
-        stub.setBalance(20L);
-
-        // Any read triggers the drift-clamp in ServerBank.resolveBound().
-        long postDriftFree = bank.getBalance();
-        long postDriftLockedFromBinding = bindings.getLocked(testAccountNr, slotItemA);
-
-        if (postDriftLockedFromBinding != 20L) {
-            return fail("Drift-clamp: binding row locked should be clamped to 20, got "
-                    + postDriftLockedFromBinding);
-        }
-        if (postDriftFree != 0L) {
-            return fail("Drift-clamp: post-clamp free = " + postDriftFree + " (expected 0)");
-        }
-        if (bank.getLockedBalance() != 20L) {
-            return fail("Drift-clamp: post-clamp locked = " + bank.getLockedBalance() + " (expected 20)");
-        }
-        return pass("Drift-clamp: locked clamped from 80 to 20 to match external, free = 0");
+            return fail("Post-unlock stub balance = " + stub.getBalance()
+                    + " (expected 70 — unlock deposits back to external)");
+        return pass("Transactional-lock protocol: lock physically withdraws external, withdrawLocked "
+                + "is local-only, unlock deposits back");
     }
 
     // -----------------------------------------------------------------------
@@ -578,5 +559,408 @@ public class ExternalCurrencyBindingTests extends TestSuite {
             manager.deleteBankAccount(freshAccountNr);
         }
         return pass("Cascade cleanup: account delete drops all its rows; removeBank drops only its slot");
+    }
+
+    // -----------------------------------------------------------------------
+    // 8. Unbind user choice: keepOnBankSystem vs keepOnProvider (Task #33 v2.0.5)
+    // -----------------------------------------------------------------------
+    private TestResult testUnbindUserChoice() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return fail("BankAccountBindings backend is not available");
+
+        // (a) keepOnBankSystem=true: recover all funds locally (ext + dust + locked).
+        StubCurrencyProvider.StubAccount stubA = StubCurrencyProvider.create(STUB_KEY_A, true, 0L);
+        ExternalAccountRef refA = new ExternalAccountRef(
+                StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "UnbindA", true);
+        BankStatus bindA = manager.bindExternalAccount(testAccountNr, slotItemA, refA);
+        if (bindA != BankStatus.SUCCESS) return fail("bind A returned " + bindA);
+
+        ISyncServerBank bankA = account.getBank(slotItemA);
+        if (bankA == null) return fail("Bank slot A missing after bind");
+
+        // Populate: deposit(100) then lockAmount(40). Under the transactional protocol,
+        // lock physically withdraws 40 from external, so: external=60, row.locked=40, total=100.
+        bankA.deposit(100L);
+        bankA.lockAmount(40L);
+        if (stubA.getBalance() != 60L) {
+            return fail("Pre-unbind A: stub balance = " + stubA.getBalance()
+                    + " (expected 60 — lockAmount(40) physically withdrew 40 under transactional protocol)");
+        }
+        if (bindings.getLocked(testAccountNr, slotItemA) != 40L) {
+            return fail("Pre-unbind A: locked in binding row = "
+                    + bindings.getLocked(testAccountNr, slotItemA) + " (expected 40)");
+        }
+
+        // Unbind with keepOnBankSystem=true → withdraw external (60), restore locked (40).
+        // Local: free=60, locked=40, total=100 preserved.
+        BankStatus unbindA = manager.unbindExternalAccount(testAccountNr, slotItemA, true);
+        if (unbindA != BankStatus.SUCCESS) return fail("unbind A returned " + unbindA);
+        if (bindings.getBinding(testAccountNr, slotItemA) != null) {
+            return fail("unbind A left binding row behind");
+        }
+        if (bankA.getBalance() != 60L) {
+            return fail("After unbind A (keepOnBankSystem=true), free = " + bankA.getBalance()
+                    + " (expected 60 — external held only free portion under transactional protocol)");
+        }
+        if (bankA.getLockedBalance() != 40L) {
+            return fail("After unbind A (keepOnBankSystem=true), locked = " + bankA.getLockedBalance()
+                    + " (expected 40)");
+        }
+        // Stub should be 0 (withdrew everything remaining externally).
+        if (stubA.getBalance() != 0L) {
+            return fail("After unbind A (keepOnBankSystem=true), stub balance = "
+                    + stubA.getBalance() + " (expected 0)");
+        }
+
+        // (b) keepOnBankSystem=false: deposit (dust + locked) back to external, accept fractional loss.
+        // Bind slot B with external starting at 0.
+        StubCurrencyProvider.StubAccount stubB = StubCurrencyProvider.create(STUB_KEY_B, true, 0L);
+        ExternalAccountRef refB = new ExternalAccountRef(
+                StubCurrencyProvider.PROVIDER_ID, STUB_KEY_B, "UnbindB", true);
+        BankStatus bindB = manager.bindExternalAccount(testAccountNr, slotItemB, refB);
+        if (bindB != BankStatus.SUCCESS) return fail("bind B returned " + bindB);
+
+        ISyncServerBank bankB = account.getBank(slotItemB);
+        if (bankB == null) return fail("Bank slot B missing after bind");
+
+        // Populate: deposit(200) → external=200. lockAmount(50) withdraws 50 from external
+        // under transactional protocol → external=150, row.locked=50, total=200.
+        bankB.deposit(200L);
+        bankB.lockAmount(50L);
+        if (stubB.getBalance() != 150L) {
+            return fail("Pre-unbind B: stub balance = " + stubB.getBalance()
+                    + " (expected 150 — lockAmount(50) physically withdrew 50 under transactional protocol)");
+        }
+        if (bindings.getLocked(testAccountNr, slotItemB) != 50L) {
+            return fail("Pre-unbind B: locked in binding row = "
+                    + bindings.getLocked(testAccountNr, slotItemB) + " (expected 50)");
+        }
+
+        // Unbind with keepOnBankSystem=false → external UNTOUCHED (free stays there), locked
+        // comes home as local locked, dust discarded. Depositing locked back to external
+        // would orphan the pending orders that reference it.
+        BankStatus unbindB = manager.unbindExternalAccount(testAccountNr, slotItemB, false);
+        if (unbindB != BankStatus.SUCCESS) return fail("unbind B returned " + unbindB);
+        if (bindings.getBinding(testAccountNr, slotItemB) != null) {
+            return fail("unbind B left binding row behind");
+        }
+        // Local free = 0 (dust=0, discarded).
+        if (bankB.getBalance() != 0L) {
+            return fail("After unbind B (keepOnBankSystem=false), free = " + bankB.getBalance()
+                    + " (expected 0)");
+        }
+        // Local locked = 50 (carried back home for pending orders).
+        if (bankB.getLockedBalance() != 50L) {
+            return fail("After unbind B (keepOnBankSystem=false), locked = " + bankB.getLockedBalance()
+                    + " (expected 50 — carried back for pending orders)");
+        }
+        // External stays at 150 — the free portion never moves during keepOnProvider unbind.
+        if (stubB.getBalance() != 150L) {
+            return fail("After unbind B (keepOnBankSystem=false), stub balance = "
+                    + stubB.getBalance() + " (expected 150 — external must not gain locked)");
+        }
+
+        return pass("Unbind user choice: keepOnBankSystem recovers everything locally, "
+                + "keepOnProvider leaves free on external and returns locked to local");
+    }
+
+    // =======================================================================
+    // Hardening pass — v2.0.5 late-stage additions covering the "hard-to-test"
+    // correctness questions that would otherwise be gameplay-only checks:
+    //   1. default-slot seeding (money + provider currency)
+    //   2. bind carrying locked balance over into the binding row
+    //   3. bind atomicity on FAILED_OVERFLOW
+    //   4. withdraw refused by external
+    //   5. membership sync propagation
+    // =======================================================================
+
+    /**
+     * H1. Default-slot seeding. {@link ServerBankManager#addDefaultBankSlots} must
+     * add the base {@code banksystem:money} slot plus one slot per available
+     * external-currency provider that declares a base-currency item. This is the
+     * shared code path exercised by both {@code /bank create} and personal-account
+     * creation on player join.
+     */
+    private TestResult testDefaultSlotSeeding() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        // Configure the stub to declare emerald as its base currency. reset() in the
+        // NEXT test's perTestReset will null this back out, so no cross-test leak.
+        StubCurrencyProvider.getInstance().setBaseCurrencyItemId("minecraft:emerald");
+
+        // Fresh account with NO slots — verifies the helper actually seeds them.
+        String helperAccountName = TEST_ACCOUNT_NAME + "_seed";
+        IServerBankAccount existing = manager.getBankAccountByName(helperAccountName);
+        if (existing != null) manager.deleteBankAccount(existing.getAccountNumber());
+        IServerBankAccount fresh = manager.createBankAccount(helperAccountName);
+        if (fresh == null) return fail("createBankAccount returned null");
+        int freshAccountNr = fresh.getAccountNumber();
+        try {
+            // Sanity: the account starts with no banks.
+            if (fresh.getAccountData().bankData.size() != 0) {
+                return fail("Fresh account has " + fresh.getAccountData().bankData.size()
+                        + " banks pre-seed (expected 0)");
+            }
+
+            ServerBankManager.addDefaultBankSlots(fresh);
+
+            ItemID moneyId = net.kroia.banksystem.minecraft.item.custom.money.MoneyItem.getItemID();
+            ItemID emeraldId = ItemIDManager.registerItemStackServerSide_direct(
+                    Items.EMERALD.getDefaultInstance());
+
+            if (fresh.getBank(moneyId) == null) {
+                return fail("addDefaultBankSlots did not seed the base money slot");
+            }
+            if (fresh.getBank(emeraldId) == null) {
+                return fail("addDefaultBankSlots did not seed the stub provider's base-currency "
+                        + "slot (emerald)");
+            }
+            if (!manager.isItemIDAllowed(emeraldId)) {
+                return fail("addDefaultBankSlots did not allowlist the stub provider's "
+                        + "base-currency item");
+            }
+
+            // Idempotence: calling it a second time is a no-op (createBank short-circuits
+            // on existing keys, allowItemID is set-add). Balance stays 0.
+            fresh.getBank(emeraldId).setBalance(42L);
+            ServerBankManager.addDefaultBankSlots(fresh);
+            if (fresh.getBank(emeraldId).getBalance() != 42L) {
+                return fail("addDefaultBankSlots second call clobbered emerald balance "
+                        + "(got " + fresh.getBank(emeraldId).getBalance() + ", expected 42)");
+            }
+        } finally {
+            manager.deleteBankAccount(freshAccountNr);
+        }
+        return pass("Default-slot seeding: money + provider-declared item slot added, allowlist "
+                + "updated, second call is idempotent");
+    }
+
+    /**
+     * H2. Bind carries local locked balance into the binding row (v2.0.5 refinement).
+     * Locked funds represent pending orders that reference the local slot — bind must
+     * preserve them in {@link BindingRow#lockedBalance()} rather than losing them or
+     * refusing the bind.
+     */
+    private TestResult testBindPreservesLocked() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return fail("BankAccountBindings backend is not available");
+
+        // Populate local: free=80, locked=30 (total 110).
+        ISyncServerBank bank = account.getBank(slotItemA);
+        if (bank == null) return fail("Bank slot A missing");
+        bank.setBalance(80L);
+        BankStatus lockStatus = bank.lockAmount(30L);
+        if (lockStatus != BankStatus.SUCCESS) return fail("lockAmount(30) returned " + lockStatus);
+        if (bank.getBalance() != 50L)
+            return fail("Setup: expected free=50 after lockAmount, got " + bank.getBalance());
+        if (bank.getLockedBalance() != 30L)
+            return fail("Setup: expected locked=30, got " + bank.getLockedBalance());
+
+        StubCurrencyProvider.StubAccount stub = StubCurrencyProvider.create(STUB_KEY_A, true, 0L);
+        ExternalAccountRef ref = new ExternalAccountRef(
+                StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "LockedBind", true);
+        BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, slotItemA, ref);
+        if (bindStatus != BankStatus.SUCCESS) {
+            return fail("bind returned " + bindStatus + " (expected SUCCESS — locked funds must "
+                    + "not block binding)");
+        }
+
+        // Only local FREE (50) transferred to external; locked (30) carried into the row.
+        if (stub.getBalance() != 50L) {
+            return fail("After bind: stub balance = " + stub.getBalance()
+                    + " (expected 50 — only free portion should transfer)");
+        }
+        if (bindings.getLocked(testAccountNr, slotItemA) != 30L) {
+            return fail("After bind: BindingRow.lockedBalance = "
+                    + bindings.getLocked(testAccountNr, slotItemA)
+                    + " (expected 30 — must carry over from local)");
+        }
+        // Bound-slot view: free reads external (50), locked reads binding row (30).
+        if (bank.getBalance() != 50L) {
+            return fail("Bound-slot getBalance() = " + bank.getBalance() + " (expected 50)");
+        }
+        if (bank.getLockedBalance() != 30L) {
+            return fail("Bound-slot getLockedBalance() = " + bank.getLockedBalance()
+                    + " (expected 30)");
+        }
+
+        // Unbind (keepOnBankSystem=true) — everything comes home: free=50, locked=30.
+        BankStatus unbind = manager.unbindExternalAccount(testAccountNr, slotItemA, true);
+        if (unbind != BankStatus.SUCCESS) return fail("unbind returned " + unbind);
+        if (bank.getBalance() != 50L) {
+            return fail("After unbind: free = " + bank.getBalance() + " (expected 50)");
+        }
+        if (bank.getLockedBalance() != 30L) {
+            return fail("After unbind: locked = " + bank.getLockedBalance() + " (expected 30)");
+        }
+        return pass("Bind preserved locked=30 through the binding row; unbind restored it locally");
+    }
+
+    /**
+     * H3. Bind atomicity on FAILED_OVERFLOW. When {@code external.deposit} refuses the
+     * whole-native portion of the local free balance, bind must return FAILED_OVERFLOW
+     * WITHOUT touching local state — free, locked, and dust all remain as they were.
+     */
+    private TestResult testBindOverflowAtomicity() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return fail("BankAccountBindings backend is not available");
+
+        ISyncServerBank bank = account.getBank(slotItemA);
+        if (bank == null) return fail("Bank slot A missing");
+        // Local: free=100, locked=25 → total 125.
+        bank.setBalance(100L);
+        BankStatus lockStatus = bank.lockAmount(25L);
+        if (lockStatus != BankStatus.SUCCESS) return fail("lockAmount(25) returned " + lockStatus);
+        long preFree = bank.getBalance();
+        long preLocked = bank.getLockedBalance();
+
+        // Stub configured to reject any deposit above ceiling (matches Numismatics'
+        // Integer.MAX_VALUE cap — deposit-time overflow refusal).
+        StubCurrencyProvider.StubAccount stub = StubCurrencyProvider.create(STUB_KEY_A, true, 0L);
+        stub.setOverflowCeiling(50L); // any deposit > 50 fails
+        ExternalAccountRef ref = new ExternalAccountRef(
+                StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "BindOverflow", true);
+
+        BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, slotItemA, ref);
+        if (bindStatus != BankStatus.FAILED_OVERFLOW) {
+            return fail("bind returned " + bindStatus + " (expected FAILED_OVERFLOW — local free "
+                    + "100 exceeds stub ceiling 50)");
+        }
+        // No binding row committed.
+        if (bindings.getBinding(testAccountNr, slotItemA) != null) {
+            return fail("bind FAILED_OVERFLOW created a binding row (should not commit)");
+        }
+        // Local state untouched.
+        if (bank.getBalance() != preFree) {
+            return fail("After bind FAILED_OVERFLOW: free = " + bank.getBalance()
+                    + " (expected " + preFree + " — must not mutate on failure)");
+        }
+        if (bank.getLockedBalance() != preLocked) {
+            return fail("After bind FAILED_OVERFLOW: locked = " + bank.getLockedBalance()
+                    + " (expected " + preLocked + " — must not mutate on failure)");
+        }
+        if (stub.getBalance() != 0L) {
+            return fail("After bind FAILED_OVERFLOW: stub balance = " + stub.getBalance()
+                    + " (expected 0 — external must not mutate on failure)");
+        }
+        return pass("Bind FAILED_OVERFLOW: no row committed, local free/locked and external "
+                + "balance all unchanged");
+    }
+
+    /**
+     * H4. Withdraw refused by external. When the underlying mod's {@code withdraw}
+     * returns {@code false} (funds already spent through the mod's own UI, drift
+     * beyond the clamp, etc.), {@link ServerBank#withdraw} must surface a failure
+     * status without falsely debiting the local view.
+     */
+    private TestResult testWithdrawRefusedByExternal() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+
+        StubCurrencyProvider.StubAccount stub = StubCurrencyProvider.create(STUB_KEY_A, true, 100L);
+        ExternalAccountRef ref = new ExternalAccountRef(
+                StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "WithdrawRefusal", true);
+        BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, slotItemA, ref);
+        if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
+
+        ISyncServerBank bank = account.getBank(slotItemA);
+        if (bank == null) return fail("Bank slot A missing after bind");
+
+        // Player drained the external balance behind BankSystem's back (mod's own UI).
+        stub.setBalance(20L);
+
+        // Try to withdraw more than the external actually has.
+        BankStatus wd = bank.withdraw(50L);
+        if (wd == BankStatus.SUCCESS) {
+            return fail("withdraw(50) succeeded — should have been refused (external only holds 20)");
+        }
+        // External must be unchanged.
+        if (stub.getBalance() != 20L) {
+            return fail("Refused withdraw mutated external balance to " + stub.getBalance()
+                    + " (expected 20 — external unchanged on refusal)");
+        }
+        // The next getBalance() reads through the stub and reflects the drift down to 20.
+        if (bank.getBalance() != 20L) {
+            return fail("Post-refusal getBalance() = " + bank.getBalance()
+                    + " (expected 20 — drift read reflects current external)");
+        }
+        // A withdraw within the current external balance still works — degradation is per-op.
+        BankStatus wdSmall = bank.withdraw(15L);
+        if (wdSmall != BankStatus.SUCCESS) {
+            return fail("withdraw(15) returned " + wdSmall + " (expected SUCCESS — within budget)");
+        }
+        if (stub.getBalance() != 5L) {
+            return fail("After withdraw(15): stub balance = " + stub.getBalance() + " (expected 5)");
+        }
+        return pass("Withdraw refusal by external: BankSystem propagates failure, external state "
+                + "untouched, subsequent smaller withdraw still succeeds");
+    }
+
+    /**
+     * H5. Membership sync propagation. Calling {@link ExternalAccount#syncMembership}
+     * on the opened external account must update the provider's authoritative member
+     * set — the same code path Numismatics uses to keep BLAZE_BANKER trust lists in
+     * sync with BankSystem's per-account user set.
+     */
+    private TestResult testMembershipSyncPropagates() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        StubCurrencyProvider.StubAccount stub = StubCurrencyProvider.create(STUB_KEY_A, true, 0L);
+        ExternalAccountRef ref = new ExternalAccountRef(
+                StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "Membership", true);
+        BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, slotItemA, ref);
+        if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
+
+        // Initial state: empty membership.
+        if (!stub.currentMembers().isEmpty()) {
+            return fail("Stub started with " + stub.currentMembers().size()
+                    + " members (expected 0)");
+        }
+
+        // Sync a fresh set of 2 members through the ExternalAccount handle.
+        java.util.Set<UUID> membersA = new java.util.HashSet<>();
+        membersA.add(TEST_OWNER);
+        membersA.add(TEST_MEMBER);
+        net.kroia.banksystem.api.currency.ExternalCurrencyProvider provider =
+                BankSystemMod.getAPI().getCurrencyProvider(StubCurrencyProvider.PROVIDER_ID);
+        if (provider == null) return fail("Stub provider not registered");
+        net.kroia.banksystem.api.currency.ExternalAccount ext = provider.open(ref);
+        if (ext == null) return fail("Stub provider could not open ref");
+        ext.syncMembership(membersA);
+
+        java.util.Set<UUID> afterA = stub.currentMembers();
+        if (afterA.size() != 2 || !afterA.contains(TEST_OWNER) || !afterA.contains(TEST_MEMBER)) {
+            return fail("Sync A: stub members = " + afterA + " (expected {TEST_OWNER, TEST_MEMBER})");
+        }
+
+        // Second sync with a smaller set — the stub must REPLACE, not merge.
+        java.util.Set<UUID> membersB = new java.util.HashSet<>();
+        membersB.add(TEST_OWNER);
+        ext.syncMembership(membersB);
+
+        java.util.Set<UUID> afterB = stub.currentMembers();
+        if (afterB.size() != 1 || !afterB.contains(TEST_OWNER)) {
+            return fail("Sync B: stub members = " + afterB + " (expected {TEST_OWNER} — replace, "
+                    + "not merge)");
+        }
+        if (afterB.contains(TEST_MEMBER)) {
+            return fail("Sync B did not remove TEST_MEMBER (still present after replace)");
+        }
+        return pass("Membership sync: replace semantics observed, TEST_MEMBER removed on second "
+                + "sync as expected");
     }
 }

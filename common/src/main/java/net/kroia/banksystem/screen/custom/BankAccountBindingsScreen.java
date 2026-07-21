@@ -12,6 +12,7 @@ import net.kroia.banksystem.networking.currency.ListBindingsForAccountRequest;
 import net.kroia.banksystem.networking.currency.ListCurrencyProvidersRequest;
 import net.kroia.banksystem.networking.currency.UnbindExternalAccountRequest;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
+import net.kroia.banksystem.screen.uiElements.InfoPopupScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.ItemID;
@@ -68,9 +69,18 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     private static final String KEY_PICK_ACCOUNT = PREFIX + "pick_account";
     private static final String KEY_CONFIRM_BIND_TITLE = PREFIX + "confirm_bind_title";
     private static final String KEY_CONFIRM_BIND_BODY = PREFIX + "confirm_bind_body";
-    private static final String KEY_CONFIRM_BIND_NONZERO = PREFIX + "confirm_bind_nonzero";
-    private static final String KEY_CONFIRM_UNBIND_TITLE = PREFIX + "confirm_unbind_title";
-    private static final String KEY_CONFIRM_UNBIND_BODY = PREFIX + "confirm_unbind_body";
+    private static final String KEY_UNBIND_DIALOG_TITLE = PREFIX + "unbind_dialog.title";
+    private static final String KEY_UNBIND_DIALOG_MESSAGE = PREFIX + "unbind_dialog.message";
+    private static final String KEY_UNBIND_DIALOG_KEEP_ON_BANKSYSTEM = PREFIX + "unbind_dialog.keep_on_banksystem";
+    private static final String KEY_UNBIND_DIALOG_KEEP_ON_PROVIDER = PREFIX + "unbind_dialog.keep_on_provider";
+    private static final String KEY_UNBIND_DIALOG_KEEP_ON_PROVIDER_WARNING = PREFIX + "unbind_dialog.keep_on_provider.warning";
+    private static final String KEY_UNBIND_DIALOG_CANCEL = PREFIX + "unbind_dialog.cancel";
+    private static final String KEY_BIND_ERROR_TITLE = PREFIX + "bind_error.title";
+    private static final String KEY_BIND_ERROR_OVERFLOW = PREFIX + "bind_error.overflow";
+    private static final String KEY_BIND_ERROR_ITEM_MISMATCH = PREFIX + "bind_error.item_mismatch";
+    private static final String KEY_UNBIND_ERROR_TITLE = PREFIX + "unbind_error.title";
+    private static final String KEY_UNBIND_ERROR_OVERFLOW = PREFIX + "unbind_error.overflow";
+    private static final String KEY_UNBIND_ERROR_GENERIC = PREFIX + "unbind_error.generic";
     private static final String KEY_NO_PROVIDERS = PREFIX + "no_providers";
     private static final String KEY_PROVIDER_UNAVAILABLE = PREFIX + "provider_unavailable";
     private static final String KEY_REQUIRES_MANAGE = PREFIX + "requires_manage";
@@ -79,7 +89,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     private static final String KEY_STATUS_SUCCESS = PREFIX + "status.success";
     private static final String KEY_STATUS_INVALID_ACCOUNT = PREFIX + "status.invalid_account";
     private static final String KEY_STATUS_SHARED_MISMATCH = PREFIX + "status.shared_mismatch";
-    private static final String KEY_STATUS_NONZERO_BALANCE = PREFIX + "status.nonzero_balance";
+    private static final String KEY_STATUS_INVALID_REQUEST = PREFIX + "status.invalid_request";
     private static final String KEY_STATUS_EXTERNAL_UNAVAILABLE = PREFIX + "status.external_unavailable";
     private static final String KEY_STATUS_NO_MASTER = PREFIX + "status.no_master";
     private static final String KEY_STATUS_GENERIC_FAILURE = PREFIX + "status.generic_failure";
@@ -290,15 +300,17 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
      * Entry point for the "Bind..." button on a row. Walks through provider pick, account pick,
      * and confirmation dialog before firing the request. Skips step 1 when only one provider is
      * available; refuses to open at all when zero providers are available.
+     * <p>
+     * Auto-transfer: The server now auto-transfers any local free balance to external
+     * (Task #33 v2.0.5 refinement). No client-side balance check here — the server
+     * handles overflow / locked-balance refusal and returns the appropriate status.
      */
     private void beginBindFlow(BindingRow row) {
         if (!canManage) return;
-        if (row.bank.balance() != 0L || row.bank.lockedBalance() != 0L) {
-            showMessagePopup(Component.translatable(KEY_CONFIRM_BIND_NONZERO).getString());
-            return;
-        }
         if (availableProviders.isEmpty()) {
-            showMessagePopup(Component.translatable(KEY_NO_PROVIDERS).getString());
+            showInfoPopup(
+                    Component.translatable(KEY_BIND_ERROR_TITLE).getString(),
+                    Component.translatable(KEY_NO_PROVIDERS).getString());
             return;
         }
         if (availableProviders.size() == 1) {
@@ -309,6 +321,19 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     }
 
     private void openAccountPicker(BindingRow row, ListCurrencyProvidersRequest.ProviderInfo provider) {
+        // Client-side item-match pre-check: refuse instantly with a clear message rather than
+        // walking the user through the picker only to fail on the server. Server still enforces
+        // the same rule as defense-in-depth.
+        String providerCurrency = provider.baseCurrencyItemIdOrNull();
+        if (providerCurrency != null && !providerCurrency.equals(row.itemId.getName())) {
+            showInfoPopup(
+                    Component.translatable(KEY_BIND_ERROR_TITLE).getString(),
+                    Component.translatable(KEY_BIND_ERROR_ITEM_MISMATCH).getString()
+                            .replace("{item}", row.itemId.getName())
+                            .replace("{provider}", provider.displayName())
+                            .replace("{provider_currency}", providerCurrency));
+            return;
+        }
         boolean accountIsShared = accountData != null && accountData.personalBankOwnerData == null;
         AccountPickerScreen picker = new AccountPickerScreen(this, provider, accountIsShared,
                 ref -> confirmBind(row, provider, ref));
@@ -317,11 +342,6 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     }
 
     private void confirmBind(BindingRow row, ListCurrencyProvidersRequest.ProviderInfo provider, ExternalAccountRef ref) {
-        // Defense-in-depth balance check (server also enforces this).
-        if (row.bank.balance() != 0L || row.bank.lockedBalance() != 0L) {
-            showMessagePopup(Component.translatable(KEY_CONFIRM_BIND_NONZERO).getString());
-            return;
-        }
         String title = Component.translatable(KEY_CONFIRM_BIND_TITLE).getString();
         String body = Component.translatable(KEY_CONFIRM_BIND_BODY).getString()
                 .replace("{item}", row.itemId.getName())
@@ -333,7 +353,9 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
                 () -> BindExternalAccountRequest.sendRequest(row.accountNumber(), row.itemId, ref)
                         .thenAccept(status -> {
                             if (!isBankStatusSuccess(status)) {
-                                showMessagePopup(mapStatusToMessage(status));
+                                showInfoPopup(
+                                        Component.translatable(KEY_BIND_ERROR_TITLE).getString(),
+                                        mapBindStatusToMessage(status, row, provider));
                             }
                             refreshAll();
                         }),
@@ -350,25 +372,8 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
 
     private void beginUnbindFlow(BindingRow row, ExternalAccountRef ref) {
         if (!canManage) return;
-        String title = Component.translatable(KEY_CONFIRM_UNBIND_TITLE).getString();
-        String body = Component.translatable(KEY_CONFIRM_UNBIND_BODY).getString()
-                .replace("{item}", row.itemId.getName())
-                .replace("{provider}", ref.providerId())
-                .replace("{account}", ref.label().isEmpty() ? ref.accountKey() : ref.label());
-        AskPopupScreen popup = new AskPopupScreen(
-                this,
-                () -> UnbindExternalAccountRequest.sendRequest(row.accountNumber(), row.itemId)
-                        .thenAccept(status -> {
-                            if (!isBankStatusSuccess(status)) {
-                                showMessagePopup(mapStatusToMessage(status));
-                            }
-                            refreshAll();
-                        }),
-                () -> {},
-                title, body);
-        popup.setSize(420, 130);
-        popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFF70e815, 0xFFf22718);
-        Minecraft.getInstance().setScreen(popup);
+        UnbindChoiceDialog dialog = new UnbindChoiceDialog(this, row, ref);
+        Minecraft.getInstance().setScreen(dialog);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -379,29 +384,175 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
         return status == BankStatus.SUCCESS;
     }
 
-    private static String mapStatusToMessage(BankStatus status) {
+    /**
+     * Bind-response status → user-facing message with contextual filling. For the shared /
+     * item-mismatch overload of {@code FAILED_WRONG_INSTANCE_TYPE} we compare the slot's item
+     * against the provider's declared base currency to decide which of the two flavors to show —
+     * client-side item pre-check catches this case first anyway, so this branch is only hit when
+     * the provider's base-currency changed between provider-list fetch and bind, or when a
+     * mismatch snuck through some other path.
+     */
+    private static String mapBindStatusToMessage(BankStatus status, BindingRow row,
+                                                 ListCurrencyProvidersRequest.ProviderInfo provider) {
         if (status == null) return Component.translatable(KEY_STATUS_GENERIC_FAILURE).getString();
         return switch (status) {
             case SUCCESS -> Component.translatable(KEY_STATUS_SUCCESS).getString();
             case FAILED_NO_BANK -> Component.translatable(KEY_STATUS_INVALID_ACCOUNT).getString();
-            case FAILED_WRONG_INSTANCE_TYPE -> Component.translatable(KEY_STATUS_SHARED_MISMATCH).getString();
-            case FAILED_INVALID_ITEM_ID -> Component.translatable(KEY_STATUS_NONZERO_BALANCE).getString();
+            case FAILED_WRONG_INSTANCE_TYPE -> {
+                String providerCurrency = provider.baseCurrencyItemIdOrNull();
+                if (providerCurrency != null && row != null && !providerCurrency.equals(row.itemId.getName())) {
+                    yield Component.translatable(KEY_BIND_ERROR_ITEM_MISMATCH).getString()
+                            .replace("{item}", row.itemId.getName())
+                            .replace("{provider}", provider.displayName())
+                            .replace("{provider_currency}", providerCurrency);
+                }
+                yield Component.translatable(KEY_STATUS_SHARED_MISMATCH).getString();
+            }
+            case FAILED_OVERFLOW -> Component.translatable(KEY_BIND_ERROR_OVERFLOW).getString();
+            case FAILED_INVALID_ITEM_ID -> Component.translatable(KEY_STATUS_INVALID_REQUEST).getString();
             case FAILED_EXTERNAL_UNAVAILABLE -> Component.translatable(KEY_STATUS_EXTERNAL_UNAVAILABLE).getString();
             case FAILED_NO_MASTER_CONNECTION -> Component.translatable(KEY_STATUS_NO_MASTER).getString();
             default -> Component.translatable(KEY_STATUS_GENERIC_FAILURE).getString();
         };
     }
 
-    private void showMessagePopup(String message) {
-        AskPopupScreen popup = new AskPopupScreen(
-                this,
-                () -> {},
-                () -> {},
-                Component.translatable(KEY_STATUS_GENERIC_FAILURE).getString(),
-                message);
+    /**
+     * Unbind-response status → user-facing message. No item/provider context needed here — the
+     * failure modes are simpler than bind.
+     */
+    private static String mapUnbindStatusToMessage(BankStatus status) {
+        if (status == null) return Component.translatable(KEY_UNBIND_ERROR_GENERIC).getString();
+        return switch (status) {
+            case SUCCESS -> Component.translatable(KEY_STATUS_SUCCESS).getString();
+            case FAILED_NO_BANK -> Component.translatable(KEY_STATUS_INVALID_ACCOUNT).getString();
+            case FAILED_OVERFLOW -> Component.translatable(KEY_UNBIND_ERROR_OVERFLOW).getString();
+            case FAILED_EXTERNAL_UNAVAILABLE -> Component.translatable(KEY_STATUS_EXTERNAL_UNAVAILABLE).getString();
+            case FAILED_NO_MASTER_CONNECTION -> Component.translatable(KEY_STATUS_NO_MASTER).getString();
+            default -> Component.translatable(KEY_UNBIND_ERROR_GENERIC).getString() + " (" + status + ")";
+        };
+    }
+
+    /**
+     * Shows a single-button OK acknowledgment popup. Use this instead of {@link AskPopupScreen}
+     * for informational messages (errors, warnings) where the user is not being asked a Yes/No
+     * question.
+     */
+    private void showInfoPopup(String title, String message) {
+        InfoPopupScreen popup = new InfoPopupScreen(this, title, message);
         popup.setSize(420, 110);
-        popup.setColors(0xFF806040, 0xFF503020, 0xFF70e815, 0xFFf22718);
+        popup.setColors(0xFF806040, 0xFF503020, 0xFF70e815);
         Minecraft.getInstance().setScreen(popup);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Three-button unbind choice dialog
+    // ---------------------------------------------------------------------------------------
+
+    /**
+     * Custom 3-button dialog for the unbind flow (Task #33 v2.0.5 refinement).
+     * User chooses:
+     * - Keep on BankSystem (default)
+     * - Keep on <provider> (with fractional-loss warning)
+     * - Cancel
+     */
+    private class UnbindChoiceDialog extends BankSystemGuiScreen {
+        private final BankAccountBindingsScreen parent;
+        private final BindingRow row;
+        private final ExternalAccountRef ref;
+        private Label titleLabel;
+        private Label messageLabel;
+        private Label warningLabel;
+        private Button keepOnBankSystemButton;
+        private Button keepOnProviderButton;
+        private Button cancelButton;
+
+        UnbindChoiceDialog(BankAccountBindingsScreen parent, BindingRow row, ExternalAccountRef ref) {
+            super(Component.translatable(KEY_UNBIND_DIALOG_TITLE), parent);
+            this.parent = parent;
+            this.row = row;
+            this.ref = ref;
+
+            titleLabel = new Label(Component.translatable(KEY_UNBIND_DIALOG_TITLE).getString());
+            titleLabel.setAlignment(GuiElement.Alignment.CENTER);
+            addElement(titleLabel);
+
+            messageLabel = new Label(Component.translatable(KEY_UNBIND_DIALOG_MESSAGE).getString());
+            messageLabel.setAlignment(GuiElement.Alignment.CENTER);
+            addElement(messageLabel);
+
+            warningLabel = new Label(Component.translatable(KEY_UNBIND_DIALOG_KEEP_ON_PROVIDER_WARNING).getString());
+            warningLabel.setAlignment(GuiElement.Alignment.CENTER);
+            warningLabel.setTextColor(0xFFFFAA00);
+            warningLabel.setTextFontScale(0.8f);
+            addElement(warningLabel);
+
+            keepOnBankSystemButton = new Button(
+                    Component.translatable(KEY_UNBIND_DIALOG_KEEP_ON_BANKSYSTEM).getString(),
+                    () -> doUnbind(true));
+            addElement(keepOnBankSystemButton);
+
+            String providerLabel = Component.translatable(KEY_UNBIND_DIALOG_KEEP_ON_PROVIDER)
+                    .getString().replace("%s", ref.providerId());
+            keepOnProviderButton = new Button(providerLabel, () -> doUnbind(false));
+            addElement(keepOnProviderButton);
+
+            cancelButton = new Button(Component.translatable(KEY_UNBIND_DIALOG_CANCEL).getString(), this::onClose);
+            addElement(cancelButton);
+        }
+
+        private void doUnbind(boolean keepOnBankSystem) {
+            UnbindExternalAccountRequest.sendRequest(row.accountNumber(), row.itemId, keepOnBankSystem)
+                    .thenAccept(status -> {
+                        parent.refreshAll();
+                        if (!isBankStatusSuccess(status)) {
+                            // showInfoPopup sets the screen to the popup with parent as its parent;
+                            // don't call our own onClose() afterwards or it would replace the popup
+                            // with the plain parent screen before the user can dismiss it.
+                            parent.showInfoPopup(
+                                    Component.translatable(KEY_UNBIND_ERROR_TITLE).getString(),
+                                    mapUnbindStatusToMessage(status));
+                        } else {
+                            onClose();
+                        }
+                    });
+        }
+
+        @Override
+        protected void updateLayout(Gui gui) {
+            int padding = 10;
+            int spacing = 5;
+            int width = getWidth();
+            int height = getHeight();
+
+            int contentWidth = Math.min(width - 2 * padding, 400);
+            int x = (width - contentWidth) / 2;
+            int y = padding;
+
+            titleLabel.setBounds(x, y, contentWidth, 20);
+            y += 25;
+
+            messageLabel.setBounds(x, y, contentWidth, 15);
+            y += 20;
+
+            warningLabel.setBounds(x, y, contentWidth, 12);
+            y += 20;
+
+            int buttonWidth = (contentWidth - spacing) / 2;
+            int buttonHeight = 20;
+
+            keepOnBankSystemButton.setBounds(x, y, buttonWidth, buttonHeight);
+            keepOnProviderButton.setBounds(x + buttonWidth + spacing, y, buttonWidth, buttonHeight);
+            y += buttonHeight + spacing;
+
+            cancelButton.setBounds(x + (contentWidth - buttonWidth) / 2, y, buttonWidth, buttonHeight);
+        }
+
+        @Override
+        public void onClose() {
+            if (this.minecraft != null) {
+                this.minecraft.setScreen(parent);
+            }
+        }
     }
 
     // ---------------------------------------------------------------------------------------
@@ -642,7 +793,10 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
                     final ExternalAccountRef finalRef = ref;
                     b.setOnFallingEdge(() -> {
                         onPicked.accept(finalRef);
-                        onClose();
+                        // onPicked opens the confirmation dialog, which handles returning to the
+                        // parent screen on its own (both Yes and No buttons call setScreen(parent)).
+                        // Calling onClose() here would immediately replace the confirm dialog with
+                        // the parent before the user can interact with it (bug #3 root cause).
                     });
                     list.addChild(b);
                     shown++;

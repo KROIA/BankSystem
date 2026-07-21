@@ -231,6 +231,12 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private static final String CRAFT_PREFS_KEY = "bankTerminalCrafting";
     private static final String KEY_USE_BANK_ITEMS = "useBankItems";
     private static final String KEY_DEPOSIT_OUTPUT = "depositOutput";
+    /**
+     * customData key holding the player's last-selected account across ALL bank terminals.
+     * Preferred over the per-block, per-player selection stored on the terminal block entity
+     * so that opening any terminal restores the user's most recent choice.
+     */
+    private static final String KEY_LAST_ACCOUNT = "bankTerminalLastAccount";
     /** Guard so programmatic checkbox initialization does not echo a settings packet. */
     private boolean initializingCraftSettings = false;
     /** False while checkboxes change programmatically — suppresses preference writes. */
@@ -327,41 +333,46 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         addElement(inventoryView);
 
 
-        getBankManager().requestBankTerminalData(pMenu.getBlockPos()).thenAccept((bankTerminalData) -> {
-            setSelectedBankAccountNr(bankTerminalData.selectedBankAccount());
-
-            //userPermission = bankTerminalData.userPermission;
-
-            ghostsDirty = true;
-
-            if(selectedBankAccountNr > 0)
-            {
-                updateBankList();
-            }
-            else
-            {
-                getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID()).thenAccept(this::updateBankList);
-            }
-        });
-
-        // Fetch the player's GLOBAL crafting preference unconditionally on every
-        // screen open. Deliberately NOT gated on the terminal's per-block account
-        // selection: that value (BankTerminalBlockDataRequest.selectedBankAccount)
-        // is only ever written by item transfers, so it is 0 on any terminal the
-        // player never transferred through — gating the fetch on it made the
-        // preference appear per-block. The preference is applied once BOTH the
-        // fetch has landed AND an account is selected (whichever happens last —
-        // see applyCraftPreferenceIfReady, also triggered from
-        // setSelectedBankAccountNr when the personal-account fallback resolves).
+        // Initial account resolution + crafting-preference fetch. Both come from the
+        // player's GLOBAL customData (persisted server-side, follows the player across
+        // terminals and servers). The customData fetch is authoritative for account
+        // selection; only when no last-selected account is stored do we fall back to
+        // the per-block, per-player value on the terminal block entity, and finally to
+        // the personal account.
         getBankManager().getUserCustomData().thenAccept(customData ->
                 net.minecraft.client.Minecraft.getInstance().execute(() -> {
-                    if (!screenIsOpen || customData == null)
-                        return;
-                    var prefs = customData.getCompound(CRAFT_PREFS_KEY);
-                    savedCraftUseBankItems = prefs.getBoolean(KEY_USE_BANK_ITEMS);
-                    savedCraftDepositOutput = prefs.getBoolean(KEY_DEPOSIT_OUTPUT);
+                    if (!screenIsOpen) return;
+                    int lastAccount = 0;
+                    if (customData != null) {
+                        var prefs = customData.getCompound(CRAFT_PREFS_KEY);
+                        savedCraftUseBankItems = prefs.getBoolean(KEY_USE_BANK_ITEMS);
+                        savedCraftDepositOutput = prefs.getBoolean(KEY_DEPOSIT_OUTPUT);
+                        lastAccount = customData.getInt(KEY_LAST_ACCOUNT);
+                    }
                     craftPreferenceLoaded = true;
-                    applyCraftPreferenceIfReady();
+                    ghostsDirty = true;
+
+                    if (lastAccount > 0) {
+                        setSelectedBankAccountNr(lastAccount);
+                        // updateBankList falls back to the personal account if this
+                        // one no longer exists / the user lost access to it.
+                        updateBankList();
+                        applyCraftPreferenceIfReady();
+                    } else {
+                        // No user-scoped last selection — legacy fallback: read the
+                        // per-block, per-player value written by previous transfers.
+                        getBankManager().requestBankTerminalData(pMenu.getBlockPos()).thenAccept(btd ->
+                                net.minecraft.client.Minecraft.getInstance().execute(() -> {
+                                    if (!screenIsOpen) return;
+                                    setSelectedBankAccountNr(btd.selectedBankAccount());
+                                    if (selectedBankAccountNr > 0) {
+                                        updateBankList();
+                                    } else {
+                                        getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID())
+                                                .thenAccept(this::updateBankList);
+                                    }
+                                }));
+                    }
                 }));
     }
 
@@ -880,10 +891,25 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         latestAccountData = null;
         ghostsDirty = true;
         updateBankList();
+        saveLastAccountPreference(accountNumber);
         // Re-target the server-side crafting settings to the newly selected
         // account (permissions are re-validated there; the streamed bank data of
         // the new account re-enables/disables the checkboxes via updateBankList).
         if (useBankItemsCheckBox.isChecked() || autoDepositCheckBox.isChecked())
             onCraftingSettingsChanged();
+    }
+
+    /**
+     * Persists the user's last-selected account as a GLOBAL customData entry so any
+     * terminal opened next restores this choice. Fetch-modify-write so keys owned by
+     * other screens (crafting prefs, history chart settings) are not clobbered by a
+     * stale cached copy.
+     */
+    private void saveLastAccountPreference(int accountNumber) {
+        getBankManager().getUserCustomData().thenAccept(customData -> {
+            var data = customData != null ? customData : new net.minecraft.nbt.CompoundTag();
+            data.putInt(KEY_LAST_ACCOUNT, accountNumber);
+            getBankManager().updateUserCustomData(data);
+        });
     }
 }

@@ -230,7 +230,7 @@ public class MyMoneyMod {
 
 If you would rather not hard-import BankSystem, guard the call behind reflection or place it in a separate Architectury service. Re-registering with the same `providerId` is a "last-wins" replace — safe to call multiple times, useful for hot reload in dev.
 
-There is currently no `unregisterCurrencyProvider` primitive; once registered, the provider stays for the JVM lifetime. See [Section 13](#13-known-limitations-as-of-v205).
+Adapters that need to drop themselves — most commonly the in-game test suite's stub provider — can call `BankSystemMod.getAPI().unregisterCurrencyProvider(providerId)`. Real currency-mod adapters normally never need this and live for the JVM lifetime.
 
 ---
 
@@ -410,7 +410,6 @@ Never break existing bindings without translation. Users' savedata contains rows
 
 ## 13. Known limitations (as of v2.0.5)
 
-- **No `unregisterCurrencyProvider` primitive.** Once registered, a provider stays for the JVM lifetime. Re-registration with the same `providerId` is last-wins — that is the closest reachable "drop and restore" semantics.
 - **No push-based staleness invalidation.** The binding-management UI has a manual "Refresh" button. If your mod's own UI changes an account balance, BankSystem's **client-side** snapshot may be stale until the next refresh or the next BankSystem write. Server-side reads are always live via read-through.
 - **No cross-server binding migration.** A binding row references `(providerId, accountKey)`. If the same conceptual account has different `accountKey`s on two servers (e.g. a Numismatics account whose UUID differs across worlds), bindings do not transfer. Player must re-bind after migrating.
 

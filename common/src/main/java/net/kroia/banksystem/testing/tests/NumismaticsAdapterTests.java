@@ -36,7 +36,7 @@ import java.util.UUID;
  */
 public class NumismaticsAdapterTests extends TestSuite {
 
-    private static final UUID TEST_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000num");
+    private static final UUID TEST_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000034");
     private static final String TEST_OWNER_NAME = "NumismaticsTestOwner";
 
     private ServerBankManager manager;
@@ -92,6 +92,47 @@ public class NumismaticsAdapterTests extends TestSuite {
             if (bank != null) {
                 bank.setBalance(0);
             }
+        }
+        // Numismatics external state persists across sessions (backed by the world save).
+        // Zero the PLAYER account before each test so absolute-value assertions are stable.
+        // Failing to do this makes deposit(100) return 2147483700 when the account has
+        // accumulated balance from prior test runs.
+        zeroPlayerNumismaticsAccount();
+    }
+
+    /**
+     * Reflection helper: zeros the TEST_OWNER's Numismatics PLAYER account balance so
+     * every test starts from a clean external state. Silently no-ops if Numismatics is
+     * absent or its API isn't reachable — the test bodies still skip themselves in that
+     * case via {@code Platform.isModLoaded} checks.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void zeroPlayerNumismaticsAccount() {
+        if (!dev.architectury.platform.Platform.isModLoaded("numismatics")) return;
+        try {
+            Class<?> numismaticsClass = Class.forName("dev.ithundxr.createnumismatics.Numismatics");
+            Object bankManager = numismaticsClass.getField("BANK").get(null);
+            Class<?> managerClass = Class.forName("dev.ithundxr.createnumismatics.content.backend.GlobalBankManager");
+            Class<?> typeClass = Class.forName("dev.ithundxr.createnumismatics.content.backend.BankAccount$Type");
+            Object playerType = Enum.valueOf((Class<Enum>) typeClass, "PLAYER");
+            Object account = managerClass.getMethod("getOrCreateAccount", UUID.class, typeClass)
+                    .invoke(bankManager, TEST_OWNER, playerType);
+            if (account == null) return;
+            Class<?> accountClass = Class.forName("dev.ithundxr.createnumismatics.content.backend.BankAccount");
+            // BankAccount exposes setBalance(int); use it to force the balance to 0.
+            try {
+                accountClass.getMethod("setBalance", int.class).invoke(account, 0);
+            } catch (NoSuchMethodException nsme) {
+                // Alternative: withdraw everything via subtractFromBalance(int)
+                java.lang.reflect.Method getBalance = accountClass.getMethod("getBalance");
+                int cur = (int) getBalance.invoke(account);
+                if (cur > 0) {
+                    accountClass.getMethod("subtractFromBalance", int.class).invoke(account, cur);
+                }
+            }
+        } catch (Exception e) {
+            // Best-effort — if the API shape changed, tests will still catch the regression
+            // via their absolute-value assertions and report a clear failure.
         }
     }
 
@@ -218,26 +259,35 @@ public class NumismaticsAdapterTests extends TestSuite {
 
             bindings.bind(testAccountNr, slotItem, personalRef);
 
-            // Set balance near max
-            bank.setBalance(Integer.MAX_VALUE - 10);
+            // Numismatics stores spurs as a signed int (cap = Integer.MAX_VALUE spurs).
+            // BankSystem exposes the balance in BS units where 100 BS units = 1 spur
+            // (SCALE_FACTOR = 100 in NumismaticsAccount). To push the account to
+            // (MAX_SPURS - 10) we need (MAX_SPURS - 10) * 100 BS units, and to trigger
+            // overflow the deposit must be at least 11 spurs = 1100 BS units.
+            long nearMaxBSUnits = ((long) (Integer.MAX_VALUE - 10)) * 100L;
+            bank.setBalance(nearMaxBSUnits);
             long balance = bank.getBalance();
-            if (balance != Integer.MAX_VALUE - 10) {
-                return fail("Failed to set balance near max");
+            if (balance != nearMaxBSUnits) {
+                return fail("Failed to set balance near max: expected " + nearMaxBSUnits
+                        + ", got " + balance);
             }
 
             // Try to deposit 20 — should fail (would overflow)
-            BankStatus depositStatus = bank.deposit(20);
+            // Deposit 1100 BS units = 11 spurs. External is (MAX-10) spurs, so this would
+            // require MAX+1 spurs — Numismatics's 32-bit cap must refuse.
+            BankStatus depositStatus = bank.deposit(1100L);
             if (depositStatus == BankStatus.SUCCESS) {
                 return fail("Deposit should have failed due to overflow");
             }
 
             // Balance should be unchanged
             long balanceAfter = bank.getBalance();
-            if (balanceAfter != Integer.MAX_VALUE - 10) {
-                return fail("Balance changed after failed overflow deposit");
+            if (balanceAfter != nearMaxBSUnits) {
+                return fail("Balance changed after failed overflow deposit: expected "
+                        + nearMaxBSUnits + ", got " + balanceAfter);
             }
 
-            return pass("Overflow guard prevented deposit above Integer.MAX_VALUE");
+            return pass("Overflow guard prevented deposit above Numismatics's 32-bit spur cap");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }

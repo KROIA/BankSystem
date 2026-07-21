@@ -26,10 +26,11 @@ import java.util.concurrent.CompletableFuture;
  */
 public class UnbindExternalAccountRequest extends BankSystemGenericRequest<UnbindExternalAccountRequest.InputData, UnbindExternalAccountRequest.OutputData> {
 
-    public record InputData(int accountId, ItemID itemId) {
+    public record InputData(int accountId, ItemID itemId, boolean keepOnBankSystem) {
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.INT, InputData::accountId,
                 ItemID.STREAM_CODEC, InputData::itemId,
+                ByteBufCodecs.BOOL, InputData::keepOnBankSystem,
                 InputData::new
         );
     }
@@ -44,13 +45,18 @@ public class UnbindExternalAccountRequest extends BankSystemGenericRequest<Unbin
     /**
      * Client-side entry point.
      *
+     * @param accountId         BankSystem account number
+     * @param itemId            item slot on the account
+     * @param keepOnBankSystem  {@code true} → recover all funds locally;
+     *                          {@code false} → return funds to external with
+     *                          fractional-dust loss accepted
      * @return future completing with the {@link BankStatus} returned by the master. On transport
      *         failure the future completes with {@link BankStatus#FAILED_NO_MASTER_CONNECTION}.
      */
-    public static CompletableFuture<BankStatus> sendRequest(int accountId, ItemID itemId) {
+    public static CompletableFuture<BankStatus> sendRequest(int accountId, ItemID itemId, boolean keepOnBankSystem) {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         BankSystemNetworking.UNBIND_EXTERNAL_ACCOUNT_REQUEST
-                .sendRequestToServer(new InputData(accountId, itemId))
+                .sendRequestToServer(new InputData(accountId, itemId, keepOnBankSystem))
                 .whenComplete((response, ex) -> {
                     if (ex != null || response == null || response.status == null) {
                         future.complete(BankStatus.FAILED_NO_MASTER_CONNECTION);
@@ -96,7 +102,7 @@ public class UnbindExternalAccountRequest extends BankSystemGenericRequest<Unbin
         if (!(bankManager instanceof ServerBankManager sbm)) {
             return CompletableFuture.completedFuture(new OutputData(BankStatus.FAILED_EXTERNAL_UNAVAILABLE));
         }
-        BankStatus status = sbm.unbindExternalAccount(input.accountId, input.itemId);
+        BankStatus status = sbm.unbindExternalAccount(input.accountId, input.itemId, input.keepOnBankSystem);
         return CompletableFuture.completedFuture(new OutputData(status != null ? status : BankStatus.FAILED_EXTERNAL_UNAVAILABLE));
     }
 

@@ -163,6 +163,28 @@ public class BankAccountBindings {
     }
 
     /**
+     * Overwrites the sub-native-unit dust balance for the given slot. Negative
+     * values are clamped to zero. No-op if the slot is unbound.
+     */
+    public void setDust(int accountId, @NotNull ItemID itemId, long newAmount) {
+        BindingRow row = getBinding(accountId, itemId);
+        if (row == null) return;
+        long clamped = Math.max(0L, newAmount);
+        if (clamped != row.dustBalance()) {
+            row.setDustBalance(clamped);
+            dirty = true;
+        }
+    }
+
+    /**
+     * Convenience accessor: dust for the given slot, or 0 when unbound.
+     */
+    public long getDust(int accountId, @NotNull ItemID itemId) {
+        BindingRow row = getBinding(accountId, itemId);
+        return row == null ? 0L : row.dustBalance();
+    }
+
+    /**
      * Lists every binding row belonging to the given account. Returned list is
      * a defensive copy — safe to iterate while mutations happen.
      */

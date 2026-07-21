@@ -106,4 +106,21 @@ public interface ExternalCurrencyProvider {
      *         with no features is not very useful).
      */
     @NotNull Set<ProviderFeature> features();
+
+    /**
+     * Resource-location string (e.g. {@code "numismatics:spur"}) of the item this
+     * provider is authoritative for. BankSystem uses this to prevent semantically
+     * nonsensical bindings — e.g. binding a diamond slot to Numismatics, which
+     * would credit spur deposits to the diamond slot.
+     * <p>
+     * Return {@code null} when the provider is not tied to a single item (e.g.
+     * Lightman's Currency, whose primary chain is config-driven and can vary).
+     * With {@code null}, BankSystem accepts any item and the caller is responsible
+     * for the sanity of the pairing.
+     *
+     * @return the item id string, or {@code null} to opt out of item validation.
+     */
+    default @Nullable String getBaseCurrencyItemId() {
+        return null;
+    }
 }

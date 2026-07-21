@@ -68,6 +68,13 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
      */
     private volatile boolean available = true;
 
+    /**
+     * Optional resource-location string returned from {@link #getBaseCurrencyItemId()}.
+     * Defaults to {@code null} (item validation opt-out). Tests exercising the
+     * auto-seed / item-match code paths set this to a real vanilla item id.
+     */
+    private volatile @Nullable String baseCurrencyItemId = null;
+
     private StubCurrencyProvider() {}
 
     // -----------------------------------------------------------------------
@@ -123,9 +130,24 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
     public static void reset() {
         INSTANCE.accounts.clear();
         INSTANCE.available = true;
+        INSTANCE.baseCurrencyItemId = null;
         // Re-register self so BankSystemMod.getAPI() knows about the fresh
         // instance state. registerCurrencyProvider is idempotent by providerId.
         BankSystemMod.getAPI().registerCurrencyProvider(INSTANCE);
+    }
+
+    /**
+     * Suite-level teardown: drops the stub from the live provider registry and
+     * clears its state. Must be called from {@code teardown()} of every test
+     * suite that used {@link #reset()} — otherwise the stub (and any accounts
+     * the last test left behind) leaks into the production binding UI for the
+     * rest of the JVM session.
+     */
+    public static void teardown() {
+        INSTANCE.accounts.clear();
+        INSTANCE.baseCurrencyItemId = null;
+        INSTANCE.available = false;
+        BankSystemMod.getAPI().unregisterCurrencyProvider(PROVIDER_ID);
     }
 
     /**
@@ -137,6 +159,23 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
      */
     public void setAvailable(boolean available) {
         this.available = available;
+    }
+
+    /**
+     * Test-only setter for {@link #getBaseCurrencyItemId()}. Pass a vanilla
+     * item id like {@code "minecraft:emerald"} to make the stub advertise a
+     * base currency for the auto-seed / item-match tests, or {@code null} to
+     * revert to the "no base currency declared" default.
+     *
+     * @param itemId resource-location string or {@code null}.
+     */
+    public void setBaseCurrencyItemId(@Nullable String itemId) {
+        this.baseCurrencyItemId = itemId;
+    }
+
+    @Override
+    public @Nullable String getBaseCurrencyItemId() {
+        return baseCurrencyItemId;
     }
 
     // -----------------------------------------------------------------------

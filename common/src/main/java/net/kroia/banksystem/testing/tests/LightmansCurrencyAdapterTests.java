@@ -39,7 +39,7 @@ import java.util.UUID;
  */
 public class LightmansCurrencyAdapterTests extends TestSuite {
 
-    private static final UUID TEST_OWNER = UUID.fromString("00000000-0000-0000-0000-0000000000lc");
+    private static final UUID TEST_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000036");
     private static final String TEST_OWNER_NAME = "LCTestOwner";
 
     private ServerBankManager manager;

@@ -36,6 +36,29 @@ public interface ExternalAccount {
     @NotNull ExternalAccountRef ref();
 
     /**
+     * Native scale factor: how many BankSystem raw units correspond to one
+     * indivisible unit of the underlying external mod. Default {@code 1}
+     * — the external mod natively operates at BankSystem's raw-unit granularity
+     * (no fractional handling required).
+     * <p>
+     * When {@code > 1}, the external mod cannot represent BS-unit deltas smaller
+     * than {@code nativeScale()}. Example: Numismatics uses integer spurs, so any
+     * BankSystem operation smaller than 1 spur has no external representation.
+     * With BankSystem's default per-item scale of 100, that's {@code nativeScale = 100}.
+     * <p>
+     * {@code ServerBank}'s bound-slot code path uses this value to split every
+     * balance op into a whole-native-unit external delta plus a sub-unit
+     * remainder that is persisted in the binding row as {@code dustBalance}.
+     * That keeps money conservation exact — sub-unit fractions never silently
+     * vanish, and the "phantom" that appeared in early v2.0.5 builds cannot occur.
+     *
+     * @return native scale factor, always {@code >= 1}.
+     */
+    default long nativeScale() {
+        return 1L;
+    }
+
+    /**
      * Reads the current balance from the underlying external mod, expressed in
      * <b>BankSystem raw units</b> (long).
      * <p>

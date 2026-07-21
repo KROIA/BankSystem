@@ -1,6 +1,7 @@
 package net.kroia.banksystem.integration.numismatics;
 
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.currency.ExternalAccount;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import org.jetbrains.annotations.NotNull;
@@ -25,6 +26,10 @@ import java.util.function.Consumer;
  * {@link Integer#MAX_VALUE}). {@link #deposit(long)} refuses amounts that would
  * overflow the 32-bit ceiling and returns {@code false} with no state change.
  * <p>
+ * <b>Scale factor.</b> 1 spur = 100 BankSystem raw units (matching
+ * {@link BankSystemModSettings#ITEM_FRACTION_SCALE_FACTOR}). The adapter converts
+ * on every balance op. Fractional spurs (amounts not divisible by 100) are refused.
+ * <p>
  * <b>Simulate support.</b> Numismatics' {@code deduct(int, boolean force)}
  * method has a {@code force} flag (overdraft to zero on insufficient funds),
  * but no true simulate primitive. We implement {@link #canWithdraw(long)} as
@@ -47,6 +52,15 @@ public final class NumismaticsAccount implements ExternalAccount {
 
     /** Dedup flag for reflection failure warnings in balance operations. */
     private static final AtomicBoolean BALANCE_OP_WARNED = new AtomicBoolean(false);
+
+    /** Dedup flag for fractional-amount refusal warnings. */
+    private static final AtomicBoolean FRACTIONAL_AMOUNT_WARNED = new AtomicBoolean(false);
+
+    /**
+     * Scale factor: 1 spur = 100 BankSystem raw units.
+     * Must match {@link BankSystemModSettings#ITEM_FRACTION_SCALE_FACTOR}.
+     */
+    private static final long SCALE_FACTOR = 100L;
 
     /** The underlying Numismatics BankAccount, accessed via reflection. */
     private final Object numismaticsAccount;
@@ -73,11 +87,17 @@ public final class NumismaticsAccount implements ExternalAccount {
     }
 
     @Override
+    public long nativeScale() {
+        return SCALE_FACTOR;
+    }
+
+    @Override
     public long getBalance() {
         try {
             Class<?> accountClass = numismaticsAccount.getClass();
             int spurs = (int) accountClass.getMethod("getBalance").invoke(numismaticsAccount);
-            return spurs;
+            // Widen to long before scaling to avoid overflow on large balances.
+            return ((long) spurs) * SCALE_FACTOR;
         } catch (Exception e) {
             if (BALANCE_OP_WARNED.compareAndSet(false, true)) {
                 logWarn("Failed to read balance for account " + ref.accountKey() + ": " + e.getMessage());
@@ -88,17 +108,27 @@ public final class NumismaticsAccount implements ExternalAccount {
 
     @Override
     public boolean deposit(long amount) {
+        // Fractional BS-units (< 1 spur) are rounded DOWN silently. StockMarket
+        // computes prices with 2 decimal places (BS-scale=100) so lock/unlock/deposit
+        // amounts routinely aren't spur-aligned. Refusing them would break trading;
+        // rounding down means at most (SCALE_FACTOR - 1) BS-units of dust vanish
+        // externally per op — accepted as a known trade-off until per-item scale
+        // exists (see BankSystem CurrencyModSupport follow-up).
         if (amount < 0) return false;
         if (amount == 0) return true;
-
+        int spursToDeposit = (int) (amount / SCALE_FACTOR);
+        if (spursToDeposit == 0) {
+            // Amount is below 1 spur — cannot move; treat as no-op success so
+            // callers don't fail on sub-spur residues.
+            return true;
+        }
         try {
-            long currentBalance = getBalance();
-            if (Integer.MAX_VALUE - currentBalance < amount) {
-                logDebug("Deposit refused: amount " + amount + " would overflow 32-bit cap for account " + ref.accountKey());
+            int currentSpurs = (int) numismaticsAccount.getClass().getMethod("getBalance").invoke(numismaticsAccount);
+            if (Integer.MAX_VALUE - currentSpurs < spursToDeposit) {
+                logDebug("Deposit refused: " + spursToDeposit + " spurs would overflow 32-bit cap for account " + ref.accountKey());
                 return false;
             }
 
-            int spursToDeposit = (int) amount;
             Class<?> accountClass = numismaticsAccount.getClass();
             accountClass.getMethod("deposit", int.class).invoke(numismaticsAccount, spursToDeposit);
             return true;
@@ -112,17 +142,19 @@ public final class NumismaticsAccount implements ExternalAccount {
 
     @Override
     public boolean withdraw(long amount) {
+        // Same dust-tolerance rule as deposit — see comment there.
         if (amount < 0) return false;
         if (amount == 0) return true;
-        if (amount > Integer.MAX_VALUE) return false;
+        int spursToDeduct = (int) (amount / SCALE_FACTOR);
+        if (spursToDeduct == 0) return true; // sub-spur amount — no-op success
+        if (spursToDeduct < 0) return false;
 
-        long currentBalance = getBalance();
-        if (currentBalance < amount) {
-            return false;
-        }
-
+        // Availability check uses the raw spur balance so a fractional amount
+        // whose floored spur count is affordable succeeds.
         try {
-            int spursToDeduct = (int) amount;
+            int currentSpurs = (int) numismaticsAccount.getClass().getMethod("getBalance").invoke(numismaticsAccount);
+            if (currentSpurs < spursToDeduct) return false;
+
             Class<?> accountClass = numismaticsAccount.getClass();
             Boolean success = (Boolean) accountClass.getMethod("deduct", int.class, boolean.class)
                     .invoke(numismaticsAccount, spursToDeduct, false);
@@ -138,17 +170,22 @@ public final class NumismaticsAccount implements ExternalAccount {
     @Override
     public boolean canWithdraw(long amount) {
         if (amount < 0) return false;
-        if (amount > Integer.MAX_VALUE) return false;
-        return getBalance() >= amount;
+        int spurs = (int) (amount / SCALE_FACTOR);
+        if (spurs < 0) return false;
+        try {
+            int currentSpurs = (int) numismaticsAccount.getClass().getMethod("getBalance").invoke(numismaticsAccount);
+            return currentSpurs >= spurs;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override
     public boolean isSharedAccount() {
         try {
             Class<?> accountClass = numismaticsAccount.getClass();
-            Object type = accountClass.getMethod("getType").invoke(numismaticsAccount);
-            String typeName = type.toString();
-            return "BLAZE_BANKER".equals(typeName);
+            Object type = accountClass.getField("type").get(numismaticsAccount);
+            return "BLAZE_BANKER".equals(type.toString());
         } catch (Exception e) {
             logWarn("Failed to check account type for " + ref.accountKey() + " — treating as non-shared: " + e.getMessage());
             return false;
@@ -162,10 +199,8 @@ public final class NumismaticsAccount implements ExternalAccount {
         try {
             Class<?> accountClass = numismaticsAccount.getClass();
 
-            UUID ownerId = (UUID) accountClass.getMethod("getId").invoke(numismaticsAccount);
-            members.add(ownerId);
-
             if (isSharedAccount()) {
+                // BLAZE_BANKER: no owner concept — members = trustList only.
                 try {
                     java.lang.reflect.Field trustListField = accountClass.getDeclaredField("trustList");
                     trustListField.setAccessible(true);
@@ -180,6 +215,10 @@ public final class NumismaticsAccount implements ExternalAccount {
                         logWarn("Could not access trustList field for BLAZE_BANKER account — Numismatics API may have changed: " + e.getMessage());
                     }
                 }
+            } else {
+                // PLAYER: account.id IS the owner's UUID.
+                UUID ownerId = (UUID) accountClass.getField("id").get(numismaticsAccount);
+                members.add(ownerId);
             }
         } catch (Exception e) {
             logWarn("Failed to read current members for account " + ref.accountKey() + ": " + e.getMessage());

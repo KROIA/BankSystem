@@ -153,17 +153,42 @@ public class ServerBank implements ServerSaveable, IServerBank {
         final @NotNull BindingRow row;
         final @Nullable ExternalAccount external;
         final long externalBalance; // only meaningful when external != null
+        final long scale;           // external.nativeScale() cached; 1 when external null
+        final long dust;            // cached row.dustBalance() — never > scale-1
 
         private BoundView(@NotNull BindingRow row, @Nullable ExternalAccount external,
-                          long externalBalance) {
+                          long externalBalance, long scale, long dust) {
             this.row = row;
             this.external = external;
             this.externalBalance = externalBalance;
+            this.scale = scale;
+            this.dust = dust;
         }
 
         boolean isAvailable() {
             return external != null;
         }
+
+        /** Free pool = external free balance + sub-native-unit dust. */
+        long freeTotal() {
+            return externalBalance + dust;
+        }
+    }
+
+    /**
+     * Splits a free-pool change into an external-mod delta (a multiple of the
+     * native scale) and a new sub-unit remainder. Positive
+     * {@code externalDelta} means "deposit that much to external"; negative means
+     * "withdraw {@code -externalDelta} from external". Post-condition:
+     * {@code newExt + newDust == ext + dust + changeInFree}, with
+     * {@code 0 <= newDust < scale} and {@code newExt} being a multiple of {@code scale}.
+     */
+    private static long[] splitBoundDelta(long ext, long dust, long changeInFree, long scale) {
+        long newFree = ext + dust + changeInFree;
+        // Correct modulo for possibly-negative newFree.
+        long newDust = ((newFree % scale) + scale) % scale;
+        long newExt = newFree - newDust;
+        return new long[] { newExt - ext, newDust };
     }
 
     /**
@@ -172,7 +197,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
      * a {@link BoundView} otherwise. Applies the umbrella spec's drift-clamp on
      * every bound read: if the external balance dropped below our tracked locked
      * amount (player used the external mod's own UI behind our back), the locked
-     * amount is clamped down to match and a WARN is logged.
+     * amount is clamped down to match and an ERROR is logged (now a real problem
+     * under the transactional-lock protocol).
      */
     private @Nullable BoundView resolveBound() {
         BindingRow row = lookupBindingRow();
@@ -183,22 +209,17 @@ public class ServerBank implements ServerSaveable, IServerBank {
                 (provider != null && provider.isAvailable()) ? provider.open(row.ref()) : null;
         if (external == null) {
             maybeWarnProviderUnavailable(row);
-            return new BoundView(row, null, 0L);
+            return new BoundView(row, null, 0L, 1L, row.dustBalance());
         }
+        // Under the transactional-lock protocol (Task #33 v2.0.5+), locked funds
+        // have ALREADY been withdrawn from the external mod at lock time and are
+        // tracked separately in row.lockedBalance. External balance = free funds
+        // (multiple of nativeScale), row.dustBalance = sub-native-unit remainder
+        // that keeps money conservation exact. locked balance = held-back funds.
+        // All three are independent axes — no drift-clamp.
         long extBal = external.getBalance();
-        if (extBal < row.lockedBalance()) {
-            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
-                BACKEND_INSTANCES.LOGGER.warn("[ServerBank] Drift-clamp on bound slot "
-                        + accountId + "/" + itemID + ": external balance (" + extBal
-                        + ") dropped below tracked lockedLocal (" + row.lockedBalance()
-                        + "). Clamping lockedLocal down to " + extBal + " — a player likely "
-                        + "deposited/withdrew via the external mod's own UI while a lock was "
-                        + "held here. StockMarket's next order check sees the reduced lock.");
-            }
-            BankAccountBindings bindings = BankAccountBindings.get();
-            if (bindings != null) bindings.setLocked(accountId, itemID, extBal);
-        }
-        return new BoundView(row, external, extBal);
+        long scale = Math.max(1L, external.nativeScale());
+        return new BoundView(row, external, extBal, scale, row.dustBalance());
     }
 
     /**
@@ -272,11 +293,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public long getBalance() {
-        // Task #33: bound-branch guard. Unbound path below is byte-for-byte unchanged.
+        // Task #33: bound-branch guard. Free balance = external balance + tracked
+        // sub-native-unit dust. Unbound path below is byte-for-byte unchanged.
         BoundView bv = resolveBound();
         if (bv != null) {
             if (!bv.isAvailable()) return 0L; // degraded — free reads as 0
-            return Math.max(0L, bv.externalBalance - bv.row.lockedBalance());
+            return bv.freeTotal();
         }
         return balance;
     }
@@ -305,12 +327,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public long getTotalBalance() {
-        // Task #33: total = external balance for bound-available; locked-only when the
-        // provider is degraded (external inaccessible). Unbound path unchanged.
+        // Task #33: total = external + dust + locked (money the user owns).
+        // Unbound path unchanged.
         BoundView bv = resolveBound();
         if (bv != null) {
-            if (!bv.isAvailable()) return bv.row.lockedBalance();
-            return bv.externalBalance;
+            if (!bv.isAvailable()) return bv.row.lockedBalance() + bv.dust;
+            return bv.freeTotal() + bv.row.lockedBalance();
         }
         return balance + lockedBalance;
     }
@@ -388,30 +410,25 @@ public class ServerBank implements ServerSaveable, IServerBank {
     // Weak-lock semantics — lockedBalance is advisory; callers verify before withdrawing locked funds
     @Override
     public boolean setBalance(long balance) {
-        // Task #33: bound branch. Preserves the "return false on clamp-drop-of-locked"
-        // contract (ISyncServerBank.java:107-115) so StockMarket's existing drift handling
-        // works transparently. Unbound path below is byte-for-byte unchanged.
+        // Task #33: bound branch. Set the free pool (external + dust) to `balance`
+        // — locked stays untouched (it's a separate axis under the transactional
+        // model). Unbound path below is byte-for-byte unchanged.
         BoundView bv = resolveBound();
         if (bv != null) {
             if (balance < 0) return false;
-            if (!bv.isAvailable()) return false; // degraded — no external write possible
-            long delta = balance - bv.externalBalance;
-            boolean willClampLocked = balance < bv.row.lockedBalance();
-            if (delta > 0) {
-                if (!bv.external.deposit(delta)) {
-                    // Overflow / provider rejected — no state change on either side.
-                    return false;
-                }
-            } else if (delta < 0) {
-                if (!bv.external.withdraw(-delta)) {
-                    return false;
-                }
+            if (!bv.isAvailable()) return false;
+            long delta = balance - bv.freeTotal();
+            if (delta == 0) return true;
+            long[] split = splitBoundDelta(bv.externalBalance, bv.dust, delta, bv.scale);
+            long externalDelta = split[0];
+            long newDust = split[1];
+            if (externalDelta > 0) {
+                if (!bv.external.deposit(externalDelta)) return false;
+            } else if (externalDelta < 0) {
+                if (!bv.external.withdraw(-externalDelta)) return false;
             }
-            if (willClampLocked) {
-                BankAccountBindings bindings = BankAccountBindings.get();
-                if (bindings != null) bindings.setLocked(accountId, itemID, balance);
-                return false;
-            }
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null) bindings.setDust(accountId, itemID, newDust);
             return true;
         }
         if(balance < 0)
@@ -446,15 +463,23 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus deposit(long amount) {
-        // Task #33: bound branch. External mod decides overflow; adapters
-        // return false rather than throwing. Unbound path unchanged.
+        // Task #33: bound branch. Dust-aware add to the free pool. The whole-native
+        // portion goes through external.deposit; sub-native remainder is persisted
+        // to row.dustBalance so no fraction is silently dropped. Unbound path unchanged.
         BoundView bv = resolveBound();
         if (bv != null) {
             if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            if (amount == 0) return BankStatus.SUCCESS;
             if (!bv.isAvailable()) return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
-            return bv.external.deposit(amount)
-                    ? BankStatus.SUCCESS
-                    : BankStatus.FAILED_OVERFLOW;
+            long[] split = splitBoundDelta(bv.externalBalance, bv.dust, amount, bv.scale);
+            long externalDelta = split[0];
+            long newDust = split[1];
+            if (externalDelta > 0 && !bv.external.deposit(externalDelta)) {
+                return BankStatus.FAILED_OVERFLOW;
+            }
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null) bindings.setDust(accountId, itemID, newDust);
+            return BankStatus.SUCCESS;
         }
         if(amount < 0)
             return BankStatus.FAILED_NEGATIVE_VALUE;
@@ -483,12 +508,11 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public boolean hasSufficientFunds(long amount) {
-        // Task #33: bound branch. Free-balance check uses external.getBalance()
-        // minus locked-local. Unbound path unchanged.
+        // Task #33: bound branch. Free pool = external + dust. Unbound path unchanged.
         BoundView bv = resolveBound();
         if (bv != null) {
             if (!bv.isAvailable()) return false;
-            return bv.externalBalance - bv.row.lockedBalance() >= amount;
+            return bv.freeTotal() >= amount;
         }
         return balance >= amount;
     }
@@ -501,25 +525,27 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdraw(long amount) {
-        // Task #33: bound branch. Verify against external balance - locked-local; use
-        // canWithdraw as authoritative iff the provider advertises SUFFICIENT_FUNDS_CHECK,
-        // otherwise compare via getBalance. Unbound path unchanged.
+        // Task #33: bound branch. Dust-aware subtract from the free pool.
+        // Unbound path unchanged.
         BoundView bv = resolveBound();
         if (bv != null) {
             if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            if (amount == 0) return BankStatus.SUCCESS;
             if (!bv.isAvailable()) return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
-            long availableForFreeWithdraw = bv.externalBalance - bv.row.lockedBalance();
-            if (availableForFreeWithdraw < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
-            ExternalCurrencyProvider provider =
-                    BankSystemMod.getAPI().getCurrencyProvider(bv.row.ref().providerId());
-            if (provider != null
-                    && provider.features().contains(ProviderFeature.SUFFICIENT_FUNDS_CHECK)
-                    && !bv.external.canWithdraw(amount)) {
+            if (bv.freeTotal() < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            long[] split = splitBoundDelta(bv.externalBalance, bv.dust, -amount, bv.scale);
+            long externalDelta = split[0];
+            long newDust = split[1];
+            if (externalDelta < 0 && !bv.external.withdraw(-externalDelta)) {
                 return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            } else if (externalDelta > 0 && !bv.external.deposit(externalDelta)) {
+                // Rare: dust rebalancing requires a deposit-side move; if it fails
+                // the caller sees FAILED_OVERFLOW and no state changes.
+                return BankStatus.FAILED_OVERFLOW;
             }
-            return bv.external.withdraw(amount)
-                    ? BankStatus.SUCCESS
-                    : BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null) bindings.setDust(accountId, itemID, newDust);
+            return BankStatus.SUCCESS;
         }
         if(amount < 0)
             return BankStatus.FAILED_NEGATIVE_VALUE;
@@ -549,17 +575,17 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdrawLocked(long amount) {
-        // Task #33: bound branch. Locked amount lives in the binding row; external
-        // withdraw runs first, only decrement the row on success. Unbound path unchanged.
+        // Task #33: bound branch. External balance was already decremented on lock —
+        // just decrement local locked. Unbound path unchanged.
         BoundView bv = resolveBound();
         if (bv != null) {
             if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
             if (!bv.isAvailable()) return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
-            if (bv.row.lockedBalance() < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
-            if (!bv.external.withdraw(amount)) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            long clamped = Math.min(amount, bv.row.lockedBalance());
+            if (clamped < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
             BankAccountBindings bindings = BankAccountBindings.get();
             if (bindings != null) {
-                bindings.setLocked(accountId, itemID, bv.row.lockedBalance() - amount);
+                bindings.setLocked(accountId, itemID, bv.row.lockedBalance() - clamped);
             }
             return BankStatus.SUCCESS;
         }
@@ -592,21 +618,33 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdrawLockedPrefered(long amount) {
-        // Task #33: bound branch. External withdraw runs once for the full amount
-        // (external mods have no "locked" concept); the locked-first accounting is
-        // done locally against the binding row. Unbound path unchanged.
+        // Task #33: bound branch. Discount from locked first (no external op — the
+        // funds were already deducted at lock time), then fall back to the free
+        // pool via the dust-aware split. Unbound path unchanged.
         BoundView bv = resolveBound();
         if (bv != null) {
             if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            if (amount == 0) return BankStatus.SUCCESS;
             if (!bv.isAvailable()) return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
-            if (bv.externalBalance < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
-            if (!bv.external.withdraw(amount)) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
-            long lockedConsumed = Math.min(amount, bv.row.lockedBalance());
-            if (lockedConsumed > 0) {
-                BankAccountBindings bindings = BankAccountBindings.get();
-                if (bindings != null) {
-                    bindings.setLocked(accountId, itemID, bv.row.lockedBalance() - lockedConsumed);
+            long totalAvail = bv.row.lockedBalance() + bv.freeTotal();
+            if (totalAvail < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            long fromLocked = Math.min(amount, bv.row.lockedBalance());
+            long fromFree = amount - fromLocked;
+            long newDust = bv.dust;
+            if (fromFree > 0) {
+                long[] split = splitBoundDelta(bv.externalBalance, bv.dust, -fromFree, bv.scale);
+                long externalDelta = split[0];
+                newDust = split[1];
+                if (externalDelta < 0 && !bv.external.withdraw(-externalDelta)) {
+                    return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+                } else if (externalDelta > 0 && !bv.external.deposit(externalDelta)) {
+                    return BankStatus.FAILED_OVERFLOW;
                 }
+            }
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null) {
+                bindings.setLocked(accountId, itemID, bv.row.lockedBalance() - fromLocked);
+                if (fromFree > 0) bindings.setDust(accountId, itemID, newDust);
             }
             return BankStatus.SUCCESS;
         }
@@ -910,19 +948,28 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus lockAmount(long amount) {
-        // Task #33: bound branch. Increment lockedLocal in the binding row; NO external
-        // write (external mods have no locked concept — we hold the reservation locally).
-        // Verify that external balance minus current locked-local can cover the extra amount.
+        // Task #33: bound branch. Dust-aware transactional move from free pool to
+        // locked. Whole-native-unit portion physically withdraws from external;
+        // sub-native-unit remainder stays as dust so no fraction is silently dropped.
         // Unbound path unchanged.
         BoundView bv = resolveBound();
         if (bv != null) {
             if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            if (amount == 0) return BankStatus.SUCCESS;
             if (!bv.isAvailable()) return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
-            long availableFree = bv.externalBalance - bv.row.lockedBalance();
-            if (availableFree < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            if (bv.freeTotal() < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            long[] split = splitBoundDelta(bv.externalBalance, bv.dust, -amount, bv.scale);
+            long externalDelta = split[0];
+            long newDust = split[1];
+            if (externalDelta < 0 && !bv.external.withdraw(-externalDelta)) {
+                return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            } else if (externalDelta > 0 && !bv.external.deposit(externalDelta)) {
+                return BankStatus.FAILED_OVERFLOW;
+            }
             BankAccountBindings bindings = BankAccountBindings.get();
             if (bindings != null) {
                 bindings.setLocked(accountId, itemID, bv.row.lockedBalance() + amount);
+                bindings.setDust(accountId, itemID, newDust);
             }
             return BankStatus.SUCCESS;
         }
@@ -957,15 +1004,34 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus unlockAmount(long amount) {
-        // Task #33: bound branch. Decrement lockedLocal in the binding row; NO external
-        // write. Unbound path unchanged.
-        BindingRow row = lookupBindingRow();
-        if (row != null) {
+        // Task #33: bound branch. Dust-aware transactional move from locked back to
+        // free pool. External deposit only for the whole-native-unit portion of the
+        // change; sub-native remainder shifts into dust. Unbound path unchanged.
+        BoundView bv = resolveBound();
+        if (bv != null) {
             if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
-            if (row.lockedBalance() < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            long clamped = Math.min(amount, bv.row.lockedBalance());
+            if (clamped == 0) return BankStatus.SUCCESS;
+            if (!bv.isAvailable()) return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+            long[] split = splitBoundDelta(bv.externalBalance, bv.dust, clamped, bv.scale);
+            long externalDelta = split[0];
+            long newDust = split[1];
+            if (externalDelta > 0 && !bv.external.deposit(externalDelta)) {
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                    BACKEND_INSTANCES.LOGGER.error("[ServerBank] unlockAmount deposit of " + externalDelta
+                            + " to external provider failed on bound slot " + accountId + "/" + itemID
+                            + " — external overflow or unavailable. Locked funds (" + clamped
+                            + ") remain stuck locally. Manual intervention or retry on next unlock required.");
+                }
+                return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+            } else if (externalDelta < 0 && !bv.external.withdraw(-externalDelta)) {
+                // Rare dust-rebalance withdraw during unlock — treat like the above.
+                return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            }
             BankAccountBindings bindings = BankAccountBindings.get();
             if (bindings != null) {
-                bindings.setLocked(accountId, itemID, row.lockedBalance() - amount);
+                bindings.setLocked(accountId, itemID, bv.row.lockedBalance() - clamped);
+                bindings.setDust(accountId, itemID, newDust);
             }
             return BankStatus.SUCCESS;
         }
@@ -1000,12 +1066,44 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public void unlockAll()
     {
-        // Task #33: bound branch — clear lockedLocal on the binding row; NO external
-        // write. Unbound path unchanged.
-        BindingRow row = lookupBindingRow();
-        if (row != null) {
+        // Task #33: bound branch — deposit locked funds back to external via the
+        // dust-aware split, then clear the local locked field. If the external op
+        // fails, log an ERROR and leave locked untouched so the funds stay tracked
+        // and can be retried on a later unlock. Unbound path unchanged.
+        BoundView bv = resolveBound();
+        if (bv != null) {
+            long lockedLocal = bv.row.lockedBalance();
+            if (lockedLocal <= 0) return;
+            if (!bv.isAvailable()) {
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                    BACKEND_INSTANCES.LOGGER.error("[ServerBank] unlockAll on bound slot "
+                            + accountId + "/" + itemID + " skipped — external provider unavailable. "
+                            + "Locked funds (" + lockedLocal + ") stay tracked locally; retry on next unlock.");
+                }
+                return;
+            }
+            long[] split = splitBoundDelta(bv.externalBalance, bv.dust, lockedLocal, bv.scale);
+            long externalDelta = split[0];
+            long newDust = split[1];
+            if (externalDelta > 0 && !bv.external.deposit(externalDelta)) {
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                    BACKEND_INSTANCES.LOGGER.error("[ServerBank] unlockAll deposit of " + externalDelta
+                            + " to external provider failed on bound slot " + accountId + "/" + itemID
+                            + " — external overflow or unavailable. Locked funds stay tracked locally; manual intervention or retry required.");
+                }
+                return;
+            } else if (externalDelta < 0 && !bv.external.withdraw(-externalDelta)) {
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                    BACKEND_INSTANCES.LOGGER.error("[ServerBank] unlockAll dust-rebalance withdraw of " + (-externalDelta)
+                            + " failed on bound slot " + accountId + "/" + itemID + ". Locked funds stay tracked locally.");
+                }
+                return;
+            }
             BankAccountBindings bindings = BankAccountBindings.get();
-            if (bindings != null) bindings.setLocked(accountId, itemID, 0L);
+            if (bindings != null) {
+                bindings.setLocked(accountId, itemID, 0L);
+                bindings.setDust(accountId, itemID, newDust);
+            }
             return;
         }
         addBalanceInternal(lockedBalance);

@@ -13,6 +13,7 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
+import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
 import net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket;
@@ -591,6 +592,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         }
         boolean isAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isBanksystemAdmin(executor);
         account.addUser(user, BankPermission.getAllPermissions());
+        ServerBankManager.addDefaultBankSlots(account);
         ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
         if(player != null)
         {

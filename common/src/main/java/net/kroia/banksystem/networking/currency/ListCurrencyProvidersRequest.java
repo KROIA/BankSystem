@@ -45,13 +45,17 @@ public class ListCurrencyProvidersRequest extends BankSystemGenericRequest<ListC
     /**
      * One entry per available currency provider on the master.
      *
-     * @param providerId  Stable id (matches {@link ExternalCurrencyProvider#providerId()})
-     * @param displayName Human-readable name for the picker. Defaults to {@code providerId} —
-     *                    provider adapters may later expose a nicer name via a lang key.
-     * @param features    Feature flags advertised by the provider. Used by the UI to decide
-     *                    whether to enable the shared-account picker path, etc.
+     * @param providerId          Stable id (matches {@link ExternalCurrencyProvider#providerId()})
+     * @param displayName         Human-readable name for the picker. Defaults to {@code providerId} —
+     *                            provider adapters may later expose a nicer name via a lang key.
+     * @param features            Feature flags advertised by the provider. Used by the UI to decide
+     *                            whether to enable the shared-account picker path, etc.
+     * @param baseCurrencyItemId  Resource-location string of the item this provider is authoritative
+     *                            for (e.g. {@code "numismatics:spur"}), or empty string when the
+     *                            provider is not tied to a single item. Empty is used in place of
+     *                            {@code null} to keep the wire codec simple.
      */
-    public record ProviderInfo(String providerId, String displayName, Set<ProviderFeature> features) {
+    public record ProviderInfo(String providerId, String displayName, Set<ProviderFeature> features, String baseCurrencyItemId) {
         public static final StreamCodec<RegistryFriendlyByteBuf, ProviderFeature> FEATURE_CODEC =
                 ExtraCodecUtils.enumStreamCodec(ProviderFeature.class);
 
@@ -59,8 +63,14 @@ public class ListCurrencyProvidersRequest extends BankSystemGenericRequest<ListC
                 ByteBufCodecs.STRING_UTF8, ProviderInfo::providerId,
                 ByteBufCodecs.STRING_UTF8, ProviderInfo::displayName,
                 ExtraCodecUtils.setStreamCodec(FEATURE_CODEC, HashSet::new), ProviderInfo::features,
+                ByteBufCodecs.STRING_UTF8, ProviderInfo::baseCurrencyItemId,
                 ProviderInfo::new
         );
+
+        /** {@code null}-tolerant alias for {@link #baseCurrencyItemId()} — empty string maps back to {@code null}. */
+        public @org.jetbrains.annotations.Nullable String baseCurrencyItemIdOrNull() {
+            return baseCurrencyItemId == null || baseCurrencyItemId.isEmpty() ? null : baseCurrencyItemId;
+        }
     }
 
     public record OutputData(List<ProviderInfo> providers) {
@@ -115,7 +125,9 @@ public class ListCurrencyProvidersRequest extends BankSystemGenericRequest<ListC
                 String id = provider.providerId();
                 Set<ProviderFeature> features = provider.features();
                 if (features == null) features = EnumSet.noneOf(ProviderFeature.class);
-                providers.add(new ProviderInfo(id, id, new HashSet<>(features)));
+                String baseCurrencyItemId = provider.getBaseCurrencyItemId();
+                providers.add(new ProviderInfo(id, id, new HashSet<>(features),
+                        baseCurrencyItemId == null ? "" : baseCurrencyItemId));
             }
         }
         return CompletableFuture.completedFuture(new OutputData(providers));

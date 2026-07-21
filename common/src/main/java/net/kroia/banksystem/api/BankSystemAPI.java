@@ -91,6 +91,23 @@ public interface BankSystemAPI {
     void registerCurrencyProvider(@Nullable ExternalCurrencyProvider provider);
 
     /**
+     * Removes the currently-registered provider for {@code providerId}.
+     * <p>
+     * Intended for teardown paths that need to guarantee a provider no longer appears
+     * in the binding UI or in {@link #getCurrencyProviders()} — most importantly the
+     * in-game test suite, whose {@code StubCurrencyProvider} must not leak into
+     * production once the tests finish. Real adapters normally never need this: they
+     * live for the JVM lifetime.
+     * <p>
+     * A {@code null} or unknown {@code providerId} is a no-op and returns {@code false}.
+     *
+     * @param providerId the {@link ExternalCurrencyProvider#providerId()} to drop.
+     * @return {@code true} if a provider was removed; {@code false} otherwise.
+     * @since 2.0.5
+     */
+    boolean unregisterCurrencyProvider(@Nullable String providerId);
+
+    /**
      * @return an immutable snapshot of every currently-registered
      *         {@link ExternalCurrencyProvider}. Iteration order is unspecified.
      *         Never {@code null}; may be empty when no adapter has registered.

@@ -714,6 +714,17 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
 
     @Override
+    public boolean unregisterCurrencyProvider(@Nullable String providerId) {
+        if (providerId == null || providerId.isEmpty()) return false;
+        ExternalCurrencyProvider removed = CURRENCY_PROVIDERS.remove(providerId);
+        if (removed != null && INSTANCES.LOGGER != null) {
+            INSTANCES.LOGGER.info("Unregistered external currency provider '" + providerId + "' ("
+                    + removed.getClass().getName() + ")");
+        }
+        return removed != null;
+    }
+
+    @Override
     public Collection<ExternalCurrencyProvider> getCurrencyProviders() {
         // Defensive snapshot — callers must not be able to mutate the registry through
         // the returned view, and iteration must be safe against concurrent registration.

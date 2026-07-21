@@ -30,12 +30,21 @@ public final class BindingRow {
     private static final String NBT_ITEM_SHORT = "itemShort";
     private static final String NBT_REF = "ref";
     private static final String NBT_LOCKED_BALANCE = "lockedBalance";
+    private static final String NBT_DUST_BALANCE = "dustBalance";
     private static final String NBT_BOUND_AT = "boundAt";
 
     private final int bankAccountId;
     private final short itemIdShort;
     private final @NotNull ExternalAccountRef ref;
     private long lockedBalance;
+    /**
+     * Sub-native-unit remainder in BankSystem raw units. Always in
+     * [0, {@code ExternalAccount.nativeScale() - 1}]. Captures the fractional
+     * portion of any external op that couldn't be represented in the external
+     * mod's native granularity (e.g. 0.17 spurs of a 154.17-spur trade). This
+     * keeps money conservation exact — nothing is silently rounded away.
+     */
+    private long dustBalance;
     private final long boundAt;
 
     /**
@@ -49,10 +58,20 @@ public final class BindingRow {
      */
     public BindingRow(int bankAccountId, short itemIdShort, @NotNull ExternalAccountRef ref,
                       long lockedBalance, long boundAt) {
+        this(bankAccountId, itemIdShort, ref, lockedBalance, 0L, boundAt);
+    }
+
+    /**
+     * Full-field constructor including {@code dustBalance}. Used by NBT
+     * deserialization to preserve sub-native-unit remainders across restarts.
+     */
+    public BindingRow(int bankAccountId, short itemIdShort, @NotNull ExternalAccountRef ref,
+                      long lockedBalance, long dustBalance, long boundAt) {
         this.bankAccountId = bankAccountId;
         this.itemIdShort = itemIdShort;
         this.ref = ref;
         this.lockedBalance = Math.max(0L, lockedBalance);
+        this.dustBalance = Math.max(0L, dustBalance);
         this.boundAt = boundAt;
     }
 
@@ -70,6 +89,10 @@ public final class BindingRow {
 
     public long lockedBalance() {
         return lockedBalance;
+    }
+
+    public long dustBalance() {
+        return dustBalance;
     }
 
     public long boundAt() {
@@ -90,6 +113,15 @@ public final class BindingRow {
     }
 
     /**
+     * Overwrites the sub-native-unit dust balance. Values below zero are clamped
+     * to zero. Package-private — callers go through
+     * {@link BankAccountBindings#setDust(int, net.kroia.banksystem.util.ItemID, long)}.
+     */
+    void setDustBalance(long newAmount) {
+        this.dustBalance = Math.max(0L, newAmount);
+    }
+
+    /**
      * Serializes this row into a fresh {@link CompoundTag}.
      *
      * @return an NBT tag carrying every field of this row
@@ -100,6 +132,7 @@ public final class BindingRow {
         tag.putShort(NBT_ITEM_SHORT, itemIdShort);
         tag.put(NBT_REF, ref.toNbt());
         tag.putLong(NBT_LOCKED_BALANCE, lockedBalance);
+        tag.putLong(NBT_DUST_BALANCE, dustBalance);
         tag.putLong(NBT_BOUND_AT, boundAt);
         return tag;
     }
@@ -121,8 +154,9 @@ public final class BindingRow {
         ExternalAccountRef ref = ExternalAccountRef.fromNbt(tag.getCompound(NBT_REF));
         if (ref == null) return null;
         long locked = tag.contains(NBT_LOCKED_BALANCE) ? tag.getLong(NBT_LOCKED_BALANCE) : 0L;
+        long dust = tag.contains(NBT_DUST_BALANCE) ? tag.getLong(NBT_DUST_BALANCE) : 0L;
         long boundAt = tag.contains(NBT_BOUND_AT) ? tag.getLong(NBT_BOUND_AT) : 0L;
-        return new BindingRow(accountId, itemShort, ref, locked, boundAt);
+        return new BindingRow(accountId, itemShort, ref, locked, dust, boundAt);
     }
 
     @Override
@@ -131,6 +165,7 @@ public final class BindingRow {
                 + ", itemShort=" + itemIdShort
                 + ", ref=" + ref
                 + ", locked=" + lockedBalance
+                + ", dust=" + dustBalance
                 + ", boundAt=" + boundAt + "}";
     }
 }
