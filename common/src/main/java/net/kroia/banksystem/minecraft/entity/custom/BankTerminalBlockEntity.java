@@ -169,6 +169,11 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     long availableAmount = Math.min(amount, inventory.getItemCount(itemID));
                     if(availableAmount > 0)
                     {
+                        // TODO Task #34.1: Support Numismatics coin items as physical deposit input.
+                        // Recognize Coin items, convert to spurs, add to bound account if the slot
+                        // is Numismatics-bound. Routing: check if BankAccount is bound via
+                        // BankAccountBindings.get() → if providerId=="numismatics", route to that
+                        // bound account's deposit; else normal BankSystem deposit below.
                         long depositAmount = availableAmount;
                         if(isMoney) {
                             MoneyItem moneyItem = (MoneyItem) itemID.getStack().getItem();

@@ -21,6 +21,7 @@ import net.kroia.banksystem.testing.tests.LifecycleTests;
 import net.kroia.banksystem.testing.tests.ModSettingsTests;
 import net.kroia.banksystem.testing.tests.MultiServerSecurityTests;
 import net.kroia.banksystem.testing.tests.NetworkingValidationTests;
+import net.kroia.banksystem.testing.tests.NumismaticsAdapterTests;
 import net.kroia.banksystem.testing.tests.SerializationTests;
 import net.kroia.banksystem.testing.tests.ServerBankTests;
 import net.kroia.banksystem.testing.tests.WithdrawMergeTests;
@@ -56,5 +57,6 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new BankCraftingMatcherTests());
         TestRegistry.register(new ModSettingsTests());
         TestRegistry.register(new ExternalCurrencyBindingTests());
+        TestRegistry.register(new NumismaticsAdapterTests());
     }
 }

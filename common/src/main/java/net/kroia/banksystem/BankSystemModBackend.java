@@ -214,6 +214,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemNetworking.setBackend(INSTANCES);
         BankSystemTextMessages.setBackend(INSTANCES);
 
+        net.kroia.banksystem.integration.numismatics.NumismaticsProvider.setBackend(INSTANCES);
+        net.kroia.banksystem.integration.numismatics.NumismaticsAccount.setBackend(INSTANCES);
+
 
         BankSystemCommands.registerCommands();
 
@@ -244,6 +247,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         if (TestRegistry.ENABLE_TESTS && BankSystemMod.ENABLE_DEV_FEATURES) {
             BankSystemTestRegistration.register();
         }
+
+        // Register external currency providers (Task #34+, v2.0.5)
+        registerExternalCurrencyProviders();
 
     }
 
@@ -651,6 +657,27 @@ public class BankSystemModBackend implements BankSystemAPI {
     @Override
     public short getPriceCurrencyItem() {
         return priceCurrencyItemId;
+    }
+
+    /**
+     * One-time registration of all external currency providers during mod init
+     * (Task #34+, v2.0.5). Each adapter checks {@code Platform.isModLoaded(...)}
+     * before registering; absent mods are skipped without error.
+     */
+    private void registerExternalCurrencyProviders() {
+        // Numismatics adapter (Task #34)
+        try {
+            if (dev.architectury.platform.Platform.isModLoaded("numismatics")) {
+                registerCurrencyProvider(net.kroia.banksystem.integration.numismatics.NumismaticsProvider.INSTANCE);
+            }
+        } catch (NoClassDefFoundError e) {
+            // Numismatics classes couldn't load — mod was removed or class moved.
+            // isAvailable() will also return false; no registration happens.
+            if (INSTANCES.LOGGER != null)
+                INSTANCES.LOGGER.debug("Numismatics adapter skipped: classes not resolvable.");
+        }
+
+        // Future adapters (Lightman's, etc.) would go here.
     }
 
     @Override
