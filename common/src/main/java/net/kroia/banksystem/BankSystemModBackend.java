@@ -216,6 +216,8 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         net.kroia.banksystem.integration.numismatics.NumismaticsProvider.setBackend(INSTANCES);
         net.kroia.banksystem.integration.numismatics.NumismaticsAccount.setBackend(INSTANCES);
+        net.kroia.banksystem.integration.lightmanscurrency.LightmansCurrencyProvider.setBackend(INSTANCES);
+        net.kroia.banksystem.integration.lightmanscurrency.LightmansCurrencyAccount.setBackend(INSTANCES);
 
 
         BankSystemCommands.registerCommands();
@@ -677,7 +679,17 @@ public class BankSystemModBackend implements BankSystemAPI {
                 INSTANCES.LOGGER.debug("Numismatics adapter skipped: classes not resolvable.");
         }
 
-        // Future adapters (Lightman's, etc.) would go here.
+        // Lightman's Currency adapter (Task #36)
+        try {
+            if (dev.architectury.platform.Platform.isModLoaded("lightmanscurrency")) {
+                registerCurrencyProvider(net.kroia.banksystem.integration.lightmanscurrency.LightmansCurrencyProvider.INSTANCE);
+            }
+        } catch (NoClassDefFoundError e) {
+            // LC classes couldn't load — mod was removed or class moved.
+            // isAvailable() will also return false; no registration happens.
+            if (INSTANCES.LOGGER != null)
+                INSTANCES.LOGGER.debug("Lightman's Currency adapter skipped: classes not resolvable.");
+        }
     }
 
     @Override
