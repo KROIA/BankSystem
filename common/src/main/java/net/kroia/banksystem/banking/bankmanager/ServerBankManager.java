@@ -6,6 +6,8 @@ import com.google.gson.JsonObject;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
@@ -13,9 +15,15 @@ import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.api.currency.ExternalAccount;
+import net.kroia.banksystem.api.currency.ExternalAccountRef;
+import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
+import net.kroia.banksystem.banking.binding.BindingRow;
 import net.kroia.banksystem.api.ItemPriceProvider;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
@@ -395,9 +403,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             }
 
             // Force-delete personal accounts (bypass the personal account protection since the user is being removed)
+            BankAccountBindings cascadeBindings = BankAccountBindings.get();
             for (int accountNr : personalAccountsToDrop) {
                 ServerBankAccount removed = bankAccounts.remove(accountNr);
                 if (removed != null) {
+                    // Task #33 (v2.0.5): cascade-drop external-currency binding rows for
+                    // the departing personal account. Idempotent when no rows exist.
+                    if (cascadeBindings != null) cascadeBindings.removeAllForAccount(accountNr);
                     BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_DELETED.notifyListeners(removed);
                 }
                 info("Removed personal bank account with number: " + accountNr + " for deleted user: " + userUUID);
@@ -1101,6 +1113,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 return false; // Cannot delete personal bank accounts
             }
             bankAccounts.remove(accountNumber);
+            // Task #33 (v2.0.5): cascade-drop every external-currency binding row for
+            // the deleted account so stale rows never re-materialize on next load.
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null) {
+                int dropped = bindings.removeAllForAccount(accountNumber);
+                if (dropped > 0) {
+                    info("Dropped " + dropped + " external-currency binding row(s) alongside "
+                            + "the deleted account (number: " + accountNumber + ").");
+                }
+            }
             BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_DELETED.notifyListeners(account);
             info("Deleted bank account with number: " + accountNumber);
             return true;
@@ -1871,6 +1893,186 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         bankAccounts.put(accountNumber, account);
         return account;
+    }
+
+
+    // =====================================================================
+    // External-currency bindings (Task #33, v2.0.5).
+    // -----------------------------------------------------------------------
+    // These methods live here (rather than on ServerBankAccount) because bind
+    // and unbind are cross-cutting: they consult the ExternalCurrencyProvider
+    // registry, the account's shared / personal state, the target bank's
+    // current balance, and the BankAccountBindings savedata — all reachable
+    // from the master's bank manager. They are called from the UI layer
+    // (Stage 3) and — in the meantime — from tests (Stage 4). Not exposed on
+    // IServerBankManager: intentional scope-limit for Stage 2. Multi-server
+    // bindings-over-the-wire are out of scope until Task #35 validation.
+    // =====================================================================
+
+    /**
+     * Binds a BankSystem slot to an external currency-mod account (Task #33).
+     * <p>
+     * Preconditions (checked in this order, each with a WARN log on failure):
+     * <ul>
+     *   <li>The account exists ({@link BankStatus#FAILED_NO_BANK} otherwise).</li>
+     *   <li>The item slot exists on the account ({@link BankStatus#FAILED_NO_BANK}).</li>
+     *   <li>The bank's current {@code getTotalBalance()} is exactly 0 — the safest
+     *       v1 policy. Non-zero balances must be withdrawn before binding to avoid
+     *       ambiguity about what the external "starting balance" represents.
+     *       ({@link BankStatus#FAILED_INVALID_ITEM_ID} otherwise — closest fit in
+     *       the existing status enum for a bind-precondition violation.)</li>
+     *   <li>The referenced provider is registered and available
+     *       ({@link BankStatus#FAILED_EXTERNAL_UNAVAILABLE} otherwise).</li>
+     *   <li>The ref resolves ({@code provider.open(ref) != null},
+     *       {@link BankStatus#FAILED_EXTERNAL_UNAVAILABLE} otherwise).</li>
+     *   <li>{@code ref.shared()} matches the account's shared state (personal →
+     *       non-shared; non-personal → shared). Mismatch:
+     *       {@link BankStatus#FAILED_WRONG_INSTANCE_TYPE}.</li>
+     * </ul>
+     * On success a fresh binding row is written and future balance operations
+     * on the slot delegate to the external mod. Locked amount starts at 0.
+     *
+     * @param accountId BankSystem account number
+     * @param itemId    item slot on the account
+     * @param ref       external account to bind to
+     * @return SUCCESS on success; a specific FAILED_* status on any precondition
+     *         violation (WARN-logged with a human-readable reason)
+     */
+    public BankStatus bindExternalAccount(int accountId, ItemID itemId, ExternalAccountRef ref) {
+        if (itemId == null || !itemId.isValid() || ref == null) {
+            warn("bindExternalAccount refused: invalid arguments (accountId=" + accountId
+                    + ", itemId=" + itemId + ", ref=" + ref + ")");
+            return BankStatus.FAILED_INVALID_ITEM_ID;
+        }
+        itemId = ItemIDManager.resolveAlias(itemId);
+        ServerBankAccount account = bankAccounts.get(accountId);
+        if (account == null) {
+            warn("bindExternalAccount refused: account " + accountId + " does not exist");
+            return BankStatus.FAILED_NO_BANK;
+        }
+        IServerBank bank = account.getBank(itemId);
+        if (bank == null || !(bank instanceof ServerBank serverBank)) {
+            warn("bindExternalAccount refused: no bank slot for item " + itemId
+                    + " on account " + accountId);
+            return BankStatus.FAILED_NO_BANK;
+        }
+        // Zero-balance precondition. Reading getTotalBalance is safe even on a
+        // (still non-bound) slot — routes through the local logic.
+        long total = serverBank.getTotalBalance();
+        if (total != 0L) {
+            warn("bindExternalAccount refused: slot " + accountId + "/" + itemId
+                    + " has non-zero balance (" + total + "). Withdraw all funds before "
+                    + "binding to avoid ambiguity about the initial external balance.");
+            return BankStatus.FAILED_INVALID_ITEM_ID;
+        }
+        // Provider must exist and be available.
+        ExternalCurrencyProvider provider = BankSystemMod.getAPI().getCurrencyProvider(ref.providerId());
+        if (provider == null || !provider.isAvailable()) {
+            warn("bindExternalAccount refused: provider '" + ref.providerId()
+                    + "' is not registered or not available on this server");
+            return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+        }
+        // Ref must open.
+        ExternalAccount external = provider.open(ref);
+        if (external == null) {
+            warn("bindExternalAccount refused: provider '" + ref.providerId()
+                    + "' could not open account (ref=" + ref + ")");
+            return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+        }
+        // Shared-state must match: personal (owner != null) → non-shared;
+        // non-personal (owner == null) → shared.
+        boolean accountIsShared = account.getPersonalBankOwner() == null;
+        if (accountIsShared != ref.shared()) {
+            warn("bindExternalAccount refused: shared-state mismatch — account "
+                    + accountId + " is " + (accountIsShared ? "shared" : "personal")
+                    + " but ref " + ref + " is " + (ref.shared() ? "shared" : "non-shared"));
+            return BankStatus.FAILED_WRONG_INSTANCE_TYPE;
+        }
+        // All checks passed — commit the binding.
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) {
+            error("bindExternalAccount failed: BankAccountBindings backend is not available");
+            return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+        }
+        BindingRow row = bindings.bind(accountId, itemId, ref);
+        info("Bound slot " + accountId + "/" + itemId + " to external account "
+                + ref + " (initial locked=0, boundAt=" + row.boundAt() + ")");
+        return BankStatus.SUCCESS;
+    }
+
+    /**
+     * Unbinds a BankSystem slot from its external currency-mod account
+     * (Task #33). Idempotent: unbinding a non-bound slot returns SUCCESS.
+     * <p>
+     * On success:
+     * <ul>
+     *   <li>If the provider is available: read the external balance one last
+     *       time and copy it into the local {@code ServerBank.balance} field
+     *       so the slot returns to BankSystem-native storage with the correct
+     *       amount. The lockedLocal field is zeroed.</li>
+     *   <li>If the provider is unavailable: the local {@code balance} and
+     *       {@code lockedBalance} are set to 0. The player has not lost money
+     *       on the external side — they simply detached from it.</li>
+     * </ul>
+     * The binding row is then removed. Callers UI-side typically confirm the
+     * outcome with the player because "provider unavailable at unbind" loses
+     * access to the funds until the mod is reinstalled and a new bind is done.
+     *
+     * @param accountId BankSystem account number
+     * @param itemId    item slot on the account
+     * @return SUCCESS in every reachable case (no-op unbind included)
+     */
+    public BankStatus unbindExternalAccount(int accountId, ItemID itemId) {
+        if (itemId == null || !itemId.isValid()) {
+            warn("unbindExternalAccount refused: invalid itemId (" + itemId + ")");
+            return BankStatus.FAILED_INVALID_ITEM_ID;
+        }
+        itemId = ItemIDManager.resolveAlias(itemId);
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) {
+            // Backend not available — nothing to unbind, treat as no-op success.
+            return BankStatus.SUCCESS;
+        }
+        BindingRow row = bindings.getBinding(accountId, itemId);
+        if (row == null) {
+            // Idempotent no-op — the slot was not bound.
+            return BankStatus.SUCCESS;
+        }
+        ServerBankAccount account = bankAccounts.get(accountId);
+        IServerBank bank = account != null ? account.getBank(itemId) : null;
+        // Read the external balance one last time (best-effort). Zero when the
+        // provider is unavailable — this is the "detach without access to funds"
+        // case described in the task spec.
+        long finalExternalBalance = 0L;
+        ExternalCurrencyProvider provider = BankSystemMod.getAPI().getCurrencyProvider(row.ref().providerId());
+        if (provider != null && provider.isAvailable()) {
+            ExternalAccount external = provider.open(row.ref());
+            if (external != null) {
+                finalExternalBalance = external.getBalance();
+            } else {
+                warn("unbindExternalAccount on " + accountId + "/" + itemId + ": provider '"
+                        + row.ref().providerId() + "' was available but open() returned null. "
+                        + "Local balance will be set to 0.");
+            }
+        } else {
+            warn("unbindExternalAccount on " + accountId + "/" + itemId + ": provider '"
+                    + row.ref().providerId() + "' is unavailable. Local balance will be set "
+                    + "to 0. External funds are not lost — reinstall the mod and re-bind to "
+                    + "regain access.");
+        }
+        // Write local balance into the bank BEFORE dropping the binding row so
+        // there is never a moment where a caller sees both no-binding and 0-balance
+        // for a slot that used to hold funds. writeLocalFieldsForUnbind_internal
+        // bypasses the delegating public API (which would still route to the
+        // external mod at this point in time).
+        if (bank instanceof ServerBank serverBank) {
+            serverBank.writeLocalFieldsForUnbind_internal(finalExternalBalance, 0L);
+        }
+        bindings.unbind(accountId, itemId);
+        info("Unbound slot " + accountId + "/" + itemId + " from provider '"
+                + row.ref().providerId() + "' (materialized " + finalExternalBalance
+                + " raw units into local storage)");
+        return BankStatus.SUCCESS;
     }
 
 

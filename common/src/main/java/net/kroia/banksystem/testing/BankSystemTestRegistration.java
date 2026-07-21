@@ -11,6 +11,7 @@ import net.kroia.banksystem.testing.tests.BankPermissionTests;
 import net.kroia.banksystem.testing.tests.DatabaseTests;
 import net.kroia.banksystem.testing.tests.DepositGateTests;
 import net.kroia.banksystem.testing.tests.ExampleTests;
+import net.kroia.banksystem.testing.tests.ExternalCurrencyBindingTests;
 import net.kroia.banksystem.testing.tests.ItemIDCounterTests;
 import net.kroia.banksystem.testing.tests.ItemIDFormatAndRepairTests;
 import net.kroia.banksystem.testing.tests.ItemIDIdentityTests;
@@ -54,5 +55,6 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new WithdrawMergeTests());
         TestRegistry.register(new BankCraftingMatcherTests());
         TestRegistry.register(new ModSettingsTests());
+        TestRegistry.register(new ExternalCurrencyBindingTests());
     }
 }

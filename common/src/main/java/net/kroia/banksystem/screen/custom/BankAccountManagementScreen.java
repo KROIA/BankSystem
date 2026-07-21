@@ -43,6 +43,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final Component CREATE_NEW_BANK = Component.translatable(PREFIX+"create_new_bank");
     private static final Component ADD_USER = Component.translatable(PREFIX+"add_user");
     private static final Component MUST_KEEP_MANAGER = Component.translatable(PREFIX+"must_keep_manager");
+    private static final Component BINDINGS_BUTTON = Component.translatable(PREFIX+"bindings_button");
 
     private static class ItemViewButton extends Button{
 
@@ -96,6 +97,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private Button deleteBankAccountButton;
     private Button createNewBankButton;
     private Button addUserButton;
+    private Button bindingsButton;
     private ListView userElementListView;
     private ListView bankElementListView;
 
@@ -238,6 +240,11 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         addElement(saveChangesButton);
         addElement(addUserButton);
 
+        // Task #33 Stage 3: entry point to the currency-binding UI. Available to any viewer —
+        // the bindings screen itself carries a MANAGE-permission check + read-only degradation
+        // (bind/unbind buttons are grayed out with a tooltip for non-manage viewers).
+        bindingsButton = new Button(BINDINGS_BUTTON.getString(), this::onBindingsButtonClicked);
+        addElement(bindingsButton);
     }
     private void setupAdminWindow()
     {
@@ -315,6 +322,15 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         addUserButton.setBounds(padding, selectAccountButton.getBottom()+accountNameY, nameWidth, closeButton.getHeight());
         userElementListView.setBounds(padding, addUserButton.getBottom()+spacing, nameWidth, height-(addUserButton.getBottom()+spacing)+padding);
         bankElementListView.setBounds(userElementListView.getRight()+spacing, closeButton.getBottom()+spacing, userElementListView.getWidth(), height-(closeButton.getBottom()+spacing)+padding);
+
+        // Bindings button — placed next to the save/close cluster in the header row.
+        if(bindingsButton != null) {
+            int bindingsTextWidth = closeButton.getTextWidth(BINDINGS_BUTTON.getString()) + 10;
+            int bindingsLeftAnchor = (canManage && deleteBankAccountButton != null)
+                    ? deleteBankAccountButton.getLeft()
+                    : saveChangesButton.getLeft();
+            bindingsButton.setBounds(bindingsLeftAnchor - spacing - bindingsTextWidth, padding, bindingsTextWidth, closeButton.getHeight());
+        }
 
 
         if(isAdminMode)
@@ -634,6 +650,16 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             itemSelectionScreen.sortItems();
             Minecraft.getInstance().setScreen(itemSelectionScreen);
         }
+    }
+    /**
+     * Opens {@link BankAccountBindingsScreen} for the current account (Task #33 Stage 3).
+     * The bindings screen carries its own MANAGE-permission check + read-only degradation, so
+     * this callback merely opens the screen; the button itself is disabled up-front for
+     * non-manage viewers to match the existing addUserButton discipline.
+     */
+    private void onBindingsButtonClicked()
+    {
+        BankAccountBindingsScreen.openScreen(this, accountNumber, isAdminMode);
     }
     private void onDeleteAccountButtonClicked()
     {

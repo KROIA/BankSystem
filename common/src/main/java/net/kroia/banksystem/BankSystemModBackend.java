@@ -12,6 +12,8 @@ import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.api.command.IBankSystemCommands;
+import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.bankmanager.ClientBankManager;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
@@ -58,7 +60,11 @@ import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class BankSystemModBackend implements BankSystemAPI {
@@ -80,6 +86,12 @@ public class BankSystemModBackend implements BankSystemAPI {
         public BalanceHistoryManager BALANCE_HISTORY_MANAGER;
 
         /**
+         * External-currency binding table (Task #33, v2.0.5). Master-authoritative;
+         * on slave servers this instance stays empty. See {@link BankAccountBindings}.
+         */
+        public BankAccountBindings BANK_ACCOUNT_BINDINGS;
+
+        /**
          * Client-held settings snapshot synced from the server at player join
          * (see {@link net.kroia.banksystem.networking.general.PlayerJoinSyncPacket}).
          * Only meaningful on the client side; carries the isMasterServer flag used
@@ -92,6 +104,16 @@ public class BankSystemModBackend implements BankSystemAPI {
     private static long snapshotTickCounter = 0;
     private static @Nullable ItemPriceProvider itemPriceProvider = null;
     private static short priceCurrencyItemId = 0;
+
+    /**
+     * Registry of external currency-mod adapters (Task #33, v2.0.5). Keyed by
+     * {@link ExternalCurrencyProvider#providerId()}. Adapters register themselves
+     * during mod init via
+     * {@link BankSystemAPI#registerCurrencyProvider(ExternalCurrencyProvider)}.
+     * Concurrent map so registration happening off the server thread (mod-init
+     * threads) is safe against readers on the server thread.
+     */
+    private static final Map<String, ExternalCurrencyProvider> CURRENCY_PROVIDERS = new ConcurrentHashMap<>();
 
     /**
      * Slave-side watchdog counter for the Task #22 registration latch: ticks up every
@@ -170,6 +192,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.NETWORKING = null;
         INSTANCES.ITEM_ID_MANAGER = new ItemIDManager();
         ItemIDManager.setBackend(INSTANCES);
+        INSTANCES.BANK_ACCOUNT_BINDINGS = new BankAccountBindings();
+        BankAccountBindings.setBackend(INSTANCES);
         VolatileItemComponents.setBackend(INSTANCES);
         MultiServerUtils.setBackend(INSTANCES);
         BankSystemDataHandler.setBackend(INSTANCES);
@@ -396,6 +420,11 @@ public class BankSystemModBackend implements BankSystemAPI {
         // Drop the world-load tag snapshot: the next world/server captures its own freshly
         // bound tags (see VolatileItemComponents#captureTagSnapshot()).
         VolatileItemComponents.resetTagSnapshot();
+        // Reset the external-currency binding table so a subsequent world load starts
+        // from a clean slate (see BankAccountBindings#clear).
+        if (INSTANCES.BANK_ACCOUNT_BINDINGS != null) {
+            INSTANCES.BANK_ACCOUNT_BINDINGS.clear();
+        }
         ItemColorUtil.clearCache();
     }
 
@@ -622,6 +651,40 @@ public class BankSystemModBackend implements BankSystemAPI {
     @Override
     public short getPriceCurrencyItem() {
         return priceCurrencyItemId;
+    }
+
+    @Override
+    public void registerCurrencyProvider(@Nullable ExternalCurrencyProvider provider) {
+        if (provider == null) return;
+        String id = provider.providerId();
+        if (id == null || id.isEmpty()) {
+            if (INSTANCES.LOGGER != null)
+                INSTANCES.LOGGER.warn("registerCurrencyProvider ignored: provider " + provider.getClass().getName()
+                        + " returned a null / empty providerId()");
+            return;
+        }
+        ExternalCurrencyProvider prev = CURRENCY_PROVIDERS.put(id, provider);
+        if (INSTANCES.LOGGER != null) {
+            if (prev == null)
+                INSTANCES.LOGGER.info("Registered external currency provider '" + id + "' ("
+                        + provider.getClass().getName() + ")");
+            else
+                INSTANCES.LOGGER.info("Replaced external currency provider '" + id + "' ("
+                        + prev.getClass().getName() + " -> " + provider.getClass().getName() + ")");
+        }
+    }
+
+    @Override
+    public Collection<ExternalCurrencyProvider> getCurrencyProviders() {
+        // Defensive snapshot — callers must not be able to mutate the registry through
+        // the returned view, and iteration must be safe against concurrent registration.
+        return Collections.unmodifiableCollection(new ArrayList<>(CURRENCY_PROVIDERS.values()));
+    }
+
+    @Override
+    public @Nullable ExternalCurrencyProvider getCurrencyProvider(@Nullable String providerId) {
+        if (providerId == null || providerId.isEmpty()) return null;
+        return CURRENCY_PROVIDERS.get(providerId);
     }
 
     /**

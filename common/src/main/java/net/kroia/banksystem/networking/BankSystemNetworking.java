@@ -6,6 +6,11 @@ import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
 import net.kroia.banksystem.banking.bankmanager.AsyncBankManager;
 import net.kroia.banksystem.minecraft.command.AsyncBankSystemCommandHandler;
+import net.kroia.banksystem.networking.currency.BindExternalAccountRequest;
+import net.kroia.banksystem.networking.currency.ListBindableAccountsRequest;
+import net.kroia.banksystem.networking.currency.ListBindingsForAccountRequest;
+import net.kroia.banksystem.networking.currency.ListCurrencyProvidersRequest;
+import net.kroia.banksystem.networking.currency.UnbindExternalAccountRequest;
 import net.kroia.banksystem.networking.entity.*;
 import net.kroia.banksystem.networking.general.*;
 import net.kroia.banksystem.networking.multi_server.*;
@@ -42,6 +47,14 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public static GetUserCustomDataRequest GET_USER_CUSTOM_DATA_REQUEST = (GetUserCustomDataRequest)AsynchronousRequestResponseSystem.register(new GetUserCustomDataRequest());
     public static UpdateUserCustomDataRequest UPDATE_USER_CUSTOM_DATA_REQUEST = (UpdateUserCustomDataRequest)AsynchronousRequestResponseSystem.register(new UpdateUserCustomDataRequest());
     public static ModSettingsRequest MOD_SETTINGS_REQUEST = (ModSettingsRequest)AsynchronousRequestResponseSystem.register(new ModSettingsRequest());
+
+    // Currency-binding ARRS requests (Task #33, v2.0.5). All routed to master; writes are
+    // MANAGE-gated + untrusted-slave-gated, reads are permission- or open-info as appropriate.
+    public static ListCurrencyProvidersRequest LIST_CURRENCY_PROVIDERS_REQUEST = (ListCurrencyProvidersRequest) AsynchronousRequestResponseSystem.register(new ListCurrencyProvidersRequest());
+    public static ListBindableAccountsRequest LIST_BINDABLE_ACCOUNTS_REQUEST = (ListBindableAccountsRequest) AsynchronousRequestResponseSystem.register(new ListBindableAccountsRequest());
+    public static ListBindingsForAccountRequest LIST_BINDINGS_FOR_ACCOUNT_REQUEST = (ListBindingsForAccountRequest) AsynchronousRequestResponseSystem.register(new ListBindingsForAccountRequest());
+    public static BindExternalAccountRequest BIND_EXTERNAL_ACCOUNT_REQUEST = (BindExternalAccountRequest) AsynchronousRequestResponseSystem.register(new BindExternalAccountRequest());
+    public static UnbindExternalAccountRequest UNBIND_EXTERNAL_ACCOUNT_REQUEST = (UnbindExternalAccountRequest) AsynchronousRequestResponseSystem.register(new UnbindExternalAccountRequest());
 
     public static BankAccountChangeStream BANKSYSTEM_ACCOUNT_CHANGE_STREAM = (BankAccountChangeStream) StreamSystem.register(new BankAccountChangeStream());
 

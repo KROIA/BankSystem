@@ -2,6 +2,7 @@ package net.kroia.banksystem.banking.bank;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.BankStatus;
@@ -10,7 +11,12 @@ import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.api.currency.ExternalAccount;
+import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
+import net.kroia.banksystem.api.currency.ProviderFeature;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
+import net.kroia.banksystem.banking.binding.BindingRow;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -28,6 +34,25 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Master-side bank ledger for one {@code (account, item)} slot.
+ * <p>
+ * <b>External-currency binding (Task #33, v2.0.5).</b> Each slot may optionally
+ * bind to a third-party mod's account via
+ * {@link net.kroia.banksystem.banking.binding.BankAccountBindings}. When a
+ * binding row exists for the {@code (accountId, itemID)} of this bank, the 11
+ * balance-operation methods delegate to the bound {@link ExternalAccount}; the
+ * local {@link #balance} / {@link #lockedBalance} fields go unused. When no
+ * binding row exists, every operation uses the original local-only code path,
+ * byte-for-byte identical to pre-Stage-2 behavior.
+ * <p>
+ * <b>Save behavior for bound slots.</b> The local balance fields are FORCED
+ * to {@code 0L} in {@link #save(net.minecraft.nbt.CompoundTag)} while the slot
+ * is bound — the external mod is the authoritative source, so persisting a
+ * (potentially stale) local copy would only invite drift. On unbind the local
+ * fields get re-materialized from a final external read (see the unbind
+ * service in {@code ServerBankManager}).
+ */
 public class ServerBank implements ServerSaveable, IServerBank {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
@@ -40,12 +65,32 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     }
 
+    /**
+     * Matches {@code ServerBankAccount.INVALID_ACCOUNT_NUMBER}. Duplicated here as a
+     * literal to avoid a compile-time dependency on ServerBankAccount from the low-
+     * level bank class (they already sit at different layers).
+     */
+    private static final int UNATTACHED_ACCOUNT_ID = 0;
 
 
     protected long balance;
     protected long lockedBalance;
     protected boolean changeFlag = false;
     private ItemID itemID;
+
+    /**
+     * The BankSystem account number this bank belongs to (Task #33, v2.0.5).
+     * <p>
+     * Set to the owning account's number when the bank is added to a
+     * {@code ServerBankAccount}. {@code 0} ({@link #UNATTACHED_ACCOUNT_ID}) means
+     * "not attached yet" — as it is for freshly-created banks between
+     * {@link #create(ItemID, long)} and being put into the account's map, and for
+     * banks freshly restored from NBT before the account calls
+     * {@link #attachToAccount(int)} on them. While the field is {@code 0} the
+     * binding table cannot resolve a row for this bank, so every operation takes
+     * the unbound path — the safe default.
+     */
+    private int accountId = UNATTACHED_ACCOUNT_ID;
 
     private ServerBank()
     {
@@ -56,6 +101,125 @@ public class ServerBank implements ServerSaveable, IServerBank {
         this.itemID = itemID;
         this.balance = Math.max(balance, 0); // Ensure balance is not negative
         this.lockedBalance = 0;
+    }
+
+    /**
+     * Attaches this bank to the given BankSystem account (Task #33, v2.0.5).
+     * <p>
+     * Called by {@code ServerBankAccount} every time a bank is placed into the
+     * account's map — on creation ({@code createBank} / {@code createPersonal} /
+     * {@code getOrCreateBank}) and after NBT load. The account id is the key the
+     * {@link BankAccountBindings} table uses to find the (if any) binding row for
+     * the {@code (accountId, itemID)} slot this bank represents. Idempotent when
+     * called with the same value.
+     *
+     * @param accountId the BankSystem account number this bank belongs to
+     */
+    public void attachToAccount(int accountId) {
+        this.accountId = accountId;
+    }
+
+    /**
+     * @return the BankSystem account this bank is attached to, or
+     *         {@code 0} ({@code ServerBankAccount.INVALID_ACCOUNT_NUMBER}) if it
+     *         has not been attached yet
+     */
+    public int getAccountId() {
+        return accountId;
+    }
+
+    /**
+     * Fast look-up: returns the binding row for this bank's slot, or
+     * {@code null} when there is no binding table, the bank has not been attached
+     * to an account, or no row exists for the slot. The unbound path in every
+     * balance method uses this as its leading guard (return-null → fall through
+     * to the original local logic).
+     */
+    private @Nullable BindingRow lookupBindingRow() {
+        if (accountId == UNATTACHED_ACCOUNT_ID) return null;
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return null;
+        return bindings.getBinding(accountId, itemID);
+    }
+
+    /**
+     * Read/write context for a bound operation. Carries the current
+     * {@link BindingRow}, an open {@link ExternalAccount} (or {@code null}
+     * when the provider is unavailable — degraded state), and — when
+     * available — a fresh external balance already used for the mandatory
+     * drift-clamp so downstream callers can reuse it without a second RPC.
+     */
+    private static final class BoundView {
+        final @NotNull BindingRow row;
+        final @Nullable ExternalAccount external;
+        final long externalBalance; // only meaningful when external != null
+
+        private BoundView(@NotNull BindingRow row, @Nullable ExternalAccount external,
+                          long externalBalance) {
+            this.row = row;
+            this.external = external;
+            this.externalBalance = externalBalance;
+        }
+
+        boolean isAvailable() {
+            return external != null;
+        }
+    }
+
+    /**
+     * Resolves the bound view for the current slot: returns {@code null} when the
+     * slot is unbound (callers fall through to the original local path); returns
+     * a {@link BoundView} otherwise. Applies the umbrella spec's drift-clamp on
+     * every bound read: if the external balance dropped below our tracked locked
+     * amount (player used the external mod's own UI behind our back), the locked
+     * amount is clamped down to match and a WARN is logged.
+     */
+    private @Nullable BoundView resolveBound() {
+        BindingRow row = lookupBindingRow();
+        if (row == null) return null;
+        ExternalCurrencyProvider provider =
+                BankSystemMod.getAPI().getCurrencyProvider(row.ref().providerId());
+        ExternalAccount external =
+                (provider != null && provider.isAvailable()) ? provider.open(row.ref()) : null;
+        if (external == null) {
+            maybeWarnProviderUnavailable(row);
+            return new BoundView(row, null, 0L);
+        }
+        long extBal = external.getBalance();
+        if (extBal < row.lockedBalance()) {
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                BACKEND_INSTANCES.LOGGER.warn("[ServerBank] Drift-clamp on bound slot "
+                        + accountId + "/" + itemID + ": external balance (" + extBal
+                        + ") dropped below tracked lockedLocal (" + row.lockedBalance()
+                        + "). Clamping lockedLocal down to " + extBal + " — a player likely "
+                        + "deposited/withdrew via the external mod's own UI while a lock was "
+                        + "held here. StockMarket's next order check sees the reduced lock.");
+            }
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null) bindings.setLocked(accountId, itemID, extBal);
+        }
+        return new BoundView(row, external, extBal);
+    }
+
+    /**
+     * One-shot WARN dedup for a bound slot whose provider is not available.
+     * Reads on such a slot happen every render frame in some UIs; logging on each
+     * call would drown the log. {@link BankAccountBindings#shouldWarnUnavailable}
+     * returns true the first time per (account, item, session).
+     */
+    private void maybeWarnProviderUnavailable(@NotNull BindingRow row) {
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return;
+        if (!bindings.shouldWarnUnavailable(accountId, itemID)) return;
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.warn("[ServerBank] Bound slot " + accountId + "/"
+                    + itemID + " references external provider '" + row.ref().providerId()
+                    + "' which is not currently available (mod uninstalled or adapter not "
+                    + "loaded). Reads return degraded values (free=0, locked=" + row.lockedBalance()
+                    + "); writes fail with FAILED_EXTERNAL_UNAVAILABLE. The binding row is "
+                    + "preserved — reinstall the mod to resume operation. "
+                    + "This warning fires once per slot per session.");
+        }
     }
 
     public static @Nullable ServerBank create(ItemID itemID, long balance) {
@@ -92,10 +256,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankData getMinimalData() {
+        // Route through the delegating getters so client snapshots see the bound
+        // (or unbound) values correctly. Behavior unchanged for unbound slots.
         return new BankData(
                 itemID,
-                balance,
-                lockedBalance
+                getBalance(),
+                getLockedBalance()
         );
     }
     @Override
@@ -106,6 +272,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public long getBalance() {
+        // Task #33: bound-branch guard. Unbound path below is byte-for-byte unchanged.
+        BoundView bv = resolveBound();
+        if (bv != null) {
+            if (!bv.isAvailable()) return 0L; // degraded — free reads as 0
+            return Math.max(0L, bv.externalBalance - bv.row.lockedBalance());
+        }
         return balance;
     }
     @Override
@@ -117,6 +289,11 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public long getLockedBalance() {
+        // Task #33: locked balance for a bound slot lives in the binding row; the
+        // provider being unavailable does NOT hide the tracked lock (players/StockMarket
+        // still need to see the reservation). Unbound path unchanged.
+        BindingRow row = lookupBindingRow();
+        if (row != null) return row.lockedBalance();
         return lockedBalance;
     }
     @Override
@@ -128,6 +305,13 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public long getTotalBalance() {
+        // Task #33: total = external balance for bound-available; locked-only when the
+        // provider is degraded (external inaccessible). Unbound path unchanged.
+        BoundView bv = resolveBound();
+        if (bv != null) {
+            if (!bv.isAvailable()) return bv.row.lockedBalance();
+            return bv.externalBalance;
+        }
         return balance + lockedBalance;
     }
     @Override
@@ -139,7 +323,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public double getRealBalance() {
-        return convertToRealAmount(balance);
+        // Route through the delegating getter so bound slots produce a correct value.
+        // Unbound: getBalance() returns the balance field — identical to the pre-Task-#33 read.
+        return convertToRealAmount(getBalance());
     }
     @Override
     public CompletableFuture<Double> getRealBalanceAsync() {
@@ -150,7 +336,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public double getRealLockedBalance() {
-        return convertToRealAmount(lockedBalance);
+        return convertToRealAmount(getLockedBalance());
     }
     @Override
     public CompletableFuture<Double> getRealLockedBalanceAsync() {
@@ -161,7 +347,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public double getRealTotalBalance() {
-        return convertToRealAmount(balance + lockedBalance);
+        return convertToRealAmount(getTotalBalance());
     }
     @Override
     public CompletableFuture<Double> getRealTotalBalanceAsync() {
@@ -202,6 +388,32 @@ public class ServerBank implements ServerSaveable, IServerBank {
     // Weak-lock semantics — lockedBalance is advisory; callers verify before withdrawing locked funds
     @Override
     public boolean setBalance(long balance) {
+        // Task #33: bound branch. Preserves the "return false on clamp-drop-of-locked"
+        // contract (ISyncServerBank.java:107-115) so StockMarket's existing drift handling
+        // works transparently. Unbound path below is byte-for-byte unchanged.
+        BoundView bv = resolveBound();
+        if (bv != null) {
+            if (balance < 0) return false;
+            if (!bv.isAvailable()) return false; // degraded — no external write possible
+            long delta = balance - bv.externalBalance;
+            boolean willClampLocked = balance < bv.row.lockedBalance();
+            if (delta > 0) {
+                if (!bv.external.deposit(delta)) {
+                    // Overflow / provider rejected — no state change on either side.
+                    return false;
+                }
+            } else if (delta < 0) {
+                if (!bv.external.withdraw(-delta)) {
+                    return false;
+                }
+            }
+            if (willClampLocked) {
+                BankAccountBindings bindings = BankAccountBindings.get();
+                if (bindings != null) bindings.setLocked(accountId, itemID, balance);
+                return false;
+            }
+            return true;
+        }
         if(balance < 0)
             return false;
         long newBalance = balance - this.lockedBalance;
@@ -234,6 +446,16 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus deposit(long amount) {
+        // Task #33: bound branch. External mod decides overflow; adapters
+        // return false rather than throwing. Unbound path unchanged.
+        BoundView bv = resolveBound();
+        if (bv != null) {
+            if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            if (!bv.isAvailable()) return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+            return bv.external.deposit(amount)
+                    ? BankStatus.SUCCESS
+                    : BankStatus.FAILED_OVERFLOW;
+        }
         if(amount < 0)
             return BankStatus.FAILED_NEGATIVE_VALUE;
         if(willOverflow(amount))
@@ -261,6 +483,13 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public boolean hasSufficientFunds(long amount) {
+        // Task #33: bound branch. Free-balance check uses external.getBalance()
+        // minus locked-local. Unbound path unchanged.
+        BoundView bv = resolveBound();
+        if (bv != null) {
+            if (!bv.isAvailable()) return false;
+            return bv.externalBalance - bv.row.lockedBalance() >= amount;
+        }
         return balance >= amount;
     }
     @Override
@@ -272,6 +501,26 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdraw(long amount) {
+        // Task #33: bound branch. Verify against external balance - locked-local; use
+        // canWithdraw as authoritative iff the provider advertises SUFFICIENT_FUNDS_CHECK,
+        // otherwise compare via getBalance. Unbound path unchanged.
+        BoundView bv = resolveBound();
+        if (bv != null) {
+            if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            if (!bv.isAvailable()) return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+            long availableForFreeWithdraw = bv.externalBalance - bv.row.lockedBalance();
+            if (availableForFreeWithdraw < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            ExternalCurrencyProvider provider =
+                    BankSystemMod.getAPI().getCurrencyProvider(bv.row.ref().providerId());
+            if (provider != null
+                    && provider.features().contains(ProviderFeature.SUFFICIENT_FUNDS_CHECK)
+                    && !bv.external.canWithdraw(amount)) {
+                return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            }
+            return bv.external.withdraw(amount)
+                    ? BankStatus.SUCCESS
+                    : BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+        }
         if(amount < 0)
             return BankStatus.FAILED_NEGATIVE_VALUE;
         if (balance < amount) {
@@ -300,6 +549,20 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdrawLocked(long amount) {
+        // Task #33: bound branch. Locked amount lives in the binding row; external
+        // withdraw runs first, only decrement the row on success. Unbound path unchanged.
+        BoundView bv = resolveBound();
+        if (bv != null) {
+            if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            if (!bv.isAvailable()) return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+            if (bv.row.lockedBalance() < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            if (!bv.external.withdraw(amount)) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null) {
+                bindings.setLocked(accountId, itemID, bv.row.lockedBalance() - amount);
+            }
+            return BankStatus.SUCCESS;
+        }
         if(amount < 0)
             return BankStatus.FAILED_NEGATIVE_VALUE;
         if (lockedBalance < amount) {
@@ -329,6 +592,24 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdrawLockedPrefered(long amount) {
+        // Task #33: bound branch. External withdraw runs once for the full amount
+        // (external mods have no "locked" concept); the locked-first accounting is
+        // done locally against the binding row. Unbound path unchanged.
+        BoundView bv = resolveBound();
+        if (bv != null) {
+            if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            if (!bv.isAvailable()) return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+            if (bv.externalBalance < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            if (!bv.external.withdraw(amount)) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            long lockedConsumed = Math.min(amount, bv.row.lockedBalance());
+            if (lockedConsumed > 0) {
+                BankAccountBindings bindings = BankAccountBindings.get();
+                if (bindings != null) {
+                    bindings.setLocked(accountId, itemID, bv.row.lockedBalance() - lockedConsumed);
+                }
+            }
+            return BankStatus.SUCCESS;
+        }
         if(amount < 0)
             return BankStatus.FAILED_NEGATIVE_VALUE;
         if (lockedBalance < amount) {
@@ -365,6 +646,20 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus transfer(long amount, @NotNull ISyncServerBank other) {
+        // Task #33: bound branch. Decompose into primitives (withdraw + deposit) so we
+        // never have to special-case bound-source-to-bound-target. Unbound path unchanged.
+        BindingRow boundRow = lookupBindingRow();
+        if (boundRow != null) {
+            if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            if (other == this) return BankStatus.SUCCESS;
+            BankStatus w = this.withdraw(amount);
+            if (w != BankStatus.SUCCESS) return w;
+            BankStatus d = other.deposit(amount);
+            if (d == BankStatus.SUCCESS) return BankStatus.SUCCESS;
+            // Best-effort rollback: deposit back what we just withdrew.
+            this.deposit(amount);
+            return d;
+        }
         if(amount < 0)
             return BankStatus.FAILED_NEGATIVE_VALUE;
         if (balance < amount) {
@@ -428,6 +723,32 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus transferFromLocked(long amount, @NotNull ISyncServerBank other) {
+        // Task #33: bound branch. Decompose into withdrawLocked + deposit primitives.
+        // Unbound path unchanged.
+        BindingRow boundRow = lookupBindingRow();
+        if (boundRow != null) {
+            if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            BankStatus w = this.withdrawLocked(amount);
+            if (w != BankStatus.SUCCESS) return w;
+            BankStatus d = other.deposit(amount);
+            if (d == BankStatus.SUCCESS) return BankStatus.SUCCESS;
+            // Rollback: put the funds back on the external side and re-lock them.
+            if (!this.deposit(amount).equals(BankStatus.SUCCESS)) {
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                    BACKEND_INSTANCES.LOGGER.error("[ServerBank] transferFromLocked rollback "
+                            + "deposit failed on bound slot " + accountId + "/" + itemID
+                            + " after other.deposit failed with " + d
+                            + " — external funds may be off by " + amount);
+                }
+            } else {
+                // Restore the lock we consumed via withdrawLocked.
+                BankAccountBindings bindings = BankAccountBindings.get();
+                if (bindings != null) {
+                    bindings.setLocked(accountId, itemID, boundRow.lockedBalance() + amount);
+                }
+            }
+            return d;
+        }
         if(amount < 0)
             return BankStatus.FAILED_NEGATIVE_VALUE;
         if (lockedBalance < amount) {
@@ -487,6 +808,30 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus transferFromLockedPrefered(long amount, @NotNull ISyncServerBank other) {
+        // Task #33: bound branch. Decompose into withdrawLockedPrefered + deposit.
+        // Unbound path unchanged.
+        BindingRow boundRow = lookupBindingRow();
+        if (boundRow != null) {
+            if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            long lockedBefore = boundRow.lockedBalance();
+            BankStatus w = this.withdrawLockedPrefered(amount);
+            if (w != BankStatus.SUCCESS) return w;
+            BankStatus d = other.deposit(amount);
+            if (d == BankStatus.SUCCESS) return BankStatus.SUCCESS;
+            // Rollback: deposit back into the external side and restore the pre-op lock.
+            if (!this.deposit(amount).equals(BankStatus.SUCCESS)) {
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                    BACKEND_INSTANCES.LOGGER.error("[ServerBank] transferFromLockedPrefered "
+                            + "rollback deposit failed on bound slot " + accountId + "/" + itemID
+                            + " after other.deposit failed with " + d
+                            + " — external funds may be off by " + amount);
+                }
+            } else {
+                BankAccountBindings bindings = BankAccountBindings.get();
+                if (bindings != null) bindings.setLocked(accountId, itemID, lockedBefore);
+            }
+            return d;
+        }
         if(amount < 0)
             return BankStatus.FAILED_NEGATIVE_VALUE;
         long origAmount = amount;
@@ -565,6 +910,22 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus lockAmount(long amount) {
+        // Task #33: bound branch. Increment lockedLocal in the binding row; NO external
+        // write (external mods have no locked concept — we hold the reservation locally).
+        // Verify that external balance minus current locked-local can cover the extra amount.
+        // Unbound path unchanged.
+        BoundView bv = resolveBound();
+        if (bv != null) {
+            if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            if (!bv.isAvailable()) return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+            long availableFree = bv.externalBalance - bv.row.lockedBalance();
+            if (availableFree < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null) {
+                bindings.setLocked(accountId, itemID, bv.row.lockedBalance() + amount);
+            }
+            return BankStatus.SUCCESS;
+        }
         if(amount < 0)
             return BankStatus.FAILED_NEGATIVE_VALUE;
         if (balance < amount) {
@@ -596,6 +957,18 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus unlockAmount(long amount) {
+        // Task #33: bound branch. Decrement lockedLocal in the binding row; NO external
+        // write. Unbound path unchanged.
+        BindingRow row = lookupBindingRow();
+        if (row != null) {
+            if (amount < 0) return BankStatus.FAILED_NEGATIVE_VALUE;
+            if (row.lockedBalance() < amount) return BankStatus.FAILED_NOT_ENOUGH_FUNDS;
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null) {
+                bindings.setLocked(accountId, itemID, row.lockedBalance() - amount);
+            }
+            return BankStatus.SUCCESS;
+        }
         if(amount < 0)
             return BankStatus.FAILED_NEGATIVE_VALUE;
         if (lockedBalance < amount) {
@@ -627,6 +1000,14 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public void unlockAll()
     {
+        // Task #33: bound branch — clear lockedLocal on the binding row; NO external
+        // write. Unbound path unchanged.
+        BindingRow row = lookupBindingRow();
+        if (row != null) {
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null) bindings.setLocked(accountId, itemID, 0L);
+            return;
+        }
         addBalanceInternal(lockedBalance);
         lockedBalance = 0;
     }
@@ -673,12 +1054,13 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public String getNormalizedBalance()
     {
-        return getNormalizedAmount(balance);
+        // Route through getBalance so bound-slot displays are correct.
+        return getNormalizedAmount(getBalance());
     }
     @Override
     public CompletableFuture<String> getNormalizedBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getNormalizedAmount(balance));
+        return CompletableFuture.completedFuture(getNormalizedAmount(getBalance()));
     }
 
 
@@ -687,12 +1069,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public String getNormalizedLockedBalance()
     {
-        return getNormalizedAmount(lockedBalance);
+        return getNormalizedAmount(getLockedBalance());
     }
     @Override
     public CompletableFuture<String> getNormalizedLockedBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getNormalizedAmount(lockedBalance));
+        return CompletableFuture.completedFuture(getNormalizedAmount(getLockedBalance()));
     }
 
 
@@ -701,12 +1083,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public String getNormalizedTotalBalance()
     {
-        return getNormalizedAmount(balance + lockedBalance);
+        return getNormalizedAmount(getTotalBalance());
     }
     @Override
     public CompletableFuture<String> getNormalizedTotalBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getNormalizedAmount(balance + lockedBalance));
+        return CompletableFuture.completedFuture(getNormalizedAmount(getTotalBalance()));
     }
 
 
@@ -716,12 +1098,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public String getFormattedBalance()
     {
-        return getFormattedAmount(balance);
+        return getFormattedAmount(getBalance());
     }
     @Override
     public CompletableFuture<String> getFormattedBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getFormattedAmount(balance));
+        return CompletableFuture.completedFuture(getFormattedAmount(getBalance()));
     }
 
 
@@ -730,12 +1112,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public String getFormattedLockedBalance()
     {
-        return getFormattedAmount(lockedBalance);
+        return getFormattedAmount(getLockedBalance());
     }
     @Override
     public CompletableFuture<String> getFormattedLockedBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getFormattedAmount(lockedBalance));
+        return CompletableFuture.completedFuture(getFormattedAmount(getLockedBalance()));
     }
 
 
@@ -743,12 +1125,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public String getFormattedTotalBalance()
     {
-        return getFormattedAmount(balance + lockedBalance);
+        return getFormattedAmount(getTotalBalance());
     }
     @Override
     public CompletableFuture<String> getFormattedTotalBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getFormattedAmount(balance + lockedBalance));
+        return CompletableFuture.completedFuture(getFormattedAmount(getTotalBalance()));
     }
 
 
@@ -826,11 +1208,14 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public String toStringNoOwner()
     {
+        // Route through the delegating getters so bound slots show correctly.
+        long free = getBalance();
+        long locked = getLockedBalance();
         StringBuilder content = new StringBuilder(getItemName() + getFormattedTotalBalance());
-        if(lockedBalance > 0) {
+        if(locked > 0) {
             content.append("(").append(BankSystemTextMessages.getBalanceDetailedMessage(
-                    getFormattedAmount(balance),
-                    getFormattedAmount(lockedBalance))).append(")");
+                    getFormattedAmount(free),
+                    getFormattedAmount(locked))).append(")");
         }
 
         return content.toString();
@@ -881,8 +1266,14 @@ public class ServerBank implements ServerSaveable, IServerBank {
         CompoundTag itemTag = new CompoundTag();
         itemID.save(itemTag);
         tag.put("itemID", itemTag);
-        tag.putLong("balance", balance);
-        tag.putLong("lockedBalance", lockedBalance);
+        // Task #33 (v2.0.5): for a currently-bound slot the local balance/lockedBalance
+        // are NOT authoritative — the external mod is. Force-zero on save so a later
+        // unbind path (which explicitly writes back the external balance) is the only
+        // way values re-enter local storage. If the slot is not bound, save the usual
+        // local values byte-for-byte identically to pre-Task-#33 behavior.
+        boolean bound = lookupBindingRow() != null;
+        tag.putLong("balance", bound ? 0L : balance);
+        tag.putLong("lockedBalance", bound ? 0L : lockedBalance);
         return true;
     }
 
@@ -1027,6 +1418,24 @@ public class ServerBank implements ServerSaveable, IServerBank {
      */
     public void rekeyForAliasMerge_internal(@NotNull ItemID canonical) {
         this.itemID = canonical;
+        this.changeFlag = true;
+    }
+
+    /**
+     * <b>Internal — external-currency unbind service only (Task #33, v2.0.5).</b>
+     * Writes the local {@code balance} / {@code lockedBalance} fields directly,
+     * bypassing every check the public API performs. Called by the unbind path in
+     * {@code ServerBankManager} after a final external balance read: the freshly
+     * unbound slot re-materializes into native storage without routing through
+     * the still-bound public API (which would still delegate to the external mod
+     * that just got unbound).
+     *
+     * @param balance       new free balance in raw units (clamped to {@code >= 0})
+     * @param lockedBalance new locked balance in raw units (clamped to {@code >= 0})
+     */
+    public void writeLocalFieldsForUnbind_internal(long balance, long lockedBalance) {
+        this.balance = Math.max(0L, balance);
+        this.lockedBalance = Math.max(0L, lockedBalance);
         this.changeFlag = true;
     }
 
