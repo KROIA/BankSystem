@@ -6,6 +6,9 @@ import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.VolatileItemComponents;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
@@ -31,15 +34,42 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
         return TYPE;
     }
 
+    /**
+     * Wire format for {@link #items}: NBT (CompoundTag) via
+     * {@link ByteBufCodecs#TRUSTED_COMPOUND_TAG} — NOT vanilla's
+     * {@link ItemStack#STREAM_CODEC}, which encodes items by their runtime numeric
+     * registry ID. Numeric IDs are stable master↔client (broadcast via vanilla
+     * handshake), but NOT stable master↔slave — each server computes its own numeric
+     * ID table independently and even a byte-identical mod set can diverge if mod
+     * load order differs. Encoding by resource key (via
+     * {@link ItemStack#save(net.minecraft.core.HolderLookup.Provider, Tag)} on the
+     * sender / {@link ItemStack#parseOptional(net.minecraft.core.HolderLookup.Provider, CompoundTag)}
+     * on the receiver) is stable across independent server processes and degrades to
+     * an unresolvable stack (dropped in {@link ItemIDManager#receiveSyncPacket}) when
+     * the receiving side lacks the mod, instead of silently binding the short to a
+     * wrong item.
+     * <p>
+     * Master↔client uses the same NBT codec for uniformity; vanilla broadcasts the
+     * master's registry to clients at connect time, so client-side
+     * {@code parseOptional} always resolves items that the master registered.
+     */
     public static final StreamCodec<RegistryFriendlyByteBuf, SyncItemIDsPacket> STREAM_CODEC = StreamCodec.composite(
-            ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ItemStack.STREAM_CODEC, HashMap<ItemID, ItemStack>::new), p -> p.items,
+            ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.TRUSTED_COMPOUND_TAG, HashMap<ItemID, CompoundTag>::new), p -> p.items,
             ExtraCodecUtils.listStreamCodec(ByteBufCodecs.STRING_UTF8), p -> p.volatileComponentIds,
             ExtraCodecUtils.listStreamCodec(ByteBufCodecs.STRING_UTF8), p -> p.depositGatedComponentIds,
             ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ItemID.STREAM_CODEC, HashMap<ItemID, ItemID>::new), p -> p.aliases,
             SyncItemIDsPacket::new
     );
 
-    private final Map<ItemID, ItemStack> items;
+    /**
+     * Raw NBT payload of the sender's ItemID -> ItemStack table. Kept in serialized
+     * form (rather than eagerly inflated back to {@link ItemStack}) so the "item is
+     * unresolvable on this side" case can be reported and dropped by
+     * {@link ItemIDManager#receiveSyncPacket} — a stack constructed from a tag whose
+     * host mod is missing here would otherwise silently degrade to
+     * {@link ItemStack#EMPTY} inside a lossy codec, hiding the divergence.
+     */
+    private final Map<ItemID, CompoundTag> items;
 
     /**
      * Config-sourced volatile component type ids (see
@@ -68,19 +98,22 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
 
 
     /**
-     * Creates a sync packet for the given items, automatically attaching the sender's
-     * current config-sourced volatile + deposit-gated component lists and ItemID alias table.
+     * Creates a sync packet from live {@link ItemStack} entries — converts each stack
+     * to its NBT form using the current server's registry access. See
+     * {@link #STREAM_CODEC} for why NBT (not the numeric-ID codec) is used on the wire.
+     * Automatically attaches the sender's current config-sourced volatile + deposit-gated
+     * component lists and ItemID alias table.
      */
-    public SyncItemIDsPacket(Map<ItemID, ItemStack> items)
+    public SyncItemIDsPacket(Map<ItemID, ItemStack> itemStacks)
     {
-        this(items,
+        this(toItemTagMap(itemStacks),
                 VolatileItemComponents.getConfigComponentIdStrings(),
                 VolatileItemComponents.getGatedConfigComponentIdStrings(),
                 ItemIDManager.getItemIDAliasMap());
     }
 
     /** Codec constructor. */
-    public SyncItemIDsPacket(Map<ItemID, ItemStack> items, List<String> volatileComponentIds, List<String> depositGatedComponentIds, Map<ItemID, ItemID> aliases)
+    public SyncItemIDsPacket(Map<ItemID, CompoundTag> items, List<String> volatileComponentIds, List<String> depositGatedComponentIds, Map<ItemID, ItemID> aliases)
     {
         this.items = items;
         this.volatileComponentIds = volatileComponentIds;
@@ -88,7 +121,50 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
         this.aliases = aliases;
     }
 
-    public Map<ItemID, ItemStack> getItems()
+    /**
+     * Converts a live {@code ItemID -> ItemStack} map to the NBT wire representation.
+     * Called on the sending server thread. Uses the running server's
+     * {@link RegistryAccess} to serialize each stack via
+     * {@link ItemStack#save(net.minecraft.core.HolderLookup.Provider, Tag)} — the same
+     * mechanism {@link ItemIDManager#save(CompoundTag)} uses for the on-disk
+     * {@code ItemIDs.nbt} file, and thus subject to the same failure discipline:
+     * an entry that cannot be serialized in the current registry context is dropped
+     * with a WARN (receiver would fail to parse it anyway).
+     */
+    private static Map<ItemID, CompoundTag> toItemTagMap(Map<ItemID, ItemStack> itemStacks)
+    {
+        Map<ItemID, CompoundTag> tags = new HashMap<>(itemStacks.size());
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if(access == null)
+            return tags;
+        for(Map.Entry<ItemID, ItemStack> entry : itemStacks.entrySet())
+        {
+            ItemStack stack = entry.getValue();
+            if(stack == null || stack.isEmpty())
+                continue;
+            try
+            {
+                Tag stackTag = stack.save(access, new CompoundTag());
+                if(stackTag instanceof CompoundTag compoundTag)
+                    tags.put(entry.getKey(), compoundTag);
+            }
+            catch(Exception ignored)
+            {
+                // Match ItemIDManager.save()'s discipline: silently drop entries that
+                // can't be serialized here. The receiver's parseOptional would fail
+                // on them anyway; no point sending unparseable bytes on the wire.
+            }
+        }
+        return tags;
+    }
+
+    /**
+     * @return the sender's ItemID -> serialized ItemStack NBT map. Callers must
+     *         inflate to {@link ItemStack} via
+     *         {@link ItemStack#parseOptional(net.minecraft.core.HolderLookup.Provider, CompoundTag)}
+     *         on their own registry to handle unresolvable entries gracefully.
+     */
+    public Map<ItemID, CompoundTag> getItems()
     {
         return items;
     }
@@ -167,15 +243,26 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
     protected void handleOnSlave(ForwardPacketContext context)
     {
         ItemIDManager.receiveSyncPacket(this);
+        // Task #22: after applying the master's authoritative items + aliases, release the
+        // slave-side registration latch and run default registration via register-if-absent.
+        // Master's shorts stay untouched; only genuinely new-in-mod-update items (that the
+        // master doesn't yet know about) mint fresh slave-local shorts. Idempotent —
+        // subsequent incremental sync packets find the latch already released and return.
+        ItemIDManager.finalizeSlaveSync();
     }
 
     @Override
     public String toString()
     {
         StringBuilder s = new StringBuilder();
-        for(Map.Entry<ItemID, ItemStack> entry : items.entrySet())
+        for(Map.Entry<ItemID, CompoundTag> entry : items.entrySet())
         {
-            s.append(entry.getKey()).append(" -> Stack=").append(entry.getValue().getItem()).append("\n");
+            // Tag NBT carries the item's resource key under "id" — friendlier than the
+            // full CompoundTag dump for debug logs. Falls back to the raw tag when the
+            // key is absent (defensive; a well-formed save() output always includes it).
+            CompoundTag tag = entry.getValue();
+            String label = (tag != null && tag.contains("id")) ? tag.getString("id") : String.valueOf(tag);
+            s.append(entry.getKey()).append(" -> Stack=").append(label).append("\n");
         }
         return "SyncItemIDsPacket\n"+s.toString();
     }

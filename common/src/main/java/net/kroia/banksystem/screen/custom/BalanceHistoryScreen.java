@@ -1,11 +1,13 @@
 package net.kroia.banksystem.screen.custom;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.ItemColorUtil;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -53,10 +55,13 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private static final String DISABLED_ITEMS_KEY = "disabledItems";
     private static final String VIEWPORT_KEY = "viewport";
 
+    private static final Component FILTER_LABEL_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".filter");
+
     private record ToggleRow(GuiElement element, String name) {}
 
     private final int accountNumber;
     private final BalanceHistoryChart chart;
+    private final Label searchLabel;
     private final TextBox searchField;
     private final VerticalListView toggleListView;
     private final Label titleLabel;
@@ -85,6 +90,9 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         chart = new BalanceHistoryChart();
         addElement(chart);
 
+        searchLabel = new Label(FILTER_LABEL_TEXT.getString());
+        addElement(searchLabel);
+
         searchField = new TextBox();
         searchField.setOnTextChanged(this::onSearchChanged);
         addElement(searchField);
@@ -112,7 +120,9 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
 
         titleLabel.setBounds(p, p, getWidth() - 2 * p, titleHeight);
         chart.setBounds(p, toggleTop, toggleX - 2 * p, getHeight() - titleHeight - 3 * p);
-        searchField.setBounds(toggleX, toggleTop, toggleWidth, searchHeight);
+        int searchLabelWidth = searchLabel.getTextWidth(searchLabel.getText()) + searchLabel.getPadding() * 2;
+        searchLabel.setBounds(toggleX, toggleTop, searchLabelWidth, searchHeight);
+        searchField.setBounds(toggleX + searchLabelWidth, toggleTop, toggleWidth - searchLabelWidth, searchHeight);
         toggleListView.setBounds(toggleX, toggleTop + searchHeight + p, toggleWidth, getHeight() - toggleTop - searchHeight - 2 * p);
     }
 
@@ -182,6 +192,10 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
 
         for (Map.Entry<Short, List<BalanceHistoryRecord>> entry : grouped.entrySet()) {
             short itemId = entry.getKey();
+            // Task #24: skip series for items this client can't resolve (a mod on the master but
+            // not here) — they would plot under an air / wrong-item icon. Display-only.
+            if (!ItemIDManager.isResolvableOnThisServer(new ItemID(itemId)))
+                continue;
             List<BalanceHistoryRecord> itemRecords = entry.getValue();
 
             ItemStack itemStack = getItemStack(itemId);

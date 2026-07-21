@@ -25,6 +25,11 @@ public class UpdateUserCustomDataRequest extends BankSystemGenericRequest<Compou
 
     @Override
     public CompletableFuture<Boolean> handleOnMasterServer(CompoundTag input, String slaveID, UUID sender) {
+        // Task #26: an untrusted slave could forge the sender UUID to write another user's
+        // custom data — block writes from untrusted slaves outright.
+        if (isBlockedForUntrustedSlave(slaveID)) {
+            return CompletableFuture.completedFuture(false);
+        }
         ISyncServerBankManager manager = getServerBankManager();
         if (manager == null) return CompletableFuture.completedFuture(false);
         User user = manager.getUserByUUID(sender);

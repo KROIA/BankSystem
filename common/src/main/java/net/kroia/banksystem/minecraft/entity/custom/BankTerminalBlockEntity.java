@@ -381,6 +381,27 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
          */
         public CompletableFuture<HashMap<ItemID, Long>> getItemCount(@Nullable List<ItemStack> rejectedDeposits)
         {
+            return getItemCount(rejectedDeposits, null);
+        }
+
+        /**
+         * Counts the depositable items in this inventory, grouped by ItemID.
+         * Only counts items that are not damaged or enchanted and that pass the
+         * deposit gate (see {@link VolatileItemComponents#isDepositEquivalent}).
+         *
+         * @param rejectedDeposits     when non-null, receives the stacks that were refused
+         *                             by the deposit gate so the caller can inform the player
+         *                             (rejections must never be silent)
+         * @param unresolvableDeposits when non-null, receives stacks whose ItemID is unknown
+         *                             to the master's registry ({@link ItemID#INVALID_ID}) —
+         *                             e.g. a mod installed only on this slave. The caller tells
+         *                             the depositing player the item cannot be banked here. This
+         *                             is emitted from the deposit action (per attempt, per player)
+         *                             rather than the ID-registration path, which is deduplicated
+         *                             by the slave's negative cache and so cannot reliably notify.
+         */
+        public CompletableFuture<HashMap<ItemID, Long>> getItemCount(@Nullable List<ItemStack> rejectedDeposits, @Nullable List<ItemStack> unresolvableDeposits)
+        {
             CompletableFuture<HashMap<ItemID, Long>> futureResult = new CompletableFuture<>();
 
             List<ItemStack> stacks = new ArrayList<>();
@@ -398,7 +419,15 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 ItemID itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
                 if(itemID == null || !itemID.isValid())
                 {
+                    // Unresolvable on this server: the master's registry doesn't know this item
+                    // (mod missing on master), so it resolves to INVALID_ID and can never be
+                    // banked. Surface it to the caller so the depositing player is told — every
+                    // attempt. Do NOT rely on the ID-registration ARRS message: that fires at
+                    // most once per item per session (negative-cache dedup) and not at all once
+                    // a background lookup has already cached the item.
                     warn("ItemStack: "+stack+" is not registered for ItemID. Skipping this item");
+                    if (unresolvableDeposits != null)
+                        unresolvableDeposits.add(stack);
                     continue;
                 }
 
@@ -712,6 +741,11 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             //CompoundTag transferTaskTag = new CompoundTag();
             //tag.put("TransferTask", transferTaskTag);
             tag.putInt("SelectedBankAccount", selectedBankAccount);
+            // NOTE: the crafting checkbox flags (formerly "CraftUseBankItems" /
+            // "CraftDepositOutput") moved to the per-player User.customData store
+            // (they are global player preferences, not per-block state). Old
+            // worlds may still carry those keys here — they are simply no longer
+            // read and disappear on the next save of this block entity.
             return true;
         }
 
@@ -911,7 +945,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         // components (e.g. spoiled tfc:food) don't match a fresh withdrawal, blocking
         // the deposit-rotten/withdraw-fresh laundering exploit.
         List<ItemStack> rejectedDeposits = new ArrayList<>();
-        CompletableFuture<HashMap<ItemID, Long>> itemsFuture = inventory.getItemCount(rejectedDeposits);
+        List<ItemStack> unresolvableDeposits = new ArrayList<>();
+        CompletableFuture<HashMap<ItemID, Long>> itemsFuture = inventory.getItemCount(rejectedDeposits, unresolvableDeposits);
 
         itemsFuture.thenAccept((items)->
         {
@@ -924,6 +959,18 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 for (String itemName : rejectedNames)
                     ServerPlayerUtilities.printToClientConsole(playerID,
                             BankSystemTextMessages.getDepositRejectedItemConditionMessage(itemName));
+            }
+            // Master-unknown items must never be silent either: tell the player, per attempt,
+            // which items can't be banked because the master's registry doesn't know them
+            // (e.g. a mod installed only on this slave). Fires here — on the deposit action —
+            // so it is reliable and per-item, unlike the deduped ID-registration ARRS path.
+            if (!unresolvableDeposits.isEmpty()) {
+                Set<String> unresolvableNames = new LinkedHashSet<>();
+                for (ItemStack unresolvable : unresolvableDeposits)
+                    unresolvableNames.add(unresolvable.getHoverName().getString());
+                for (String itemName : unresolvableNames)
+                    ServerPlayerUtilities.printToClientConsole(playerID,
+                            BankSystemTextMessages.getDepositItemUnknownOnMasterMessage(itemName));
             }
             CompletableFuture<IAsyncBankAccount> bankAccountFuture = bankManager.getBankAccountAsync(accountNr);
             bankAccountFuture.thenAccept(bankAccount -> {

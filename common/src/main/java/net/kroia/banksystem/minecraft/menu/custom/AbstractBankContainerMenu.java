@@ -27,6 +27,19 @@ public abstract class AbstractBankContainerMenu extends AbstractContainerMenu {
     protected static final int POS_X = 0;
     protected static final int POS_Y = 0;
 
+    /**
+     * Additional Y offset applied to every slot created by this menu.
+     * <p>
+     * Subclasses that render extra UI above the standard container area (e.g. the
+     * Bank Terminal's 3x3 crafting grid) override this to shift the hotbar, player
+     * inventory and block inventory slots downwards so the slot coordinates match
+     * the taller screen element. Must return a compile-time constant — it is invoked
+     * from this class's constructor, before subclass fields are initialized.
+     */
+    protected int getSlotYOffset() {
+        return 0;
+    }
+
 
 
     // Client Constructor
@@ -54,7 +67,7 @@ public abstract class AbstractBankContainerMenu extends AbstractContainerMenu {
     protected void createBlockEntityInventory(Container inventory) {
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 9; column++) {
-                Slot slot = new Slot(inventory, column + (row * 9), 8 + (column * 18)+POS_X, 18 + (row * 18)+POS_Y);
+                Slot slot = new Slot(inventory, column + (row * 9), 8 + (column * 18)+POS_X, 18 + (row * 18)+POS_Y+getSlotYOffset());
                 addSlot(slot);
             }
         }
@@ -66,7 +79,7 @@ public abstract class AbstractBankContainerMenu extends AbstractContainerMenu {
                 addSlot(new Slot(playerInv,
                         9 + column + (row * 9),
                         8 + (column * 18)+POS_X,
-                        84 + (row * 18)+POS_Y));
+                        84 + (row * 18)+POS_Y+getSlotYOffset()));
             }
         }
     }
@@ -76,7 +89,7 @@ public abstract class AbstractBankContainerMenu extends AbstractContainerMenu {
             addSlot(new Slot(playerInv,
                     column,
                     8 + (column * 18)+POS_X,
-                    142+POS_Y));
+                    142+POS_Y+getSlotYOffset()));
         }
     }
 

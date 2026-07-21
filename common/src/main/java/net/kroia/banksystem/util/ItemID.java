@@ -169,8 +169,14 @@ public class ItemID implements ServerSaveable {
      */
     public static @NotNull ItemID getOrRegisterFromItemStackServerSide_direct(@NotNull ItemStack itemStack)
     {
-        @Nullable ItemID id = getFromItemStack(itemStack);
-        if(id == null)
+        // Note: getFromItemStack (→ ItemIDManager.getItemID) returns INVALID_ID (not null) for
+        // unknown stacks. Prior to Task #23 the slave-side createDefaultItemIDs pre-registered
+        // items so unknown stacks were rare on the register-flow path; with Task #23 removing
+        // that pre-registration, an unknown stack on the slave must fall through to the
+        // registration path (which on the slave delegates to master via ARRS). Gating on
+        // `== null` alone silently returned INVALID_ID without ever calling the delegation.
+        ItemID id = getFromItemStack(itemStack);
+        if (id == null || !id.isValid())
         {
             id = ItemIDManager.registerItemStackServerSide_direct(itemStack);
         }

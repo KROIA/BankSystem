@@ -2,6 +2,7 @@ package net.kroia.banksystem.util.async_function_forwarding;
 
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
@@ -105,6 +106,17 @@ public abstract class AsyncForwardingRequest<
             if (!isAllowedToCallByUntrustedSlaveServer(input)) {
                 if (!BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isSlaveServerTrusted(slaveID)) {
                     warn("The slave server: '" + slaveID + "' try's to call the function: '" + input.function.toString() + "' which is not allowed for an untrusted slave server!");
+                    String userMsg = "[BankSystem] Your server '" + slaveID + "' is not trusted by the bank master. " +
+                            "This action is not allowed. Contact a bank admin to grant trust for cross-server bank operations.";
+                    if (playerSender != null) {
+                        // Player UUID was propagated (e.g. client-initiated request); target them specifically.
+                        ClientConsoleMessagePacket.sendMessageFromMaster(playerSender, userMsg);
+                    } else {
+                        // Player UUID not propagated (slave-initiated server-side request via ARRS which
+                        // drops the UUID). Fall back to broadcasting to all players on the offending slave.
+                        // Task #27 follow-up: propagate player UUID through ARRS so we can target precisely.
+                        ClientConsoleMessagePacket.sendMessageFromMasterToSlave(slaveID, userMsg);
+                    }
                     return false;
                 }
             }
@@ -112,6 +124,11 @@ public abstract class AsyncForwardingRequest<
         if (playerSender != null) {
             if (!isAllowedToCallByClient(input)) {
                 warn("The player '" + playerName + "' try's to call the function: '" + input.function.toString() + "' which is not allowed from the client side!");
+                ClientConsoleMessagePacket.sendMessageFromMaster(
+                        playerSender,
+                        "[BankSystem] This action is not allowed to be initiated directly from a client. " +
+                                "If you triggered it through normal in-game UI, this is a bug — please report it."
+                );
                 return false;
             }
         }

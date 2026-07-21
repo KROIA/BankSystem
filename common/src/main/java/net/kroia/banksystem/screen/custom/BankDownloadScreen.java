@@ -19,6 +19,7 @@ import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.Layout;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
+import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -535,6 +536,18 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
 
         settingsMenu.setBounds(padding,padding, width - inventoryWidth - spacing - padding*2, height - padding*2);
         inventoryView.setPosition(settingsMenu.getRight() + spacing, (height - inventoryHeight) / 2);
+    }
+
+    /**
+     * Screen-space bounds of the visible GUI elements, used by the JEI plugin
+     * as exclusion areas. Without them JEI only knows about the vanilla
+     * centered container rectangle and overlaps the settings panel with its
+     * ingredient list and overlay buttons.
+     */
+    public List<Rect2i> getJeiExclusionAreas() {
+        if (!isInitialized())
+            return List.of();
+        return buildJeiExclusionAreas(settingsMenu, inventoryView);
     }
 
     public static void handlePacket(SyncBankDownloadDataPacket packet) {

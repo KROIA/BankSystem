@@ -316,6 +316,43 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
+    private static final Component DEPOSIT_ITEM_UNKNOWN_ON_MASTER = Component.translatable(prefix+"deposit_item_unknown_on_master");
+    /**
+     * Message shown on a slave when a player tries to deposit an item whose identity is
+     * unknown to the master server's registry (e.g. a mod installed only on the slave).
+     * Unlike the deposit-gate rejection, such an item can never be banked on this setup at
+     * all. Emitted from the deposit action so it fires on every attempt, per player — not
+     * from the ID-registration path, which is deduplicated by the slave's negative cache.
+     */
+    public static String getDepositItemUnknownOnMasterMessage(String itemName)
+    {
+        String msg = DEPOSIT_ITEM_UNKNOWN_ON_MASTER.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+    private static final Component CRAFTING_MISSING_BANK_ITEMS = Component.translatable(prefix+"crafting_missing_bank_items");
+    /**
+     * Message shown when a bank-assisted craft is aborted because a required
+     * ingredient could not be locked in the bank (all-or-nothing deduction).
+     */
+    public static String getCraftingMissingBankItemsMessage(String itemName)
+    {
+        String msg = CRAFTING_MISSING_BANK_ITEMS.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+    private static final Component CRAFTING_DEPOSIT_FALLBACK = Component.translatable(prefix+"crafting_deposit_fallback");
+    /**
+     * Message shown when the crafted output could not be auto-deposited into the
+     * bank and was handed to the player inventory instead (never blocked, never
+     * silently dropped).
+     */
+    public static String getCraftingDepositFallbackMessage(String itemName)
+    {
+        String msg = CRAFTING_DEPOSIT_FALLBACK.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
     private static final Component ITEM_NOT_ALLOWED_FAILED = Component.translatable(prefix+"item_not_allowed_failed");
     public static String getItemNotAllowedFailedMessage(String itemName)
     {

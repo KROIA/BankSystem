@@ -14,6 +14,7 @@ import net.kroia.banksystem.screen.uiElements.BankUserWidget;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.client.GuiScreen;
@@ -41,6 +42,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private static final Component CREATE_NEW_BANK = Component.translatable(PREFIX+"create_new_bank");
     private static final Component ADD_USER = Component.translatable(PREFIX+"add_user");
+    private static final Component MUST_KEEP_MANAGER = Component.translatable(PREFIX+"must_keep_manager");
 
     private static class ItemViewButton extends Button{
 
@@ -368,6 +370,20 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             setUsers.put(userData.userUUID, userData.permissions);
         }
 
+        // Advisory pre-guard: a non-personal account must always keep at least one user (with
+        // MANAGE). Removing the last user would orphan the account, so block the save locally.
+        // A non-empty-but-no-MANAGE set is allowed through — the master auto-promotes a user and
+        // the refreshed account data reflects the new manager. Personal accounts are unaffected
+        // (the owner implicitly holds MANAGE and is never in this widget list).
+        if(personalBankOwnerData == null && setUsers.isEmpty())
+        {
+            if(minecraft != null && minecraft.player != null)
+            {
+                minecraft.player.sendSystemMessage(MUST_KEEP_MANAGER);
+            }
+            return;
+        }
+
         String accountName = null;
         if(accountNameTextBox != null)
         {
@@ -413,7 +429,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         {
             ItemID itemID = entry.getKey();
             BankData bankData = entry.getValue();
-            if(bankData != null)
+            // Task #24: hide items this client can't resolve (mod present on the master but not
+            // here) so the management list never shows air / wrong-item rows. Display-only.
+            if(bankData != null && ItemIDManager.isResolvableOnThisServer(itemID))
                 sortedBankAccounts.add(new Pair<>(itemID, bankData));
         }
         sortedBankAccounts.sort((a, b) -> Long.compare(b.getSecond().balance(), a.getSecond().balance()));
@@ -511,6 +529,20 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             userElementListView.removeChild(userWidget);
             bankUserWidgets.remove(userWidget.getUserData().userUUID);
         }
+        refreshRemoveButtonStates();
+    }
+
+    /**
+     * Re-evaluates whether each user row's remove-X button should be clickable. Removing the last
+     * user of a non-personal account would orphan it, so in that single case the (only) row's
+     * remove button is disabled. Personal accounts and accounts with >=2 users keep all remove
+     * buttons enabled. Must be called after every mutation of {@link #bankUserWidgets}.
+     */
+    private void refreshRemoveButtonStates() {
+        boolean lockLastUser = (personalBankOwnerData == null) && (bankUserWidgets.size() == 1);
+        for (BankUserWidget w : bankUserWidgets.values()) {
+            w.setRemoveButtonEnabled(!lockLastUser);
+        }
     }
     private void onCreateNewBank(ItemStack item)
     {
@@ -552,6 +584,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                         BankUserWidget userWidget = new BankUserWidget(bankUserData, toRemoveUserWidgets::add, canManage, this);
                         bankUserWidgets.put(userData.userUUID(), userWidget);
                         userElementListView.addChild(userWidget);
+                        refreshRemoveButtonStates();
                     });
             List<UserData> userDataList = new ArrayList<>(bankManagerData.userMapData().userMap().values().stream().toList());
             // remove already added users
@@ -645,6 +678,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                 bankUserWidgets.remove(widget.getUserData().userUUID);
             }
             toRemoveUserWidgets.clear();
+            refreshRemoveButtonStates();
         }
         if(lastTickCount > 20)
         {

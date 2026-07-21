@@ -82,6 +82,11 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
     public boolean needsRoutingToMaster() { return false; }
 
     public CompletableFuture<OutputData> handleOnMasterServer(WithdrawItemsFromBankRequest.InputData input, String slaveID, @Nullable UUID playerSender) {
+        // Task #26 (security): untrusted-slave gate — see DepositItemsInBankRequest. No-op
+        // return: empty withdrawn-items map, master balances untouched.
+        if (isBlockedForUntrustedSlave(slaveID)) {
+            return CompletableFuture.completedFuture(new OutputData(new HashMap<>()));
+        }
         if(playerSender != null)
         {
             warn("This request is not allowed to be sent from a client");

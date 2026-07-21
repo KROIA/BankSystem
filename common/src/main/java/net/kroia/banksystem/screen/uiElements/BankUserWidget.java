@@ -22,6 +22,7 @@ public class BankUserWidget extends BankSystemGuiElement {
         public static final String PREFIX = "gui."+ BankSystemMod.MOD_ID+".bank_user_widget.";
         public static final Component PERMISSION_EDIT_BUTTON = Component.translatable(PREFIX+"permission_edit_button");
         public static final Component REMOVE_BUTTON = Component.translatable(PREFIX+"remove_button");
+        public static final Component CANNOT_REMOVE_LAST_MANAGER = Component.translatable(PREFIX+"cannot_remove_last_manager");
 
         public static final Component PERMISSION_SCREEN = Component.translatable(PREFIX+"permission_screen");
         public static final Component PERMISSION_DEPOSIT = Component.translatable(PREFIX+"permission_deposit");
@@ -120,6 +121,7 @@ public class BankUserWidget extends BankSystemGuiElement {
     private final Label nameLabel;
     private final Button permissionEditButton;
     private final Button removeButton;
+    private final int defaultRemoveButtonTextColor;
 
     private final BankUserData userData;
     private final boolean canManage;
@@ -148,11 +150,13 @@ public class BankUserWidget extends BankSystemGuiElement {
 
             addChild(permissionEditButton);
             addChild(removeButton);
+            defaultRemoveButtonTextColor = removeButton.getTextColor();
         }
         else
         {
             permissionEditButton = null;
             removeButton = null;
+            defaultRemoveButtonTextColor = 0;
         }
 
         // Initialize UI elements here if needed
@@ -160,6 +164,28 @@ public class BankUserWidget extends BankSystemGuiElement {
 
     public BankUserData getUserData() {
         return userData;
+    }
+
+    /**
+     * Enables or disables the remove-X button of this user row.
+     * <p>
+     * When disabled, the button still renders (via {@code setClickable(false)}) but ignores input,
+     * its text is dimmed and a hover tooltip explains why it is locked. No-ops when this row has no
+     * remove button (i.e. the viewer cannot manage the account).
+     */
+    public void setRemoveButtonEnabled(boolean enabled)
+    {
+        if(removeButton == null)
+            return;
+        removeButton.setClickable(enabled);
+        removeButton.setTextColor(enabled ? defaultRemoveButtonTextColor : 0xFF808080);
+        if(enabled)
+            removeButton.setHoverTooltipSupplier(() -> "");
+        else
+        {
+            final String reason = TEXT.CANNOT_REMOVE_LAST_MANAGER.getString();
+            removeButton.setHoverTooltipSupplier(() -> reason);
+        }
     }
 
     @Override
@@ -197,6 +223,10 @@ public class BankUserWidget extends BankSystemGuiElement {
         }
     }
     private void onRemoveButtonClicked() {
+        // Defense-in-depth: setClickable(false) already suppresses the click, but guard anyway so a
+        // disabled (last-manager) row can never trigger a removal.
+        if (removeButton != null && !removeButton.isClickable())
+            return;
         if (canManage) {
             onRemoveUser.accept(this);
         }

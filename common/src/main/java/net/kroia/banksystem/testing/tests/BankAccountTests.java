@@ -61,6 +61,13 @@ public class BankAccountTests extends TestSuite {
 
         // Listener Management
         addTest("unsubscribe_doesnt_throw", this::testUnsubscribeDoesntThrow);
+
+        // Manage-invariant (orphan-prevention) helper — pure, no manager needed
+        addTest("manageInvariant_promotes_when_no_manage", this::testManageInvariantPromotesWhenNoManage);
+        addTest("manageInvariant_promotes_deterministic_pick", this::testManageInvariantPromotesDeterministicPick);
+        addTest("manageInvariant_empty_refuses_orphan", this::testManageInvariantEmptyRefusesOrphan);
+        addTest("manageInvariant_ok_when_manage_present", this::testManageInvariantOkWhenManagePresent);
+        addTest("manageInvariant_personal_owner_always_ok", this::testManageInvariantPersonalOwnerAlwaysOk);
     }
 
     @Override
@@ -410,5 +417,108 @@ public class BankAccountTests extends TestSuite {
         }
 
         return pass("unsubscribeBankChanges completed without throwing");
+    }
+
+    // ================= Manage-Invariant Helper Tests =================
+    // These exercise the pure static ServerBankAccount.enforceManageInvariant helper
+    // directly (no manager / server state required). It guarantees a non-personal
+    // account never loses its last MANAGE holder.
+
+    private static User makeUser(UUID uuid, String name) {
+        return new User(uuid, name, false);
+    }
+
+    /**
+     * Non-empty user set with no MANAGE holder → PROMOTED, and the map now has a MANAGE holder.
+     */
+    private TestResult testManageInvariantPromotesWhenNoManage() {
+        java.util.Map<User, Integer> proposed = new java.util.HashMap<>();
+        proposed.put(makeUser(TEST_USER_A, TEST_USER_A_NAME), BankPermission.DEPOSIT.getValue());
+        proposed.put(makeUser(TEST_USER_B, TEST_USER_B_NAME), BankPermission.WITHDRAW.getValue());
+
+        ServerBankAccount.ManageInvariantOutcome outcome =
+                ServerBankAccount.enforceManageInvariant(proposed, false);
+        if (outcome != ServerBankAccount.ManageInvariantOutcome.PROMOTED) {
+            return fail("Expected PROMOTED, got " + outcome);
+        }
+        long manageHolders = proposed.values().stream()
+                .filter(mask -> BankPermission.hasPermission(mask, BankPermission.MANAGE.getValue()))
+                .count();
+        return assertTrue("At least one user must hold MANAGE after promotion (got "
+                + manageHolders + ")", manageHolders >= 1);
+    }
+
+    /**
+     * Deterministic pick: the user with the most set permission bits is promoted.
+     * User A has 2 bits (DEPOSIT|WITHDRAW), User B has 1 bit (DEPOSIT) → A must be chosen.
+     */
+    private TestResult testManageInvariantPromotesDeterministicPick() {
+        User userA = makeUser(TEST_USER_A, TEST_USER_A_NAME);
+        User userB = makeUser(TEST_USER_B, TEST_USER_B_NAME);
+        java.util.Map<User, Integer> proposed = new java.util.HashMap<>();
+        proposed.put(userA, BankPermission.DEPOSIT.getValue() | BankPermission.WITHDRAW.getValue());
+        proposed.put(userB, BankPermission.DEPOSIT.getValue());
+
+        ServerBankAccount.ManageInvariantOutcome outcome =
+                ServerBankAccount.enforceManageInvariant(proposed, false);
+        if (outcome != ServerBankAccount.ManageInvariantOutcome.PROMOTED) {
+            return fail("Expected PROMOTED, got " + outcome);
+        }
+        boolean aHasManage = BankPermission.hasPermission(proposed.get(userA), BankPermission.MANAGE.getValue());
+        boolean bHasManage = BankPermission.hasPermission(proposed.get(userB), BankPermission.MANAGE.getValue());
+        if (!aHasManage) {
+            return fail("User A (most permission bits) should have been promoted to MANAGE");
+        }
+        return assertFalse("User B should NOT have been promoted (A wins on bit count)", bHasManage);
+    }
+
+    /**
+     * Empty set → REFUSED_ORPHAN, map left unchanged (still empty).
+     */
+    private TestResult testManageInvariantEmptyRefusesOrphan() {
+        java.util.Map<User, Integer> proposed = new java.util.HashMap<>();
+        ServerBankAccount.ManageInvariantOutcome outcome =
+                ServerBankAccount.enforceManageInvariant(proposed, false);
+        if (outcome != ServerBankAccount.ManageInvariantOutcome.REFUSED_ORPHAN) {
+            return fail("Expected REFUSED_ORPHAN, got " + outcome);
+        }
+        return assertTrue("Map should remain empty after refusal", proposed.isEmpty());
+    }
+
+    /**
+     * Set already containing a MANAGE holder → OK, map unchanged.
+     */
+    private TestResult testManageInvariantOkWhenManagePresent() {
+        User userA = makeUser(TEST_USER_A, TEST_USER_A_NAME);
+        java.util.Map<User, Integer> proposed = new java.util.HashMap<>();
+        int originalMask = BankPermission.DEPOSIT.getValue() | BankPermission.MANAGE.getValue();
+        proposed.put(userA, originalMask);
+
+        ServerBankAccount.ManageInvariantOutcome outcome =
+                ServerBankAccount.enforceManageInvariant(proposed, false);
+        if (outcome != ServerBankAccount.ManageInvariantOutcome.OK) {
+            return fail("Expected OK, got " + outcome);
+        }
+        return assertEquals("Mask must be unchanged when MANAGE already present",
+                originalMask, (int) proposed.get(userA));
+    }
+
+    /**
+     * Personal account (hasOwner==true) with a no-MANAGE set → OK, map unchanged.
+     * The owner implicitly holds MANAGE, so no promotion is needed.
+     */
+    private TestResult testManageInvariantPersonalOwnerAlwaysOk() {
+        User userA = makeUser(TEST_USER_A, TEST_USER_A_NAME);
+        java.util.Map<User, Integer> proposed = new java.util.HashMap<>();
+        int originalMask = BankPermission.DEPOSIT.getValue();
+        proposed.put(userA, originalMask);
+
+        ServerBankAccount.ManageInvariantOutcome outcome =
+                ServerBankAccount.enforceManageInvariant(proposed, true);
+        if (outcome != ServerBankAccount.ManageInvariantOutcome.OK) {
+            return fail("Expected OK for personal account, got " + outcome);
+        }
+        return assertEquals("Mask must be unchanged for a personal account",
+                originalMask, (int) proposed.get(userA));
     }
 }

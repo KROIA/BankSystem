@@ -33,6 +33,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public static DropItemsInPlayerInventoryRequest DROP_ITEMS_IN_PLAYER_INVENTORY_REQUEST = (DropItemsInPlayerInventoryRequest)AsynchronousRequestResponseSystem.register(new DropItemsInPlayerInventoryRequest());
     public static DepositItemsInBankRequest DEPOSIT_ITEMS_IN_BANK_REQUEST = (DepositItemsInBankRequest)AsynchronousRequestResponseSystem.register(new DepositItemsInBankRequest());
     public static WithdrawItemsFromBankRequest WITHDRAW_ITEMS_FROM_BANK_REQUEST = (WithdrawItemsFromBankRequest)AsynchronousRequestResponseSystem.register(new WithdrawItemsFromBankRequest());
+    public static RegisterItemStacksBatchRequest REGISTER_ITEM_STACKS_BATCH_REQUEST = (RegisterItemStacksBatchRequest)AsynchronousRequestResponseSystem.register(new RegisterItemStacksBatchRequest());
 
     public static ServerInfoRequest SERVER_INFO_REQUEST = (ServerInfoRequest)AsynchronousRequestResponseSystem.register(new ServerInfoRequest());
     public static ServerNetworkInfoRequest SERVER_NETWORK_INFO_REQUEST = (ServerNetworkInfoRequest)AsynchronousRequestResponseSystem.register(new ServerNetworkInfoRequest());
@@ -40,6 +41,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public static BalanceHistoryRequest BALANCE_HISTORY_REQUEST = (BalanceHistoryRequest)AsynchronousRequestResponseSystem.register(new BalanceHistoryRequest());
     public static GetUserCustomDataRequest GET_USER_CUSTOM_DATA_REQUEST = (GetUserCustomDataRequest)AsynchronousRequestResponseSystem.register(new GetUserCustomDataRequest());
     public static UpdateUserCustomDataRequest UPDATE_USER_CUSTOM_DATA_REQUEST = (UpdateUserCustomDataRequest)AsynchronousRequestResponseSystem.register(new UpdateUserCustomDataRequest());
+    public static ModSettingsRequest MOD_SETTINGS_REQUEST = (ModSettingsRequest)AsynchronousRequestResponseSystem.register(new ModSettingsRequest());
 
     public static BankAccountChangeStream BANKSYSTEM_ACCOUNT_CHANGE_STREAM = (BankAccountChangeStream) StreamSystem.register(new BankAccountChangeStream());
 
@@ -70,6 +72,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerS2C(SyncBankUploadDataPacket.TYPE, SyncBankUploadDataPacket.STREAM_CODEC);
         registerS2C(SyncBankDownloadDataPacket.TYPE, SyncBankDownloadDataPacket.STREAM_CODEC);
         registerS2C(SyncItemIDsPacket.TYPE, SyncItemIDsPacket.STREAM_CODEC);
+        registerS2C(PlayerJoinSyncPacket.TYPE, PlayerJoinSyncPacket.STREAM_CODEC);
 
     }
 
@@ -77,6 +80,9 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public void setupServerReceiverPackets()
     {
         registerC2S(UpdateBankTerminalBlockEntityPacket.TYPE, UpdateBankTerminalBlockEntityPacket.STREAM_CODEC);
+        registerC2S(UpdateBankTerminalCraftingSettingsPacket.TYPE, UpdateBankTerminalCraftingSettingsPacket.STREAM_CODEC);
+        registerC2S(SetBankTerminalGhostRecipePacket.TYPE, SetBankTerminalGhostRecipePacket.STREAM_CODEC);
+        registerC2S(FillBankTerminalCraftingGridPacket.TYPE, FillBankTerminalCraftingGridPacket.STREAM_CODEC);
         registerC2S(UpdateBankUploadBlockEntityPacket.TYPE, UpdateBankUploadBlockEntityPacket.STREAM_CODEC);
         registerC2S(UpdateBankDownloadBlockEntityPacket.TYPE, UpdateBankDownloadBlockEntityPacket.STREAM_CODEC);
         registerC2S(UpdateDisplayBlockConfigPacket.TYPE, UpdateDisplayBlockConfigPacket.STREAM_CODEC);

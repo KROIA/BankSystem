@@ -1,6 +1,7 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.api.IBankSystemEvents;
 import net.kroia.banksystem.banking.User;
 import net.kroia.modutilities.event.DataEvent;
@@ -42,6 +43,41 @@ public class BankSystemEvents implements IBankSystemEvents {
     public final Signal BANKSYSTEM_SETUP_COMPLETED = new Signal();
     public final Signal MASTER_SERVER_SLAVE_CONNECTED = new Signal();
 
+    /**
+     * Fired on the master when a slave disconnects (the
+     * {@code onMasterServerSlaveDisconnected} callback from {@code MultiServerManager}).
+     * Counterpart to {@link #MASTER_SERVER_SLAVE_CONNECTED}; carries the departing
+     * slaveID so dependent mods (e.g. StockMarket) can evict per-slave state.
+     * See {@link IBankSystemEvents#getMasterServerSlaveDisconnected()}.
+     */
+    public final DataEvent<String> MASTER_SERVER_SLAVE_DISCONNECTED = new DataEvent<>();
+
+    /**
+     * Fired on the slave when the slave&rarr;master handshake completes (the
+     * {@code onSlaveConnectionAccepted} callback from {@code SlaveServerClient}).
+     * See {@link IBankSystemEvents#getSlaveConnectionAcceptedSignal()} for the
+     * intended use case (dependent-mod caches that need the async forwarder to
+     * be live before they can query the master).
+     */
+    public final Signal SLAVE_CONNECTION_ACCEPTED = new Signal();
+
+    /**
+     * Fired on the slave when the established connection to the master drops
+     * ({@code onSlaveConnectionLost} or {@code onSlaveDisconnected}). Paired
+     * with {@link #SLAVE_CONNECTION_ACCEPTED} to let dependent-mod caches
+     * invalidate their master-derived state until the next successful handshake.
+     */
+    public final Signal SLAVE_CONNECTION_LOST = new Signal();
+
+    /**
+     * Fired on the master after {@code ServerBankManager.trustSlaveServer} /
+     * {@code untrustSlaveServer} has mutated the trust set. Carries the affected
+     * slaveID and the new trust value. Dependent mods subscribe here to push
+     * runtime trust-toggle updates to their own slaves/clients — see
+     * {@link IBankSystemEvents#getTrustChangedSignal()} for the full contract.
+     */
+    public final DataEvent<TrustChangeInfo> TRUST_CHANGED = new DataEvent<>();
+
 
     @Override
     public void removeListeners() {
@@ -56,6 +92,10 @@ public class BankSystemEvents implements IBankSystemEvents {
         SETTINGS_LOADED_FROM_FILE.removeListeners();
         BANKSYSTEM_SETUP_COMPLETED.removeListeners();
         MASTER_SERVER_SLAVE_CONNECTED.removeListeners();
+        MASTER_SERVER_SLAVE_DISCONNECTED.removeListeners();
+        SLAVE_CONNECTION_ACCEPTED.removeListeners();
+        SLAVE_CONNECTION_LOST.removeListeners();
+        TRUST_CHANGED.removeListeners();
     }
 
 
@@ -120,5 +160,29 @@ public class BankSystemEvents implements IBankSystemEvents {
     public Signal getMasterServerSlaveConnected()
     {
         return MASTER_SERVER_SLAVE_CONNECTED;
+    }
+
+    @Override
+    public DataEvent<String> getMasterServerSlaveDisconnected()
+    {
+        return MASTER_SERVER_SLAVE_DISCONNECTED;
+    }
+
+    @Override
+    public Signal getSlaveConnectionAcceptedSignal()
+    {
+        return SLAVE_CONNECTION_ACCEPTED;
+    }
+
+    @Override
+    public Signal getSlaveConnectionLostSignal()
+    {
+        return SLAVE_CONNECTION_LOST;
+    }
+
+    @Override
+    public DataEvent<TrustChangeInfo> getTrustChangedSignal()
+    {
+        return TRUST_CHANGED;
     }
 }

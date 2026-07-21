@@ -925,6 +925,20 @@ public class ServerBank implements ServerSaveable, IServerBank {
         long balance = tag.getLong("balance");
         lockedBalance = tag.getLong("lockedBalance");
         setBalanceInternal(balance);
+        // Issue #61: when the item this bank held can no longer be resolved (its mod was
+        // removed, or a removed mod's data component broke the saved template's parse), the
+        // bank is dropped from the account and the balance is lost on the next save. That
+        // matches vanilla, which deletes unknown items on load and never restores them if the
+        // mod returns — but the loss must never be SILENT. Log it loudly with the item and the
+        // amounts so an admin sees exactly what was lost and why.
+        if (!itemID.isValid() && (balance > 0 || lockedBalance > 0)
+                && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.warn("[ServerBank] Dropping a bank balance for an unresolvable item '"
+                    + itemID.getName() + "' (balance=" + balance + ", locked=" + lockedBalance + "). "
+                    + "Its mod is not installed on this server, so the balance cannot be restored and "
+                    + "will be gone on the next save — this matches vanilla's handling of unknown items. "
+                    + "Re-install the mod BEFORE loading/saving this world if you need to recover it.");
+        }
         return balance >= 0 && lockedBalance >= 0 && itemID.isValid();
     }
 

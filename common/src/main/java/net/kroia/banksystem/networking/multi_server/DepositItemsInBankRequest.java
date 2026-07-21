@@ -82,6 +82,14 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
     public boolean needsRoutingToMaster() { return false; }
 
     public CompletableFuture<OutputData> handleOnMasterServer(DepositItemsInBankRequest.InputData input, String slaveID, @Nullable UUID playerSender) {
+        // Task #26 (security): untrusted-slave gate. WRITE-side requests that extend
+        // BankSystemGenericRequest bypass the central AsyncForwardingRequest gate, so the
+        // slave-trust check is enforced here. An untrusted slave could otherwise deposit
+        // freely by forging playerSender (see isBlockedForUntrustedSlave). No-op return:
+        // the full requested map comes back as "not deposited", master state untouched.
+        if (isBlockedForUntrustedSlave(slaveID)) {
+            return CompletableFuture.completedFuture(new OutputData(input.items));
+        }
         if(playerSender != null)
         {
             warn("This request is not allowed to be sent from a client");

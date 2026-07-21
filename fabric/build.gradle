@@ -53,6 +53,14 @@ dependencies {
     shadowBundle('org.xerial:sqlite-jdbc:3.46.0.0'){
         exclude group: "org.slf4j"
     }
+    // Dev-runtime-only copy of the JDBC driver: shadowBundle only bundles it
+    // into the RELEASE jar and is not part of the dev run classpath — without
+    // this, org.sqlite.JDBC is missing in runClient/runServer and the balance
+    // history database never connects in dev. localRuntime is loom's
+    // "local dev runtime, not published, not bundled" configuration.
+    localRuntime('org.xerial:sqlite-jdbc:3.46.0.0'){
+        exclude group: "org.slf4j"
+    }
 
     modImplementation("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version")
     include("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version")

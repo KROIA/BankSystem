@@ -715,9 +715,16 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.CreateBankAsync, accountNr, new ParamGroup_ItemID_long(itemID, startBalance));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)->
+        // Task #30: the master can answer with an empty/rejection response (e.g. a trust or
+        // unknown-item refusal), for which decodeResult() returns a null Boolean. Auto-unboxing
+        // that in an `if` threw an NPE inside this callback, so the future never completed and
+        // the whole chain silently stalled — the caller's fallback ("item not allowed") message
+        // never fired. Handle transport failure / null result as a normal "bank not created"
+        // outcome so the future always completes with the documented null sentinel.
+        outputDataFuture.whenComplete((outputData, ex)->
         {
-            if(outputData.decodeResult())
+            Boolean created = (ex != null || outputData == null) ? null : outputData.decodeResult();
+            if(Boolean.TRUE.equals(created))
                 future.complete(createBank(itemID));
             else
                 future.complete(null);

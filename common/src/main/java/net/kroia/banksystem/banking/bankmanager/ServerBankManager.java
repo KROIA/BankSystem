@@ -13,6 +13,7 @@ import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.api.ItemPriceProvider;
@@ -75,14 +76,31 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     private int tickCounter = 0;
 
 
+    /**
+     * Deliberately performs <b>no ItemID registration</b> (Task #16 root-cause fix).
+     * <p>
+     * Historically this constructor "warmed up" {@link #getBlacklistedItems()},
+     * {@link #getNotRemovableItems()} and {@link #setupDefaultItems()} — all of which
+     * REGISTER ItemIDs. Because {@code BankManager.createMaster()} runs BEFORE
+     * {@code loadDataFromFiles()} (see {@code BankSystemModBackend.onServerStart}), every
+     * master boot minted ~27 fresh low shorts (bedrock=1, ..., money200=19, ...) into the
+     * just-cleared registry before {@code ItemIDs.nbt} was read — the same bug class fixed
+     * for {@code createDefaultItemIDs()} in v2.0.3 ("load persisted item ids before
+     * registering defaults"). On worlds whose persisted layout differs from that fresh
+     * assignment, the pre-load keys either survived {@code load()} with a stale cached name
+     * (correct template, wrong name — e.g. a Diorite deposit rejected as "money200") or got
+     * merged/renumbered by the healing merge (persisted bedrock@71 aliased to session
+     * bedrock@1, balance history of short 71 purged).
+     * <p>
+     * Nothing is lost by removing the warm-up: the blacklist/not-removable results were
+     * discarded here and are recomputed (register-if-absent) on every later call, and
+     * {@code setupDefaultItems()} is invoked post-load by
+     * {@code BankSystemDataHandler.load_bank()} / {@link #load(Map)} on both the
+     * fresh-world and the existing-world path. The {@link ItemIDManager} registration
+     * latch additionally rejects any master-side registration that would run before
+     * {@code load_itemIDs()} completes (defense in depth).
+     */
     public ServerBankManager() {
-        getBlacklistedItems();
-        getAllowedItems();
-        getNotRemovableItems();
-
-        setupDefaultItems();
-
-
         TickEvent.SERVER_POST.register(this::update);
     }
 
@@ -218,11 +236,27 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public void trustSlaveServer(String slaveID)
     {
         trustedSlaveServers.add(slaveID);
+        // T-128 (cross-repo): notify dependent mods (e.g. StockMarket) that the
+        // trust set changed so they can propagate the new state to their own
+        // connected slaves/clients without polling. Fired AFTER the mutation so
+        // listeners see the post-change state. Idempotent contract — the event
+        // fires even when the caller set-to-same-value; subscribers filter if
+        // that matters to them (in practice the admin-command surface
+        // short-circuits before calling us, so this only fires on real flips).
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_EVENTS != null) {
+            BACKEND_INSTANCES.SERVER_EVENTS.TRUST_CHANGED.notifyListeners(
+                    new TrustChangeInfo(slaveID, true));
+        }
     }
     @Override
     public void untrustSlaveServer(String slaveID)
     {
         trustedSlaveServers.remove(slaveID);
+        // T-128 (cross-repo): see trustSlaveServer above for the full rationale.
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_EVENTS != null) {
+            BACKEND_INSTANCES.SERVER_EVENTS.TRUST_CHANGED.notifyListeners(
+                    new TrustChangeInfo(slaveID, false));
+        }
     }
 
 
@@ -1540,7 +1574,22 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         // Check if all allowed items have a scale factor
         List<ItemStack> allowedItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_ALLOWED_ITEMS;
         List<ItemID> itemIDs = ItemIDManager.registerItemStackServerSide_direct(allowedItems);
-        allowedItemIDs.addAll(itemIDs);
+        // Never admit INVALID_ID into the allowed set (Task #16 review): registration can
+        // refuse (registration latch armed while ItemIDs.nbt failed to load, ItemID space
+        // exhausted) and returns INVALID_ID then. An INVALID entry would be persisted by
+        // save() and permanently poison the allowed set on the next load (allowedItems key
+        // present -> clear() + restore {INVALID} -> nothing bankable ever again).
+        int refused = 0;
+        for (ItemID id : itemIDs) {
+            if (id != null && id.isValid())
+                allowedItemIDs.add(id);
+            else
+                refused++;
+        }
+        if (refused > 0)
+            warn("setupDefaultItems: " + refused + " of " + itemIDs.size() + " default allowed "
+                    + "item(s) could not be registered (see preceding ItemIDManager log) and "
+                    + "were NOT added to the allowed set.");
     }
 
     /**
@@ -1608,6 +1657,15 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
         ListTag allowedItems = new ListTag();
         for (ItemID itemID : allowedItemIDs) {
+            // Defensive (Task #16 review): never persist the INVALID short (0) into the
+            // allowedItems list — a persisted INVALID entry survives every future load and
+            // permanently degrades the allowed set. Should be unreachable now that
+            // setupDefaultItems()/allowItemID() filter, hence the WARN if it ever trips.
+            if (itemID == null || itemID.getShort() == ItemID.INVALID_ID.getShort()) {
+                warn("save: skipped INVALID entry in the allowed-items set (should be "
+                        + "unreachable — investigate how it was inserted).");
+                continue;
+            }
             CompoundTag pairTag = new CompoundTag();
             CompoundTag itemTag = new CompoundTag();
             itemID.save(itemTag);
@@ -1655,11 +1713,31 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 }
 
                 ItemID itemID = ItemID.createFromTag(idTag.getCompound("itemID"));
+                // Defensive (Task #16 review): drop persisted INVALID shorts (0) — written
+                // by builds without the save/setup filters. Restoring one would permanently
+                // poison the allowed set (every save re-persists it).
+                if (itemID.getShort() == ItemID.INVALID_ID.getShort()) {
+                    warn("load: dropped a persisted INVALID entry from the allowed-items list "
+                            + "(written by an earlier buggy recovery — healed on the next save).");
+                    continue;
+                }
                 // Canonicalize at load time: a saved allowed-entry may reference an ID that
                 // was merged into a canonical ID (possibly in an earlier session). The Set
                 // dedupes collapsing entries automatically. This also heals worlds merged
                 // before consolidation existed.
                 allowedItemIDs.add(ItemIDManager.resolveAlias(itemID));
+            }
+            // A legitimately persisted allowed set can never be EMPTY: the not-removable
+            // items (base money) cannot be disallowed (disallowItemID refuses them), so an
+            // empty restored set only ever comes from a degenerate save — e.g. the
+            // unreadable-ItemIDs.nbt recovery pass, where every default registration was
+            // refused by the registration latch (Task #16 review). Re-seed the defaults so
+            // the recovered world is bankable again.
+            if (allowedItemIDs.isEmpty()) {
+                warn("load: the persisted allowed-items set restored EMPTY (degenerate save, "
+                        + "e.g. an unreadable-ItemIDs recovery pass) — re-seeding the default "
+                        + "allowed items.");
+                setupDefaultItems();
             }
         }
         else {
