@@ -1,5 +1,6 @@
 package net.kroia.banksystem.api.currency;
 
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -123,4 +124,37 @@ public interface ExternalCurrencyProvider {
     default @Nullable String getBaseCurrencyItemId() {
         return null;
     }
+
+    /**
+     * If this provider accepts the given {@link ItemStack} as a member of its
+     * currency chain, returns the per-item value in BankSystem raw units
+     * (the same units {@link ExternalAccount#deposit(long)} consumes).
+     * Returns {@code 0L} for stacks this provider does not recognise.
+     * <p>
+     * Called during deposit routing to convert non-base coin variants (e.g. LC's
+     * {@code coin_copper} / {@code coin_iron} / {@code coin_emerald} /
+     * {@code coin_diamond} / {@code coin_netherite}, or Numismatics'
+     * {@code bevel} / {@code sprocket} / {@code cog} / {@code crown} /
+     * {@code sun}) into the account's base currency for deposit through the
+     * bound slot. A non-zero return signals: "credit {@code count × baseUnitsPerItem}
+     * raw units to the bound base-coin slot instead of routing the stack to a
+     * per-variant BankSystem bank."
+     * <p>
+     * Implementations MUST honor the mod's runtime configuration where the mod
+     * offers one (LC's chain data is server-configurable at load time; hardcoded
+     * ratios are incorrect). Implementations SHOULD return {@code 0L} for
+     * damaged or enchanted stacks even if the item id matches — BankSystem
+     * treats those as non-fungible upstream, but adapters apply defense in depth.
+     * <p>
+     * Default is a no-op that returns {@code 0L}; providers opt in by overriding.
+     * The default preserves the pre-Task #38 behavior for adapters that don't
+     * expose a coin chain.
+     *
+     * @param stack the item stack being deposited. Never {@code null}; may be
+     *              {@link ItemStack#EMPTY}.
+     * @return the per-item value in BankSystem raw units, or {@code 0L} if the
+     *         stack is not part of this provider's chain.
+     * @since 2.0.5
+     */
+    default long baseUnitsPerItem(@NotNull ItemStack stack) { return 0L; }
 }
