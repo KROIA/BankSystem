@@ -282,7 +282,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
         return new BankData(
                 itemID,
                 getBalance(),
-                getLockedBalance()
+                getLockedBalance(),
+                net.kroia.banksystem.banking.binding.BankAccountBindings.getRawUnitsPerItem(accountId, itemID)
         );
     }
     @Override
@@ -1679,7 +1680,20 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     public static String getFormattedAmountStatic(long rawAmount)
     {
-        String nr = String.valueOf(rawAmount/ BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+        return getFormattedAmountStatic(rawAmount, BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+    }
+
+    /**
+     * Ratio-aware overload (Task #38b, v2.0.5). {@code itemFractionScaleFactor}
+     * defaults to {@link BankSystemModSettings#ITEM_FRACTION_SCALE_FACTOR} (100);
+     * bound slots pass the provider's per-item ratio (e.g. 81 for a Lightman's
+     * gold slot) so the formatted string reports the correct physical-coin
+     * count.
+     */
+    public static String getFormattedAmountStatic(long rawAmount, int itemFractionScaleFactor)
+    {
+        if (itemFractionScaleFactor <= 0) itemFractionScaleFactor = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        String nr = String.valueOf(rawAmount/ itemFractionScaleFactor);
         // add ' for every 3 digits
         StringBuilder sb = new StringBuilder();
         int i = 0;
@@ -1691,10 +1705,10 @@ public class ServerBank implements ServerSaveable, IServerBank {
                 sb.append('\'');
         }
         sb.reverse();
-        if(rawAmount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR != 0)
+        if(rawAmount % itemFractionScaleFactor != 0)
         {
 
-            double cents = (rawAmount % BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (double)BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR; // Convert to cents
+            double cents = (rawAmount % itemFractionScaleFactor) / (double)itemFractionScaleFactor; // Convert to cents
 
             String centsString = String.valueOf(cents);
 

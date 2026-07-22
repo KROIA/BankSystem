@@ -1,11 +1,17 @@
 package net.kroia.banksystem.banking.binding;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
+import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
+import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -16,6 +22,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Per-world savedata for BankSystem-slot &rarr; external-account bindings
@@ -69,6 +76,40 @@ public class BankAccountBindings {
         return BACKEND_INSTANCES != null ? BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS : null;
     }
 
+    /**
+     * Raw-BankSystem-units per one physical item of the slot's currency
+     * (Task #38b, v2.0.5). Returns:
+     * <ul>
+     *   <li>{@link BankSystemModSettings#ITEM_FRACTION_SCALE_FACTOR} (100) when
+     *       the slot is unbound, when the bindings table isn't available, or
+     *       when the provider is missing / its item template is unresolvable.
+     *       Preserves the pre-#38b behavior for every non-bound path.</li>
+     *   <li>The provider's {@code baseUnitsPerItem(templateStack)} when the
+     *       slot is bound and that value resolves &gt; 0. For a Lightman's
+     *       Currency {@code coin_gold} slot on default config this is 81; for
+     *       a Numismatics {@code spur} slot it is 100 (equal to the global
+     *       constant — the reason Numismatics needs no per-slot rewiring).</li>
+     * </ul>
+     * Callers use this at every site that converts raw balance ↔ physical
+     * item count (withdraw math, display formatting, chart Y-axis, wealth
+     * pricing) so the LC coprime-ratio problem (81 vs. 100) does not produce
+     * drift or lost coins.
+     */
+    public static long getRawUnitsPerItem(int accountId, @NotNull ItemID slotItemId) {
+        BankAccountBindings self = get();
+        if (self == null) return BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        BindingRow row = self.getBinding(accountId, slotItemId);
+        if (row == null) return BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        BankSystemAPI api = BankSystemMod.getAPI();
+        if (api == null) return BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        ExternalCurrencyProvider provider = api.getCurrencyProvider(row.ref().providerId());
+        if (provider == null) return BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        net.minecraft.world.item.ItemStack template = ItemIDManager.getItemStackTemplate(slotItemId);
+        if (template == null || template.isEmpty()) return BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        long r = provider.baseUnitsPerItem(template);
+        return r > 0L ? r : BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+    }
+
     private final Map<BindingKey, BindingRow> bindings = new HashMap<>();
 
     /**
@@ -78,6 +119,16 @@ public class BankAccountBindings {
      * (accountId, itemShort) per session instead. Cleared on {@link #clear()}.
      */
     private final Set<BindingKey> unavailableWarnedKeys = new HashSet<>();
+
+    /**
+     * Session-scoped dedup flag for the "multiple bindings claim the same stack"
+     * WARN emitted by {@link #findBindingAcceptingItem(int, ItemStack)}. Chains
+     * are supposed to be disjoint (LC's coin_* items and Numismatics' spur/bevel/
+     * ... are non-overlapping); a collision means a misconfigured account with
+     * two providers claiming the same item. First-wins routing keeps deposits
+     * moving; the WARN surfaces the mistake to admins.
+     */
+    private final AtomicBoolean bindingCollisionWarned = new AtomicBoolean(false);
 
     private boolean dirty = false;
 
@@ -182,6 +233,53 @@ public class BankAccountBindings {
     public long getDust(int accountId, @NotNull ItemID itemId) {
         BindingRow row = getBinding(accountId, itemId);
         return row == null ? 0L : row.dustBalance();
+    }
+
+    /**
+     * Finds the binding row on the given account whose provider accepts the
+     * supplied stack as part of its currency chain via
+     * {@link ExternalCurrencyProvider#baseUnitsPerItem(ItemStack)}.
+     * Returns {@code null} if no binding claims the stack or if the account
+     * has no bindings.
+     * <p>
+     * Used by deposit routing (Task #38) to redirect non-base coin variants
+     * (e.g. LC {@code coin_copper}, Numismatics {@code bevel}) into the
+     * account's base-coin binding slot at their converted per-item value
+     * instead of creating a per-variant BankSystem bank.
+     * <p>
+     * When two rows both claim the stack — which the chain-disjointness
+     * invariant says should never happen — this returns the first hit and
+     * WARNs once per session.
+     *
+     * @param accountId BankSystem account number
+     * @param stack     the stack being deposited; {@link ItemStack#EMPTY} returns null
+     * @return the accepting binding row, or {@code null}
+     */
+    public @Nullable BindingRow findBindingAcceptingItem(int accountId, @NotNull ItemStack stack) {
+        if (stack.isEmpty()) return null;
+        BankSystemAPI api = BankSystemMod.getAPI();
+        if (api == null) return null;
+
+        BindingRow first = null;
+        for (BindingRow row : bindings.values()) {
+            if (row.bankAccountId() != accountId) continue;
+            ExternalCurrencyProvider provider = api.getCurrencyProvider(row.ref().providerId());
+            if (provider == null) continue;
+            long units = provider.baseUnitsPerItem(stack);
+            if (units <= 0L) continue;
+            if (first == null) {
+                first = row;
+            } else {
+                if (bindingCollisionWarned.compareAndSet(false, true)) {
+                    warn("Multiple bindings on account " + accountId + " accept "
+                            + stack.getItem() + " (providers: " + first.ref().providerId()
+                            + ", " + row.ref().providerId() + "). Using the first — "
+                            + "check for a misconfigured account.");
+                }
+                break;
+            }
+        }
+        return first;
     }
 
     /**

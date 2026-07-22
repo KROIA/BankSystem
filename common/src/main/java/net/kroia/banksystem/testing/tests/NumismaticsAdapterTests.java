@@ -12,15 +12,23 @@ import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.banking.binding.BankAccountBindings;
+import net.kroia.banksystem.banking.binding.BindingRow;
+import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -53,6 +61,9 @@ public class NumismaticsAdapterTests extends TestSuite {
         addTest("numismatics_player_round_trip", this::testPlayerRoundTrip);
         addTest("numismatics_overflow_guard", this::testOverflowGuard);
         addTest("numismatics_blaze_banker_enumeration_and_bind", this::testBlazeBankerEnumerationAndBind);
+        // Task #38 — coin-variant routing through the deposit path
+        addTest("numismatics_variant_deposit_credits_bound_slot", this::testVariantDepositCreditsBoundSlot);
+        addTest("numismatics_no_binding_falls_back", this::testNoBindingFallsBack);
     }
 
     @Override
@@ -437,6 +448,152 @@ public class NumismaticsAdapterTests extends TestSuite {
             }
 
             return pass("BLAZE_BANKER: enumeration, bind, round-trip, membership sync all validated");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Coin-variant routing (Task #38): with a Numismatics binding on the test slot,
+     * depositing 3× numismatics:bevel through {@link DepositItemsInBankRequest}
+     * must credit the bound slot by 3 × (BEVEL.value=8) × SCALE_FACTOR=100 = 2400
+     * raw units, not create a per-variant bevel bank.
+     */
+    private TestResult testVariantDepositCreditsBoundSlot() {
+        if (!Platform.isModLoaded("numismatics")) {
+            return pass("Numismatics not loaded — skipped");
+        }
+        perTestReset();
+
+        try {
+            ExternalCurrencyProvider provider = BankSystemMod.getAPI().getCurrencyProviders().stream()
+                    .filter(p -> "numismatics".equals(p.providerId()))
+                    .findFirst()
+                    .orElse(null);
+            if (provider == null || !provider.isAvailable()) {
+                return pass("Numismatics provider not available — skipped");
+            }
+
+            Item bevelItem = BuiltInRegistries.ITEM.get(
+                    ResourceLocation.fromNamespaceAndPath("numismatics", "bevel"));
+            if (bevelItem == null || bevelItem == Items.AIR) {
+                return pass("numismatics:bevel not in item registry — skipped");
+            }
+
+            ItemStack bevelStack = new ItemStack(bevelItem);
+            long expectedPerItem = provider.baseUnitsPerItem(bevelStack);
+            if (expectedPerItem != 800L) {
+                return fail("Expected baseUnitsPerItem(bevel) = 800 (8 spurs × 100 scale), got "
+                        + expectedPerItem);
+            }
+
+            List<ExternalAccountRef> refs = provider.listBindableAccounts(TEST_OWNER);
+            ExternalAccountRef personalRef = refs.stream().filter(r -> !r.shared()).findFirst().orElse(null);
+            if (personalRef == null) return fail("No personal Numismatics account found");
+
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings == null) return fail("BankAccountBindings unavailable");
+
+            IServerBankAccount account = manager.getBankAccount(testAccountNr);
+            if (account == null) return fail("Test account not found");
+            ISyncServerBank bank = account.getBank(slotItem);
+            if (bank == null) return fail("Test bank slot not found");
+
+            bindings.bind(testAccountNr, slotItem, personalRef);
+
+            BindingRow row = bindings.findBindingAcceptingItem(testAccountNr, bevelStack);
+            if (row == null || row.itemIdShort() != slotItem.getShort()) {
+                return fail("findBindingAcceptingItem did not return the bound row for bevel");
+            }
+
+            ItemID bevelID = ItemID.getOrRegisterFromItemStackServerSide_direct(bevelStack);
+            long balanceBefore = bank.getBalance();
+
+            Map<ItemID, Long> deposit = new HashMap<>();
+            deposit.put(bevelID, 3L);
+            DepositItemsInBankRequest req = new DepositItemsInBankRequest();
+            DepositItemsInBankRequest.InputData input = new DepositItemsInBankRequest.InputData(
+                    testAccountNr, null, deposit);
+            DepositItemsInBankRequest.OutputData output = req.handleOnMasterServer(input, "", null).get();
+            if (!output.items().isEmpty()) {
+                return fail("Variant deposit had leftovers: " + output.items());
+            }
+
+            long delta = bank.getBalance() - balanceBefore;
+            long expected = 3L * expectedPerItem;
+            if (delta != expected) {
+                return fail("Bound-slot balance delta = " + delta + ", expected " + expected);
+            }
+            // Regression guard: no separate bevel bank should have been created.
+            ISyncServerBank strayVariantBank = account.getBank(bevelID);
+            if (strayVariantBank != null && strayVariantBank.getBalance() > 0) {
+                return fail("A stray per-variant bank was created for bevel with balance="
+                        + strayVariantBank.getBalance());
+            }
+
+            return pass("3× bevel deposit credited bound slot by " + expected + " raw units");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Regression guard (Task #38): with NO binding on the account, a bevel deposit
+     * must NOT route into any slot as a variant — findBindingAcceptingItem returns
+     * null and the bound slot's balance is unchanged.
+     */
+    private TestResult testNoBindingFallsBack() {
+        if (!Platform.isModLoaded("numismatics")) {
+            return pass("Numismatics not loaded — skipped");
+        }
+        perTestReset();
+
+        try {
+            ExternalCurrencyProvider provider = BankSystemMod.getAPI().getCurrencyProviders().stream()
+                    .filter(p -> "numismatics".equals(p.providerId()))
+                    .findFirst()
+                    .orElse(null);
+            if (provider == null || !provider.isAvailable()) {
+                return pass("Numismatics provider not available — skipped");
+            }
+
+            Item bevelItem = BuiltInRegistries.ITEM.get(
+                    ResourceLocation.fromNamespaceAndPath("numismatics", "bevel"));
+            if (bevelItem == null || bevelItem == Items.AIR) {
+                return pass("numismatics:bevel not in item registry — skipped");
+            }
+            ItemStack bevelStack = new ItemStack(bevelItem);
+
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings == null) return fail("BankAccountBindings unavailable");
+
+            BindingRow row = bindings.findBindingAcceptingItem(testAccountNr, bevelStack);
+            if (row != null) {
+                return fail("findBindingAcceptingItem returned a row when no binding exists");
+            }
+
+            IServerBankAccount account = manager.getBankAccount(testAccountNr);
+            if (account == null) return fail("Test account not found");
+            ISyncServerBank slotBank = account.getBank(slotItem);
+            if (slotBank == null) return fail("Test bank slot not found");
+            long balanceBefore = slotBank.getBalance();
+
+            ItemID bevelID = ItemID.getOrRegisterFromItemStackServerSide_direct(bevelStack);
+            Map<ItemID, Long> deposit = new HashMap<>();
+            deposit.put(bevelID, 3L);
+            DepositItemsInBankRequest req = new DepositItemsInBankRequest();
+            DepositItemsInBankRequest.InputData input = new DepositItemsInBankRequest.InputData(
+                    testAccountNr, null, deposit);
+            // Result may be empty (bevel bank rejected by allowlist → not deposited) or contain
+            // the deposit in a bevel bank — either is acceptable; the guard is that the SLOT
+            // balance did not move as if the deposit had been routed through the binding.
+            req.handleOnMasterServer(input, "", null).get();
+
+            if (slotBank.getBalance() != balanceBefore) {
+                return fail("Slot balance changed without binding — variant routing leaked: "
+                        + slotBank.getBalance() + " (expected " + balanceBefore + ")");
+            }
+            return pass("No binding → variant deposit did not touch slot balance (as designed)");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }

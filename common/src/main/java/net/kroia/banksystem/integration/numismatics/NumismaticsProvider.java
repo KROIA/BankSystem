@@ -6,13 +6,17 @@ import net.kroia.banksystem.api.currency.ExternalAccount;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.api.currency.ProviderFeature;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,6 +60,17 @@ public final class NumismaticsProvider implements ExternalCurrencyProvider {
 
     /** Dedup flag for BLAZE_BANKER enumeration failure warnings. */
     private static final AtomicBoolean BLAZE_BANKER_ENUM_WARNED = new AtomicBoolean(false);
+
+    /** Dedup flag for coin-variant reflection failure warnings. */
+    private static final AtomicBoolean COIN_MAP_WARNED = new AtomicBoolean(false);
+
+    /**
+     * Per-Item → raw-BankSystem-unit table for every Numismatics coin variant.
+     * Built once lazily on first {@link #baseUnitsPerItem(ItemStack)} call —
+     * Numismatics' coin ratios are baked into the enum, not runtime-mutable, so
+     * a single population is sufficient. {@code null} while unpopulated.
+     */
+    private volatile Map<Item, Long> coinValueByItem = null;
 
     private NumismaticsProvider() {}
 
@@ -211,6 +226,46 @@ public final class NumismaticsProvider implements ExternalCurrencyProvider {
                 ProviderFeature.MEMBERSHIP_SYNC,
                 ProviderFeature.SUFFICIENT_FUNDS_CHECK
         );
+    }
+
+    // Numismatics coin ratios sourced from CreateNumismatics-1.0.20+neoforge-mc1.21.1
+    // (see .claude/reference/numismatics/api-dump.txt) — SPUR/BEVEL/SPROCKET/COG/CROWN/SUN.
+    // Baked into the enum's <clinit>; update if a future release adds coins or reshuffles.
+    @Override
+    public long baseUnitsPerItem(@NotNull ItemStack stack) {
+        if (!isAvailable() || stack.isEmpty()) return 0L;
+        if (stack.isDamaged() || stack.isEnchanted()) return 0L;
+
+        Map<Item, Long> map = coinValueByItem;
+        if (map == null) {
+            map = buildCoinValueMap();
+            coinValueByItem = map;
+        }
+        Long value = map.get(stack.getItem());
+        return value == null ? 0L : value;
+    }
+
+    private Map<Item, Long> buildCoinValueMap() {
+        Map<Item, Long> map = new HashMap<>();
+        try {
+            Class<?> coinClass = Class.forName("dev.ithundxr.createnumismatics.content.backend.Coin");
+            Object[] coins = (Object[]) coinClass.getMethod("values").invoke(null);
+            java.lang.reflect.Field valueField = coinClass.getField("value");
+            java.lang.reflect.Method asStack = coinClass.getMethod("asStack");
+            for (Object coin : coins) {
+                if (coin == null) continue;
+                int spurs = valueField.getInt(coin);
+                ItemStack sample = (ItemStack) asStack.invoke(coin);
+                if (sample == null || sample.isEmpty()) continue;
+                map.put(sample.getItem(), ((long) spurs) * NumismaticsAccount.SCALE_FACTOR);
+            }
+        } catch (ReflectiveOperationException e) {
+            if (COIN_MAP_WARNED.compareAndSet(false, true)) {
+                logWarn("Failed to build Coin variant map — Numismatics API may have changed: "
+                        + e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+        }
+        return map;
     }
 
     // Logger helpers — null-safe if the backend has not been wired yet.

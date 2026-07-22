@@ -8,6 +8,7 @@ import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.minecraft.block.custom.BankDownloadBlock;
@@ -558,13 +559,18 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     private CompletableFuture<Integer> withdrawAndFillInventory(ItemID item, final int amountToFillIn, IAsyncBank itemBank)
     {
         CompletableFuture<Integer>  result = new CompletableFuture<>();
+        // Task #38b: per-slot raw-units-per-item ratio. For unbound slots this is
+        // ITEM_FRACTION_SCALE_FACTOR (100) — unchanged behavior. For bound LC gold
+        // slots this is 81 (from CoinAPI's runtime chain data), so 81 raw = 1 gold
+        // and the withdraw math produces exactly 1 physical coin with zero dust.
+        final long ratio = BankAccountBindings.getRawUnitsPerItem(bankAccountNumber, item);
         CompletableFuture<Long>  currentBalanceFuture = itemBank.getBalanceAsync();
         currentBalanceFuture.thenAccept((currentBalance) -> {
             int amountToFill = amountToFillIn;
-            long amountToReserve = BankManager.convertToRawAmountStatic(amountToFill);
+            long amountToReserve = (long) amountToFill * ratio;
             if(amountToReserve > currentBalance) {
-                amountToFill = (int) (currentBalance / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
-                amountToReserve = BankManager.convertToRawAmountStatic(amountToFill);
+                amountToFill = (int) (currentBalance / ratio);
+                amountToReserve = (long) amountToFill * ratio;
             }
             if(amountToReserve <= 0)
             {
@@ -585,14 +591,14 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                 // Try to fill the inventory with the item
                 int filledAmount = tryFillInventory(item, amountToFillFinal);
                 if(filledAmount > 0) {
-                    long amountToWithdraw = BankManager.convertToRawAmountStatic(filledAmount);
+                    long amountToWithdraw = (long) filledAmount * ratio;
                     CompletableFuture<BankStatus> withdrawStatusFuture = itemBank.withdrawLockedPreferedAsync(amountToWithdraw);
                     withdrawStatusFuture.thenAccept((withdrawStatus) -> {
                         if(withdrawStatus == BankStatus.SUCCESS) {
                             if(filledAmount != amountToFillFinal)
                             {
                                 // If we filled less than requested, unlock the remaining amount
-                                long remainingAmount = BankManager.convertToRawAmountStatic(amountToFillFinal - filledAmount);
+                                long remainingAmount = (long) (amountToFillFinal - filledAmount) * ratio;
                                 itemBank.unlockAmountAsync(remainingAmount);
                             }
                             setChanged();

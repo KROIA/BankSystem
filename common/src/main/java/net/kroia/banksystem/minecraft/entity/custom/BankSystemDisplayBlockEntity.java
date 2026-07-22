@@ -605,7 +605,8 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
                 }
             }
             if (i < overviewLabels.size()) {
-                String newText = formatCompact(bankData.balance());
+                // Task #38b: per-slot ratio (bound LC gold slot = 81; unbound = 100).
+                String newText = formatCompact(bankData.balance(), bankData.rawUnitsPerItem());
                 if (!newText.equals(overviewLabels.get(i).getText())) {
                     overviewLabels.get(i).setText(newText);
                     changed = true;
@@ -656,7 +657,12 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     }
 
     static String formatCompact(long rawAmount) {
-        double value = rawAmount / (double) BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        return formatCompact(rawAmount, BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+    }
+
+    static String formatCompact(long rawAmount, long rawUnitsPerItem) {
+        long ratio = rawUnitsPerItem > 0 ? rawUnitsPerItem : BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        double value = rawAmount / (double) ratio;
         if (value <= 0) return "0";
 
         String[] suffixes = {"", "k", "M", "G", "T", "P"};
@@ -837,7 +843,6 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         boolean firstLoad = historyChart.getSeries().isEmpty();
         historyChart.clearSeries();
         historyChart.clearHoverBindings();
-        double scale = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
         legendOutlineColors = new int[sortedItems.size()];
         legendBgColors = new int[sortedItems.size()];
@@ -850,6 +855,11 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             int color = ItemColorUtil.getColor(itemId, ci);
             String name = getItemDisplayName(itemId);
 
+            // Task #38b: per-slot ratio. Server-side resolves bound-slot ratios
+            // (e.g. LC gold = 81); client-side falls back to ITEM_FRACTION_SCALE_FACTOR (100).
+            long ratio = net.kroia.banksystem.banking.binding.BankAccountBindings
+                    .getRawUnitsPerItem(accountNumber, new ItemID(itemId));
+            double scale = ratio > 0 ? (double) ratio : BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
             BalanceHistoryChart.LineSeries s = new BalanceHistoryChart.LineSeries(name, color);
             for (BalanceHistoryRecord r : itemRecords) {
                 s.points.add(new BalanceHistoryChart.DataPoint(r.time(),

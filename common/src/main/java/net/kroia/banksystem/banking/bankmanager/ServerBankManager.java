@@ -500,7 +500,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                     } else {
                         long price = priceProvider.getItemPrice(itemId);
                         if (price > 0) {
-                            totalWealth += totalBalance * price / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                            // Task #38b: bound slots have a per-item ratio (e.g. LC gold = 81).
+                            // "price per physical item" × "physical item count" = wealth in the
+                            // aggregate cent unit; physical count = balance / ratio.
+                            long ratio = BankAccountBindings.getRawUnitsPerItem(accountNumber, bankItemID);
+                            totalWealth += totalBalance * price / ratio;
                         }
                     }
                 }
@@ -2081,15 +2085,36 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         // deposited to external (it belongs to pending orders that reference this
         // slot) — it is carried into the binding row's lockedBalance and preserved
         // there until the pending order settles or the slot is unbound.
+        //
+        // Task #38b: local balance is in ITEM_FRACTION_SCALE_FACTOR (100:1) raw
+        // units — that's the pre-bind ratio. The provider's ratio (e.g. LC gold
+        // = 81:1) may differ, so we convert BEFORE depositing to keep the
+        // physical-coin count invariant across the bind. E.g. localFree = 500
+        // pre-bind (5 gold at 100:1) → 500 * 81 / 100 = 405 post-bind (5 gold at
+        // 81:1). For coin slots this is always integer (localFree is always a
+        // multiple of 100). Numismatics is unaffected: ratio = 100 = pre-bind,
+        // so the multiplication is a no-op.
+        long providerRatio = provider.baseUnitsPerItem(net.kroia.banksystem.util.ItemIDManager
+                .getItemStackTemplate(itemId));
+        if (providerRatio <= 0L) {
+            providerRatio = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        }
+        long convertedFree = providerRatio == BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR
+                ? localFree
+                : localFree * providerRatio / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        long convertedLocked = providerRatio == BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR
+                ? localLocked
+                : localLocked * providerRatio / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
         long scale = Math.max(1L, external.nativeScale());
         long initialDust = 0L;
-        if (localFree > 0L) {
-            long dust = localFree % scale;
-            long wholeNativePortion = localFree - dust;
+        if (convertedFree > 0L) {
+            long dust = convertedFree % scale;
+            long wholeNativePortion = convertedFree - dust;
             if (wholeNativePortion > 0L) {
                 if (!external.deposit(wholeNativePortion)) {
                     warn("bindExternalAccount refused: slot " + accountId + "/" + itemId
-                            + " has local balance " + localFree + " whose whole-native portion ("
+                            + " has local balance " + localFree + " (converted " + convertedFree
+                            + " at ratio " + providerRatio + ") whose whole-native portion ("
                             + wholeNativePortion + ") cannot be deposited to external "
                             + "(overflow or external refusal).");
                     return BankStatus.FAILED_OVERFLOW;
@@ -2110,8 +2135,10 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         if (initialDust > 0L) {
             bindings.setDust(accountId, itemId, initialDust);
         }
-        if (localLocked > 0L) {
-            bindings.setLocked(accountId, itemId, localLocked);
+        if (convertedLocked > 0L) {
+            // Task #38b: locked balance is stored in POST-BIND ratio units (matches
+            // the free-balance ratio the bound slot uses for reads/writes).
+            bindings.setLocked(accountId, itemId, convertedLocked);
         }
         info("Bound slot " + accountId + "/" + itemId + " to external account " + ref
                 + " (transferred " + (localFree - initialDust) + " raw units to external, "
@@ -2211,6 +2238,14 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         long ext = external.getBalance();
         long dust = row.dustBalance();
         long locked = row.lockedBalance();
+        // Task #38b: post-bind values (ext, locked, dust) are in the PROVIDER's ratio
+        // (e.g. LC gold = 81:1). Local unbound storage uses ITEM_FRACTION_SCALE_FACTOR
+        // (100:1). Convert post→pre to keep physical-coin count invariant.
+        long providerRatio = provider.baseUnitsPerItem(net.kroia.banksystem.util.ItemIDManager
+                .getItemStackTemplate(itemId));
+        if (providerRatio <= 0L) {
+            providerRatio = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        }
 
         if (keepOnBankSystem) {
             // Case A: recover all funds locally (no dust loss).
@@ -2221,14 +2256,37 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                         + row.ref().providerId() + "' refused). Aborting unbind.");
                 return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
             }
-            // Materialize into local: free = ext + dust, locked = locked.
+            // Convert ext + dust from post-bind (provider ratio) to pre-bind (100:1) units.
+            // Truncation loss is sub-raw-unit — negligible; log at info when present.
+            long externalTotal = ext + dust;
+            long convertedFree;
+            long subUnitLoss = 0L;
+            if (providerRatio == BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) {
+                convertedFree = externalTotal;
+            } else {
+                long numerator = externalTotal * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                convertedFree = numerator / providerRatio;
+                subUnitLoss = numerator % providerRatio;
+            }
+            long convertedLocked = providerRatio == BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR
+                    ? locked
+                    : locked * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / providerRatio;
+            // Materialize into local: free = convertedFree, locked = convertedLocked.
             if (bank instanceof ServerBank serverBank) {
-                serverBank.writeLocalFieldsForUnbind_internal(ext + dust, locked);
+                serverBank.writeLocalFieldsForUnbind_internal(convertedFree, convertedLocked);
             }
             bindings.unbind(accountId, itemId);
-            info("Unbound slot " + accountId + "/" + itemId + " from provider '"
-                    + row.ref().providerId() + "' (recovered " + (ext + dust)
-                    + " free + " + locked + " locked to local storage)");
+            if (subUnitLoss > 0L) {
+                info("Unbound slot " + accountId + "/" + itemId + " from provider '"
+                        + row.ref().providerId() + "' (recovered " + convertedFree
+                        + " free + " + convertedLocked + " locked to local; ratio " + providerRatio
+                        + "→" + BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR
+                        + " truncated " + subUnitLoss + "/" + providerRatio + " sub-raw-unit)");
+            } else {
+                info("Unbound slot " + accountId + "/" + itemId + " from provider '"
+                        + row.ref().providerId() + "' (recovered " + convertedFree
+                        + " free + " + convertedLocked + " locked to local storage)");
+            }
             return BankStatus.SUCCESS;
         } else {
             // Case B: leave funds on the provider. External balance is not touched — the
@@ -2238,19 +2296,22 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             // Only dust (< 1 native unit) is discarded, matching the UI's "fractional
             // amounts will be discarded" warning.
             long fractionalLoss = dust;
+            long convertedLocked = providerRatio == BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR
+                    ? locked
+                    : locked * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / providerRatio;
             if (bank instanceof ServerBank serverBank) {
-                serverBank.writeLocalFieldsForUnbind_internal(0L, locked);
+                serverBank.writeLocalFieldsForUnbind_internal(0L, convertedLocked);
             }
             bindings.unbind(accountId, itemId);
             if (fractionalLoss > 0L) {
                 info("Unbound slot " + accountId + "/" + itemId + " from provider '"
                         + row.ref().providerId() + "' (kept " + ext + " on external, restored "
-                        + locked + " raw units locked to local, discarded " + fractionalLoss
+                        + convertedLocked + " raw units locked to local, discarded " + fractionalLoss
                         + " raw units of dust < 1 native unit)");
             } else {
                 info("Unbound slot " + accountId + "/" + itemId + " from provider '"
                         + row.ref().providerId() + "' (kept " + ext + " on external, restored "
-                        + locked + " raw units locked to local)");
+                        + convertedLocked + " raw units locked to local)");
             }
             return BankStatus.SUCCESS;
         }

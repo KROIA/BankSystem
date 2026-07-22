@@ -60,7 +60,7 @@ public final class NumismaticsAccount implements ExternalAccount {
      * Scale factor: 1 spur = 100 BankSystem raw units.
      * Must match {@link BankSystemModSettings#ITEM_FRACTION_SCALE_FACTOR}.
      */
-    private static final long SCALE_FACTOR = 100L;
+    static final long SCALE_FACTOR = 100L;
 
     /** The underlying Numismatics BankAccount, accessed via reflection. */
     private final Object numismaticsAccount;

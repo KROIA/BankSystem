@@ -218,7 +218,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
                 balance = addClampedForAggregation(existing.balance(), balance);
                 lockedBalance = addClampedForAggregation(existing.lockedBalance(), lockedBalance);
             }
-            bankData.put(canonical, new BankData(canonical, balance, lockedBalance));
+            long ratio = net.kroia.banksystem.banking.binding.BankAccountBindings
+                    .getRawUnitsPerItem(accountNumber, canonical);
+            bankData.put(canonical, new BankData(canonical, balance, lockedBalance, ratio));
         }
 
         return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);

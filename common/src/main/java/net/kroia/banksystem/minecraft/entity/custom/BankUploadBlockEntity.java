@@ -5,7 +5,10 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
+import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
+import net.kroia.banksystem.banking.binding.BindingRow;
 import net.kroia.banksystem.minecraft.block.custom.BankUploadBlock;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
@@ -334,6 +337,55 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                 dropItem(stack);
                                 inventory.setItem(i, ItemStack.EMPTY);
                             }
+                            continue;
+                        }
+
+                        // Task #38: variant routing — if the account has a binding whose provider
+                        // accepts this stack (LC coin_iron / Numismatics bevel / etc.), redirect
+                        // the deposit into the bound base-coin slot at (count * baseUnitsPerItem).
+                        BindingRow variantBinding = null;
+                        long variantBaseUnits = 0L;
+                        BankAccountBindings bindings = BankAccountBindings.get();
+                        if (bindings != null && !MoneyItem.isMoney(itemID)) {
+                            variantBinding = bindings.findBindingAcceptingItem(bankAccountNumber, stack);
+                            if (variantBinding != null) {
+                                ExternalCurrencyProvider provider =
+                                        BankSystemMod.getAPI().getCurrencyProvider(variantBinding.ref().providerId());
+                                variantBaseUnits = provider == null ? 0L : provider.baseUnitsPerItem(stack);
+                                if (variantBaseUnits <= 0L) variantBinding = null;
+                            }
+                        }
+
+                        if (variantBinding != null) {
+                            inventory.setItem(i, ItemStack.EMPTY);
+                            long amountToDeposit;
+                            try {
+                                amountToDeposit = Math.multiplyExact((long) stack.getCount(), variantBaseUnits);
+                            } catch (ArithmeticException overflow) {
+                                if (dropIfNotBankable) {
+                                    dropItem(stack);
+                                } else {
+                                    inventory.setItem(finalI, stack);
+                                }
+                                continue;
+                            }
+                            ItemID baseSlotId = new ItemID(variantBinding.itemIdShort());
+                            final long finalDeposit = amountToDeposit;
+                            account.getOrCreateBankAsync(baseSlotId).thenAccept(baseBank -> {
+                                if (baseBank == null) {
+                                    if (dropIfNotBankable) {
+                                        dropItem(stack);
+                                    } else {
+                                        inventory.setItem(finalI, stack);
+                                    }
+                                    return;
+                                }
+                                baseBank.depositAsync(finalDeposit).thenAccept(status -> {
+                                    if (status != BankStatus.SUCCESS) {
+                                        inventory.setItem(finalI, stack);
+                                    }
+                                });
+                            });
                             continue;
                         }
 

@@ -50,6 +50,10 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         private long wholeBankBalance;
         private final Rectangle itemStackHitBox;
         public final ItemID itemID;
+        /** Task #38b: per-slot raw-units-per-item ratio; defaults to
+         *  {@link BankSystemModSettings#ITEM_FRACTION_SCALE_FACTOR} until the
+         *  first bank-data snapshot arrives (or forever, for unbound slots). */
+        private long rawUnitsPerItem = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
         private final TextBox amountBox;
         private final Label balanceLabel;
@@ -59,7 +63,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         BankTerminalScreen parent;
 
-        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long rawBalance) {
+        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long rawBalance, long rawUnitsPerItem) {
             super(0, 0, 100, HEIGHT);
             this.parent = parent;
             this.stack = stack;
@@ -90,7 +94,8 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             setHeight(addAmountButtonGroup.getHeight());
             addAmountButtonGroup.updateButtons();
 
-            wholeBankBalance = (long)getBankManager().convertToRealAmount(rawBalance);
+            this.rawUnitsPerItem = rawUnitsPerItem > 0 ? rawUnitsPerItem : BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            wholeBankBalance = rawBalance / this.rawUnitsPerItem;
             balanceLabel.setText(formatCompactBalance(rawBalance));
             //addChild(receiveItemsFromMarketButton);
         }
@@ -129,8 +134,9 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             amountBox.setBounds(balanceLabel.getRight(), padding, width/3, height-padding*2);
             addAmountButtonGroup.setBounds(amountBox.getRight()+1, 0, getWidth()-amountBox.getRight()-1, height);
         }
-        public void setBankBalance(long amount) {
-            wholeBankBalance = (long)getBankManager().convertToRealAmount(amount);
+        public void setBankBalance(long amount, long rawUnitsPerItem) {
+            this.rawUnitsPerItem = rawUnitsPerItem > 0 ? rawUnitsPerItem : BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            wholeBankBalance = amount / this.rawUnitsPerItem;
             balanceLabel.setText(formatCompactBalance(amount));
 
             if(targetAmount > wholeBankBalance) {
@@ -140,12 +146,13 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             }
 
         }
-        private static String formatCompactBalance(long rawAmount) {
-            double real = (double) rawAmount / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        private String formatCompactBalance(long rawAmount) {
+            long ratio = rawUnitsPerItem > 0 ? rawUnitsPerItem : BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            double real = (double) rawAmount / ratio;
             if (real >= 1_000_000_000) return String.format(Locale.ROOT, "%.3fB", real / 1_000_000_000);
             if (real >= 1_000_000) return String.format(Locale.ROOT, "%.3fM", real / 1_000_000);
             if (real >= 10_000) return String.format(Locale.ROOT, "%.3fk", real / 1_000);
-            return ServerBank.getFormattedAmountStatic(rawAmount);
+            return ServerBank.getFormattedAmountStatic(rawAmount, (int) ratio);
         }
 
         public long getTargetAmount()
@@ -695,15 +702,16 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         for (Pair<ItemID, BankData> pair : sortedBankAccounts)
         {
             long balance = pair.getSecond().balance();
+            long ratio = pair.getSecond().rawUnitsPerItem();
             BankElement element = getBankElement(pair.getFirst());
             if (element == null) {
                 ItemStack stack = pair.getFirst().getStack();
-                element = new BankElement(this, stack, pair.getFirst(), balance);
+                element = new BankElement(this, stack, pair.getFirst(), balance, ratio);
                 bankElements.add(element);
                 if (matchesFilter(element))
                     itemListView.addChild(element);
             } else {
-                element.setBankBalance(balance);
+                element.setBankBalance(balance, ratio);
             }
             if (needsResize)
                 availableItems.put(pair.getFirst(), pair.getFirst());

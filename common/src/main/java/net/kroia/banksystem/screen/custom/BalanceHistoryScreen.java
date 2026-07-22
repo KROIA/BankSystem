@@ -78,6 +78,10 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     /** Saved viewport from user custom data, applied once after data loads. */
     private CompoundTag pendingViewport = null;
     private boolean dataLoaded = false;
+    /** Task #38b: per-item raw-units-per-item ratio (from the account-data snapshot).
+     *  Missing entries default to {@link BankSystemModSettings#ITEM_FRACTION_SCALE_FACTOR}
+     *  so unbound slots still render correctly. */
+    private final Map<Short, Long> ratioByItem = new HashMap<>();
 
     public BalanceHistoryScreen(Screen parent, int accountNumber) {
         super(Component.literal("Balance History"), parent);
@@ -137,6 +141,10 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
                 Minecraft.getInstance().execute(() -> {
                     if (data != null) {
                         titleLabel.setText("Balance History - " + data.accountName + " (#" + accountNumber + ")");
+                        ratioByItem.clear();
+                        for (Map.Entry<ItemID, net.kroia.banksystem.banking.clientdata.BankData> e : data.bankData.entrySet()) {
+                            ratioByItem.put(e.getKey().getShort(), e.getValue().rawUnitsPerItem());
+                        }
                     }
                 })
         );
@@ -182,12 +190,13 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         wealthRow = null;
 
         int colorIndex = 0;
-        double scaleFactor = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        // Wealth uses the aggregate "cent" unit (global constant) — not slot-item-ratio dependent.
+        double wealthScaleFactor = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
         // Wealth series (from ItemPriceProvider) — added first, pinned on top
         List<BalanceHistoryRecord> wealthRecords = grouped.remove(BalanceHistoryRecord.WEALTH_ITEM_ID);
         if (wealthRecords != null && !wealthRecords.isEmpty()) {
-            addWealthSeries(wealthRecords, scaleFactor);
+            addWealthSeries(wealthRecords, wealthScaleFactor);
         }
 
         for (Map.Entry<Short, List<BalanceHistoryRecord>> entry : grouped.entrySet()) {
@@ -202,6 +211,11 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             int color = ItemColorUtil.getColor(itemId, itemStack, colorIndex);
             String name = getItemName(itemId);
 
+            // Task #38b: per-item ratio from the account snapshot (defaults to
+            // ITEM_FRACTION_SCALE_FACTOR when the item isn't in the snapshot).
+            long ratio = ratioByItem.getOrDefault(itemId,
+                    (long) BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+            double scaleFactor = ratio > 0 ? (double) ratio : BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
             BalanceHistoryChart.LineSeries series = new BalanceHistoryChart.LineSeries(name, color);
             series.visible = !disabledItems.contains(itemId);
             for (BalanceHistoryRecord r : itemRecords) {
