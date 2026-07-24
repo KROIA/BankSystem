@@ -340,10 +340,31 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                         // Clear the slot immediately to prevent double-read on next tick
                         inventory.setItem(i, ItemStack.EMPTY);
 
-                        CompletableFuture<@Nullable IAsyncBank> itemBankFuture = account.getOrCreateBankAsync(itemID);
+                        boolean isMoney = MoneyItem.isMoney(itemID);
+                        CompletableFuture<@Nullable IAsyncBank> bankFuture;
+                        if(isMoney)
+                        {
+                            // Denomination-agnostic — target the account's existing money
+                            // bank regardless of the currently cached money short; matches
+                            // BankTerminal.sendItemsToBank.
+                            bankFuture = account.getAllBanksAsync().thenCompose(banks -> {
+                                for(ItemID bankItemID : banks.keySet())
+                                {
+                                    if(MoneyItem.isMoney(bankItemID))
+                                    {
+                                        return account.getOrCreateBankAsync(bankItemID);
+                                    }
+                                }
+                                return account.getOrCreateBankAsync(MoneyItem.getItemID());
+                            });
+                        }
+                        else
+                        {
+                            bankFuture = account.getOrCreateBankAsync(itemID);
+                        }
 
-                        itemBankFuture.thenAccept(itemBank->{
-                            if(itemBank == null)
+                        bankFuture.thenAccept(bank->{
+                            if(bank == null)
                             {
                                 if(dropIfNotBankable){
                                     dropItem(stack);
@@ -353,29 +374,19 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                 return;
                             }
                             long amount = stack.getCount();
-                            if(MoneyItem.isMoney(itemID))
+                            if(isMoney)
                             {
-                                amount *= ((MoneyItem)stack.getItem()).worth();
-                                CompletableFuture<@Nullable IAsyncBank> moneyBankFuture = account.getOrCreateBankAsync(MoneyItem.getItemID());
-                                final long finalAmount = amount;
-                                moneyBankFuture.thenAccept(moneyBank->{
-                                    if(moneyBank != null) {
-                                        CompletableFuture<BankStatus> depositStatusFuture = moneyBank.depositAsync(finalAmount);
-                                        depositStatusFuture.thenAccept(depositStatus->{
-                                            if(depositStatus != BankStatus.SUCCESS) {
-                                                inventory.setItem(finalI, stack); // Restore item on failure
-                                            }
-                                        });
-                                    }else if(dropIfNotBankable){
-                                        dropItem(stack);
-                                    } else {
+                                long finalAmount = amount * ((MoneyItem)stack.getItem()).worth();
+                                CompletableFuture<BankStatus> depositStatusFuture = bank.depositAsync(finalAmount);
+                                depositStatusFuture.thenAccept(depositStatus->{
+                                    if(depositStatus != BankStatus.SUCCESS) {
                                         inventory.setItem(finalI, stack); // Restore item on failure
                                     }
                                 });
                             }
                             else
                             {
-                                CompletableFuture<BankStatus> depositStatusFuture = itemBank.depositRealAsync((double)amount);
+                                CompletableFuture<BankStatus> depositStatusFuture = bank.depositRealAsync((double)amount);
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus != BankStatus.SUCCESS) {
                                         inventory.setItem(finalI, stack); // Restore item on failure
