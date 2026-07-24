@@ -13,6 +13,7 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
@@ -77,6 +78,11 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             this.accountName = personalBankOwner.getName()+"'s ServerBank Account";
         }
         this.banks.putAll(banks);
+        // Task #33 (v2.0.5): every bank must know its owning account number so it can
+        // consult the BankAccountBindings table. Attach every bank we just adopted.
+        for (ServerBank bank : this.banks.values()) {
+            bank.attachToAccount(this.accountNumber);
+        }
         for (BankUser user : users) {
             this.users.put(user.getUUID(), user);
         }
@@ -212,7 +218,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
                 balance = addClampedForAggregation(existing.balance(), balance);
                 lockedBalance = addClampedForAggregation(existing.lockedBalance(), lockedBalance);
             }
-            bankData.put(canonical, new BankData(canonical, balance, lockedBalance));
+            long ratio = net.kroia.banksystem.banking.binding.BankAccountBindings
+                    .getRawUnitsPerItem(accountNumber, canonical);
+            bankData.put(canonical, new BankData(canonical, balance, lockedBalance, ratio));
         }
 
         return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
@@ -744,6 +752,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         }
         ServerBank bank = ServerBank.create(itemID, startBalance); // Create a new bank with 0 balance
         if (bank != null) {
+            bank.attachToAccount(this.accountNumber); // Task #33: attach for bindings lookup
             banks.put(itemID, bank); // Add new bank to the account
             hasChanges = true;
             return bank;
@@ -762,6 +771,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         }
         ServerBank bank = ServerBank.create(itemID, startBalance); // Create a new bank with 0 balance
         if (bank != null) {
+            bank.attachToAccount(this.accountNumber); // Task #33: attach for bindings lookup
             banks.put(itemID, bank); // Add new bank to the account
             hasChanges = true;
             return CompletableFuture.completedFuture(bank);
@@ -779,7 +789,17 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             return; // Invalid item ID
         }
         itemID = ItemIDManager.resolveAlias(itemID); // alias safety net (see getAccountData)
-        hasChanges |= banks.remove(itemID) != null; // Remove bank by item ID
+        boolean removed = banks.remove(itemID) != null;
+        hasChanges |= removed;
+        // Task #33 (v2.0.5): cascade-drop any external-currency binding row for the
+        // slot that just went away. Idempotent when no binding existed.
+        if (removed) {
+            BankAccountBindings bindings =
+                    BankAccountBindings.get();
+            if (bindings != null) {
+                bindings.unbind(this.accountNumber, itemID);
+            }
+        }
     }
     @Override
     public void removeBankAsync(ItemID itemID) {
@@ -798,8 +818,14 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
                 emptyBanks.add(entry.getKey());
             }
         }
+        // Task #33 (v2.0.5): cascade-drop bindings for every removed slot. Safe when
+        // no binding exists — unbind is idempotent.
+        BankAccountBindings bindings = BankAccountBindings.get();
         for (ItemID itemID : emptyBanks) {
-            hasChanges |= banks.remove(itemID) != null; // Remove empty banks from the account
+            if (banks.remove(itemID) != null) {
+                hasChanges = true;
+                if (bindings != null) bindings.unbind(this.accountNumber, itemID);
+            }
         }
         return emptyBanks; // Return list of removed empty banks
     }
@@ -814,6 +840,12 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public void removeAllBanks() {
         hasChanges |= !banks.isEmpty();
+        // Task #33 (v2.0.5): every slot the account owned is going away — cascade-drop
+        // the whole account's bindings in one pass.
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings != null) {
+            bindings.removeAllForAccount(this.accountNumber);
+        }
         banks.clear(); // Clear all banks in the account
     }
     @Override
@@ -879,6 +911,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (bank == null) {
             bank = ServerBank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
             if (bank != null) {
+                bank.attachToAccount(this.accountNumber); // Task #33: attach for bindings lookup
                 banks.put(itemID, bank); // Add new bank to the account
             }
         }
@@ -895,6 +928,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (bank == null) {
             bank = ServerBank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
             if (bank != null) {
+                bank.attachToAccount(this.accountNumber); // Task #33: attach for bindings lookup
                 banks.put(itemID, bank); // Add new bank to the account
             }
         }
@@ -1000,6 +1034,10 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             CompoundTag bankTag = banksTag.getCompound(i);
             ServerBank bank = ServerBank.createFromTag(bankTag);
             if (bank != null) {
+                // Task #33: attach for bindings lookup — must happen for both branches
+                // below because absorb() drops the bank from the account, but the
+                // "existing" branch's bank already got attached when it was first put.
+                bank.attachToAccount(this.accountNumber);
                 // ServerBank.load() canonicalizes aliased ItemIDs, so two saved banks may
                 // resolve to the same key after an ItemID merge (confirmed volatile-
                 // component merge, possibly from an earlier session before consolidation
@@ -1042,6 +1080,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             if (canonicalBank == null) {
                 // No bank under the canonical ID yet: re-key the alias bank in place.
                 aliasBank.rekeyForAliasMerge_internal(canonical);
+                aliasBank.attachToAccount(this.accountNumber); // Task #33: idempotent re-attach
                 banks.put(canonical, aliasBank);
             } else {
                 // Invariant check: total over the pair must be unchanged by the merge.

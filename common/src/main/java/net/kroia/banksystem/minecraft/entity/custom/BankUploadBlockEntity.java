@@ -5,7 +5,10 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
+import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
+import net.kroia.banksystem.banking.binding.BindingRow;
 import net.kroia.banksystem.minecraft.block.custom.BankUploadBlock;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
@@ -337,13 +340,83 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             continue;
                         }
 
+                        // Task #38: variant routing — if the account has a binding whose provider
+                        // accepts this stack (LC coin_iron / Numismatics bevel / etc.), redirect
+                        // the deposit into the bound base-coin slot at (count * baseUnitsPerItem).
+                        BindingRow variantBinding = null;
+                        long variantBaseUnits = 0L;
+                        BankAccountBindings bindings = BankAccountBindings.get();
+                        if (bindings != null && !MoneyItem.isMoney(itemID)) {
+                            variantBinding = bindings.findBindingAcceptingItem(bankAccountNumber, stack);
+                            if (variantBinding != null) {
+                                ExternalCurrencyProvider provider =
+                                        BankSystemMod.getAPI().getCurrencyProvider(variantBinding.ref().providerId());
+                                variantBaseUnits = provider == null ? 0L : provider.baseUnitsPerItem(stack);
+                                if (variantBaseUnits <= 0L) variantBinding = null;
+                            }
+                        }
+
+                        if (variantBinding != null) {
+                            inventory.setItem(i, ItemStack.EMPTY);
+                            long amountToDeposit;
+                            try {
+                                amountToDeposit = Math.multiplyExact((long) stack.getCount(), variantBaseUnits);
+                            } catch (ArithmeticException overflow) {
+                                if (dropIfNotBankable) {
+                                    dropItem(stack);
+                                } else {
+                                    inventory.setItem(finalI, stack);
+                                }
+                                continue;
+                            }
+                            ItemID baseSlotId = new ItemID(variantBinding.itemIdShort());
+                            final long finalDeposit = amountToDeposit;
+                            account.getOrCreateBankAsync(baseSlotId).thenAccept(baseBank -> {
+                                if (baseBank == null) {
+                                    if (dropIfNotBankable) {
+                                        dropItem(stack);
+                                    } else {
+                                        inventory.setItem(finalI, stack);
+                                    }
+                                    return;
+                                }
+                                baseBank.depositAsync(finalDeposit).thenAccept(status -> {
+                                    if (status != BankStatus.SUCCESS) {
+                                        inventory.setItem(finalI, stack);
+                                    }
+                                });
+                            });
+                            continue;
+                        }
+
                         // Clear the slot immediately to prevent double-read on next tick
                         inventory.setItem(i, ItemStack.EMPTY);
 
-                        CompletableFuture<@Nullable IAsyncBank> itemBankFuture = account.getOrCreateBankAsync(itemID);
+                        boolean isMoney = MoneyItem.isMoney(itemID);
+                        CompletableFuture<@Nullable IAsyncBank> bankFuture;
+                        if(isMoney)
+                        {
+                            // Denomination-agnostic — target the account's existing money
+                            // bank regardless of the currently cached money short; matches
+                            // BankTerminal.sendItemsToBank.
+                            bankFuture = account.getAllBanksAsync().thenCompose(banks -> {
+                                for(ItemID bankItemID : banks.keySet())
+                                {
+                                    if(MoneyItem.isMoney(bankItemID))
+                                    {
+                                        return account.getOrCreateBankAsync(bankItemID);
+                                    }
+                                }
+                                return account.getOrCreateBankAsync(MoneyItem.getItemID());
+                            });
+                        }
+                        else
+                        {
+                            bankFuture = account.getOrCreateBankAsync(itemID);
+                        }
 
-                        itemBankFuture.thenAccept(itemBank->{
-                            if(itemBank == null)
+                        bankFuture.thenAccept(bank->{
+                            if(bank == null)
                             {
                                 if(dropIfNotBankable){
                                     dropItem(stack);
@@ -353,29 +426,19 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                 return;
                             }
                             long amount = stack.getCount();
-                            if(MoneyItem.isMoney(itemID))
+                            if(isMoney)
                             {
-                                amount *= ((MoneyItem)stack.getItem()).worth();
-                                CompletableFuture<@Nullable IAsyncBank> moneyBankFuture = account.getOrCreateBankAsync(MoneyItem.getItemID());
-                                final long finalAmount = amount;
-                                moneyBankFuture.thenAccept(moneyBank->{
-                                    if(moneyBank != null) {
-                                        CompletableFuture<BankStatus> depositStatusFuture = moneyBank.depositAsync(finalAmount);
-                                        depositStatusFuture.thenAccept(depositStatus->{
-                                            if(depositStatus != BankStatus.SUCCESS) {
-                                                inventory.setItem(finalI, stack); // Restore item on failure
-                                            }
-                                        });
-                                    }else if(dropIfNotBankable){
-                                        dropItem(stack);
-                                    } else {
+                                long finalAmount = amount * ((MoneyItem)stack.getItem()).worth();
+                                CompletableFuture<BankStatus> depositStatusFuture = bank.depositAsync(finalAmount);
+                                depositStatusFuture.thenAccept(depositStatus->{
+                                    if(depositStatus != BankStatus.SUCCESS) {
                                         inventory.setItem(finalI, stack); // Restore item on failure
                                     }
                                 });
                             }
                             else
                             {
-                                CompletableFuture<BankStatus> depositStatusFuture = itemBank.depositRealAsync((double)amount);
+                                CompletableFuture<BankStatus> depositStatusFuture = bank.depositRealAsync((double)amount);
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus != BankStatus.SUCCESS) {
                                         inventory.setItem(finalI, stack); // Restore item on failure

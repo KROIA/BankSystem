@@ -50,6 +50,10 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         private long wholeBankBalance;
         private final Rectangle itemStackHitBox;
         public final ItemID itemID;
+        /** Task #38b: per-slot raw-units-per-item ratio; defaults to
+         *  {@link BankSystemModSettings#ITEM_FRACTION_SCALE_FACTOR} until the
+         *  first bank-data snapshot arrives (or forever, for unbound slots). */
+        private long rawUnitsPerItem = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
         private final TextBox amountBox;
         private final Label balanceLabel;
@@ -59,7 +63,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         BankTerminalScreen parent;
 
-        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long rawBalance) {
+        public BankElement(BankTerminalScreen parent, ItemStack stack, ItemID itemID, long rawBalance, long rawUnitsPerItem) {
             super(0, 0, 100, HEIGHT);
             this.parent = parent;
             this.stack = stack;
@@ -90,7 +94,8 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             setHeight(addAmountButtonGroup.getHeight());
             addAmountButtonGroup.updateButtons();
 
-            wholeBankBalance = (long)getBankManager().convertToRealAmount(rawBalance);
+            this.rawUnitsPerItem = rawUnitsPerItem > 0 ? rawUnitsPerItem : BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            wholeBankBalance = rawBalance / this.rawUnitsPerItem;
             balanceLabel.setText(formatCompactBalance(rawBalance));
             //addChild(receiveItemsFromMarketButton);
         }
@@ -129,8 +134,9 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             amountBox.setBounds(balanceLabel.getRight(), padding, width/3, height-padding*2);
             addAmountButtonGroup.setBounds(amountBox.getRight()+1, 0, getWidth()-amountBox.getRight()-1, height);
         }
-        public void setBankBalance(long amount) {
-            wholeBankBalance = (long)getBankManager().convertToRealAmount(amount);
+        public void setBankBalance(long amount, long rawUnitsPerItem) {
+            this.rawUnitsPerItem = rawUnitsPerItem > 0 ? rawUnitsPerItem : BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            wholeBankBalance = amount / this.rawUnitsPerItem;
             balanceLabel.setText(formatCompactBalance(amount));
 
             if(targetAmount > wholeBankBalance) {
@@ -140,12 +146,13 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             }
 
         }
-        private static String formatCompactBalance(long rawAmount) {
-            double real = (double) rawAmount / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        private String formatCompactBalance(long rawAmount) {
+            long ratio = rawUnitsPerItem > 0 ? rawUnitsPerItem : BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            double real = (double) rawAmount / ratio;
             if (real >= 1_000_000_000) return String.format(Locale.ROOT, "%.3fB", real / 1_000_000_000);
             if (real >= 1_000_000) return String.format(Locale.ROOT, "%.3fM", real / 1_000_000);
             if (real >= 10_000) return String.format(Locale.ROOT, "%.3fk", real / 1_000);
-            return ServerBank.getFormattedAmountStatic(rawAmount);
+            return ServerBank.getFormattedAmountStatic(rawAmount, (int) ratio);
         }
 
         public long getTargetAmount()
@@ -231,6 +238,12 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private static final String CRAFT_PREFS_KEY = "bankTerminalCrafting";
     private static final String KEY_USE_BANK_ITEMS = "useBankItems";
     private static final String KEY_DEPOSIT_OUTPUT = "depositOutput";
+    /**
+     * customData key holding the player's last-selected account across ALL bank terminals.
+     * Preferred over the per-block, per-player selection stored on the terminal block entity
+     * so that opening any terminal restores the user's most recent choice.
+     */
+    private static final String KEY_LAST_ACCOUNT = "bankTerminalLastAccount";
     /** Guard so programmatic checkbox initialization does not echo a settings packet. */
     private boolean initializingCraftSettings = false;
     /** False while checkboxes change programmatically — suppresses preference writes. */
@@ -327,41 +340,46 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         addElement(inventoryView);
 
 
-        getBankManager().requestBankTerminalData(pMenu.getBlockPos()).thenAccept((bankTerminalData) -> {
-            setSelectedBankAccountNr(bankTerminalData.selectedBankAccount());
-
-            //userPermission = bankTerminalData.userPermission;
-
-            ghostsDirty = true;
-
-            if(selectedBankAccountNr > 0)
-            {
-                updateBankList();
-            }
-            else
-            {
-                getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID()).thenAccept(this::updateBankList);
-            }
-        });
-
-        // Fetch the player's GLOBAL crafting preference unconditionally on every
-        // screen open. Deliberately NOT gated on the terminal's per-block account
-        // selection: that value (BankTerminalBlockDataRequest.selectedBankAccount)
-        // is only ever written by item transfers, so it is 0 on any terminal the
-        // player never transferred through — gating the fetch on it made the
-        // preference appear per-block. The preference is applied once BOTH the
-        // fetch has landed AND an account is selected (whichever happens last —
-        // see applyCraftPreferenceIfReady, also triggered from
-        // setSelectedBankAccountNr when the personal-account fallback resolves).
+        // Initial account resolution + crafting-preference fetch. Both come from the
+        // player's GLOBAL customData (persisted server-side, follows the player across
+        // terminals and servers). The customData fetch is authoritative for account
+        // selection; only when no last-selected account is stored do we fall back to
+        // the per-block, per-player value on the terminal block entity, and finally to
+        // the personal account.
         getBankManager().getUserCustomData().thenAccept(customData ->
                 net.minecraft.client.Minecraft.getInstance().execute(() -> {
-                    if (!screenIsOpen || customData == null)
-                        return;
-                    var prefs = customData.getCompound(CRAFT_PREFS_KEY);
-                    savedCraftUseBankItems = prefs.getBoolean(KEY_USE_BANK_ITEMS);
-                    savedCraftDepositOutput = prefs.getBoolean(KEY_DEPOSIT_OUTPUT);
+                    if (!screenIsOpen) return;
+                    int lastAccount = 0;
+                    if (customData != null) {
+                        var prefs = customData.getCompound(CRAFT_PREFS_KEY);
+                        savedCraftUseBankItems = prefs.getBoolean(KEY_USE_BANK_ITEMS);
+                        savedCraftDepositOutput = prefs.getBoolean(KEY_DEPOSIT_OUTPUT);
+                        lastAccount = customData.getInt(KEY_LAST_ACCOUNT);
+                    }
                     craftPreferenceLoaded = true;
-                    applyCraftPreferenceIfReady();
+                    ghostsDirty = true;
+
+                    if (lastAccount > 0) {
+                        setSelectedBankAccountNr(lastAccount);
+                        // updateBankList falls back to the personal account if this
+                        // one no longer exists / the user lost access to it.
+                        updateBankList();
+                        applyCraftPreferenceIfReady();
+                    } else {
+                        // No user-scoped last selection — legacy fallback: read the
+                        // per-block, per-player value written by previous transfers.
+                        getBankManager().requestBankTerminalData(pMenu.getBlockPos()).thenAccept(btd ->
+                                net.minecraft.client.Minecraft.getInstance().execute(() -> {
+                                    if (!screenIsOpen) return;
+                                    setSelectedBankAccountNr(btd.selectedBankAccount());
+                                    if (selectedBankAccountNr > 0) {
+                                        updateBankList();
+                                    } else {
+                                        getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID())
+                                                .thenAccept(this::updateBankList);
+                                    }
+                                }));
+                    }
                 }));
     }
 
@@ -684,15 +702,16 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         for (Pair<ItemID, BankData> pair : sortedBankAccounts)
         {
             long balance = pair.getSecond().balance();
+            long ratio = pair.getSecond().rawUnitsPerItem();
             BankElement element = getBankElement(pair.getFirst());
             if (element == null) {
                 ItemStack stack = pair.getFirst().getStack();
-                element = new BankElement(this, stack, pair.getFirst(), balance);
+                element = new BankElement(this, stack, pair.getFirst(), balance, ratio);
                 bankElements.add(element);
                 if (matchesFilter(element))
                     itemListView.addChild(element);
             } else {
-                element.setBankBalance(balance);
+                element.setBankBalance(balance, ratio);
             }
             if (needsResize)
                 availableItems.put(pair.getFirst(), pair.getFirst());
@@ -880,10 +899,25 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         latestAccountData = null;
         ghostsDirty = true;
         updateBankList();
+        saveLastAccountPreference(accountNumber);
         // Re-target the server-side crafting settings to the newly selected
         // account (permissions are re-validated there; the streamed bank data of
         // the new account re-enables/disables the checkboxes via updateBankList).
         if (useBankItemsCheckBox.isChecked() || autoDepositCheckBox.isChecked())
             onCraftingSettingsChanged();
+    }
+
+    /**
+     * Persists the user's last-selected account as a GLOBAL customData entry so any
+     * terminal opened next restores this choice. Fetch-modify-write so keys owned by
+     * other screens (crafting prefs, history chart settings) are not clobbered by a
+     * stale cached copy.
+     */
+    private void saveLastAccountPreference(int accountNumber) {
+        getBankManager().getUserCustomData().thenAccept(customData -> {
+            var data = customData != null ? customData : new net.minecraft.nbt.CompoundTag();
+            data.putInt(KEY_LAST_ACCOUNT, accountNumber);
+            getBankManager().updateUserCustomData(data);
+        });
     }
 }

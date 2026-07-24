@@ -11,6 +11,8 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
+import net.kroia.banksystem.banking.binding.BindingRow;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
@@ -18,6 +20,7 @@ import net.kroia.banksystem.networking.entity.UpdateBankTerminalBlockEntityPacke
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ContainerItemInsertion;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.VolatileItemComponents;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
@@ -169,6 +172,11 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     long availableAmount = Math.min(amount, inventory.getItemCount(itemID));
                     if(availableAmount > 0)
                     {
+                        // TODO Task #34.1: Support Numismatics coin items as physical deposit input.
+                        // Recognize Coin items, convert to spurs, add to bound account if the slot
+                        // is Numismatics-bound. Routing: check if BankAccount is bound via
+                        // BankAccountBindings.get() → if providerId=="numismatics", route to that
+                        // bound account's deposit; else normal BankSystem deposit below.
                         long depositAmount = availableAmount;
                         if(isMoney) {
                             MoneyItem moneyItem = (MoneyItem) itemID.getStack().getItem();
@@ -1000,6 +1008,57 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
                         CompletableFuture<@Nullable IAsyncBank> bankFuture;
                         boolean isMoney = MoneyItem.isMoney(itemID);
+                        // Task #38: variant routing — LC coin_iron / Numismatics bevel /
+                        // etc. land in the account's base-coin binding slot at their
+                        // converted per-item value, bypassing per-variant bank creation.
+                        BindingRow variantBinding = null;
+                        long variantBaseUnits = 0L;
+                        if (!isMoney) {
+                            BankAccountBindings bindings = BankAccountBindings.get();
+                            if (bindings != null) {
+                                ItemStack template = ItemIDManager.getItemStackTemplate(itemID);
+                                if (!template.isEmpty()) {
+                                    variantBinding = bindings.findBindingAcceptingItem(accountNr, template);
+                                    if (variantBinding != null) {
+                                        net.kroia.banksystem.api.currency.ExternalCurrencyProvider provider =
+                                                BankSystemMod.getAPI().getCurrencyProvider(variantBinding.ref().providerId());
+                                        variantBaseUnits = provider == null ? 0L : provider.baseUnitsPerItem(template);
+                                        if (variantBaseUnits <= 0L) variantBinding = null;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (variantBinding != null) {
+                            ItemID baseSlotId = new ItemID(variantBinding.itemIdShort());
+                            long amountToDeposit;
+                            try {
+                                amountToDeposit = Math.multiplyExact(amount, variantBaseUnits);
+                            } catch (ArithmeticException overflow) {
+                                ServerPlayerUtilities.printToClientConsole(playerID,
+                                        BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
+                                continue;
+                            }
+                            long finalAmountToDeposit = amountToDeposit;
+                            long finalAmount = amount;
+                            bankAccount.getOrCreateBankAsync(baseSlotId).thenAccept(baseBank -> {
+                                if (baseBank == null) {
+                                    ServerPlayerUtilities.printToClientConsole(playerID,
+                                            BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
+                                    return;
+                                }
+                                baseBank.depositAsync(finalAmountToDeposit).thenAccept(status -> {
+                                    if (status == BankStatus.SUCCESS) {
+                                        runOnMainThread(() -> {
+                                            inventory.removeItem(itemID, finalAmount);
+                                            setChanged();
+                                        });
+                                    }
+                                });
+                            });
+                            continue;
+                        }
+
                         if (isMoney) {
                             // Denomination-agnostic money targeting: credit the account's
                             // ALREADY-EXISTING money bank when it has one, regardless of which
@@ -1107,7 +1166,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             return;
                         }
 
-                        final long withdrawAmountFinal = BankManager.convertToRawAmountStatic(amount);
+                        // Task #38b: per-slot ratio. Unbound = 100, bound LC gold = 81.
+                        final long ratio = BankAccountBindings.getRawUnitsPerItem(accountNr, itemID);
+                        final long withdrawAmountFinal = amount * ratio;
 
                         // Use lock-withdraw pattern to prevent TOCTOU race
                         CompletableFuture<BankStatus> lockStatusFuture = bank.lockAmountAsync(withdrawAmountFinal);
@@ -1135,10 +1196,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                         // main thread); on a slave they forward and their callbacks may run
                                         // off-thread, so container writes inside them are re-marshaled.
                                         runOnMainThread(() -> {
-                                            long itemsToDeposit = (long) Math.floor(BankManager.convertToRealAmountStatic(reducedAmount));
+                                            long itemsToDeposit = reducedAmount / ratio;
                                             long addedAmount = inventory.addItem(itemID, itemsToDeposit);
                                             if (addedAmount > 0) {
-                                                long rawToWithdraw = BankManager.convertToRawAmountStatic(addedAmount);
+                                                long rawToWithdraw = addedAmount * ratio;
                                                 CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
                                                 withdrawResult.thenAccept(withdraw -> {
                                                     if (withdraw != BankStatus.SUCCESS) {
@@ -1170,10 +1231,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             // drives the debit/unlock decision, so the whole region runs on the main
                             // server thread so broadcastChanges() can sync the new slots to the client.
                             runOnMainThread(() -> {
-                                long itemsToDeposit = (long) Math.floor(BankManager.convertToRealAmountStatic(withdrawAmountFinal));
+                                long itemsToDeposit = withdrawAmountFinal / ratio;
                                 long addedAmount = inventory.addItem(itemID, itemsToDeposit);
                                 if (addedAmount > 0) {
-                                    long rawToWithdraw = BankManager.convertToRawAmountStatic(addedAmount);
+                                    long rawToWithdraw = addedAmount * ratio;
                                     CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
                                     withdrawResult.thenAccept(withdraw -> {
                                         if (withdraw != BankStatus.SUCCESS) {

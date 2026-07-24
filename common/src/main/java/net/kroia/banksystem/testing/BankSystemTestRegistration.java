@@ -11,6 +11,7 @@ import net.kroia.banksystem.testing.tests.BankPermissionTests;
 import net.kroia.banksystem.testing.tests.DatabaseTests;
 import net.kroia.banksystem.testing.tests.DepositGateTests;
 import net.kroia.banksystem.testing.tests.ExampleTests;
+import net.kroia.banksystem.testing.tests.ExternalCurrencyBindingTests;
 import net.kroia.banksystem.testing.tests.ItemIDCounterTests;
 import net.kroia.banksystem.testing.tests.ItemIDFormatAndRepairTests;
 import net.kroia.banksystem.testing.tests.ItemIDIdentityTests;
@@ -20,6 +21,8 @@ import net.kroia.banksystem.testing.tests.LifecycleTests;
 import net.kroia.banksystem.testing.tests.ModSettingsTests;
 import net.kroia.banksystem.testing.tests.MultiServerSecurityTests;
 import net.kroia.banksystem.testing.tests.NetworkingValidationTests;
+import net.kroia.banksystem.testing.tests.NumismaticsAdapterTests;
+import net.kroia.banksystem.testing.tests.LightmansCurrencyAdapterTests;
 import net.kroia.banksystem.testing.tests.SerializationTests;
 import net.kroia.banksystem.testing.tests.ServerBankTests;
 import net.kroia.banksystem.testing.tests.WithdrawMergeTests;
@@ -54,5 +57,8 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new WithdrawMergeTests());
         TestRegistry.register(new BankCraftingMatcherTests());
         TestRegistry.register(new ModSettingsTests());
+        TestRegistry.register(new ExternalCurrencyBindingTests());
+        TestRegistry.register(new NumismaticsAdapterTests());
+        TestRegistry.register(new LightmansCurrencyAdapterTests());
     }
 }

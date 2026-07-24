@@ -1,14 +1,20 @@
 package net.kroia.banksystem.networking.multi_server;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
+import net.kroia.banksystem.banking.binding.BindingRow;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -120,10 +126,46 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
         }
 
         Map<ItemID, Long> notDepositedItems = new HashMap<>();
+        BankAccountBindings bindings = BankAccountBindings.get();
         for(Map.Entry<ItemID, Long> entry : input.items.entrySet())
         {
             long toDeposit = Math.max(0, entry.getValue());
-            IServerBank itemBank = account.getOrCreateBank(entry.getKey());
+            ItemID itemID = entry.getKey();
+
+            // Task #38: variant routing — redirect coin variants to the bound base-coin
+            // slot at the provider's per-item value. Falls through to per-item routing
+            // when the stack can't be reconstructed from ItemID (master registry miss).
+            if (bindings != null && toDeposit > 0) {
+                ItemStack template = ItemIDManager.getItemStackTemplate(itemID);
+                if (template.isEmpty()) {
+                    debug("Variant routing skipped: no ItemStack template for " + itemID
+                            + " (master registry miss); falling through to per-item routing");
+                } else {
+                    BindingRow row = bindings.findBindingAcceptingItem(input.bankAccount, template);
+                    if (row != null) {
+                        ExternalCurrencyProvider provider = BankSystemMod.getAPI()
+                                .getCurrencyProvider(row.ref().providerId());
+                        long baseUnits = provider == null ? 0L : provider.baseUnitsPerItem(template);
+                        if (baseUnits > 0L) {
+                            long amount;
+                            try {
+                                amount = Math.multiplyExact(toDeposit, baseUnits);
+                            } catch (ArithmeticException overflow) {
+                                notDepositedItems.put(itemID, toDeposit);
+                                continue;
+                            }
+                            IServerBank baseBank = account.getOrCreateBank(new ItemID(row.itemIdShort()));
+                            if (baseBank != null && baseBank.deposit(amount) == BankStatus.SUCCESS) {
+                                continue;
+                            }
+                            notDepositedItems.put(itemID, toDeposit);
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            IServerBank itemBank = account.getOrCreateBank(itemID);
             if(itemBank != null)
             {
                 if(itemBank.deposit(toDeposit) == BankStatus.SUCCESS)
@@ -133,7 +175,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
             }
             if(toDeposit != 0)
             {
-                notDepositedItems.put(entry.getKey(), toDeposit);
+                notDepositedItems.put(itemID, toDeposit);
             }
         }
         return CompletableFuture.completedFuture(new OutputData(notDepositedItems));

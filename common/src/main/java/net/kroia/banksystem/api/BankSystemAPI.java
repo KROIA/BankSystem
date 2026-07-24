@@ -2,7 +2,10 @@ package net.kroia.banksystem.api;
 
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
+import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.Collection;
 
 public interface BankSystemAPI {
 
@@ -69,4 +72,57 @@ public interface BankSystemAPI {
      * @return the short ID of the currency item used for wealth calculation, or 0 if not set
      */
     short getPriceCurrencyItem();
+
+    /**
+     * Registers an {@link ExternalCurrencyProvider} adapter with BankSystem.
+     * <p>
+     * Adapters call this during their mod-init phase to make themselves discoverable
+     * for the binding UI and for {@code ServerBank} balance delegation (see
+     * {@code .claude/Features/CurrencyModSupport.md}).
+     * <p>
+     * If a provider with the same {@link ExternalCurrencyProvider#providerId()} is
+     * already registered, the previous registration is replaced — this lets
+     * adapters be hot-swapped in dev without a restart, and mirrors a service-loader-
+     * style "last-wins" convention. Passing {@code null} is a no-op.
+     *
+     * @param provider the adapter to register.
+     * @since 2.0.5
+     */
+    void registerCurrencyProvider(@Nullable ExternalCurrencyProvider provider);
+
+    /**
+     * Removes the currently-registered provider for {@code providerId}.
+     * <p>
+     * Intended for teardown paths that need to guarantee a provider no longer appears
+     * in the binding UI or in {@link #getCurrencyProviders()} — most importantly the
+     * in-game test suite, whose {@code StubCurrencyProvider} must not leak into
+     * production once the tests finish. Real adapters normally never need this: they
+     * live for the JVM lifetime.
+     * <p>
+     * A {@code null} or unknown {@code providerId} is a no-op and returns {@code false}.
+     *
+     * @param providerId the {@link ExternalCurrencyProvider#providerId()} to drop.
+     * @return {@code true} if a provider was removed; {@code false} otherwise.
+     * @since 2.0.5
+     */
+    boolean unregisterCurrencyProvider(@Nullable String providerId);
+
+    /**
+     * @return an immutable snapshot of every currently-registered
+     *         {@link ExternalCurrencyProvider}. Iteration order is unspecified.
+     *         Never {@code null}; may be empty when no adapter has registered.
+     * @since 2.0.5
+     */
+    Collection<ExternalCurrencyProvider> getCurrencyProviders();
+
+    /**
+     * Looks up a registered provider by its stable id.
+     *
+     * @param providerId the {@link ExternalCurrencyProvider#providerId()} to find.
+     *                   May be {@code null}, in which case {@code null} is returned.
+     * @return the matching provider, or {@code null} if none is registered under
+     *         that id.
+     * @since 2.0.5
+     */
+    @Nullable ExternalCurrencyProvider getCurrencyProvider(@Nullable String providerId);
 }

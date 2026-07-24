@@ -1,0 +1,160 @@
+package net.kroia.banksystem.api.currency;
+
+import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * Service Provider Interface for optional integrations with third-party currency
+ * mods (Numismatics, Lightman's Currency, ...).
+ * <p>
+ * Each supported currency mod ships an adapter that implements this interface and
+ * registers itself against BankSystem via
+ * {@link net.kroia.banksystem.api.BankSystemAPI#registerCurrencyProvider(ExternalCurrencyProvider)}
+ * during mod init. BankSystem itself has no compile-time dependency on any
+ * external mod — adapters live in their own modules and are only activated when
+ * {@link #isAvailable()} returns {@code true} at runtime.
+ * <p>
+ * When a specific {@code IServerBank} slot is bound to an external account (see
+ * the {@code BankAccountBindings} savedata added in Stage 2), balance
+ * reads / deposits / withdrawals route through the corresponding
+ * {@link ExternalAccount}. BankSystem retains authority over identity,
+ * permissions, and the locked-balance ledger — those stay local.
+ * <p>
+ * All calls on this SPI happen on the <b>server thread</b>. Implementations are
+ * not required to be thread-safe, and must never assume they are invoked from a
+ * client or from a mod-init thread after registration completes.
+ * <p>
+ * See {@code .claude/Features/CurrencyModSupport.md} for the design principle
+ * ("binding, not replacement"), the locked-balance protocol, currency-unit
+ * conversion rules, and the shared-account permission-mapping model.
+ *
+ * @since 2.0.5
+ * @see ExternalAccount
+ * @see ExternalAccountRef
+ * @see ProviderFeature
+ */
+public interface ExternalCurrencyProvider {
+
+    /**
+     * Stable, unique identifier for this provider. Written to savedata as part of
+     * every binding row; must not change across mod versions once released.
+     * Conventionally the underlying mod's id — e.g. {@code "numismatics"},
+     * {@code "lightmans_currency"}.
+     *
+     * @return the provider id. Never {@code null} or empty.
+     */
+    @NotNull String providerId();
+
+    /**
+     * Whether the underlying currency mod is actually present and initialized on
+     * this server. Typically implemented via {@code Platform.isModLoaded(...)} plus
+     * any adapter-specific readiness checks (e.g. the mod's API bootstrapped).
+     * <p>
+     * Providers that return {@code false} are not offered to players in the
+     * binding UI and are skipped by lookups; any pre-existing bindings pointing at
+     * an unavailable provider surface as "unavailable" until the mod is reinstalled.
+     *
+     * @return {@code true} if the provider can serve requests.
+     */
+    boolean isAvailable();
+
+    /**
+     * Lists every external account the given player is allowed to bind a
+     * BankSystem slot to right now. This includes both personal accounts owned by
+     * the player and any shared accounts the player is a current member of.
+     * <p>
+     * Called on demand from the binding UI — implementations may issue live
+     * queries against the underlying mod and should not aggressively cache. Order
+     * is presentation-relevant; adapters typically return personal accounts first,
+     * then shared accounts.
+     *
+     * @param player the player opening the binding picker. Never {@code null}.
+     * @return the list of bindable accounts (possibly empty). Never {@code null}.
+     */
+    @NotNull List<ExternalAccountRef> listBindableAccounts(@NotNull UUID player);
+
+    /**
+     * Opens a live handle to the referenced external account. Returns {@code null}
+     * if the reference is no longer valid — the account was deleted, the player
+     * lost access, the provider became unavailable, etc.
+     * <p>
+     * Handles are cheap; callers may open a fresh one per read cycle and are not
+     * required to close them (no {@code close()} method exists on this SPI).
+     * Implementations should not hold onto returned handles beyond the caller's
+     * scope.
+     *
+     * @param ref the reference to open. Never {@code null}. Adapters should
+     *            tolerate refs whose {@code providerId} does not match their own
+     *            {@link #providerId()} by returning {@code null}.
+     * @return an open handle, or {@code null} if the account is not currently
+     *         accessible.
+     */
+    @Nullable ExternalAccount open(@NotNull ExternalAccountRef ref);
+
+    /**
+     * The set of capability flags this provider advertises. Returned set is
+     * immutable / snapshot-like; BankSystem inspects it before offering shared
+     * bindings, before calling {@link ExternalAccount#syncMembership(Set)}
+     * expecting propagation, and to decide whether
+     * {@link ExternalAccount#canWithdraw(long)} is authoritative.
+     *
+     * @return the feature set. Never {@code null}; may be empty (but a provider
+     *         with no features is not very useful).
+     */
+    @NotNull Set<ProviderFeature> features();
+
+    /**
+     * Resource-location string (e.g. {@code "numismatics:spur"}) of the item this
+     * provider is authoritative for. BankSystem uses this to prevent semantically
+     * nonsensical bindings — e.g. binding a diamond slot to Numismatics, which
+     * would credit spur deposits to the diamond slot.
+     * <p>
+     * Return {@code null} when the provider is not tied to a single item (e.g.
+     * Lightman's Currency, whose primary chain is config-driven and can vary).
+     * With {@code null}, BankSystem accepts any item and the caller is responsible
+     * for the sanity of the pairing.
+     *
+     * @return the item id string, or {@code null} to opt out of item validation.
+     */
+    default @Nullable String getBaseCurrencyItemId() {
+        return null;
+    }
+
+    /**
+     * If this provider accepts the given {@link ItemStack} as a member of its
+     * currency chain, returns the per-item value in BankSystem raw units
+     * (the same units {@link ExternalAccount#deposit(long)} consumes).
+     * Returns {@code 0L} for stacks this provider does not recognise.
+     * <p>
+     * Called during deposit routing to convert non-base coin variants (e.g. LC's
+     * {@code coin_copper} / {@code coin_iron} / {@code coin_emerald} /
+     * {@code coin_diamond} / {@code coin_netherite}, or Numismatics'
+     * {@code bevel} / {@code sprocket} / {@code cog} / {@code crown} /
+     * {@code sun}) into the account's base currency for deposit through the
+     * bound slot. A non-zero return signals: "credit {@code count × baseUnitsPerItem}
+     * raw units to the bound base-coin slot instead of routing the stack to a
+     * per-variant BankSystem bank."
+     * <p>
+     * Implementations MUST honor the mod's runtime configuration where the mod
+     * offers one (LC's chain data is server-configurable at load time; hardcoded
+     * ratios are incorrect). Implementations SHOULD return {@code 0L} for
+     * damaged or enchanted stacks even if the item id matches — BankSystem
+     * treats those as non-fungible upstream, but adapters apply defense in depth.
+     * <p>
+     * Default is a no-op that returns {@code 0L}; providers opt in by overriding.
+     * The default preserves the pre-Task #38 behavior for adapters that don't
+     * expose a coin chain.
+     *
+     * @param stack the item stack being deposited. Never {@code null}; may be
+     *              {@link ItemStack#EMPTY}.
+     * @return the per-item value in BankSystem raw units, or {@code 0L} if the
+     *         stack is not part of this provider's chain.
+     * @since 2.0.5
+     */
+    default long baseUnitsPerItem(@NotNull ItemStack stack) { return 0L; }
+}

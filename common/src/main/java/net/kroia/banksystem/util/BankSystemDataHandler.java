@@ -30,6 +30,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     private final String BANK_DATA_FOLDER_NAME = "Bank_data";
     private final String META_DATA_FILE_NAME = "Meta_data.nbt";
     private final String BANK_SETTINGS_FILE_NAME = "settings.json";
+    /** Filename holding the external-currency binding table (Task #33, v2.0.5). */
+    private final String BANK_ACCOUNT_BINDINGS_FILE_NAME = "BankAccountBindings.nbt";
     public static final Path BASE_PATH = Path.of("data", "BankSystem");
     private static final Path OLD_PATH = Path.of("Finance", "BankSystem");
     private long tickCounter = 0;
@@ -62,6 +64,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     private LoadState settingsLoadState = LoadState.NOT_LOADED;
     private LoadState itemIDsLoadState = LoadState.NOT_LOADED;
     private LoadState bankLoadState = LoadState.NOT_LOADED;
+    /** Load-state gate for {@code BankAccountBindings.nbt} (Task #33, v2.0.5). */
+    private LoadState bankAccountBindingsLoadState = LoadState.NOT_LOADED;
 
     /**
      * Session-wide save kill-switch, set when any startup-abort guard fires
@@ -222,6 +226,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         if(!BACKEND_INSTANCES.isSlaveServer) {
             success &= save_bank();
             success &= save_itemIDs();
+            success &= save_bankAccountBindings();
         }
 
 
@@ -337,6 +342,11 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
         if(!BACKEND_INSTANCES.isSlaveServer) {
             success &= load_bank();
+            // External-currency bindings (Task #33, v2.0.5) — master only. Loaded AFTER
+            // Bank_data so a fresh binding on a not-yet-loaded account cannot race, and
+            // BEFORE the balance-history snapshot (which reads through ServerBank and
+            // would otherwise see 0 for bound slots).
+            success &= load_bankAccountBindings();
             // The startup merge pass inside load_itemIDs() ran BEFORE the bank data existed
             // in memory, so its alias→canonical pairs were queued. Now that the banks are
             // loaded, consolidate balances/locked balances/allowed items under the canonical
@@ -522,6 +532,59 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
                 ? LoadState.NOT_LOADED : LoadState.FRESH;
         return false;
     }
+    /**
+     * Persists the external-currency binding table (Task #33, v2.0.5) to
+     * {@code BankAccountBindings.nbt}. Master only — slaves don't own the table.
+     * Gated by the shared save-load-state discipline so a failed load can never
+     * be silently overwritten with an empty state.
+     */
+    public boolean save_bankAccountBindings()
+    {
+        if (!canSave("BankAccountBindings", bankAccountBindingsLoadState))
+            return false;
+        if (BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS == null)
+            return false;
+        CompoundTag tag = new CompoundTag();
+        boolean success = BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.save(tag);
+        if (success)
+            saveDataCompound(getAbsoluteSavePath(BANK_ACCOUNT_BINDINGS_FILE_NAME), tag);
+        BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.clearChanges();
+        return success;
+    }
+
+    /**
+     * Loads {@code BankAccountBindings.nbt}. A missing file is treated as a fresh
+     * world (state becomes {@link LoadState#FRESH} so saves may create it); a
+     * present-but-unreadable file marks the subsystem
+     * {@link LoadState#NOT_LOADED} so its data can be backed up aside by
+     * {@link #backupFailedSubsystemData()} and a clean file written next pass.
+     */
+    public boolean load_bankAccountBindings()
+    {
+        if (BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS == null)
+            return false;
+        Path filePath = getAbsoluteSavePath(BANK_ACCOUNT_BINDINGS_FILE_NAME);
+        boolean fileWasPresent = fileExists(filePath);
+        if (!fileWasPresent) {
+            // Fresh world / first boot on the feature — clean-slate empty table is fine.
+            BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.clear();
+            bankAccountBindingsLoadState = LoadState.FRESH;
+            return true;
+        }
+        CompoundTag tag = readDataCompound(filePath);
+        if (tag != null && BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.load(tag)) {
+            bankAccountBindingsLoadState = LoadState.LOADED;
+            return true;
+        }
+        // File exists but is unreadable / schema mismatch: keep it in place so the
+        // load-failure fallback can back it up aside. Save stays prohibited until then.
+        bankAccountBindingsLoadState = LoadState.NOT_LOADED;
+        error("BankAccountBindings.nbt exists but could not be loaded — the file will "
+                + "be backed up aside before a fresh empty one is written (see load-failure "
+                + "recovery flow).");
+        return false;
+    }
+
     public boolean load_bank_compatibilityMode()
     {
         CompoundTag data = readDataCompound(getAbsoluteSavePath("Bank_data.dat"));
@@ -987,6 +1050,12 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         }
         if (bankLoadState == LoadState.NOT_LOADED && backupPath(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME), suffix))
             bankLoadState = LoadState.FRESH;
+        // Task #33 (v2.0.5): mirror the pattern for BankAccountBindings.nbt — an
+        // unreadable file gets moved aside so the recovery-save writes a fresh empty
+        // one in its place.
+        if (bankAccountBindingsLoadState == LoadState.NOT_LOADED
+                && backupPath(getAbsoluteSavePath(BANK_ACCOUNT_BINDINGS_FILE_NAME), suffix))
+            bankAccountBindingsLoadState = LoadState.FRESH;
     }
 
     /**

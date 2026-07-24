@@ -33,6 +33,12 @@ dependencies {
 
     compileOnly("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
 
+    // Create: Numismatics integration (Task #34, v2.0.5)
+    // compileOnly — no runtime dependency; adapter only activates when Numismatics is present.
+    // Numismatics classes are accessed via reflection, so we don't need the actual dependency
+    // at compile time. The adapter is class-guarded and only loads when Platform.isModLoaded("numismatics").
+    // compileOnly("maven.modrinth:numismatics:${numismatics_version}")
+
     implementation('org.xerial:sqlite-jdbc:3.46.0.0'){
         exclude group: "org.slf4j"
     }

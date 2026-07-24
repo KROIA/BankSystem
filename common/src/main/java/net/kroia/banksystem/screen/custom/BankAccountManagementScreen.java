@@ -43,6 +43,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final Component CREATE_NEW_BANK = Component.translatable(PREFIX+"create_new_bank");
     private static final Component ADD_USER = Component.translatable(PREFIX+"add_user");
     private static final Component MUST_KEEP_MANAGER = Component.translatable(PREFIX+"must_keep_manager");
+    private static final Component BINDINGS_BUTTON = Component.translatable(PREFIX+"bindings_button");
 
     private static class ItemViewButton extends Button{
 
@@ -96,6 +97,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private Button deleteBankAccountButton;
     private Button createNewBankButton;
     private Button addUserButton;
+    private Button bindingsButton;
     private ListView userElementListView;
     private ListView bankElementListView;
 
@@ -238,6 +240,11 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         addElement(saveChangesButton);
         addElement(addUserButton);
 
+        // Task #33 Stage 3: entry point to the currency-binding UI. Available to any viewer —
+        // the bindings screen itself carries a MANAGE-permission check + read-only degradation
+        // (bind/unbind buttons are grayed out with a tooltip for non-manage viewers).
+        bindingsButton = new Button(BINDINGS_BUTTON.getString(), this::onBindingsButtonClicked);
+        addElement(bindingsButton);
     }
     private void setupAdminWindow()
     {
@@ -300,27 +307,39 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         saveChangesButton.setBounds(closeButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
 
 
-        int nameWidth = (width-spacing)/2;
-        selectAccountButton.setBounds(padding, padding, nameWidth, 20);
+        // Left column narrower than right (2:3) so the header buttons on the right
+        // (Delete Account + Save Changes + Close) don't collide with Create/Bindings on the left.
+        int leftWidth = (width - spacing) * 2 / 5;
+        int rightWidth = width - spacing - leftWidth;
+        selectAccountButton.setBounds(padding, padding, leftWidth, 20);
         int accountNameY = selectAccountButton.getBottom()+spacing;
         accountIconButton.setBounds(padding, accountNameY, 20, 20);
         if(canManage && deleteBankAccountButton != null && accountNameTextBox != null) {
             textWidth = deleteBankAccountButton.getTextWidth(DELETE_ACCOUNT.getString())+10;
             deleteBankAccountButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
-            accountNameTextBox.setBounds(accountIconButton.getRight()+spacing, accountNameY, nameWidth-(accountIconButton.getRight()), 20);
+            accountNameTextBox.setBounds(accountIconButton.getRight()+spacing, accountNameY, leftWidth-(accountIconButton.getRight()), 20);
         }else if(accountNameLabel != null) {
-            accountNameLabel.setBounds(accountIconButton.getRight()+spacing, accountNameY, nameWidth-(accountIconButton.getRight()), 20);
+            accountNameLabel.setBounds(accountIconButton.getRight()+spacing, accountNameY, leftWidth-(accountIconButton.getRight()), 20);
         }
 
-        addUserButton.setBounds(padding, selectAccountButton.getBottom()+accountNameY, nameWidth, closeButton.getHeight());
-        userElementListView.setBounds(padding, addUserButton.getBottom()+spacing, nameWidth, height-(addUserButton.getBottom()+spacing)+padding);
-        bankElementListView.setBounds(userElementListView.getRight()+spacing, closeButton.getBottom()+spacing, userElementListView.getWidth(), height-(closeButton.getBottom()+spacing)+padding);
-
+        addUserButton.setBounds(padding, selectAccountButton.getBottom()+accountNameY, leftWidth, closeButton.getHeight());
+        userElementListView.setBounds(padding, addUserButton.getBottom()+spacing, leftWidth, height-(addUserButton.getBottom()+spacing)+padding);
+        bankElementListView.setBounds(userElementListView.getRight()+spacing, closeButton.getBottom()+spacing, rightWidth, height-(closeButton.getBottom()+spacing)+padding);
 
         if(isAdminMode)
         {
             textWidth = createNewBankButton.getTextWidth(CREATE_NEW_BANK.getString())+10;
             createNewBankButton.setBounds(selectAccountButton.getRight()+spacing, padding, textWidth, closeButton.getHeight());
+        }
+
+        // Bindings button — placed in the header row, after "Create new Bank" in admin mode (or at
+        // selectAccountButton.getRight() in non-admin mode where createNewBankButton doesn't exist).
+        if(bindingsButton != null) {
+            int bindingsTextWidth = closeButton.getTextWidth(BINDINGS_BUTTON.getString()) + 10;
+            int bindingsLeft = isAdminMode && createNewBankButton != null
+                    ? createNewBankButton.getRight() + spacing
+                    : selectAccountButton.getRight() + spacing;
+            bindingsButton.setBounds(bindingsLeft, padding, bindingsTextWidth, closeButton.getHeight());
         }
     }
 
@@ -634,6 +653,16 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             itemSelectionScreen.sortItems();
             Minecraft.getInstance().setScreen(itemSelectionScreen);
         }
+    }
+    /**
+     * Opens {@link BankAccountBindingsScreen} for the current account (Task #33 Stage 3).
+     * The bindings screen carries its own MANAGE-permission check + read-only degradation, so
+     * this callback merely opens the screen; the button itself is disabled up-front for
+     * non-manage viewers to match the existing addUserButton discipline.
+     */
+    private void onBindingsButtonClicked()
+    {
+        BankAccountBindingsScreen.openScreen(this, accountNumber, isAdminMode);
     }
     private void onDeleteAccountButtonClicked()
     {
