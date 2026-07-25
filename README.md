@@ -35,6 +35,7 @@ You want to support me?<br>
 - Bank Display blocks that show live balance overviews or history charts
 - Money system with coins and bills that can be placed as decorative blocks
 - Multi-server support to share bank accounts across connected servers
+- **Currency mod bindings** — link a bank slot to an external currency mod's account ([Numismatics](https://modrinth.com/mod/numismatics), [Lightman's Currency](https://modrinth.com/mod/lightmans-currency)) so BankSystem, StockMarket, and the currency mod share one balance
 - Mod API for developers to integrate with the banking system
 
 ---
@@ -174,6 +175,27 @@ The **Bank Display** block shows live bank account data on its screen. Right-cli
 | **Balance History** | A line chart tracking balance changes over time for all items in the account. Each item is color-coded with a legend on the right. Updates every 60 seconds. |
 | **Balance Overview** | A compact grid showing the current balances of the highest-value items in the account. Displays item icons with their amounts. Updates every second. |
 
+---
+### Currency Mod Bindings
+
+BankSystem can link an item slot on a bank account to an external currency mod's account. Once bound, every deposit, withdrawal, or StockMarket trade routed through BankSystem moves the same balance on the other mod's side — no manual migration needed.
+
+<div align="center">
+    <img src="documentation/images/CurrencyBindingsScreen.png">
+</div>
+
+Supported currency mods out of the box:
+
+| Currency mod | Fabric | NeoForge | Quilt |
+|---|:---:|:---:|:---:|
+| [Numismatics](https://modrinth.com/mod/numismatics) | ✅ | ✅ | ✅ |
+| [Lightman's Currency](https://modrinth.com/mod/lightmans-currency) | ❌ | ✅ | ❌ |
+
+Open a bank account's management screen and press **Bindings** to pick a slot, choose a provider, and select which of your external accounts to link. Personal BankSystem accounts bind to personal external accounts; shared BankSystem accounts bind to co-owned external accounts (Numismatics Blaze Bankers, Lightman's teams). Every coin denomination in the chain deposits into the same bound slot.
+
+See the [Currency Bindings guide](documentation/user-guide/CurrencyBindings.md) for the full walkthrough, per-provider notes, and troubleshooting. Currency-mod authors who want their mod to appear in the picker can consult the [Currency Integration developer guide](documentation/developer-guide/CurrencyIntegration.md).
+
+---
 ### Mod Settings Screen
 
 Server admins can edit the mod's `settings.json` in-game, without touching the file:
@@ -251,12 +273,17 @@ Detailed guides are available in the [documentation](documentation/README.md) fo
 **For Mod Users:**
 - [Block Usage](documentation/user-guide/Usage.md) — How to use the Bank Terminal (including its crafting grid), ATM, automation blocks, bank displays, and money stockpiles
 - [Bank Accounts](documentation/user-guide/BankAccounts.md) — Shared accounts, creating accounts, permissions
+- [Currency Bindings](documentation/user-guide/CurrencyBindings.md) — Link a bank slot to a Numismatics or Lightman's Currency account
 - [Administration](documentation/user-guide/Administration.md) — Managing banking items, player accounts, locked amounts
+- [Configuration](documentation/user-guide/Configuration.md) — Per-world `settings.json` reference; volatile & deposit-gated item components
 - [Multi-Server Setup](documentation/user-guide/MultiserverSetup.md) — Master-slave architecture for cross-server banking
 - [Commands](documentation/user-guide/Commands.md) — Full command reference
 
 **For Mod Developers:**
 - [API Reference](documentation/developer-guide/API.md) — Public API overview and usage examples
+- [Currency Integration](documentation/developer-guide/CurrencyIntegration.md) — SPI for authors of currency mods who want to expose their mod to BankSystem
+- [Events & Signals](documentation/developer-guide/EventsAndSignals.md) — Every event/signal for dependent mods: user/account changes, ItemID merges, multi-server lifecycle
+- [Item Price Provider API](documentation/developer-guide/ItemPriceProviderAPI.md) — Contribute item prices for total-wealth tracking
 - [Async Forwarding Architecture](documentation/developer-guide/AsyncForwardingArchitecture.md) — Internal RPC system documentation
 
 ---
@@ -463,7 +490,7 @@ All notable changes are documented in version-specific files under `changelog/`.
 
 ### Previous
 
-- [2.0.5](changelog/v2.0.5.md) — Released 2026-07-25
+- [2.0.5](changelog/v2.0.5.md) — Released 2026-07-25 · External currency bindings (Numismatics + Lightman's Currency)
 - [2.0.4](changelog/v2.0.4.md) — Released 2026-07-21
 - [2.0.3](changelog/v2.0.3.md) — Released 2026-07-14
 - [2.0.2](changelog/v2.0.2.md) — Released 2026-06-07

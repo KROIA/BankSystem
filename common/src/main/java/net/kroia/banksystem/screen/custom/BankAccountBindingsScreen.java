@@ -698,7 +698,10 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
                 b.setHeight(20);
                 b.setOnFallingEdge(() -> {
                     onPicked.accept(info);
-                    onClose();
+                    // onPicked opens the AccountPickerScreen via setScreen(). Calling onClose()
+                    // here would immediately replace it with the parent bindings screen before
+                    // the user can see the account list — same pattern as AccountPickerScreen's
+                    // bug #3 fix below.
                 });
                 list.addChild(b);
             }
