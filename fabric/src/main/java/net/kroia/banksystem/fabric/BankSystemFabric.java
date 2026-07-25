@@ -62,6 +62,8 @@ public final class BankSystemFabric implements ModInitializer {
         // Run our common setup.
         BankSystemMod.init();
 
+        // Register Fabric Transfer API item storage providers (must run after BE types exist).
+        FabricItemStorageProviders.register();
 
         if (isJeiLoaded() && Platform.getEnv() == EnvType.CLIENT) {
             BankSystemGuiScreen.setJeiModLoaded(true);
