@@ -4,10 +4,11 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
+import net.kroia.banksystem.minecraft.compat.BankSystemJeiOverlayBroker;
 import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.minecraft.menu.custom.BankDownloadContainerMenu;
-import net.kroia.banksystem.networking.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.entity.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.networking.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.ItemID;
@@ -485,6 +486,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
 
     public BankDownloadScreen(BankDownloadContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
         super(pMenu, pPlayerInventory, pTitle);
+        //setGuiScale(BankSystemGuiScreen.guiScale-0.2f);
         instance = this;
         this.pos = pMenu.getBlockPos();
 
@@ -536,6 +538,15 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
 
         settingsMenu.setBounds(padding,padding, width - inventoryWidth - spacing - padding*2, height - padding*2);
         inventoryView.setPosition(settingsMenu.getRight() + spacing, (height - inventoryHeight) / 2);
+
+        // Hide JEI's ingredient list + bookmark overlays (and their overlay
+        // buttons) while this screen is open. updateLayout fires on open AND
+        // on resize / GUI-scale change; the broker's hider is idempotent so
+        // re-hiding is a no-op. The existing exclusion-area registration in
+        // BankSystemJeiPlugin is kept as a defensive fallback in case the
+        // runtime toggle no-ops (e.g. JEI reflection failed at install-time).
+        // Restore happens in onCloseCleanup() (via onClose) and removed().
+        BankSystemJeiOverlayBroker.setHidden(true);
     }
 
     /**
@@ -562,11 +573,28 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         instance = null;
         blockInventorySlotCount = 0;
         accountNr = 0; // Reset account number when closing the screen
+        // Restore JEI overlays. Called from both onClose() (player-triggered
+        // close) and the ContainerView close event. removed() is the
+        // belt-and-suspenders path for screen swaps that bypass onClose.
+        BankSystemJeiOverlayBroker.setHidden(false);
     }
     @Override
     public void onClose() {
         onCloseCleanup();
         super.onClose();
+    }
+
+    /**
+     * Called by Minecraft whenever this screen is removed — either replaced
+     * by another screen, or after {@link #onClose()} routes back to the parent.
+     * Restoring JEI here (in addition to {@link #onCloseCleanup()}) covers the
+     * case where the screen is swapped out without a player-triggered close.
+     * Idempotent: the broker no-ops if we did not flip JEI.
+     */
+    @Override
+    public void removed() {
+        super.removed();
+        BankSystemJeiOverlayBroker.setHidden(false);
     }
 
     private void onConnectDisconnectButtonClicked(int accountNr)
