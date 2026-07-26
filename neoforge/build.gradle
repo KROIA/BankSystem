@@ -57,6 +57,13 @@ dependencies {
     modImplementation("com.github.KROIA.MC_ModUtilities:modutilities-neoforge:$rootProject.modutilities_version")
     include("com.github.KROIA.MC_ModUtilities:modutilities-neoforge:$rootProject.modutilities_version")
 
+    // Dev-runtime-only JEI (matches fabric/build.gradle rationale): the
+    // Architectury platform transformer needs to resolve JEI types referenced
+    // by BankSystemJeiPlugin during frame merging, or runClient crashes with
+    // "TypeNotPresentException: Type mezz/jei/... not present". JEI is still
+    // a soft dependency of the shipped mod — this line only affects dev.
+    modRuntimeOnly("mezz.jei:jei-${rootProject.minecraft_version}-neoforge:${rootProject.jei_version}")
+
     implementation('org.xerial:sqlite-jdbc:3.46.0.0'){
         exclude group: "org.slf4j"
     }

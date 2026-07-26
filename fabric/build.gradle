@@ -66,7 +66,12 @@ dependencies {
     include("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version")
 
     modCompileOnlyApi("mezz.jei:jei-${rootProject.minecraft_version}-fabric-api:${rootProject.jei_version}")
-    //modRuntimeOnly("mezz.jei:jei-${minecraft_version}-fabric:${jei_version}")
+    // Dev-runtime-only JEI: the Architectury platform transformer walks class
+    // frames on launch and must resolve every referenced JEI type
+    // (IJeiRuntime, IIngredientListOverlay, ...) even though JEI itself stays
+    // a soft dependency of the shipped mod. Without this, runClient crashes
+    // with "TypeNotPresentException: Type mezz/jei/... not present".
+    modRuntimeOnly("mezz.jei:jei-${rootProject.minecraft_version}-fabric:${rootProject.jei_version}")
 }
 
 processResources {
