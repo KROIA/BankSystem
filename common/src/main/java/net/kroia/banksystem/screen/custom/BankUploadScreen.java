@@ -2,7 +2,6 @@ package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.minecraft.compat.BankSystemJeiOverlayBroker;
 import net.kroia.banksystem.minecraft.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.networking.entity.SyncBankUploadDataPacket;
 import net.kroia.banksystem.networking.entity.UpdateBankUploadBlockEntityPacket;
@@ -86,6 +85,11 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
         instance = this;
         this.pos = pMenu.getBlockPos();
 
+        // Hide JEI's ingredient list + bookmark overlays (and their overlay
+        // buttons) while this screen is open. The ModUtilities base class
+        // wires the lifecycle — the flag is applied on init() and released
+        // on onClose() / removed().
+        setHideJeiOverlay(true);
 
         settingsMenu = new SettingsMenu(this);
         inventoryView = new ContainerView<>(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 256, 256));
@@ -108,12 +112,6 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
 
         settingsMenu.setBounds((width-inventoryWidth)/2, (height-inventoryHeight-spacing-settingsMenu.getHeight())/2, inventoryWidth, 0);
         inventoryView.setPosition(settingsMenu.getLeft(), settingsMenu.getBottom()+spacing);
-
-        // Hide JEI's ingredient list + bookmark overlays (and their overlay
-        // buttons) while this screen is open. updateLayout fires on open AND
-        // on resize / GUI-scale change; the broker's hider is idempotent so
-        // re-hiding is a no-op. Restore happens in onClose() and removed().
-        BankSystemJeiOverlayBroker.setHidden(true);
     }
 
     public static void handlePacket(SyncBankUploadDataPacket packet) {
@@ -137,23 +135,8 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
         isOwned = false;
         dropIfNotBankable = false;
         this.accountNr = 0; // Reset account number on close
-        // Restore JEI overlays when the player closes the screen. removed()
-        // is the belt-and-suspenders path for screen swaps that bypass onClose.
-        BankSystemJeiOverlayBroker.setHidden(false);
+        // JEI overlay restore is handled by the ModUtilities base class.
         super.onClose();
-    }
-
-    /**
-     * Called by Minecraft whenever this screen is removed — either replaced
-     * by another screen, or after {@link #onClose()} routes back to the parent.
-     * Restoring JEI here (in addition to {@link #onClose()}) covers the case
-     * where the screen is swapped out without a player-triggered close.
-     * Idempotent: the broker no-ops if we did not flip JEI.
-     */
-    @Override
-    public void removed() {
-        super.removed();
-        BankSystemJeiOverlayBroker.setHidden(false);
     }
 
     private void onConnectDisconnectButtonClicked(int accountNr)

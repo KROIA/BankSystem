@@ -278,6 +278,14 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
 
         widthPercentage = (isJeiModLoaded()?70:100);
 
+        // Hide only JEI's bookmark toggle + lookup-history toggle while the
+        // Terminal is open. Ingredient list stays visible on the right (that
+        // area is reserved via widthPercentage=70 and the exclusion areas
+        // returned by getJeiExclusionAreas). The ModUtilities base class
+        // wires the lifecycle — the flag is applied on init() and released
+        // on onClose() / removed().
+        setHideJeiButtons("bookmarkButton", "historyButton");
+
         screenIsOpen = true;
         playerUUID = getThisPlayerUUID();
         playerName = getThisPlayerName();
@@ -476,6 +484,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             StreamSystem.stopStream(bankChangeStreamID);
             bankChangeStreamID = null;
         }
+        // JEI overlay button restore is handled by the ModUtilities base class.
     }
     @Override
     public void containerTick() {
