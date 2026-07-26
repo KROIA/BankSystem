@@ -185,6 +185,36 @@ public final class BankSystemModSettings extends ModSettings {
                 new TypeToken<List<String>>() {}.getType());
 
         /**
+         * <b>Blacklist-only mode: allow every non-blacklisted item to be banked.</b>
+         * <p>
+         * Default {@code false} — existing worlds keep today's whitelist behavior where only
+         * items explicitly registered via {@code addAllowedItemID} / {@code setupDefaultItems}
+         * (seeded from {@link #INITIAL_ALLOWED_ITEMS}) can carry a balance.
+         * <p>
+         * When set to {@code true}, {@code ServerBankManager.isItemIDAllowed} bypasses the
+         * explicit allow-list and returns {@code true} for every valid, non-blacklisted
+         * ItemID. Useful for admins running large modpacks who don't want to curate the
+         * allowed-items list item-by-item.
+         * <p>
+         * <b>Blacklist always wins.</b> Items in {@link #INITIAL_BLACKLIST_ITEMS} (bedrock,
+         * barrier, command blocks, debug stick, knowledge book, all sub-denomination money
+         * items, ...) remain rejected even with allow-all on — the blacklist exists
+         * specifically to block dangerous or degenerate items whose banking would corrupt
+         * gameplay or the money system.
+         * <p>
+         * <b>The explicit allow-list stays functional as advisory data.</b> With allow-all
+         * on, {@code addAllowedItemID} / {@code removeAllowedItemID} still work and
+         * {@code getAllowedItems()} still returns the explicit set — useful if admins
+         * later flip allow-all back off. The predicate branches at read-time; the allow-set
+         * is never retroactively populated.
+         * <p>
+         * Read on every allow-check, not cached — toggling it in-game takes effect
+         * immediately, no server restart required.
+         */
+        public final Setting<Boolean> ALLOW_ALL_ITEMS = registerSetting(
+                "ALLOW_ALL_ITEMS", false, Boolean.class);
+
+        /**
          * <b>One-shot confirmation flag for the ItemID merge guard.</b>
          * <p>
          * When the effective volatile/deposit-gated component set (datapack tags + the two

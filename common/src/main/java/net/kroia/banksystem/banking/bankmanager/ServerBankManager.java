@@ -1268,10 +1268,26 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean isItemIDAllowed(ItemID itemID)
     {
+        // Guard invalid inputs up front. The old code relied on "invalid ID cannot be in
+        // the allow-set" to reject implicitly; adding the explicit gate makes the ALLOW_ALL
+        // bypass safe (Task #39) — otherwise ALLOW_ALL would return true for an INVALID_ID.
+        if (itemID == null || !itemID.isValid())
+            return false;
         // Alias safety net: an ID merged into a canonical ID stays "allowed" iff its
         // canonical ID is allowed (the allowed set only stores canonical IDs after a
         // merge consolidation). O(1) map lookup.
-        return itemID != null && allowedItemIDs.contains(ItemIDManager.resolveAlias(itemID));
+        ItemID canonical = ItemIDManager.resolveAlias(itemID);
+        // Blacklist always wins — same guarantee as allowItemID() enforces at add-time.
+        // With ALLOW_ALL_ITEMS on this is the ONLY gate.
+        if (isItemIDBlacklisted(canonical))
+            return false;
+        // Task #39: blacklist-only mode. When the admin has opted in via the mod-settings
+        // screen, the explicit allow-list is bypassed and every non-blacklisted item is
+        // bankable. Read live on every call (not cached) so toggling in-game takes effect
+        // immediately without a server restart.
+        if (BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOW_ALL_ITEMS.get())
+            return true;
+        return allowedItemIDs.contains(canonical);
     }
     @Override
     public CompletableFuture<Boolean> isItemIDAllowedAsync(ItemID itemID) {
