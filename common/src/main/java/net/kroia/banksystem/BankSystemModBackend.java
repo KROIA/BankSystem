@@ -456,7 +456,22 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the server side
     public static void onPlayerLeave(ServerPlayer player)
     {
-
+        // Task #39 (v2.0.7): ATM Money Converter tab. If the player disconnects
+        // with a nonzero converter cache, drop the remaining balance at their feet
+        // as the minimum-item banknote split so no value is silently lost. This is
+        // the authoritative safety net for crashed / force-killed clients that
+        // never send the ConverterDropAll packet on GUI close. Cache is per-server;
+        // this hook runs on whichever server the player was connected to.
+        if (player != null) {
+            try {
+                net.kroia.banksystem.networking.entity.ConverterDropAllPacket.dropAllForPlayer(player);
+            } catch (Throwable t) {
+                if (INSTANCES.LOGGER != null) {
+                    INSTANCES.LOGGER.warn("Converter auto-drop-on-disconnect failed for player "
+                            + player.getUUID() + ": " + t.getMessage());
+                }
+            }
+        }
     }
 
     // Called from the client side

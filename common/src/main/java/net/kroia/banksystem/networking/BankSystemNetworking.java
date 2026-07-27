@@ -56,6 +56,12 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public static BindExternalAccountRequest BIND_EXTERNAL_ACCOUNT_REQUEST = (BindExternalAccountRequest) AsynchronousRequestResponseSystem.register(new BindExternalAccountRequest());
     public static UnbindExternalAccountRequest UNBIND_EXTERNAL_ACCOUNT_REQUEST = (UnbindExternalAccountRequest) AsynchronousRequestResponseSystem.register(new UnbindExternalAccountRequest());
 
+    // ATM Money Converter tab (Task #39, v2.0.7). Cache is per-server (see
+    // ConverterCacheManager); the four write packets stay local (needsRoutingToMaster()==false).
+    // The one bank-crossing branch (commit-to-bank) routes via DepositItemsInBankRequest on
+    // slave, inheriting the Task #26 untrusted-slave gate on master.
+    public static GetConverterCachePacket GET_CONVERTER_CACHE_REQUEST = (GetConverterCachePacket) AsynchronousRequestResponseSystem.register(new GetConverterCachePacket());
+
     public static BankAccountChangeStream BANKSYSTEM_ACCOUNT_CHANGE_STREAM = (BankAccountChangeStream) StreamSystem.register(new BankAccountChangeStream());
 
     public BankSystemNetworking() {
@@ -101,6 +107,11 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerC2S(UpdateDisplayBlockConfigPacket.TYPE, UpdateDisplayBlockConfigPacket.STREAM_CODEC);
         registerC2S(WithdrawMoneyPacket.TYPE, WithdrawMoneyPacket.STREAM_CODEC);
         registerC2S(RegisterItemIDPacket.TYPE, RegisterItemIDPacket.STREAM_CODEC);
+        // ATM Money Converter tab (Task #39, v2.0.7).
+        registerC2S(ConverterDepositPacket.TYPE, ConverterDepositPacket.STREAM_CODEC);
+        registerC2S(ConverterWithdrawPacket.TYPE, ConverterWithdrawPacket.STREAM_CODEC);
+        registerC2S(ConverterDropAllPacket.TYPE, ConverterDropAllPacket.STREAM_CODEC);
+        registerC2S(ConverterCommitToBankPacket.TYPE, ConverterCommitToBankPacket.STREAM_CODEC);
     }
 
     @Override

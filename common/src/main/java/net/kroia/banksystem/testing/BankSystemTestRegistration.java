@@ -9,8 +9,10 @@ import net.kroia.banksystem.testing.tests.BankChangeStreamPublishTests;
 import net.kroia.banksystem.testing.tests.BankCraftingMatcherTests;
 import net.kroia.banksystem.testing.tests.BankManagerTests;
 import net.kroia.banksystem.testing.tests.BankPermissionTests;
+import net.kroia.banksystem.testing.tests.ConverterCacheTests;
 import net.kroia.banksystem.testing.tests.DatabaseTests;
 import net.kroia.banksystem.testing.tests.DepositGateTests;
+import net.kroia.banksystem.testing.tests.MoneyDenominationOptimizerTests;
 import net.kroia.banksystem.testing.tests.ExampleTests;
 import net.kroia.banksystem.testing.tests.ExternalCurrencyBindingTests;
 import net.kroia.banksystem.testing.tests.ItemIDCounterTests;
@@ -62,5 +64,8 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new NumismaticsAdapterTests());
         TestRegistry.register(new LightmansCurrencyAdapterTests());
         TestRegistry.register(new BankChangeStreamPublishTests());
+        // Task #39 (v2.0.7) — ATM Money Converter tab
+        TestRegistry.register(new MoneyDenominationOptimizerTests());
+        TestRegistry.register(new ConverterCacheTests());
     }
 }
