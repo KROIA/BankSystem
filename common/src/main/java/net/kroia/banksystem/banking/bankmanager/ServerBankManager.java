@@ -120,6 +120,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return; // Only process bank updates once per second to save some performance
         tickCounter = 0;
 
+        // Issue #67 (v2.0.6): watchdog pass FIRST — detect out-of-band external-mod
+        // mutations (player used Numismatics/Lightman's own UI while a BankSystem
+        // terminal was open elsewhere) and flip changeFlag on drift so the
+        // account.update pass below publishes to subscribed BankTerminalScreens.
+        // Running BEFORE account.update means the cache-update in pollExternalDrift
+        // silences the phantom-drift signal on the next tick after any bound-branch
+        // mutation, avoiding a redundant notify.
+        for(ServerBankAccount account : bankAccounts.values())
+            account.pollAllExternalDrifts();
+
         for(ServerBankAccount account : bankAccounts.values())
             account.update(server);
     }
@@ -2156,6 +2166,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             // the free-balance ratio the bound slot uses for reads/writes).
             bindings.setLocked(accountId, itemId, convertedLocked);
         }
+        // Issue #67 (v2.0.6): seed the drift-cache watchdog with the current external
+        // balance so the very first pollExternalDrift() tick after bind does NOT fire
+        // a spurious flag flip (cache would otherwise start at Long.MIN_VALUE and
+        // always report drift on the first read).
+        serverBank.primeDriftCache(external.getBalance());
         info("Bound slot " + accountId + "/" + itemId + " to external account " + ref
                 + " (transferred " + (localFree - initialDust) + " raw units to external, "
                 + "carried " + initialDust + " raw units dust + " + localLocked

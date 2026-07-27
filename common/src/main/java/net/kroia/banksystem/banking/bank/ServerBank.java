@@ -79,6 +79,23 @@ public class ServerBank implements ServerSaveable, IServerBank {
     private ItemID itemID;
 
     /**
+     * Watchdog cache (Issue #67, v2.0.6) for detecting out-of-band external mutations
+     * (e.g. player uses Numismatics' own Bank Terminal or Lightman's ATM while a
+     * BankSystem terminal is open elsewhere). Every 1 Hz {@code ServerBankManager}
+     * tick, {@link #pollExternalDrift()} compares the current external balance to
+     * this cached value; a mismatch flips {@link #changeFlag} so the bound
+     * bank's next {@code ServerBankAccount.update()} pass will notify subscribed
+     * {@code BankTerminalScreen} instances via the ARRS change stream.
+     * <p>
+     * {@link Long#MIN_VALUE} = never seeded. Seeded at bind time by
+     * {@link #primeDriftCache(long)} so the first tick after bind does not fire a
+     * spurious flag flip (the cache already matches external). Unbound slots
+     * ignore this field — {@link #pollExternalDrift()} short-circuits on a
+     * {@code null} binding row.
+     */
+    private long lastSeenExternalBalance = Long.MIN_VALUE;
+
+    /**
      * The BankSystem account number this bank belongs to (Task #33, v2.0.5).
      * <p>
      * Set to the owning account's number when the bank is added to a
@@ -430,6 +447,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
             }
             BankAccountBindings bindings = BankAccountBindings.get();
             if (bindings != null) bindings.setDust(accountId, itemID, newDust);
+            // Issue #67 (v2.0.6): the bound branch mutates external + dust but the
+            // local balance/lockedBalance fields stay 0, so setBalanceInternal is not
+            // called and nothing flipped changeFlag. Without this, the
+            // BANKSYSTEM_ACCOUNT_CHANGE_STREAM never fires and open BankTerminalScreens
+            // stay stale.
+            changeFlag = true;
             return true;
         }
         if(balance < 0)
@@ -480,6 +503,11 @@ public class ServerBank implements ServerSaveable, IServerBank {
             }
             BankAccountBindings bindings = BankAccountBindings.get();
             if (bindings != null) bindings.setDust(accountId, itemID, newDust);
+            // Issue #67 (v2.0.6): mark dirty so the change stream publishes to
+            // subscribed BankTerminalScreens. The local balance/lockedBalance
+            // fields are not touched on the bound path, so nothing else flips
+            // changeFlag automatically.
+            changeFlag = true;
             return BankStatus.SUCCESS;
         }
         if(amount < 0)
@@ -546,6 +574,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
             }
             BankAccountBindings bindings = BankAccountBindings.get();
             if (bindings != null) bindings.setDust(accountId, itemID, newDust);
+            // Issue #67 (v2.0.6): mark dirty so the change stream publishes.
+            changeFlag = true;
             return BankStatus.SUCCESS;
         }
         if(amount < 0)
@@ -588,6 +618,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
             if (bindings != null) {
                 bindings.setLocked(accountId, itemID, bv.row.lockedBalance() - clamped);
             }
+            // Issue #67 (v2.0.6): mark dirty so the change stream publishes.
+            // amount == 0 stays a no-op above (falls through with SUCCESS below is unreachable
+            // — the amount == 0 case reaches here with clamped == 0). Setting the flag on a
+            // zero-amount call is technically harmless but avoids over-firing: guard on
+            // clamped > 0 to keep no-op semantics.
+            if (clamped > 0) changeFlag = true;
             return BankStatus.SUCCESS;
         }
         if(amount < 0)
@@ -647,6 +683,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
                 bindings.setLocked(accountId, itemID, bv.row.lockedBalance() - fromLocked);
                 if (fromFree > 0) bindings.setDust(accountId, itemID, newDust);
             }
+            // Issue #67 (v2.0.6): mark dirty so the change stream publishes.
+            changeFlag = true;
             return BankStatus.SUCCESS;
         }
         if(amount < 0)
@@ -972,6 +1010,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
                 bindings.setLocked(accountId, itemID, bv.row.lockedBalance() + amount);
                 bindings.setDust(accountId, itemID, newDust);
             }
+            // Issue #67 (v2.0.6): mark dirty so the change stream publishes.
+            changeFlag = true;
             return BankStatus.SUCCESS;
         }
         if(amount < 0)
@@ -1034,6 +1074,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
                 bindings.setLocked(accountId, itemID, bv.row.lockedBalance() - clamped);
                 bindings.setDust(accountId, itemID, newDust);
             }
+            // Issue #67 (v2.0.6): mark dirty so the change stream publishes.
+            changeFlag = true;
             return BankStatus.SUCCESS;
         }
         if(amount < 0)
@@ -1105,6 +1147,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
                 bindings.setLocked(accountId, itemID, 0L);
                 bindings.setDust(accountId, itemID, newDust);
             }
+            // Issue #67 (v2.0.6): mark dirty so the change stream publishes.
+            changeFlag = true;
             return;
         }
         addBalanceInternal(lockedBalance);
@@ -1536,6 +1580,52 @@ public class ServerBank implements ServerSaveable, IServerBank {
         this.balance = Math.max(0L, balance);
         this.lockedBalance = Math.max(0L, lockedBalance);
         this.changeFlag = true;
+    }
+
+    /**
+     * <b>Internal — external-currency bind service only (Issue #67, v2.0.6).</b>
+     * Seeds {@link #lastSeenExternalBalance} with the external balance observed
+     * at bind time so the very first {@link #pollExternalDrift()} tick after bind
+     * does not fire a spurious flag flip (the cache already matches external).
+     * Called by {@code ServerBankManager.bindExternalAccount} right after commit.
+     *
+     * @param externalBalance the balance {@code external.getBalance()} returned
+     *                        at bind time
+     */
+    public void primeDriftCache(long externalBalance) {
+        this.lastSeenExternalBalance = externalBalance;
+    }
+
+    /**
+     * Watchdog poll (Issue #67, v2.0.6). Detects out-of-band mutations of the
+     * external balance — the player used the third-party mod's own UI
+     * (Numismatics Bank Terminal, Lightman's ATM, ...) while a BankSystem
+     * terminal was open elsewhere. Every 1 Hz {@code ServerBankManager} tick:
+     * compare {@code external.getBalance()} to {@link #lastSeenExternalBalance};
+     * on mismatch, flip {@link #changeFlag} so the ARRS change stream fires.
+     * <p>
+     * Silent short-circuits (no allocation, no logging, no cache mutation):
+     * <ul>
+     *   <li>slot is not bound — nothing to watch;</li>
+     *   <li>provider is not registered or reports unavailable — no reliable read;</li>
+     *   <li>{@code provider.open(ref)} returns {@code null} — same as above.</li>
+     * </ul>
+     * The cache is updated ONLY when a real drift is detected — a matching poll
+     * touches nothing.
+     */
+    public void pollExternalDrift() {
+        BindingRow row = lookupBindingRow();
+        if (row == null) return;
+        ExternalCurrencyProvider provider =
+                BankSystemMod.getAPI().getCurrencyProvider(row.ref().providerId());
+        if (provider == null || !provider.isAvailable()) return;
+        ExternalAccount external = provider.open(row.ref());
+        if (external == null) return;
+        long current = external.getBalance();
+        if (current != lastSeenExternalBalance) {
+            lastSeenExternalBalance = current;
+            changeFlag = true;
+        }
     }
 
     /**
