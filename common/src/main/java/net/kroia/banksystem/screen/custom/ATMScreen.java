@@ -303,8 +303,8 @@ public class ATMScreen extends BankSystemGuiScreen {
         LayoutGrid layout = new LayoutGrid();
         layout.stretchX = true;
         layout.columns = 2;
-        layout.padding = 5;
-        layout.spacing = 5;
+        layout.padding = 2;
+        layout.spacing = 2;
         moneyListView = new VerticalListView();
         moneyListView.setLayout(layout);
 
@@ -366,7 +366,7 @@ public class ATMScreen extends BankSystemGuiScreen {
         int height = getHeight();
 
 
-        int padding = 10;
+        int padding = 5;
         int spacing = 5;
 
         int leftEdget = (getWidth() - width)/2+padding;
@@ -417,6 +417,12 @@ public class ATMScreen extends BankSystemGuiScreen {
                 currentBalanceWeekVar = minimalBankData.balance();
                 balanceView.updateBalance(currentBalanceWeekVar);
             }
+            else
+            {
+                currentBalanceWeekVar = 0;
+                balanceView.updateBalance(0);
+            }
+            calculateSum();
         });
     }
 

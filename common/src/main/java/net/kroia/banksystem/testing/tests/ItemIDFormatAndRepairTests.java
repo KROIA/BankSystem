@@ -857,14 +857,18 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
     // 12–13: realistic multi-pair corpora (direct-pair fingerprint semantics)
     // ========================================================================
 
-    /** The nine non-cent money items in {@code getMoneyItems()} order. */
+    /** The non-cent money items in {@code getMoneyItems()} order. */
     private static List<Item> nonCentMoneyItems() {
         return List.of(
                 BankSystemItems.MONEY.get(), BankSystemItems.MONEY5.get(),
                 BankSystemItems.MONEY10.get(), BankSystemItems.MONEY20.get(),
                 BankSystemItems.MONEY50.get(), BankSystemItems.MONEY100.get(),
                 BankSystemItems.MONEY200.get(), BankSystemItems.MONEY500.get(),
-                BankSystemItems.MONEY1000.get());
+                BankSystemItems.MONEY1000.get(), BankSystemItems.MONEY5000.get(),
+                BankSystemItems.MONEY10000.get(),
+                BankSystemItems.MONEY20000.get(), BankSystemItems.MONEY50000.get(),
+                BankSystemItems.MONEY100000.get(),
+                BankSystemItems.MONEY500000.get(), BankSystemItems.MONEY1000000.get());
     }
 
     /**
@@ -884,7 +888,7 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
         LinkedHashMap<Short, ItemStack> freshMapping = ItemIDWorldRepair.simulateDefaultAssignment(access, true, 1);
         Map<ItemID, ItemStack> corruptedMap = toItemIDMap(freshMapping);
 
-        // Build the full 9-pair money corpus: old short → fresh short for every money item.
+        // Build the full money corpus: old short → fresh short for every money item.
         Map<ItemID, ItemID> aliases = new HashMap<>();
         Map<Short, Short> expectedPairs = new HashMap<>();
         for (Item money : nonCentMoneyItems()) {
@@ -898,10 +902,10 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
 
         Optional<ItemIDWorldRepair.CorruptionEvidence> evidence =
                 ItemIDWorldRepair.detect(corruptedMap, aliases, access);
-        TestResult r = assertTrue("detection fires on the 9-pair money corpus", evidence.isPresent());
+        TestResult r = assertTrue("detection fires on the money corpus", evidence.isPresent());
         if (!r.passed()) return r;
-        r = assertEquals("all 9 direct pairs are reported as fingerprints",
-                9, evidence.get().fingerprints().size());
+        r = assertEquals("all direct pairs are reported as fingerprints",
+                nonCentMoneyItems().size(), evidence.get().fingerprints().size());
         if (!r.passed()) return r;
         for (ItemIDWorldRepair.AliasFingerprint fp : evidence.get().fingerprints()) {
             Short expectedTo = expectedPairs.get(fp.from());
@@ -926,7 +930,7 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
                             && ItemStack.isSameItemSameComponents(entry.getValue(), repairedTemplate));
             if (!r.passed()) return r;
         }
-        return pass("9-pair money corpus: direct-pair fingerprints, firewall passes, old mapping restored");
+        return pass("money corpus: direct-pair fingerprints, firewall passes, old mapping restored");
     }
 
     /**
@@ -957,10 +961,11 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
                 ItemIDWorldRepair.detect(corruptedMap, aliases, access);
         TestResult r = assertTrue("detection fires on the large +5 ladder corpus", evidence.isPresent());
         if (!r.passed()) return r;
-        // Exactly the nine money pairs (fresh money block sits at 6..14, so sources 1..9)
-        // must be fingerprinted — nothing dropped to hop limits, nothing extra.
-        r = assertEquals("all 9 money fingerprints survive the large corpus",
-                9, evidence.get().fingerprints().size());
+        // Exactly the money pairs (fresh money block starts at short 6 after the five cent
+        // items; sources 1..N where N = number of non-cent money items) must be fingerprinted
+        // — nothing dropped to hop limits, nothing extra.
+        r = assertEquals("all money fingerprints survive the large corpus",
+                nonCentMoneyItems().size(), evidence.get().fingerprints().size());
         if (!r.passed()) return r;
         for (ItemIDWorldRepair.AliasFingerprint fp : evidence.get().fingerprints()) {
             r = assertTrue("fingerprint is a direct +5 pair", fp.to() == fp.from() + 5);

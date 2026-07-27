@@ -210,7 +210,7 @@ public class BankSystemClientHooks {
             if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money200"),
                     "banksystem:money20", 10, outputDir.resolve("recipe_money20_4.png"))) successCount++;
             if (RecipeImageExporter.exportShapedRecipe(new String[]{"S"}, Map.of('S', "banksystem:money1000"),
-                    "banksystem:money20", 20, outputDir.resolve("recipe_money20_5.png"))) successCount++;
+                    "banksystem:money20", 50, outputDir.resolve("recipe_money20_5.png"))) successCount++;
 
             // $50
             if (RecipeImageExporter.exportShapedRecipe(new String[]{"SSZ"}, Map.of('S', "banksystem:money20", 'Z', "banksystem:money10"),
@@ -255,6 +255,8 @@ public class BankSystemClientHooks {
                     "banksystem:money1000", 1, outputDir.resolve("recipe_money1000_1.png"))) successCount++;
             if (RecipeImageExporter.exportShapedRecipe(new String[]{"SS ", "SSS"}, Map.of('S', "banksystem:money200"),
                     "banksystem:money1000", 1, outputDir.resolve("recipe_money1000_2.png"))) successCount++;
+
+            // $5000..$1000000 are shapeless — skipped by the shaped-only exporter.
 
             // Print status summary
             LOGGER.info("[BankSystem] Recipe export complete: {}/{} recipes exported to {}",

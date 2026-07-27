@@ -312,7 +312,14 @@ public final class BankSystemModSettings extends ModSettings {
                     BankSystemItems.MONEY100.get().getDefaultInstance(),
                     BankSystemItems.MONEY200.get().getDefaultInstance(),
                     BankSystemItems.MONEY500.get().getDefaultInstance(),
-                    BankSystemItems.MONEY1000.get().getDefaultInstance()
+                    BankSystemItems.MONEY1000.get().getDefaultInstance(),
+                    BankSystemItems.MONEY5000.get().getDefaultInstance(),
+                    BankSystemItems.MONEY10000.get().getDefaultInstance(),
+                    BankSystemItems.MONEY20000.get().getDefaultInstance(),
+                    BankSystemItems.MONEY50000.get().getDefaultInstance(),
+                    BankSystemItems.MONEY100000.get().getDefaultInstance(),
+                    BankSystemItems.MONEY500000.get().getDefaultInstance(),
+                    BankSystemItems.MONEY1000000.get().getDefaultInstance()
             );
         }
 

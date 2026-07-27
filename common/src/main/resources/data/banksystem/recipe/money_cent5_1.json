@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "banksystem:money_cent1" },
+    { "item": "banksystem:money_cent1" },
+    { "item": "banksystem:money_cent1" },
+    { "item": "banksystem:money_cent1" },
+    { "item": "banksystem:money_cent1" }
+  ],
+  "result": {
+    "count": 1,
+    "id": "banksystem:money_cent5"
+  },
+  "show_notification": true
+}
