@@ -243,6 +243,12 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         //   automatically through the existing SyncItemIDsPacket path.
         // * ServerBank confirm flags (CONFIRM_ITEMID_MERGE / CONFIRM_ITEMID_REPAIR):
         //   one-shot startup guards evaluated on the master only. No propagation.
+        // * ServerBank ALLOW_ALL_ITEMS (Task #39): consulted by isItemIDAllowed, which only
+        //   runs authoritatively on the master. Slaves never call isItemIDAllowed locally
+        //   — deposit/withdraw block entities on a slave forward to the master via ARRS
+        //   (DepositItemsInBankRequest etc.), and the slave's AsyncBankManager routes
+        //   IsItemIDAllowedAsync to the master through the ARRS dispatch as well. So the
+        //   master's live setting always gates. No propagation required.
         // * Placeholder: consumed once at TAB-integration registration during startup
         //   of the server where the TAB mod runs, from that server's local file.
         //   No propagation.
@@ -308,6 +314,7 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
                 normalizeComponentList(settings.BANK.ADDITIONAL_VOLATILE_COMPONENTS.get()));
         settings.BANK.ADDITIONAL_DEPOSIT_GATED_COMPONENTS.set(
                 normalizeComponentList(settings.BANK.ADDITIONAL_DEPOSIT_GATED_COMPONENTS.get()));
+        sanitizeBoolean(settings.BANK.ALLOW_ALL_ITEMS);
         sanitizeBoolean(settings.BANK.CONFIRM_ITEMID_MERGE);
         sanitizeBoolean(settings.BANK.CONFIRM_ITEMID_REPAIR);
 

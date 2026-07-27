@@ -5,6 +5,7 @@ import net.kroia.banksystem.testing.tests.ArithmeticTests;
 import net.kroia.banksystem.testing.tests.AsyncForwardingTests;
 import net.kroia.banksystem.testing.tests.AsyncMethodAuditTests;
 import net.kroia.banksystem.testing.tests.BankAccountTests;
+import net.kroia.banksystem.testing.tests.BankChangeStreamPublishTests;
 import net.kroia.banksystem.testing.tests.BankCraftingMatcherTests;
 import net.kroia.banksystem.testing.tests.BankManagerTests;
 import net.kroia.banksystem.testing.tests.BankPermissionTests;
@@ -60,5 +61,6 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new ExternalCurrencyBindingTests());
         TestRegistry.register(new NumismaticsAdapterTests());
         TestRegistry.register(new LightmansCurrencyAdapterTests());
+        TestRegistry.register(new BankChangeStreamPublishTests());
     }
 }

@@ -11,7 +11,6 @@ import mezz.jei.api.recipe.transfer.IRecipeTransferHandlerHelper;
 import mezz.jei.api.recipe.transfer.IRecipeTransferInfo;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.registration.IRecipeTransferRegistration;
-import mezz.jei.api.runtime.IJeiRuntime;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
@@ -75,6 +74,15 @@ import java.util.Optional;
  * sourcing is invisible to JEI by design — with "Use Bank Items" active, the
  * grid slots JEI could not fill are completed from the bank automatically and
  * shown as ghost icons.
+ * <p>
+ * <b>Overlay hide-on-open:</b> the Bank Upload / Bank Download / Bank Terminal
+ * screens opt into hiding JEI's ingredient list, bookmark overlays and/or
+ * individual overlay buttons while they are open. That behavior is delegated
+ * to ModUtilities' {@code ModUtilitiesJeiPlugin} — each screen calls
+ * {@code setHideJeiOverlay(true)} or {@code setHideJeiButtons(names...)} on
+ * the ModUtilities base class in its constructor, and the base class wires
+ * the lifecycle. This class carries only the BankSystem-specific bits
+ * (exclusion areas + Bank Terminal recipe transfer).
  */
 @JeiPlugin
 public class BankSystemJeiPlugin implements IModPlugin {
@@ -196,10 +204,5 @@ public class BankSystemJeiPlugin implements IModPlugin {
             }
             return physicalDelegate.transferRecipe(container, recipe, recipeSlots, player, maxTransfer, doTransfer);
         }
-    }
-
-    @Override
-    public void onRuntimeAvailable(IJeiRuntime jeiRuntime) {
-        // Optional: Interact with JEI runtime if needed
     }
 }

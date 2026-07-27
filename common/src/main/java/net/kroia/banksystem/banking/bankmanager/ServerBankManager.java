@@ -120,6 +120,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return; // Only process bank updates once per second to save some performance
         tickCounter = 0;
 
+        // Issue #67 (v2.0.6): watchdog pass FIRST — detect out-of-band external-mod
+        // mutations (player used Numismatics/Lightman's own UI while a BankSystem
+        // terminal was open elsewhere) and flip changeFlag on drift so the
+        // account.update pass below publishes to subscribed BankTerminalScreens.
+        // Running BEFORE account.update means the cache-update in pollExternalDrift
+        // silences the phantom-drift signal on the next tick after any bound-branch
+        // mutation, avoiding a redundant notify.
+        for(ServerBankAccount account : bankAccounts.values())
+            account.pollAllExternalDrifts();
+
         for(ServerBankAccount account : bankAccounts.values())
             account.update(server);
     }
@@ -1268,10 +1278,26 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean isItemIDAllowed(ItemID itemID)
     {
+        // Guard invalid inputs up front. The old code relied on "invalid ID cannot be in
+        // the allow-set" to reject implicitly; adding the explicit gate makes the ALLOW_ALL
+        // bypass safe (Task #39) — otherwise ALLOW_ALL would return true for an INVALID_ID.
+        if (itemID == null || !itemID.isValid())
+            return false;
         // Alias safety net: an ID merged into a canonical ID stays "allowed" iff its
         // canonical ID is allowed (the allowed set only stores canonical IDs after a
         // merge consolidation). O(1) map lookup.
-        return itemID != null && allowedItemIDs.contains(ItemIDManager.resolveAlias(itemID));
+        ItemID canonical = ItemIDManager.resolveAlias(itemID);
+        // Blacklist always wins — same guarantee as allowItemID() enforces at add-time.
+        // With ALLOW_ALL_ITEMS on this is the ONLY gate.
+        if (isItemIDBlacklisted(canonical))
+            return false;
+        // Task #39: blacklist-only mode. When the admin has opted in via the mod-settings
+        // screen, the explicit allow-list is bypassed and every non-blacklisted item is
+        // bankable. Read live on every call (not cached) so toggling in-game takes effect
+        // immediately without a server restart.
+        if (BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ALLOW_ALL_ITEMS.get())
+            return true;
+        return allowedItemIDs.contains(canonical);
     }
     @Override
     public CompletableFuture<Boolean> isItemIDAllowedAsync(ItemID itemID) {
@@ -2140,6 +2166,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             // the free-balance ratio the bound slot uses for reads/writes).
             bindings.setLocked(accountId, itemId, convertedLocked);
         }
+        // Issue #67 (v2.0.6): seed the drift-cache watchdog with the current external
+        // balance so the very first pollExternalDrift() tick after bind does NOT fire
+        // a spurious flag flip (cache would otherwise start at Long.MIN_VALUE and
+        // always report drift on the first read).
+        serverBank.primeDriftCache(external.getBalance());
         info("Bound slot " + accountId + "/" + itemId + " to external account " + ref
                 + " (transferred " + (localFree - initialDust) + " raw units to external, "
                 + "carried " + initialDust + " raw units dust + " + localLocked

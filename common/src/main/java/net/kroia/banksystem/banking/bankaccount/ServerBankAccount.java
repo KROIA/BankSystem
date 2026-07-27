@@ -147,6 +147,24 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         }
     }
 
+    /**
+     * Runs the Issue #67 (v2.0.6) external-drift watchdog against every bank in
+     * this account. Called from {@code ServerBankManager.update} at 1 Hz,
+     * BEFORE the per-account {@link #update(MinecraftServer)} pass — a detected
+     * drift flips the bank's {@code changeFlag} so {@link #update(MinecraftServer)}'s
+     * listener-notify loop fires in the same tick, and the cache update in
+     * {@code pollExternalDrift} prevents a phantom re-notify on the next tick.
+     * <p>
+     * Unbound banks and unavailable providers short-circuit inside
+     * {@link ServerBank#pollExternalDrift()} — this method incurs no per-bank
+     * cost beyond a map iteration when no external provider is loaded.
+     */
+    public void pollAllExternalDrifts() {
+        for (ServerBank bank : banks.values()) {
+            bank.pollExternalDrift();
+        }
+    }
+
 
 
 

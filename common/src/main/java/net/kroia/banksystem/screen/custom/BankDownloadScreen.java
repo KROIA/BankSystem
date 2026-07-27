@@ -6,8 +6,8 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.minecraft.menu.custom.BankDownloadContainerMenu;
-import net.kroia.banksystem.networking.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.networking.entity.SyncBankDownloadDataPacket;
+import net.kroia.banksystem.networking.entity.UpdateBankDownloadBlockEntityPacket;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.ItemID;
@@ -485,8 +485,15 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
 
     public BankDownloadScreen(BankDownloadContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
         super(pMenu, pPlayerInventory, pTitle);
+        //setGuiScale(BankSystemGuiScreen.guiScale-0.2f);
         instance = this;
         this.pos = pMenu.getBlockPos();
+
+        // Hide JEI's ingredient list + bookmark overlays (and their overlay
+        // buttons) while this screen is open. The ModUtilities base class
+        // wires the lifecycle — the flag is applied on init() and released
+        // on onClose() / removed().
+        setHideJeiOverlay(true);
 
         jeiModScreenWidthPercentage = (isJeiModLoaded()?70:100);
 
@@ -526,7 +533,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
 
     @Override
     protected void updateLayout(Gui gui) {
-        int width = (this.getWidth()*jeiModScreenWidthPercentage)/100;
+        int width = this.getWidth();
         int height = this.getHeight();
         int spacing = 5;
         int padding = 5;
@@ -562,6 +569,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         instance = null;
         blockInventorySlotCount = 0;
         accountNr = 0; // Reset account number when closing the screen
+        // JEI overlay restore is handled by the ModUtilities base class.
     }
     @Override
     public void onClose() {

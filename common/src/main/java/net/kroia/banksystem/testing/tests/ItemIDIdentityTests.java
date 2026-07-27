@@ -92,6 +92,11 @@ public class ItemIDIdentityTests extends TestSuite {
         addTest("getAccountData_emits_alias_resolved_keys", this::testGetAccountDataEmitsAliasResolvedKeys);
         addTest("getAccountData_sums_balances_across_alias_collision",
                 this::testGetAccountDataSumsBalancesAcrossAliasCollision);
+        // Issue #57 — resolver-determinism regression
+        addTest("money_denomination_resolver_deterministic",
+                this::testMoneyDenominationResolverDeterministic);
+        addTest("itemid_map_has_no_ambiguous_templates",
+                this::testItemIDMapHasNoAmbiguousTemplates);
     }
 
     @Override
@@ -675,6 +680,86 @@ public class ItemIDIdentityTests extends TestSuite {
             manager.disallowItemID(idB);
             ItemIDManager.removeAliasEntries_forTesting(List.of(other));
         }
+    }
+
+    /**
+     * Issue #57 regression: every money denomination must resolve through
+     * {@link ItemIDManager#getItemID(ItemStack)} to a short whose stored template is the
+     * same item. The original report observed {@code banksystem:money} (short 7) resolving
+     * to {@code banksystem:money_cent50} (short 6) because the fast path returns the first
+     * match from a {@code ConcurrentHashMap} whose iteration order is unspecified. Under
+     * proper registration each denomination is a distinct {@code Item}, so
+     * {@code isSameItemSameComponents} can only match one template; this test guards that
+     * property against regressions (e.g. a template getting mutated in place, or a
+     * duplicate template getting inserted by a merge/sync bug).
+     * <p>
+     * Read-only: never mutates ItemID state. Skips gracefully if the denominations are not
+     * pre-registered (early-init / stripped test world).
+     */
+    private TestResult testMoneyDenominationResolverDeterministic() {
+        List<ItemStack> denominations = net.kroia.banksystem.minecraft.item.BankSystemItems.getMoneyItems();
+        int checked = 0;
+        for (ItemStack denomStack : denominations) {
+            net.minecraft.world.item.Item expectedItem = denomStack.getItem();
+            ItemID resolved = ItemIDManager.getItemID(denomStack);
+            if (!resolved.isValid()) {
+                // Denomination not registered on this world — skip (early-init or minimal test world).
+                continue;
+            }
+            ItemStack storedTemplate = ItemIDManager.getItemStackTemplate(resolved);
+            TestResult r = assertTrue(
+                    "resolved template for " + expectedItem + " must not be EMPTY (short "
+                            + resolved.getShort() + ")",
+                    !storedTemplate.isEmpty());
+            if (!r.passed()) return r;
+            if (storedTemplate.getItem() != expectedItem) {
+                return fail("Issue #57 REGRESSION: " + expectedItem
+                        + ".getDefaultInstance() resolved to short " + resolved.getShort()
+                        + " whose stored template is " + storedTemplate.getItem()
+                        + " — resolver returned the wrong denomination.");
+            }
+            checked++;
+        }
+        if (checked == 0)
+            return pass("skipped: no money denominations registered on this world");
+        return pass("all " + checked + " registered money denominations resolve to their own short");
+    }
+
+    /**
+     * Issue #57 root-cause invariant: no two entries in {@link ItemIDManager#getItemIDMap()}
+     * may satisfy {@code ItemStack.isSameItemSameComponents} against each other. As long as
+     * this invariant holds, {@link ItemIDManager#getItemID(ItemStack)}'s first-match
+     * iteration over a {@code ConcurrentHashMap} returns the unique matching entry, so the
+     * unspecified iteration order is harmless. A failure here means some upstream path has
+     * produced a duplicate template — the exact precondition that would reawaken #57.
+     * <p>
+     * Read-only: iterates a copy of the map.
+     */
+    private TestResult testItemIDMapHasNoAmbiguousTemplates() {
+        Map<ItemID, ItemStack> snapshot = ItemIDManager.getItemIDMap();
+        if (snapshot.isEmpty())
+            return pass("skipped: itemIDMap is empty (early-init or stripped test world)");
+
+        List<Map.Entry<ItemID, ItemStack>> entries = new ArrayList<>(snapshot.entrySet());
+        // Two templates are ambiguous only if their normalized identity collides — that's
+        // exactly what getItemID compares against.
+        for (int i = 0; i < entries.size(); i++) {
+            ItemStack a = entries.get(i).getValue();
+            if (a.isEmpty()) continue; // dropped-mod placeholder, tolerated
+            for (int j = i + 1; j < entries.size(); j++) {
+                ItemStack b = entries.get(j).getValue();
+                if (b.isEmpty()) continue;
+                if (ItemStack.isSameItemSameComponents(a, b)) {
+                    return fail("Issue #57 INVARIANT VIOLATION: two ItemIDs share the same "
+                            + "normalized identity — short " + entries.get(i).getKey().getShort()
+                            + " (" + a.getItem() + ") and short " + entries.get(j).getKey().getShort()
+                            + " (" + b.getItem() + "). getItemID(...) is now non-deterministic "
+                            + "for this template. Investigate the code path that produced the "
+                            + "duplicate (merge/alias, sync, or in-place template mutation).");
+                }
+            }
+        }
+        return pass("no ambiguous templates in itemIDMap (" + entries.size() + " entries scanned)");
     }
 
     /**

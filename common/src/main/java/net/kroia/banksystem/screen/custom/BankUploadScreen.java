@@ -3,15 +3,15 @@ package net.kroia.banksystem.screen.custom;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.minecraft.menu.custom.BankUploadContainerMenu;
-import net.kroia.banksystem.networking.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.networking.entity.SyncBankUploadDataPacket;
+import net.kroia.banksystem.networking.entity.UpdateBankUploadBlockEntityPacket;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiTexture;
+import net.kroia.modutilities.gui.client.ContainerView;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
-import net.kroia.modutilities.gui.client.ContainerView;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -85,6 +85,11 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
         instance = this;
         this.pos = pMenu.getBlockPos();
 
+        // Hide JEI's ingredient list + bookmark overlays (and their overlay
+        // buttons) while this screen is open. The ModUtilities base class
+        // wires the lifecycle — the flag is applied on init() and released
+        // on onClose() / removed().
+        setHideJeiOverlay(true);
 
         settingsMenu = new SettingsMenu(this);
         inventoryView = new ContainerView<>(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 256, 256));
@@ -124,11 +129,13 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
         }
     }
 
+    @Override
     public void onClose() {
         instance = null;
         isOwned = false;
         dropIfNotBankable = false;
         this.accountNr = 0; // Reset account number on close
+        // JEI overlay restore is handled by the ModUtilities base class.
         super.onClose();
     }
 

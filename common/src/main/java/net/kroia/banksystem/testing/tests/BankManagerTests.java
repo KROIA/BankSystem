@@ -1,6 +1,7 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
@@ -13,6 +14,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.ConcurrentModificationException;
@@ -54,6 +56,13 @@ public class BankManagerTests extends TestSuite {
         addTest("getNotRemovableItems_returns_correct_list", this::testGetNotRemovableItemsReturnsCorrectList);
         addTest("isBanksystemAdmin_after_set", this::testIsBanksystemAdminAfterSet);
         addTest("isBanksystemAdmin_after_revoke", this::testIsBanksystemAdminAfterRevoke);
+        // Task #39 — ALLOW_ALL_ITEMS blacklist-only mode
+        addTest("allow_all_items_off_preserves_current_behavior",
+                this::testAllowAllItemsOffPreservesCurrentBehavior);
+        addTest("allow_all_items_on_permits_any_non_blacklisted_item",
+                this::testAllowAllItemsOnPermitsAnyNonBlacklistedItem);
+        addTest("allow_all_items_on_still_refuses_blacklisted",
+                this::testAllowAllItemsOnStillRefusesBlacklisted);
     }
 
     @Override
@@ -319,5 +328,139 @@ public class BankManagerTests extends TestSuite {
         boolean isAdmin = manager.isBanksystemAdmin(TEST_USER_A);
         return assertFalse("isBanksystemAdmin should return false after revoking admin",
                 isAdmin);
+    }
+
+    // ============= Task #39 — ALLOW_ALL_ITEMS blacklist-only mode =============
+
+    /**
+     * Returns the master settings object, or null if the backend is not initialized
+     * (e.g. slave-only test run). Callers must skip if null.
+     */
+    private BankSystemModSettings getSettings() {
+        BankSystemModBackend.Instances instances = BankSystemModBackend.getInstances_forTesting();
+        return instances == null ? null : instances.SERVER_SETTINGS;
+    }
+
+    /**
+     * Task #39: with ALLOW_ALL_ITEMS at its default (false), the pre-Task-#39 whitelist
+     * behavior must be preserved — an ItemID that is not in the explicit allow-list must
+     * report as NOT allowed.
+     */
+    private TestResult testAllowAllItemsOffPreservesCurrentBehavior() {
+        if (manager == null) {
+            return fail("ServerBankManager is null -- cannot run on slave server");
+        }
+        BankSystemModSettings settings = getSettings();
+        if (settings == null) {
+            return fail("SERVER_SETTINGS is null -- backend not fully initialized");
+        }
+
+        // Register a vanilla item that is NOT in INITIAL_ALLOWED_ITEMS and NOT in
+        // INITIAL_BLACKLIST_ITEMS. Dirt fits both requirements.
+        ItemID freshItem = ItemID.getOrRegisterFromItemStackServerSide_direct(
+                Items.DIRT.getDefaultInstance());
+        if (!freshItem.isValid()) {
+            return fail("Could not register DIRT for the allow-all-off test");
+        }
+
+        // Precondition: item must NOT be in the explicit allow-list. Snapshot + strip if
+        // a previous test left it there; restore in finally.
+        boolean wasInAllowList = manager.getAllowedItems().contains(freshItem);
+        boolean savedAllowAll = settings.BANK.ALLOW_ALL_ITEMS.get();
+        if (wasInAllowList) {
+            manager.disallowItemID(freshItem);
+        }
+
+        try {
+            settings.BANK.ALLOW_ALL_ITEMS.set(false);
+            boolean allowed = manager.isItemIDAllowed(freshItem);
+            return assertFalse(
+                    "With ALLOW_ALL_ITEMS=false, an unlisted item must NOT be allowed",
+                    allowed);
+        } finally {
+            settings.BANK.ALLOW_ALL_ITEMS.set(savedAllowAll);
+            if (wasInAllowList) {
+                manager.allowItemID(freshItem);
+            }
+        }
+    }
+
+    /**
+     * Task #39: with ALLOW_ALL_ITEMS=true, a non-blacklisted ItemID that is NOT in the
+     * explicit allow-list must report as allowed (allow-list bypass).
+     */
+    private TestResult testAllowAllItemsOnPermitsAnyNonBlacklistedItem() {
+        if (manager == null) {
+            return fail("ServerBankManager is null -- cannot run on slave server");
+        }
+        BankSystemModSettings settings = getSettings();
+        if (settings == null) {
+            return fail("SERVER_SETTINGS is null -- backend not fully initialized");
+        }
+
+        // Use dirt again — vanilla, not in INITIAL_ALLOWED_ITEMS, not in INITIAL_BLACKLIST_ITEMS.
+        ItemID freshItem = ItemID.getOrRegisterFromItemStackServerSide_direct(
+                Items.DIRT.getDefaultInstance());
+        if (!freshItem.isValid()) {
+            return fail("Could not register DIRT for the allow-all-on test");
+        }
+
+        // Precondition: ensure the item is NOT already in the explicit allow-list, so the
+        // pass would come from the allow-all branch (not the allow-list membership check).
+        boolean wasInAllowList = manager.getAllowedItems().contains(freshItem);
+        boolean savedAllowAll = settings.BANK.ALLOW_ALL_ITEMS.get();
+        if (wasInAllowList) {
+            manager.disallowItemID(freshItem);
+        }
+
+        try {
+            settings.BANK.ALLOW_ALL_ITEMS.set(true);
+            boolean allowed = manager.isItemIDAllowed(freshItem);
+            return assertTrue(
+                    "With ALLOW_ALL_ITEMS=true, a non-blacklisted item must be allowed even without an explicit entry",
+                    allowed);
+        } finally {
+            settings.BANK.ALLOW_ALL_ITEMS.set(savedAllowAll);
+            if (wasInAllowList) {
+                manager.allowItemID(freshItem);
+            }
+        }
+    }
+
+    /**
+     * Task #39: blacklist ALWAYS wins over allow-all. With ALLOW_ALL_ITEMS=true, a
+     * blacklisted ItemID (bedrock, taken from INITIAL_BLACKLIST_ITEMS) must STILL be
+     * refused — same guarantee allowItemID() enforces at add-time.
+     */
+    private TestResult testAllowAllItemsOnStillRefusesBlacklisted() {
+        if (manager == null) {
+            return fail("ServerBankManager is null -- cannot run on slave server");
+        }
+        BankSystemModSettings settings = getSettings();
+        if (settings == null) {
+            return fail("SERVER_SETTINGS is null -- backend not fully initialized");
+        }
+
+        ItemID bedrock = ItemID.getOrRegisterFromItemStackServerSide_direct(
+                Items.BEDROCK.getDefaultInstance());
+        if (!bedrock.isValid()) {
+            return fail("Could not register BEDROCK for the blacklist-wins test");
+        }
+        // Sanity: bedrock IS in INITIAL_BLACKLIST_ITEMS. If this assertion ever flips,
+        // the test premise is broken and the check below tells us nothing useful.
+        if (!manager.isItemIDBlacklisted(bedrock)) {
+            return fail("Bedrock is expected to be blacklisted by default -- test premise broken");
+        }
+
+        boolean savedAllowAll = settings.BANK.ALLOW_ALL_ITEMS.get();
+        try {
+            settings.BANK.ALLOW_ALL_ITEMS.set(true);
+            boolean allowed = manager.isItemIDAllowed(bedrock);
+            return assertFalse(
+                    "Blacklist must win over ALLOW_ALL_ITEMS -- bedrock stays refused",
+                    allowed);
+        } finally {
+            settings.BANK.ALLOW_ALL_ITEMS.set(savedAllowAll);
+        }
     }
 }
