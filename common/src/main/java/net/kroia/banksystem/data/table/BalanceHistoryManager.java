@@ -84,6 +84,16 @@ public class BalanceHistoryManager implements ITableManager<BalanceHistoryRecord
      * which is the semantically-correct visualization for step-function balances
      * where no finer data exists in the bucket window.
      * <p>
+     * <b>Anchor rows</b> (newest snapshot before {@code fromMs}) are returned in
+     * addition to in-window bucketed rows, so clients rendering step-function
+     * balances can draw the correct starting value at the left edge. Exactly one
+     * anchor row per {@code item_id} that has any pre-window data is returned,
+     * mixed into the same result list in ascending {@code time} order. When the
+     * query is dispatched via {@code ALL_HISTORY_SENTINEL} (either bound is the
+     * corresponding {@code Long.MIN_VALUE}/{@code Long.MAX_VALUE}), no anchor rows
+     * are returned — {@code effectiveFrom} is resolved to {@code MIN(time)} for
+     * the account, so by construction no row exists before it.
+     * <p>
      * If {@code fromMs == Long.MIN_VALUE} or {@code toMs == Long.MAX_VALUE}, the
      * effective range is resolved from the underlying table via a first-pass
      * {@code MIN(time) / MAX(time)} lookup on the account. When the account has zero
@@ -91,10 +101,14 @@ public class BalanceHistoryManager implements ITableManager<BalanceHistoryRecord
      * <p>
      * The wealth synthetic series ({@code BalanceHistoryRecord.WEALTH_ITEM_ID}) is
      * treated identically — it is just another {@code item_id} in the table and gets
-     * its own {@code maxPoints}-budget bucketed slice, no special-case needed.
+     * its own {@code maxPoints}-budget bucketed slice plus its own anchor row, no
+     * special-case needed.
      * <p>
      * Runs on the DB thread; safe against SQL injection (all params via
-     * {@link PreparedStatement}).
+     * {@link PreparedStatement}). Two sequential {@code PreparedStatement}s are
+     * issued (anchor query then bucketed query) on the same DB thread executor —
+     * the extra roundtrip is negligible next to the win of drawing the left edge
+     * of a viewport with pre-window data.
      *
      * @param accountNumber account whose history to sample
      * @param fromMs        inclusive lower time bound in epoch millis, or
@@ -104,7 +118,8 @@ public class BalanceHistoryManager implements ITableManager<BalanceHistoryRecord
      * @param maxPoints     per-item point budget; {@code <= 0} disables bucketing and
      *                      falls back to the unbucketed {@link #getHistory} path so
      *                      admin tooling can still fetch every row when needed
-     * @return future completing with the sampled rows in ascending {@code time} order
+     * @return future completing with the sampled rows (plus at most one anchor row
+     *         per {@code item_id}) in ascending {@code time} order
      */
     public CompletableFuture<List<BalanceHistoryRecord>> getHistoryBucketed(
             int accountNumber, long fromMs, long toMs, int maxPoints) {
@@ -116,6 +131,11 @@ public class BalanceHistoryManager implements ITableManager<BalanceHistoryRecord
                     0
             );
         }
+        // Capture whether either bound was the ALL_HISTORY sentinel before resolution;
+        // in that mode the effective range is expanded to the full table extent, so an
+        // anchor query with "time < effectiveFrom" would be nonsensical (nothing precedes
+        // MIN(time)). Skip it entirely.
+        final boolean sentinelUsed = (fromMs == Long.MIN_VALUE) || (toMs == Long.MAX_VALUE);
         return CompletableFuture.supplyAsync(() -> {
             try {
                 long effectiveFrom = fromMs;
@@ -132,6 +152,38 @@ public class BalanceHistoryManager implements ITableManager<BalanceHistoryRecord
                 long span = effectiveTo - effectiveFrom;
                 long bucketWidth = Math.max(1L, span / maxPoints);
 
+                List<BalanceHistoryRecord> result = new ArrayList<>();
+
+                // 1) Anchor query — newest row per item_id with time < effectiveFrom. Skipped
+                // when the caller used ALL_HISTORY_SENTINEL, since there is nothing before
+                // the account's MIN(time) by definition.
+                if (!sentinelUsed) {
+                    String anchorSql =
+                            "WITH anchor AS (" +
+                            "  SELECT account_number, item_id, balance, locked_balance, time," +
+                            "         ROW_NUMBER() OVER (" +
+                            "             PARTITION BY item_id" +
+                            "             ORDER BY time DESC" +
+                            "         ) AS rn" +
+                            "  FROM BalanceHistory" +
+                            "  WHERE account_number = ? AND time < ?" +
+                            ") " +
+                            "SELECT account_number, item_id, balance, locked_balance, time " +
+                            "FROM anchor WHERE rn = 1 ORDER BY time ASC";
+                    try (PreparedStatement stmt = databaseManager.getConnection().prepareStatement(anchorSql)) {
+                        stmt.setInt(1, accountNumber);
+                        stmt.setLong(2, effectiveFrom);
+                        try (ResultSet rs = stmt.executeQuery()) {
+                            databaseManager.commitTransaction();
+                            while (rs.next()) {
+                                BalanceHistoryRecord row = mapRow(rs);
+                                if (row != null) result.add(row);
+                            }
+                        }
+                    }
+                }
+
+                // 2) Bucketed in-window query — the primary payload.
                 String sql =
                         "WITH bucketed AS (" +
                         "  SELECT account_number, item_id, balance, locked_balance, time," +
@@ -145,7 +197,6 @@ public class BalanceHistoryManager implements ITableManager<BalanceHistoryRecord
                         "SELECT account_number, item_id, balance, locked_balance, time " +
                         "FROM bucketed WHERE rn = 1 ORDER BY time ASC";
 
-                List<BalanceHistoryRecord> result = new ArrayList<>();
                 try (PreparedStatement stmt = databaseManager.getConnection().prepareStatement(sql)) {
                     stmt.setLong(1, effectiveFrom);
                     stmt.setLong(2, bucketWidth);

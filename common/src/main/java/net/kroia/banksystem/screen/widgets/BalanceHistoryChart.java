@@ -50,6 +50,16 @@ public class BalanceHistoryChart extends GuiElement {
         void onTimescaleSelected(long windowMs);
     }
 
+    /**
+     * Listener notified whenever the X-axis viewport (viewX / viewWidth) changes.
+     * Used by the screen to detect pan/scroll and trigger rolling prefetch fetches
+     * before the user drags into empty (not-yet-loaded) chart territory.
+     */
+    @FunctionalInterface
+    public interface ViewChangeListener {
+        void onViewChanged(double viewX, double viewWidth);
+    }
+
     public record DataPoint(long time, double value) {}
 
     public static class LineSeries {
@@ -100,6 +110,26 @@ public class BalanceHistoryChart extends GuiElement {
     private int currentTimescaleIndex = TIMESCALES_MS.length - 1;
     private int buttonRowHeight = 0;
     private TimescaleChangeListener timescaleListener;
+    private ViewChangeListener viewChangeListener;
+
+    /**
+     * Rolling-fetch X-axis clamp bounds. When either is non-null, {@link #clampView()}
+     * uses these instead of clamping viewX to the loaded-data extents. This lets the
+     * screen relax the clamp so the user can drag past the currently loaded range
+     * (triggering a prefetch) while still preventing them from dragging past the
+     * true server minimum ({@link #leftClampAtMs}) or into the future
+     * ({@link #rightClampAtMs}). Both null == legacy clamp-to-loaded-data behavior.
+     */
+    private Long leftClampAtMs = null;
+    private Long rightClampAtMs = null;
+
+    /**
+     * Optional upper bound on {@code viewWidth} (in ms). When non-null, both
+     * {@link #mouseScrolledOverElement scroll-zoom} and the explicit-bounds branch
+     * of {@link #clampView()} cap {@code viewWidth} at this value. {@code null}
+     * (default) means uncapped — preserves legacy display-block behavior.
+     */
+    private Long maxViewWidthMs = null;
 
     public BalanceHistoryChart() {
         setTextFontScale(0.8f);
@@ -134,6 +164,53 @@ public class BalanceHistoryChart extends GuiElement {
      */
     public void setTimescaleChangeListener(TimescaleChangeListener listener) {
         this.timescaleListener = listener;
+    }
+
+    /**
+     * Sets the callback fired whenever the X-axis viewport (viewX / viewWidth)
+     * changes as a result of user input (drag, scroll-zoom) or programmatic
+     * changes ({@link #setView}, {@link #scrollToLatestData},
+     * {@link #scrollToPresent}, {@link #autoCenterView},
+     * {@link #autoCenterViewWithinRange}).
+     */
+    public void setViewChangeListener(ViewChangeListener listener) {
+        this.viewChangeListener = listener;
+    }
+
+    /**
+     * Overrides {@link #clampView()}'s "clamp to loaded data extents" behavior.
+     * When either bound is non-null, the loaded-data range no longer clamps
+     * {@code viewX} — the caller (screen) can drag past currently loaded data.
+     * <p>
+     * Pass {@code null} for either bound to disable that side's explicit clamp.
+     * If both are {@code null}, the legacy behavior (clamp to first/last data
+     * point across all series) is restored — backwards-compatible for other
+     * callers of this chart.
+     *
+     * @param leftMs  earliest allowed {@code viewX} (null = no explicit left clamp)
+     * @param rightMs latest allowed {@code viewX + viewWidth} (null = no explicit right clamp)
+     */
+    public void setClampBounds(Long leftMs, Long rightMs) {
+        this.leftClampAtMs = leftMs;
+        this.rightClampAtMs = rightMs;
+        clampView();
+        markDirty();
+    }
+
+    /**
+     * Sets an upper bound on {@code viewWidth} (in ms) enforced by scroll-zoom
+     * and the explicit-bounds branch of {@link #clampView()}. Pass {@code null}
+     * to remove the cap. Setting the cap does not by itself change the current
+     * viewport or fire the view-change listener — the cap takes effect on the
+     * next scroll-zoom or drag (via {@code clampView}).
+     */
+    public void setMaxViewWidthMs(Long ms) {
+        this.maxViewWidthMs = ms;
+        markDirty();
+    }
+
+    private void fireViewChanged() {
+        if (viewChangeListener != null) viewChangeListener.onViewChanged(viewX, viewWidth);
     }
 
     /**
@@ -328,6 +405,7 @@ public class BalanceHistoryChart extends GuiElement {
         this.viewHeight = height;
         clampView();
         markDirty();
+        fireViewChanged();
     }
 
     public boolean isAtPresent() {
@@ -350,6 +428,7 @@ public class BalanceHistoryChart extends GuiElement {
         viewX = maxTime - viewWidth;
         clampView();
         markDirty();
+        fireViewChanged();
     }
 
     public void scrollToPresent() {
@@ -357,6 +436,7 @@ public class BalanceHistoryChart extends GuiElement {
         if (viewWidth <= 0) viewWidth = 3_600_000;
         viewX = now - viewWidth;
         markDirty();
+        fireViewChanged();
     }
 
     public void autoCenterView() {
@@ -387,6 +467,7 @@ public class BalanceHistoryChart extends GuiElement {
         viewX = minTime;
         viewHeight = valRange * 1.2;
         viewY = Math.max(-viewHeight * 0.05, minVal - valRange * 0.1);
+        fireViewChanged();
     }
 
     /**
@@ -420,6 +501,7 @@ public class BalanceHistoryChart extends GuiElement {
         viewHeight = valRange * 1.2;
         viewY = Math.max(-viewHeight * 0.05, minVal - valRange * 0.1);
         markDirty();
+        fireViewChanged();
     }
 
     // ── Rendering ──
@@ -564,23 +646,39 @@ public class BalanceHistoryChart extends GuiElement {
 
     private void renderLines() {
         for (LineSeries series : seriesList) {
-            if (!series.visible || series.points.size() < 2) continue;
+            if (!series.visible || series.points.size() < 1) continue;
             if (series == highlightedSeries || series == pinnedSeries) continue;
             float thickness = 1.5f;
             int color = (highlightedSeries != null) ? ColorUtilities.setAlpha(series.color, 0.4f) : series.color;
             renderSeries(series, thickness, color);
         }
-        if (highlightedSeries != null && highlightedSeries.visible && highlightedSeries.points.size() >= 2) {
+        if (highlightedSeries != null && highlightedSeries.visible && highlightedSeries.points.size() >= 1) {
             int brightColor = ColorUtilities.setBrightness(highlightedSeries.color, 1.4f);
             renderSeries(highlightedSeries, 3.0f, brightColor);
         }
-        if (pinnedSeries != null && pinnedSeries.visible && pinnedSeries.points.size() >= 2) {
+        if (pinnedSeries != null && pinnedSeries.visible && pinnedSeries.points.size() >= 1) {
             renderSeries(pinnedSeries, 2.0f, pinnedSeries.color);
         }
     }
 
     private void renderSeries(LineSeries series, float thickness, int color) {
         List<int[]> pts = buildOptimizedPoints(series);
+        // Extend the last real data point horizontally to "now" so accounts
+        // whose balance hasn't changed recently still render as a flat line
+        // out to the present rather than leaving a visual gap. Render-only:
+        // series.points is never mutated.
+        if (!series.points.isEmpty()) {
+            DataPoint last = series.points.get(series.points.size() - 1);
+            long now = System.currentTimeMillis();
+            if (last.time() < now) {
+                int nowX = toCanvasSpaceX(now);
+                int lastY = toCanvasSpaceY(last.value());
+                int[] tail = pts.get(pts.size() - 1);
+                if (nowX != tail[0]) {
+                    pts.add(new int[]{nowX, lastY});
+                }
+            }
+        }
         if (pts.size() < 2) return;
 
         boolean opaque = (color >>> 24) == 0xFF;
@@ -631,6 +729,7 @@ public class BalanceHistoryChart extends GuiElement {
         if (!isKeyPressed(InputConstants.KEY_LEFT_CONTROL)) {
             double oldWidth = viewWidth;
             viewWidth = Math.max(1000, viewWidth * zoomFactor);
+            if (maxViewWidthMs != null && viewWidth > maxViewWidthMs) viewWidth = maxViewWidthMs;
             double mouseNormX = (mouseWorldX - viewX) / oldWidth;
             viewX = mouseWorldX - mouseNormX * viewWidth;
             consumed = true;
@@ -645,7 +744,10 @@ public class BalanceHistoryChart extends GuiElement {
         }
 
         clampView();
-        if (consumed) markDirty();
+        if (consumed) {
+            markDirty();
+            fireViewChanged();
+        }
         return consumed;
     }
 
@@ -681,6 +783,7 @@ public class BalanceHistoryChart extends GuiElement {
             viewY -= worldDeltaY;
             clampView();
             markDirty();
+            fireViewChanged();
             return true;
         }
         return false;
@@ -689,7 +792,12 @@ public class BalanceHistoryChart extends GuiElement {
     @Override
     protected boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode == KEY_SPACE) {
-            autoCenterView();
+            if (isKeyPressed(InputConstants.KEY_LEFT_CONTROL)) {
+                long now = System.currentTimeMillis();
+                autoCenterViewWithinRange(now - (long) viewWidth, now);
+            } else {
+                autoCenterView();
+            }
             markDirty();
             return true;
         }
@@ -699,21 +807,41 @@ public class BalanceHistoryChart extends GuiElement {
     // ── View clamping ──
 
     private void clampView() {
-        long minTime = Long.MAX_VALUE;
-        long maxTime = Long.MIN_VALUE;
-        for (LineSeries s : seriesList) {
-            if (s.points.isEmpty()) continue;
-            minTime = Math.min(minTime, s.points.get(0).time());
-            maxTime = Math.max(maxTime, s.points.get(s.points.size() - 1).time());
+        if (leftClampAtMs != null || rightClampAtMs != null) {
+            // Explicit-bounds mode (rolling-fetch): the loaded-data extents no longer
+            // clamp viewX, so the caller can drag past currently loaded data to trigger
+            // prefetches. Only the caller-supplied bounds constrain viewX. viewWidth is
+            // NOT clamped to dataRange here — a "30d" window with only 1d of data still
+            // shows a 30d-wide viewport.
+            // Cap viewWidth at the configured maximum (if any) BEFORE the horizontal
+            // clamp math so a shrunk viewWidth feeds the viewX / rightClamp checks.
+            if (maxViewWidthMs != null && viewWidth > maxViewWidthMs) viewWidth = maxViewWidthMs;
+            if (leftClampAtMs != null && viewX < leftClampAtMs) viewX = leftClampAtMs;
+            if (rightClampAtMs != null && viewX + viewWidth > rightClampAtMs) {
+                viewX = rightClampAtMs - viewWidth;
+            }
+            // Re-apply the left clamp: if the two bounds together can't fit viewWidth,
+            // let the left clamp win (right edge may extend past rightClampAtMs).
+            if (leftClampAtMs != null && viewX < leftClampAtMs) viewX = leftClampAtMs;
+        } else {
+            // Legacy clamp-to-loaded-data behavior — preserved for callers that don't
+            // opt into explicit bounds (e.g., BankSystemDisplayBlockEntity).
+            long minTime = Long.MAX_VALUE;
+            long maxTime = Long.MIN_VALUE;
+            for (LineSeries s : seriesList) {
+                if (s.points.isEmpty()) continue;
+                minTime = Math.min(minTime, s.points.get(0).time());
+                maxTime = Math.max(maxTime, s.points.get(s.points.size() - 1).time());
+            }
+            if (minTime != Long.MAX_VALUE) {
+                double dataRange = maxTime - minTime;
+                if (dataRange <= 0) dataRange = 60_000;
+
+                if (viewWidth > dataRange) viewWidth = dataRange;
+                if (viewX < minTime) viewX = minTime;
+                if (viewX + viewWidth > maxTime) viewX = maxTime - viewWidth;
+            }
         }
-        if (minTime == Long.MAX_VALUE) return;
-
-        double dataRange = maxTime - minTime;
-        if (dataRange <= 0) dataRange = 60_000;
-
-        if (viewWidth > dataRange) viewWidth = dataRange;
-        if (viewX < minTime) viewX = minTime;
-        if (viewX + viewWidth > maxTime) viewX = maxTime - viewWidth;
 
         double minY = -viewHeight * 0.05;
         if (viewY < minY) viewY = minY;

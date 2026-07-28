@@ -84,6 +84,26 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
      * part of it. Cleared after use. Null means "auto-fit to data extents". */
     private long[] pendingTimescaleXRange = null;
     private boolean dataLoaded = false;
+
+    // ── Rolling-fetch state (pan-triggered prefetch) ──
+    /** Selected timescale window in ms. {@code -1L} == "All history" (rolling fetch disabled).
+     *  Set on every timescale-button click. */
+    private long windowMs = -1L;
+    /** Viewport-center at the moment of the last successful fetch response. Threshold checks
+     *  fire when {@code |viewCenter - anchorMs| >= 0.5 * windowMs}. {@code 0L} == not yet initialized
+     *  (safeguards the listener against firing during the very first data-apply). */
+    private long anchorMs = 0L;
+    /** True while a balance-history fetch is in flight — prevents overlapping requests. */
+    private boolean fetchInFlight = false;
+    /** If the pan threshold is re-crossed while a fetch is in flight, remember it and
+     *  dispatch exactly one follow-up fetch when the current response arrives. */
+    private boolean pendingRefetch = false;
+    /** Generation counter — incremented on every fetch dispatch. Response handlers ignore
+     *  results whose generation is stale (user clicked a different timescale mid-flight). */
+    private int fetchGeneration = 0;
+    /** Guard so the fresh viewport set by autoCenterViewWithinRange during timescale
+     *  data-apply doesn't itself re-trigger the pan listener → rolling fetch. */
+    private boolean suppressPanListener = false;
     /** Task #38b: per-item raw-units-per-item ratio (from the account-data snapshot).
      *  Missing entries default to {@link BankSystemModSettings#ITEM_FRACTION_SCALE_FACTOR}
      *  so unbound slots still render correctly. */
@@ -99,6 +119,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
 
         chart = new BalanceHistoryChart();
         chart.setTimescaleChangeListener(this::onTimescaleSelected);
+        chart.setViewChangeListener(this::onChartViewChanged);
         addElement(chart);
 
         searchLabel = new Label(FILTER_LABEL_TEXT.getString());
@@ -175,56 +196,218 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     }
 
     private void requestData() {
-        getBankManager().requestBalanceHistory(accountNumber).thenAccept(this::onDataReceived);
+        // Initial load on screen open: no timescale selected yet, so route through the
+        // legacy all-history path. The rolling-fetch machinery stays dormant until the
+        // user picks a specific window (1h/6h/…/30d).
+        long now = System.currentTimeMillis();
+        windowMs = -1L;
+        chart.setMaxViewWidthMs(null);
+        anchorMs = 0L;
+        pendingRefetch = false;
+        fetchGeneration++;
+        fetchInFlight = true;
+        final int gen = fetchGeneration;
+        chart.setClampBounds(null, null); // legacy clamp-to-data mode
+        getBankManager()
+                .requestBalanceHistory(accountNumber)
+                .thenAccept(records -> onFetchResponse(records,
+                        BalanceHistoryRequest.Query.ALL_HISTORY_SENTINEL, now, gen, false));
     }
 
     /**
-     * Handles a timescale-button click from the chart (Task #40). Re-issues the
-     * balance-history request with the selected window and a fixed point budget
-     * so the wire payload stays bounded. A negative window means "all history"
-     * and is translated to {@link BalanceHistoryRequest.Query#ALL_HISTORY_SENTINEL}
-     * — the master server resolves the effective start from {@code MIN(time)}.
+     * Handles a timescale-button click from the chart (Task #40). Picks a
+     * <b>2× window</b> data slice ending at {@code now} so that half the buffered
+     * data lies left-of-viewport, ready to reveal as the user drags left. The
+     * viewport itself is set to the trailing 1× window {@code [now-windowMs, now]}.
      * <p>
-     * The existing {@link #applyData} path works unchanged: line series pick up
-     * whatever points arrive, disabled-item filter (userCustomData) is preserved
-     * across requests, and {@link BalanceHistoryChart#autoCenterView()} recenters
-     * to the new range on refresh.
+     * From that point on, {@link #onChartViewChanged} tracks the pan-threshold
+     * ({@code |viewCenter - anchorMs| >= 0.5 * windowMs}) and issues a
+     * {@link #dispatchRollingFetch rolling fetch} to keep buffered data ahead of
+     * the user's drag. See spec for the full "pan-triggered rolling fetch" design.
+     * <p>
+     * A negative window means "all history" — the request is translated to
+     * {@link BalanceHistoryRequest.Query#ALL_HISTORY_SENTINEL} and rolling-fetch
+     * mode stays disabled (existing behavior; data already spans everything).
      */
     private void onTimescaleSelected(long windowMs) {
-        long toMs = System.currentTimeMillis();
-        long fromMs = (windowMs < 0)
-                ? BalanceHistoryRequest.Query.ALL_HISTORY_SENTINEL
-                : (toMs - windowMs);
-        // Finite windows: viewport should span the FULL requested window, not
-        // auto-fit to data extents — otherwise "7d" on a world with only 1d of
-        // history would look identical to "1d". "All" keeps auto-fit so the
-        // chart naturally frames the world's actual history extents.
-        pendingTimescaleXRange = (windowMs < 0) ? null : new long[]{toMs - windowMs, toMs};
-        // The 500-per-series budget is enforced client-side so external API
-        // consumers cannot accidentally uncap a chart request.
+        long now = System.currentTimeMillis();
+        this.windowMs = windowMs;
+        chart.setMaxViewWidthMs(windowMs > 0 ? windowMs : null);
+        // Reset per-session rolling state — a fresh timescale click starts a new session.
+        anchorMs = 0L;
+        pendingRefetch = false;
+        fetchGeneration++;
+        fetchInFlight = true;
+        final int gen = fetchGeneration;
+
+        long fromMs;
+        long toMs = now;
+        int maxPoints;
+
+        if (windowMs < 0) {
+            // "All history" — legacy behavior, no rolling fetch.
+            fromMs = BalanceHistoryRequest.Query.ALL_HISTORY_SENTINEL;
+            pendingTimescaleXRange = null;
+            maxPoints = 500;
+            chart.setClampBounds(null, null);
+        } else {
+            // Finite window: over-fetch 2× (twice the wall time AND twice the point budget)
+            // ending at now. Viewport is set to trailing 1× ending at now, leaving half the
+            // buffered data left-of-view. See spec §1.
+            fromMs = now - 2L * windowMs;
+            pendingTimescaleXRange = new long[]{now - windowMs, now};
+            maxPoints = 1000;
+            // Left clamp is disabled — the anchor row from the server means the chart always
+            // has a data point at (or before) the visible left edge, and the user can freely
+            // pan into the past. Right edge always clamps at "now" at time of last fetch.
+            chart.setClampBounds(null, now);
+        }
+
+        final long reqFrom = fromMs;
+        final long reqTo = toMs;
         getBankManager()
-                .requestBalanceHistory(accountNumber, fromMs, toMs, 500)
-                .thenAccept(this::onDataReceived);
+                .requestBalanceHistory(accountNumber, fromMs, toMs, maxPoints)
+                .thenAccept(records -> onFetchResponse(records, reqFrom, reqTo, gen, false));
     }
 
-    private void onDataReceived(List<BalanceHistoryRecord> records) {
-        if (records == null || records.isEmpty()) {
-            // Empty response from a timescale re-request (window has no data) —
-            // still apply the requested X range so the chart shows the correct
-            // empty window instead of the stale prior view. Clears the pending
-            // range either way so a later click can't consume a stale value.
-            if (pendingTimescaleXRange != null) {
-                long from = pendingTimescaleXRange[0];
-                long to = pendingTimescaleXRange[1];
-                pendingTimescaleXRange = null;
-                Minecraft.getInstance().execute(() -> chart.autoCenterViewWithinRange(from, to));
+    /**
+     * Called by the chart on every viewport change (drag, scroll-zoom, or programmatic
+     * viewport set). Enforces the pan-threshold rule: when the viewport-center has
+     * drifted at least 50% of the current window from the last-fetch anchor, dispatch
+     * a rolling fetch centered on the current viewCenter.
+     * <p>
+     * The 50% threshold is well before the loaded-data edge (data extends ±windowMs
+     * from anchor, viewport is windowMs wide, so threshold-cross still leaves a full
+     * 0.5×windowMs buffer). By the time the fetch response arrives, the user typically
+     * hasn't reached the edge yet.
+     */
+    private void onChartViewChanged(double vx, double vw) {
+        if (suppressPanListener) return;
+        if (windowMs <= 0) return;      // "All history" mode — no rolling fetch
+        if (anchorMs == 0L) return;     // Anchor not yet initialized (initial fetch in progress)
+        // Keep the right clamp fresh with actual current time so wall-clock drift doesn't
+        // artificially cap the viewport short of "now" between fetches. Left clamp is
+        // always null — the anchor row lets the user drag arbitrarily far into the past.
+        chart.setClampBounds(null, System.currentTimeMillis());
+
+        double viewCenter = vx + vw / 2.0;
+        double drift = Math.abs(viewCenter - anchorMs);
+        if (drift >= 0.5 * windowMs) {
+            if (fetchInFlight) {
+                pendingRefetch = true;
+            } else {
+                dispatchRollingFetch();
             }
-            return;
         }
-        Minecraft.getInstance().execute(() -> applyData(records));
+    }
+
+    /**
+     * Issues a 2×-window balance-history request centered on the current viewport-center.
+     * If {@code viewCenter + windowMs} exceeds {@code now}, {@code toMs} is clamped to
+     * {@code now} (we never request future data).
+     * <p>
+     * Concurrency: caller must guarantee {@code !fetchInFlight} — this method sets it to
+     * {@code true}. The fetch generation is incremented so late-arriving responses from
+     * previously-superseded requests are dropped.
+     */
+    private void dispatchRollingFetch() {
+        if (windowMs <= 0) return;
+        long now = System.currentTimeMillis();
+        long viewCenter = (long) (chart.getViewX() + chart.getViewWidth() / 2.0);
+        long fromMs = viewCenter - windowMs;
+        long toMs = viewCenter + windowMs;
+        if (toMs > now) toMs = now;
+
+        fetchGeneration++;
+        fetchInFlight = true;
+        final int gen = fetchGeneration;
+        final long reqFrom = fromMs;
+        final long reqTo = toMs;
+
+        getBankManager()
+                .requestBalanceHistory(accountNumber, fromMs, toMs, 1000)
+                .thenAccept(records -> onFetchResponse(records, reqFrom, reqTo, gen, true));
+    }
+
+    /**
+     * Unified fetch-response handler. Drops stale results (generation mismatch),
+     * refreshes chart clamp bounds, applies the data (either respecting the pending
+     * viewport for a timescale click or preserving the current user-driven viewport
+     * for a rolling fetch), then updates the anchor and dispatches a queued follow-up
+     * fetch if one is pending.
+     *
+     * @param records          the response records (may be null / empty). May include
+     *                         one "anchor" row per item_id with {@code time < reqFromMs}
+     *                         — see {@code BalanceHistoryManager.getHistoryBucketed}
+     * @param reqFromMs        the {@code fromMs} value passed to this fetch (unused —
+     *                         retained for future diagnostic use)
+     * @param reqToMs          the {@code toMs} value passed to this fetch (unused —
+     *                         retained for future diagnostic use)
+     * @param gen              the generation captured at dispatch — must match
+     *                         {@link #fetchGeneration} or the response is discarded
+     * @param preserveViewport if {@code true}, {@link #applyData} skips the viewport
+     *                         reset (rolling-fetch case — the user's drag is source of
+     *                         truth). If {@code false}, the standard pendingViewport /
+     *                         pendingTimescaleXRange / autoCenterView flow runs.
+     */
+    private void onFetchResponse(List<BalanceHistoryRecord> records,
+                                  long reqFromMs, long reqToMs, int gen,
+                                  boolean preserveViewport) {
+        if (gen != fetchGeneration) return;
+        Minecraft.getInstance().execute(() -> {
+            // Re-check on client thread — a newer request may have been dispatched
+            // while this response was hopping threads.
+            if (gen != fetchGeneration) return;
+            fetchInFlight = false;
+            if (windowMs > 0) {
+                chart.setClampBounds(null, System.currentTimeMillis());
+            }
+
+            // Empty response for a timescale click: still snap the viewport to the
+            // requested X range so the chart shows the correct empty window (matches
+            // pre-rolling-fetch behavior).
+            if (records == null || records.isEmpty()) {
+                if (!preserveViewport && pendingTimescaleXRange != null) {
+                    long from = pendingTimescaleXRange[0];
+                    long to = pendingTimescaleXRange[1];
+                    pendingTimescaleXRange = null;
+                    suppressPanListener = true;
+                    try { chart.autoCenterViewWithinRange(from, to); }
+                    finally { suppressPanListener = false; }
+                }
+            } else {
+                suppressPanListener = true;
+                try { applyData(records, preserveViewport); }
+                finally { suppressPanListener = false; }
+            }
+
+            // Anchor at the current viewport-center — matches spec §"anchorMs initialization"
+            // for both the initial timescale fetch (viewport is trailing 1× ending at now,
+            // center = now - windowMs/2) and rolling fetches (viewport unchanged, still
+            // sits over the returned data which is centered on viewCenter).
+            if (windowMs > 0) {
+                anchorMs = (long) (chart.getViewX() + chart.getViewWidth() / 2.0);
+            }
+
+            if (pendingRefetch) {
+                pendingRefetch = false;
+                if (windowMs > 0) dispatchRollingFetch();
+            }
+        });
     }
 
     private void applyData(List<BalanceHistoryRecord> records) {
+        applyData(records, false);
+    }
+
+    /**
+     * @param preserveViewport if {@code true}, skip the viewport reset at the end
+     *     (pendingViewport / pendingTimescaleXRange / autoCenterView) — the caller's
+     *     current viewport is the source of truth. Used by rolling fetches so a
+     *     silent data replacement doesn't yank the chart out from under the user
+     *     mid-drag.
+     */
+    private void applyData(List<BalanceHistoryRecord> records, boolean preserveViewport) {
         Map<Short, List<BalanceHistoryRecord>> grouped = new LinkedHashMap<>();
         for (BalanceHistoryRecord r : records) {
             grouped.computeIfAbsent(r.itemId(), k -> new ArrayList<>()).add(r);
@@ -321,7 +504,10 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             colorIndex++;
         }
 
-        if (pendingViewport != null) {
+        if (preserveViewport) {
+            // Rolling fetch: leave viewport exactly where the user's drag put it. Y
+            // is also left untouched (per spec — user can hit SPACE to auto-center Y).
+        } else if (pendingViewport != null) {
             double y = pendingViewport.getDouble("y");
             double w = pendingViewport.getDouble("w");
             double h = pendingViewport.getDouble("h");
@@ -332,6 +518,23 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
                 chart.setView(pendingViewport.getDouble("x"), y, w, h);
             }
             pendingViewport = null;
+            // Saved-viewport restore: bootstrap rolling-fetch mode from the restored
+            // window. The initial all-history fetch may not have dense coverage around
+            // the saved viewport-center, so kick off a 2×-window fetch centered there.
+            // Guard: skip when the saved width looks like an "all history" span (heuristic:
+            // wider than ~400 days), which shouldn't be rolling-fetched.
+            double restoredWidth = chart.getViewWidth();
+            long allHistoryThresholdMs = 400L * 24L * 60L * 60L * 1000L;
+            if (restoredWidth > 0 && restoredWidth < allHistoryThresholdMs) {
+                windowMs = (long) restoredWidth;
+                chart.setMaxViewWidthMs(windowMs);
+                pendingRefetch = false;
+                chart.setClampBounds(null, System.currentTimeMillis());
+                // Fire pan-check logic: onChartViewChanged will be a no-op because
+                // anchorMs is still 0 at this point (initial fetch just landed).
+                // Instead, we dispatch an explicit rolling fetch to get the 2× buffer.
+                dispatchRollingFetch();
+            }
         } else if (pendingTimescaleXRange != null) {
             chart.autoCenterViewWithinRange(pendingTimescaleXRange[0], pendingTimescaleXRange[1]);
             pendingTimescaleXRange = null;
