@@ -273,8 +273,12 @@
   "gui.banksystem.mod_settings_screen.setting.Utilities.SAVE_INTERVAL_MINUTES.tooltip": "How often the BankSystem data is automatically saved to disk, in minutes.",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_INTERVAL_MINUTES": "Balance snapshot interval (minutes)",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_INTERVAL_MINUTES.tooltip": "How often a balance-history snapshot of all accounts is recorded, in minutes.\n0 disables snapshots.",
-  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM": "Max snapshot records per item",
-  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.tooltip": "Maximum number of balance-history records kept per item and account.\nOldest records are pruned when exceeded.\n0 = unlimited (the database file can grow very large over time).",
+  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM": "Max snapshot records per item (deprecated)",
+  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.tooltip": "Deprecated as of v2.0.7. The tiered retention model supersedes this flat cap. Value is preserved for compatibility but is no longer applied; set to 0 to silence the boot warning.",
+  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_HEARTBEAT_MINUTES": "Balance snapshot heartbeat (minutes)",
+  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_HEARTBEAT_MINUTES.tooltip": "Minutes between forced writes when the balance hasn't changed. Ensures the chart can still draw a continuous line for idle accounts.\n0 = disable heartbeat (only balance changes are recorded).",
+  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_HISTORY_RETENTION_SWEEP_MINUTES": "History retention sweep (minutes)",
+  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_HISTORY_RETENTION_SWEEP_MINUTES.tooltip": "How often the tiered downsample+prune sweep runs. Higher = less DB work, larger DB between sweeps.\n0 = disable retention (WARNING: unbounded database growth).",
   "gui.banksystem.mod_settings_screen.setting.Utilities.LOGGING_ENABLE_INFO": "Enable info logging",
   "gui.banksystem.mod_settings_screen.setting.Utilities.LOGGING_ENABLE_INFO.tooltip": "Write INFO messages of the BankSystem mod to the server log.",
   "gui.banksystem.mod_settings_screen.setting.Utilities.LOGGING_ENABLE_WARNING": "Enable warning logging",
@@ -310,5 +314,12 @@
   "gui.banksystem.mod_settings_screen.setting.Placeholder.PLAYER_BANKUSER_JSON": "Bank user JSON placeholder",
   "gui.banksystem.mod_settings_screen.setting.Placeholder.PLAYER_BANKUSER_JSON.tooltip": "TAB-mod placeholder providing the player bank account data as JSON.\nLeft: identifier, right: refresh rate in milliseconds.\nRequires the TAB mod; registered once at server startup.",
   "gui.banksystem.mod_settings_screen.setting.Placeholder.SERVER_CIRCULATION_JSON": "Server circulation JSON placeholder",
-  "gui.banksystem.mod_settings_screen.setting.Placeholder.SERVER_CIRCULATION_JSON.tooltip": "TAB-mod placeholder providing the server-wide item circulation data as JSON.\nLeft: identifier, right: refresh rate in milliseconds.\nRequires the TAB mod; registered once at server startup."
+  "gui.banksystem.mod_settings_screen.setting.Placeholder.SERVER_CIRCULATION_JSON.tooltip": "TAB-mod placeholder providing the server-wide item circulation data as JSON.\nLeft: identifier, right: refresh rate in milliseconds.\nRequires the TAB mod; registered once at server startup.",
+
+  "gui.banksystem.balance_history.timescale.1h": "1h",
+  "gui.banksystem.balance_history.timescale.6h": "6h",
+  "gui.banksystem.balance_history.timescale.1d": "1d",
+  "gui.banksystem.balance_history.timescale.7d": "7d",
+  "gui.banksystem.balance_history.timescale.30d": "30d",
+  "gui.banksystem.balance_history.timescale.all": "all"
 }

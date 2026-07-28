@@ -70,10 +70,28 @@ public final class BankSystemModSettings extends ModSettings {
     public static final class Utilities extends SettingsGroup
     {
         public final Setting<Long> SAVE_INTERVAL_MINUTES = registerSetting("SAVE_INTERVAL_MINUTES",5L, Long.class); // 5 minutes
-        public final Setting<Long> BALANCE_SNAPSHOT_INTERVAL_MINUTES = registerSetting("BALANCE_SNAPSHOT_INTERVAL_MINUTES",1L, Long.class); // 1 minute (for testing)
-        // Max snapshot records per item per account. Oldest records are pruned when exceeded.
-        // 0 = unlimited (WARNING: database file can grow extremely large over time)
+        public final Setting<Long> BALANCE_SNAPSHOT_INTERVAL_MINUTES = registerSetting("BALANCE_SNAPSHOT_INTERVAL_MINUTES",1L, Long.class); // 1 minute; combined with sample-on-change dedup this is now safe for production.
+        /**
+         * @deprecated Task #41 (v2.0.7): the tiered retention model supersedes this flat cap.
+         * The value is preserved on disk so existing settings.json files load unchanged, but
+         * the backend no longer reads it — retention is now driven by
+         * {@link #BALANCE_HISTORY_RETENTION_SWEEP_MINUTES}. A one-shot boot WARN fires when
+         * this is left at a non-zero value.
+         */
+        @Deprecated
         public final Setting<Long> BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM = registerSetting("BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM", 1440L, Long.class);
+        /**
+         * Task #41 (v2.0.7). Minutes between forced writes when balance hasn't changed.
+         * Ensures the chart can still draw a continuous line for idle accounts. 0 = disable
+         * heartbeat (only balance changes are recorded — chart lines still connect across
+         * gaps but no extra rows are emitted).
+         */
+        public final Setting<Long> BALANCE_SNAPSHOT_HEARTBEAT_MINUTES = registerSetting("BALANCE_SNAPSHOT_HEARTBEAT_MINUTES", 60L, Long.class);
+        /**
+         * Task #41 (v2.0.7). How often the tiered downsample+prune sweep runs. Higher = less
+         * DB work, larger DB between sweeps. 0 = disable retention (WARNING: unbounded growth).
+         */
+        public final Setting<Long> BALANCE_HISTORY_RETENTION_SWEEP_MINUTES = registerSetting("BALANCE_HISTORY_RETENTION_SWEEP_MINUTES", 60L, Long.class);
         public final Setting<Boolean> LOGGING_ENABLE_INFO = registerSetting("LOGGING_ENABLE_INFO",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_WARNING = registerSetting("LOGGING_ENABLE_WARNING",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_ERROR = registerSetting("LOGGING_ENABLE_ERROR",true, Boolean.class);

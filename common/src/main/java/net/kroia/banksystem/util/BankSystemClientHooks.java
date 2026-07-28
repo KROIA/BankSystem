@@ -3,7 +3,6 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.screen.custom.ATMScreen;
 import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
 import net.kroia.banksystem.screen.custom.BankSystemSettingScreen;
-import net.kroia.banksystem.screen.custom.TestScreen;
 import net.kroia.modutilities.gui.client.RecipeImageExporter;
 import net.minecraft.client.Minecraft;
 import org.apache.logging.log4j.LogManager;
@@ -32,14 +31,6 @@ public class BankSystemClientHooks {
         // Ensuring the code runs on the main thread
         Minecraft.getInstance().submit(() -> {
             BankAccountManagementScreen.openScreen(accountNumber, isAdminMode);
-        });
-    }
-
-    public static void openTestScreen()
-    {
-        // Ensuring the code runs on the main thread
-        Minecraft.getInstance().submit(() -> {
-            TestScreen.openScreen();
         });
     }
 

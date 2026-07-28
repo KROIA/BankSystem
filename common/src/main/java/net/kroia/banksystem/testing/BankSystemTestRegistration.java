@@ -4,7 +4,9 @@ import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.banksystem.testing.tests.ArithmeticTests;
 import net.kroia.banksystem.testing.tests.AsyncForwardingTests;
 import net.kroia.banksystem.testing.tests.AsyncMethodAuditTests;
+import net.kroia.banksystem.testing.tests.BackupCommandTests;
 import net.kroia.banksystem.testing.tests.BankAccountTests;
+import net.kroia.banksystem.testing.tests.BalanceHistoryTests;
 import net.kroia.banksystem.testing.tests.BankChangeStreamPublishTests;
 import net.kroia.banksystem.testing.tests.BankCraftingMatcherTests;
 import net.kroia.banksystem.testing.tests.BankManagerTests;
@@ -51,6 +53,10 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new SerializationTests());
         TestRegistry.register(new LifecycleTests());
         TestRegistry.register(new DatabaseTests());
+        // Task #41 (v2.0.7) — sample-on-change dedup + tiered retention
+        TestRegistry.register(new BalanceHistoryTests());
+        // Task #42 (v2.0.7) — /banksystem backup pause|resume|status|snapshot
+        TestRegistry.register(new BackupCommandTests());
         TestRegistry.register(new ItemIDIdentityTests());
         TestRegistry.register(new ItemIDMergeGuardTests());
         TestRegistry.register(new ItemIDSlaveDelegationTests());

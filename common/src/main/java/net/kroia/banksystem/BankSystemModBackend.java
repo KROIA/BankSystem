@@ -102,6 +102,13 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     private static Instances INSTANCES = new Instances();
     private static long snapshotTickCounter = 0;
+    /**
+     * Task #41 (v2.0.7): tick counter for the tiered-retention sweep cadence. Runs on a
+     * separate schedule from the balance snapshot itself so the (heavier) DELETE-per-band
+     * SQL does not fire every minute. Reset to {@code 0} on server start/stop; the first
+     * sweep runs synchronously at {@link #onServerStart(MinecraftServer)}.
+     */
+    private static long retentionSweepTickCounter = 0;
     private static @Nullable ItemPriceProvider itemPriceProvider = null;
     private static short priceCurrencyItemId = 0;
 
@@ -333,15 +340,22 @@ public class BankSystemModBackend implements BankSystemAPI {
             INSTANCES.COMMAND_HANDLER = BankSystemCommands.createMaster();
 
             snapshotTickCounter = 0;
+            retentionSweepTickCounter = 0;
             DatabaseManager.setBackend(INSTANCES);
             INSTANCES.DATABASE_MANAGER = new DatabaseManager();
             INSTANCES.DATABASE_MANAGER.connectToDatabase(server);
             INSTANCES.BALANCE_HISTORY_MANAGER = new BalanceHistoryManager(INSTANCES.DATABASE_MANAGER);
 
-            if (INSTANCES.SERVER_SETTINGS.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.get() <= 0) {
-                INSTANCES.LOGGER.warn("BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM is 0 (unlimited). " +
-                        "The balance history database file can grow extremely large over time. " +
-                        "Set a positive value to enable automatic pruning of old records.");
+            // Task #41 (v2.0.7): one-shot deprecation WARN for the old flat-cap setting.
+            // Fires only when the user still has a non-zero cap on disk — the tiered
+            // retention model has fully superseded this cap. Placed inside onServerStart
+            // so it runs exactly once per boot (not on every snapshot tick).
+            if (INSTANCES.SERVER_SETTINGS.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.get() > 0) {
+                INSTANCES.LOGGER.warn("BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM is deprecated as of "
+                        + "v2.0.7 — the tiered retention model supersedes the flat cap. This "
+                        + "setting is now ignored. Set it to 0 in settings.json to silence this "
+                        + "warning; the sweep cadence is controlled by "
+                        + "BALANCE_HISTORY_RETENTION_SWEEP_MINUTES.");
             }
 
             TickEvent.SERVER_POST.register(BankSystemModBackend::onServerTick);
@@ -389,6 +403,13 @@ public class BankSystemModBackend implements BankSystemAPI {
         }
 
         if (INSTANCES.BALANCE_HISTORY_MANAGER != null) {
+            // Task #41 (v2.0.7): run the tiered-retention sweep once BEFORE the first
+            // snapshot of this session. Existing histories from the flat-cap era (up to
+            // 1440 rows/item in the last 24h) are already inside the untouched 0..24h band
+            // and stay put; older rows from long-running worlds get downsampled into the
+            // tiered shape on this first pass. Fire-and-forget on the DB thread — the
+            // async future is not awaited so onServerStart never blocks on SQL.
+            INSTANCES.BALANCE_HISTORY_MANAGER.applyTieredRetention(System.currentTimeMillis());
             takeBalanceSnapshot();
         }
 
@@ -424,6 +445,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.BALANCE_HISTORY_MANAGER = null;
         INSTANCES.isSlaveServer = false;
         snapshotTickCounter = 0;
+        retentionSweepTickCounter = 0;
         ItemIDManager.clear();
         // Drop the world-load tag snapshot: the next world/server captures its own freshly
         // bound tags (see VolatileItemComponents#captureTagSnapshot()).
@@ -535,6 +557,20 @@ public class BankSystemModBackend implements BankSystemAPI {
                 snapshotTickCounter = 0;
                 takeBalanceSnapshot();
             }
+
+            // Task #41 (v2.0.7): tiered-retention sweep, on its own (longer) cadence.
+            // Running the sweep every snapshot tick is wasteful — the SQL still scans each
+            // affected age band even when it's already downsampled. Default 60 minutes;
+            // 0 disables retention entirely (WARNING: unbounded growth). The first sweep
+            // of a session is triggered directly from onServerStart above so the wait
+            // window here starts from a clean baseline.
+            retentionSweepTickCounter++;
+            long sweepIntervalTicks = INSTANCES.SERVER_SETTINGS.UTILITIES
+                    .BALANCE_HISTORY_RETENTION_SWEEP_MINUTES.get() * 1200L;
+            if (sweepIntervalTicks > 0 && retentionSweepTickCounter >= sweepIntervalTicks) {
+                retentionSweepTickCounter = 0;
+                INSTANCES.BALANCE_HISTORY_MANAGER.applyTieredRetention(System.currentTimeMillis());
+            }
         }
     }
 
@@ -567,11 +603,10 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         if (!records.isEmpty()) {
             INSTANCES.BALANCE_HISTORY_MANAGER.save(records);
-
-            long maxRecords = INSTANCES.SERVER_SETTINGS.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.get();
-            if (maxRecords > 0) {
-                INSTANCES.BALANCE_HISTORY_MANAGER.pruneOldRecords(maxRecords);
-            }
+            // Task #41 (v2.0.7): flat-cap pruneOldRecords has been superseded by the
+            // tiered-retention sweep, which runs on its own cadence in onServerTick above
+            // (default: every BALANCE_HISTORY_RETENTION_SWEEP_MINUTES). No per-snapshot
+            // prune call needed.
         }
     }
 

@@ -1,11 +1,14 @@
 package net.kroia.banksystem.screen.widgets;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.InputConstants;
+import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.network.chat.Component;
 
 import java.awt.Point;
 import java.text.SimpleDateFormat;
@@ -14,6 +17,38 @@ import java.util.*;
 public class BalanceHistoryChart extends GuiElement {
 
     private static final int KEY_SPACE = 32;
+
+    // ── Task #40: timescale toolbar ──
+    // 1h / 6h / 1d / 7d / 30d / All. -1L is the sentinel meaning "all history"
+    // and gets translated to Query.ALL_HISTORY_SENTINEL by the screen listener.
+    private static final long[] TIMESCALES_MS = {
+            1L * 60L * 60L * 1000L,        // 1h
+            6L * 60L * 60L * 1000L,        // 6h
+            24L * 60L * 60L * 1000L,       // 1d
+            7L * 24L * 60L * 60L * 1000L,  // 7d
+            30L * 24L * 60L * 60L * 1000L, // 30d
+            -1L                             // All
+    };
+    private static final String[] TIMESCALE_LABEL_KEYS = {
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.1h",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.6h",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.1d",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.7d",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.30d",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.all"
+    };
+    private static final int BUTTON_PADDING = 4;
+    private static final int BUTTON_SPACING = 3;
+    private static final int BUTTON_ROW_GAP = 3;
+
+    /**
+     * Listener notified when the user selects a timescale button.
+     * The window is in milliseconds; a value {@code < 0} means "all history".
+     */
+    @FunctionalInterface
+    public interface TimescaleChangeListener {
+        void onTimescaleSelected(long windowMs);
+    }
 
     public record DataPoint(long time, double value) {}
 
@@ -58,8 +93,77 @@ public class BalanceHistoryChart extends GuiElement {
     private final Map<String, Integer> pendingHoverBindingIds = new LinkedHashMap<>();
     private boolean hoverBindingsResolved = false;
 
+    // ── Task #40: timescale toolbar state ──
+    private final List<Button> timescaleButtons = new ArrayList<>();
+    private final int defaultButtonBackgroundColor = ColorUtilities.setAlpha(DEFAULT_BACKGROUND_COLOR, 1.0f);
+    /** Default to "All" (last index) — preserves the pre-Task-#40 open behavior of showing everything. */
+    private int currentTimescaleIndex = TIMESCALES_MS.length - 1;
+    private int buttonRowHeight = 0;
+    private TimescaleChangeListener timescaleListener;
+
     public BalanceHistoryChart() {
         setTextFontScale(0.8f);
+        buildTimescaleButtons();
+        highlightTimescaleButton(currentTimescaleIndex);
+    }
+
+    private void buildTimescaleButtons() {
+        for (int i = 0; i < TIMESCALES_MS.length; i++) {
+            final int index = i;
+            String label = Component.translatable(TIMESCALE_LABEL_KEYS[i]).getString();
+            Button button = new Button(label, () -> selectTimescaleByIndex(index));
+            button.setTextFontScale(1.0f);
+            int textWidth = getTextWidth(label);
+            int textHeight = button.getTextHeight();
+            int w = textWidth + 2 * BUTTON_PADDING;
+            int h = textHeight + 2 * BUTTON_PADDING;
+            button.setWidth(w);
+            button.setHeight(h);
+            button.setBackgroundColor(ColorUtilities.setAlpha(button.getBackgroundColor(), 1.0f));
+            button.setPressedColor(ColorUtilities.setAlpha(button.getPressedColor(), 1.0f));
+            button.setHoverColor(ColorUtilities.setAlpha(button.getHoverColor(), 1.0f));
+            buttonRowHeight = Math.max(buttonRowHeight, h);
+            timescaleButtons.add(button);
+            addChild(button);
+        }
+    }
+
+    /**
+     * Sets the callback fired when the user picks a timescale button. A
+     * negative value passed to the listener means "all history".
+     */
+    public void setTimescaleChangeListener(TimescaleChangeListener listener) {
+        this.timescaleListener = listener;
+    }
+
+    /**
+     * Programmatically selects a timescale index without firing the listener.
+     * Only updates the button highlight — used by the screen to re-sync the
+     * highlight with saved viewport state on open.
+     */
+    public void setSelectedTimescaleIndex(int index) {
+        if (index < 0 || index >= TIMESCALES_MS.length) return;
+        currentTimescaleIndex = index;
+        highlightTimescaleButton(index);
+    }
+
+    public int getSelectedTimescaleIndex() { return currentTimescaleIndex; }
+
+    private void selectTimescaleByIndex(int index) {
+        if (index < 0 || index >= TIMESCALES_MS.length) return;
+        currentTimescaleIndex = index;
+        highlightTimescaleButton(index);
+        if (timescaleListener != null) {
+            timescaleListener.onTimescaleSelected(TIMESCALES_MS[index]);
+        }
+    }
+
+    private void highlightTimescaleButton(int selectedIndex) {
+        for (int i = 0; i < timescaleButtons.size(); i++) {
+            Button b = timescaleButtons.get(i);
+            int color = (i == selectedIndex) ? b.getPressedColor() : defaultButtonBackgroundColor;
+            b.setBackgroundColor(color);
+        }
     }
 
     // ── Serialization for display block sync ──
@@ -285,6 +389,39 @@ public class BalanceHistoryChart extends GuiElement {
         viewY = Math.max(-viewHeight * 0.05, minVal - valRange * 0.1);
     }
 
+    /**
+     * Task #40: centers the viewport on a caller-supplied X (time) range while
+     * fitting Y to the data that falls inside that range. Used by the timescale
+     * toolbar so a "7d" button truly shows a 7-day-wide window regardless of
+     * how much data actually exists in that window — empty regions render as
+     * blank chart area on either side of the drawn line. Falls back to
+     * {@link #autoCenterView} when no data lies in the requested range so the
+     * chart is never left blank when data exists elsewhere.
+     */
+    public void autoCenterViewWithinRange(long fromMs, long toMs) {
+        if (toMs <= fromMs) { autoCenterView(); return; }
+        double minVal = Double.MAX_VALUE;
+        double maxVal = -Double.MAX_VALUE;
+        boolean hasData = false;
+        for (LineSeries s : seriesList) {
+            if (!s.visible || s.points.isEmpty()) continue;
+            for (DataPoint p : s.points) {
+                if (p.time() < fromMs || p.time() > toMs) continue;
+                minVal = Math.min(minVal, p.value());
+                maxVal = Math.max(maxVal, p.value());
+                hasData = true;
+            }
+        }
+        if (!hasData) { autoCenterView(); return; }
+        double valRange = maxVal - minVal;
+        if (valRange <= 0) valRange = 100;
+        viewX = fromMs;
+        viewWidth = toMs - fromMs;
+        viewHeight = valRange * 1.2;
+        viewY = Math.max(-viewHeight * 0.05, minVal - valRange * 0.1);
+        markDirty();
+    }
+
     // ── Rendering ──
 
     @Override
@@ -327,13 +464,27 @@ public class BalanceHistoryChart extends GuiElement {
     protected void render() {}
 
     @Override
-    protected void layoutChanged() {}
+    protected void layoutChanged() {
+        // Task #40: lay out the timescale toolbar top-left, horizontally.
+        int x = BUTTON_PADDING;
+        int y = BUTTON_PADDING;
+        for (Button b : timescaleButtons) {
+            b.setPosition(x, y);
+            x += b.getWidth() + BUTTON_SPACING;
+        }
+    }
+
+    private int getButtonRowReservedHeight() {
+        if (timescaleButtons.isEmpty()) return 0;
+        return BUTTON_PADDING + buttonRowHeight + BUTTON_ROW_GAP;
+    }
 
     private void updateCanvasRect() {
+        int topReserved = getButtonRowReservedHeight();
         canvasRect.x = 1;
-        canvasRect.y = 1;
+        canvasRect.y = 1 + topReserved;
         canvasRect.width = Math.max(2, getWidth() - maxValueLabelWidth - 10);
-        canvasRect.height = Math.max(2, getHeight() - maxTimeLabelHeight - 5);
+        canvasRect.height = Math.max(2, getHeight() - maxTimeLabelHeight - 5 - topReserved);
         canvasScissorRect.x = canvasRect.x + 1;
         canvasScissorRect.y = canvasRect.y + 1;
         canvasScissorRect.width = Math.max(1, canvasRect.width - 1);

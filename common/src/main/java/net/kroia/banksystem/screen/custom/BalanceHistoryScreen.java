@@ -3,6 +3,7 @@ package net.kroia.banksystem.screen.custom;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
+import net.kroia.banksystem.networking.general.BalanceHistoryRequest;
 import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.ItemColorUtil;
@@ -77,6 +78,11 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private final List<ToggleRow> toggleRows = new ArrayList<>();
     /** Saved viewport from user custom data, applied once after data loads. */
     private CompoundTag pendingViewport = null;
+    /** Task #40: if non-null, {@link #applyData} sets the X viewport to [x, y]
+     * (fromMs, toMs) via {@link BalanceHistoryChart#autoCenterViewWithinRange}
+     * so the chart shows the full requested window even when data only spans
+     * part of it. Cleared after use. Null means "auto-fit to data extents". */
+    private long[] pendingTimescaleXRange = null;
     private boolean dataLoaded = false;
     /** Task #38b: per-item raw-units-per-item ratio (from the account-data snapshot).
      *  Missing entries default to {@link BankSystemModSettings#ITEM_FRACTION_SCALE_FACTOR}
@@ -92,6 +98,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         addElement(titleLabel);
 
         chart = new BalanceHistoryChart();
+        chart.setTimescaleChangeListener(this::onTimescaleSelected);
         addElement(chart);
 
         searchLabel = new Label(FILTER_LABEL_TEXT.getString());
@@ -171,8 +178,49 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         getBankManager().requestBalanceHistory(accountNumber).thenAccept(this::onDataReceived);
     }
 
+    /**
+     * Handles a timescale-button click from the chart (Task #40). Re-issues the
+     * balance-history request with the selected window and a fixed point budget
+     * so the wire payload stays bounded. A negative window means "all history"
+     * and is translated to {@link BalanceHistoryRequest.Query#ALL_HISTORY_SENTINEL}
+     * — the master server resolves the effective start from {@code MIN(time)}.
+     * <p>
+     * The existing {@link #applyData} path works unchanged: line series pick up
+     * whatever points arrive, disabled-item filter (userCustomData) is preserved
+     * across requests, and {@link BalanceHistoryChart#autoCenterView()} recenters
+     * to the new range on refresh.
+     */
+    private void onTimescaleSelected(long windowMs) {
+        long toMs = System.currentTimeMillis();
+        long fromMs = (windowMs < 0)
+                ? BalanceHistoryRequest.Query.ALL_HISTORY_SENTINEL
+                : (toMs - windowMs);
+        // Finite windows: viewport should span the FULL requested window, not
+        // auto-fit to data extents — otherwise "7d" on a world with only 1d of
+        // history would look identical to "1d". "All" keeps auto-fit so the
+        // chart naturally frames the world's actual history extents.
+        pendingTimescaleXRange = (windowMs < 0) ? null : new long[]{toMs - windowMs, toMs};
+        // The 500-per-series budget is enforced client-side so external API
+        // consumers cannot accidentally uncap a chart request.
+        getBankManager()
+                .requestBalanceHistory(accountNumber, fromMs, toMs, 500)
+                .thenAccept(this::onDataReceived);
+    }
+
     private void onDataReceived(List<BalanceHistoryRecord> records) {
-        if (records == null || records.isEmpty()) return;
+        if (records == null || records.isEmpty()) {
+            // Empty response from a timescale re-request (window has no data) —
+            // still apply the requested X range so the chart shows the correct
+            // empty window instead of the stale prior view. Clears the pending
+            // range either way so a later click can't consume a stale value.
+            if (pendingTimescaleXRange != null) {
+                long from = pendingTimescaleXRange[0];
+                long to = pendingTimescaleXRange[1];
+                pendingTimescaleXRange = null;
+                Minecraft.getInstance().execute(() -> chart.autoCenterViewWithinRange(from, to));
+            }
+            return;
+        }
         Minecraft.getInstance().execute(() -> applyData(records));
     }
 
@@ -284,6 +332,9 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
                 chart.setView(pendingViewport.getDouble("x"), y, w, h);
             }
             pendingViewport = null;
+        } else if (pendingTimescaleXRange != null) {
+            chart.autoCenterViewWithinRange(pendingTimescaleXRange[0], pendingTimescaleXRange[1]);
+            pendingTimescaleXRange = null;
         } else {
             chart.autoCenterView();
         }

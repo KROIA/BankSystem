@@ -531,8 +531,12 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
         r = assertEquals("fingerprint 'to' matches the alias target",
                 aliases.get(aliasSource).getShort(), fp.to());
         if (!r.passed()) return r;
-        r = assertEquals("the fresh money block has all 14 money/cent items",
-                14, ev.freshMoneyBlock().size());
+        // Derive the expected count from BankSystemItems so future banknote-tier additions
+        // don't break this assertion (was hard-coded 14; v2.0.7's 5k-1M banknote tier
+        // bumped the real count without updating the number here).
+        int expectedMoneyBlockSize = BankSystemItems.getMoneyItems().size();
+        r = assertEquals("the fresh money block has all " + expectedMoneyBlockSize + " money/cent items",
+                expectedMoneyBlockSize, ev.freshMoneyBlock().size());
         if (!r.passed()) return r;
 
         // Pure dry run: the passed-in maps are bit-identical afterwards.

@@ -60,18 +60,6 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
 
 
 
-    @Override
-    public CompletableFuture<Boolean> banksystem_testScreen_async(@NotNull UUID executor) {
-        ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
-        if(player != null) {
-            SyncOpenGUIPacket.send_openTestScreen(player);
-            return CompletableFuture.completedFuture(true);
-        }
-        return CompletableFuture.completedFuture(false);
-    }
-
-
-
 
 
     @Override

@@ -309,5 +309,12 @@
   "gui.banksystem.mod_settings_screen.setting.Placeholder.PLAYER_BANKUSER_JSON": "Bank user JSON placeholder",
   "gui.banksystem.mod_settings_screen.setting.Placeholder.PLAYER_BANKUSER_JSON.tooltip": "TAB-mod placeholder providing the player bank account data as JSON.\nLeft: identifier, right: refresh rate in milliseconds.\nRequires the TAB mod; registered once at server startup.",
   "gui.banksystem.mod_settings_screen.setting.Placeholder.SERVER_CIRCULATION_JSON": "Server circulation JSON placeholder",
-  "gui.banksystem.mod_settings_screen.setting.Placeholder.SERVER_CIRCULATION_JSON.tooltip": "TAB-mod placeholder providing the server-wide item circulation data as JSON.\nLeft: identifier, right: refresh rate in milliseconds.\nRequires the TAB mod; registered once at server startup."
+  "gui.banksystem.mod_settings_screen.setting.Placeholder.SERVER_CIRCULATION_JSON.tooltip": "TAB-mod placeholder providing the server-wide item circulation data as JSON.\nLeft: identifier, right: refresh rate in milliseconds.\nRequires the TAB mod; registered once at server startup.",
+
+  "gui.banksystem.balance_history.timescale.1h": "1h",
+  "gui.banksystem.balance_history.timescale.6h": "6h",
+  "gui.banksystem.balance_history.timescale.1d": "1d",
+  "gui.banksystem.balance_history.timescale.7d": "7d",
+  "gui.banksystem.balance_history.timescale.30d": "30d",
+  "gui.banksystem.balance_history.timescale.all": "all"
 }
