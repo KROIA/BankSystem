@@ -52,7 +52,6 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
     public enum FunctionType
     {
         //Banksystem_manage,
-        //Banksystem_testScreen,
         //Banksystem_setBankSystemAdminMode,
         //Banksystem_setBankSystemAdminMode_user,
         Banksystem_allowItem,
@@ -94,7 +93,6 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
     public static final Map<FunctionType, AsyncFunctionDataCodecs> codecs = new HashMap<>(){{
         //put(FunctionType.GetAccountDataAsync_1,             codecPacket(null, BankAccountData.STREAM_CODEC));
         //put(FunctionType.Banksystem_manage,                 codecPacket(null));
-        //put(FunctionType.Banksystem_testScreen,             codecPacket(null));
         //put(FunctionType.Banksystem_setBankSystemAdminMode,         codecPacket(ByteBufCodecs.BOOL.cast()));
         //put(FunctionType.Banksystem_setBankSystemAdminMode_user,    codecPacket(ParamGroup_String_Bool.STREAM_CODEC));
         put(FunctionType.Banksystem_allowItem,                      codecPacket(ItemID.STREAM_CODEC));
@@ -412,16 +410,6 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
             }
         });
         return future;
-    }
-
-    @Override
-    public CompletableFuture<Boolean> banksystem_testScreen_async(@NotNull UUID executor) {
-        ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
-        if(player != null) {
-            SyncOpenGUIPacket.send_openTestScreen(player);
-            return CompletableFuture.completedFuture(true);
-        }
-        return CompletableFuture.completedFuture(false);
     }
 
    /* @Override

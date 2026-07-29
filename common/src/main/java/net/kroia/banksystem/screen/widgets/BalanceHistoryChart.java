@@ -1,11 +1,14 @@
 package net.kroia.banksystem.screen.widgets;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.InputConstants;
+import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.network.chat.Component;
 
 import java.awt.Point;
 import java.text.SimpleDateFormat;
@@ -14,6 +17,48 @@ import java.util.*;
 public class BalanceHistoryChart extends GuiElement {
 
     private static final int KEY_SPACE = 32;
+
+    // ── Task #40: timescale toolbar ──
+    // 1h / 6h / 1d / 7d / 30d / All. -1L is the sentinel meaning "all history"
+    // and gets translated to Query.ALL_HISTORY_SENTINEL by the screen listener.
+    private static final long[] TIMESCALES_MS = {
+            1L * 60L * 60L * 1000L,        // 1h
+            6L * 60L * 60L * 1000L,        // 6h
+            24L * 60L * 60L * 1000L,       // 1d
+            7L * 24L * 60L * 60L * 1000L,  // 7d
+            30L * 24L * 60L * 60L * 1000L, // 30d
+            -1L                             // All
+    };
+    private static final String[] TIMESCALE_LABEL_KEYS = {
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.1h",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.6h",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.1d",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.7d",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.30d",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.all"
+    };
+    private static final int BUTTON_PADDING = 4;
+    private static final int BUTTON_SPACING = 3;
+    private static final int BUTTON_ROW_GAP = 3;
+
+    /**
+     * Listener notified when the user selects a timescale button.
+     * The window is in milliseconds; a value {@code < 0} means "all history".
+     */
+    @FunctionalInterface
+    public interface TimescaleChangeListener {
+        void onTimescaleSelected(long windowMs);
+    }
+
+    /**
+     * Listener notified whenever the X-axis viewport (viewX / viewWidth) changes.
+     * Used by the screen to detect pan/scroll and trigger rolling prefetch fetches
+     * before the user drags into empty (not-yet-loaded) chart territory.
+     */
+    @FunctionalInterface
+    public interface ViewChangeListener {
+        void onViewChanged(double viewX, double viewWidth);
+    }
 
     public record DataPoint(long time, double value) {}
 
@@ -58,8 +103,144 @@ public class BalanceHistoryChart extends GuiElement {
     private final Map<String, Integer> pendingHoverBindingIds = new LinkedHashMap<>();
     private boolean hoverBindingsResolved = false;
 
+    // ── Task #40: timescale toolbar state ──
+    private final List<Button> timescaleButtons = new ArrayList<>();
+    private final int defaultButtonBackgroundColor = ColorUtilities.setAlpha(DEFAULT_BACKGROUND_COLOR, 1.0f);
+    /** Default to "All" (last index) — preserves the pre-Task-#40 open behavior of showing everything. */
+    private int currentTimescaleIndex = TIMESCALES_MS.length - 1;
+    private int buttonRowHeight = 0;
+    private TimescaleChangeListener timescaleListener;
+    private ViewChangeListener viewChangeListener;
+
+    /**
+     * Rolling-fetch X-axis clamp bounds. When either is non-null, {@link #clampView()}
+     * uses these instead of clamping viewX to the loaded-data extents. This lets the
+     * screen relax the clamp so the user can drag past the currently loaded range
+     * (triggering a prefetch) while still preventing them from dragging past the
+     * true server minimum ({@link #leftClampAtMs}) or into the future
+     * ({@link #rightClampAtMs}). Both null == legacy clamp-to-loaded-data behavior.
+     */
+    private Long leftClampAtMs = null;
+    private Long rightClampAtMs = null;
+
+    /**
+     * Optional upper bound on {@code viewWidth} (in ms). When non-null, both
+     * {@link #mouseScrolledOverElement scroll-zoom} and the explicit-bounds branch
+     * of {@link #clampView()} cap {@code viewWidth} at this value. {@code null}
+     * (default) means uncapped — preserves legacy display-block behavior.
+     */
+    private Long maxViewWidthMs = null;
+
     public BalanceHistoryChart() {
         setTextFontScale(0.8f);
+        buildTimescaleButtons();
+        highlightTimescaleButton(currentTimescaleIndex);
+    }
+
+    private void buildTimescaleButtons() {
+        for (int i = 0; i < TIMESCALES_MS.length; i++) {
+            final int index = i;
+            String label = Component.translatable(TIMESCALE_LABEL_KEYS[i]).getString();
+            Button button = new Button(label, () -> selectTimescaleByIndex(index));
+            button.setTextFontScale(1.0f);
+            int textWidth = getTextWidth(label);
+            int textHeight = button.getTextHeight();
+            int w = textWidth + 2 * BUTTON_PADDING;
+            int h = textHeight + 2 * BUTTON_PADDING;
+            button.setWidth(w);
+            button.setHeight(h);
+            button.setBackgroundColor(ColorUtilities.setAlpha(button.getBackgroundColor(), 1.0f));
+            button.setPressedColor(ColorUtilities.setAlpha(button.getPressedColor(), 1.0f));
+            button.setHoverColor(ColorUtilities.setAlpha(button.getHoverColor(), 1.0f));
+            buttonRowHeight = Math.max(buttonRowHeight, h);
+            timescaleButtons.add(button);
+            addChild(button);
+        }
+    }
+
+    /**
+     * Sets the callback fired when the user picks a timescale button. A
+     * negative value passed to the listener means "all history".
+     */
+    public void setTimescaleChangeListener(TimescaleChangeListener listener) {
+        this.timescaleListener = listener;
+    }
+
+    /**
+     * Sets the callback fired whenever the X-axis viewport (viewX / viewWidth)
+     * changes as a result of user input (drag, scroll-zoom) or programmatic
+     * changes ({@link #setView}, {@link #scrollToLatestData},
+     * {@link #scrollToPresent}, {@link #autoCenterView},
+     * {@link #autoCenterViewWithinRange}).
+     */
+    public void setViewChangeListener(ViewChangeListener listener) {
+        this.viewChangeListener = listener;
+    }
+
+    /**
+     * Overrides {@link #clampView()}'s "clamp to loaded data extents" behavior.
+     * When either bound is non-null, the loaded-data range no longer clamps
+     * {@code viewX} — the caller (screen) can drag past currently loaded data.
+     * <p>
+     * Pass {@code null} for either bound to disable that side's explicit clamp.
+     * If both are {@code null}, the legacy behavior (clamp to first/last data
+     * point across all series) is restored — backwards-compatible for other
+     * callers of this chart.
+     *
+     * @param leftMs  earliest allowed {@code viewX} (null = no explicit left clamp)
+     * @param rightMs latest allowed {@code viewX + viewWidth} (null = no explicit right clamp)
+     */
+    public void setClampBounds(Long leftMs, Long rightMs) {
+        this.leftClampAtMs = leftMs;
+        this.rightClampAtMs = rightMs;
+        clampView();
+        markDirty();
+    }
+
+    /**
+     * Sets an upper bound on {@code viewWidth} (in ms) enforced by scroll-zoom
+     * and the explicit-bounds branch of {@link #clampView()}. Pass {@code null}
+     * to remove the cap. Setting the cap does not by itself change the current
+     * viewport or fire the view-change listener — the cap takes effect on the
+     * next scroll-zoom or drag (via {@code clampView}).
+     */
+    public void setMaxViewWidthMs(Long ms) {
+        this.maxViewWidthMs = ms;
+        markDirty();
+    }
+
+    private void fireViewChanged() {
+        if (viewChangeListener != null) viewChangeListener.onViewChanged(viewX, viewWidth);
+    }
+
+    /**
+     * Programmatically selects a timescale index without firing the listener.
+     * Only updates the button highlight — used by the screen to re-sync the
+     * highlight with saved viewport state on open.
+     */
+    public void setSelectedTimescaleIndex(int index) {
+        if (index < 0 || index >= TIMESCALES_MS.length) return;
+        currentTimescaleIndex = index;
+        highlightTimescaleButton(index);
+    }
+
+    public int getSelectedTimescaleIndex() { return currentTimescaleIndex; }
+
+    private void selectTimescaleByIndex(int index) {
+        if (index < 0 || index >= TIMESCALES_MS.length) return;
+        currentTimescaleIndex = index;
+        highlightTimescaleButton(index);
+        if (timescaleListener != null) {
+            timescaleListener.onTimescaleSelected(TIMESCALES_MS[index]);
+        }
+    }
+
+    private void highlightTimescaleButton(int selectedIndex) {
+        for (int i = 0; i < timescaleButtons.size(); i++) {
+            Button b = timescaleButtons.get(i);
+            int color = (i == selectedIndex) ? b.getPressedColor() : defaultButtonBackgroundColor;
+            b.setBackgroundColor(color);
+        }
     }
 
     // ── Serialization for display block sync ──
@@ -224,6 +405,7 @@ public class BalanceHistoryChart extends GuiElement {
         this.viewHeight = height;
         clampView();
         markDirty();
+        fireViewChanged();
     }
 
     public boolean isAtPresent() {
@@ -246,6 +428,7 @@ public class BalanceHistoryChart extends GuiElement {
         viewX = maxTime - viewWidth;
         clampView();
         markDirty();
+        fireViewChanged();
     }
 
     public void scrollToPresent() {
@@ -253,6 +436,7 @@ public class BalanceHistoryChart extends GuiElement {
         if (viewWidth <= 0) viewWidth = 3_600_000;
         viewX = now - viewWidth;
         markDirty();
+        fireViewChanged();
     }
 
     public void autoCenterView() {
@@ -283,6 +467,41 @@ public class BalanceHistoryChart extends GuiElement {
         viewX = minTime;
         viewHeight = valRange * 1.2;
         viewY = Math.max(-viewHeight * 0.05, minVal - valRange * 0.1);
+        fireViewChanged();
+    }
+
+    /**
+     * Task #40: centers the viewport on a caller-supplied X (time) range while
+     * fitting Y to the data that falls inside that range. Used by the timescale
+     * toolbar so a "7d" button truly shows a 7-day-wide window regardless of
+     * how much data actually exists in that window — empty regions render as
+     * blank chart area on either side of the drawn line. Falls back to
+     * {@link #autoCenterView} when no data lies in the requested range so the
+     * chart is never left blank when data exists elsewhere.
+     */
+    public void autoCenterViewWithinRange(long fromMs, long toMs) {
+        if (toMs <= fromMs) { autoCenterView(); return; }
+        double minVal = Double.MAX_VALUE;
+        double maxVal = -Double.MAX_VALUE;
+        boolean hasData = false;
+        for (LineSeries s : seriesList) {
+            if (!s.visible || s.points.isEmpty()) continue;
+            for (DataPoint p : s.points) {
+                if (p.time() < fromMs || p.time() > toMs) continue;
+                minVal = Math.min(minVal, p.value());
+                maxVal = Math.max(maxVal, p.value());
+                hasData = true;
+            }
+        }
+        if (!hasData) { autoCenterView(); return; }
+        double valRange = maxVal - minVal;
+        if (valRange <= 0) valRange = 100;
+        viewX = fromMs;
+        viewWidth = toMs - fromMs;
+        viewHeight = valRange * 1.2;
+        viewY = Math.max(-viewHeight * 0.05, minVal - valRange * 0.1);
+        markDirty();
+        fireViewChanged();
     }
 
     // ── Rendering ──
@@ -327,13 +546,27 @@ public class BalanceHistoryChart extends GuiElement {
     protected void render() {}
 
     @Override
-    protected void layoutChanged() {}
+    protected void layoutChanged() {
+        // Task #40: lay out the timescale toolbar top-left, horizontally.
+        int x = BUTTON_PADDING;
+        int y = BUTTON_PADDING;
+        for (Button b : timescaleButtons) {
+            b.setPosition(x, y);
+            x += b.getWidth() + BUTTON_SPACING;
+        }
+    }
+
+    private int getButtonRowReservedHeight() {
+        if (timescaleButtons.isEmpty()) return 0;
+        return BUTTON_PADDING + buttonRowHeight + BUTTON_ROW_GAP;
+    }
 
     private void updateCanvasRect() {
+        int topReserved = getButtonRowReservedHeight();
         canvasRect.x = 1;
-        canvasRect.y = 1;
+        canvasRect.y = 1 + topReserved;
         canvasRect.width = Math.max(2, getWidth() - maxValueLabelWidth - 10);
-        canvasRect.height = Math.max(2, getHeight() - maxTimeLabelHeight - 5);
+        canvasRect.height = Math.max(2, getHeight() - maxTimeLabelHeight - 5 - topReserved);
         canvasScissorRect.x = canvasRect.x + 1;
         canvasScissorRect.y = canvasRect.y + 1;
         canvasScissorRect.width = Math.max(1, canvasRect.width - 1);
@@ -413,23 +646,39 @@ public class BalanceHistoryChart extends GuiElement {
 
     private void renderLines() {
         for (LineSeries series : seriesList) {
-            if (!series.visible || series.points.size() < 2) continue;
+            if (!series.visible || series.points.size() < 1) continue;
             if (series == highlightedSeries || series == pinnedSeries) continue;
             float thickness = 1.5f;
             int color = (highlightedSeries != null) ? ColorUtilities.setAlpha(series.color, 0.4f) : series.color;
             renderSeries(series, thickness, color);
         }
-        if (highlightedSeries != null && highlightedSeries.visible && highlightedSeries.points.size() >= 2) {
+        if (highlightedSeries != null && highlightedSeries.visible && highlightedSeries.points.size() >= 1) {
             int brightColor = ColorUtilities.setBrightness(highlightedSeries.color, 1.4f);
             renderSeries(highlightedSeries, 3.0f, brightColor);
         }
-        if (pinnedSeries != null && pinnedSeries.visible && pinnedSeries.points.size() >= 2) {
+        if (pinnedSeries != null && pinnedSeries.visible && pinnedSeries.points.size() >= 1) {
             renderSeries(pinnedSeries, 2.0f, pinnedSeries.color);
         }
     }
 
     private void renderSeries(LineSeries series, float thickness, int color) {
         List<int[]> pts = buildOptimizedPoints(series);
+        // Extend the last real data point horizontally to "now" so accounts
+        // whose balance hasn't changed recently still render as a flat line
+        // out to the present rather than leaving a visual gap. Render-only:
+        // series.points is never mutated.
+        if (!series.points.isEmpty()) {
+            DataPoint last = series.points.get(series.points.size() - 1);
+            long now = System.currentTimeMillis();
+            if (last.time() < now) {
+                int nowX = toCanvasSpaceX(now);
+                int lastY = toCanvasSpaceY(last.value());
+                int[] tail = pts.get(pts.size() - 1);
+                if (nowX != tail[0]) {
+                    pts.add(new int[]{nowX, lastY});
+                }
+            }
+        }
         if (pts.size() < 2) return;
 
         boolean opaque = (color >>> 24) == 0xFF;
@@ -480,6 +729,7 @@ public class BalanceHistoryChart extends GuiElement {
         if (!isKeyPressed(InputConstants.KEY_LEFT_CONTROL)) {
             double oldWidth = viewWidth;
             viewWidth = Math.max(1000, viewWidth * zoomFactor);
+            if (maxViewWidthMs != null && viewWidth > maxViewWidthMs) viewWidth = maxViewWidthMs;
             double mouseNormX = (mouseWorldX - viewX) / oldWidth;
             viewX = mouseWorldX - mouseNormX * viewWidth;
             consumed = true;
@@ -494,7 +744,10 @@ public class BalanceHistoryChart extends GuiElement {
         }
 
         clampView();
-        if (consumed) markDirty();
+        if (consumed) {
+            markDirty();
+            fireViewChanged();
+        }
         return consumed;
     }
 
@@ -530,6 +783,7 @@ public class BalanceHistoryChart extends GuiElement {
             viewY -= worldDeltaY;
             clampView();
             markDirty();
+            fireViewChanged();
             return true;
         }
         return false;
@@ -538,7 +792,12 @@ public class BalanceHistoryChart extends GuiElement {
     @Override
     protected boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode == KEY_SPACE) {
-            autoCenterView();
+            if (isKeyPressed(InputConstants.KEY_LEFT_CONTROL)) {
+                long now = System.currentTimeMillis();
+                autoCenterViewWithinRange(now - (long) viewWidth, now);
+            } else {
+                autoCenterView();
+            }
             markDirty();
             return true;
         }
@@ -548,21 +807,41 @@ public class BalanceHistoryChart extends GuiElement {
     // ── View clamping ──
 
     private void clampView() {
-        long minTime = Long.MAX_VALUE;
-        long maxTime = Long.MIN_VALUE;
-        for (LineSeries s : seriesList) {
-            if (s.points.isEmpty()) continue;
-            minTime = Math.min(minTime, s.points.get(0).time());
-            maxTime = Math.max(maxTime, s.points.get(s.points.size() - 1).time());
+        if (leftClampAtMs != null || rightClampAtMs != null) {
+            // Explicit-bounds mode (rolling-fetch): the loaded-data extents no longer
+            // clamp viewX, so the caller can drag past currently loaded data to trigger
+            // prefetches. Only the caller-supplied bounds constrain viewX. viewWidth is
+            // NOT clamped to dataRange here — a "30d" window with only 1d of data still
+            // shows a 30d-wide viewport.
+            // Cap viewWidth at the configured maximum (if any) BEFORE the horizontal
+            // clamp math so a shrunk viewWidth feeds the viewX / rightClamp checks.
+            if (maxViewWidthMs != null && viewWidth > maxViewWidthMs) viewWidth = maxViewWidthMs;
+            if (leftClampAtMs != null && viewX < leftClampAtMs) viewX = leftClampAtMs;
+            if (rightClampAtMs != null && viewX + viewWidth > rightClampAtMs) {
+                viewX = rightClampAtMs - viewWidth;
+            }
+            // Re-apply the left clamp: if the two bounds together can't fit viewWidth,
+            // let the left clamp win (right edge may extend past rightClampAtMs).
+            if (leftClampAtMs != null && viewX < leftClampAtMs) viewX = leftClampAtMs;
+        } else {
+            // Legacy clamp-to-loaded-data behavior — preserved for callers that don't
+            // opt into explicit bounds (e.g., BankSystemDisplayBlockEntity).
+            long minTime = Long.MAX_VALUE;
+            long maxTime = Long.MIN_VALUE;
+            for (LineSeries s : seriesList) {
+                if (s.points.isEmpty()) continue;
+                minTime = Math.min(minTime, s.points.get(0).time());
+                maxTime = Math.max(maxTime, s.points.get(s.points.size() - 1).time());
+            }
+            if (minTime != Long.MAX_VALUE) {
+                double dataRange = maxTime - minTime;
+                if (dataRange <= 0) dataRange = 60_000;
+
+                if (viewWidth > dataRange) viewWidth = dataRange;
+                if (viewX < minTime) viewX = minTime;
+                if (viewX + viewWidth > maxTime) viewX = maxTime - viewWidth;
+            }
         }
-        if (minTime == Long.MAX_VALUE) return;
-
-        double dataRange = maxTime - minTime;
-        if (dataRange <= 0) dataRange = 60_000;
-
-        if (viewWidth > dataRange) viewWidth = dataRange;
-        if (viewX < minTime) viewX = minTime;
-        if (viewX + viewWidth > maxTime) viewX = maxTime - viewWidth;
 
         double minY = -viewHeight * 0.05;
         if (viewY < minY) viewY = minY;

@@ -8,7 +8,6 @@ import java.util.UUID;
 public interface IServerBankSystemCommandHandler {
 
     //boolean banksystem_manage(@NotNull UUID executor);
-    //boolean banksystem_testScreen(@NotNull UUID executor);
     boolean banksystem_setBankSystemAdminMode(@NotNull UUID executor, boolean isAdmin);
     boolean banksystem_setBankSystemAdminMode_user(@NotNull UUID executor, String userName, boolean isAdmin);
     boolean banksystem_setSlaveServerTrusted(@NotNull UUID executor, String slaveID, boolean isTrusted);

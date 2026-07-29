@@ -9,6 +9,7 @@ import net.kroia.banksystem.data.filter.EqualityFilter;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.general.BalanceHistoryRequest;
 import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
 import net.kroia.banksystem.util.ItemColorUtil;
 import net.kroia.banksystem.util.ItemID;
@@ -808,8 +809,17 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
                 pendingHistoryRecords = (records != null) ? records : List.of();
             });
         } else if (BACKEND.isSlaveServer) {
+            // Display blocks fetch the full history (0 = unlimited); Task #40's bucketed
+            // downsampling is opt-in via a positive maxPoints — kept off here so the
+            // display block continues to render every recorded sample.
+            BalanceHistoryRequest.Query query = new BalanceHistoryRequest.Query(
+                    accountNumber,
+                    BalanceHistoryRequest.Query.ALL_HISTORY_SENTINEL,
+                    Long.MAX_VALUE,
+                    0
+            );
             BankSystemNetworking.BALANCE_HISTORY_REQUEST
-                    .sendRequestToMaster(accountNumber)
+                    .sendRequestToMaster(query)
                     .thenAccept(records -> {
                         pendingHistoryRecords = (records != null) ? records : List.of();
                     });

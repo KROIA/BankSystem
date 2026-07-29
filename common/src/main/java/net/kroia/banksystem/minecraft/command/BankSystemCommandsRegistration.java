@@ -11,6 +11,7 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
 import net.kroia.banksystem.api.command.IServerBankSystemCommandHandler;
+import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
 import net.kroia.modutilities.testing.TestCommandRegistration;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -20,9 +21,13 @@ import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
+import java.nio.file.Path;
+import java.nio.file.InvalidPathException;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -51,7 +56,6 @@ public class BankSystemCommandsRegistration {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 
         // /banksystem manage                                         - Open bank settings GUI to manage the bankable items
-        // /banksystem testScreen                                     - Open thest screen for development
         // /banksystem trust <slaveServerID>                          - Ads the slave server ID to the trusted list
         // /banksystem untrust <slaveServerID>                        - Removes the slave ID from the trusted list
         // /banksystem setBankSystemAdminMode <ON/OFF>
@@ -63,15 +67,6 @@ public class BankSystemCommandsRegistration {
         // /banksystem exportrecipes                                  - Export all crafting recipes as PNG images
         dispatcher.register(
                 Commands.literal("banksystem")
-                .then(Commands.literal("testScreen")
-                        .requires(source -> BankSystemMod.ENABLE_DEV_FEATURES)
-                        .executes(context -> {
-                            CommandSourceStack source = context.getSource();
-                            ServerPlayer player = source.getPlayerOrException();
-                            handler().banksystem_testScreen_async(player.getUUID());
-                            return Command.SINGLE_SUCCESS;
-                        })
-                )
                 .then(Commands.literal("manage")
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
@@ -260,6 +255,95 @@ public class BankSystemCommandsRegistration {
                             SyncOpenGUIPacket.send_exportRecipes(player);
                             return Command.SINGLE_SUCCESS;
                         })
+                )
+                // Task #42 (v2.0.7) — op-only backup coordination for external tar-based backups.
+                // /banksystem backup pause                                     - Block the db-worker so tar sees a stable file
+                // /banksystem backup resume                                    - Release the db-worker
+                // /banksystem backup status                                    - Report IDLE / PAUSED (for Xs)
+                // /banksystem backup snapshot <path>                           - Write a consistent DB copy to <path>
+                .then(Commands.literal("backup")
+                        .requires(source -> source.hasPermission(2)) // op-only, matches vanilla save-off
+                        .then(Commands.literal("pause")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    DatabaseManager db = BACKEND_INSTANCES.DATABASE_MANAGER;
+                                    if (db == null) {
+                                        source.sendFailure(Component.literal("[BankSystem] database not initialized (slave server or master pre-init)"));
+                                        return 0;
+                                    }
+                                    MinecraftServer server = source.getServer();
+                                    db.beginBackupPause().thenAccept(ok -> {
+                                        Runnable feedback = () -> source.sendSuccess(() -> Component.literal(ok
+                                                ? "[BankSystem] db-worker paused for backup"
+                                                : "[BankSystem] db-worker was already paused"), true);
+                                        if (server != null) server.execute(feedback);
+                                        else feedback.run();
+                                    });
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("resume")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    DatabaseManager db = BACKEND_INSTANCES.DATABASE_MANAGER;
+                                    if (db == null) {
+                                        source.sendFailure(Component.literal("[BankSystem] database not initialized (slave server or master pre-init)"));
+                                        return 0;
+                                    }
+                                    boolean ok = db.endBackupPause();
+                                    source.sendSuccess(() -> Component.literal(ok
+                                            ? "[BankSystem] db-worker resumed"
+                                            : "[BankSystem] db-worker was not paused"), true);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("status")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    DatabaseManager db = BACKEND_INSTANCES.DATABASE_MANAGER;
+                                    if (db == null) {
+                                        source.sendFailure(Component.literal("[BankSystem] database not initialized (slave server or master pre-init)"));
+                                        return 0;
+                                    }
+                                    DatabaseManager.BackupState state = db.getBackupState();
+                                    String line = "[BankSystem] backup state: " + state;
+                                    if (state == DatabaseManager.BackupState.PAUSED) {
+                                        line += " (for " + (db.getPausedForMs() / 1000L) + "s)";
+                                    }
+                                    final String finalLine = line;
+                                    source.sendSuccess(() -> Component.literal(finalLine), false);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("snapshot")
+                                .then(Commands.argument("path", StringArgumentType.string())
+                                        .executes(context -> {
+                                            CommandSourceStack source = context.getSource();
+                                            DatabaseManager db = BACKEND_INSTANCES.DATABASE_MANAGER;
+                                            if (db == null) {
+                                                source.sendFailure(Component.literal("[BankSystem] database not initialized (slave server or master pre-init)"));
+                                                return 0;
+                                            }
+                                            String p = StringArgumentType.getString(context, "path");
+                                            Path target;
+                                            try {
+                                                target = Path.of(p);
+                                            } catch (InvalidPathException e) {
+                                                source.sendFailure(Component.literal("[BankSystem] invalid snapshot path: " + e.getMessage()));
+                                                return 0;
+                                            }
+                                            MinecraftServer server = source.getServer();
+                                            db.snapshotTo(target).thenAccept(ok -> {
+                                                Runnable feedback = () -> source.sendSuccess(() -> Component.literal(ok
+                                                        ? "[BankSystem] snapshot written to " + p
+                                                        : "[BankSystem] snapshot failed (see server log)"), true);
+                                                if (server != null) server.execute(feedback);
+                                                else feedback.run();
+                                            });
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                        )
                 )
         );
 

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "banksystem:money20000" }
+  ],
+  "result": {
+    "count": 20,
+    "id": "banksystem:money1000"
+  },
+  "show_notification": true
+}

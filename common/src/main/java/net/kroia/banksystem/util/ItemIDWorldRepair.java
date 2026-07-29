@@ -163,11 +163,11 @@ public final class ItemIDWorldRepair {
      *       healthy worlds: fresh worlds have no aliases, and pre-cent worlds upgraded
      *       through fixed builds create none (registration is register-if-absent, so
      *       persisted money shorts are kept and never merged).</li>
-     *   <li><b>Fresh cent-shifted money block</b> (signal b): all 14 money/cent items occupy
+     *   <li><b>Fresh cent-shifted money block</b> (signal b): all 21 money/cent items occupy
      *       a contiguous ascending short block in one of the two historical fresh-assignment
      *       orders — {@link BankSystemItems#getMoneyItems()} order
-     *       ({@code CENT1..CENT50, MONEY..MONEY1000} at {@code k..k+13}) or the boot order
-     *       ({@code CENT1..CENT50, MONEY5..MONEY1000, MONEY}; see
+     *       ({@code CENT1..CENT50, MONEY..MONEY1000000} at {@code k..k+20}) or the boot order
+     *       ({@code CENT1..CENT50, MONEY5..MONEY1000000, MONEY}; see
      *       {@link #simulateBootOrderAssignment}) — the signature of a fresh post-cent
      *       default assignment. A healthy upgraded pre-cent world has its cents appended at
      *       the tail instead, far away from base money.</li>
@@ -245,7 +245,7 @@ public final class ItemIDWorldRepair {
     }
 
     /**
-     * Looks for the 14 money/cent items at a contiguous ascending short block in the given
+     * Looks for the 21 money/cent items at a contiguous ascending short block in the given
      * order ({@link BankSystemItems#getMoneyItems()} order or the boot order from
      * {@link #bootOrderMoneyItems()}).
      *
@@ -253,7 +253,7 @@ public final class ItemIDWorldRepair {
      * @param moneyItems the expected money-item order of the candidate fresh assignment
      * @return the block as an insertion-ordered short→template map, or {@code null} when any
      *         money item is missing, occurs at more than one short, or the shorts are not
-     *         exactly {@code k, k+1, ..., k+13} in list order
+     *         exactly {@code k, k+1, ..., k+20} in list order
      */
     private static @Nullable LinkedHashMap<Short, ItemStack> findContiguousMoneyBlock(Map<ItemID, ItemStack> map,
                                                                                       List<ItemStack> moneyItems) {

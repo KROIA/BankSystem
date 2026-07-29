@@ -152,7 +152,31 @@ public interface IClientBankManager {
     //CompletableFuture<Boolean> requestDeleteBankAccount(int accountNumber);
     CompletableFuture<List<ItemID>> requestAllowdItems();
 
+    /**
+     * Requests balance-history for an account across the full time-range.
+     * Delegates to the 4-arg overload with an all-history sentinel and a
+     * default per-item point budget so the wire payload stays bounded on
+     * long-running worlds (Task #40).
+     *
+     * @param accountNumber the account whose history is requested
+     */
     CompletableFuture<List<BalanceHistoryRecord>> requestBalanceHistory(int accountNumber);
+
+    /**
+     * Requests bucketed balance-history for an account (Task #40). The master
+     * server samples at most {@code maxPoints} rows per item series inside
+     * the given {@code [fromMs, toMs]} range using bucket-last-sample
+     * downsampling.
+     *
+     * @param accountNumber the account whose history is requested
+     * @param fromMs        inclusive lower time bound in epoch millis, or
+     *                      {@code BalanceHistoryRequest.Query.ALL_HISTORY_SENTINEL}
+     *                      to have the server resolve the earliest row
+     * @param toMs          inclusive upper time bound in epoch millis
+     * @param maxPoints     per-item point budget (client convention: 500)
+     */
+    CompletableFuture<List<BalanceHistoryRecord>> requestBalanceHistory(
+            int accountNumber, long fromMs, long toMs, int maxPoints);
 
     CompletableFuture<CompoundTag> getUserCustomData();
     CompletableFuture<Boolean> updateUserCustomData(CompoundTag data);

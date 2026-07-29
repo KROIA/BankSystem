@@ -21,8 +21,13 @@ Lifecycle:
 - **Loaded** every time the world/server starts.
 - **Rewritten regularly while the server runs**: BankSystem saves all its data (including this file) on its save interval (`SAVE_INTERVAL_MINUTES`, default every 5 minutes while players are online), whenever the world is saved (autosave, `/save-all`), and on server shutdown.
 
+> [!TIP]
+> **Prefer the in-game settings GUI.** Ops can run `/banksystem manage` to open the bankable-items management screen and, from there, click the **Mod Settings** button to open the editor for every value in this file — booleans, numbers, and the component lists. Edits made there go through the normal save cycle instead of being overwritten. This is the recommended way to change settings at runtime; the section below documents the file for reference and for cases where the GUI is not available (e.g. bootstrap edits before the first server start).
+>
+> The **Mod Settings** button is only shown on the master server. On a slave server the button is hidden — configure settings on the master; slaves receive the relevant values (component lists, etc.) through the master's sync.
+
 > [!WARNING]
-> Because the server rewrites `settings.json` on its save interval, **only edit the file while the world/server is stopped**. Edits made while the server is running are silently overwritten.
+> Because the server rewrites `settings.json` on its save interval, **only edit the file directly while the world/server is stopped**. Edits made through the raw file while the server is running are silently overwritten. Use `/banksystem manage` → **Mod Settings** instead when the server is live.
 > Also make sure your edits are valid JSON and keep a backup — if the file cannot be loaded, BankSystem writes a fresh file, and your manual changes are lost.
 
 > [!IMPORTANT]
@@ -51,6 +56,7 @@ A freshly created `settings.json` looks like this:
     "ITEM_TRANSFER_TICK_INTERVAL": 2,
     "ADDITIONAL_VOLATILE_COMPONENTS": [],
     "ADDITIONAL_DEPOSIT_GATED_COMPONENTS": [],
+    "ALLOW_ALL_ITEMS": false,
     "CONFIRM_ITEMID_MERGE": false,
     "BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL": 20,
     "BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL": 20
@@ -108,6 +114,7 @@ A freshly created `settings.json` looks like this:
 | `ITEM_TRANSFER_TICK_INTERVAL` | number | `2` | Reserved. This setting is present in the file but is not used by any active code path in the current version. |
 | `ADDITIONAL_VOLATILE_COMPONENTS` | list of strings | `[]` | Extra **volatile** item component type ids (e.g. `"tfc:food"`) that are ignored for item identification. Extends the datapack tag `banksystem:volatile_item_components`. See the [deep dive](#volatile--deposit-gated-item-components) below. |
 | `ADDITIONAL_DEPOSIT_GATED_COMPONENTS` | list of strings | `[]` | Extra **deposit-gated** item component type ids. Gated components are ignored for identification too, but deposits of items carrying them are only accepted in withdrawal-fresh condition. Extends the datapack tag `banksystem:deposit_gated_components`. See the [deep dive](#volatile--deposit-gated-item-components) below. |
+| `ALLOW_ALL_ITEMS` | boolean | `false` | **Blacklist-only mode.** When `false` (default), only items in the explicit allow-list (see [Administration → allow / disallow items](Administration.md)) can carry a balance — this is the historical whitelist behavior and existing worlds keep it. When `true`, every valid item is bankable except those in the built-in blacklist (bedrock, barrier, command blocks, debug stick, knowledge book, all sub-denomination money items, …); useful for admins running large modpacks who don't want to curate the allow-list item-by-item. The blacklist always wins regardless of this setting. Toggling the value takes effect immediately — no restart needed — and the explicit allow-list is preserved as advisory data if you flip it back off later. |
 | `CONFIRM_ITEMID_MERGE` | boolean | `false` | **One-shot confirmation flag for the ItemID merge guard.** When a change to the component lists would irreversibly merge genuinely distinct bank items, the server refuses to start and logs a report. Setting this to `true` approves that merge on the next startup; the flag automatically resets to `false` afterwards. See [Changing the Lists on an Existing World](#changing-the-lists-on-an-existing-world). |
 | `BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL` | number | `20` | Interval in game ticks between work cycles of the [Bank Download Block](Usage.md#bank-download-block) (20 ticks = 1 second). |
 | `BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL` | number | `20` | Interval in game ticks between work cycles of the [Bank Upload Block](Usage.md#bank-upload-block) (20 ticks = 1 second). |

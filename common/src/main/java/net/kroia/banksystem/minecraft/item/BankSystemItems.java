@@ -63,6 +63,13 @@ public class BankSystemItems {
     public static final Supplier<Item> MONEY200  = registerItem(MoneyItem200.NAME, MoneyItem200::new);
     public static final Supplier<Item> MONEY500  = registerItem(MoneyItem500.NAME, MoneyItem500::new);
     public static final Supplier<Item> MONEY1000 = registerItem(MoneyItem1000.NAME, MoneyItem1000::new);
+    public static final Supplier<Item> MONEY5000 = registerItem(MoneyItem5000.NAME, MoneyItem5000::new);
+    public static final Supplier<Item> MONEY10000 = registerItem(MoneyItem10000.NAME, MoneyItem10000::new);
+    public static final Supplier<Item> MONEY20000 = registerItem(MoneyItem20000.NAME, MoneyItem20000::new);
+    public static final Supplier<Item> MONEY50000 = registerItem(MoneyItem50000.NAME, MoneyItem50000::new);
+    public static final Supplier<Item> MONEY100000 = registerItem(MoneyItem100000.NAME, MoneyItem100000::new);
+    public static final Supplier<Item> MONEY500000 = registerItem(MoneyItem500000.NAME, MoneyItem500000::new);
+    public static final Supplier<Item> MONEY1000000 = registerItem(MoneyItem1000000.NAME, MoneyItem1000000::new);
 
 
 
@@ -82,6 +89,13 @@ public class BankSystemItems {
         moneyItems.add(new ItemStack(MONEY200.get()));
         moneyItems.add(new ItemStack(MONEY500.get()));
         moneyItems.add(new ItemStack(MONEY1000.get()));
+        moneyItems.add(new ItemStack(MONEY5000.get()));
+        moneyItems.add(new ItemStack(MONEY10000.get()));
+        moneyItems.add(new ItemStack(MONEY20000.get()));
+        moneyItems.add(new ItemStack(MONEY50000.get()));
+        moneyItems.add(new ItemStack(MONEY100000.get()));
+        moneyItems.add(new ItemStack(MONEY500000.get()));
+        moneyItems.add(new ItemStack(MONEY1000000.get()));
         return moneyItems;
     }
 

@@ -12,6 +12,7 @@ import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.entity.BankTerminalBlockDataRequest;
+import net.kroia.banksystem.networking.general.BalanceHistoryRequest;
 import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.core.BlockPos;
@@ -213,9 +214,24 @@ public class ClientBankManager implements IClientBankManager {
         return BankSystemNetworking.ALLOWED_ITEMS_REQUEST.sendRequestToServer(0);
     }
 
+    /** Task #40: default point budget for chart requests. Hard-coded per user-approved design. */
+    private static final int DEFAULT_HISTORY_MAX_POINTS = 500;
+
     @Override
     public CompletableFuture<List<BalanceHistoryRecord>> requestBalanceHistory(int accountNumber) {
-        return BankSystemNetworking.BALANCE_HISTORY_REQUEST.sendRequestToServer(accountNumber);
+        return requestBalanceHistory(
+                accountNumber,
+                BalanceHistoryRequest.Query.ALL_HISTORY_SENTINEL,
+                System.currentTimeMillis(),
+                DEFAULT_HISTORY_MAX_POINTS
+        );
+    }
+
+    @Override
+    public CompletableFuture<List<BalanceHistoryRecord>> requestBalanceHistory(
+            int accountNumber, long fromMs, long toMs, int maxPoints) {
+        BalanceHistoryRequest.Query query = new BalanceHistoryRequest.Query(accountNumber, fromMs, toMs, maxPoints);
+        return BankSystemNetworking.BALANCE_HISTORY_REQUEST.sendRequestToServer(query);
     }
 
     @Override

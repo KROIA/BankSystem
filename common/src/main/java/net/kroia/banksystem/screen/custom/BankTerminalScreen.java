@@ -209,6 +209,18 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private int tickCount = 0;
     private final ArrayList<BankElement> bankElements = new ArrayList<>();
 
+    /**
+     * Minimum comfortable width (in mod-scaled GUI pixels) for a single
+     * {@link BankElement} — below this, the +/- amount buttons get squashed
+     * horizontally. Calibrated empirically against the user's "GUI scale 5 +
+     * JEI installed = 1 column" baseline: the bank list is ~220 px wide at
+     * that setup, so 200 keeps it single-column while wider setups (small GUI
+     * scales, JEI absent, high-res monitors) unlock more columns.
+     */
+    private static final int MIN_ELEMENT_WIDTH = 200;
+    /** Hard cap on columns; anything beyond this is unreadable regardless of width. */
+    private static final int MAX_COLUMNS = 6;
+
     BankTerminalContainerMenu menu;
 
     // Gui elements
@@ -220,6 +232,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private final Label searchLabel;
     private final TextBox searchField;
     private final VerticalListView itemListView;
+    private final LayoutGrid bankListLayout;
     private final BankTerminalCraftingView inventoryView;
     private final CheckBox useBankItemsCheckBox;
     private final CheckBox autoDepositCheckBox;
@@ -323,13 +336,12 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         searchField.setOnTextChanged(this::onSearchChanged);
 
         itemListView = new VerticalListView(0, 0, 100, 100);
-        LayoutGrid layoutGrid = new LayoutGrid();
-        layoutGrid.stretchX = true;
-        // With JEI loaded the GUI only spans 70% of the screen width — two columns
-        // would squash each BankElement's +/- amount buttons into unusability, so
-        // the bank list falls back to a single column there.
-        layoutGrid.columns = isJeiModLoaded() ? 1 : 2;
-        itemListView.setLayout(layoutGrid);
+        bankListLayout = new LayoutGrid();
+        bankListLayout.stretchX = true;
+        // Column count is recomputed each layout pass in updateLayout() from the
+        // actual bank-list width so it adapts to GUI scale + JEI presence.
+        bankListLayout.columns = 1;
+        itemListView.setLayout(bankListLayout);
         inventoryView = new BankTerminalCraftingView(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 256, 256));
 
         useBankItemsCheckBox = new CheckBox(USE_BANK_ITEMS_TEXT.getString(), (checked) -> onCraftingSettingsChanged());
@@ -448,6 +460,11 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         int searchLabelWidth = searchLabel.getTextWidth(searchLabel.getText()) + searchLabel.getPadding()*2;
         searchLabel.setBounds(padding, receiveItemsFromBankButton.getBottom()+spacing, searchLabelWidth, searchHeight);
         searchField.setBounds(searchLabel.getRight()+spacing, searchLabel.getTop(), itemListViewWidth - searchLabelWidth - spacing, searchHeight);
+        // Dynamic column count: divide the available bank-list width by the
+        // minimum comfortable element width. The layout is applied when
+        // itemListView.setBounds triggers the scrollContainer relayout below,
+        // so the columns update takes effect immediately.
+        bankListLayout.columns = Math.min(MAX_COLUMNS, Math.max(1, itemListViewWidth / MIN_ELEMENT_WIDTH));
         itemListView.setBounds(padding, searchField.getBottom() + padding,
                 itemListViewWidth, height -searchField.getBottom() - spacing - padding);
     }

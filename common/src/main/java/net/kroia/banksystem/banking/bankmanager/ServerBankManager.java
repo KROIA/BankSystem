@@ -84,6 +84,83 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     private int nextAccountNumber = 1; // Start with account number 1
     private int tickCounter = 0;
 
+    /**
+     * Task #41 (v2.0.7): last (balance, lockedBalance, time) written for each (account, item)
+     * key. Cache is authoritative for the snapshot dedup path — populated lazily on the
+     * first snapshot after server start (empty cache on boot forces every row to emit once,
+     * which is a natural "server started" audit record). Cleared implicitly on world unload:
+     * the whole {@link ServerBankManager} instance is dropped by
+     * {@code BankSystemModBackend.onServerStop}, so the map is GC'd with it.
+     */
+    private final Map<Long, LastSnapshotSample> lastSnapshotCache = new HashMap<>();
+
+    /**
+     * Task #41 (v2.0.7): the {@link #lastSnapshotCache} value type. Public so the in-game
+     * balance-history tests can construct their own cache map and drive the dedup filter
+     * directly via {@link #applySnapshotDedup} without a live world.
+     */
+    public static final class LastSnapshotSample {
+        public final long balance;
+        public final long lockedBalance;
+        public final long time;
+        public LastSnapshotSample(long balance, long lockedBalance, long time) {
+            this.balance = balance;
+            this.lockedBalance = lockedBalance;
+            this.time = time;
+        }
+    }
+
+    /**
+     * Task #41 (v2.0.7): packs an (accountNumber, itemId) pair into a single long map key.
+     * The high 32 bits carry the account number (signed) and the low 16 bits carry the item
+     * id (masked with {@code 0xFFFFL} so negative shorts round-trip unambiguously). Bits
+     * 16..31 stay zero — no collision with the account number in the high half.
+     */
+    public static long snapshotKey(int accountNumber, short itemId) {
+        return ((long) accountNumber << 32) | (itemId & 0xFFFFL);
+    }
+
+    /**
+     * Task #41 (v2.0.7). Applies the sample-on-change + heartbeat dedup filter to one
+     * candidate snapshot row. If the sample should be emitted, appends a
+     * {@link BalanceHistoryRecord} to {@code out} and updates the {@code cache}. Otherwise
+     * no-op. Returns whether a row was emitted.
+     * <p>
+     * The rule:
+     * <ul>
+     *   <li>No prior entry in {@code cache} for this (account, item) key -&gt; emit.</li>
+     *   <li>Prior entry with a different {@code balance} or {@code lockedBalance} -&gt; emit.</li>
+     *   <li>{@code heartbeatMs > 0} and {@code timestamp - prev.time >= heartbeatMs} -&gt; emit.</li>
+     *   <li>Otherwise -&gt; skip.</li>
+     * </ul>
+     * {@code heartbeatMs <= 0} disables the heartbeat leg entirely (only balance changes
+     * produce rows), matching the {@code BALANCE_SNAPSHOT_HEARTBEAT_MINUTES = 0} contract.
+     * <p>
+     * Public + static so the in-game test suite can drive the algorithm with a locally
+     * constructed cache map (no need to instantiate a full {@link ServerBankManager}).
+     * Production call site is {@link #collectBalanceSnapshot}.
+     */
+    public static boolean applySnapshotDedup(
+            Map<Long, LastSnapshotSample> cache,
+            int accountNumber, short itemId,
+            long balance, long lockedBalance, long timestamp, long heartbeatMs,
+            List<BalanceHistoryRecord> out) {
+        long key = snapshotKey(accountNumber, itemId);
+        LastSnapshotSample prev = cache.get(key);
+        boolean changed = prev == null
+                || prev.balance != balance
+                || prev.lockedBalance != lockedBalance;
+        boolean heartbeatDue = prev != null
+                && heartbeatMs > 0L
+                && (timestamp - prev.time) >= heartbeatMs;
+        if (changed || heartbeatDue) {
+            out.add(new BalanceHistoryRecord(accountNumber, itemId, balance, lockedBalance, timestamp));
+            cache.put(key, new LastSnapshotSample(balance, lockedBalance, timestamp));
+            return true;
+        }
+        return false;
+    }
+
 
     /**
      * Deliberately performs <b>no ItemID registration</b> (Task #16 root-cause fix).
@@ -478,6 +555,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      */
     public List<BalanceHistoryRecord> collectBalanceSnapshot(long timestamp, ItemPriceProvider priceProvider, short currencyItemId) {
         List<BalanceHistoryRecord> records = new ArrayList<>();
+        // Task #41 (v2.0.7): sample-on-change + heartbeat dedup. Look up the heartbeat once
+        // per snapshot pass — the setting is a boot-time config value, not something we want
+        // to re-read per row. If BACKEND_INSTANCES / SERVER_SETTINGS are unavailable (test
+        // harness), heartbeat defaults to 0 (disabled) and dedup runs pure sample-on-change.
+        final long heartbeatMs = (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_SETTINGS != null)
+                ? BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.BALANCE_SNAPSHOT_HEARTBEAT_MINUTES.get() * 60_000L
+                : 0L;
 
         for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
             int accountNumber = entry.getKey();
@@ -492,7 +576,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 short itemId = bankEntry.getKey().getShort();
                 long balance = bank.getBalance();
                 long lockedBalance = bank.getLockedBalance();
-                records.add(new BalanceHistoryRecord(accountNumber, itemId, balance, lockedBalance, timestamp));
+                // Task #41: dedup — only emit when the (balance, lockedBalance) changed since
+                // the previous snapshot for this (account, item) OR the heartbeat window has
+                // elapsed. Skipped rows leave the DB entirely unchanged for that key.
+                applySnapshotDedup(lastSnapshotCache, accountNumber, itemId,
+                        balance, lockedBalance, timestamp, heartbeatMs, records);
                 if (hasWealth) {
                     long totalBalance = balance + lockedBalance;
                     ItemID bankItemID = bankEntry.getKey();
@@ -520,8 +608,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 }
             }
             if (hasWealth) {
-                records.add(new BalanceHistoryRecord(
-                        accountNumber, BalanceHistoryRecord.WEALTH_ITEM_ID, totalWealth, 0, timestamp));
+                // Task #41: dedup wealth row too — one row per account per event, deduped
+                // against the previous wealth value with the same heartbeat rule as per-item
+                // rows. WEALTH_ITEM_ID = Short.MAX_VALUE is a reserved sentinel and can never
+                // collide with a real item id, so the shared cache is safe.
+                applySnapshotDedup(lastSnapshotCache, accountNumber,
+                        BalanceHistoryRecord.WEALTH_ITEM_ID, totalWealth, 0L,
+                        timestamp, heartbeatMs, records);
             }
         }
         return records;
