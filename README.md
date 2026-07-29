@@ -487,10 +487,9 @@ All notable changes are documented in version-specific files under `changelog/`.
 
 ### Current
 
-- [2.0.7](changelog/v2.0.7.md) — In Development
-
 ### Previous
 
+- [2.0.7](changelog/v2.0.7.md) — Released 2026-07-29 · Balance history overhaul (timescale toolbar, tiered retention, chart polish), ATM Money Converter tab, 5k–1M banknote tier, backup subcommands
 - [2.0.6](changelog/v2.0.6.md) — Released 2026-07-27 · Ecosystem polish — Bank Terminal live updates, pipe/hopper integration, JEI dev-runtime fix, allow-all-items setting
 - [2.0.5](changelog/v2.0.5.md) — Released 2026-07-25 · External currency bindings (Numismatics + Lightman's Currency)
 - [2.0.4](changelog/v2.0.4.md) — Released 2026-07-21
