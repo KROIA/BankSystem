@@ -487,6 +487,8 @@ All notable changes are documented in version-specific files under `changelog/`.
 
 ### Current
 
+- [2.0.8](changelog/v2.0.8.md) — In Development
+
 ### Previous
 
 - [2.0.7](changelog/v2.0.7.md) — Released 2026-07-29 · Balance history overhaul (timescale toolbar, tiered retention, chart polish), ATM Money Converter tab, 5k–1M banknote tier, backup subcommands
