@@ -45,6 +45,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final Component MUST_KEEP_MANAGER = Component.translatable(PREFIX+"must_keep_manager");
     private static final Component BINDINGS_BUTTON = Component.translatable(PREFIX+"bindings_button");
     private static final Component PAYOUTS_BUTTON = Component.translatable(PREFIX+"payouts_button");
+    private static final Component SHARE_VISUALS_BUTTON = Component.translatable(PREFIX+"share_visuals");
 
     private static class ItemViewButton extends Button{
 
@@ -100,7 +101,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private Button addUserButton;
     private Button bindingsButton;
     private Button payoutsButton;
+    private Button shareVisualsButton;
     private Integer companyIdForPayouts = null;
+    private Integer companyIdForShareVisuals = null;
     private ListView userElementListView;
     private ListView bankElementListView;
 
@@ -254,6 +257,13 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         payoutsButton.setEnabled(false);
         addElement(payoutsButton);
         companyIdForPayouts = null;
+
+        // Task #46 (v2.0.8) — Share Visuals entry-point (MANAGE-only + company-bound).
+        shareVisualsButton = new Button(SHARE_VISUALS_BUTTON.getString(), this::onShareVisualsButtonClicked);
+        shareVisualsButton.setEnabled(false);
+        addElement(shareVisualsButton);
+        companyIdForShareVisuals = null;
+
         net.kroia.banksystem.banking.company.AsyncCompanyManager
                 .getCompanyInfoByAccountAsync(accountNumber)
                 .thenAccept(info -> {
@@ -261,6 +271,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     companyIdForPayouts = info.companyId();
                     boolean visible = canManage || isAdminMode;
                     payoutsButton.setEnabled(visible);
+                    companyIdForShareVisuals = info.companyId();
+                    shareVisualsButton.setEnabled(visible);
                 });
     }
     private void setupAdminWindow()
@@ -363,6 +375,16 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             int payoutsTextWidth = closeButton.getTextWidth(PAYOUTS_BUTTON.getString()) + 10;
             payoutsButton.setBounds(bindingsButton.getRight() + spacing, padding, payoutsTextWidth, closeButton.getHeight());
         }
+        if (shareVisualsButton != null && payoutsButton != null) {
+            int svTextWidth = closeButton.getTextWidth(SHARE_VISUALS_BUTTON.getString()) + 10;
+            shareVisualsButton.setBounds(payoutsButton.getRight() + spacing, padding, svTextWidth, closeButton.getHeight());
+        }
+    }
+
+    private void onShareVisualsButtonClicked() {
+        if (companyIdForShareVisuals == null) return;
+        ShareVisualEditorScreen.openScreen(this, companyIdForShareVisuals,
+                getThisPlayerUUID(), canManage || isAdminMode);
     }
 
     private void onPayoutsButtonClicked() {

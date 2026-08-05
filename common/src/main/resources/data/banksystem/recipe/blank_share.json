@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "minecraft:paper" },
+    { "item": "minecraft:leather" }
+  ],
+  "result": {
+    "count": 4,
+    "id": "banksystem:blank_share"
+  },
+  "show_notification": true
+}

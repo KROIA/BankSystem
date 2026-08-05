@@ -353,5 +353,17 @@
   "gui.banksystem.balance_history.timescale.1d": "1d",
   "gui.banksystem.balance_history.timescale.7d": "7d",
   "gui.banksystem.balance_history.timescale.30d": "30d",
-  "gui.banksystem.balance_history.timescale.all": "all"
+  "gui.banksystem.balance_history.timescale.all": "all",
+  "item.banksystem.blank_share": "Leere Aktie",
+  "item.banksystem.stamped_share": "Unternehmensaktie",
+  "item.banksystem.stamped_share.unknown": "Unbekannte Unternehmensaktie",
+  "item.banksystem.stamped_share.no_company": "Ungeprägt — keine company_id",
+  "tooltip.banksystem.stamped_share.supply": "Bestand: %s / %s",
+  "gui.banksystem.share_visual_editor.title": "Aktien-Design",
+  "gui.banksystem.share_visual_editor.save": "Speichern",
+  "gui.banksystem.share_visual_editor.preset": "Symbol",
+  "gui.banksystem.share_visual_editor.tint": "Farbton",
+  "gui.banksystem.share_visual_editor.display_name": "Anzeigename",
+  "gui.banksystem.share_visual_editor.description": "Beschreibung",
+  "gui.banksystem.bank_account_management_screen.share_visuals": "Aktien-Design"
 }

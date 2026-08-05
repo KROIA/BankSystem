@@ -79,7 +79,11 @@ public final class AsyncCompanyManager {
         LIST_SCHEDULES,
         GET_HISTORY,
         GET_COMPANY_INFO_BY_ACCOUNT,
-        GET_FAILURE_COUNT_24H
+        GET_FAILURE_COUNT_24H,
+        // Task #46 (v2.0.8) — share visuals editor writeback (MANAGE-gated on master).
+        UPDATE_SHARE_VISUALS,
+        // Task #46 (v2.0.8) — by-id share visuals lookup for tooltip self-heal.
+        GET_SHARE_VISUALS
     }
 
     /** Task #43h — rights filter kinds for {@link #LIST_COMPANIES_FOR_CALLER}. */
@@ -391,6 +395,54 @@ public final class AsyncCompanyManager {
                 GetFailureCount24hOutput::new);
     }
 
+    // Task #46 (v2.0.8) — share visuals editor.
+    public record UpdateShareVisualsInput(int companyId, String iconPresetId, int tint,
+                                          String displayName, String description, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, UpdateShareVisualsInput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.companyId);
+                    buf.writeUtf(v.iconPresetId == null ? "" : v.iconPresetId);
+                    buf.writeInt(v.tint);
+                    buf.writeUtf(v.displayName == null ? "" : v.displayName);
+                    buf.writeUtf(v.description == null ? "" : v.description);
+                    buf.writeUUID(v.callerUUID);
+                },
+                buf -> new UpdateShareVisualsInput(
+                        buf.readVarInt(), buf.readUtf(), buf.readInt(),
+                        buf.readUtf(), buf.readUtf(), buf.readUUID()));
+    }
+    public record UpdateShareVisualsOutput(int resultCode) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, UpdateShareVisualsOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.resultCode,
+                UpdateShareVisualsOutput::new);
+    }
+
+    // Task #46 (v2.0.8) — by-id share visuals lookup for tooltip self-heal.
+    public record GetShareVisualsInput(int companyId) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, GetShareVisualsInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                GetShareVisualsInput::new);
+    }
+    public record GetShareVisualsOutput(boolean present, String iconPresetId, int tint,
+                                        String displayName, String description,
+                                        long totalIssued, long maxSupply) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, GetShareVisualsOutput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeBoolean(v.present);
+                    buf.writeUtf(v.iconPresetId == null ? "" : v.iconPresetId);
+                    buf.writeInt(v.tint);
+                    buf.writeUtf(v.displayName == null ? "" : v.displayName);
+                    buf.writeUtf(v.description == null ? "" : v.description);
+                    buf.writeVarLong(v.totalIssued);
+                    buf.writeVarLong(v.maxSupply);
+                },
+                buf -> new GetShareVisualsOutput(
+                        buf.readBoolean(), buf.readUtf(), buf.readInt(),
+                        buf.readUtf(), buf.readUtf(), buf.readVarLong(), buf.readVarLong()));
+        public static final GetShareVisualsOutput ABSENT =
+                new GetShareVisualsOutput(false, "", 0, "", "", 0L, 0L);
+    }
+
     public record GetCompanyInfoByAccountInput(int accountNr) {
         public static final StreamCodec<RegistryFriendlyByteBuf, GetCompanyInfoByAccountInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.accountNr,
@@ -416,6 +468,8 @@ public final class AsyncCompanyManager {
         put(FunctionType.GET_HISTORY,        new AsyncFunctionDataCodecs(GetHistoryInput.STREAM_CODEC,   GetHistoryOutput.STREAM_CODEC));
         put(FunctionType.GET_COMPANY_INFO_BY_ACCOUNT, new AsyncFunctionDataCodecs(GetCompanyInfoByAccountInput.STREAM_CODEC, CompanyInfoOutput.STREAM_CODEC));
         put(FunctionType.GET_FAILURE_COUNT_24H, new AsyncFunctionDataCodecs(GetFailureCount24hInput.STREAM_CODEC, GetFailureCount24hOutput.STREAM_CODEC));
+        put(FunctionType.UPDATE_SHARE_VISUALS, new AsyncFunctionDataCodecs(UpdateShareVisualsInput.STREAM_CODEC, UpdateShareVisualsOutput.STREAM_CODEC));
+        put(FunctionType.GET_SHARE_VISUALS,    new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC,    GetShareVisualsOutput.STREAM_CODEC));
     }};
 
     // ------------------------------------------------------------------
@@ -483,6 +537,8 @@ public final class AsyncCompanyManager {
                 case GET_HISTORY        -> handleGetHistory(input.decodeParams());
                 case GET_COMPANY_INFO_BY_ACCOUNT -> handleInfoByAccount(input.decodeParams(), bm, cm);
                 case GET_FAILURE_COUNT_24H -> handleFailureCount24h(input.decodeParams());
+                case UPDATE_SHARE_VISUALS -> handleUpdateShareVisuals(input.decodeParams(), bm, cm);
+                case GET_SHARE_VISUALS    -> handleGetShareVisuals(input.decodeParams(), cm);
             });
         }
 
@@ -498,7 +554,7 @@ public final class AsyncCompanyManager {
             return switch (input.function) {
                 case GET_COMPANY_INFO, IS_NAME_TAKEN, LIST_COMPANIES_FOR_CALLER,
                      LIST_SCHEDULES, GET_HISTORY, GET_COMPANY_INFO_BY_ACCOUNT,
-                     GET_FAILURE_COUNT_24H -> true;
+                     GET_FAILURE_COUNT_24H, GET_SHARE_VISUALS -> true;
                 default -> false;
             };
         }
@@ -655,7 +711,42 @@ public final class AsyncCompanyManager {
             case GET_HISTORY        -> OutputData.of(function, GetHistoryOutput.EMPTY);
             case GET_COMPANY_INFO_BY_ACCOUNT -> OutputData.of(function, CompanyInfoOutput.ABSENT);
             case GET_FAILURE_COUNT_24H -> OutputData.of(function, new GetFailureCount24hOutput(0L));
+            case UPDATE_SHARE_VISUALS -> OutputData.of(function, new UpdateShareVisualsOutput(CODE_INTERNAL));
+            case GET_SHARE_VISUALS    -> OutputData.of(function, GetShareVisualsOutput.ABSENT);
         };
+    }
+
+    // Task #46 (v2.0.8) — MANAGE-gated visuals writeback + broadcast.
+    private static OutputData handleUpdateShareVisuals(UpdateShareVisualsInput in,
+                                                       IServerBankManager bm, CompanyManager cm) {
+        int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
+        if (gate != CODE_OK) return OutputData.of(FunctionType.UPDATE_SHARE_VISUALS, new UpdateShareVisualsOutput(gate));
+        // Preset id validation — reject arbitrary client-supplied ids. Empty allowed (no preset).
+        String preset = in.iconPresetId == null ? "" : in.iconPresetId;
+        if (!preset.isEmpty()
+                && !net.kroia.banksystem.client.company.SharePresetRegistry.isValidPresetId(preset)) {
+            return OutputData.of(FunctionType.UPDATE_SHARE_VISUALS, new UpdateShareVisualsOutput(CODE_INVALID_INPUT));
+        }
+        // Length caps mirror the editor's client-side caps — defense in depth.
+        String displayName = in.displayName == null ? "" : in.displayName;
+        if (displayName.length() > 24) displayName = displayName.substring(0, 24);
+        String description = in.description == null ? "" : in.description;
+        if (description.length() > 120) description = description.substring(0, 120);
+
+        net.kroia.banksystem.banking.company.ShareVisuals visuals =
+                new net.kroia.banksystem.banking.company.ShareVisuals(preset, in.tint, displayName, description);
+        if (!cm.updateShareVisuals(in.companyId, visuals)) {
+            return OutputData.of(FunctionType.UPDATE_SHARE_VISUALS, new UpdateShareVisualsOutput(CODE_NOT_FOUND));
+        }
+        Company company = cm.getById(in.companyId);
+        long issued = company != null ? company.getTotalSharesIssued() : 0L;
+        long max = company != null ? company.getMaxSupply() : 0L;
+        net.minecraft.server.MinecraftServer server = dev.architectury.utils.GameInstance.getServer();
+        if (server != null) {
+            net.kroia.banksystem.networking.general.S2CCompanyVisualUpdatePacket
+                    .broadcast(server, in.companyId, visuals, issued, max);
+        }
+        return OutputData.of(FunctionType.UPDATE_SHARE_VISUALS, new UpdateShareVisualsOutput(CODE_OK));
     }
 
     // ------------------------------------------------------------------
@@ -762,6 +853,23 @@ public final class AsyncCompanyManager {
             count = 0L;
         }
         return OutputData.of(FunctionType.GET_FAILURE_COUNT_24H, new GetFailureCount24hOutput(count));
+    }
+
+    // Task #46 (v2.0.8) — by-id share visuals lookup (read-only; no permission gate).
+    private static OutputData handleGetShareVisuals(GetShareVisualsInput in, CompanyManager cm) {
+        Company company = cm.getById(in.companyId);
+        if (company == null)
+            return OutputData.of(FunctionType.GET_SHARE_VISUALS, GetShareVisualsOutput.ABSENT);
+        ShareVisuals v = company.getShareVisuals();
+        if (v == null) v = ShareVisuals.EMPTY;
+        return OutputData.of(FunctionType.GET_SHARE_VISUALS,
+                new GetShareVisualsOutput(true,
+                        v.getIconPresetId() == null ? "" : v.getIconPresetId(),
+                        v.getTint(),
+                        v.getDisplayName() == null ? "" : v.getDisplayName(),
+                        v.getDescription() == null ? "" : v.getDescription(),
+                        company.getTotalSharesIssued(),
+                        company.getMaxSupply()));
     }
 
     private static OutputData handleInfoByAccount(GetCompanyInfoByAccountInput in, IServerBankManager bm, CompanyManager cm) {
@@ -888,6 +996,26 @@ public final class AsyncCompanyManager {
     public static CompletableFuture<CompanyInfoOutput> getCompanyInfoByAccountAsync(int accountNr) {
         InputData input = InputData.of(FunctionType.GET_COMPANY_INFO_BY_ACCOUNT, new GetCompanyInfoByAccountInput(accountNr));
         CompletableFuture<CompanyInfoOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
+    }
+
+    /** Task #46 (v2.0.8) — slave helper: forward share-visuals writeback to master. */
+    public static CompletableFuture<UpdateShareVisualsOutput> updateShareVisualsAsync(int companyId,
+                                                                                     String iconPresetId, int tint,
+                                                                                     String displayName, String description,
+                                                                                     UUID caller) {
+        InputData input = InputData.of(FunctionType.UPDATE_SHARE_VISUALS,
+                new UpdateShareVisualsInput(companyId, iconPresetId, tint, displayName, description, caller));
+        CompletableFuture<UpdateShareVisualsOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
+    }
+
+    /** Task #46 (v2.0.8) — slave helper: fetch share visuals + supply for a companyId. */
+    public static CompletableFuture<GetShareVisualsOutput> getShareVisualsAsync(int companyId) {
+        InputData input = InputData.of(FunctionType.GET_SHARE_VISUALS, new GetShareVisualsInput(companyId));
+        CompletableFuture<GetShareVisualsOutput> f = new CompletableFuture<>();
         Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
         return f;
     }

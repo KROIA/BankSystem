@@ -227,6 +227,20 @@ public final class CompanyManager implements ServerSaveableChunked {
         return TransferResult.OK;
     }
 
+    /**
+     * Task #46 (v2.0.8) — MANAGE-gated update of a Company's {@link ShareVisuals}.
+     * Permission gating happens at the ARRS entry point (see {@code AsyncCompanyManager});
+     * this method is the pure mutator. Master-only.
+     *
+     * @return {@code true} when the Company exists and was updated; {@code false} otherwise.
+     */
+    public boolean updateShareVisuals(int companyId, ShareVisuals visuals) {
+        Company company = byId.get(companyId);
+        if (company == null) return false;
+        company.setShareVisuals(visuals == null ? ShareVisuals.EMPTY : visuals);
+        return true;
+    }
+
     public boolean updateDescription(int companyId, String newDescription) {
         Company company = byId.get(companyId);
         if (company == null) return false;

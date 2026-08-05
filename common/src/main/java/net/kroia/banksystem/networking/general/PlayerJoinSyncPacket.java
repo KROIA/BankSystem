@@ -53,6 +53,25 @@ public class PlayerJoinSyncPacket extends BankSystemNetworkPacket {
         ClientSettings settings = new ClientSettings(!BACKEND_INSTANCES.isSlaveServer);
         PlayerJoinSyncPacket packet = new PlayerJoinSyncPacket(settings);
         packet.sendToClient(player);
+
+        // Task #46 (v2.0.8) — piggyback the initial bulk sync of Company share visuals on
+        // the login handshake. Master-only: on slaves the CompanyManager singleton is null
+        // (all Company state lives on master) and slaves receive their visuals via S2C
+        // updates forwarded from master through the standard broadcast path.
+        net.kroia.banksystem.banking.company.CompanyManager mgr =
+                net.kroia.banksystem.banking.company.CompanyManager.get();
+        if (mgr != null) {
+            java.util.List<net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry> entries =
+                    new java.util.ArrayList<>();
+            for (net.kroia.banksystem.banking.company.Company c : mgr.getAll()) {
+                entries.add(net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry.of(
+                        c.getCompanyId(), c.getShareVisuals(),
+                        c.getTotalSharesIssued(), c.getMaxSupply()));
+            }
+            if (!entries.isEmpty()) {
+                net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.sendTo(player, entries);
+            }
+        }
     }
 
     @Override

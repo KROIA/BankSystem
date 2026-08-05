@@ -358,5 +358,17 @@
   "gui.banksystem.balance_history.timescale.1d": "1d",
   "gui.banksystem.balance_history.timescale.7d": "7d",
   "gui.banksystem.balance_history.timescale.30d": "30d",
-  "gui.banksystem.balance_history.timescale.all": "all"
+  "gui.banksystem.balance_history.timescale.all": "all",
+  "item.banksystem.blank_share": "Blank Share",
+  "item.banksystem.stamped_share": "Company Share",
+  "item.banksystem.stamped_share.unknown": "Unknown Company Share",
+  "item.banksystem.stamped_share.no_company": "Unstamped — no company_id",
+  "tooltip.banksystem.stamped_share.supply": "Supply: %s / %s",
+  "gui.banksystem.share_visual_editor.title": "Share Visuals",
+  "gui.banksystem.share_visual_editor.save": "Save",
+  "gui.banksystem.share_visual_editor.preset": "Icon",
+  "gui.banksystem.share_visual_editor.tint": "Tint",
+  "gui.banksystem.share_visual_editor.display_name": "Display name",
+  "gui.banksystem.share_visual_editor.description": "Description",
+  "gui.banksystem.bank_account_management_screen.share_visuals": "Share Visuals"
 }

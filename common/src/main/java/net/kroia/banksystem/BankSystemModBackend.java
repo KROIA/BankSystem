@@ -253,6 +253,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
 
         BankSystemBlocks.init();
+        net.kroia.banksystem.minecraft.component.BankSystemDataComponents.init();
         BankSystemItems.init();
         BankSystemEntities.init();
         BankSystemMenus.init();
