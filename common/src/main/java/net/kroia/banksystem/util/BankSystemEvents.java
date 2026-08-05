@@ -1,6 +1,7 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.event.DividendPaidEvent;
 import net.kroia.banksystem.api.event.PayoutExecutedInfo;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.api.IBankSystemEvents;
@@ -82,6 +83,9 @@ public class BankSystemEvents implements IBankSystemEvents {
     /** Task #45 (v2.0.8) — one event per payout tick (success or failure). Master-only. */
     public final DataEvent<PayoutExecutedInfo> PAYOUT_EXECUTED = new DataEvent<>();
 
+    /** Task #49 (v2.0.8) — one event per successful dividend run. Master-only. */
+    public final DataEvent<DividendPaidEvent> DIVIDEND_PAID = new DataEvent<>();
+
 
     @Override
     public void removeListeners() {
@@ -101,6 +105,7 @@ public class BankSystemEvents implements IBankSystemEvents {
         SLAVE_CONNECTION_LOST.removeListeners();
         TRUST_CHANGED.removeListeners();
         PAYOUT_EXECUTED.removeListeners();
+        DIVIDEND_PAID.removeListeners();
     }
 
 
@@ -195,5 +200,11 @@ public class BankSystemEvents implements IBankSystemEvents {
     public DataEvent<PayoutExecutedInfo> getPayoutExecutedEvent()
     {
         return PAYOUT_EXECUTED;
+    }
+
+    @Override
+    public DataEvent<DividendPaidEvent> getDividendPaidEvent()
+    {
+        return DIVIDEND_PAID;
     }
 }

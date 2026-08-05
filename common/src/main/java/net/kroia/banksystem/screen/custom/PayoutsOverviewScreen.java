@@ -31,6 +31,7 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
     private static final String PREFIX = "gui." + BankSystemMod.MOD_ID + ".payouts_overview_screen.";
     private static final Component TITLE = Component.translatable(PREFIX + "title");
     private static final Component NEW_PAYOUT = Component.translatable(PREFIX + "new_payout");
+    private static final Component PAY_DIVIDEND = Component.translatable(PREFIX + "pay_dividend");
     private static final String TOTAL_PER_HOUR_KEY = PREFIX + "total_per_hour";
     private static final String COUNT_KEY = PREFIX + "schedule_count";
     private static final String FAILED_KEY = PREFIX + "failed_24h";
@@ -43,6 +44,7 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
 
     private CloseButton closeButton;
     private Button newPayoutButton;
+    private Button payDividendButton;
     private Label totalLabel;
     private Label countLabel;
     private Label failedLabel;
@@ -70,6 +72,9 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
         closeButton = new CloseButton(this::onClose);
         newPayoutButton = new Button(NEW_PAYOUT.getString(), this::onNewPayoutClicked);
         newPayoutButton.setEnabled(canManage);
+        // Task #49 (v2.0.8) — one-shot dividend distribution entry-point.
+        payDividendButton = new Button(PAY_DIVIDEND.getString(), this::onPayDividendClicked);
+        payDividendButton.setEnabled(canManage);
         totalLabel = new Label("");
         countLabel = new Label("");
         failedLabel = new Label("");
@@ -86,6 +91,7 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
 
         addElement(closeButton);
         addElement(newPayoutButton);
+        addElement(payDividendButton);
         addElement(totalLabel);
         addElement(countLabel);
         addElement(failedLabel);
@@ -124,6 +130,11 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
         Minecraft.getInstance().setScreen(edit);
     }
 
+    private void onPayDividendClicked() {
+        if (!canManage) return;
+        Minecraft.getInstance().setScreen(new PayDividendScreen(this, companyId, getThisPlayerUUID()));
+    }
+
     @Override
     public void onClose() {
         screenIsOpen = false;
@@ -145,6 +156,8 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
         closeButton.setBounds(getWidth() - 20 - padding, padding, 20, 20);
         int btnW = closeButton.getTextWidth(NEW_PAYOUT.getString()) + 10;
         newPayoutButton.setBounds(closeButton.getLeft() - spacing - btnW, padding, btnW, 20);
+        int divW = closeButton.getTextWidth(PAY_DIVIDEND.getString()) + 10;
+        payDividendButton.setBounds(newPayoutButton.getLeft() - spacing - divW, padding, divW, 20);
 
         totalLabel.setBounds(padding, padding, width / 2, 20);
         countLabel.setBounds(padding, totalLabel.getBottom() + spacing, width / 2, 20);

@@ -1,6 +1,7 @@
 package net.kroia.banksystem.api;
 
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.event.DividendPaidEvent;
 import net.kroia.banksystem.api.event.PayoutExecutedInfo;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.banking.User;
@@ -181,6 +182,15 @@ public interface IBankSystemEvents {
      * and SQL history write have been submitted.
      */
     DataEvent<PayoutExecutedInfo> getPayoutExecutedEvent();
+
+    /**
+     * Task #49 (v2.0.8) — event emitted on the <b>master server</b> after a successful
+     * one-shot dividend distribution. Never fires when the run was refused (invalid
+     * input, insufficient funds, no holders). See {@link DividendPaidEvent}. Dispatched
+     * on the server thread after the transfers and the SQL ledger writes have been
+     * submitted.
+     */
+    DataEvent<DividendPaidEvent> getDividendPaidEvent();
 
     /**
      * Removes all listeners for the events and signals in this class.

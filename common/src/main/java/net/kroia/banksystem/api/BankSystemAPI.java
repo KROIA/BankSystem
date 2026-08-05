@@ -134,4 +134,15 @@ public interface BankSystemAPI {
      * @return the payout manager. Downstream mods and UI callers use this interface only.
      */
     net.kroia.banksystem.api.payout.IPayoutManager getPayoutManager();
+
+    /**
+     * Task #49 (v2.0.8) — one-shot dividend distributor. Never {@code null}; on slaves
+     * the returned instance is a fail-closed shim that returns
+     * {@link net.kroia.banksystem.api.PayDividendResult.Reason#NOT_MASTER} for every
+     * call. Callers reaching this from a slave should route through the ARRS
+     * {@code AsyncCompanyManager.PAY_DIVIDEND} function instead.
+     *
+     * @return the dividend payer. Downstream mods and UI callers use this interface only.
+     */
+    net.kroia.banksystem.api.dividend.IDividendPayer getDividendPayer();
 }

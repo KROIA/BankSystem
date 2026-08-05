@@ -59,6 +59,10 @@ public final class AsyncCompanyManager {
     public static final int CODE_BANK_ACCOUNT_ERROR    = 8;
     public static final int CODE_INTERNAL              = 9;
     public static final int CODE_SCHEDULE_MISSING      = 10;
+    /** Task #49 (v2.0.8) — company money bank cannot cover the dividend outflow. */
+    public static final int CODE_INSUFFICIENT_FUNDS    = 11;
+    /** Task #49 (v2.0.8) — no account holds this company's shares. */
+    public static final int CODE_NO_SHARES             = 12;
 
     // ------------------------------------------------------------------
     // Function enum
@@ -83,7 +87,9 @@ public final class AsyncCompanyManager {
         // Task #46 (v2.0.8) — share visuals editor writeback (MANAGE-gated on master).
         UPDATE_SHARE_VISUALS,
         // Task #46 (v2.0.8) — by-id share visuals lookup for tooltip self-heal.
-        GET_SHARE_VISUALS
+        GET_SHARE_VISUALS,
+        // Task #49 (v2.0.8) — one-shot dividend distribution.
+        PAY_DIVIDEND
     }
 
     /** Task #43h — rights filter kinds for {@link #LIST_COMPANIES_FOR_CALLER}. */
@@ -443,6 +449,23 @@ public final class AsyncCompanyManager {
                 new GetShareVisualsOutput(false, "", 0, "", "", 0L, 0L);
     }
 
+    // Task #49 (v2.0.8) — dividend distribution.
+    public record PayDividendInput(int companyId, long amountPerShare, boolean includeCompanyAccount, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, PayDividendInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT,  p -> p.companyId,
+                ByteBufCodecs.VAR_LONG, p -> p.amountPerShare,
+                ByteBufCodecs.BOOL,     p -> p.includeCompanyAccount,
+                UUIDUtil.STREAM_CODEC,  p -> p.callerUUID,
+                PayDividendInput::new);
+    }
+    public record PayDividendOutput(int resultCode, long totalPaid, int holderCount) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, PayDividendOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT,  p -> p.resultCode,
+                ByteBufCodecs.VAR_LONG, p -> p.totalPaid,
+                ByteBufCodecs.VAR_INT,  p -> p.holderCount,
+                PayDividendOutput::new);
+    }
+
     public record GetCompanyInfoByAccountInput(int accountNr) {
         public static final StreamCodec<RegistryFriendlyByteBuf, GetCompanyInfoByAccountInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.accountNr,
@@ -470,6 +493,7 @@ public final class AsyncCompanyManager {
         put(FunctionType.GET_FAILURE_COUNT_24H, new AsyncFunctionDataCodecs(GetFailureCount24hInput.STREAM_CODEC, GetFailureCount24hOutput.STREAM_CODEC));
         put(FunctionType.UPDATE_SHARE_VISUALS, new AsyncFunctionDataCodecs(UpdateShareVisualsInput.STREAM_CODEC, UpdateShareVisualsOutput.STREAM_CODEC));
         put(FunctionType.GET_SHARE_VISUALS,    new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC,    GetShareVisualsOutput.STREAM_CODEC));
+        put(FunctionType.PAY_DIVIDEND,         new AsyncFunctionDataCodecs(PayDividendInput.STREAM_CODEC,       PayDividendOutput.STREAM_CODEC));
     }};
 
     // ------------------------------------------------------------------
@@ -539,6 +563,7 @@ public final class AsyncCompanyManager {
                 case GET_FAILURE_COUNT_24H -> handleFailureCount24h(input.decodeParams());
                 case UPDATE_SHARE_VISUALS -> handleUpdateShareVisuals(input.decodeParams(), bm, cm);
                 case GET_SHARE_VISUALS    -> handleGetShareVisuals(input.decodeParams(), cm);
+                case PAY_DIVIDEND         -> handlePayDividend(input.decodeParams(), bm, cm);
             });
         }
 
@@ -713,6 +738,7 @@ public final class AsyncCompanyManager {
             case GET_FAILURE_COUNT_24H -> OutputData.of(function, new GetFailureCount24hOutput(0L));
             case UPDATE_SHARE_VISUALS -> OutputData.of(function, new UpdateShareVisualsOutput(CODE_INTERNAL));
             case GET_SHARE_VISUALS    -> OutputData.of(function, GetShareVisualsOutput.ABSENT);
+            case PAY_DIVIDEND         -> OutputData.of(function, new PayDividendOutput(CODE_INTERNAL, 0L, 0));
         };
     }
 
@@ -1016,6 +1042,38 @@ public final class AsyncCompanyManager {
     public static CompletableFuture<GetShareVisualsOutput> getShareVisualsAsync(int companyId) {
         InputData input = InputData.of(FunctionType.GET_SHARE_VISUALS, new GetShareVisualsInput(companyId));
         CompletableFuture<GetShareVisualsOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
+    }
+
+    /** Task #49 (v2.0.8) — MANAGE-gated one-shot dividend distribution. Master-only side effects. */
+    private static OutputData handlePayDividend(PayDividendInput in, IServerBankManager bm, CompanyManager cm) {
+        int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
+        if (gate != CODE_OK) return OutputData.of(FunctionType.PAY_DIVIDEND, new PayDividendOutput(gate, 0L, 0));
+        net.kroia.banksystem.api.dividend.IDividendPayer payer =
+                BACKEND_INSTANCES != null ? BACKEND_INSTANCES.DIVIDEND_PAYER : null;
+        if (payer == null) return OutputData.of(FunctionType.PAY_DIVIDEND, new PayDividendOutput(CODE_INTERNAL, 0L, 0));
+        net.kroia.banksystem.api.PayDividendResult result =
+                payer.payDividend(in.companyId, in.amountPerShare, in.includeCompanyAccount, in.callerUUID);
+        int code = switch (result.reason()) {
+            case OK -> CODE_OK;
+            case NOT_MASTER, INTERNAL -> CODE_INTERNAL;
+            case COMPANY_MISSING -> CODE_NOT_FOUND;
+            case INVALID_INPUT -> CODE_INVALID_INPUT;
+            case NO_SHARES -> CODE_NO_SHARES;
+            case INSUFFICIENT_FUNDS -> CODE_INSUFFICIENT_FUNDS;
+            case NO_PERMISSION -> CODE_NO_PERMISSION;
+        };
+        return OutputData.of(FunctionType.PAY_DIVIDEND,
+                new PayDividendOutput(code, result.totalPaid(), result.holderCount()));
+    }
+
+    /** Task #49 (v2.0.8) — slave helper: forward a dividend distribution request to master. */
+    public static CompletableFuture<PayDividendOutput> payDividendAsync(int companyId, long amountPerShare,
+                                                                       boolean includeCompanyAccount, UUID caller) {
+        InputData input = InputData.of(FunctionType.PAY_DIVIDEND,
+                new PayDividendInput(companyId, amountPerShare, includeCompanyAccount, caller));
+        CompletableFuture<PayDividendOutput> f = new CompletableFuture<>();
         Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
         return f;
     }

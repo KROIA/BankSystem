@@ -90,6 +90,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         public net.kroia.banksystem.data.table.PayoutHistoryManager PAYOUT_HISTORY_MANAGER;
         /** Task #45 (v2.0.8) — public payout API impl (always non-null; degrades to fail-closed on slave). */
         public net.kroia.banksystem.api.payout.IPayoutManager PAYOUT_MANAGER;
+        /** Task #49 (v2.0.8) — dividend payer (always non-null; degrades to fail-closed on slave). */
+        public net.kroia.banksystem.api.dividend.IDividendPayer DIVIDEND_PAYER;
 
         /**
          * External-currency binding table (Task #33, v2.0.5). Master-authoritative;
@@ -378,6 +380,9 @@ public class BankSystemModBackend implements BankSystemAPI {
                     new net.kroia.banksystem.data.table.PayoutHistoryManager(INSTANCES.DATABASE_MANAGER);
             INSTANCES.PAYOUT_MANAGER =
                     new net.kroia.banksystem.banking.company.PayoutManagerImpl(INSTANCES);
+            // Task #49 (v2.0.8) — dividend distributor (master-only).
+            INSTANCES.DIVIDEND_PAYER =
+                    new net.kroia.banksystem.banking.share.DividendPayer(INSTANCES);
 
             // Task #41 (v2.0.7): one-shot deprecation WARN for the old flat-cap setting.
             // Fires only when the user still has a non-zero cap on disk — the tiered
@@ -479,6 +484,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.TRANSACTION_LOG_MANAGER = null;
         INSTANCES.PAYOUT_HISTORY_MANAGER = null;
         INSTANCES.PAYOUT_MANAGER = null;
+        INSTANCES.DIVIDEND_PAYER = null;
         INSTANCES.isSlaveServer = false;
         snapshotTickCounter = 0;
         retentionSweepTickCounter = 0;
@@ -842,6 +848,21 @@ public class BankSystemModBackend implements BankSystemAPI {
             INSTANCES.PAYOUT_MANAGER = new net.kroia.banksystem.banking.company.PayoutManagerImpl(INSTANCES);
         }
         return INSTANCES.PAYOUT_MANAGER;
+    }
+
+    /**
+     * Task #49 (v2.0.8) — dividend payer accessor. Always non-null; on slaves / before
+     * startup completes the returned instance short-circuits with
+     * {@link net.kroia.banksystem.api.PayDividendResult.Reason#NOT_MASTER}. Callers on
+     * the slave should hop through the ARRS {@code AsyncCompanyManager.PAY_DIVIDEND}
+     * function instead of this shim.
+     */
+    @Override
+    public net.kroia.banksystem.api.dividend.IDividendPayer getDividendPayer() {
+        if (INSTANCES.DIVIDEND_PAYER == null) {
+            INSTANCES.DIVIDEND_PAYER = new net.kroia.banksystem.banking.share.DividendPayer(INSTANCES);
+        }
+        return INSTANCES.DIVIDEND_PAYER;
     }
 
     /**
