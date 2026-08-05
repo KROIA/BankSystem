@@ -218,10 +218,24 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
             }
             // Invariant: a non-personal account must always keep at least one MANAGE holder.
             // Personal accounts are already safe (owner implicitly holds MANAGE), so the helper
-            // short-circuits to OK when owner != null.
+            // short-circuits to OK when owner != null. Task #43 (v2.0.8): the four-arg overload
+            // additionally refuses removals of MANAGE from Company founders.
+            Map<User, Integer> previous = new HashMap<>();
+            for (net.kroia.banksystem.banking.clientdata.BankUserData bud : account.getUserData()) {
+                User u = bankManager.getUserByUUID(bud.userUUID);
+                if (u != null) previous.put(u, bud.permissions);
+            }
             ServerBankAccount.ManageInvariantOutcome outcome =
-                    ServerBankAccount.enforceManageInvariant(userList, owner != null);
+                    ServerBankAccount.enforceManageInvariant(userList, previous, owner != null, input.accountNumber);
             switch (outcome) {
+                case REFUSED_FOUNDER -> {
+                    warn("Refused user-set change on account " + input.accountNumber
+                            + ": it would strip MANAGE from a Company founder. User-set change skipped.");
+                    if (slaveID != null && slaveID.isEmpty()) {
+                        notifySender(sender,
+                                "gui.banksystem.bank_account_management_screen.must_keep_founder");
+                    }
+                }
                 case REFUSED_ORPHAN -> {
                     // Removing the last user would orphan the account. Skip ONLY the user-set
                     // mutation; the name/icon/bankData changes above/below still apply. The

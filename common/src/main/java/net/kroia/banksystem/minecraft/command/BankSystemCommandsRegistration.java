@@ -3,6 +3,8 @@ package net.kroia.banksystem.minecraft.command;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.FloatArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
@@ -11,6 +13,8 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
 import net.kroia.banksystem.api.command.IServerBankSystemCommandHandler;
+import net.kroia.banksystem.banking.company.AsyncCompanyManager;
+import net.kroia.banksystem.banking.company.CompanyManager;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
 import net.kroia.modutilities.testing.TestCommandRegistration;
@@ -562,9 +566,131 @@ public class BankSystemCommandsRegistration {
                         )
         );
 
+        // Task #43 (v2.0.8) — /company command tree (Phase 1: Company foundation).
+        registerCompanyCommands(dispatcher);
+
         boolean isSlave = BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer;
         if (BankSystemMod.ENABLE_DEV_FEATURES)
             TestCommandRegistration.register(dispatcher, "banksystem", "BankSystem", "banksystem", isSlave);
+    }
+
+    /**
+     * Task #43 (v2.0.8). Registers the {@code /company} command tree — Phase 1 subset:
+     * {@code create}, {@code transfer}, {@code dissolve}, {@code description}, {@code info}.
+     * <p>
+     * Master-only in this phase. Slaves print a "master only" notice — full slave-side ARRS
+     * forwarding is a follow-up task (deferred from Task #43 spec item 8).
+     */
+    private static void registerCompanyCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(
+                Commands.literal("company")
+                    .then(Commands.literal("create")
+                        .then(Commands.argument("name", StringArgumentType.string())
+                            .then(Commands.argument("maxSupply", LongArgumentType.longArg(1L, 1_000_000_000L))
+                                .executes(ctx -> {
+                                    ServerPlayer player = ctx.getSource().getPlayerOrException();
+                                    String name = StringArgumentType.getString(ctx, "name");
+                                    long maxSupply = LongArgumentType.getLong(ctx, "maxSupply");
+                                    CompanyCommandLogic.create(player, name, maxSupply);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                            )
+                        )
+                    )
+                    .then(Commands.literal("transfer")
+                        .then(Commands.argument("companyName", StringArgumentType.string())
+                                .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_FOUNDER))
+                            .then(Commands.argument("newFounder", StringArgumentType.string())
+                                    .suggests((c, b) -> getPlayerNamesSuggestion(b))
+                                .executes(ctx -> {
+                                    ServerPlayer player = ctx.getSource().getPlayerOrException();
+                                    String companyName = StringArgumentType.getString(ctx, "companyName");
+                                    String targetName = StringArgumentType.getString(ctx, "newFounder");
+                                    CompanyCommandLogic.transfer(player, companyName, targetName);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                            )
+                        )
+                    )
+                    .then(Commands.literal("dissolve")
+                        .then(Commands.argument("companyName", StringArgumentType.string())
+                                .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_FOUNDER))
+                            .executes(ctx -> {
+                                ServerPlayer player = ctx.getSource().getPlayerOrException();
+                                String companyName = StringArgumentType.getString(ctx, "companyName");
+                                CompanyCommandLogic.dissolve(player, companyName);
+                                return Command.SINGLE_SUCCESS;
+                            })
+                        )
+                    )
+                    .then(Commands.literal("description")
+                        .then(Commands.argument("companyName", StringArgumentType.string())
+                                .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_MANAGE))
+                            .then(Commands.argument("text", StringArgumentType.greedyString())
+                                .executes(ctx -> {
+                                    ServerPlayer player = ctx.getSource().getPlayerOrException();
+                                    String companyName = StringArgumentType.getString(ctx, "companyName");
+                                    String text = StringArgumentType.getString(ctx, "text");
+                                    CompanyCommandLogic.description(player, companyName, text);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                            )
+                        )
+                    )
+                    .then(Commands.literal("info")
+                        .then(Commands.argument("companyName", StringArgumentType.string())
+                                .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_ALL))
+                            .executes(ctx -> {
+                                ServerPlayer player = ctx.getSource().getPlayerOrException();
+                                String companyName = StringArgumentType.getString(ctx, "companyName");
+                                CompanyCommandLogic.info(player, companyName);
+                                return Command.SINGLE_SUCCESS;
+                            })
+                        )
+                    )
+        );
+    }
+
+    /**
+     * Task #43h — company-name suggestion provider, filtered by caller's rights.
+     * On master, iterates {@link CompanyManager} directly. On slave, forwards to master
+     * via {@link AsyncCompanyManager} — ARRS response completes the returned future.
+     */
+    private static CompletableFuture<Suggestions> getCompanyNameSuggestion(
+            com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+            SuggestionsBuilder builder,
+            byte filterKind) {
+        CommandSourceStack source = ctx.getSource();
+        UUID callerUUID;
+        try {
+            callerUUID = source.getPlayerOrException().getUUID();
+        } catch (Exception e) {
+            return CompletableFuture.completedFuture(builder.build());
+        }
+
+        CompanyManager cm = CompanyManager.get();
+        IServerBankSystemCommandHandler master = BACKEND_INSTANCES == null ? null
+                : BACKEND_INSTANCES.COMMAND_HANDLER.getSync();
+        if (cm != null && master != null) {
+            // Master side — walk indices directly, no ARRS.
+            java.util.Set<net.kroia.banksystem.banking.company.Company> set = switch (filterKind) {
+                case AsyncCompanyManager.FILTER_FOUNDER -> cm.listCompaniesFounderedBy(callerUUID);
+                case AsyncCompanyManager.FILTER_MANAGE  -> cm.listCompaniesManagedBy(callerUUID);
+                default                                 -> cm.listAllCompanies();
+            };
+            for (net.kroia.banksystem.banking.company.Company c : set) {
+                builder.suggest("\"" + c.getName() + "\"");
+            }
+            return CompletableFuture.completedFuture(builder.build());
+        }
+        // Slave — ARRS forward.
+        CompletableFuture<Suggestions> future = new CompletableFuture<>();
+        AsyncCompanyManager.listCompanyNamesForCallerAsync(callerUUID, filterKind)
+                .thenAccept(names -> {
+                    for (String n : names) builder.suggest("\"" + n + "\"");
+                    future.complete(builder.build());
+                });
+        return future;
     }
 
     private static CompletableFuture<Suggestions> getPlayerNamesSuggestion(SuggestionsBuilder builder)

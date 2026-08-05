@@ -75,6 +75,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
         AsyncBankAccount.setupNetworkPacket();
         AsyncBank.setupNetworkPacket();
         AsyncBankSystemCommandHandler.setupNetworkPacket();
+        net.kroia.banksystem.banking.company.AsyncCompanyManager.setupNetworkPacket();
 
         this.setupARRS(); // Setup the Asynchronous Request Response System (ARRS)
         this.setupStreamSystem();
