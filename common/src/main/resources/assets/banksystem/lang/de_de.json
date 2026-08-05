@@ -2,6 +2,7 @@
   "container.banksystem.bank_download_block": "Bank Download Block",
   "container.banksystem.bank_terminal_block_entity": "Bank Terminal Block",
   "container.banksystem.bank_upload_block": "Bank Upload Block",
+  "container.banksystem.bank_upload": "Bank Upload",
   "itemGroup.banksystem.bank_system_tab": "Bank System",
   "block.banksystem.bank_terminal_block": "Bank Terminal Block",
   "block.banksystem.metal_case_block": "Metall Gehäuse Block",
@@ -89,6 +90,7 @@
   "gui.banksystem.bank_account_management_item.total_label.tooltip": "Summe aus dem freien und reservierten Betrag.\nGesammtkapital des Spielers für dieses Item.",
   "gui.banksystem.bank_account_management_item.ask_remove_title": "Konto für {item_name} entfernen",
   "gui.banksystem.bank_account_management_item.ask_remove_message": "Bist du sicher, dass du die Bank für {item_name} entfernen möchtest?\nDer Bankaccount {account_number} wird alle {item_name} in der Bank verlieren!\nDiese Aktion kann nicht rückgängig gemacht werden!",
+  "gui.banksystem.bank_account_management_screen.title": "Bankkonto-Verwaltung",
   "gui.banksystem.bank_account_management_screen.save_changes": "Änderingen speichern",
   "gui.banksystem.bank_account_management_screen.delete_account": "Konto löschen",
   "gui.banksystem.bank_account_management_screen.delete_account_ask_popup_title": "Konto: \"{account_number}\" löschen?",
@@ -96,6 +98,7 @@
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Bankkonto eröffnen",
   "gui.banksystem.bank_account_management_screen.add_user": "Benutzer hinzufügen",
   "gui.banksystem.bank_account_management_screen.must_keep_manager": "Ein Konto muss immer mindestens einen Benutzer mit Verwalten-Berechtigung behalten — die Änderung wurde nicht übernommen.",
+  "gui.banksystem.bank_account_management_screen.must_keep_founder": "Ein Firmenkonto muss die Verwalten-Berechtigung beim Gründer behalten — die Änderung wurde nicht übernommen.",
   "gui.banksystem.bank_account_management_screen.bindings_button": "Verknüpfungen",
 
   "gui.banksystem.bank_account_bindings_screen.title": "Währungs-Verknüpfungen — {account}",
@@ -210,6 +213,7 @@
 
   "block.banksystem.banksystem_display_block": "Bank Anzeige",
   "block.banksystem.atm_block": "Geldautomat",
+  "gui.banksystem.atm_screen.title": "Geldautomat",
   "gui.banksystem.atm_screen.receive_button": "Geld abheben",
   "gui.banksystem.atm_screen.sum_text": "{amount} wird ausbezahlt",
   "gui.banksystem.atm_screen.available_text": "Zum abheben verfügbar: {amount}",
@@ -242,6 +246,7 @@
   "gui.banksystem.bank_user_widget.permission_cancel": "Abbrechen",
 
   "gui.banksystem.bank_user_widget.user_selection_screen": "Benutzerauswahl",
+  "gui.banksystem.user_selection_screen.title": "Benutzerauswahl",
 
   "gui.banksystem.bank_account_selection_screen.title": "Bankkonto Auswahl",
   "gui.banksystem.bank_account_selection_screen.title_label": "Wähle ein Bankkonto aus",

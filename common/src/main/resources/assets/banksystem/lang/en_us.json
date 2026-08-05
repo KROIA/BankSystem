@@ -2,6 +2,7 @@
   "container.banksystem.bank_download_block": "Bank Download Block",
   "container.banksystem.bank_terminal_block_entity": "Bank Terminal Block",
   "container.banksystem.bank_upload_block": "Bank Upload Block",
+  "container.banksystem.bank_upload": "Bank Upload",
   "itemGroup.banksystem.bank_system_tab": "Bank System",
   "block.banksystem.bank_terminal_block": "Bank Terminal Block",
   "block.banksystem.metal_case_block": "Metal Case Block",
@@ -89,6 +90,7 @@
   "gui.banksystem.bank_account_management_item.total_label.tooltip": "Sum of the freely available and locked balance.\nTotal capital of the player for this item.",
   "gui.banksystem.bank_account_management_item.ask_remove_title": "Remove account for {item_name}",
   "gui.banksystem.bank_account_management_item.ask_remove_message": "Are you sure you want to remove this account for {item_name}?\nThe bankaccount {account_number} will lose all {item_name} in the account!\nThis action cannot be undone!",
+  "gui.banksystem.bank_account_management_screen.title": "Bank Account Management",
   "gui.banksystem.bank_account_management_screen.save_changes": "Save changes",
   "gui.banksystem.bank_account_management_screen.delete_account": "Delete Account",
   "gui.banksystem.bank_account_management_screen.delete_account_ask_popup_title": "Delete the account: \"{account_number}\"?",
@@ -96,6 +98,7 @@
   "gui.banksystem.bank_account_management_screen.create_new_bank": "Create new bank",
   "gui.banksystem.bank_account_management_screen.add_user": "Add user",
   "gui.banksystem.bank_account_management_screen.must_keep_manager": "An account must always keep at least one user with Manage permission — the change was not applied.",
+  "gui.banksystem.bank_account_management_screen.must_keep_founder": "A Company account must always keep the Manage permission on its founder — the change was not applied.",
   "gui.banksystem.bank_account_management_screen.bindings_button": "Bindings",
 
   "gui.banksystem.bank_account_bindings_screen.title": "Currency Bindings — {account}",
@@ -211,6 +214,7 @@
 
   "block.banksystem.banksystem_display_block": "Bank Display",
   "block.banksystem.atm_block": "ATM",
+  "gui.banksystem.atm_screen.title": "ATM",
   "gui.banksystem.atm_screen.receive_button": "Withdraw money",
   "gui.banksystem.atm_screen.sum_text": "Current withdrawal sum: {amount}",
   "gui.banksystem.atm_screen.available_text": "Available for withdrawal: {amount}",
@@ -243,6 +247,7 @@
   "gui.banksystem.bank_user_widget.permission_cancel": "Cancel",
 
   "gui.banksystem.bank_user_widget.user_selection_screen": "User selection screen",
+  "gui.banksystem.user_selection_screen.title": "User Selection",
 
   "gui.banksystem.bank_account_selection_screen.title": "Bank Account Selection Screen",
   "gui.banksystem.bank_account_selection_screen.title_label": "Select a bank account",
