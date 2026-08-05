@@ -30,6 +30,17 @@ public final class BankSystemDataComponents {
                             .networkSynchronized(ByteBufCodecs.INT)
                             .build());
 
+    /**
+     * Task #47 (v2.0.8) — Share Stamper binding component. Persists the companyId a
+     * dropped Share Stamper block-item is bound to. 0 or absent means unbound.
+     */
+    public static final RegistrySupplier<DataComponentType<Integer>> STAMPER_BINDING =
+            DATA_COMPONENT_TYPES.register("stamper_binding",
+                    () -> DataComponentType.<Integer>builder()
+                            .persistent(Codec.INT)
+                            .networkSynchronized(ByteBufCodecs.INT)
+                            .build());
+
     private static boolean initialized = false;
 
     public static void init() {

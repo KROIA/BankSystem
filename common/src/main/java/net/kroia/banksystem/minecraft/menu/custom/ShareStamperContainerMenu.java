@@ -32,12 +32,13 @@ public class ShareStamperContainerMenu extends AbstractContainerMenu {
     public ShareStamperContainerMenu(int id, Inventory playerInv, ShareStamperBlockEntity be) {
         super(BankSystemMenus.SHARE_STAMPER_CONTAINER_MENU.get(), id);
         this.blockEntity = be;
-        this.data = be != null ? be.data : new SimpleContainerData(9);
+        this.data = be != null ? be.data : new SimpleContainerData(10);
 
         // Two BE slots (0=input, 1=output). If BE is null (client with missing BE), use dummy.
         SimpleContainer dummy = new SimpleContainer(2);
-        addSlot(new Slot(be != null ? be : dummy, ShareStamperBlockEntity.SLOT_INPUT, 56, 35));
-        addSlot(new Slot(be != null ? be : dummy, ShareStamperBlockEntity.SLOT_OUTPUT, 116, 35) {
+        // Vertical stack: input on top, progress bar between, output below.
+        addSlot(new Slot(be != null ? be : dummy, ShareStamperBlockEntity.SLOT_INPUT, 134, 18));
+        addSlot(new Slot(be != null ? be : dummy, ShareStamperBlockEntity.SLOT_OUTPUT, 134, 50) {
             @Override public boolean mayPlace(ItemStack stack) { return false; }
         });
 
@@ -55,12 +56,13 @@ public class ShareStamperContainerMenu extends AbstractContainerMenu {
     public BlockPos getBlockPos() { return blockEntity != null ? blockEntity.getBlockPos() : BlockPos.ZERO; }
 
     public int getStampProgress()   { return data.get(0); }
-    public int getQueuedStamps()    { return data.get(1); }
+    public boolean isProcessing()   { return data.get(1) != 0; }
     public int getBoundCompanyId()  { return data.get(2); }
     public int getModeOrdinal()     { return data.get(3); }
-    public boolean isAllowHopperRedeem() { return data.get(4) != 0; }
-    public long getTotalIssued()    { return ((long)(data.get(5) & 0xFFFF)) | (((long)(data.get(6) & 0xFFFF)) << 16); }
-    public long getMaxSupply()      { return ((long)(data.get(7) & 0xFFFF)) | (((long)(data.get(8) & 0xFFFF)) << 16); }
+    public boolean isAutoInput()    { return data.get(4) != 0; }
+    public boolean isAutoOutput()   { return data.get(5) != 0; }
+    public long getTotalIssued()    { return ((long)(data.get(6) & 0xFFFF)) | (((long)(data.get(7) & 0xFFFF)) << 16); }
+    public long getMaxSupply()      { return ((long)(data.get(8) & 0xFFFF)) | (((long)(data.get(9) & 0xFFFF)) << 16); }
 
     @Override
     public boolean stillValid(Player player) {

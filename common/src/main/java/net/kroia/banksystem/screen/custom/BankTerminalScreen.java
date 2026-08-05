@@ -342,7 +342,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         // actual bank-list width so it adapts to GUI scale + JEI presence.
         bankListLayout.columns = 1;
         itemListView.setLayout(bankListLayout);
-        inventoryView = new BankTerminalCraftingView(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 256, 256));
+        inventoryView = new BankTerminalCraftingView(pMenu, pPlayerInventory, INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/bank_terminal.png", 256, 256));
 
         useBankItemsCheckBox = new CheckBox(USE_BANK_ITEMS_TEXT.getString(), (checked) -> onCraftingSettingsChanged());
         autoDepositCheckBox = new CheckBox(AUTO_DEPOSIT_OUTPUT_TEXT.getString(), (checked) -> onCraftingSettingsChanged());

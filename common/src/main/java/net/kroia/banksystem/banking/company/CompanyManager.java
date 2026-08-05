@@ -258,7 +258,17 @@ public final class CompanyManager implements ServerSaveableChunked {
         Company company = byId.get(companyId);
         if (company == null) return false;
         long cur = company.getTotalSharesIssued();
-        if (cur <= 0L) return false;
+        if (cur <= 0L) {
+            // Task v2.0.8 — hardening: totalSharesIssued was 0 but a valid stamped share
+            // was presented for redemption. Warn (possible share duplication somewhere
+            // in the world) but still succeed so the item conversion proceeds.
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                BACKEND_INSTANCES.LOGGER.warn("[Stamper] redeem underflow for company "
+                        + companyId + "/" + company.getName()
+                        + ": totalSharesIssued was 0. Possible share duplication elsewhere in the world.");
+            }
+            return true;
+        }
         company.setTotalSharesIssued(cur - 1);
         broadcastSupply(companyId, cur - 1);
         return true;

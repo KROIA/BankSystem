@@ -97,6 +97,8 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerS2C(S2CCompanyVisualUpdatePacket.TYPE, S2CCompanyVisualUpdatePacket.STREAM_CODEC);
         registerS2C(S2CCompanyVisualBulkPacket.TYPE, S2CCompanyVisualBulkPacket.STREAM_CODEC);
         registerS2C(S2CCompanyVisualSupplyUpdatePacket.TYPE, S2CCompanyVisualSupplyUpdatePacket.STREAM_CODEC);
+        // Task #47 (v2.0.8) — Share Stamper bind screen open (S2C).
+        registerS2C(OpenStamperBindScreenPacket.TYPE, OpenStamperBindScreenPacket.STREAM_CODEC);
 
     }
 
@@ -119,6 +121,9 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerC2S(ConverterCommitToBankPacket.TYPE, ConverterCommitToBankPacket.STREAM_CODEC);
         // Task #47 (v2.0.8) — Share Stamper C2S mutations.
         registerC2S(StampSharesRequest.TYPE, StampSharesRequest.STREAM_CODEC);
+        // Task #47 (v2.0.8) — Share Stamper bind request (C2S).
+        registerC2S(SetStamperBindingRequest.TYPE, SetStamperBindingRequest.STREAM_CODEC);
+        registerC2S(CloseStamperBindScreenPacket.TYPE, CloseStamperBindScreenPacket.STREAM_CODEC);
     }
 
     @Override

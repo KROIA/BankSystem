@@ -45,7 +45,8 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
 
     public static final int SLOT_INPUT = 0;
     public static final int SLOT_OUTPUT = 1;
-    public static final int STAMP_TICKS_PER_CYCLE = 200;
+    // Task v2.0.8 — 3x faster (was 200) per user feedback.
+    public static final int STAMP_TICKS_PER_CYCLE = 67;
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) { BACKEND_INSTANCES = backend; }
@@ -59,11 +60,24 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     private UUID linkedByUUID = null;
     private long linkedAt = 0L;
     private int stampProgress = 0;
-    private int queuedStamps = 0;
     private Mode mode = Mode.STAMP;
-    private boolean allowHopperRedeem = false;
+    // Task v2.0.8 — Start/Stop control replaces the queued-stamps counter.
+    // While `processing` is true the BE ticks one stamp/redeem per cycle; it auto-stops when
+    // input empty / output full / max supply reached (see serverTick).
+    private boolean processing = false;
+    // Task v2.0.8 — split hopper toggle: autoInput gates INSERT via UP face,
+    // autoOutput gates EXTRACT via DOWN face (both default off; NBT-migrated from
+    // legacy `AllowHopperRedeem`).
+    private boolean autoInput = false;
+    private boolean autoOutput = false;
 
     private boolean idleLoggedOnce = false;
+
+    // Task #47 (v2.0.8) — single-viewer lock (transient; never persisted).
+    // Held by whichever player currently has either the bind screen or the main
+    // stamper screen open on this BE. Cleared on menu close, bind-screen close,
+    // or BE removal. Concurrent right-clicks from other players get rejected.
+    private UUID currentViewer = null;
 
     // ContainerData for menu sync.
     public final ContainerData data = new ContainerData() {
@@ -73,14 +87,15 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
             long ms = getMaxSupply();
             return switch (index) {
                 case 0 -> stampProgress;
-                case 1 -> queuedStamps;
+                case 1 -> processing ? 1 : 0;
                 case 2 -> boundCompanyId;
                 case 3 -> mode.ordinal();
-                case 4 -> allowHopperRedeem ? 1 : 0;
-                case 5 -> (int) (ti & 0xFFFF);
-                case 6 -> (int) ((ti >> 16) & 0xFFFF);
-                case 7 -> (int) (ms & 0xFFFF);
-                case 8 -> (int) ((ms >> 16) & 0xFFFF);
+                case 4 -> autoInput ? 1 : 0;
+                case 5 -> autoOutput ? 1 : 0;
+                case 6 -> (int) (ti & 0xFFFF);
+                case 7 -> (int) ((ti >> 16) & 0xFFFF);
+                case 8 -> (int) (ms & 0xFFFF);
+                case 9 -> (int) ((ms >> 16) & 0xFFFF);
                 default -> 0;
             };
         }
@@ -88,14 +103,15 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         public void set(int index, int value) {
             switch (index) {
                 case 0 -> stampProgress = value;
-                case 1 -> queuedStamps = value;
+                case 1 -> processing = value != 0;
                 case 2 -> boundCompanyId = value;
                 case 3 -> mode = value == 1 ? Mode.REDEEM : Mode.STAMP;
-                case 4 -> allowHopperRedeem = value != 0;
+                case 4 -> autoInput = value != 0;
+                case 5 -> autoOutput = value != 0;
             }
         }
         @Override
-        public int getCount() { return 9; }
+        public int getCount() { return 10; }
     };
 
     public ShareStamperBlockEntity(BlockPos pos, BlockState state) {
@@ -107,8 +123,9 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     public UUID getLinkedByUUID() { return linkedByUUID; }
     public long getLinkedAt() { return linkedAt; }
     public Mode getMode() { return mode; }
-    public boolean isAllowHopperRedeem() { return allowHopperRedeem; }
-    public int getQueuedStamps() { return queuedStamps; }
+    public boolean isAutoInput() { return autoInput; }
+    public boolean isAutoOutput() { return autoOutput; }
+    public boolean isProcessing() { return processing; }
     public int getStampProgress() { return stampProgress; }
 
     public String getBoundCompanyName() {
@@ -160,16 +177,28 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         this.linkedByUUID = null;
         this.linkedAt = 0L;
         this.stampProgress = 0;
-        this.queuedStamps = 0;
+        this.processing = false;
         setChanged();
     }
+
+    // -------- viewer lock (Task #47, v2.0.8) --------
+    /** @return true if the caller may now open a stamper GUI on this BE (bind or main). */
+    public synchronized boolean tryAcquireViewer(UUID uuid) {
+        if (currentViewer == null || currentViewer.equals(uuid)) {
+            currentViewer = uuid;
+            return true;
+        }
+        return false;
+    }
+    public synchronized void releaseViewer(UUID uuid) {
+        if (currentViewer != null && currentViewer.equals(uuid)) currentViewer = null;
+    }
+    public synchronized UUID getCurrentViewer() { return currentViewer; }
     public void setMode(Mode m) { this.mode = m; this.stampProgress = 0; setChanged(); }
-    public void queueStamps(int add) {
-        if (add <= 0) return;
-        this.queuedStamps = Math.min(Integer.MAX_VALUE - 1, this.queuedStamps + add);
-        setChanged();
+    public void setProcessing(boolean p) { this.processing = p; if (!p) this.stampProgress = 0; setChanged(); }
+    public void setAutoIo(boolean input, boolean output) {
+        this.autoInput = input; this.autoOutput = output; setChanged();
     }
-    public void toggleHopperRedeem() { this.allowHopperRedeem = !this.allowHopperRedeem; setChanged(); }
 
     // -------- tick --------
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos, BlockState state, T t) {
@@ -180,7 +209,8 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
 
     private void serverTick() {
-        if (boundCompanyId < 0) return;
+        if (!processing) return;
+        if (boundCompanyId < 0) { processing = false; return; }
         CompanyManager cm = CompanyManager.get();
         if (cm == null) return;
         Company company = cm.getById(boundCompanyId);
@@ -199,31 +229,40 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         ItemStack input = items.get(SLOT_INPUT);
         ItemStack output = items.get(SLOT_OUTPUT);
 
+        // Task v2.0.8 — auto-stop `processing` when the current mode can't advance
+        // for one of the well-known "stuck" reasons: input empty, output full, or
+        // (STAMP mode only) company hit maxSupply. Setting processing=false also
+        // ripples through ContainerData index 1 so the client button flips back
+        // to "Start" without an extra packet.
         if (mode == Mode.STAMP) {
             if (input.isEmpty() || !(input.getItem() instanceof BlankShareItem)) {
-                stampProgress = 0; return;
+                stampProgress = 0; processing = false; setChanged(); return;
             }
             if (company.getTotalSharesIssued() + 1 > company.getMaxSupply()) {
-                stampProgress = 0; return;
+                stampProgress = 0; processing = false; setChanged(); return;
             }
             ItemStack expected = StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), boundCompanyId);
             if (!output.isEmpty()) {
                 if (!ItemStack.isSameItemSameComponents(output, expected)
                         || output.getCount() >= output.getMaxStackSize()) {
-                    stampProgress = 0; return;
+                    stampProgress = 0; processing = false; setChanged(); return;
                 }
             }
         } else { // REDEEM
             if (input.isEmpty() || !(input.getItem() instanceof StampedShareItem)) {
-                stampProgress = 0; return;
+                stampProgress = 0; processing = false; setChanged(); return;
             }
             Integer cid = StampedShareItem.getCompanyId(input);
-            if (cid == null || cid != boundCompanyId) { stampProgress = 0; return; }
-            if (company.getTotalSharesIssued() <= 0L) { stampProgress = 0; return; }
+            if (cid == null || cid != boundCompanyId) {
+                stampProgress = 0; processing = false; setChanged(); return;
+            }
+            if (company.getTotalSharesIssued() <= 0L) {
+                stampProgress = 0; processing = false; setChanged(); return;
+            }
             if (!output.isEmpty()) {
                 if (!(output.getItem() instanceof BlankShareItem)
                         || output.getCount() >= output.getMaxStackSize()) {
-                    stampProgress = 0; return;
+                    stampProgress = 0; processing = false; setChanged(); return;
                 }
             }
         }
@@ -238,7 +277,6 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
                 ItemStack made = StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), boundCompanyId);
                 if (output.isEmpty()) items.set(SLOT_OUTPUT, made);
                 else output.grow(1);
-                if (queuedStamps > 0) queuedStamps--;
                 logLedger(company, TransactionLogRecord.Kind.SHARE_STAMP);
             } else {
                 if (!cm.redeemShare(boundCompanyId)) { setChanged(); return; }
@@ -274,9 +312,21 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         linkedByUUID = tag.hasUUID("LinkedByUUID") ? tag.getUUID("LinkedByUUID") : null;
         linkedAt = tag.getLong("LinkedAt");
         stampProgress = tag.getInt("StampProgress");
-        queuedStamps = tag.getInt("QueuedStamps");
         mode = tag.getInt("Mode") == 1 ? Mode.REDEEM : Mode.STAMP;
-        allowHopperRedeem = tag.getBoolean("AllowHopperRedeem");
+        // Task v2.0.8 — NBT migration: legacy single `AllowHopperRedeem` flag maps to
+        // both new autoInput / autoOutput toggles. Legacy `QueuedStamps` field discarded
+        // (no back-compat needed beyond load — see COMPLETED_TASKS.md).
+        if (tag.contains("AutoInput") || tag.contains("AutoOutput")) {
+            autoInput = tag.getBoolean("AutoInput");
+            autoOutput = tag.getBoolean("AutoOutput");
+        } else if (tag.getBoolean("AllowHopperRedeem")) {
+            autoInput = true;
+            autoOutput = true;
+        } else {
+            autoInput = false;
+            autoOutput = false;
+        }
+        processing = tag.getBoolean("Processing");
     }
 
     @Override
@@ -287,9 +337,10 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         if (linkedByUUID != null) tag.putUUID("LinkedByUUID", linkedByUUID);
         tag.putLong("LinkedAt", linkedAt);
         tag.putInt("StampProgress", stampProgress);
-        tag.putInt("QueuedStamps", queuedStamps);
         tag.putInt("Mode", mode.ordinal());
-        tag.putBoolean("AllowHopperRedeem", allowHopperRedeem);
+        tag.putBoolean("AutoInput", autoInput);
+        tag.putBoolean("AutoOutput", autoOutput);
+        tag.putBoolean("Processing", processing);
     }
 
     // -------- Container --------
@@ -321,6 +372,20 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
     @Override public void clearContent() { items.clear(); }
 
+    // Task #47 (v2.0.8) — release viewer lock when the container menu closes and when
+    // the BE unloads. AbstractContainerMenu#removed calls Container#stopOpen(Player).
+    @Override
+    public void stopOpen(Player p) {
+        super.stopOpen(p);
+        releaseViewer(p.getUUID());
+    }
+
+    @Override
+    public void setRemoved() {
+        currentViewer = null;
+        super.setRemoved();
+    }
+
     // WorldlyContainer
     @Override
     public int[] getSlotsForFace(Direction side) {
@@ -330,17 +395,34 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
     @Override
     public boolean canPlaceItemThroughFace(int slot, ItemStack stack, Direction dir) {
-        if (slot != SLOT_INPUT || dir != Direction.UP) return false;
+        // Task v2.0.8 — insert only when autoInput gate is on AND the face is UP.
+        if (slot != SLOT_INPUT || dir != Direction.UP || !autoInput) return false;
         if (mode == Mode.STAMP) return stack.getItem() instanceof BlankShareItem;
         // REDEEM
-        if (!allowHopperRedeem) return false;
         if (!(stack.getItem() instanceof StampedShareItem)) return false;
         Integer cid = StampedShareItem.getCompanyId(stack);
         return cid != null && cid == boundCompanyId;
     }
     @Override
     public boolean canTakeItemThroughFace(int slot, ItemStack stack, Direction dir) {
-        return slot == SLOT_OUTPUT && dir == Direction.DOWN && !stack.isEmpty();
+        // Task v2.0.8 — extract only when autoOutput gate is on AND face is DOWN.
+        return slot == SLOT_OUTPUT && dir == Direction.DOWN && autoOutput && !stack.isEmpty();
+    }
+
+    // Task #47 (v2.0.8) — client sync of the binding + mode so tooltip / getDestroyProgress
+    // can react without opening the menu. Contents are intentionally NOT synced to keep the
+    // update tag small; only the identity-relevant fields ship.
+    @Override
+    public net.minecraft.network.protocol.Packet<net.minecraft.network.protocol.game.ClientGamePacketListener> getUpdatePacket() {
+        return net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    @Override
+    public @NotNull CompoundTag getUpdateTag(HolderLookup.@NotNull Provider provider) {
+        CompoundTag tag = new CompoundTag();
+        tag.putInt("BoundCompanyId", boundCompanyId);
+        tag.putInt("Mode", mode.ordinal());
+        return tag;
     }
 
     public void dropContents() {

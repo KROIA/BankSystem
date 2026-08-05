@@ -16,6 +16,7 @@ import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.screen.custom.BankDownloadScreen;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
+import net.kroia.banksystem.screen.custom.ShareStamperScreen;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
@@ -114,6 +115,12 @@ public class BankSystemJeiPlugin implements IModPlugin {
         registration.addGuiContainerHandler(BankDownloadScreen.class, new IGuiContainerHandler<BankDownloadScreen>() {
             @Override
             public List<Rect2i> getGuiExtraAreas(BankDownloadScreen screen) {
+                return screen.getJeiExclusionAreas();
+            }
+        });
+        registration.addGuiContainerHandler(ShareStamperScreen.class, new IGuiContainerHandler<ShareStamperScreen>() {
+            @Override
+            public List<Rect2i> getGuiExtraAreas(ShareStamperScreen screen) {
                 return screen.getJeiExclusionAreas();
             }
         });

@@ -20,7 +20,10 @@ import org.jetbrains.annotations.NotNull;
  */
 public class StampSharesRequest extends BankSystemNetworkPacket {
 
-    public enum Op { QUEUE_STAMPS, SET_MODE, TOGGLE_HOPPER_REDEEM, BIND_COMPANY }
+    // Task v2.0.8 — QUEUE_STAMPS + TOGGLE_HOPPER_REDEEM retired. Replaced by
+    // SET_PROCESSING (Start/Stop toggle) and SET_AUTO_IO (bit0=autoInput,
+    // bit1=autoOutput carried in `count`).
+    public enum Op { UNUSED_LEGACY_0, SET_MODE, UNUSED_LEGACY_1, BIND_COMPANY, SET_PROCESSING, SET_AUTO_IO }
 
     public static final Type<StampSharesRequest> TYPE = new Type<>(
             ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "stamp_shares_request"));
@@ -69,11 +72,11 @@ public class StampSharesRequest extends BankSystemNetworkPacket {
         }
         if (!stamper.hasManagePermission(player.getUUID())) return;
         switch (op) {
-            case QUEUE_STAMPS -> stamper.queueStamps(Math.max(1, count));
             case SET_MODE -> stamper.setMode(count == 1
                     ? ShareStamperBlockEntity.Mode.REDEEM
                     : ShareStamperBlockEntity.Mode.STAMP);
-            case TOGGLE_HOPPER_REDEEM -> stamper.toggleHopperRedeem();
+            case SET_PROCESSING -> stamper.setProcessing(flagValue);
+            case SET_AUTO_IO -> stamper.setAutoIo((count & 1) != 0, (count & 2) != 0);
             default -> {}
         }
     }
