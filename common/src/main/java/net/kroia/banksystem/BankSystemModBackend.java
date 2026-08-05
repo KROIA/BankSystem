@@ -64,6 +64,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -917,11 +919,18 @@ public class BankSystemModBackend implements BankSystemAPI {
             }
             return;
         }
-        // Notify the master that players are on this server to create the personal bank account if the players don't have one
-        ArrayList<ServerPlayer> players = ServerPlayerUtilities.getOnlinePlayers();
+        // Notify the master that players are on this server to create the personal bank account if the players don't have one.
+        // First drain any joins that were queued while the slave→master link was down (silent-drop fix),
+        // then iterate currently online players — deduping so a queued player who is still online is not double-forwarded.
         IAsyncBankManager manager = INSTANCES.SERVER_BANK_MANAGER.getAsync();
+        Set<UUID> alreadyReplayed = Collections.emptySet();
+        if (manager instanceof net.kroia.banksystem.banking.bankmanager.AsyncBankManager asyncMgr) {
+            alreadyReplayed = asyncMgr.flushPendingJoins();
+        }
+        ArrayList<ServerPlayer> players = ServerPlayerUtilities.getOnlinePlayers();
         for(ServerPlayer player : players)
         {
+            if (alreadyReplayed.contains(player.getUUID())) continue;
             manager.onPlayerJoinAsync(player.getUUID(), player.getName().getString());
         }
 
@@ -939,7 +948,10 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
     private static void onSlaveConnectionFailed(SlaveServerClient.ConnectionEstablishState state)
     {
-
+        if (INSTANCES.LOGGER != null) {
+            INSTANCES.LOGGER.warn("[BankSystemModBackend] slave→master handshake failed: "
+                    + (state != null ? state.name() : "unknown"));
+        }
     }
     private static void onSlaveConnectionLost(Throwable reason)
     {
