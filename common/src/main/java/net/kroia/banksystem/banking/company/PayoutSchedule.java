@@ -41,6 +41,25 @@ public final class PayoutSchedule {
     public long getCreatedAt() { return createdAt; }
     public UUID getCreatedBy() { return createdBy; }
 
+    // ------------------------------------------------------------------
+    // Task #45 (v2.0.8) — copy-with helpers. PayoutSchedule stays immutable;
+    // Company keeps the schedule list mutable via replaceById(...).
+    // ------------------------------------------------------------------
+    public PayoutSchedule withNextRunTick(long newNextRunTick) {
+        return new PayoutSchedule(scheduleId, targetUUID, amount, intervalTicks,
+                newNextRunTick, paused, createdAt, createdBy);
+    }
+
+    public PayoutSchedule withPaused(boolean newPaused) {
+        return new PayoutSchedule(scheduleId, targetUUID, amount, intervalTicks,
+                nextRunTick, newPaused, createdAt, createdBy);
+    }
+
+    public PayoutSchedule withAmountAndInterval(long newAmount, long newIntervalTicks) {
+        return new PayoutSchedule(scheduleId, targetUUID, newAmount, newIntervalTicks,
+                nextRunTick, paused, createdAt, createdBy);
+    }
+
     public void save(CompoundTag tag) {
         tag.putLong("scheduleId", scheduleId);
         if (targetUUID != null) tag.putUUID("targetUUID", targetUUID);

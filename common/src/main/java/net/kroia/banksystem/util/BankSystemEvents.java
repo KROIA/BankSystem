@@ -1,6 +1,7 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.event.PayoutExecutedInfo;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.api.IBankSystemEvents;
 import net.kroia.banksystem.banking.User;
@@ -78,6 +79,9 @@ public class BankSystemEvents implements IBankSystemEvents {
      */
     public final DataEvent<TrustChangeInfo> TRUST_CHANGED = new DataEvent<>();
 
+    /** Task #45 (v2.0.8) — one event per payout tick (success or failure). Master-only. */
+    public final DataEvent<PayoutExecutedInfo> PAYOUT_EXECUTED = new DataEvent<>();
+
 
     @Override
     public void removeListeners() {
@@ -96,6 +100,7 @@ public class BankSystemEvents implements IBankSystemEvents {
         SLAVE_CONNECTION_ACCEPTED.removeListeners();
         SLAVE_CONNECTION_LOST.removeListeners();
         TRUST_CHANGED.removeListeners();
+        PAYOUT_EXECUTED.removeListeners();
     }
 
 
@@ -184,5 +189,11 @@ public class BankSystemEvents implements IBankSystemEvents {
     public DataEvent<TrustChangeInfo> getTrustChangedSignal()
     {
         return TRUST_CHANGED;
+    }
+
+    @Override
+    public DataEvent<PayoutExecutedInfo> getPayoutExecutedEvent()
+    {
+        return PAYOUT_EXECUTED;
     }
 }

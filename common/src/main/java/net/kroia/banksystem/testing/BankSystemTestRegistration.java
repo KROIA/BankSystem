@@ -80,7 +80,11 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new CompanyFounderInvariantTests());
         // Task #43g (v2.0.8) — slave-side ARRS forwarding for /company subcommands.
         TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyArrsRoundTripTests());
+        // Task #45a (v2.0.8) — payout ARRS wire-contract coverage.
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.PayoutArrsRoundTripTests());
         // Task #44 (v2.0.8) — SQLite Transaction Ledger round-trip + read API.
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransactionLogManagerTests());
+        // Task #45 (v2.0.8) — recurring payouts (schedule mutation, NBT roundtrip, cascade-strip).
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.PayoutManagerTests());
     }
 }

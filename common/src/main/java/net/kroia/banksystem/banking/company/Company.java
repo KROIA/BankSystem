@@ -3,6 +3,7 @@ package net.kroia.banksystem.banking.company;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -40,6 +41,8 @@ public final class Company {
     private long totalSharesIssued;
     private ShareVisuals shareVisuals;
     private final List<PayoutSchedule> payoutSchedules;
+    /** Task #45 — monotonic schedule id allocator, scoped per Company. */
+    private long nextScheduleId = 1L;
 
     Company(int companyId, String name, int bankAccountNr, long maxSupply, long createdAt,
             String description, Set<UUID> founders, long totalSharesIssued,
@@ -100,6 +103,57 @@ public final class Company {
     }
 
     // ------------------------------------------------------------------
+    // Task #45 (v2.0.8) — payout schedule mutation (package-private; only
+    // CompanyManager / PayoutExecutor may call these).
+    // ------------------------------------------------------------------
+
+    /** Allocate a new monotonic schedule id for this company. */
+    long allocateScheduleId() {
+        long id = nextScheduleId++;
+        return id;
+    }
+
+    void addSchedule(PayoutSchedule schedule) {
+        if (schedule == null) return;
+        payoutSchedules.add(schedule);
+        if (schedule.getScheduleId() >= nextScheduleId) nextScheduleId = schedule.getScheduleId() + 1;
+    }
+
+    /** Returns {@code true} iff a schedule with {@code scheduleId} was found and swapped. */
+    boolean replaceSchedule(long scheduleId, PayoutSchedule updated) {
+        for (int i = 0; i < payoutSchedules.size(); i++) {
+            if (payoutSchedules.get(i).getScheduleId() == scheduleId) {
+                payoutSchedules.set(i, updated);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    boolean removeSchedule(long scheduleId) {
+        return payoutSchedules.removeIf(s -> s.getScheduleId() == scheduleId);
+    }
+
+    @Nullable
+    public PayoutSchedule findSchedule(long scheduleId) {
+        for (PayoutSchedule s : payoutSchedules) {
+            if (s.getScheduleId() == scheduleId) return s;
+        }
+        return null;
+    }
+
+    /**
+     * Cascade-strip: removes every schedule whose {@code targetUUID} equals {@code user}.
+     * Returns the count removed.
+     */
+    int stripSchedulesForUser(UUID user) {
+        if (user == null) return 0;
+        int before = payoutSchedules.size();
+        payoutSchedules.removeIf(s -> user.equals(s.getTargetUUID()));
+        return before - payoutSchedules.size();
+    }
+
+    // ------------------------------------------------------------------
     // Persistence
     // ------------------------------------------------------------------
     public void save(CompoundTag tag) {
@@ -110,6 +164,7 @@ public final class Company {
         tag.putLong("createdAt", createdAt);
         tag.putString("description", description);
         tag.putLong("totalSharesIssued", totalSharesIssued);
+        tag.putLong("nextScheduleId", nextScheduleId);
 
         ListTag foundersTag = new ListTag();
         for (UUID founder : founders) {
@@ -172,7 +227,16 @@ public final class Company {
             }
         }
 
-        return new Company(companyId, name, bankAccountNr, maxSupply, createdAt,
+        Company loaded = new Company(companyId, name, bankAccountNr, maxSupply, createdAt,
                 description, founders, totalSharesIssued, visuals, schedules);
+        // Task #45 — tolerant load of nextScheduleId. Fall back to max(scheduleId)+1
+        // when the tag is absent (older Company NBT).
+        long nextSchedId = 1L;
+        if (tag.contains("nextScheduleId")) nextSchedId = tag.getLong("nextScheduleId");
+        for (PayoutSchedule s : schedules) {
+            if (s.getScheduleId() >= nextSchedId) nextSchedId = s.getScheduleId() + 1;
+        }
+        loaded.nextScheduleId = nextSchedId;
+        return loaded;
     }
 }

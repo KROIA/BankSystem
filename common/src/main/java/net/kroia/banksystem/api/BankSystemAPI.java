@@ -125,4 +125,13 @@ public interface BankSystemAPI {
      * @since 2.0.5
      */
     @Nullable ExternalCurrencyProvider getCurrencyProvider(@Nullable String providerId);
+
+    /**
+     * Task #45 (v2.0.8) — recurring payout API. Never {@code null}; on slaves the returned
+     * instance is a fail-closed shim that returns {@code NOT_MASTER} for every mutation and
+     * an empty list/future for every read.
+     *
+     * @return the payout manager. Downstream mods and UI callers use this interface only.
+     */
+    net.kroia.banksystem.api.payout.IPayoutManager getPayoutManager();
 }

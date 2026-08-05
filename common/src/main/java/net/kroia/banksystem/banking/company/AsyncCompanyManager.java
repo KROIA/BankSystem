@@ -4,8 +4,10 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.api.payout.IPayoutManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.data.table.record.PayoutHistoryRecord;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
@@ -56,6 +58,7 @@ public final class AsyncCompanyManager {
     public static final int CODE_NO_PERMISSION         = 7;
     public static final int CODE_BANK_ACCOUNT_ERROR    = 8;
     public static final int CODE_INTERNAL              = 9;
+    public static final int CODE_SCHEDULE_MISSING      = 10;
 
     // ------------------------------------------------------------------
     // Function enum
@@ -67,7 +70,16 @@ public final class AsyncCompanyManager {
         UPDATE_DESCRIPTION,
         GET_COMPANY_INFO,
         IS_NAME_TAKEN,
-        LIST_COMPANIES_FOR_CALLER
+        LIST_COMPANIES_FOR_CALLER,
+        // Task #45a (v2.0.8) — payout scheduling.
+        CREATE_PAYOUT,
+        UPDATE_PAYOUT,
+        PAUSE_PAYOUT,
+        DELETE_PAYOUT,
+        LIST_SCHEDULES,
+        GET_HISTORY,
+        GET_COMPANY_INFO_BY_ACCOUNT,
+        GET_FAILURE_COUNT_24H
     }
 
     /** Task #43h — rights filter kinds for {@link #LIST_COMPANIES_FOR_CALLER}. */
@@ -197,6 +209,195 @@ public final class AsyncCompanyManager {
     }
 
     // ------------------------------------------------------------------
+    // Task #45a (v2.0.8) — payout ARRS records
+    // ------------------------------------------------------------------
+    public record CreatePayoutInput(int companyId, UUID target, long amount, long intervalTicks,
+                                    long nowTick, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, CreatePayoutInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                UUIDUtil.STREAM_CODEC, p -> p.target,
+                ByteBufCodecs.VAR_LONG, p -> p.amount,
+                ByteBufCodecs.VAR_LONG, p -> p.intervalTicks,
+                ByteBufCodecs.VAR_LONG, p -> p.nowTick,
+                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
+                CreatePayoutInput::new);
+    }
+    public record CreatePayoutOutput(int resultCode, long scheduleId) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, CreatePayoutOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.resultCode,
+                ByteBufCodecs.VAR_LONG, p -> p.scheduleId,
+                CreatePayoutOutput::new);
+    }
+
+    public record UpdatePayoutInput(int companyId, long scheduleId, long newAmount,
+                                    long newIntervalTicks, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, UpdatePayoutInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                ByteBufCodecs.VAR_LONG, p -> p.scheduleId,
+                ByteBufCodecs.VAR_LONG, p -> p.newAmount,
+                ByteBufCodecs.VAR_LONG, p -> p.newIntervalTicks,
+                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
+                UpdatePayoutInput::new);
+    }
+    public record UpdatePayoutOutput(int resultCode) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, UpdatePayoutOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.resultCode,
+                UpdatePayoutOutput::new);
+    }
+
+    public record PausePayoutInput(int companyId, long scheduleId, boolean paused, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, PausePayoutInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                ByteBufCodecs.VAR_LONG, p -> p.scheduleId,
+                ByteBufCodecs.BOOL, p -> p.paused,
+                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
+                PausePayoutInput::new);
+    }
+    public record PausePayoutOutput(int resultCode) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, PausePayoutOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.resultCode,
+                PausePayoutOutput::new);
+    }
+
+    public record DeletePayoutInput(int companyId, long scheduleId, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, DeletePayoutInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                ByteBufCodecs.VAR_LONG, p -> p.scheduleId,
+                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
+                DeletePayoutInput::new);
+    }
+    public record DeletePayoutOutput(int resultCode) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, DeletePayoutOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.resultCode,
+                DeletePayoutOutput::new);
+    }
+
+    public record ListSchedulesInput(int companyId) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ListSchedulesInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                ListSchedulesInput::new);
+    }
+    /** Wire form of a {@link PayoutSchedule}. */
+    public record ScheduleWire(long scheduleId, @Nullable UUID targetUUID, long amount, long intervalTicks,
+                               long nextRunTick, boolean paused, long createdAt, @Nullable UUID createdBy) {
+        public static void write(RegistryFriendlyByteBuf buf, ScheduleWire v) {
+            buf.writeVarLong(v.scheduleId);
+            buf.writeBoolean(v.targetUUID != null);
+            if (v.targetUUID != null) buf.writeUUID(v.targetUUID);
+            buf.writeVarLong(v.amount);
+            buf.writeVarLong(v.intervalTicks);
+            buf.writeVarLong(v.nextRunTick);
+            buf.writeBoolean(v.paused);
+            buf.writeVarLong(v.createdAt);
+            buf.writeBoolean(v.createdBy != null);
+            if (v.createdBy != null) buf.writeUUID(v.createdBy);
+        }
+        public static ScheduleWire read(RegistryFriendlyByteBuf buf) {
+            long id = buf.readVarLong();
+            UUID target = buf.readBoolean() ? buf.readUUID() : null;
+            long amount = buf.readVarLong();
+            long interval = buf.readVarLong();
+            long next = buf.readVarLong();
+            boolean paused = buf.readBoolean();
+            long createdAt = buf.readVarLong();
+            UUID createdBy = buf.readBoolean() ? buf.readUUID() : null;
+            return new ScheduleWire(id, target, amount, interval, next, paused, createdAt, createdBy);
+        }
+        public static ScheduleWire of(PayoutSchedule s) {
+            return new ScheduleWire(s.getScheduleId(), s.getTargetUUID(), s.getAmount(),
+                    s.getIntervalTicks(), s.getNextRunTick(), s.isPaused(), s.getCreatedAt(), s.getCreatedBy());
+        }
+        public PayoutSchedule toSchedule() {
+            return new PayoutSchedule(scheduleId, targetUUID, amount, intervalTicks, nextRunTick,
+                    paused, createdAt, createdBy);
+        }
+    }
+    public record ListSchedulesOutput(List<ScheduleWire> schedules) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ListSchedulesOutput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.schedules.size());
+                    for (ScheduleWire s : v.schedules) ScheduleWire.write(buf, s);
+                },
+                buf -> {
+                    int n = buf.readVarInt();
+                    List<ScheduleWire> out = new ArrayList<>(n);
+                    for (int i = 0; i < n; i++) out.add(ScheduleWire.read(buf));
+                    return new ListSchedulesOutput(out);
+                });
+        public static final ListSchedulesOutput EMPTY = new ListSchedulesOutput(List.of());
+    }
+
+    public record GetHistoryInput(long scheduleId, int limit) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, GetHistoryInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_LONG, p -> p.scheduleId,
+                ByteBufCodecs.VAR_INT, p -> p.limit,
+                GetHistoryInput::new);
+    }
+    /** Wire form of a {@link PayoutHistoryRecord}. */
+    public record HistoryRowWire(long id, int companyId, long scheduleId, int sourceAccount,
+                                 @Nullable UUID targetUuid, long amount, long time, int statusOrdinal) {
+        public static void write(RegistryFriendlyByteBuf buf, HistoryRowWire v) {
+            buf.writeVarLong(v.id);
+            buf.writeVarInt(v.companyId);
+            buf.writeVarLong(v.scheduleId);
+            buf.writeVarInt(v.sourceAccount);
+            buf.writeBoolean(v.targetUuid != null);
+            if (v.targetUuid != null) buf.writeUUID(v.targetUuid);
+            buf.writeVarLong(v.amount);
+            buf.writeVarLong(v.time);
+            buf.writeVarInt(v.statusOrdinal);
+        }
+        public static HistoryRowWire read(RegistryFriendlyByteBuf buf) {
+            long id = buf.readVarLong();
+            int cid = buf.readVarInt();
+            long sid = buf.readVarLong();
+            int src = buf.readVarInt();
+            UUID target = buf.readBoolean() ? buf.readUUID() : null;
+            long amount = buf.readVarLong();
+            long time = buf.readVarLong();
+            int status = buf.readVarInt();
+            return new HistoryRowWire(id, cid, sid, src, target, amount, time, status);
+        }
+        public static HistoryRowWire of(PayoutHistoryRecord r) {
+            return new HistoryRowWire(r.id(), r.companyId(), r.scheduleId(), r.sourceAccount(),
+                    r.targetUuid(), r.amount(), r.time(), r.status().ordinal());
+        }
+    }
+    public record GetHistoryOutput(List<HistoryRowWire> rows, long totalPaid) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, GetHistoryOutput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.rows.size());
+                    for (HistoryRowWire r : v.rows) HistoryRowWire.write(buf, r);
+                    buf.writeVarLong(v.totalPaid);
+                },
+                buf -> {
+                    int n = buf.readVarInt();
+                    List<HistoryRowWire> out = new ArrayList<>(n);
+                    for (int i = 0; i < n; i++) out.add(HistoryRowWire.read(buf));
+                    long total = buf.readVarLong();
+                    return new GetHistoryOutput(out, total);
+                });
+        public static final GetHistoryOutput EMPTY = new GetHistoryOutput(List.of(), 0L);
+    }
+
+    public record GetFailureCount24hInput(int companyId) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, GetFailureCount24hInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                GetFailureCount24hInput::new);
+    }
+    public record GetFailureCount24hOutput(long failedCount) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, GetFailureCount24hOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_LONG, p -> p.failedCount,
+                GetFailureCount24hOutput::new);
+    }
+
+    public record GetCompanyInfoByAccountInput(int accountNr) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, GetCompanyInfoByAccountInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.accountNr,
+                GetCompanyInfoByAccountInput::new);
+    }
+
+    // ------------------------------------------------------------------
     // Codec map
     // ------------------------------------------------------------------
     public static final Map<FunctionType, AsyncFunctionDataCodecs> codecs = new HashMap<>() {{
@@ -207,6 +408,14 @@ public final class AsyncCompanyManager {
         put(FunctionType.GET_COMPANY_INFO,   new AsyncFunctionDataCodecs(ByteBufCodecs.STRING_UTF8.cast(), CompanyInfoOutput.STREAM_CODEC));
         put(FunctionType.IS_NAME_TAKEN,      new AsyncFunctionDataCodecs(ByteBufCodecs.STRING_UTF8.cast(), ByteBufCodecs.BOOL.cast()));
         put(FunctionType.LIST_COMPANIES_FOR_CALLER, new AsyncFunctionDataCodecs(ListInput.STREAM_CODEC, ListOutput.STREAM_CODEC));
+        put(FunctionType.CREATE_PAYOUT,      new AsyncFunctionDataCodecs(CreatePayoutInput.STREAM_CODEC, CreatePayoutOutput.STREAM_CODEC));
+        put(FunctionType.UPDATE_PAYOUT,      new AsyncFunctionDataCodecs(UpdatePayoutInput.STREAM_CODEC, UpdatePayoutOutput.STREAM_CODEC));
+        put(FunctionType.PAUSE_PAYOUT,       new AsyncFunctionDataCodecs(PausePayoutInput.STREAM_CODEC,  PausePayoutOutput.STREAM_CODEC));
+        put(FunctionType.DELETE_PAYOUT,      new AsyncFunctionDataCodecs(DeletePayoutInput.STREAM_CODEC, DeletePayoutOutput.STREAM_CODEC));
+        put(FunctionType.LIST_SCHEDULES,     new AsyncFunctionDataCodecs(ListSchedulesInput.STREAM_CODEC, ListSchedulesOutput.STREAM_CODEC));
+        put(FunctionType.GET_HISTORY,        new AsyncFunctionDataCodecs(GetHistoryInput.STREAM_CODEC,   GetHistoryOutput.STREAM_CODEC));
+        put(FunctionType.GET_COMPANY_INFO_BY_ACCOUNT, new AsyncFunctionDataCodecs(GetCompanyInfoByAccountInput.STREAM_CODEC, CompanyInfoOutput.STREAM_CODEC));
+        put(FunctionType.GET_FAILURE_COUNT_24H, new AsyncFunctionDataCodecs(GetFailureCount24hInput.STREAM_CODEC, GetFailureCount24hOutput.STREAM_CODEC));
     }};
 
     // ------------------------------------------------------------------
@@ -266,6 +475,14 @@ public final class AsyncCompanyManager {
                 case IS_NAME_TAKEN      -> OutputData.of(FunctionType.IS_NAME_TAKEN,
                                              cm.isNameTaken((String) input.decodeParams()));
                 case LIST_COMPANIES_FOR_CALLER -> handleListForCaller(input.decodeParams(), cm);
+                case CREATE_PAYOUT      -> handleCreatePayout(input.decodeParams(), bm, cm);
+                case UPDATE_PAYOUT      -> handleUpdatePayout(input.decodeParams(), bm, cm);
+                case PAUSE_PAYOUT       -> handlePausePayout(input.decodeParams(), bm, cm);
+                case DELETE_PAYOUT      -> handleDeletePayout(input.decodeParams(), bm, cm);
+                case LIST_SCHEDULES     -> handleListSchedules(input.decodeParams());
+                case GET_HISTORY        -> handleGetHistory(input.decodeParams());
+                case GET_COMPANY_INFO_BY_ACCOUNT -> handleInfoByAccount(input.decodeParams(), bm, cm);
+                case GET_FAILURE_COUNT_24H -> handleFailureCount24h(input.decodeParams());
             });
         }
 
@@ -279,7 +496,9 @@ public final class AsyncCompanyManager {
         @Override
         protected boolean isAllowedToCallByUntrustedSlaveServer(InputData input) {
             return switch (input.function) {
-                case GET_COMPANY_INFO, IS_NAME_TAKEN, LIST_COMPANIES_FOR_CALLER -> true;
+                case GET_COMPANY_INFO, IS_NAME_TAKEN, LIST_COMPANIES_FOR_CALLER,
+                     LIST_SCHEDULES, GET_HISTORY, GET_COMPANY_INFO_BY_ACCOUNT,
+                     GET_FAILURE_COUNT_24H -> true;
                 default -> false;
             };
         }
@@ -428,7 +647,138 @@ public final class AsyncCompanyManager {
             case GET_COMPANY_INFO   -> OutputData.of(function, CompanyInfoOutput.ABSENT);
             case IS_NAME_TAKEN      -> OutputData.of(function, Boolean.FALSE);
             case LIST_COMPANIES_FOR_CALLER -> OutputData.of(function, ListOutput.EMPTY);
+            case CREATE_PAYOUT      -> OutputData.of(function, new CreatePayoutOutput(CODE_INTERNAL, 0L));
+            case UPDATE_PAYOUT      -> OutputData.of(function, new UpdatePayoutOutput(CODE_INTERNAL));
+            case PAUSE_PAYOUT       -> OutputData.of(function, new PausePayoutOutput(CODE_INTERNAL));
+            case DELETE_PAYOUT      -> OutputData.of(function, new DeletePayoutOutput(CODE_INTERNAL));
+            case LIST_SCHEDULES     -> OutputData.of(function, ListSchedulesOutput.EMPTY);
+            case GET_HISTORY        -> OutputData.of(function, GetHistoryOutput.EMPTY);
+            case GET_COMPANY_INFO_BY_ACCOUNT -> OutputData.of(function, CompanyInfoOutput.ABSENT);
+            case GET_FAILURE_COUNT_24H -> OutputData.of(function, new GetFailureCount24hOutput(0L));
         };
+    }
+
+    // ------------------------------------------------------------------
+    // Task #45a — payout master handlers
+    // ------------------------------------------------------------------
+    private static int mapPayoutOp(IPayoutManager.OpResult r) {
+        return switch (r) {
+            case OK -> CODE_OK;
+            case COMPANY_MISSING -> CODE_NOT_FOUND;
+            case SCHEDULE_MISSING -> CODE_SCHEDULE_MISSING;
+            case INVALID_INPUT -> CODE_INVALID_INPUT;
+            case NOT_MASTER -> CODE_INTERNAL;
+        };
+    }
+
+    /**
+     * MANAGE gate for a mutation. Returns {@link #CODE_OK} on pass, or a specific error code
+     * to short-circuit with. Non-mutating queries do not use this.
+     */
+    private static int gateManage(int companyId, UUID callerUUID, IServerBankManager bm, CompanyManager cm) {
+        Company company = cm.getById(companyId);
+        if (company == null) return CODE_NOT_FOUND;
+        IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
+        boolean hasManage = account != null && account.hasPermission(callerUUID, BankPermission.MANAGE);
+        boolean isAdmin = bm.isBanksystemAdmin(callerUUID);
+        return (hasManage || isAdmin) ? CODE_OK : CODE_NO_PERMISSION;
+    }
+
+    private static OutputData handleCreatePayout(CreatePayoutInput in, IServerBankManager bm, CompanyManager cm) {
+        int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
+        if (gate != CODE_OK) return OutputData.of(FunctionType.CREATE_PAYOUT, new CreatePayoutOutput(gate, 0L));
+        IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
+        if (pm == null) return OutputData.of(FunctionType.CREATE_PAYOUT, new CreatePayoutOutput(CODE_INTERNAL, 0L));
+        // Server tick isn't easily reachable from ARRS thread — fall through to client-supplied nowTick.
+        long nowTick = in.nowTick;
+        IPayoutManager.CreateOutcome outcome = pm.createSchedule(in.companyId, in.target, in.amount,
+                in.intervalTicks, nowTick, in.callerUUID);
+        return OutputData.of(FunctionType.CREATE_PAYOUT,
+                new CreatePayoutOutput(mapPayoutOp(outcome.result()), outcome.scheduleId()));
+    }
+
+    private static OutputData handleUpdatePayout(UpdatePayoutInput in, IServerBankManager bm, CompanyManager cm) {
+        int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
+        if (gate != CODE_OK) return OutputData.of(FunctionType.UPDATE_PAYOUT, new UpdatePayoutOutput(gate));
+        IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
+        if (pm == null) return OutputData.of(FunctionType.UPDATE_PAYOUT, new UpdatePayoutOutput(CODE_INTERNAL));
+        return OutputData.of(FunctionType.UPDATE_PAYOUT,
+                new UpdatePayoutOutput(mapPayoutOp(pm.updateSchedule(in.companyId, in.scheduleId, in.newAmount, in.newIntervalTicks))));
+    }
+
+    private static OutputData handlePausePayout(PausePayoutInput in, IServerBankManager bm, CompanyManager cm) {
+        int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
+        if (gate != CODE_OK) return OutputData.of(FunctionType.PAUSE_PAYOUT, new PausePayoutOutput(gate));
+        IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
+        if (pm == null) return OutputData.of(FunctionType.PAUSE_PAYOUT, new PausePayoutOutput(CODE_INTERNAL));
+        return OutputData.of(FunctionType.PAUSE_PAYOUT,
+                new PausePayoutOutput(mapPayoutOp(pm.pauseSchedule(in.companyId, in.scheduleId, in.paused))));
+    }
+
+    private static OutputData handleDeletePayout(DeletePayoutInput in, IServerBankManager bm, CompanyManager cm) {
+        int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
+        if (gate != CODE_OK) return OutputData.of(FunctionType.DELETE_PAYOUT, new DeletePayoutOutput(gate));
+        IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
+        if (pm == null) return OutputData.of(FunctionType.DELETE_PAYOUT, new DeletePayoutOutput(CODE_INTERNAL));
+        return OutputData.of(FunctionType.DELETE_PAYOUT,
+                new DeletePayoutOutput(mapPayoutOp(pm.deleteSchedule(in.companyId, in.scheduleId))));
+    }
+
+    private static OutputData handleListSchedules(ListSchedulesInput in) {
+        IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
+        if (pm == null) return OutputData.of(FunctionType.LIST_SCHEDULES, ListSchedulesOutput.EMPTY);
+        List<PayoutSchedule> list = pm.listSchedulesFor(in.companyId);
+        List<ScheduleWire> wire = new ArrayList<>(list.size());
+        for (PayoutSchedule s : list) wire.add(ScheduleWire.of(s));
+        return OutputData.of(FunctionType.LIST_SCHEDULES, new ListSchedulesOutput(wire));
+    }
+
+    private static OutputData handleGetHistory(GetHistoryInput in) {
+        IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
+        if (pm == null) return OutputData.of(FunctionType.GET_HISTORY, GetHistoryOutput.EMPTY);
+        // Best-effort synchronous unwrap — history futures resolve on the DB worker.
+        List<PayoutHistoryRecord> rows;
+        long total;
+        try {
+            rows = pm.getHistory(in.scheduleId, in.limit).get();
+            total = pm.getTotalPaidForSchedule(in.scheduleId).get();
+        } catch (Exception e) {
+            return OutputData.of(FunctionType.GET_HISTORY, GetHistoryOutput.EMPTY);
+        }
+        List<HistoryRowWire> wire = new ArrayList<>(rows.size());
+        for (PayoutHistoryRecord r : rows) wire.add(HistoryRowWire.of(r));
+        return OutputData.of(FunctionType.GET_HISTORY, new GetHistoryOutput(wire, total));
+    }
+
+    private static OutputData handleFailureCount24h(GetFailureCount24hInput in) {
+        net.kroia.banksystem.data.table.PayoutHistoryManager hm =
+                BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_HISTORY_MANAGER : null;
+        if (hm == null) return OutputData.of(FunctionType.GET_FAILURE_COUNT_24H, new GetFailureCount24hOutput(0L));
+        long since = System.currentTimeMillis() - 86_400_000L;
+        long count;
+        try {
+            count = hm.countFailuresSinceForCompany(in.companyId, since).get();
+        } catch (Exception e) {
+            count = 0L;
+        }
+        return OutputData.of(FunctionType.GET_FAILURE_COUNT_24H, new GetFailureCount24hOutput(count));
+    }
+
+    private static OutputData handleInfoByAccount(GetCompanyInfoByAccountInput in, IServerBankManager bm, CompanyManager cm) {
+        Company company = cm.getByBankAccount(in.accountNr);
+        if (company == null) return OutputData.of(FunctionType.GET_COMPANY_INFO_BY_ACCOUNT, CompanyInfoOutput.ABSENT);
+        Set<UUID> founders = company.getFounders();
+        List<String> founderNames = new ArrayList<>(founders.size());
+        for (UUID uuid : founders) {
+            User u = bm.getUserByUUID(uuid);
+            founderNames.add(u != null ? u.getName() : uuid.toString());
+        }
+        return OutputData.of(FunctionType.GET_COMPANY_INFO_BY_ACCOUNT,
+                new CompanyInfoOutput(true, company.getCompanyId(), company.getName(),
+                        company.getBankAccountNr(), company.getMaxSupply(),
+                        company.getTotalSharesIssued(),
+                        company.getDescription() == null ? "" : company.getDescription(),
+                        founderNames));
     }
 
     // ------------------------------------------------------------------
@@ -474,6 +824,72 @@ public final class AsyncCompanyManager {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         Request.instance.sendRequestToMaster(input).thenAccept(out -> future.complete(out.decodeResult()));
         return future;
+    }
+
+    // ------------------------------------------------------------------
+    // Task #45a — payout slave-side helpers
+    // ------------------------------------------------------------------
+    public static CompletableFuture<CreatePayoutOutput> createPayoutAsync(int companyId, UUID target, long amount,
+                                                                         long intervalTicks, long nowTick, UUID caller) {
+        InputData input = InputData.of(FunctionType.CREATE_PAYOUT,
+                new CreatePayoutInput(companyId, target, amount, intervalTicks, nowTick, caller));
+        CompletableFuture<CreatePayoutOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
+    }
+
+    public static CompletableFuture<UpdatePayoutOutput> updatePayoutAsync(int companyId, long scheduleId,
+                                                                         long newAmount, long newIntervalTicks, UUID caller) {
+        InputData input = InputData.of(FunctionType.UPDATE_PAYOUT,
+                new UpdatePayoutInput(companyId, scheduleId, newAmount, newIntervalTicks, caller));
+        CompletableFuture<UpdatePayoutOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
+    }
+
+    public static CompletableFuture<PausePayoutOutput> pausePayoutAsync(int companyId, long scheduleId,
+                                                                       boolean paused, UUID caller) {
+        InputData input = InputData.of(FunctionType.PAUSE_PAYOUT,
+                new PausePayoutInput(companyId, scheduleId, paused, caller));
+        CompletableFuture<PausePayoutOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
+    }
+
+    public static CompletableFuture<DeletePayoutOutput> deletePayoutAsync(int companyId, long scheduleId, UUID caller) {
+        InputData input = InputData.of(FunctionType.DELETE_PAYOUT,
+                new DeletePayoutInput(companyId, scheduleId, caller));
+        CompletableFuture<DeletePayoutOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
+    }
+
+    public static CompletableFuture<ListSchedulesOutput> listSchedulesAsync(int companyId) {
+        InputData input = InputData.of(FunctionType.LIST_SCHEDULES, new ListSchedulesInput(companyId));
+        CompletableFuture<ListSchedulesOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
+    }
+
+    public static CompletableFuture<GetHistoryOutput> getHistoryAsync(long scheduleId, int limit) {
+        InputData input = InputData.of(FunctionType.GET_HISTORY, new GetHistoryInput(scheduleId, limit));
+        CompletableFuture<GetHistoryOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
+    }
+
+    public static CompletableFuture<GetFailureCount24hOutput> getFailureCount24hAsync(int companyId) {
+        InputData input = InputData.of(FunctionType.GET_FAILURE_COUNT_24H, new GetFailureCount24hInput(companyId));
+        CompletableFuture<GetFailureCount24hOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
+    }
+
+    public static CompletableFuture<CompanyInfoOutput> getCompanyInfoByAccountAsync(int accountNr) {
+        InputData input = InputData.of(FunctionType.GET_COMPANY_INFO_BY_ACCOUNT, new GetCompanyInfoByAccountInput(accountNr));
+        CompletableFuture<CompanyInfoOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
     }
 
     /** Task #43h — fetch company names visible to the caller under a rights filter. */

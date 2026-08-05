@@ -86,6 +86,10 @@ public class BankSystemModBackend implements BankSystemAPI {
         public BalanceHistoryManager BALANCE_HISTORY_MANAGER;
         /** Task #44 (v2.0.8) — SQLite transaction ledger (master-only, nullable on slaves). */
         public net.kroia.banksystem.data.table.TransactionLogManager TRANSACTION_LOG_MANAGER;
+        /** Task #45 (v2.0.8) — payout history SQLite writer (master-only, nullable on slaves). */
+        public net.kroia.banksystem.data.table.PayoutHistoryManager PAYOUT_HISTORY_MANAGER;
+        /** Task #45 (v2.0.8) — public payout API impl (always non-null; degrades to fail-closed on slave). */
+        public net.kroia.banksystem.api.payout.IPayoutManager PAYOUT_MANAGER;
 
         /**
          * External-currency binding table (Task #33, v2.0.5). Master-authoritative;
@@ -111,6 +115,13 @@ public class BankSystemModBackend implements BankSystemAPI {
      * sweep runs synchronously at {@link #onServerStart(MinecraftServer)}.
      */
     private static long retentionSweepTickCounter = 0;
+    /**
+     * Task #45 (v2.0.8) — monotonic tick counter for the payout scheduler. Advances on every
+     * master-side server tick; the scheduler evaluates due schedules every
+     * {@link net.kroia.banksystem.banking.company.PayoutExecutor#PAYOUT_TICK_INTERVAL} ticks.
+     * Reset on server start / stop.
+     */
+    private static long payoutTickCounter = 0;
     private static @Nullable ItemPriceProvider itemPriceProvider = null;
     private static short priceCurrencyItemId = 0;
 
@@ -352,6 +363,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
             snapshotTickCounter = 0;
             retentionSweepTickCounter = 0;
+            payoutTickCounter = 0;
             DatabaseManager.setBackend(INSTANCES);
             INSTANCES.DATABASE_MANAGER = new DatabaseManager();
             INSTANCES.DATABASE_MANAGER.connectToDatabase(server);
@@ -359,6 +371,11 @@ public class BankSystemModBackend implements BankSystemAPI {
             // Task #44 (v2.0.8) — transaction ledger writer/reader.
             INSTANCES.TRANSACTION_LOG_MANAGER =
                     new net.kroia.banksystem.data.table.TransactionLogManager(INSTANCES.DATABASE_MANAGER);
+            // Task #45 (v2.0.8) — payout history writer + IPayoutManager impl.
+            INSTANCES.PAYOUT_HISTORY_MANAGER =
+                    new net.kroia.banksystem.data.table.PayoutHistoryManager(INSTANCES.DATABASE_MANAGER);
+            INSTANCES.PAYOUT_MANAGER =
+                    new net.kroia.banksystem.banking.company.PayoutManagerImpl(INSTANCES);
 
             // Task #41 (v2.0.7): one-shot deprecation WARN for the old flat-cap setting.
             // Fires only when the user still has a non-zero cap on disk — the tiered
@@ -458,9 +475,12 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.DATABASE_MANAGER = null;
         INSTANCES.BALANCE_HISTORY_MANAGER = null;
         INSTANCES.TRANSACTION_LOG_MANAGER = null;
+        INSTANCES.PAYOUT_HISTORY_MANAGER = null;
+        INSTANCES.PAYOUT_MANAGER = null;
         INSTANCES.isSlaveServer = false;
         snapshotTickCounter = 0;
         retentionSweepTickCounter = 0;
+        payoutTickCounter = 0;
         ItemIDManager.clear();
         // Drop the world-load tag snapshot: the next world/server captures its own freshly
         // bound tags (see VolatileItemComponents#captureTagSnapshot()).
@@ -586,6 +606,13 @@ public class BankSystemModBackend implements BankSystemAPI {
                 retentionSweepTickCounter = 0;
                 INSTANCES.BALANCE_HISTORY_MANAGER.applyTieredRetention(System.currentTimeMillis());
             }
+        }
+
+        // Task #45 (v2.0.8) — recurring payout evaluator. Master-only; the executor
+        // internally short-circuits on slave/pre-startup state.
+        payoutTickCounter++;
+        if (payoutTickCounter % net.kroia.banksystem.banking.company.PayoutExecutor.PAYOUT_TICK_INTERVAL == 0) {
+            net.kroia.banksystem.banking.company.PayoutExecutor.tick(payoutTickCounter, INSTANCES);
         }
     }
 
@@ -800,6 +827,19 @@ public class BankSystemModBackend implements BankSystemAPI {
     public @Nullable ExternalCurrencyProvider getCurrencyProvider(@Nullable String providerId) {
         if (providerId == null || providerId.isEmpty()) return null;
         return CURRENCY_PROVIDERS.get(providerId);
+    }
+
+    /**
+     * Task #45 (v2.0.8) — payout manager accessor. On slaves / before startup completes,
+     * returns a fail-closed shim (a fresh {@code PayoutManagerImpl} bound to the shared
+     * {@link Instances}) so callers never have to null-check.
+     */
+    @Override
+    public net.kroia.banksystem.api.payout.IPayoutManager getPayoutManager() {
+        if (INSTANCES.PAYOUT_MANAGER == null) {
+            INSTANCES.PAYOUT_MANAGER = new net.kroia.banksystem.banking.company.PayoutManagerImpl(INSTANCES);
+        }
+        return INSTANCES.PAYOUT_MANAGER;
     }
 
     /**

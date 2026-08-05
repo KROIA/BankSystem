@@ -262,6 +262,23 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 }
                 case OK -> account.setUsers(userList);
             }
+            // Task #45 (v2.0.8) — cascade-strip payout schedules whose target was just removed.
+            // Only fire when the user-set change actually landed (OK / PROMOTED); on refuse
+            // paths the previous users are unchanged so nothing to strip.
+            if (outcome == ServerBankAccount.ManageInvariantOutcome.OK
+                    || outcome == ServerBankAccount.ManageInvariantOutcome.PROMOTED) {
+                net.kroia.banksystem.banking.company.CompanyManager cm =
+                        net.kroia.banksystem.banking.company.CompanyManager.get();
+                if (cm != null) {
+                    java.util.Set<UUID> newUuids = new java.util.HashSet<>();
+                    for (User u : userList.keySet()) newUuids.add(u.getUUID());
+                    for (User prev : previous.keySet()) {
+                        if (!newUuids.contains(prev.getUUID())) {
+                            cm.cascadeStripPayoutsForRemovedUser(input.accountNumber, prev.getUUID());
+                        }
+                    }
+                }
+            }
         }
         if(input.accountIcon != null)
         {

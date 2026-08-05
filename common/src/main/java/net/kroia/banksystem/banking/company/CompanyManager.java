@@ -234,6 +234,107 @@ public final class CompanyManager implements ServerSaveableChunked {
         return true;
     }
 
+    // ------------------------------------------------------------------
+    // Task #45 (v2.0.8) — Payout schedule CRUD on Company NBT.
+    // ------------------------------------------------------------------
+
+    /** Hard-floor per spec Open Items — no schedule may run more frequently than once per second. */
+    public static final long MIN_INTERVAL_TICKS = 20L;
+
+    public enum PayoutMutation { OK, COMPANY_MISSING, SCHEDULE_MISSING, INVALID_INPUT }
+
+    public static final class ScheduleCreateOutcome {
+        public final PayoutMutation result;
+        @Nullable public final PayoutSchedule schedule;
+        public ScheduleCreateOutcome(PayoutMutation result, @Nullable PayoutSchedule schedule) {
+            this.result = result;
+            this.schedule = schedule;
+        }
+    }
+
+    /**
+     * Create a new payout schedule on {@code companyId}. Enforces the minimum-interval
+     * hard-floor ({@link #MIN_INTERVAL_TICKS}). {@code amount > 0} required.
+     */
+    public ScheduleCreateOutcome createSchedule(int companyId, UUID target, long amount,
+                                                long intervalTicks, long nowTick,
+                                                UUID createdBy) {
+        Company company = byId.get(companyId);
+        if (company == null) return new ScheduleCreateOutcome(PayoutMutation.COMPANY_MISSING, null);
+        if (target == null || amount <= 0 || intervalTicks < MIN_INTERVAL_TICKS) {
+            return new ScheduleCreateOutcome(PayoutMutation.INVALID_INPUT, null);
+        }
+        long id = company.allocateScheduleId();
+        PayoutSchedule schedule = new PayoutSchedule(id, target, amount, intervalTicks,
+                nowTick + intervalTicks, false, System.currentTimeMillis(), createdBy);
+        company.addSchedule(schedule);
+        return new ScheduleCreateOutcome(PayoutMutation.OK, schedule);
+    }
+
+    /** Update amount + interval on an existing schedule. Interval-floor enforced. */
+    public PayoutMutation updateSchedule(int companyId, long scheduleId, long newAmount,
+                                          long newIntervalTicks) {
+        Company company = byId.get(companyId);
+        if (company == null) return PayoutMutation.COMPANY_MISSING;
+        if (newAmount <= 0 || newIntervalTicks < MIN_INTERVAL_TICKS) return PayoutMutation.INVALID_INPUT;
+        PayoutSchedule existing = company.findSchedule(scheduleId);
+        if (existing == null) return PayoutMutation.SCHEDULE_MISSING;
+        boolean ok = company.replaceSchedule(scheduleId, existing.withAmountAndInterval(newAmount, newIntervalTicks));
+        return ok ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
+    }
+
+    public PayoutMutation pauseSchedule(int companyId, long scheduleId, boolean paused) {
+        Company company = byId.get(companyId);
+        if (company == null) return PayoutMutation.COMPANY_MISSING;
+        PayoutSchedule existing = company.findSchedule(scheduleId);
+        if (existing == null) return PayoutMutation.SCHEDULE_MISSING;
+        boolean ok = company.replaceSchedule(scheduleId, existing.withPaused(paused));
+        return ok ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
+    }
+
+    public PayoutMutation deleteSchedule(int companyId, long scheduleId) {
+        Company company = byId.get(companyId);
+        if (company == null) return PayoutMutation.COMPANY_MISSING;
+        return company.removeSchedule(scheduleId) ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
+    }
+
+    /**
+     * Executor-only hook — replace a schedule to advance {@code nextRunTick} after a
+     * successful (or observed) tick. Does not validate; the executor already resolved
+     * the schedule.
+     */
+    public void advanceSchedule(int companyId, long scheduleId, long newNextRunTick) {
+        Company company = byId.get(companyId);
+        if (company == null) return;
+        PayoutSchedule existing = company.findSchedule(scheduleId);
+        if (existing == null) return;
+        company.replaceSchedule(scheduleId, existing.withNextRunTick(newNextRunTick));
+    }
+
+    public List<PayoutSchedule> listSchedulesFor(int companyId) {
+        Company company = byId.get(companyId);
+        if (company == null) return List.of();
+        return company.getPayoutSchedules();
+    }
+
+    /**
+     * Cascade-strip hook called from {@code UpdateBankAccountRequest.setUsers} when a user is
+     * removed from an account. Removes every {@link PayoutSchedule} whose {@code targetUUID}
+     * equals the removed user on the Company bound to that account (if any).
+     *
+     * @return number of schedules stripped (0 if none, or if the account has no Company).
+     */
+    public int cascadeStripPayoutsForRemovedUser(int accountNr, UUID removedUser) {
+        Company company = byBankAccount.get(accountNr);
+        if (company == null || removedUser == null) return 0;
+        int removed = company.stripSchedulesForUser(removedUser);
+        if (removed > 0) {
+            info("Cascade-stripped " + removed + " payout schedule(s) from company #"
+                    + company.getCompanyId() + " for removed user " + removedUser);
+        }
+        return removed;
+    }
+
     /** Iteration hook for the future payout scheduler (Task #45). */
     public void forEach(Consumer<Company> action) {
         for (Company c : byId.values()) action.accept(c);

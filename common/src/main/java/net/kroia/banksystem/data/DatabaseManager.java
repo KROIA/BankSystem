@@ -77,7 +77,8 @@ public class DatabaseManager {
      */
     public static final java.util.List<String> SQL_SCHEMA_FILES = java.util.List.of(
             "/sql/BalanceHistory.sql",
-            "/sql/TransactionLog.sql"
+            "/sql/TransactionLog.sql",
+            "/sql/PayoutHistory.sql"
     );
 
     public boolean createDatabase(MinecraftServer server) {

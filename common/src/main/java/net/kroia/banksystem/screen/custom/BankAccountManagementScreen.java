@@ -44,6 +44,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final Component ADD_USER = Component.translatable(PREFIX+"add_user");
     private static final Component MUST_KEEP_MANAGER = Component.translatable(PREFIX+"must_keep_manager");
     private static final Component BINDINGS_BUTTON = Component.translatable(PREFIX+"bindings_button");
+    private static final Component PAYOUTS_BUTTON = Component.translatable(PREFIX+"payouts_button");
 
     private static class ItemViewButton extends Button{
 
@@ -98,6 +99,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private Button createNewBankButton;
     private Button addUserButton;
     private Button bindingsButton;
+    private Button payoutsButton;
+    private Integer companyIdForPayouts = null;
     private ListView userElementListView;
     private ListView bankElementListView;
 
@@ -245,6 +248,20 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         // (bind/unbind buttons are grayed out with a tooltip for non-manage viewers).
         bindingsButton = new Button(BINDINGS_BUTTON.getString(), this::onBindingsButtonClicked);
         addElement(bindingsButton);
+
+        // Task #45a — Payouts entry; visibility gated on company presence via async lookup below.
+        payoutsButton = new Button(PAYOUTS_BUTTON.getString(), this::onPayoutsButtonClicked);
+        payoutsButton.setEnabled(false);
+        addElement(payoutsButton);
+        companyIdForPayouts = null;
+        net.kroia.banksystem.banking.company.AsyncCompanyManager
+                .getCompanyInfoByAccountAsync(accountNumber)
+                .thenAccept(info -> {
+                    if (!screenIsOpen || info == null || !info.present()) return;
+                    companyIdForPayouts = info.companyId();
+                    boolean visible = canManage || isAdminMode;
+                    payoutsButton.setEnabled(visible);
+                });
     }
     private void setupAdminWindow()
     {
@@ -341,6 +358,16 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     : selectAccountButton.getRight() + spacing;
             bindingsButton.setBounds(bindingsLeft, padding, bindingsTextWidth, closeButton.getHeight());
         }
+
+        if (payoutsButton != null && bindingsButton != null) {
+            int payoutsTextWidth = closeButton.getTextWidth(PAYOUTS_BUTTON.getString()) + 10;
+            payoutsButton.setBounds(bindingsButton.getRight() + spacing, padding, payoutsTextWidth, closeButton.getHeight());
+        }
+    }
+
+    private void onPayoutsButtonClicked() {
+        if (companyIdForPayouts == null) return;
+        PayoutsOverviewScreen.openScreen(this, accountNumber, companyIdForPayouts, canManage || isAdminMode);
     }
 
     @Override
