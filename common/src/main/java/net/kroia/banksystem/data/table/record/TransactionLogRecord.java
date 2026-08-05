@@ -64,4 +64,17 @@ public record TransactionLogRecord(
         return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor, kind, itemId,
                 amount, otherAccount, null, time, null);
     }
+
+    /**
+     * Task #48 (v2.0.8) — factory for a {@link Kind#SHARE_TRADE} row emitted when stamped
+     * shares change hands via a bank deposit/withdraw (which is where StockMarket
+     * settlement lands in the absence of a dedicated match-observer hook). Populates
+     * {@code companyId} so the future company ledger UI can filter share flows.
+     */
+    public static TransactionLogRecord shareTrade(int accountNumber, @Nullable UUID actor,
+                                                  short itemId, long amount,
+                                                  int companyId, long time) {
+        return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor, Kind.SHARE_TRADE,
+                itemId, amount, null, companyId, time, null);
+    }
 }

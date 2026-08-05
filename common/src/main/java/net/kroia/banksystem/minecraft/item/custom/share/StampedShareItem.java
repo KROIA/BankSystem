@@ -49,6 +49,23 @@ public class StampedShareItem extends Item {
         return stack.get(BankSystemDataComponents.COMPANY_ID.get());
     }
 
+    /**
+     * Task #48 (v2.0.8) — resolve the company id from an {@link net.kroia.banksystem.util.ItemID}
+     * if (and only if) it points at a stamped-share template. Returns {@code null} for any
+     * other item, an unstamped share, or an unresolvable ItemID. Used by the ledger write
+     * hooks in {@code DepositItemsInBankRequest} / {@code WithdrawItemsFromBankRequest} to
+     * decide whether a movement should be logged as a {@code SHARE_TRADE} instead of a
+     * plain deposit/withdraw.
+     */
+    @Nullable
+    public static Integer getCompanyIdForItemID(net.kroia.banksystem.util.ItemID itemID) {
+        if (itemID == null || !itemID.isValid()) return null;
+        ItemStack template = net.kroia.banksystem.util.ItemIDManager.getItemStack(itemID);
+        if (template.isEmpty()) return null;
+        if (template.getItem() != net.kroia.banksystem.minecraft.item.BankSystemItems.STAMPED_SHARE.get()) return null;
+        return getCompanyId(template);
+    }
+
     /** Stamps a fresh single-item stack with the given {@code companyId}. */
     public static ItemStack ofCompany(Item stampedShareItem, int companyId) {
         ItemStack stack = new ItemStack(stampedShareItem);

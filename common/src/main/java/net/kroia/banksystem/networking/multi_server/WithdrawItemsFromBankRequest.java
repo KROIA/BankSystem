@@ -147,10 +147,21 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
             long amount = entry.getValue();
             if (amount <= 0) continue;
             try {
-                mgr.save(TransactionLogRecord.simple(
-                        input.bankAccount, input.executor,
-                        TransactionLogRecord.Kind.WITHDRAW,
-                        entry.getKey().getShort(), amount, now));
+                // Task #48 (v2.0.8) — share movements are logged as SHARE_TRADE with the
+                // originating company id populated. Symmetric with the deposit hook in
+                // DepositItemsInBankRequest#logDeposits.
+                Integer companyId = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                        .getCompanyIdForItemID(entry.getKey());
+                if (companyId != null) {
+                    mgr.save(TransactionLogRecord.shareTrade(
+                            input.bankAccount, input.executor,
+                            entry.getKey().getShort(), amount, companyId, now));
+                } else {
+                    mgr.save(TransactionLogRecord.simple(
+                            input.bankAccount, input.executor,
+                            TransactionLogRecord.Kind.WITHDRAW,
+                            entry.getKey().getShort(), amount, now));
+                }
             } catch (RuntimeException ignored) { }
         }
     }

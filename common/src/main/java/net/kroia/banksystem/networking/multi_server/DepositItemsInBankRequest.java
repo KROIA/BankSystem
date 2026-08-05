@@ -198,10 +198,22 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
             long deposited = requested - remaining;
             if (deposited <= 0) continue;
             try {
-                mgr.save(TransactionLogRecord.simple(
-                        input.bankAccount, input.executor,
-                        TransactionLogRecord.Kind.DEPOSIT,
-                        entry.getKey().getShort(), deposited, now));
+                // Task #48 (v2.0.8) — if this ItemID resolves to a stamped share, log a
+                // SHARE_TRADE row (with company id populated) instead of a plain DEPOSIT
+                // so the ledger records share flow distinctly. This is the placeholder
+                // hook until a StockMarket match-observer surface exists — see spec §4c.
+                Integer companyId = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                        .getCompanyIdForItemID(entry.getKey());
+                if (companyId != null) {
+                    mgr.save(TransactionLogRecord.shareTrade(
+                            input.bankAccount, input.executor,
+                            entry.getKey().getShort(), deposited, companyId, now));
+                } else {
+                    mgr.save(TransactionLogRecord.simple(
+                            input.bankAccount, input.executor,
+                            TransactionLogRecord.Kind.DEPOSIT,
+                            entry.getKey().getShort(), deposited, now));
+                }
             } catch (RuntimeException ignored) {
                 // DB layer errors must not break the deposit path — the balance is already
                 // updated at this point and the log is a best-effort audit artefact.

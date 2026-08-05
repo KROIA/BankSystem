@@ -316,6 +316,23 @@ public interface ISyncServerBankManager {
     List<Integer> getBankAccountNumbers(ItemID itemID);
 
     /**
+     * Task #48 (v2.0.8) — holder index for the dividend payer + share-holder queries.
+     * <p>
+     * Enumerates account numbers whose item bank for {@code itemID} currently holds a
+     * <b>strictly positive total balance</b> (free + locked). Unlike
+     * {@link #getBankAccountNumbers(ItemID)}, this filters out accounts that opened a
+     * slot but drained it to zero — the dividend distributor doesn't want zero-balance
+     * rows and neither does the future "Companies" holder-count column.
+     * <p>
+     * Implemented as a linear scan on master; if the holder set churns hot enough to
+     * matter, the plan spec (§Open Items) contemplates a maintained secondary index.
+     *
+     * @param itemID the share (or any) ItemID to enumerate holders for
+     * @return the set of account numbers with a positive balance; empty if none
+     */
+    java.util.Set<Integer> listAccountsHolding(ItemID itemID);
+
+    /**
      * Gets a list of bank account data objects that have the user in it
      * @param userUUID The UUID of the user to get bankaccounts for.
      * @return A list of bank account data objects associated with the user

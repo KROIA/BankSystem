@@ -86,5 +86,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransactionLogManagerTests());
         // Task #45 (v2.0.8) — recurring payouts (schedule mutation, NBT roundtrip, cascade-strip).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.PayoutManagerTests());
+        // Task #48 (v2.0.8) — share ItemID volatility guard (distinct companies, distinct ItemIDs).
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyShareItemIDTests());
     }
 }
