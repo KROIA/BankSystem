@@ -84,6 +84,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         public BankSystemLogger LOGGER;
         public DatabaseManager DATABASE_MANAGER;
         public BalanceHistoryManager BALANCE_HISTORY_MANAGER;
+        /** Task #44 (v2.0.8) — SQLite transaction ledger (master-only, nullable on slaves). */
+        public net.kroia.banksystem.data.table.TransactionLogManager TRANSACTION_LOG_MANAGER;
 
         /**
          * External-currency binding table (Task #33, v2.0.5). Master-authoritative;
@@ -157,6 +159,15 @@ public class BankSystemModBackend implements BankSystemAPI {
      */
     public static @Nullable BalanceHistoryManager getBalanceHistoryManager() {
         return INSTANCES.BALANCE_HISTORY_MANAGER;
+    }
+
+    /**
+     * Master-only accessor for the transaction-ledger SQLite manager
+     * (Task #44, v2.0.8). Returns {@code null} on slaves / pre-startup / shutdown so
+     * write-site hooks can no-op without a special path.
+     */
+    public static @Nullable net.kroia.banksystem.data.table.TransactionLogManager getTransactionLogManager() {
+        return INSTANCES.TRANSACTION_LOG_MANAGER;
     }
 
     /**
@@ -345,6 +356,9 @@ public class BankSystemModBackend implements BankSystemAPI {
             INSTANCES.DATABASE_MANAGER = new DatabaseManager();
             INSTANCES.DATABASE_MANAGER.connectToDatabase(server);
             INSTANCES.BALANCE_HISTORY_MANAGER = new BalanceHistoryManager(INSTANCES.DATABASE_MANAGER);
+            // Task #44 (v2.0.8) — transaction ledger writer/reader.
+            INSTANCES.TRANSACTION_LOG_MANAGER =
+                    new net.kroia.banksystem.data.table.TransactionLogManager(INSTANCES.DATABASE_MANAGER);
 
             // Task #41 (v2.0.7): one-shot deprecation WARN for the old flat-cap setting.
             // Fires only when the user still has a non-zero cap on disk — the tiered
@@ -443,6 +457,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.COMMAND_HANDLER = null;
         INSTANCES.DATABASE_MANAGER = null;
         INSTANCES.BALANCE_HISTORY_MANAGER = null;
+        INSTANCES.TRANSACTION_LOG_MANAGER = null;
         INSTANCES.isSlaveServer = false;
         snapshotTickCounter = 0;
         retentionSweepTickCounter = 0;

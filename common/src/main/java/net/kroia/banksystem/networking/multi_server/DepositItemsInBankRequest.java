@@ -1,6 +1,8 @@
 package net.kroia.banksystem.networking.multi_server;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
@@ -178,7 +180,33 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                 notDepositedItems.put(itemID, toDeposit);
             }
         }
+        // Task #44 (v2.0.8) — Transaction Ledger. One DEPOSIT row per ItemID whose net
+        // deposited amount was > 0. Best-effort: manager is null on slaves / pre-init,
+        // and a save failure must never fail the deposit. Runs async on the DB worker.
+        logDeposits(input, notDepositedItems);
         return CompletableFuture.completedFuture(new OutputData(notDepositedItems));
+    }
+
+    private static void logDeposits(InputData input, Map<ItemID, Long> notDeposited) {
+        net.kroia.banksystem.data.table.TransactionLogManager mgr =
+                BankSystemModBackend.getTransactionLogManager();
+        if (mgr == null) return;
+        long now = System.currentTimeMillis();
+        for (Map.Entry<ItemID, Long> entry : input.items.entrySet()) {
+            long requested = Math.max(0, entry.getValue());
+            long remaining = notDeposited.getOrDefault(entry.getKey(), 0L);
+            long deposited = requested - remaining;
+            if (deposited <= 0) continue;
+            try {
+                mgr.save(TransactionLogRecord.simple(
+                        input.bankAccount, input.executor,
+                        TransactionLogRecord.Kind.DEPOSIT,
+                        entry.getKey().getShort(), deposited, now));
+            } catch (RuntimeException ignored) {
+                // DB layer errors must not break the deposit path — the balance is already
+                // updated at this point and the log is a best-effort audit artefact.
+            }
+        }
     }
 
 

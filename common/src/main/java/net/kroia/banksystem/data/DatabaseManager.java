@@ -66,14 +66,30 @@ public class DatabaseManager {
         BACKEND_INSTANCES = backend;
     }
 
+    /**
+     * Classpath-resource paths of every schema file the DB layer applies at boot.
+     * <p>
+     * Task #44 (v2.0.8): converted from a single hardcoded path to a list so new
+     * tables can be added by appending an entry. Each file is executed via
+     * {@link #executeSqlFile(String)} in order; every {@code CREATE TABLE} and
+     * {@code CREATE INDEX} statement in these scripts is idempotent
+     * ({@code IF NOT EXISTS}), so re-running on an existing world is safe.
+     */
+    public static final java.util.List<String> SQL_SCHEMA_FILES = java.util.List.of(
+            "/sql/BalanceHistory.sql",
+            "/sql/TransactionLog.sql"
+    );
+
     public boolean createDatabase(MinecraftServer server) {
-        try {
-            executeSqlFile("/sql/BalanceHistory.sql");
-            return true;
-        } catch (SQLException | IOException e) {
-            getLogger().error("Failed to create database table: " + e.getMessage());
-            return false;
+        for (String path : SQL_SCHEMA_FILES) {
+            try {
+                executeSqlFile(path);
+            } catch (SQLException | IOException e) {
+                getLogger().error("Failed to create database table from " + path + ": " + e.getMessage());
+                return false;
+            }
         }
+        return true;
     }
 
     public void executeSqlFile(String resourcePath) throws IOException, SQLException {
