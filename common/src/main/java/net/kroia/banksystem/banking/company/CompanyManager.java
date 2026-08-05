@@ -234,6 +234,43 @@ public final class CompanyManager implements ServerSaveableChunked {
      *
      * @return {@code true} when the Company exists and was updated; {@code false} otherwise.
      */
+    /**
+     * Task #47 (v2.0.8) — increment {@link Company#getTotalSharesIssued()} by one,
+     * capped by {@link Company#getMaxSupply()}. Master-only; broadcasts a supply update
+     * on success. Returns {@code false} if company is missing or cap reached.
+     */
+    public boolean stampShare(int companyId) {
+        Company company = byId.get(companyId);
+        if (company == null) return false;
+        long cur = company.getTotalSharesIssued();
+        if (cur + 1 > company.getMaxSupply()) return false;
+        company.setTotalSharesIssued(cur + 1);
+        broadcastSupply(companyId, cur + 1);
+        return true;
+    }
+
+    /**
+     * Task #47 (v2.0.8) — decrement {@link Company#getTotalSharesIssued()} by one,
+     * floored at zero. Master-only; broadcasts a supply update on success. Returns
+     * {@code false} if company is missing or supply already zero.
+     */
+    public boolean redeemShare(int companyId) {
+        Company company = byId.get(companyId);
+        if (company == null) return false;
+        long cur = company.getTotalSharesIssued();
+        if (cur <= 0L) return false;
+        company.setTotalSharesIssued(cur - 1);
+        broadcastSupply(companyId, cur - 1);
+        return true;
+    }
+
+    private static void broadcastSupply(int companyId, long total) {
+        net.minecraft.server.MinecraftServer server = dev.architectury.utils.GameInstance.getServer();
+        if (server == null) return;
+        net.kroia.banksystem.networking.general.S2CCompanyVisualSupplyUpdatePacket
+                .broadcast(server, companyId, total);
+    }
+
     public boolean updateShareVisuals(int companyId, ShareVisuals visuals) {
         Company company = byId.get(companyId);
         if (company == null) return false;

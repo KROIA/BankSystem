@@ -370,5 +370,15 @@
   "gui.banksystem.share_visual_editor.tint": "Tint",
   "gui.banksystem.share_visual_editor.display_name": "Display name",
   "gui.banksystem.share_visual_editor.description": "Description",
-  "gui.banksystem.bank_account_management_screen.share_visuals": "Share Visuals"
+  "gui.banksystem.bank_account_management_screen.share_visuals": "Share Visuals",
+  "block.banksystem.share_stamper": "Share Stamper",
+  "container.banksystem.share_stamper": "Share Stamper",
+  "gui.banksystem.share_stamper.stamp_button": "Stamp",
+  "gui.banksystem.share_stamper.mode.stamp": "Mode: Stamp",
+  "gui.banksystem.share_stamper.mode.redeem": "Mode: Redeem",
+  "gui.banksystem.share_stamper.hopper_redeem": "Hopper Redeem",
+  "gui.banksystem.share_stamper.bind_prompt": "Not bound. Use /company stamper-bind <pos> <name>",
+  "gui.banksystem.share_stamper.no_permission": "Bound to %s — no permission",
+  "gui.banksystem.share_stamper.cap_reached": "Max supply reached (%d/%d)",
+  "gui.banksystem.share_stamper.supply": "%d / %d"
 }

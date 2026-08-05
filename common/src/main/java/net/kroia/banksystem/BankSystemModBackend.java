@@ -236,6 +236,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemCommands.setBackend(INSTANCES);
         BankDownloadBlockEntity.setBackend(INSTANCES);
         BankUploadBlockEntity.setBackend(INSTANCES);
+        net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity.setBackend(INSTANCES);
         BankSystemDisplayBlockEntity.setBackend(INSTANCES);
         Software.setBackend(INSTANCES);
         ItemID.setBackend(INSTANCES);

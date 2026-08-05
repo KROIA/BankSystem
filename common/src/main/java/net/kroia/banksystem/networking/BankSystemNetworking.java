@@ -117,6 +117,8 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerC2S(ConverterWithdrawPacket.TYPE, ConverterWithdrawPacket.STREAM_CODEC);
         registerC2S(ConverterDropAllPacket.TYPE, ConverterDropAllPacket.STREAM_CODEC);
         registerC2S(ConverterCommitToBankPacket.TYPE, ConverterCommitToBankPacket.STREAM_CODEC);
+        // Task #47 (v2.0.8) — Share Stamper C2S mutations.
+        registerC2S(StampSharesRequest.TYPE, StampSharesRequest.STREAM_CODEC);
     }
 
     @Override

@@ -648,7 +648,82 @@ public class BankSystemCommandsRegistration {
                             })
                         )
                     )
+                    // Task #47 (v2.0.8) — Share Stamper bind/unbind commands.
+                    .then(Commands.literal("stamper-bind")
+                        .then(Commands.argument("pos", net.minecraft.commands.arguments.coordinates.BlockPosArgument.blockPos())
+                            .then(Commands.argument("companyName", StringArgumentType.string())
+                                    .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_MANAGE))
+                                .executes(ctx -> stamperBind(ctx, false))
+                            )
+                        )
+                    )
+                    .then(Commands.literal("stamper-unbind")
+                        .then(Commands.argument("pos", net.minecraft.commands.arguments.coordinates.BlockPosArgument.blockPos())
+                            .executes(ctx -> stamperBind(ctx, true))
+                        )
+                    )
         );
+    }
+
+    /** Task #47 — /company stamper-bind and stamper-unbind executor. */
+    private static int stamperBind(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+                                   boolean unbind) {
+        CommandSourceStack src = ctx.getSource();
+        ServerPlayer player;
+        try { player = src.getPlayerOrException(); }
+        catch (Exception e) {
+            src.sendFailure(Component.literal("Console cannot bind stampers (need player context)."));
+            return 0;
+        }
+        net.minecraft.core.BlockPos pos =
+                net.minecraft.commands.arguments.coordinates.BlockPosArgument.getBlockPos(ctx, "pos");
+        net.minecraft.world.level.block.entity.BlockEntity be = player.level().getBlockEntity(pos);
+        if (!(be instanceof net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity stamper)) {
+            src.sendFailure(Component.literal("No Share Stamper at " + pos));
+            return 0;
+        }
+        if (unbind) {
+            if (stamper.getBoundCompanyId() >= 0 && !stamper.hasManagePermission(player.getUUID())
+                    && !src.hasPermission(2)) {
+                src.sendFailure(Component.literal("No permission to unbind."));
+                return 0;
+            }
+            stamper.unbind();
+            src.sendSuccess(() -> Component.literal("Stamper unbound."), true);
+            return Command.SINGLE_SUCCESS;
+        }
+        String companyName = StringArgumentType.getString(ctx, "companyName");
+        CompanyManager cm = CompanyManager.get();
+        if (cm == null) {
+            src.sendFailure(Component.literal("CompanyManager unavailable (slave server?)."));
+            return 0;
+        }
+        net.kroia.banksystem.banking.company.Company company = cm.getByName(companyName);
+        if (company == null) {
+            src.sendFailure(Component.literal("Unknown company: " + companyName));
+            return 0;
+        }
+        // MANAGE gate — founder OR MANAGE on account OR perm-level-2 console/admin.
+        boolean allowed = src.hasPermission(2) || company.isFounder(player.getUUID());
+        if (!allowed && BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_BANK_MANAGER != null) {
+            IServerBankManager bm = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+            if (bm != null) {
+                if (bm.isBanksystemAdmin(player.getUUID())) allowed = true;
+                else {
+                    net.kroia.banksystem.api.bankaccount.IServerBankAccount acc =
+                            bm.getBankAccount(company.getBankAccountNr());
+                    if (acc != null && acc.hasPermission(player.getUUID(),
+                            net.kroia.banksystem.banking.BankPermission.MANAGE)) allowed = true;
+                }
+            }
+        }
+        if (!allowed) {
+            src.sendFailure(Component.literal("No permission to bind to " + companyName));
+            return 0;
+        }
+        stamper.bind(company.getCompanyId(), player.getUUID());
+        src.sendSuccess(() -> Component.literal("Stamper bound to " + companyName), true);
+        return Command.SINGLE_SUCCESS;
     }
 
     /**
