@@ -975,6 +975,22 @@ public class BankSystemModBackend implements BankSystemAPI {
             manager.onPlayerJoinAsync(player.getUUID(), player.getName().getString());
         }
 
+        // Task #54 (v2.0.8) — slave requests the full company visuals+info snapshot
+        // from master on every handshake and populates SlaveCompanyMirror. Failures
+        // (master unreachable, timeout) leave the mirror empty — join-time bulk sync
+        // then silently skips and per-id ARRS self-heal covers the miss.
+        try {
+            net.kroia.banksystem.banking.company.AsyncCompanyManager.listAllCompanyVisualsAsync()
+                    .whenComplete((out, err) -> {
+                        if (err != null || out == null) return;
+                        net.kroia.banksystem.banking.company.SlaveCompanyMirror.putAll(out.entries());
+                    });
+        } catch (Throwable t) {
+            if (INSTANCES.LOGGER != null) {
+                INSTANCES.LOGGER.warn("[BankSystemModBackend] listAllCompanyVisualsAsync request failed: " + t);
+            }
+        }
+
         // Notify dependent mods (e.g. StockMarket) that the slave→master
         // handshake has completed and BankSystem's async forwarder is now
         // usable. Fire AFTER the SERVER_BANK_MANAGER null guard above so
@@ -1002,6 +1018,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         // registry (mod update on master while slave was disconnected), and we want a single
         // fresh retry per unknown item per reconnect. Idempotent on master (no-op).
         ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
+        // Task #54 (v2.0.8) — drop the slave-side company mirror so a stale snapshot
+        // cannot leak across reconnects when the master might have mutated companies.
+        net.kroia.banksystem.banking.company.SlaveCompanyMirror.clear();
         // Pair to onSlaveConnectionAccepted: tell dependent mods that master is no longer
         // reachable so any cache populated from the last handshake is now stale. On reconnect,
         // SLAVE_CONNECTION_ACCEPTED fires again and caches can be re-fetched.
@@ -1017,6 +1036,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         // Same rationale as onSlaveConnectionLost above — clear the negative cache so
         // reconnect retries formerly-INVALID lookups exactly once.
         ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
+        // Task #54 (v2.0.8) — drop the slave-side company mirror on clean disconnect.
+        net.kroia.banksystem.banking.company.SlaveCompanyMirror.clear();
         // Clean-disconnect path (local disconnect() call). Dependent mods invalidate their
         // caches the same way — the semantics are identical: master is unreachable.
         // Issue #64: share the same edge-latch as onSlaveConnectionLost so a clean

@@ -71,16 +71,45 @@ public class PlayerJoinSyncPacket extends BankSystemNetworkPacket {
                     net.kroia.banksystem.banking.User u = bm != null ? bm.getUserByUUID(uuid) : null;
                     founderNames.add(u != null ? u.getName() : uuid.toString());
                 }
+                // Task #52 fix (v2.0.8) — count holders by iterating the ItemID registry and
+                // reverse-mapping each ItemID to a companyId via StampedShareItem. The forward
+                // template-match path (ofCompany → getItemID) is fragile against extra default
+                // components on the persisted stack; iterating the registry sidesteps that.
+                int holderCount = 0;
+                if (bm != null) {
+                    java.util.Set<Integer> holders = new java.util.HashSet<>();
+                    for (java.util.Map.Entry<net.kroia.banksystem.util.ItemID, net.minecraft.world.item.ItemStack> e
+                            : net.kroia.banksystem.util.ItemIDManager.getItemIDMap().entrySet()) {
+                        Integer cid = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                                .getCompanyIdForItemID(e.getKey());
+                        if (cid == null || cid != c.getCompanyId()) continue;
+                        holders.addAll(bm.listAccountsHolding(e.getKey()));
+                    }
+                    holderCount = holders.size();
+                }
                 entries.add(net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry.of(
                         c.getCompanyId(), c.getShareVisuals(),
                         c.getTotalSharesIssued(), c.getMaxSupply(),
                         c.getName(),
                         c.getDescription() == null ? "" : c.getDescription(),
                         c.getBankAccountNr(),
-                        founderNames));
+                        founderNames,
+                        holderCount));
             }
             if (!entries.isEmpty()) {
                 net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.sendTo(player, entries);
+            }
+        } else if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer) {
+            // Task #54 (v2.0.8) — slave-side branch: master's CompanyManager is null here
+            // (all Company state lives on master). Serve the join-time bulk sync from the
+            // slave-side mirror populated by the master→slave push (see SlaveCompanyMirror).
+            // If the mirror is empty (fresh boot, master unreachable, or the master→slave
+            // bulk request is still in flight) we send nothing — the tooltip's per-id
+            // ARRS self-heal path continues to cover the miss.
+            java.util.List<net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry> mirrored =
+                    net.kroia.banksystem.banking.company.SlaveCompanyMirror.snapshot();
+            if (!mirrored.isEmpty()) {
+                net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.sendTo(player, mirrored);
             }
         }
     }

@@ -49,6 +49,14 @@ public class S2CCompanyVisualSupplyUpdatePacket extends BankSystemNetworkPacket 
         for (ServerPlayer p : players) {
             packet.sendToClient(p);
         }
+        // Task #54 (v2.0.8) — fanout supply update to slaves so their mirror
+        // stays fresh; slave forwards a matching S2C to locally-connected players.
+        if (net.kroia.modutilities.networking.multi_server.MultiServerManager.isRunning()
+                && net.kroia.modutilities.networking.multi_server.MultiServerManager.isMaster()) {
+            net.kroia.banksystem.networking.multi_server.S2SCompanyMirrorPacket s2s =
+                    net.kroia.banksystem.networking.multi_server.S2SCompanyMirrorPacket.supply(companyId, totalSharesIssued);
+            net.kroia.modutilities.networking.multi_server.MultiServerManager.broadcastToSlaves(s2s);
+        }
     }
 
     @Override

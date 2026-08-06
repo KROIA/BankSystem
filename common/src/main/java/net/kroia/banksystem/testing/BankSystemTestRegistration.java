@@ -90,5 +90,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyShareItemIDTests());
         // Task #51 (v2.0.8) — CompanyManagementScreen construct-smoke (client-only; skips on servers).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyManagementScreenSmokeTests());
+        // Task #54 (v2.0.8) — slave-side company visual mirror + LIST_ALL_COMPANY_VISUALS ARRS.
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.SlaveCompanyMirrorTests());
     }
 }

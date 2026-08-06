@@ -34,15 +34,24 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
     public record Entry(int companyId, String iconPresetId, int tint, String displayName,
                         String description, long totalSharesIssued, long maxSupply,
                         String internalName, String companyDescription,
-                        int bankAccountNr, List<String> founderNames) {
+                        int bankAccountNr, List<String> founderNames,
+                        int holderCount) {
         public static Entry of(int companyId, ShareVisuals v, long issued, long max) {
-            return of(companyId, v, issued, max, "", "", 0, List.of());
+            return of(companyId, v, issued, max, "", "", 0, List.of(), 0);
         }
         /** Task #51 fix (v2.0.8) — extended with internal company metadata so the client
          *  populates {@link CompanyInfoCache} at login without a follow-up ARRS lookup. */
         public static Entry of(int companyId, ShareVisuals v, long issued, long max,
                                String internalName, String companyDescription,
                                int bankAccountNr, List<String> founderNames) {
+            return of(companyId, v, issued, max, internalName, companyDescription,
+                    bankAccountNr, founderNames, 0);
+        }
+        /** Task #52 (v2.0.8) — extended with a precomputed holderCount for the Overview tab. */
+        public static Entry of(int companyId, ShareVisuals v, long issued, long max,
+                               String internalName, String companyDescription,
+                               int bankAccountNr, List<String> founderNames,
+                               int holderCount) {
             String preset = v != null ? v.getIconPresetId() : "";
             int tint = v != null ? v.getTint() : 0xFFFFFFFF;
             String dn = v != null ? v.getDisplayName() : "";
@@ -51,7 +60,8 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
                     internalName == null ? "" : internalName,
                     companyDescription == null ? "" : companyDescription,
                     bankAccountNr,
-                    founderNames == null ? List.of() : List.copyOf(founderNames));
+                    founderNames == null ? List.of() : List.copyOf(founderNames),
+                    holderCount);
         }
     }
 
@@ -72,6 +82,7 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
                             buf.writeVarInt(e.bankAccountNr);
                             buf.writeVarInt(e.founderNames.size());
                             for (String fn : e.founderNames) buf.writeUtf(fn);
+                            buf.writeVarInt(e.holderCount);
                         }
                     },
                     buf -> {
@@ -91,8 +102,9 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
                             int fn = buf.readVarInt();
                             List<String> founders = new ArrayList<>(fn);
                             for (int j = 0; j < fn; j++) founders.add(buf.readUtf());
+                            int holderCount = buf.readVarInt();
                             out.add(new Entry(cid, preset, tint, dn, desc, issued, max,
-                                    internalName, companyDesc, accNr, founders));
+                                    internalName, companyDesc, accNr, founders, holderCount));
                         }
                         return new S2CCompanyVisualBulkPacket(out);
                     });
@@ -126,7 +138,7 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
                 CompanyInfoCache.put(new CompanyInfoCache.Snapshot(
                         e.companyId, e.internalName, e.companyDescription,
                         e.maxSupply, e.totalSharesIssued,
-                        e.bankAccountNr, e.founderNames));
+                        e.bankAccountNr, e.founderNames, e.holderCount));
             }
         }
     }

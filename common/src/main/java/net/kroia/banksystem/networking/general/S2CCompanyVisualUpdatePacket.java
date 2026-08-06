@@ -94,6 +94,40 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
         for (ServerPlayer p : players) {
             packet.sendToClient(p);
         }
+        // Task #54 (v2.0.8) — also fanout to slave servers so their
+        // SlaveCompanyMirror stays in sync with master for join-time bulks.
+        broadcastMirrorEntryToSlaves(server, companyId, visuals, totalSharesIssued, maxSupply);
+    }
+
+    /** Task #54 helper — build an S2CCompanyVisualBulkPacket.Entry from live master state
+     *  (name + description + founders + holderCount) and push it to every connected slave
+     *  via {@link net.kroia.banksystem.networking.multi_server.S2SCompanyMirrorPacket}. */
+    private static void broadcastMirrorEntryToSlaves(net.minecraft.server.MinecraftServer server, int companyId,
+                                                     ShareVisuals visuals, long totalSharesIssued, long maxSupply) {
+        if (!net.kroia.modutilities.networking.multi_server.MultiServerManager.isRunning()
+                || !net.kroia.modutilities.networking.multi_server.MultiServerManager.isMaster()) return;
+        net.kroia.banksystem.banking.company.CompanyManager cm =
+                net.kroia.banksystem.banking.company.CompanyManager.get();
+        if (cm == null) return;
+        net.kroia.banksystem.banking.company.Company c = cm.getById(companyId);
+        String internalName = c != null ? c.getName() : "";
+        String companyDesc = c != null && c.getDescription() != null ? c.getDescription() : "";
+        int accNr = c != null ? c.getBankAccountNr() : 0;
+        java.util.List<String> founderNames = new java.util.ArrayList<>();
+        if (c != null && BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_BANK_MANAGER != null) {
+            net.kroia.banksystem.api.bankmanager.IServerBankManager bm =
+                    BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+            for (java.util.UUID uuid : c.getFounders()) {
+                net.kroia.banksystem.banking.User u = bm != null ? bm.getUserByUUID(uuid) : null;
+                founderNames.add(u != null ? u.getName() : uuid.toString());
+            }
+        }
+        S2CCompanyVisualBulkPacket.Entry entry = S2CCompanyVisualBulkPacket.Entry.of(
+                companyId, visuals, totalSharesIssued, maxSupply,
+                internalName, companyDesc, accNr, founderNames, 0);
+        net.kroia.banksystem.networking.multi_server.S2SCompanyMirrorPacket pkt =
+                net.kroia.banksystem.networking.multi_server.S2SCompanyMirrorPacket.upsert(entry);
+        net.kroia.modutilities.networking.multi_server.MultiServerManager.broadcastToSlaves(pkt);
     }
 
     @Override

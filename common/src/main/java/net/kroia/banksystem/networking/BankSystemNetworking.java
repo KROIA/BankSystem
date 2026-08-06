@@ -134,5 +134,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
     {
         //registerS2S(PlayerJoinPacket.TYPE, PlayerJoinPacket.STREAM_CODEC);
         registerS2S(ClientConsoleMessagePacket.TYPE, ClientConsoleMessagePacket.STREAM_CODEC);
+        // Task #54 (v2.0.8) — master→slave live push for company visual mutations.
+        registerS2S(S2SCompanyMirrorPacket.TYPE, S2SCompanyMirrorPacket.STREAM_CODEC);
     }
 }

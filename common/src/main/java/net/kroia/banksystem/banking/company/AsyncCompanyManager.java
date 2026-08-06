@@ -95,7 +95,12 @@ public final class AsyncCompanyManager {
         LIST_STAMPER_BINDINGS,
         // Task #51 fix (v2.0.8) — by-id company info lookup (CompanyManagementScreen needs
         // the full CompanyInfoOutput given only the companyId from a stamped-share stack).
-        GET_COMPANY_INFO_BY_ID
+        GET_COMPANY_INFO_BY_ID,
+        // Task #52 (v2.0.8) — read-only holder count for a company's stamped shares.
+        COUNT_HOLDERS_FOR_COMPANY,
+        // Task #54 (v2.0.8) — slave→master bulk request for all companies' visuals+info.
+        // Used at slave-master handshake to populate SlaveCompanyMirror.
+        LIST_ALL_COMPANY_VISUALS
     }
 
     /** Task #43h — rights filter kinds for {@link #LIST_COMPANIES_FOR_CALLER}. */
@@ -493,6 +498,58 @@ public final class AsyncCompanyManager {
         public static final ListStamperBindingsOutput EMPTY = new ListStamperBindingsOutput(List.of());
     }
 
+    // Task #54 (v2.0.8) — bulk visuals+info list.
+    public record EmptyInput() {
+        public static final StreamCodec<RegistryFriendlyByteBuf, EmptyInput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {},
+                buf -> new EmptyInput());
+    }
+    public record ListAllVisualsOutput(List<net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry> entries) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ListAllVisualsOutput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.entries.size());
+                    for (var e : v.entries) {
+                        buf.writeVarInt(e.companyId());
+                        buf.writeUtf(e.iconPresetId() == null ? "" : e.iconPresetId());
+                        buf.writeInt(e.tint());
+                        buf.writeUtf(e.displayName() == null ? "" : e.displayName());
+                        buf.writeUtf(e.description() == null ? "" : e.description());
+                        buf.writeVarLong(e.totalSharesIssued());
+                        buf.writeVarLong(e.maxSupply());
+                        buf.writeUtf(e.internalName() == null ? "" : e.internalName());
+                        buf.writeUtf(e.companyDescription() == null ? "" : e.companyDescription());
+                        buf.writeVarInt(e.bankAccountNr());
+                        buf.writeVarInt(e.founderNames().size());
+                        for (String fn : e.founderNames()) buf.writeUtf(fn);
+                        buf.writeVarInt(e.holderCount());
+                    }
+                },
+                buf -> {
+                    int n = buf.readVarInt();
+                    List<net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry> out = new ArrayList<>(n);
+                    for (int i = 0; i < n; i++) {
+                        int cid = buf.readVarInt();
+                        String preset = buf.readUtf();
+                        int tint = buf.readInt();
+                        String dn = buf.readUtf();
+                        String desc = buf.readUtf();
+                        long issued = buf.readVarLong();
+                        long max = buf.readVarLong();
+                        String iname = buf.readUtf();
+                        String cdesc = buf.readUtf();
+                        int accNr = buf.readVarInt();
+                        int fn = buf.readVarInt();
+                        List<String> founders = new ArrayList<>(fn);
+                        for (int j = 0; j < fn; j++) founders.add(buf.readUtf());
+                        int hc = buf.readVarInt();
+                        out.add(new net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry(
+                                cid, preset, tint, dn, desc, issued, max, iname, cdesc, accNr, founders, hc));
+                    }
+                    return new ListAllVisualsOutput(out);
+                });
+        public static final ListAllVisualsOutput EMPTY = new ListAllVisualsOutput(List.of());
+    }
+
     public record GetCompanyInfoByAccountInput(int accountNr) {
         public static final StreamCodec<RegistryFriendlyByteBuf, GetCompanyInfoByAccountInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.accountNr,
@@ -523,6 +580,8 @@ public final class AsyncCompanyManager {
         put(FunctionType.PAY_DIVIDEND,         new AsyncFunctionDataCodecs(PayDividendInput.STREAM_CODEC,       PayDividendOutput.STREAM_CODEC));
         put(FunctionType.LIST_STAMPER_BINDINGS, new AsyncFunctionDataCodecs(ListStamperBindingsInput.STREAM_CODEC, ListStamperBindingsOutput.STREAM_CODEC));
         put(FunctionType.GET_COMPANY_INFO_BY_ID, new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC, CompanyInfoOutput.STREAM_CODEC));
+        put(FunctionType.COUNT_HOLDERS_FOR_COMPANY, new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC, ByteBufCodecs.VAR_INT.cast()));
+        put(FunctionType.LIST_ALL_COMPANY_VISUALS, new AsyncFunctionDataCodecs(EmptyInput.STREAM_CODEC, ListAllVisualsOutput.STREAM_CODEC));
     }};
 
     // ------------------------------------------------------------------
@@ -595,6 +654,8 @@ public final class AsyncCompanyManager {
                 case PAY_DIVIDEND         -> handlePayDividend(input.decodeParams(), bm, cm);
                 case LIST_STAMPER_BINDINGS -> handleListStamperBindings(input.decodeParams(), cm);
                 case GET_COMPANY_INFO_BY_ID -> handleInfoById(input.decodeParams(), bm, cm);
+                case COUNT_HOLDERS_FOR_COMPANY -> handleCountHoldersForCompany(input.decodeParams(), bm, cm);
+                case LIST_ALL_COMPANY_VISUALS -> handleListAllVisuals(bm, cm);
             });
         }
 
@@ -611,7 +672,8 @@ public final class AsyncCompanyManager {
                 case GET_COMPANY_INFO, IS_NAME_TAKEN, LIST_COMPANIES_FOR_CALLER,
                      LIST_SCHEDULES, GET_HISTORY, GET_COMPANY_INFO_BY_ACCOUNT,
                      GET_FAILURE_COUNT_24H, GET_SHARE_VISUALS,
-                     LIST_STAMPER_BINDINGS, GET_COMPANY_INFO_BY_ID -> true;
+                     LIST_STAMPER_BINDINGS, GET_COMPANY_INFO_BY_ID,
+                     COUNT_HOLDERS_FOR_COMPANY, LIST_ALL_COMPANY_VISUALS -> true;
                 default -> false;
             };
         }
@@ -659,6 +721,16 @@ public final class AsyncCompanyManager {
             return OutputData.of(FunctionType.CREATE_COMPANY,
                     new CreateOutput(code, 0, 0, in.name, in.maxSupply));
         }
+        // Task #54 (v2.0.8) — broadcast the fresh company to all clients + slaves so
+        // stamped-share tooltips and slave mirrors learn about it immediately (rather
+        // than waiting for the next join-time bulk sync).
+        Company created = outcome.company;
+        net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
+        if (srv != null && created != null) {
+            net.kroia.banksystem.networking.general.S2CCompanyVisualUpdatePacket
+                    .broadcast(srv, created.getCompanyId(), created.getShareVisuals(),
+                            created.getTotalSharesIssued(), created.getMaxSupply());
+        }
         return OutputData.of(FunctionType.CREATE_COMPANY,
                 new CreateOutput(CODE_OK, outcome.company.getCompanyId(),
                         account.getAccountNumber(), in.name, in.maxSupply));
@@ -686,6 +758,15 @@ public final class AsyncCompanyManager {
         };
         User from = bm.getUserByUUID(in.callerUUID);
         String fromName = from != null ? from.getName() : in.callerUUID.toString();
+        // Task #54 (v2.0.8) — republish so slave mirrors and clients see the founder list change.
+        if (r == CompanyManager.TransferResult.OK) {
+            net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
+            if (srv != null) {
+                net.kroia.banksystem.networking.general.S2CCompanyVisualUpdatePacket
+                        .broadcast(srv, company.getCompanyId(), company.getShareVisuals(),
+                                company.getTotalSharesIssued(), company.getMaxSupply());
+            }
+        }
         return OutputData.of(FunctionType.TRANSFER_FOUNDER,
                 new TransferOutput(code, company.getCompanyId(), fromName, target.getName()));
     }
@@ -702,6 +783,12 @@ public final class AsyncCompanyManager {
         int accNr = company.getBankAccountNr();
         int id = company.getCompanyId();
         boolean ok = cm.deleteCompany(id);
+        // Task #54 (v2.0.8) — broadcast a REMOVE to slaves so their mirror drops the row.
+        if (ok && net.kroia.modutilities.networking.multi_server.MultiServerManager.isRunning()
+                && net.kroia.modutilities.networking.multi_server.MultiServerManager.isMaster()) {
+            net.kroia.modutilities.networking.multi_server.MultiServerManager.broadcastToSlaves(
+                    net.kroia.banksystem.networking.multi_server.S2SCompanyMirrorPacket.remove(id));
+        }
         return OutputData.of(FunctionType.DISSOLVE_COMPANY,
                 new DissolveOutput(ok ? CODE_OK : CODE_INTERNAL, id, name, accNr));
     }
@@ -718,6 +805,14 @@ public final class AsyncCompanyManager {
             return OutputData.of(FunctionType.UPDATE_DESCRIPTION,
                     new DescriptionOutput(CODE_NO_PERMISSION, company.getCompanyId()));
         cm.updateDescription(company.getCompanyId(), in.text == null ? "" : in.text);
+        // Task #54 (v2.0.8) — republish so slave mirrors + all clients pick up the new
+        // description via the standard update broadcast (also carries current visuals).
+        net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
+        if (srv != null) {
+            net.kroia.banksystem.networking.general.S2CCompanyVisualUpdatePacket
+                    .broadcast(srv, company.getCompanyId(), company.getShareVisuals(),
+                            company.getTotalSharesIssued(), company.getMaxSupply());
+        }
         return OutputData.of(FunctionType.UPDATE_DESCRIPTION,
                 new DescriptionOutput(CODE_OK, company.getCompanyId()));
     }
@@ -773,7 +868,42 @@ public final class AsyncCompanyManager {
             case PAY_DIVIDEND         -> OutputData.of(function, new PayDividendOutput(CODE_INTERNAL, 0L, 0));
             case LIST_STAMPER_BINDINGS -> OutputData.of(function, ListStamperBindingsOutput.EMPTY);
             case GET_COMPANY_INFO_BY_ID -> OutputData.of(function, CompanyInfoOutput.ABSENT);
+            case COUNT_HOLDERS_FOR_COMPANY -> OutputData.of(function, Integer.valueOf(0));
+            case LIST_ALL_COMPANY_VISUALS -> OutputData.of(function, ListAllVisualsOutput.EMPTY);
         };
+    }
+
+    // Task #54 (v2.0.8) — build full Entry list from CompanyManager. Master-only.
+    private static OutputData handleListAllVisuals(IServerBankManager bm, CompanyManager cm) {
+        List<net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry> entries = new ArrayList<>();
+        for (Company c : cm.getAll()) {
+            List<String> founderNames = new ArrayList<>();
+            for (UUID uuid : c.getFounders()) {
+                User u = bm != null ? bm.getUserByUUID(uuid) : null;
+                founderNames.add(u != null ? u.getName() : uuid.toString());
+            }
+            int holderCount = 0;
+            if (bm != null) {
+                Set<Integer> holders = new java.util.HashSet<>();
+                for (Map.Entry<net.kroia.banksystem.util.ItemID, net.minecraft.world.item.ItemStack> e
+                        : net.kroia.banksystem.util.ItemIDManager.getItemIDMap().entrySet()) {
+                    Integer cid = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                            .getCompanyIdForItemID(e.getKey());
+                    if (cid == null || cid != c.getCompanyId()) continue;
+                    holders.addAll(bm.listAccountsHolding(e.getKey()));
+                }
+                holderCount = holders.size();
+            }
+            entries.add(net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry.of(
+                    c.getCompanyId(), c.getShareVisuals(),
+                    c.getTotalSharesIssued(), c.getMaxSupply(),
+                    c.getName(),
+                    c.getDescription() == null ? "" : c.getDescription(),
+                    c.getBankAccountNr(),
+                    founderNames,
+                    holderCount));
+        }
+        return OutputData.of(FunctionType.LIST_ALL_COMPANY_VISUALS, new ListAllVisualsOutput(entries));
     }
 
     // Task #51 (v2.0.8) — read-only lookup of Share Stamper positions bound to a company.
@@ -954,6 +1084,29 @@ public final class AsyncCompanyManager {
                         company.getTotalSharesIssued(),
                         company.getDescription() == null ? "" : company.getDescription(),
                         founderNames));
+    }
+
+    /** Task #52 (v2.0.8) — count of accounts holding a strictly-positive balance
+     *  of the company's stamped-share ItemID. Read-only, no permission gate.
+     *  Iterates the ItemID registry via {@code StampedShareItem.getCompanyIdForItemID}
+     *  (reverse lookup) to find every share ItemID that belongs to this company,
+     *  then unions {@code listAccountsHolding} results across all of them. Avoids
+     *  the fragile forward "build a template stack, resolve ItemID by component
+     *  equality" path — that path silently returns INVALID for stacks whose
+     *  registered form carries extra default components. */
+    private static OutputData handleCountHoldersForCompany(GetShareVisualsInput in, IServerBankManager bm, CompanyManager cm) {
+        Company company = cm.getById(in.companyId());
+        if (company == null) return OutputData.of(FunctionType.COUNT_HOLDERS_FOR_COMPANY, Integer.valueOf(0));
+
+        java.util.Set<Integer> holders = new java.util.HashSet<>();
+        for (java.util.Map.Entry<net.kroia.banksystem.util.ItemID, net.minecraft.world.item.ItemStack> e
+                : net.kroia.banksystem.util.ItemIDManager.getItemIDMap().entrySet()) {
+            Integer cid = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                    .getCompanyIdForItemID(e.getKey());
+            if (cid == null || cid != in.companyId()) continue;
+            holders.addAll(bm.listAccountsHolding(e.getKey()));
+        }
+        return OutputData.of(FunctionType.COUNT_HOLDERS_FOR_COMPANY, Integer.valueOf(holders.size()));
     }
 
     private static OutputData handleInfoByAccount(GetCompanyInfoByAccountInput in, IServerBankManager bm, CompanyManager cm) {
@@ -1149,6 +1302,28 @@ public final class AsyncCompanyManager {
         InputData input = InputData.of(FunctionType.LIST_STAMPER_BINDINGS, new ListStamperBindingsInput(companyId));
         CompletableFuture<ListStamperBindingsOutput> f = new CompletableFuture<>();
         Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
+    }
+
+    /** Task #52 (v2.0.8) — slave helper: fetch the count of accounts holding a company's shares. */
+    public static CompletableFuture<Integer> countHoldersForCompanyAsync(int companyId) {
+        InputData input = InputData.of(FunctionType.COUNT_HOLDERS_FOR_COMPANY, new GetShareVisualsInput(companyId));
+        CompletableFuture<Integer> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> {
+            Integer v = o.decodeResult();
+            f.complete(v == null ? 0 : v);
+        });
+        return f;
+    }
+
+    /** Task #54 (v2.0.8) — slave helper: fetch every company's visuals+info in one shot for the mirror. */
+    public static CompletableFuture<ListAllVisualsOutput> listAllCompanyVisualsAsync() {
+        InputData input = InputData.of(FunctionType.LIST_ALL_COMPANY_VISUALS, new EmptyInput());
+        CompletableFuture<ListAllVisualsOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(out -> {
+            ListAllVisualsOutput v = out.decodeResult();
+            f.complete(v == null ? ListAllVisualsOutput.EMPTY : v);
+        });
         return f;
     }
 
