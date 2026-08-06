@@ -288,6 +288,48 @@ public final class CompanyCommandLogic {
     }
 
     // ------------------------------------------------------------------
+    // /company manage <companyName>  (Task #51, v2.0.8)
+    // ------------------------------------------------------------------
+    /**
+     * Resolves company by name, checks MANAGE, and if OK dispatches
+     * {@link net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket}
+     * to open the client management screen.
+     */
+    public static void manage(ServerPlayer player, String rawCompanyName) {
+        String companyName = cleanName(rawCompanyName);
+        if (isSlave()) {
+            AsyncCompanyManager.getCompanyInfoAsync(companyName).thenAccept(out -> {
+                if (!out.present()) {
+                    send(player, "No such company '" + companyName + "'.");
+                    return;
+                }
+                // Slave has no local bank-account view of MANAGE — rely on master to
+                // gate any mutating follow-up. For opening the screen we optimistically
+                // send; the screen's actions themselves route through MANAGE-gated ARRS.
+                net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket
+                        .send(player, out.companyId(), out.name());
+            });
+            return;
+        }
+        CompanyManager cm = CompanyManager.get();
+        IServerBankManager bm = sync();
+        Company company = cm.getByName(companyName);
+        if (company == null) {
+            send(player, "No such company '" + companyName + "'.");
+            return;
+        }
+        IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
+        boolean hasManage = account != null && account.hasPermission(player.getUUID(), BankPermission.MANAGE);
+        boolean isAdmin = bm.isBanksystemAdmin(player.getUUID());
+        if (!hasManage && !isAdmin) {
+            send(player, "You need MANAGE on the company's bank account to manage it.");
+            return;
+        }
+        net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket
+                .send(player, company.getCompanyId(), company.getName());
+    }
+
+    // ------------------------------------------------------------------
     // Code labels for slave-side error rendering
     // ------------------------------------------------------------------
     private static String describeCode(int code) {

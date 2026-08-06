@@ -6,6 +6,7 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -83,6 +84,15 @@ public final class CompanyManager implements ServerSaveableChunked {
     private final Map<String, Company> byNameLower = new HashMap<>();
 
     private int nextCompanyId = 1;
+
+    /**
+     * Task #51 (v2.0.8) — reverse index of Share Stamper bindings per company.
+     * <p>
+     * Rebuilt at runtime from {@code ShareStamperBlockEntity} load/setLevel hooks;
+     * NOT persisted to NBT. Cleared in {@link #load(Map)} so a restart starts clean
+     * before BEs re-register themselves as chunks load.
+     */
+    private final Map<Integer, Set<BlockPos>> stamperBindings = new HashMap<>();
 
     /** Public for test injection. */
     public CompanyManager() {}
@@ -447,6 +457,31 @@ public final class CompanyManager implements ServerSaveableChunked {
     }
 
     // ------------------------------------------------------------------
+    // Task #51 (v2.0.8) — Share Stamper binding reverse index (runtime-only)
+    // ------------------------------------------------------------------
+    public void registerStamper(int companyId, BlockPos pos) {
+        if (pos == null) return;
+        stamperBindings.computeIfAbsent(companyId, k -> new HashSet<>()).add(pos.immutable());
+    }
+
+    public void unregisterStamper(int companyId, BlockPos pos) {
+        if (pos == null) return;
+        Set<BlockPos> set = stamperBindings.get(companyId);
+        if (set == null) return;
+        set.remove(pos);
+        if (set.isEmpty()) stamperBindings.remove(companyId);
+    }
+
+    public List<BlockPos> listStampers(int companyId) {
+        Set<BlockPos> set = stamperBindings.get(companyId);
+        if (set == null || set.isEmpty()) return List.of();
+        return new ArrayList<>(set);
+    }
+
+    /** Test hook — clears the runtime stamper-binding index. */
+    public void clearStamperIndex() { stamperBindings.clear(); }
+
+    // ------------------------------------------------------------------
     // Persistence — chunked NBT (master only; wired from BankSystemDataHandler)
     // ------------------------------------------------------------------
     @Override
@@ -473,6 +508,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         byId.clear();
         byBankAccount.clear();
         byNameLower.clear();
+        stamperBindings.clear();
         nextCompanyId = 1;
 
         if (listTags == null || listTags.isEmpty()) return true;

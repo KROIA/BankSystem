@@ -648,6 +648,19 @@ public class BankSystemCommandsRegistration {
                             })
                         )
                     )
+                    // Task #51 (v2.0.8) — /company manage <companyName>: opens the
+                    // CompanyManagementScreen on the caller's client if they have MANAGE.
+                    .then(Commands.literal("manage")
+                        .then(Commands.argument("companyName", StringArgumentType.string())
+                                .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_MANAGE))
+                            .executes(ctx -> {
+                                ServerPlayer player = ctx.getSource().getPlayerOrException();
+                                String companyName = StringArgumentType.getString(ctx, "companyName");
+                                CompanyCommandLogic.manage(player, companyName);
+                                return Command.SINGLE_SUCCESS;
+                            })
+                        )
+                    )
                     // Task #47 (v2.0.8) — Share Stamper bind/unbind commands.
                     .then(Commands.literal("stamper-bind")
                         .then(Commands.argument("pos", net.minecraft.commands.arguments.coordinates.BlockPosArgument.blockPos())

@@ -166,19 +166,30 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
 
     // -------- mutation from packet handler / command --------
     public void bind(int companyId, UUID linkedBy) {
+        int prev = this.boundCompanyId;
         this.boundCompanyId = companyId;
         this.linkedByUUID = linkedBy;
         this.linkedAt = System.currentTimeMillis();
         this.stampProgress = 0;
         setChanged();
+        // Task #51 (v2.0.8) — maintain reverse index (master-only; CM is null on slave/client).
+        CompanyManager cm = CompanyManager.get();
+        if (cm != null) {
+            if (prev >= 0 && prev != companyId) cm.unregisterStamper(prev, worldPosition);
+            if (companyId >= 0) cm.registerStamper(companyId, worldPosition);
+        }
     }
     public void unbind() {
+        int prev = this.boundCompanyId;
         this.boundCompanyId = -1;
         this.linkedByUUID = null;
         this.linkedAt = 0L;
         this.stampProgress = 0;
         this.processing = false;
         setChanged();
+        // Task #51 (v2.0.8) — maintain reverse index.
+        CompanyManager cm = CompanyManager.get();
+        if (cm != null && prev >= 0) cm.unregisterStamper(prev, worldPosition);
     }
 
     // -------- viewer lock (Task #47, v2.0.8) --------
@@ -383,7 +394,24 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     @Override
     public void setRemoved() {
         currentViewer = null;
+        // Task #51 (v2.0.8) — drop reverse index entry on BE unload/removal (master-only meaningful).
+        if (level != null && !level.isClientSide && boundCompanyId >= 0) {
+            CompanyManager cm = CompanyManager.get();
+            if (cm != null) cm.unregisterStamper(boundCompanyId, worldPosition);
+        }
         super.setRemoved();
+    }
+
+    @Override
+    public void setLevel(Level lvl) {
+        super.setLevel(lvl);
+        // Task #51 (v2.0.8) — after NBT load + level attach, register this BE in the
+        // Company reverse index. Master-only; on client and slave CompanyManager.get()
+        // is null so this is a no-op there.
+        if (!lvl.isClientSide && boundCompanyId >= 0) {
+            CompanyManager cm = CompanyManager.get();
+            if (cm != null) cm.registerStamper(boundCompanyId, worldPosition);
+        }
     }
 
     // WorldlyContainer

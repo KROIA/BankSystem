@@ -88,5 +88,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.PayoutManagerTests());
         // Task #48 (v2.0.8) — share ItemID volatility guard (distinct companies, distinct ItemIDs).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyShareItemIDTests());
+        // Task #51 (v2.0.8) — CompanyManagementScreen construct-smoke (client-only; skips on servers).
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyManagementScreenSmokeTests());
     }
 }

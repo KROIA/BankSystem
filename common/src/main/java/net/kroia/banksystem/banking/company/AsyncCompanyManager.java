@@ -14,6 +14,7 @@ import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputDat
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionOutputData;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -89,7 +90,12 @@ public final class AsyncCompanyManager {
         // Task #46 (v2.0.8) — by-id share visuals lookup for tooltip self-heal.
         GET_SHARE_VISUALS,
         // Task #49 (v2.0.8) — one-shot dividend distribution.
-        PAY_DIVIDEND
+        PAY_DIVIDEND,
+        // Task #51 (v2.0.8) — list Share Stamper block-entity positions bound to a company.
+        LIST_STAMPER_BINDINGS,
+        // Task #51 fix (v2.0.8) — by-id company info lookup (CompanyManagementScreen needs
+        // the full CompanyInfoOutput given only the companyId from a stamped-share stack).
+        GET_COMPANY_INFO_BY_ID
     }
 
     /** Task #43h — rights filter kinds for {@link #LIST_COMPANIES_FOR_CALLER}. */
@@ -466,6 +472,27 @@ public final class AsyncCompanyManager {
                 PayDividendOutput::new);
     }
 
+    // Task #51 (v2.0.8) — list Share Stamper positions bound to a company.
+    public record ListStamperBindingsInput(int companyId) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ListStamperBindingsInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                ListStamperBindingsInput::new);
+    }
+    public record ListStamperBindingsOutput(List<BlockPos> positions) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ListStamperBindingsOutput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.positions.size());
+                    for (BlockPos p : v.positions) BlockPos.STREAM_CODEC.encode(buf, p);
+                },
+                buf -> {
+                    int n = buf.readVarInt();
+                    List<BlockPos> out = new ArrayList<>(n);
+                    for (int i = 0; i < n; i++) out.add(BlockPos.STREAM_CODEC.decode(buf));
+                    return new ListStamperBindingsOutput(out);
+                });
+        public static final ListStamperBindingsOutput EMPTY = new ListStamperBindingsOutput(List.of());
+    }
+
     public record GetCompanyInfoByAccountInput(int accountNr) {
         public static final StreamCodec<RegistryFriendlyByteBuf, GetCompanyInfoByAccountInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.accountNr,
@@ -494,6 +521,8 @@ public final class AsyncCompanyManager {
         put(FunctionType.UPDATE_SHARE_VISUALS, new AsyncFunctionDataCodecs(UpdateShareVisualsInput.STREAM_CODEC, UpdateShareVisualsOutput.STREAM_CODEC));
         put(FunctionType.GET_SHARE_VISUALS,    new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC,    GetShareVisualsOutput.STREAM_CODEC));
         put(FunctionType.PAY_DIVIDEND,         new AsyncFunctionDataCodecs(PayDividendInput.STREAM_CODEC,       PayDividendOutput.STREAM_CODEC));
+        put(FunctionType.LIST_STAMPER_BINDINGS, new AsyncFunctionDataCodecs(ListStamperBindingsInput.STREAM_CODEC, ListStamperBindingsOutput.STREAM_CODEC));
+        put(FunctionType.GET_COMPANY_INFO_BY_ID, new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC, CompanyInfoOutput.STREAM_CODEC));
     }};
 
     // ------------------------------------------------------------------
@@ -564,6 +593,8 @@ public final class AsyncCompanyManager {
                 case UPDATE_SHARE_VISUALS -> handleUpdateShareVisuals(input.decodeParams(), bm, cm);
                 case GET_SHARE_VISUALS    -> handleGetShareVisuals(input.decodeParams(), cm);
                 case PAY_DIVIDEND         -> handlePayDividend(input.decodeParams(), bm, cm);
+                case LIST_STAMPER_BINDINGS -> handleListStamperBindings(input.decodeParams(), cm);
+                case GET_COMPANY_INFO_BY_ID -> handleInfoById(input.decodeParams(), bm, cm);
             });
         }
 
@@ -579,7 +610,8 @@ public final class AsyncCompanyManager {
             return switch (input.function) {
                 case GET_COMPANY_INFO, IS_NAME_TAKEN, LIST_COMPANIES_FOR_CALLER,
                      LIST_SCHEDULES, GET_HISTORY, GET_COMPANY_INFO_BY_ACCOUNT,
-                     GET_FAILURE_COUNT_24H, GET_SHARE_VISUALS -> true;
+                     GET_FAILURE_COUNT_24H, GET_SHARE_VISUALS,
+                     LIST_STAMPER_BINDINGS, GET_COMPANY_INFO_BY_ID -> true;
                 default -> false;
             };
         }
@@ -739,7 +771,16 @@ public final class AsyncCompanyManager {
             case UPDATE_SHARE_VISUALS -> OutputData.of(function, new UpdateShareVisualsOutput(CODE_INTERNAL));
             case GET_SHARE_VISUALS    -> OutputData.of(function, GetShareVisualsOutput.ABSENT);
             case PAY_DIVIDEND         -> OutputData.of(function, new PayDividendOutput(CODE_INTERNAL, 0L, 0));
+            case LIST_STAMPER_BINDINGS -> OutputData.of(function, ListStamperBindingsOutput.EMPTY);
+            case GET_COMPANY_INFO_BY_ID -> OutputData.of(function, CompanyInfoOutput.ABSENT);
         };
+    }
+
+    // Task #51 (v2.0.8) — read-only lookup of Share Stamper positions bound to a company.
+    private static OutputData handleListStamperBindings(ListStamperBindingsInput in, CompanyManager cm) {
+        List<BlockPos> positions = cm.listStampers(in.companyId);
+        return OutputData.of(FunctionType.LIST_STAMPER_BINDINGS,
+                new ListStamperBindingsOutput(positions));
     }
 
     // Task #46 (v2.0.8) — MANAGE-gated visuals writeback + broadcast.
@@ -898,6 +939,23 @@ public final class AsyncCompanyManager {
                         company.getMaxSupply()));
     }
 
+    private static OutputData handleInfoById(GetShareVisualsInput in, IServerBankManager bm, CompanyManager cm) {
+        Company company = cm.getById(in.companyId());
+        if (company == null) return OutputData.of(FunctionType.GET_COMPANY_INFO_BY_ID, CompanyInfoOutput.ABSENT);
+        Set<UUID> founders = company.getFounders();
+        List<String> founderNames = new ArrayList<>(founders.size());
+        for (UUID uuid : founders) {
+            User u = bm.getUserByUUID(uuid);
+            founderNames.add(u != null ? u.getName() : uuid.toString());
+        }
+        return OutputData.of(FunctionType.GET_COMPANY_INFO_BY_ID,
+                new CompanyInfoOutput(true, company.getCompanyId(), company.getName(),
+                        company.getBankAccountNr(), company.getMaxSupply(),
+                        company.getTotalSharesIssued(),
+                        company.getDescription() == null ? "" : company.getDescription(),
+                        founderNames));
+    }
+
     private static OutputData handleInfoByAccount(GetCompanyInfoByAccountInput in, IServerBankManager bm, CompanyManager cm) {
         Company company = cm.getByBankAccount(in.accountNr);
         if (company == null) return OutputData.of(FunctionType.GET_COMPANY_INFO_BY_ACCOUNT, CompanyInfoOutput.ABSENT);
@@ -948,6 +1006,14 @@ public final class AsyncCompanyManager {
 
     public static CompletableFuture<CompanyInfoOutput> getCompanyInfoAsync(String companyName) {
         InputData input = InputData.of(FunctionType.GET_COMPANY_INFO, companyName);
+        CompletableFuture<CompanyInfoOutput> future = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(out -> future.complete(out.decodeResult()));
+        return future;
+    }
+
+    /** Task #51 fix (v2.0.8) — full CompanyInfoOutput lookup by companyId. */
+    public static CompletableFuture<CompanyInfoOutput> getCompanyInfoByIdAsync(int companyId) {
+        InputData input = InputData.of(FunctionType.GET_COMPANY_INFO_BY_ID, new GetShareVisualsInput(companyId));
         CompletableFuture<CompanyInfoOutput> future = new CompletableFuture<>();
         Request.instance.sendRequestToMaster(input).thenAccept(out -> future.complete(out.decodeResult()));
         return future;
@@ -1074,6 +1140,14 @@ public final class AsyncCompanyManager {
         InputData input = InputData.of(FunctionType.PAY_DIVIDEND,
                 new PayDividendInput(companyId, amountPerShare, includeCompanyAccount, caller));
         CompletableFuture<PayDividendOutput> f = new CompletableFuture<>();
+        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        return f;
+    }
+
+    /** Task #51 (v2.0.8) — slave helper: fetch Share Stamper positions bound to a company. */
+    public static CompletableFuture<ListStamperBindingsOutput> listStamperBindingsAsync(int companyId) {
+        InputData input = InputData.of(FunctionType.LIST_STAMPER_BINDINGS, new ListStamperBindingsInput(companyId));
+        CompletableFuture<ListStamperBindingsOutput> f = new CompletableFuture<>();
         Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
         return f;
     }
