@@ -6,6 +6,7 @@ import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.screen.custom.BankDownloadScreen;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
 import net.kroia.banksystem.screen.custom.BankUploadScreen;
+import net.kroia.banksystem.screen.custom.ShareStamperScreen;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
@@ -37,5 +38,6 @@ public class NeoForgeSetup {
         event.register(BankSystemMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
         event.register(BankSystemMenus.BANK_UPLOAD_CONTAINER_MENU.get(), BankUploadScreen::new);
         event.register(BankSystemMenus.BANK_DOWNLOAD_CONTAINER_MENU.get(), BankDownloadScreen::new);
+        event.register(BankSystemMenus.SHARE_STAMPER_CONTAINER_MENU.get(), ShareStamperScreen::new);
     }
 }
