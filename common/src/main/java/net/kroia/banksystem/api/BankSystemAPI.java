@@ -145,4 +145,27 @@ public interface BankSystemAPI {
      * @return the dividend payer. Downstream mods and UI callers use this interface only.
      */
     net.kroia.banksystem.api.dividend.IDividendPayer getDividendPayer();
+
+    /**
+     * Task #50 (v2.0.8) — client-side per-share visual lookup. Consumed by external
+     * mods (e.g. StockMarket) from render paths. Never {@code null}; on dedicated
+     * servers the returned lookup always resolves to {@code null} because the client
+     * visual cache is not populated there.
+     *
+     * @return the visual lookup. Downstream mods and UI callers use this interface only.
+     * @since 2.0.8
+     */
+    net.kroia.banksystem.api.company.IBankSystemVisualLookup getVisualLookup();
+
+    /**
+     * Task #50 R4 (v2.0.8) — optional icon renderer for company shares.
+     *
+     * <p>Returns {@code null} when no renderer is available (dedicated servers, or
+     * before the client render pipeline is wired). Callers should fall back to the
+     * vanilla {@code ItemStack} renderer in that case.
+     *
+     * @return the share icon renderer, or {@code null} if unavailable.
+     * @since 2.0.8
+     */
+    @Nullable net.kroia.banksystem.api.company.IShareIconRenderer getShareIconRenderer();
 }

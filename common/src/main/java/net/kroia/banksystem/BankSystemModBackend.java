@@ -868,6 +868,47 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
 
     /**
+     * Task #50 (v2.0.8) — client-side visual lookup. Delegates to {@code ShareVisualCache}
+     * (populated by S2C visual packets) and self-heals on cache miss via
+     * {@code ShareVisualCache.tryLookup}. On dedicated servers the cache is unpopulated
+     * so every call returns {@code null}, which matches the interface contract.
+     */
+    private static final net.kroia.banksystem.api.company.IBankSystemVisualLookup VISUAL_LOOKUP =
+            itemId -> {
+                Integer companyId = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                        .getCompanyIdForItemID(itemId);
+                if (companyId == null) return null;
+                if (!net.kroia.banksystem.client.cache.ShareVisualCache.has(companyId)) {
+                    net.kroia.banksystem.client.cache.ShareVisualCache.tryLookup(companyId);
+                    return null;
+                }
+                net.kroia.banksystem.banking.company.ShareVisuals internal =
+                        net.kroia.banksystem.client.cache.ShareVisualCache.getVisualsOrPlaceholder(companyId);
+                return new net.kroia.banksystem.api.company.ShareVisuals(
+                        internal.getIconPresetId(),
+                        internal.getTint(),
+                        net.minecraft.network.chat.Component.literal(internal.getDisplayName()),
+                        net.minecraft.network.chat.Component.literal(internal.getDescription()),
+                        net.kroia.banksystem.client.cache.ShareVisualCache.getIssued(companyId),
+                        net.kroia.banksystem.client.cache.ShareVisualCache.getMax(companyId)
+                );
+            };
+
+    @Override
+    public net.kroia.banksystem.api.company.IBankSystemVisualLookup getVisualLookup() {
+        return VISUAL_LOOKUP;
+    }
+
+    /**
+     * Task #50 R4 (v2.0.8) — icon renderer not wired yet. Downstream mods fall back to
+     * the vanilla {@code ItemStack} renderer per the interface contract until this ships.
+     */
+    @Override
+    public net.kroia.banksystem.api.company.IShareIconRenderer getShareIconRenderer() {
+        return null;
+    }
+
+    /**
      * Issue #64: edge-latch for the slave&rarr;master connection so
      * {@code SLAVE_CONNECTION_LOST} fires once per connected&rarr;disconnected
      * transition instead of on every failed reconnect attempt. Set {@code true}
