@@ -2,17 +2,24 @@ package net.kroia.banksystem.minecraft.item.custom.share;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.company.ShareVisuals;
+import net.kroia.banksystem.client.cache.CompanyInfoCache;
 import net.kroia.banksystem.client.cache.ShareVisualCache;
 import net.kroia.banksystem.minecraft.component.BankSystemDataComponents;
 import net.kroia.banksystem.minecraft.item.BankSystemCreativeModeTab;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -73,6 +80,41 @@ public class StampedShareItem extends Item {
         return stack;
     }
 
+    /**
+     * Task #51 UX fix — dynamic item name so the top tooltip line reads
+     * "&lt;CompanyName&gt; Share" when the client visuals cache has the display name
+     * for this stack's companyId. Falls back to the default translated name
+     * ("Company Share") on cache miss / unstamped stacks.
+     */
+    @Override
+    public @NotNull Component getName(@NotNull ItemStack stack) {
+        Integer companyId = getCompanyId(stack);
+        if (companyId == null) return super.getName(stack);
+        if (!ShareVisualCache.has(companyId)) {
+            ShareVisualCache.tryLookup(companyId);
+            return super.getName(stack);
+        }
+        ShareVisuals visuals = ShareVisualCache.getVisualsOrPlaceholder(companyId);
+        String display = visuals.getDisplayName();
+        int tint = visuals.getTint();
+        if (display == null || display.isBlank()) {
+            // Task #51 fix — fall back to the canonical Company.name when the owner
+            // hasn't set a display name yet. Consult CompanyInfoCache; on miss trigger
+            // a by-id lookup and self-heal next frame (same pattern as ShareVisualCache).
+            CompanyInfoCache.Snapshot snap = CompanyInfoCache.get(companyId);
+            if (snap == null) {
+                CompanyInfoCache.tryLookup(companyId);
+                return super.getName(stack);
+            }
+            String cname = snap.name();
+            if (cname == null || cname.isBlank()) return super.getName(stack);
+            return Component.translatable("item." + BankSystemMod.MOD_ID + ".stamped_share.named", cname)
+                    .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(tint & 0xFFFFFF)));
+        }
+        return Component.translatable("item." + BankSystemMod.MOD_ID + ".stamped_share.named", display)
+                .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(tint & 0xFFFFFF)));
+    }
+
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         Integer companyId = getCompanyId(stack);
@@ -83,45 +125,64 @@ public class StampedShareItem extends Item {
             return;
         }
 
-        // Trigger a cache lookup on miss (fire-and-forget; the S2C visual/supply packets
-        // update the cache once the server responds; the tooltip re-runs every frame and
-        // self-heals — mirroring ItemID.getName()'s placeholder-vs-cache logic).
+        // Trigger a cache lookup on miss; tooltip re-runs each frame and self-heals.
         boolean missing = !ShareVisualCache.has(companyId);
-        ShareVisuals visuals = ShareVisualCache.getVisualsOrPlaceholder(companyId);
-
         if (missing) {
-            tooltip.add(UNKNOWN_NAME.copy().withStyle(ChatFormatting.GRAY));
             tooltip.add(Component.literal("company#" + companyId).withStyle(ChatFormatting.DARK_GRAY));
             ShareVisualCache.tryLookup(companyId);
-        } else {
-            String displayName = visuals.getDisplayName();
-            if (displayName == null || displayName.isBlank()) displayName = "company#" + companyId;
-            int tint = visuals.getTint();
-            MutableComponent name = Component.literal(displayName);
-            // The tint is stored as 0xAARRGGBB (see ShareVisuals.EMPTY = 0xFFFFFFFF).
-            // Chat colors ignore alpha; take the low 24 bits.
-            name = name.withStyle(Style.EMPTY.withColor(TextColor.fromRgb(tint & 0xFFFFFF)));
-            tooltip.add(name);
+            super.appendHoverText(stack, context, tooltip, flag);
+            return;
+        }
 
+        ShareVisuals visuals = ShareVisualCache.getVisualsOrPlaceholder(companyId);
+        long issued = ShareVisualCache.getIssued(companyId);
+        long max = ShareVisualCache.getMax(companyId);
+        tooltip.add(Component.translatable(SUPPLY_KEY, formatLong(issued), formatLong(max))
+                .withStyle(ChatFormatting.DARK_GRAY));
+
+        // Shift-hold → expanded info (description + preset id, other-mod convention).
+        if (Screen.hasShiftDown()) {
             String desc = visuals.getDescription();
             if (desc != null && !desc.isBlank()) {
                 for (String line : desc.split("\\r?\\n")) {
                     tooltip.add(Component.literal(line).withStyle(ChatFormatting.GRAY));
                 }
             }
-
-            long issued = ShareVisualCache.getIssued(companyId);
-            long max = ShareVisualCache.getMax(companyId);
-            tooltip.add(Component.translatable(SUPPLY_KEY, formatLong(issued), formatLong(max))
-                    .withStyle(ChatFormatting.DARK_GRAY));
-
             if (visuals.getIconPresetId() != null && !visuals.getIconPresetId().isBlank()) {
                 tooltip.add(Component.literal("[" + visuals.getIconPresetId() + "]")
                         .withStyle(ChatFormatting.DARK_GRAY));
             }
+        } else {
+            String desc = visuals.getDescription();
+            if (desc != null && !desc.isBlank()) {
+                tooltip.add(Component.translatable(
+                                "tooltip." + BankSystemMod.MOD_ID + ".stamped_share.hold_shift")
+                        .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
+            }
         }
 
         super.appendHoverText(stack, context, tooltip, flag);
+    }
+
+    /**
+     * Task #51 (v2.0.8) — right-click a stamped share to open the Company Management
+     * screen for that stack's company. Client-side only; server-side is a no-op pass
+     * so no bogus interaction packet reaches the block/entity layer.
+     */
+    @Override
+    public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (level.isClientSide) {
+            Integer companyId = getCompanyId(stack);
+            if (companyId != null) {
+                ShareVisuals sv = ShareVisualCache.getVisualsOrPlaceholder(companyId);
+                String name = (sv != null && sv.getDisplayName() != null) ? sv.getDisplayName() : "";
+                net.kroia.banksystem.client.company.CompanyManagementScreenLauncher.open(companyId, name);
+                return InteractionResultHolder.success(stack);
+            }
+            return InteractionResultHolder.pass(stack);
+        }
+        return InteractionResultHolder.pass(stack);
     }
 
     private static String formatLong(long value) {

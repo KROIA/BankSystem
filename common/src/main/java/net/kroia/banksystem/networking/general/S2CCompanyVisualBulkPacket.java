@@ -3,6 +3,7 @@ package net.kroia.banksystem.networking.general;
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.company.ShareVisuals;
+import net.kroia.banksystem.client.cache.CompanyInfoCache;
 import net.kroia.banksystem.client.cache.ShareVisualCache;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -31,13 +32,26 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
             ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2c_company_visual_bulk"));
 
     public record Entry(int companyId, String iconPresetId, int tint, String displayName,
-                        String description, long totalSharesIssued, long maxSupply) {
+                        String description, long totalSharesIssued, long maxSupply,
+                        String internalName, String companyDescription,
+                        int bankAccountNr, List<String> founderNames) {
         public static Entry of(int companyId, ShareVisuals v, long issued, long max) {
+            return of(companyId, v, issued, max, "", "", 0, List.of());
+        }
+        /** Task #51 fix (v2.0.8) — extended with internal company metadata so the client
+         *  populates {@link CompanyInfoCache} at login without a follow-up ARRS lookup. */
+        public static Entry of(int companyId, ShareVisuals v, long issued, long max,
+                               String internalName, String companyDescription,
+                               int bankAccountNr, List<String> founderNames) {
             String preset = v != null ? v.getIconPresetId() : "";
             int tint = v != null ? v.getTint() : 0xFFFFFFFF;
             String dn = v != null ? v.getDisplayName() : "";
             String desc = v != null ? v.getDescription() : "";
-            return new Entry(companyId, preset, tint, dn, desc, issued, max);
+            return new Entry(companyId, preset, tint, dn, desc, issued, max,
+                    internalName == null ? "" : internalName,
+                    companyDescription == null ? "" : companyDescription,
+                    bankAccountNr,
+                    founderNames == null ? List.of() : List.copyOf(founderNames));
         }
     }
 
@@ -53,20 +67,32 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
                             buf.writeUtf(e.description);
                             buf.writeVarLong(e.totalSharesIssued);
                             buf.writeVarLong(e.maxSupply);
+                            buf.writeUtf(e.internalName);
+                            buf.writeUtf(e.companyDescription);
+                            buf.writeVarInt(e.bankAccountNr);
+                            buf.writeVarInt(e.founderNames.size());
+                            for (String fn : e.founderNames) buf.writeUtf(fn);
                         }
                     },
                     buf -> {
                         int n = buf.readVarInt();
                         List<Entry> out = new ArrayList<>(n);
                         for (int i = 0; i < n; i++) {
-                            out.add(new Entry(
-                                    buf.readVarInt(),
-                                    buf.readUtf(),
-                                    buf.readInt(),
-                                    buf.readUtf(),
-                                    buf.readUtf(),
-                                    buf.readVarLong(),
-                                    buf.readVarLong()));
+                            int cid = buf.readVarInt();
+                            String preset = buf.readUtf();
+                            int tint = buf.readInt();
+                            String dn = buf.readUtf();
+                            String desc = buf.readUtf();
+                            long issued = buf.readVarLong();
+                            long max = buf.readVarLong();
+                            String internalName = buf.readUtf();
+                            String companyDesc = buf.readUtf();
+                            int accNr = buf.readVarInt();
+                            int fn = buf.readVarInt();
+                            List<String> founders = new ArrayList<>(fn);
+                            for (int j = 0; j < fn; j++) founders.add(buf.readUtf());
+                            out.add(new Entry(cid, preset, tint, dn, desc, issued, max,
+                                    internalName, companyDesc, accNr, founders));
                         }
                         return new S2CCompanyVisualBulkPacket(out);
                     });
@@ -93,6 +119,15 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
             ShareVisualCache.put(e.companyId,
                     new ShareVisuals(e.iconPresetId, e.tint, e.displayName, e.description),
                     e.totalSharesIssued, e.maxSupply);
+            // Task #51 fix — mirror the internal Company metadata into CompanyInfoCache so
+            // tooltips and CompanyManagementScreen render the canonical Company.name at login
+            // even when ShareVisuals.displayName is blank.
+            if (e.internalName != null && !e.internalName.isEmpty()) {
+                CompanyInfoCache.put(new CompanyInfoCache.Snapshot(
+                        e.companyId, e.internalName, e.companyDescription,
+                        e.maxSupply, e.totalSharesIssued,
+                        e.bankAccountNr, e.founderNames));
+            }
         }
     }
 }

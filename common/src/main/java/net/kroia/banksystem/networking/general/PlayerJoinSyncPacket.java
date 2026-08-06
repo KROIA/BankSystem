@@ -63,10 +63,21 @@ public class PlayerJoinSyncPacket extends BankSystemNetworkPacket {
         if (mgr != null) {
             java.util.List<net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry> entries =
                     new java.util.ArrayList<>();
+            net.kroia.banksystem.api.bankmanager.IServerBankManager bm =
+                    BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
             for (net.kroia.banksystem.banking.company.Company c : mgr.getAll()) {
+                java.util.List<String> founderNames = new java.util.ArrayList<>();
+                for (java.util.UUID uuid : c.getFounders()) {
+                    net.kroia.banksystem.banking.User u = bm != null ? bm.getUserByUUID(uuid) : null;
+                    founderNames.add(u != null ? u.getName() : uuid.toString());
+                }
                 entries.add(net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry.of(
                         c.getCompanyId(), c.getShareVisuals(),
-                        c.getTotalSharesIssued(), c.getMaxSupply()));
+                        c.getTotalSharesIssued(), c.getMaxSupply(),
+                        c.getName(),
+                        c.getDescription() == null ? "" : c.getDescription(),
+                        c.getBankAccountNr(),
+                        founderNames));
             }
             if (!entries.isEmpty()) {
                 net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.sendTo(player, entries);
