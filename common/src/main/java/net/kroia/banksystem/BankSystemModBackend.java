@@ -302,6 +302,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemGuiElement.setBackend(INSTANCES);
         BankSystemEntities.registerRenderers();
 
+        // Task #50 (v2.0.8) — register the stamped-share ARGB tint handler.
+        net.kroia.banksystem.client.render.BankSystemColorHandlers.register();
+
         ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(BankSystemModBackend::onPlayerLeaveClientSide);
         ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(BankSystemModBackend::onPlayerJoinClientSide);
     }
@@ -900,12 +903,19 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
 
     /**
-     * Task #50 R4 (v2.0.8) — icon renderer not wired yet. Downstream mods fall back to
-     * the vanilla {@code ItemStack} renderer per the interface contract until this ships.
+     * Task #50 R4 (v2.0.8) — client-side share icon renderer. Returns the concrete
+     * implementation wired in {@code BankSystemColorHandlers}; on dedicated servers
+     * the client class is never loaded and the accessor returns {@code null}, matching
+     * the interface contract.
      */
     @Override
     public net.kroia.banksystem.api.company.IShareIconRenderer getShareIconRenderer() {
-        return null;
+        try {
+            return net.kroia.banksystem.client.render.BankSystemColorHandlers.SHARE_ICON_RENDERER;
+        } catch (Throwable t) {
+            // Dedicated-server / class-not-available fallback — silent per contract.
+            return null;
+        }
     }
 
     /**

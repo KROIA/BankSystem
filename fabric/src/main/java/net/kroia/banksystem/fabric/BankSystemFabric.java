@@ -21,6 +21,11 @@ public final class BankSystemFabric implements ModInitializer {
             ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
                 BankSystemModBackend.onClientSetup();
             });
+            // Task #53 (v2.0.8) — stamped-share item icon: tint-only via ItemColor handler.
+            // Full monogram-on-item render deferred (BuiltinItemRenderer + builtin/entity
+            // needs per-context vanilla-parity quad rendering; scaffold at
+            // net.kroia.banksystem.fabric.client.FabricShareRenderer is intentionally
+            // NOT registered until that work lands. IShareIconRenderer covers mod GUIs.
         }
 
 
