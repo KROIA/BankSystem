@@ -158,6 +158,16 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
                 if (info != null && info.present()) {
                     // Populate the shared client cache so tooltips + other screens self-heal.
                     CompanyInfoCache.put(info);
+                    // Task #52 (v2.0.8) — refresh holder count after open so the Overview tab
+                    // reflects changes since login. Merges into the cached snapshot on completion.
+                    AsyncCompanyManager.countHoldersForCompanyAsync(companyId).thenAccept(count -> {
+                        if (!screenIsOpen) return;
+                        Minecraft.getInstance().execute(() -> {
+                            if (!screenIsOpen) return;
+                            CompanyInfoCache.updateHolderCount(companyId, count == null ? 0 : count);
+                            rebuildTabs();
+                        });
+                    });
                     loadRightsAsync();
                     String myName = safeCaller().name;
                     isFounder = info.founderNames() != null && info.founderNames().contains(myName);
@@ -275,8 +285,16 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
         body.addChild(new Label(NAME_LABEL.getString() + ": " + name));
         body.addChild(new Label(MAX_SUPPLY.getString() + ": " + maxSupply));
         body.addChild(new Label(ISSUED.getString() + ": " + issued));
-        // TODO(v2.0.9): expose a holder count via a cheap ARRS query; leave "-" for now.
-        body.addChild(new Label(HOLDERS.getString() + ": -"));
+        // Task #52 (v2.0.8) — live holder count. The login bulk-sync populates
+        // Snapshot.holderCount; a post-open ARRS refresh (see loadInfoAsync) keeps it
+        // fresh if holders changed since login. Show "-" only when nothing is cached yet.
+        String holdersText;
+        if (snap != null) {
+            holdersText = Integer.toString(snap.holderCount());
+        } else {
+            holdersText = "-";
+        }
+        body.addChild(new Label(HOLDERS.getString() + ": " + holdersText));
         body.addChild(new Label(FOUNDERS.getString() + ": "
                 + (founders != null && !founders.isEmpty() ? String.join(", ", founders) : "-")));
         body.addChild(new Label(DESC_LABEL.getString() + ":"));

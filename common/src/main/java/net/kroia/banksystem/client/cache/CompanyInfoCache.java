@@ -32,13 +32,17 @@ public final class CompanyInfoCache {
      */
     public record Snapshot(int companyId, String name, String description,
                            long maxSupply, long totalSharesIssued,
-                           int bankAccountNr, List<String> founderNames) {
+                           int bankAccountNr, List<String> founderNames,
+                           int holderCount) {
+        /** Task #52 (v2.0.8) — {@link CompanyInfoOutput} does not carry a holder count;
+         *  it is populated separately via the login bulk-sync packet path. */
         public static Snapshot of(CompanyInfoOutput out) {
             return new Snapshot(out.companyId(), out.name() == null ? "" : out.name(),
                     out.description() == null ? "" : out.description(),
                     out.maxSupply(), out.totalSharesIssued(),
                     out.bankAccountNr(),
-                    out.founderNames() == null ? List.of() : List.copyOf(out.founderNames()));
+                    out.founderNames() == null ? List.of() : List.copyOf(out.founderNames()),
+                    0);
         }
     }
 
@@ -59,7 +63,27 @@ public final class CompanyInfoCache {
 
     public static void put(CompanyInfoOutput out) {
         if (out == null || !out.present()) return;
-        put(Snapshot.of(out));
+        Snapshot fresh = Snapshot.of(out);
+        // Preserve any holderCount previously set by the login bulk-sync packet path.
+        Snapshot prior = infos.get(fresh.companyId());
+        if (prior != null && prior.holderCount() > 0 && fresh.holderCount() == 0) {
+            fresh = new Snapshot(fresh.companyId(), fresh.name(), fresh.description(),
+                    fresh.maxSupply(), fresh.totalSharesIssued(),
+                    fresh.bankAccountNr(), fresh.founderNames(), prior.holderCount());
+        }
+        put(fresh);
+    }
+
+    /** Task #52 (v2.0.8) — merge a fresh holder count into the cached snapshot without
+     *  disturbing any of the other fields. If no snapshot exists yet the update is dropped
+     *  (the login bulk sync or a subsequent by-id lookup will populate it). */
+    public static void updateHolderCount(int companyId, int holderCount) {
+        Snapshot prior = infos.get(companyId);
+        if (prior == null) return;
+        if (prior.holderCount() == holderCount) return;
+        infos.put(companyId, new Snapshot(prior.companyId(), prior.name(), prior.description(),
+                prior.maxSupply(), prior.totalSharesIssued(),
+                prior.bankAccountNr(), prior.founderNames(), holderCount));
     }
 
     /**
