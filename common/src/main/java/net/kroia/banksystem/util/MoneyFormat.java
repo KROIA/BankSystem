@@ -52,12 +52,26 @@ public final class MoneyFormat {
         }
     }
 
-    /** Format raw fixed-point units ({@code 12345}) as decimal text ({@code "123.45"}). */
+    /** Format raw fixed-point units ({@code 12345}) as decimal text ({@code "123.45"}).
+     *  Digits left of the decimal point are grouped in threes with {@code '} (Swiss style),
+     *  e.g. {@code 12230400} → {@code "122'304.00"}.
+     */
     public static String format(long raw) {
         boolean neg = raw < 0;
         long abs = Math.abs(raw);
         long whole = abs / SCALE;
         long frac = abs % SCALE;
-        return (neg ? "-" : "") + whole + "." + (frac < 10 ? "0" + frac : String.valueOf(frac));
+        String fracStr = frac < 10 ? "0" + frac : String.valueOf(frac);
+        // Insert Swiss thousands separators into the integer part.
+        String wholeStr = String.valueOf(whole);
+        int len = wholeStr.length();
+        StringBuilder sb = new StringBuilder();
+        int rem = len % 3;
+        if (rem > 0) sb.append(wholeStr, 0, rem);
+        for (int i = rem; i < len; i += 3) {
+            if (sb.length() > 0) sb.append('\'');
+            sb.append(wholeStr, i, i + 3);
+        }
+        return (neg ? "-" : "") + sb + "." + fracStr;
     }
 }

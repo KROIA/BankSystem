@@ -275,7 +275,7 @@ public class NumismaticsAdapterTests extends TestSuite {
             // (SCALE_FACTOR = 100 in NumismaticsAccount). To push the account to
             // (MAX_SPURS - 10) we need (MAX_SPURS - 10) * 100 BS units, and to trigger
             // overflow the deposit must be at least 11 spurs = 1100 BS units.
-            long nearMaxBSUnits = ((long) (Integer.MAX_VALUE - 10)) * 100L;
+            long nearMaxBSUnits = ((long) (Integer.MAX_VALUE - 10)) * (long) net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
             bank.setBalance(nearMaxBSUnits);
             long balance = bank.getBalance();
             if (balance != nearMaxBSUnits) {

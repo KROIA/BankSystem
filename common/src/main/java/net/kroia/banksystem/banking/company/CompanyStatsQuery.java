@@ -136,7 +136,7 @@ public final class CompanyStatsQuery {
             long shares = entries.get(i)[1];
             IServerBankAccount acct = bm.getBankAccount(acctNr);
             String name = acct != null ? acct.getAccountName() : String.valueOf(acctNr);
-            float pct = (float)(shares / 100L) / (float) Math.max(1L, base);
+            float pct = (float)(shares / net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) / (float) Math.max(1L, base);
             result.add(new ShareholderEntry(acctNr, name, shares, pct));
         }
         return result;

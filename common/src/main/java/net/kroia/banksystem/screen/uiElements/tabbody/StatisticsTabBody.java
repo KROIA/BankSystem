@@ -329,22 +329,7 @@ public class StatisticsTabBody extends TabBody {
 
     /** Converts a raw scale-100 bank value to a display string with Swiss-style thousands separators. */
     private static String fmtVal(long raw) {
-        double scaled = raw / (double) BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
-        // Format to 2 decimal places, then insert ' every 3 digits left of the decimal point.
-        String base = String.format("%.2f", scaled);
-        int dotIdx = base.indexOf('.');
-        String intPart = dotIdx >= 0 ? base.substring(0, dotIdx) : base;
-        String fracPart = dotIdx >= 0 ? base.substring(dotIdx) : "";
-        boolean negative = intPart.startsWith("-");
-        String digits = negative ? intPart.substring(1) : intPart;
-        StringBuilder sb = new StringBuilder();
-        int rem = digits.length() % 3;
-        if (rem > 0) sb.append(digits, 0, rem);
-        for (int i = rem; i < digits.length(); i += 3) {
-            if (sb.length() > 0) sb.append('\'');
-            sb.append(digits, i, i + 3);
-        }
-        return (negative ? "-" : "") + sb + fracPart;
+        return net.kroia.banksystem.util.MoneyFormat.format(raw);
     }
 
     private static ItemStack resolveCurrencyStack(short currencyItem) {
