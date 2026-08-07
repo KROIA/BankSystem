@@ -35,7 +35,7 @@ public final class CompanyStatsQuery {
      * @param accountNr the company's linked bank account number
      */
     public static List<CashflowBucket> getCashflowSeries(
-            Connection conn, int accountNr, long fromMs, long toMs, long bucketMs) {
+            Connection conn, int accountNr, short itemIdShort, long fromMs, long toMs, long bucketMs) {
         List<CashflowBucket> result = new ArrayList<>();
         if (conn == null || bucketMs <= 0) return result;
         // Earnings = anything NOT classified as a spending kind.
@@ -44,14 +44,15 @@ public final class CompanyStatsQuery {
                 "SUM(CASE WHEN kind IN ('PAYOUT','DIVIDEND','WITHDRAW','TRANSFER_OUT','SHARE_STAMP') THEN 0 ELSE ABS(amount) END) AS earnings, " +
                 "SUM(CASE WHEN kind IN ('PAYOUT','DIVIDEND','WITHDRAW','TRANSFER_OUT','SHARE_STAMP') THEN ABS(amount) ELSE 0 END) AS spendings " +
                 "FROM TransactionLog " +
-                "WHERE account_number = ? AND ts >= ? AND ts <= ? " +
+                "WHERE account_number = ? AND item_id = ? AND ts >= ? AND ts <= ? " +
                 "GROUP BY bucket ORDER BY bucket ASC";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, fromMs);
             ps.setLong(2, bucketMs);
             ps.setInt(3, accountNr);
-            ps.setLong(4, fromMs);
-            ps.setLong(5, toMs);
+            ps.setShort(4, itemIdShort);
+            ps.setLong(5, fromMs);
+            ps.setLong(6, toMs);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     long bucket = rs.getLong("bucket");
@@ -72,15 +73,16 @@ public final class CompanyStatsQuery {
      * @param accountNr the company's linked bank account number
      */
     public static CompanyHeadlineMetrics getHeadlineMetrics(
-            Connection conn, int accountNr, long fromMs) {
+            Connection conn, int accountNr, short itemIdShort, long fromMs) {
         if (conn == null) return new CompanyHeadlineMetrics(0L, 0L, 0L, 0, 0L);
         String sql = "SELECT " +
                 "SUM(CASE WHEN kind IN ('PAYOUT','DIVIDEND','WITHDRAW','TRANSFER_OUT','SHARE_STAMP') THEN 0 ELSE ABS(amount) END) AS earn, " +
                 "SUM(CASE WHEN kind IN ('PAYOUT','DIVIDEND','WITHDRAW','TRANSFER_OUT','SHARE_STAMP') THEN ABS(amount) ELSE 0 END) AS spend " +
-                "FROM TransactionLog WHERE account_number = ? AND ts >= ?";
+                "FROM TransactionLog WHERE account_number = ? AND item_id = ? AND ts >= ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, accountNr);
-            ps.setLong(2, fromMs);
+            ps.setShort(2, itemIdShort);
+            ps.setLong(3, fromMs);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     long earn = rs.getLong("earn");

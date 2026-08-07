@@ -517,13 +517,16 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
                         closeToParent();
                     }));
         } else {
+            final boolean finalPaused = paused;
             AsyncCompanyManager.updatePayoutAsync(companyId, original.getScheduleId(), amount, intervalTicks,
-                    caller, target, accountNr, mode, currencyItem);
-            if (paused != original.isPaused()) {
-                AsyncCompanyManager.pausePayoutAsync(companyId, original.getScheduleId(), paused, caller);
-            }
-            if (onDirty != null) onDirty.run();
-            closeToParent();
+                    caller, target, accountNr, mode, currencyItem)
+                    .thenAccept(out -> Minecraft.getInstance().tell(() -> {
+                        if (finalPaused != original.isPaused()) {
+                            AsyncCompanyManager.pausePayoutAsync(companyId, original.getScheduleId(), finalPaused, caller);
+                        }
+                        if (onDirty != null) onDirty.run();
+                        closeToParent();
+                    }));
         }
     }
 

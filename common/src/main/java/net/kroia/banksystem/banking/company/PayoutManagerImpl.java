@@ -58,13 +58,13 @@ public final class PayoutManagerImpl implements IPayoutManager {
 
     @Override
     public OpResult updateScheduleEx(int companyId, long scheduleId, long newAmount, long newIntervalTicks,
-                                     UUID newTarget, int newTargetAccountNr, String newTargetPlayerName,
-                                     String newTargetAccountName, PayoutSchedule.Mode newMode,
-                                     short newCurrencyItem) {
+                                     long nowTick, UUID newTarget, int newTargetAccountNr,
+                                     String newTargetPlayerName, String newTargetAccountName,
+                                     PayoutSchedule.Mode newMode, short newCurrencyItem) {
         CompanyManager cm = CompanyManager.get();
         if (cm == null) return OpResult.NOT_MASTER;
         return mapResult(cm.updateScheduleEx(companyId, scheduleId, newAmount, newIntervalTicks,
-                newTarget, newTargetAccountNr, newTargetPlayerName, newTargetAccountName,
+                nowTick, newTarget, newTargetAccountNr, newTargetPlayerName, newTargetAccountName,
                 newMode, newCurrencyItem));
     }
 

@@ -1678,10 +1678,11 @@ public final class AsyncCompanyManager {
         if (gate != CODE_OK) return OutputData.of(FunctionType.UPDATE_PAYOUT, new UpdatePayoutOutput(gate));
         IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
         if (pm == null) return OutputData.of(FunctionType.UPDATE_PAYOUT, new UpdatePayoutOutput(CODE_INTERNAL));
+        long nowTick = PayoutExecutor.getLastObservedTick() > 0L ? PayoutExecutor.getLastObservedTick() : 0L;
         String[] names = resolveTargetNames(in.newTarget, in.newTargetAccountNr, bm);
         return OutputData.of(FunctionType.UPDATE_PAYOUT,
                 new UpdatePayoutOutput(mapPayoutOp(pm.updateScheduleEx(in.companyId, in.scheduleId,
-                        in.newAmount, in.newIntervalTicks, in.newTarget, in.newTargetAccountNr,
+                        in.newAmount, in.newIntervalTicks, nowTick, in.newTarget, in.newTargetAccountNr,
                         names[0], names[1], modeFromByte(in.newMode), in.newCurrencyItem))));
     }
 
@@ -2339,6 +2340,7 @@ public final class AsyncCompanyManager {
 
         // Current balance — use company currency (default: money).
         long currentBalance = 0L;
+        short filterItemIdShort = 0;
         IServerBankAccount companyAccount = bm.getBankAccount(company.getBankAccountNr());
         if (companyAccount != null) {
             net.kroia.banksystem.util.ItemID currencyId;
@@ -2349,6 +2351,7 @@ public final class AsyncCompanyManager {
                 currencyId = new net.kroia.banksystem.util.ItemID(companyCurrencyShort);
             }
             if (currencyId != null) {
+                filterItemIdShort = currencyId.getShort();
                 net.kroia.banksystem.api.bank.IServerBank bank = companyAccount.getBank(currencyId);
                 if (bank != null) currentBalance = bank.getBalance();
             }
@@ -2374,23 +2377,12 @@ public final class AsyncCompanyManager {
             try {
                 java.sql.Connection conn = dbm.getConnection();
                 int acctNr = company.getBankAccountNr();
-                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
-                    BACKEND_INSTANCES.LOGGER.info("[CompanyStats] companyId=" + in.companyId
-                            + " acctNr=" + acctNr
-                            + " fromMs=" + fromMs + " nowMs=" + nowMs + " bucketMs=" + bucketMs);
                 List<CompanyStatsQuery.CashflowBucket> raw =
-                        CompanyStatsQuery.getCashflowSeries(conn, acctNr, fromMs, nowMs, bucketMs);
-                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
-                    BACKEND_INSTANCES.LOGGER.info("[CompanyStats] cashflow buckets=" + raw.size()
-                            + (raw.isEmpty() ? " (no rows — check account_number in TransactionLog)" : ""));
-                for (CompanyStatsQuery.CashflowBucket b : raw) {
-                    if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
-                        BACKEND_INSTANCES.LOGGER.info("[CompanyStats] bucket t=" + b.bucketStart()
-                                + " earn=" + b.earnings() + " spend=" + b.spendings());
+                        CompanyStatsQuery.getCashflowSeries(conn, acctNr, filterItemIdShort, fromMs, nowMs, bucketMs);
+                for (CompanyStatsQuery.CashflowBucket b : raw)
                     buckets.add(new CashflowBucketWire(b.bucketStart(), b.earnings(), b.spendings()));
-                }
                 CompanyStatsQuery.CompanyHeadlineMetrics metrics =
-                        CompanyStatsQuery.getHeadlineMetrics(conn, acctNr, fromMs);
+                        CompanyStatsQuery.getHeadlineMetrics(conn, acctNr, filterItemIdShort, fromMs);
                 totalEarnings = metrics.totalEarnings();
                 totalSpendings = metrics.totalSpendings();
                 daysToInsolvency = CompanyStatsQuery.getDaysToInsolvency(conn, acctNr, company, currentBalance);

@@ -240,11 +240,14 @@ public class StatisticsTabBody extends TabBody {
             rows.add(new String[]{Component.translatable(PREFIX + "stats_no_upcoming_payouts").getString(), ""});
             payoutsTable.setData(rows, null, null);
         } else {
+            AsyncCompanyManager.CompanyInfoOutput info = screen.info();
+            short companyCurrency = (info != null && info.present())
+                    ? info.companyCurrency() : PayoutSchedule.MONEY_CURRENCY;
+
             List<String[]> rows = new ArrayList<>();
             List<ItemStack[]> rowIcons = new ArrayList<>();
             int[] colors = new int[schedules.size() + 1];
-            long moneyTotal = 0L;
-            boolean hasNonMoney = false;
+            long currencyTotal = 0L;
             for (int i = 0; i < schedules.size(); i++) {
                 AsyncCompanyManager.ScheduleWire s = schedules.get(i);
                 String target;
@@ -258,20 +261,16 @@ public class StatisticsTabBody extends TabBody {
                 }
                 String amountStr = fmtVal(s.amount());
                 ItemStack currencyIcon = resolveCurrencyStack(s.currencyItem());
-                if (s.currencyItem() == PayoutSchedule.MONEY_CURRENCY) {
-                    moneyTotal += s.amount();
-                } else {
-                    hasNonMoney = true;
+                if (s.currencyItem() == companyCurrency) {
+                    currencyTotal += s.amount();
                 }
                 String intervalStr = (s.mode() == (byte) PayoutSchedule.Mode.ONE_TIME.ordinal())
                         ? "Once" : TimeFormat.formatTickDuration(s.intervalTicks());
                 rows.add(new String[]{target, amountStr + " / " + intervalStr});
                 rowIcons.add(new ItemStack[]{null, currencyIcon});
             }
-            String totalStr = fmtVal(moneyTotal);
-            if (hasNonMoney) totalStr += " (money only)";
-            rows.add(new String[]{"§lTotal", "§l" + totalStr});
-            rowIcons.add(new ItemStack[]{null, resolveCurrencyStack(PayoutSchedule.MONEY_CURRENCY)});
+            rows.add(new String[]{"§lTotal", "§l" + fmtVal(currencyTotal)});
+            rowIcons.add(new ItemStack[]{null, resolveCurrencyStack(companyCurrency)});
             colors[schedules.size()] = 0xFFFFFFFF;
             payoutsTable.setData(rows, colors, rowIcons.toArray(new ItemStack[0][]));
         }

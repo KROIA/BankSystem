@@ -45,9 +45,9 @@ public interface IPayoutManager {
 
     /** Spec B.1–B.3 (v2.0.8) — extended update including target/mode/currency. */
     OpResult updateScheduleEx(int companyId, long scheduleId, long newAmount, long newIntervalTicks,
-                              UUID newTarget, int newTargetAccountNr, String newTargetPlayerName,
-                              String newTargetAccountName, PayoutSchedule.Mode newMode,
-                              short newCurrencyItem);
+                              long nowTick, UUID newTarget, int newTargetAccountNr,
+                              String newTargetPlayerName, String newTargetAccountName,
+                              PayoutSchedule.Mode newMode, short newCurrencyItem);
 
     OpResult pauseSchedule(int companyId, long scheduleId, boolean paused);
 

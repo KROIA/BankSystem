@@ -400,7 +400,7 @@ public final class CompanyManager implements ServerSaveableChunked {
      * + name snapshots), mode, and currency. Interval-floor enforced.
      */
     public PayoutMutation updateScheduleEx(int companyId, long scheduleId, long newAmount,
-                                           long newIntervalTicks, UUID newTarget,
+                                           long newIntervalTicks, long nowTick, UUID newTarget,
                                            int newTargetAccountNr, String newTargetPlayerName,
                                            String newTargetAccountName, PayoutSchedule.Mode newMode,
                                            short newCurrencyItem) {
@@ -413,8 +413,11 @@ public final class CompanyManager implements ServerSaveableChunked {
         }
         PayoutSchedule existing = company.findSchedule(scheduleId);
         if (existing == null) return PayoutMutation.SCHEDULE_MISSING;
+        // Reset the timer whenever the interval changes so the new cadence takes effect immediately.
+        long newNextRunTick = (newIntervalTicks != existing.getIntervalTicks() && nowTick > 0)
+                ? nowTick + newIntervalTicks : existing.getNextRunTick();
         boolean ok = company.replaceSchedule(scheduleId, existing.withEditableFields(
-                newAmount, newIntervalTicks, newTarget, newTargetAccountNr,
+                newAmount, newIntervalTicks, newNextRunTick, newTarget, newTargetAccountNr,
                 newTargetPlayerName, newTargetAccountName, newMode, newCurrencyItem));
         return ok ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
     }

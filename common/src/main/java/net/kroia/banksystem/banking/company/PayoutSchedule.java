@@ -137,12 +137,12 @@ public final class PayoutSchedule {
     }
 
     /** Spec B.1/B.2/B.3 — full editable-fields replacement (target, mode, currency). */
-    public PayoutSchedule withEditableFields(long newAmount, long newIntervalTicks, UUID newTarget,
-                                             int newTargetAccountNr, String newTargetPlayerName,
-                                             String newTargetAccountName, Mode newMode,
-                                             short newCurrencyItem) {
+    public PayoutSchedule withEditableFields(long newAmount, long newIntervalTicks, long newNextRunTick,
+                                             UUID newTarget, int newTargetAccountNr,
+                                             String newTargetPlayerName, String newTargetAccountName,
+                                             Mode newMode, short newCurrencyItem) {
         return new PayoutSchedule(scheduleId, newTarget, newAmount, newIntervalTicks,
-                nextRunTick, paused, createdAt, createdBy, newTargetAccountNr,
+                newNextRunTick, paused, createdAt, createdBy, newTargetAccountNr,
                 newTargetPlayerName, newTargetAccountName, newMode, newCurrencyItem,
                 missedAmount, missedCount);
     }

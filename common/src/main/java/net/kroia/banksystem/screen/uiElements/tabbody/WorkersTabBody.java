@@ -237,25 +237,22 @@ public class WorkersTabBody extends TabBody {
         titleLabel.setBounds(PADDING, PADDING, w - 2 * PADDING, ROW_HEIGHT);
         int listTop = PADDING + ROW_HEIGHT + ROW_SPACING;
 
-        // Bottom row: open-account button
+        // Bottom row: all action buttons side-by-side
+        int btnRowY = h - PADDING - ROW_HEIGHT;
         int openBtnW = Math.min(220, w - 2 * PADDING);
-        int openBtnY = h - PADDING - ROW_HEIGHT;
-        openAccountButton.setBounds(w - PADDING - openBtnW, openBtnY, openBtnW, ROW_HEIGHT);
 
-        // Row above open-account: save / add buttons (only rendered for manage users)
-        int actionRowY = openBtnY - ROW_SPACING - ROW_HEIGHT;
         if (canManage) {
-            int btnW = Math.min(140, (w - 2 * PADDING - ROW_SPACING) / 2);
-            addUserButton.setBounds(PADDING, actionRowY, btnW, ROW_HEIGHT);
-            saveButton.setBounds(PADDING + btnW + ROW_SPACING, actionRowY, btnW, ROW_HEIGHT);
+            int manageBtnW = Math.min(120, (w - 2 * PADDING - ROW_SPACING * 2 - openBtnW) / 2);
+            addUserButton.setBounds(PADDING, btnRowY, manageBtnW, ROW_HEIGHT);
+            saveButton.setBounds(PADDING + manageBtnW + ROW_SPACING, btnRowY, manageBtnW, ROW_HEIGHT);
         } else {
             addUserButton.setBounds(0, 0, 0, 0);
             saveButton.setBounds(0, 0, 0, 0);
-            actionRowY = openBtnY; // userList may grow taller
         }
+        openAccountButton.setBounds(w - PADDING - openBtnW, btnRowY, openBtnW, ROW_HEIGHT);
 
-        // User list fills the space between title and action buttons
-        int listHeight = Math.max(ROW_HEIGHT, actionRowY - listTop - SECTION_SPACING);
+        // User list fills all space between title and the button row
+        int listHeight = Math.max(ROW_HEIGHT, btnRowY - ROW_SPACING - listTop);
         userList.setBounds(PADDING, listTop, w - 2 * PADDING, listHeight);
     }
 }
