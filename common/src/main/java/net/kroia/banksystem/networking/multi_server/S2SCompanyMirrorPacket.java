@@ -54,8 +54,10 @@ public class S2SCompanyMirrorPacket extends BankSystemNetworkPacket {
                         buf.writeVarInt(p.companyId);
                         if (p.op == OP_UPSERT) {
                             S2CCompanyVisualBulkPacket.Entry e = p.entry;
-                            buf.writeUtf(e.iconPresetId() == null ? "" : e.iconPresetId());
-                            buf.writeInt(e.tint());
+                            buf.writeUtf(e.bgSymbolId() == null ? "" : e.bgSymbolId());
+                            buf.writeInt(e.bgTint());
+                            buf.writeUtf(e.fgSymbolId() == null ? "" : e.fgSymbolId());
+                            buf.writeInt(e.fgTint());
                             buf.writeUtf(e.displayName() == null ? "" : e.displayName());
                             buf.writeUtf(e.description() == null ? "" : e.description());
                             buf.writeVarLong(e.totalSharesIssued());
@@ -74,8 +76,10 @@ public class S2SCompanyMirrorPacket extends BankSystemNetworkPacket {
                         byte op = buf.readByte();
                         int cid = buf.readVarInt();
                         if (op == OP_UPSERT) {
-                            String preset = buf.readUtf();
-                            int tint = buf.readInt();
+                            String bgSym = buf.readUtf();
+                            int bgTint = buf.readInt();
+                            String fgSym = buf.readUtf();
+                            int fgTint = buf.readInt();
                             String dn = buf.readUtf();
                             String desc = buf.readUtf();
                             long issued = buf.readVarLong();
@@ -88,7 +92,7 @@ public class S2SCompanyMirrorPacket extends BankSystemNetworkPacket {
                             for (int j = 0; j < fn; j++) founders.add(buf.readUtf());
                             int hc = buf.readVarInt();
                             S2CCompanyVisualBulkPacket.Entry entry = new S2CCompanyVisualBulkPacket.Entry(
-                                    cid, preset, tint, dn, desc, issued, max, iname, cdesc, accNr, founders, hc);
+                                    cid, bgSym, bgTint, fgSym, fgTint, dn, desc, issued, max, iname, cdesc, accNr, founders, hc);
                             return new S2SCompanyMirrorPacket(op, cid, entry, 0L);
                         } else if (op == OP_SUPPLY) {
                             long issued = buf.readVarLong();
@@ -130,7 +134,10 @@ public class S2SCompanyMirrorPacket extends BankSystemNetworkPacket {
             if (server != null) {
                 S2CCompanyVisualUpdatePacket fwd = new S2CCompanyVisualUpdatePacket(
                         entry.companyId(),
-                        new ShareVisuals(entry.iconPresetId(), entry.tint(), entry.displayName(), entry.description()),
+                        new ShareVisuals(
+                                new ShareVisuals.ShareLayer(entry.bgSymbolId(), entry.bgTint()),
+                                new ShareVisuals.ShareLayer(entry.fgSymbolId(), entry.fgTint()),
+                                entry.displayName(), entry.description()),
                         entry.totalSharesIssued(), entry.maxSupply());
                 // Task #51 (v2.0.8, spec §1.4) — also forward the company-level
                 // description so slave-side clients' Overview tabs stay fresh.

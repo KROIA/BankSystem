@@ -86,7 +86,9 @@ public final class ShareVisualCache {
                     return;
                 }
                 ShareVisuals v = new ShareVisuals(
-                        out.iconPresetId(), out.tint(), out.displayName(), out.description());
+                        new ShareVisuals.ShareLayer(out.bgSymbolId(), out.bgTint()),
+                        new ShareVisuals.ShareLayer(out.fgSymbolId(), out.fgTint()),
+                        out.displayName(), out.description());
                 put(companyId, v, out.totalIssued(), out.maxSupply());
             });
         } catch (Throwable t) {

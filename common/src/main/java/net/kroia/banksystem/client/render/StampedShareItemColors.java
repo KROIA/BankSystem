@@ -38,7 +38,7 @@ public final class StampedShareItemColors implements ItemColor {
             return 0xFFFFFFFF;
         }
         ShareVisuals v = ShareVisualCache.getVisualsOrPlaceholder(companyId);
-        int tint = v.getTint();
+        int tint = v.getBgLayer().tint();
         // Ensure the alpha channel is fully opaque — a stored tint of 0 (fully transparent)
         // would make the item invisible; treat "no tint chosen" as white.
         if ((tint & 0xFF000000) == 0) tint |= 0xFF000000;

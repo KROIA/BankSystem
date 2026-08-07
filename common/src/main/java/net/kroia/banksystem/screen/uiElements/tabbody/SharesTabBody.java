@@ -54,8 +54,8 @@ public class SharesTabBody extends TabBody {
         this.editable = screen.canManageNow() || screen.isFounderNow();
 
         ShareVisuals visuals = ShareVisualCache.getVisualsOrPlaceholder(screen.getCompanyId());
-        selectedPresetId = visuals.getIconPresetId() == null ? "" : visuals.getIconPresetId();
-        selectedTint = visuals.getTint();
+        selectedPresetId = visuals.getFgLayer().symbolId();
+        selectedTint = visuals.getBgLayer().tint();
 
         introLabel = new Label(Component.translatable(PREFIX + "shares_intro").getString());
         introLabel.setAlignment(Label.Alignment.LEFT);
@@ -153,10 +153,15 @@ public class SharesTabBody extends TabBody {
         String displayName = displayNameBox.getText();
         String description = descriptionBox.getText();
         // Spec §0.7 — optimistic cache update so the current frame reflects the change.
+        // selectedPresetId → fg symbol; selectedTint → bg tint (legacy single-layer mapping).
         ShareVisualCache.put(companyId,
-                new ShareVisuals(selectedPresetId, selectedTint, displayName, description),
+                new ShareVisuals(
+                        new ShareVisuals.ShareLayer("", selectedTint),
+                        new ShareVisuals.ShareLayer(selectedPresetId, 0xFFFFFFFF),
+                        displayName, description),
                 ShareVisualCache.getIssued(companyId), ShareVisualCache.getMax(companyId));
-        AsyncCompanyManager.updateShareVisualsAsync(companyId, selectedPresetId, selectedTint,
+        AsyncCompanyManager.updateShareVisualsAsync(companyId,
+                        "", selectedTint, selectedPresetId, 0xFFFFFFFF,
                         displayName, description, screen.callerUUID())
                 .thenAccept(out -> onClientThread(() -> {
                     if (out == null || out.resultCode() != AsyncCompanyManager.CODE_OK) {

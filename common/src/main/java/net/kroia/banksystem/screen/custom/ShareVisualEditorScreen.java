@@ -14,7 +14,6 @@ import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
-import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -23,25 +22,24 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Task #46 (v2.0.8) — modal editor for a Company's {@link ShareVisuals}. MANAGE-gated:
- * when {@code canManage} is false, save + edit widgets render read-only (Save hidden,
- * boxes disabled). Preset icon picker is a scroll list of preset ids (art deferred —
- * see {@link SharePresetRegistry}). Tint is entered as a hex string; three 0-255 R/G/B
- * boxes stay in sync with the hex box.
+ * Task #46 (v2.0.8) / v2.0.9 two-layer redesign — modal editor for a Company's
+ * {@link ShareVisuals}. MANAGE-gated: when {@code canManage} is false, save + edit
+ * widgets render read-only (Save hidden, boxes disabled).
  *
- * <p>Save calls {@link AsyncCompanyManager#updateShareVisualsAsync} — the master validates
- * MANAGE and preset id, then broadcasts a {@link net.kroia.banksystem.networking.general.S2CCompanyVisualUpdatePacket}
- * to all clients. The local {@link ShareVisualCache} refreshes on that broadcast.
+ * <p>Layout: displayName + description fields above the layer scroll list.
+ * The scroll list holds two {@link ShareLayerPanel} rows — <b>Foreground first (top)</b>,
+ * Background second (bottom) — matching the "lower in list → bottom of stack" convention.
+ * Each panel has a symbol-picker button and R/G/B + hex tint fields.
+ *
+ * <p>Save calls {@link AsyncCompanyManager#updateShareVisualsAsync} with 4 layer params.
  */
 public class ShareVisualEditorScreen extends BankSystemGuiScreen {
 
     private static final String PREFIX = "gui." + BankSystemMod.MOD_ID + ".share_visual_editor.";
-    private static final Component TITLE = Component.translatable(PREFIX + "title");
-    private static final Component SAVE = Component.translatable(PREFIX + "save");
-    private static final Component PRESET = Component.translatable(PREFIX + "preset");
-    private static final Component TINT = Component.translatable(PREFIX + "tint");
+    private static final Component TITLE        = Component.translatable(PREFIX + "title");
+    private static final Component SAVE         = Component.translatable(PREFIX + "save");
     private static final Component DISPLAY_NAME = Component.translatable(PREFIX + "display_name");
-    private static final Component DESCRIPTION = Component.translatable(PREFIX + "description");
+    private static final Component DESCRIPTION  = Component.translatable(PREFIX + "description");
 
     private final GuiScreen parent;
     private final int companyId;
@@ -52,24 +50,14 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
     private CloseButton closeButton;
     private Button saveButton;
 
-    private Label presetLabel;
-    private ListView presetList;
-    private String selectedPresetId = "";
-    private Label selectedPresetLabel;
-
-    private Label tintLabel;
-    private TextBox tintHexBox;
-    private TextBox tintRBox;
-    private TextBox tintGBox;
-    private TextBox tintBBox;
-
     private Label displayNameLabel;
     private TextBox displayNameBox;
-
     private Label descriptionLabel;
     private TextBox descriptionBox;
 
-    private boolean syncingTintFields = false;
+    private VerticalListView layerList;
+    private ShareLayerPanel fgPanel;
+    private ShareLayerPanel bgPanel;
 
     public ShareVisualEditorScreen(GuiScreen parent, int companyId, ShareVisuals initial,
                                    UUID caller, boolean canManage) {
@@ -87,48 +75,12 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
     }
 
     private void setupUi(ShareVisuals initial) {
-        selectedPresetId = initial.getIconPresetId() == null ? "" : initial.getIconPresetId();
-
         titleLabel = new Label(TITLE.getString());
         closeButton = new CloseButton(this::onClose);
         closeButton.setBackgroundColor(0xFFf55a42);
         closeButton.setHoverColor(0xFFe03d24);
         closeButton.setPressedColor(0xFFde2b10);
         closeButton.setOutlineColor(0xFFde2510);
-
-        presetLabel = new Label(PRESET.getString());
-        selectedPresetLabel = new Label(selectedPresetId.isEmpty() ? "-" : selectedPresetId);
-
-        presetList = new VerticalListView();
-        LayoutGrid layout = new LayoutGrid();
-        layout.columns = 1;
-        layout.spacing = 0;
-        layout.padding = 0;
-        layout.stretchX = true;
-        layout.stretchY = false;
-        layout.alignment = GuiElement.Alignment.TOP;
-        presetList.setLayout(layout);
-        for (String id : SharePresetRegistry.orderedIds()) {
-            Button row = new Button(id, () -> {
-                if (!canManage) return;
-                selectedPresetId = id;
-                selectedPresetLabel.setText(id);
-            });
-            row.setEnabled(canManage);
-            presetList.addChild(row);
-        }
-
-        tintLabel = new Label(TINT.getString());
-        int initTint = initial.getTint();
-        int r = (initTint >> 16) & 0xFF;
-        int g = (initTint >> 8) & 0xFF;
-        int b = initTint & 0xFF;
-        tintHexBox = new TextBox();
-        tintHexBox.setText(String.format("%06X", initTint & 0xFFFFFF));
-        tintHexBox.setEnabled(canManage);
-        tintRBox = channelBox(r);
-        tintGBox = channelBox(g);
-        tintBBox = channelBox(b);
 
         displayNameLabel = new Label(DISPLAY_NAME.getString());
         displayNameBox = new TextBox();
@@ -140,76 +92,49 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
         descriptionBox.setText(initial.getDescription() == null ? "" : initial.getDescription());
         descriptionBox.setEnabled(canManage);
 
+        // FG first (top of scroll list = foreground visual layer), BG second.
+        fgPanel = new ShareLayerPanel("Foreground",
+                initial.getFgLayer().symbolId(), initial.getFgLayer().tint());
+        bgPanel = new ShareLayerPanel("Background",
+                initial.getBgLayer().symbolId(), initial.getBgLayer().tint());
+
+        layerList = new VerticalListView();
+        LayoutGrid layout = new LayoutGrid();
+        layout.columns = 1;
+        layout.spacing = 4;
+        layout.padding = 0;
+        layout.stretchX = true;
+        layout.stretchY = false;
+        layout.alignment = GuiElement.Alignment.TOP;
+        layerList.setLayout(layout);
+        layerList.addChild(fgPanel);
+        layerList.addChild(bgPanel);
+
         if (canManage) {
             saveButton = new Button(SAVE.getString(), this::onSaveClicked);
         }
 
         addElement(titleLabel);
         addElement(closeButton);
-        addElement(presetLabel);
-        addElement(selectedPresetLabel);
-        addElement(presetList);
-        addElement(tintLabel);
-        addElement(tintHexBox);
-        addElement(tintRBox);
-        addElement(tintGBox);
-        addElement(tintBBox);
         addElement(displayNameLabel);
         addElement(displayNameBox);
         addElement(descriptionLabel);
         addElement(descriptionBox);
+        addElement(layerList);
         if (saveButton != null) addElement(saveButton);
-    }
-
-    private TextBox channelBox(int value) {
-        TextBox tb = new TextBox();
-        tb.setText(String.valueOf(value & 0xFF));
-        tb.setEnabled(canManage);
-        return tb;
-    }
-
-    private int parseTintFromHex() {
-        try {
-            String s = tintHexBox.getText().trim();
-            if (s.startsWith("#")) s = s.substring(1);
-            return Integer.parseInt(s, 16) & 0xFFFFFF;
-        } catch (NumberFormatException e) {
-            return 0xFFFFFF;
-        }
-    }
-
-    private int parseChannel(TextBox tb) {
-        try {
-            int v = Integer.parseInt(tb.getText().trim());
-            if (v < 0) v = 0;
-            if (v > 255) v = 255;
-            return v;
-        } catch (NumberFormatException e) {
-            return 0;
-        }
-    }
-
-    /** Recomputes the effective tint from whichever field the user most recently edited. */
-    private int effectiveTint() {
-        // Prefer hex if it looks valid (6 hex chars) — otherwise fall back to R/G/B fields.
-        String hex = tintHexBox.getText().trim();
-        if (hex.matches("(?i)#?[0-9a-f]{6}")) {
-            return 0xFF000000 | parseTintFromHex();
-        }
-        int r = parseChannel(tintRBox);
-        int g = parseChannel(tintGBox);
-        int b = parseChannel(tintBBox);
-        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
     private void onSaveClicked() {
         if (!canManage) return;
-        int tint = effectiveTint();
         String displayName = displayNameBox.getText();
         String description = descriptionBox.getText();
-        String preset = selectedPresetId == null ? "" : selectedPresetId;
+        String bgSym = bgPanel.getSymbolId();
+        int bgTint = bgPanel.getEffectiveTint();
+        String fgSym = fgPanel.getSymbolId();
+        int fgTint = fgPanel.getEffectiveTint();
 
-        AsyncCompanyManager.updateShareVisualsAsync(companyId, preset, tint, displayName, description, caller)
+        AsyncCompanyManager.updateShareVisualsAsync(
+                        companyId, bgSym, bgTint, fgSym, fgTint, displayName, description, caller)
                 .thenAccept(out -> Minecraft.getInstance().execute(this::closeToParent));
     }
 
@@ -238,23 +163,6 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
 
         int y = padding + 25;
         int col = width / 2;
-        presetLabel.setBounds(padding, y, col - spacing, 20);
-        selectedPresetLabel.setBounds(padding + col, y, col - spacing, 20);
-        y += 22;
-
-        int presetListHeight = 90;
-        presetList.setBounds(padding, y, width, presetListHeight);
-        y += presetListHeight + spacing;
-
-        tintLabel.setBounds(padding, y, col - spacing, 20);
-        tintHexBox.setBounds(padding + col, y, col - spacing, 20);
-        y += 22;
-
-        int chW = (width - 2 * spacing) / 3;
-        tintRBox.setBounds(padding, y, chW, 20);
-        tintGBox.setBounds(padding + chW + spacing, y, chW, 20);
-        tintBBox.setBounds(padding + 2 * (chW + spacing), y, chW, 20);
-        y += 22;
 
         displayNameLabel.setBounds(padding, y, col - spacing, 20);
         displayNameBox.setBounds(padding + col, y, col - spacing, 20);
@@ -264,12 +172,185 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
         descriptionBox.setBounds(padding + col, y, col - spacing, 20);
         y += 22;
 
+        int listHeight = ShareLayerPanel.PANEL_HEIGHT * 2 + 4 + 8;
+        layerList.setBounds(padding, y, width, listHeight);
+        y += listHeight + spacing;
+
         if (saveButton != null) {
             saveButton.setBounds(padding, getHeight() - 25, width, 20);
         }
     }
 
-    /** Prevents unused-import warnings from being surfaced as compile errors in strict modes. */
+    // -----------------------------------------------------------------------
+    // Inner panel for one visual layer
+    // -----------------------------------------------------------------------
+
+    /**
+     * A self-contained {@link GuiElement} representing one visual layer (FG or BG).
+     * Contains:
+     * <ul>
+     *   <li>Bold title label ("Foreground" / "Background")</li>
+     *   <li>Symbol row: label + button showing selected preset id</li>
+     *   <li>Color row: "Color:" label + hex TextBox + R/G/B TextBoxes</li>
+     * </ul>
+     */
+    private class ShareLayerPanel extends GuiElement {
+
+        static final int PANEL_HEIGHT = 20 + 22 + 22 + 18; // title + symbol row + hex color row + rgb row
+
+        private final Label titleLabel;
+        private final Label symbolLabel;
+        private final Button symbolButton;
+        private final Label colorLabel;
+        private final TextBox hexBox;
+        private final TextBox rBox;
+        private final TextBox gBox;
+        private final TextBox bBox;
+
+        private String selectedSymbolId;
+        private boolean syncingColor = false;
+
+        ShareLayerPanel(String title, String initialSymbolId, int initialTint) {
+            super();
+            setHeight(PANEL_HEIGHT);
+            selectedSymbolId = initialSymbolId == null ? "" : initialSymbolId;
+
+            titleLabel = new Label(title);
+            symbolLabel = new Label("Symbol:");
+            symbolButton = new Button(
+                    selectedSymbolId.isEmpty() ? "-" : selectedSymbolId,
+                    this::onPickSymbol);
+            symbolButton.setEnabled(canManage);
+
+            colorLabel = new Label("Color:");
+            int r = (initialTint >> 16) & 0xFF;
+            int g = (initialTint >> 8) & 0xFF;
+            int b = initialTint & 0xFF;
+            hexBox = new TextBox();
+            hexBox.setText(String.format("%06X", initialTint & 0xFFFFFF));
+            hexBox.setEnabled(canManage);
+            rBox = channelBox(r);
+            gBox = channelBox(g);
+            bBox = channelBox(b);
+
+            hexBox.setOnTextChanged(t -> {
+                if (syncingColor) return;
+                syncingColor = true;
+                try {
+                    int parsed = parseHex(t);
+                    rBox.setText(String.valueOf((parsed >> 16) & 0xFF));
+                    gBox.setText(String.valueOf((parsed >> 8) & 0xFF));
+                    bBox.setText(String.valueOf(parsed & 0xFF));
+                } finally {
+                    syncingColor = false;
+                }
+            });
+            Runnable syncHex = () -> {
+                if (syncingColor) return;
+                syncingColor = true;
+                try {
+                    int rc = parseCh(rBox), gc = parseCh(gBox), bc = parseCh(bBox);
+                    hexBox.setText(String.format("%06X", (rc << 16) | (gc << 8) | bc));
+                } finally {
+                    syncingColor = false;
+                }
+            };
+            rBox.setOnTextChanged(t -> syncHex.run());
+            gBox.setOnTextChanged(t -> syncHex.run());
+            bBox.setOnTextChanged(t -> syncHex.run());
+
+            addChild(titleLabel);
+            addChild(symbolLabel);
+            addChild(symbolButton);
+            addChild(colorLabel);
+            addChild(hexBox);
+            addChild(rBox);
+            addChild(gBox);
+            addChild(bBox);
+        }
+
+        private TextBox channelBox(int value) {
+            TextBox tb = new TextBox();
+            tb.setText(String.valueOf(value & 0xFF));
+            tb.setEnabled(canManage);
+            return tb;
+        }
+
+        private void onPickSymbol() {
+            if (!canManage) return;
+            // Inline preset-picker: reuse the existing VerticalListView inside a small popup.
+            // For simplicity, open the standard PresetPickerPopup from SharesTabBody approach.
+            net.kroia.banksystem.util.BankSystemGuiScreen.switchScreen(
+                    new net.kroia.banksystem.screen.uiElements.PresetPickerPopup(
+                            ShareVisualEditorScreen.this,
+                            presetId -> {
+                                selectedSymbolId = presetId == null ? "" : presetId;
+                                symbolButton.setText(selectedSymbolId.isEmpty() ? "-" : selectedSymbolId);
+                            }));
+        }
+
+        String getSymbolId() {
+            return selectedSymbolId;
+        }
+
+        int getEffectiveTint() {
+            String hex = hexBox.getText().trim();
+            if (hex.matches("(?i)#?[0-9a-f]{6}")) {
+                return 0xFF000000 | parseHex(hex);
+            }
+            int r = parseCh(rBox), g = parseCh(gBox), b = parseCh(bBox);
+            return 0xFF000000 | (r << 16) | (g << 8) | b;
+        }
+
+        private int parseHex(String s) {
+            try {
+                if (s == null) return 0xFFFFFF;
+                s = s.trim();
+                if (s.startsWith("#")) s = s.substring(1);
+                return Integer.parseInt(s, 16) & 0xFFFFFF;
+            } catch (NumberFormatException e) {
+                return 0xFFFFFF;
+            }
+        }
+
+        private int parseCh(TextBox tb) {
+            try {
+                int v = Integer.parseInt(tb.getText().trim());
+                if (v < 0) v = 0;
+                if (v > 255) v = 255;
+                return v;
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+
+        @Override
+        protected void render() {}
+
+        @Override
+        protected void layoutChanged() {
+            int w = getWidth();
+            int spacing = 4;
+            int col = w / 2;
+            // Row 0: title
+            titleLabel.setBounds(0, 0, w, 20);
+            // Row 1: symbol
+            symbolLabel.setBounds(0, 22, col - spacing, 20);
+            symbolButton.setBounds(col, 22, col, 20);
+            // Row 2: color
+            colorLabel.setBounds(0, 44, col - spacing, 20);
+            int hexW = Math.max(1, col - spacing);
+            hexBox.setBounds(col, 44, hexW, 20);
+            int chW = Math.max(1, (w - col - 2 * spacing) / 3);
+            // Place R/G/B below to avoid crowding; but we only have 3 rows so put them inline after hex.
+            // Use the remaining half for 3 small channel boxes side by side.
+            rBox.setBounds(col, 66, chW, 14);
+            gBox.setBounds(col + chW + spacing, 66, chW, 14);
+            bBox.setBounds(col + 2 * (chW + spacing), 66, chW, 14);
+        }
+    }
+
+    /** Prevents unused-import warnings from being surfaced as compile errors. */
     @SuppressWarnings("unused")
     private static final List<String> _PRESETS_KEEPALIVE = SharePresetRegistry.orderedIds();
 }
