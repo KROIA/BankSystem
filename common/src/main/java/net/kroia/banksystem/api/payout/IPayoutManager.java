@@ -32,7 +32,22 @@ public interface IPayoutManager {
     CreateOutcome createSchedule(int companyId, UUID target, long amount, long intervalTicks,
                                  long nowTick, UUID createdBy);
 
+    /**
+     * Spec B.1–B.3 (v2.0.8) — extended create with explicit target account, display-name
+     * snapshots, payout mode, and currency ItemID short ({@code 0} = money).
+     */
+    CreateOutcome createSchedule(int companyId, UUID target, long amount, long intervalTicks,
+                                 long nowTick, UUID createdBy, int targetAccountNr,
+                                 String targetPlayerName, String targetAccountName,
+                                 PayoutSchedule.Mode mode, short currencyItem);
+
     OpResult updateSchedule(int companyId, long scheduleId, long newAmount, long newIntervalTicks);
+
+    /** Spec B.1–B.3 (v2.0.8) — extended update including target/mode/currency. */
+    OpResult updateScheduleEx(int companyId, long scheduleId, long newAmount, long newIntervalTicks,
+                              UUID newTarget, int newTargetAccountNr, String newTargetPlayerName,
+                              String newTargetAccountName, PayoutSchedule.Mode newMode,
+                              short newCurrencyItem);
 
     OpResult pauseSchedule(int companyId, long scheduleId, boolean paused);
 

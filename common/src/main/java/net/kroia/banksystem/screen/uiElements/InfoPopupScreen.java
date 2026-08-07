@@ -41,7 +41,7 @@ public class InfoPopupScreen extends BankSystemGuiScreen {
         frame = new Frame();
         okButton = new Button(OK.getString());
         okButton.setOnFallingEdge(() -> {
-            this.minecraft.setScreen(parent);
+            switchScreen(parent);
             onOk.run();
         });
 

@@ -45,7 +45,6 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final Component MUST_KEEP_MANAGER = Component.translatable(PREFIX+"must_keep_manager");
     private static final Component BINDINGS_BUTTON = Component.translatable(PREFIX+"bindings_button");
     private static final Component PAYOUTS_BUTTON = Component.translatable(PREFIX+"payouts_button");
-    private static final Component SHARE_VISUALS_BUTTON = Component.translatable(PREFIX+"share_visuals");
 
     private static class ItemViewButton extends Button{
 
@@ -101,9 +100,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private Button addUserButton;
     private Button bindingsButton;
     private Button payoutsButton;
-    private Button shareVisualsButton;
     private Integer companyIdForPayouts = null;
-    private Integer companyIdForShareVisuals = null;
     private ListView userElementListView;
     private ListView bankElementListView;
 
@@ -252,17 +249,13 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         bindingsButton = new Button(BINDINGS_BUTTON.getString(), this::onBindingsButtonClicked);
         addElement(bindingsButton);
 
-        // Task #45a — Payouts entry; visibility gated on company presence via async lookup below.
+        // Task #45a / Spec A.3 (v2.0.8) — Payouts entry on its own second row (the
+        // "Share Visuals" button was removed; those settings live in the Company
+        // screen's Shares tab). Visibility gated on company presence via async lookup.
         payoutsButton = new Button(PAYOUTS_BUTTON.getString(), this::onPayoutsButtonClicked);
         payoutsButton.setEnabled(false);
         addElement(payoutsButton);
         companyIdForPayouts = null;
-
-        // Task #46 (v2.0.8) — Share Visuals entry-point (MANAGE-only + company-bound).
-        shareVisualsButton = new Button(SHARE_VISUALS_BUTTON.getString(), this::onShareVisualsButtonClicked);
-        shareVisualsButton.setEnabled(false);
-        addElement(shareVisualsButton);
-        companyIdForShareVisuals = null;
 
         net.kroia.banksystem.banking.company.AsyncCompanyManager
                 .getCompanyInfoByAccountAsync(accountNumber)
@@ -271,8 +264,6 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     companyIdForPayouts = info.companyId();
                     boolean visible = canManage || isAdminMode;
                     payoutsButton.setEnabled(visible);
-                    companyIdForShareVisuals = info.companyId();
-                    shareVisualsButton.setEnabled(visible);
                 });
     }
     private void setupAdminWindow()
@@ -353,7 +344,19 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
         addUserButton.setBounds(padding, selectAccountButton.getBottom()+accountNameY, leftWidth, closeButton.getHeight());
         userElementListView.setBounds(padding, addUserButton.getBottom()+spacing, leftWidth, height-(addUserButton.getBottom()+spacing)+padding);
-        bankElementListView.setBounds(userElementListView.getRight()+spacing, closeButton.getBottom()+spacing, rightWidth, height-(closeButton.getBottom()+spacing)+padding);
+
+        // Spec A.3 (v2.0.8) — company-specific "Payouts" button on its own second row
+        // above the bank list; the bank list is pushed down by the row's height (20 + 4).
+        int bankListTop = closeButton.getBottom() + spacing;
+        if (payoutsButton != null && companyIdForPayouts != null) {
+            int payoutsTextWidth = closeButton.getTextWidth(PAYOUTS_BUTTON.getString()) + 10;
+            payoutsButton.setBounds(userElementListView.getRight() + spacing, bankListTop,
+                    payoutsTextWidth, 20);
+            bankListTop += 24;
+        } else if (payoutsButton != null) {
+            payoutsButton.setBounds(userElementListView.getRight() + spacing, bankListTop, 0, 0);
+        }
+        bankElementListView.setBounds(userElementListView.getRight()+spacing, bankListTop, rightWidth, height-bankListTop+padding);
 
         if(isAdminMode)
         {
@@ -371,20 +374,6 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             bindingsButton.setBounds(bindingsLeft, padding, bindingsTextWidth, closeButton.getHeight());
         }
 
-        if (payoutsButton != null && bindingsButton != null) {
-            int payoutsTextWidth = closeButton.getTextWidth(PAYOUTS_BUTTON.getString()) + 10;
-            payoutsButton.setBounds(bindingsButton.getRight() + spacing, padding, payoutsTextWidth, closeButton.getHeight());
-        }
-        if (shareVisualsButton != null && payoutsButton != null) {
-            int svTextWidth = closeButton.getTextWidth(SHARE_VISUALS_BUTTON.getString()) + 10;
-            shareVisualsButton.setBounds(payoutsButton.getRight() + spacing, padding, svTextWidth, closeButton.getHeight());
-        }
-    }
-
-    private void onShareVisualsButtonClicked() {
-        if (companyIdForShareVisuals == null) return;
-        ShareVisualEditorScreen.openScreen(this, companyIdForShareVisuals,
-                getThisPlayerUUID(), canManage || isAdminMode);
     }
 
     private void onPayoutsButtonClicked() {
@@ -740,7 +729,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                 BankSystemTextMessages.getDeleteAccountAskPopupTitleMessage(bankAccountName),
                 BankSystemTextMessages.getDeleteAccountAskPopupMessage(bankAccountName)
         );
-        askPopupScreen.setSize(400,100);
+        askPopupScreen.setSize(460,140);
         askPopupScreen.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
         minecraft.setScreen(askPopupScreen);
     }

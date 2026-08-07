@@ -64,6 +64,10 @@ public final class AsyncCompanyManager {
     public static final int CODE_INSUFFICIENT_FUNDS    = 11;
     /** Task #49 (v2.0.8) — no account holds this company's shares. */
     public static final int CODE_NO_SHARES             = 12;
+    /** Spec B.3 (v2.0.8) — company account lacks enough of the chosen currency item. */
+    public static final int CODE_CURRENCY_ITEM_MISSING = 13;
+    /** Spec B.1 (v2.0.8) — target lacks DEPOSIT right on the chosen account. */
+    public static final int CODE_TARGET_NO_DEPOSIT     = 14;
 
     // ------------------------------------------------------------------
     // Function enum
@@ -100,8 +104,42 @@ public final class AsyncCompanyManager {
         COUNT_HOLDERS_FOR_COMPANY,
         // Task #54 (v2.0.8) — slave→master bulk request for all companies' visuals+info.
         // Used at slave-master handshake to populate SlaveCompanyMirror.
-        LIST_ALL_COMPANY_VISUALS
+        LIST_ALL_COMPANY_VISUALS,
+        // Task #1 (v2.0.8) — StockMarket integration: create/close/query share market.
+        OPEN_SHARE_MARKET,
+        CLOSE_SHARE_MARKET,
+        MARKET_EXISTS_FOR_COMPANY,
+        // Task #1 (v2.0.8) — StockMarket pause/resume trading (distinct from delete).
+        SET_MARKET_OPEN,
+        IS_MARKET_OPEN,
+        // Spec §4.3 (v2.0.8) — MANAGE-gated unbind of a Share Stamper from a company.
+        UNBIND_STAMPER,
+        // Spec B.1 (v2.0.8) — list a player's bank accounts filtered by permission mask.
+        // MANAGE-gated when caller != subject.
+        LIST_PLAYER_ACCOUNTS_WITH_FILTER,
+        // Spec B.3 (v2.0.8) — list all non-zero item balances on the company account
+        // for the payout currency picker. MANAGE-gated.
+        LIST_ACCOUNT_ITEM_BALANCES,
+        // Spec B.4 (v2.0.8) — manual missed-payout catch-up. MANAGE-gated.
+        PAY_MISSED
     }
+
+    /** Task #1 (v2.0.8) — SM bridge result codes for OPEN_SHARE_MARKET output. */
+    public static final int SM_STATUS_SUCCESS          = 0;
+    public static final int SM_STATUS_ALREADY_EXISTS   = 1;
+    public static final int SM_STATUS_ITEM_BLACKLISTED = 2;
+    public static final int SM_STATUS_FAILED           = 3;
+    public static final int SM_STATUS_UNAVAILABLE      = 4;
+    public static final int SM_STATUS_NO_PERMISSION    = 5;
+    public static final int SM_STATUS_NOT_FOUND        = 6;
+    /** MARKET_EXISTS_FOR_COMPANY result codes. */
+    public static final int MARKET_EXISTS_NO   = 0;
+    public static final int MARKET_EXISTS_YES  = 1;
+    public static final int MARKET_EXISTS_UNAV = 2;
+    /** IS_MARKET_OPEN result codes (mirrors {@link StockMarketBridge.MarketOpen}). */
+    public static final int MARKET_OPEN_NO   = 0;
+    public static final int MARKET_OPEN_YES  = 1;
+    public static final int MARKET_OPEN_UNAV = 2;
 
     /** Task #43h — rights filter kinds for {@link #LIST_COMPANIES_FOR_CALLER}. */
     public static final byte FILTER_ALL      = 0;
@@ -232,16 +270,40 @@ public final class AsyncCompanyManager {
     // ------------------------------------------------------------------
     // Task #45a (v2.0.8) — payout ARRS records
     // ------------------------------------------------------------------
-    public record CreatePayoutInput(int companyId, UUID target, long amount, long intervalTicks,
-                                    long nowTick, UUID callerUUID) {
-        public static final StreamCodec<RegistryFriendlyByteBuf, CreatePayoutInput> STREAM_CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_INT, p -> p.companyId,
-                UUIDUtil.STREAM_CODEC, p -> p.target,
-                ByteBufCodecs.VAR_LONG, p -> p.amount,
-                ByteBufCodecs.VAR_LONG, p -> p.intervalTicks,
-                ByteBufCodecs.VAR_LONG, p -> p.nowTick,
-                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
-                CreatePayoutInput::new);
+    /**
+     * Spec B.1–B.3 (v2.0.8) — extended payout create payload. {@code target} is nullable
+     * for DIVIDEND-mode schedules. Name snapshots are resolved on the master (spec A.9),
+     * never trusted from the client.
+     */
+    public record CreatePayoutInput(int companyId, @Nullable UUID target, long amount, long intervalTicks,
+                                    long nowTick, UUID callerUUID, int targetAccountNr,
+                                    byte mode, short currencyItem) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, CreatePayoutInput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.companyId);
+                    buf.writeBoolean(v.target != null);
+                    if (v.target != null) buf.writeUUID(v.target);
+                    buf.writeVarLong(v.amount);
+                    buf.writeVarLong(v.intervalTicks);
+                    buf.writeVarLong(v.nowTick);
+                    buf.writeUUID(v.callerUUID);
+                    buf.writeVarInt(v.targetAccountNr);
+                    buf.writeByte(v.mode);
+                    buf.writeShort(v.currencyItem);
+                },
+                buf -> {
+                    int cid = buf.readVarInt();
+                    UUID target = buf.readBoolean() ? buf.readUUID() : null;
+                    long amount = buf.readVarLong();
+                    long interval = buf.readVarLong();
+                    long nowTick = buf.readVarLong();
+                    UUID caller = buf.readUUID();
+                    int accNr = buf.readVarInt();
+                    byte mode = buf.readByte();
+                    short currency = buf.readShort();
+                    return new CreatePayoutInput(cid, target, amount, interval, nowTick, caller,
+                            accNr, mode, currency);
+                });
     }
     public record CreatePayoutOutput(int resultCode, long scheduleId) {
         public static final StreamCodec<RegistryFriendlyByteBuf, CreatePayoutOutput> STREAM_CODEC = StreamCodec.composite(
@@ -250,15 +312,36 @@ public final class AsyncCompanyManager {
                 CreatePayoutOutput::new);
     }
 
+    /** Spec B.1–B.3 (v2.0.8) — extended payout update payload (target/mode/currency editable). */
     public record UpdatePayoutInput(int companyId, long scheduleId, long newAmount,
-                                    long newIntervalTicks, UUID callerUUID) {
-        public static final StreamCodec<RegistryFriendlyByteBuf, UpdatePayoutInput> STREAM_CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_INT, p -> p.companyId,
-                ByteBufCodecs.VAR_LONG, p -> p.scheduleId,
-                ByteBufCodecs.VAR_LONG, p -> p.newAmount,
-                ByteBufCodecs.VAR_LONG, p -> p.newIntervalTicks,
-                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
-                UpdatePayoutInput::new);
+                                    long newIntervalTicks, UUID callerUUID, @Nullable UUID newTarget,
+                                    int newTargetAccountNr, byte newMode, short newCurrencyItem) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, UpdatePayoutInput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.companyId);
+                    buf.writeVarLong(v.scheduleId);
+                    buf.writeVarLong(v.newAmount);
+                    buf.writeVarLong(v.newIntervalTicks);
+                    buf.writeUUID(v.callerUUID);
+                    buf.writeBoolean(v.newTarget != null);
+                    if (v.newTarget != null) buf.writeUUID(v.newTarget);
+                    buf.writeVarInt(v.newTargetAccountNr);
+                    buf.writeByte(v.newMode);
+                    buf.writeShort(v.newCurrencyItem);
+                },
+                buf -> {
+                    int cid = buf.readVarInt();
+                    long sid = buf.readVarLong();
+                    long amount = buf.readVarLong();
+                    long interval = buf.readVarLong();
+                    UUID caller = buf.readUUID();
+                    UUID target = buf.readBoolean() ? buf.readUUID() : null;
+                    int accNr = buf.readVarInt();
+                    byte mode = buf.readByte();
+                    short currency = buf.readShort();
+                    return new UpdatePayoutInput(cid, sid, amount, interval, caller, target,
+                            accNr, mode, currency);
+                });
     }
     public record UpdatePayoutOutput(int resultCode) {
         public static final StreamCodec<RegistryFriendlyByteBuf, UpdatePayoutOutput> STREAM_CODEC = StreamCodec.composite(
@@ -298,9 +381,11 @@ public final class AsyncCompanyManager {
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
                 ListSchedulesInput::new);
     }
-    /** Wire form of a {@link PayoutSchedule}. */
+    /** Wire form of a {@link PayoutSchedule} (spec B fields included). */
     public record ScheduleWire(long scheduleId, @Nullable UUID targetUUID, long amount, long intervalTicks,
-                               long nextRunTick, boolean paused, long createdAt, @Nullable UUID createdBy) {
+                               long nextRunTick, boolean paused, long createdAt, @Nullable UUID createdBy,
+                               int targetAccountNr, String targetPlayerName, String targetAccountName,
+                               byte mode, short currencyItem, long missedAmount, int missedCount) {
         public static void write(RegistryFriendlyByteBuf buf, ScheduleWire v) {
             buf.writeVarLong(v.scheduleId);
             buf.writeBoolean(v.targetUUID != null);
@@ -312,6 +397,13 @@ public final class AsyncCompanyManager {
             buf.writeVarLong(v.createdAt);
             buf.writeBoolean(v.createdBy != null);
             if (v.createdBy != null) buf.writeUUID(v.createdBy);
+            buf.writeVarInt(v.targetAccountNr);
+            buf.writeUtf(v.targetPlayerName == null ? "" : v.targetPlayerName);
+            buf.writeUtf(v.targetAccountName == null ? "" : v.targetAccountName);
+            buf.writeByte(v.mode);
+            buf.writeShort(v.currencyItem);
+            buf.writeVarLong(v.missedAmount);
+            buf.writeVarInt(v.missedCount);
         }
         public static ScheduleWire read(RegistryFriendlyByteBuf buf) {
             long id = buf.readVarLong();
@@ -322,30 +414,46 @@ public final class AsyncCompanyManager {
             boolean paused = buf.readBoolean();
             long createdAt = buf.readVarLong();
             UUID createdBy = buf.readBoolean() ? buf.readUUID() : null;
-            return new ScheduleWire(id, target, amount, interval, next, paused, createdAt, createdBy);
+            int accNr = buf.readVarInt();
+            String playerName = buf.readUtf();
+            String accountName = buf.readUtf();
+            byte mode = buf.readByte();
+            short currency = buf.readShort();
+            long missedAmount = buf.readVarLong();
+            int missedCount = buf.readVarInt();
+            return new ScheduleWire(id, target, amount, interval, next, paused, createdAt, createdBy,
+                    accNr, playerName, accountName, mode, currency, missedAmount, missedCount);
         }
         public static ScheduleWire of(PayoutSchedule s) {
             return new ScheduleWire(s.getScheduleId(), s.getTargetUUID(), s.getAmount(),
-                    s.getIntervalTicks(), s.getNextRunTick(), s.isPaused(), s.getCreatedAt(), s.getCreatedBy());
+                    s.getIntervalTicks(), s.getNextRunTick(), s.isPaused(), s.getCreatedAt(), s.getCreatedBy(),
+                    s.getTargetAccountNr(), s.getTargetPlayerName(), s.getTargetAccountName(),
+                    (byte) s.getMode().ordinal(), s.getCurrencyItem(), s.getMissedAmount(), s.getMissedCount());
         }
         public PayoutSchedule toSchedule() {
+            PayoutSchedule.Mode m = mode >= 0 && mode < PayoutSchedule.Mode.values().length
+                    ? PayoutSchedule.Mode.values()[mode] : PayoutSchedule.Mode.FIXED_PAYOUT;
             return new PayoutSchedule(scheduleId, targetUUID, amount, intervalTicks, nextRunTick,
-                    paused, createdAt, createdBy);
+                    paused, createdAt, createdBy, targetAccountNr, targetPlayerName, targetAccountName,
+                    m, currencyItem, missedAmount, missedCount);
         }
     }
-    public record ListSchedulesOutput(List<ScheduleWire> schedules) {
+    /** {@code nowTick} — master's current tick, for client-side countdown rendering (spec A.4). */
+    public record ListSchedulesOutput(List<ScheduleWire> schedules, long nowTick) {
         public static final StreamCodec<RegistryFriendlyByteBuf, ListSchedulesOutput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {
                     buf.writeVarInt(v.schedules.size());
                     for (ScheduleWire s : v.schedules) ScheduleWire.write(buf, s);
+                    buf.writeVarLong(v.nowTick);
                 },
                 buf -> {
                     int n = buf.readVarInt();
                     List<ScheduleWire> out = new ArrayList<>(n);
                     for (int i = 0; i < n; i++) out.add(ScheduleWire.read(buf));
-                    return new ListSchedulesOutput(out);
+                    long nowTick = buf.readVarLong();
+                    return new ListSchedulesOutput(out, nowTick);
                 });
-        public static final ListSchedulesOutput EMPTY = new ListSchedulesOutput(List.of());
+        public static final ListSchedulesOutput EMPTY = new ListSchedulesOutput(List.of(), 0L);
     }
 
     public record GetHistoryInput(long scheduleId, int limit) {
@@ -354,9 +462,11 @@ public final class AsyncCompanyManager {
                 ByteBufCodecs.VAR_INT, p -> p.limit,
                 GetHistoryInput::new);
     }
-    /** Wire form of a {@link PayoutHistoryRecord}. */
+    /** Wire form of a {@link PayoutHistoryRecord} (spec A.8/A.9/B.3/B.4 fields included). */
     public record HistoryRowWire(long id, int companyId, long scheduleId, int sourceAccount,
-                                 @Nullable UUID targetUuid, long amount, long time, int statusOrdinal) {
+                                 @Nullable UUID targetUuid, long amount, long time, int statusOrdinal,
+                                 String targetPlayerName, String targetAccountName,
+                                 short currencyItem, int typeOrdinal) {
         public static void write(RegistryFriendlyByteBuf buf, HistoryRowWire v) {
             buf.writeVarLong(v.id);
             buf.writeVarInt(v.companyId);
@@ -367,6 +477,10 @@ public final class AsyncCompanyManager {
             buf.writeVarLong(v.amount);
             buf.writeVarLong(v.time);
             buf.writeVarInt(v.statusOrdinal);
+            buf.writeUtf(v.targetPlayerName == null ? "" : v.targetPlayerName);
+            buf.writeUtf(v.targetAccountName == null ? "" : v.targetAccountName);
+            buf.writeShort(v.currencyItem);
+            buf.writeVarInt(v.typeOrdinal);
         }
         public static HistoryRowWire read(RegistryFriendlyByteBuf buf) {
             long id = buf.readVarLong();
@@ -377,11 +491,18 @@ public final class AsyncCompanyManager {
             long amount = buf.readVarLong();
             long time = buf.readVarLong();
             int status = buf.readVarInt();
-            return new HistoryRowWire(id, cid, sid, src, target, amount, time, status);
+            String playerName = buf.readUtf();
+            String accountName = buf.readUtf();
+            short currency = buf.readShort();
+            int type = buf.readVarInt();
+            return new HistoryRowWire(id, cid, sid, src, target, amount, time, status,
+                    playerName, accountName, currency, type);
         }
         public static HistoryRowWire of(PayoutHistoryRecord r) {
             return new HistoryRowWire(r.id(), r.companyId(), r.scheduleId(), r.sourceAccount(),
-                    r.targetUuid(), r.amount(), r.time(), r.status().ordinal());
+                    r.targetUuid(), r.amount(), r.time(), r.status().ordinal(),
+                    r.targetPlayerName(), r.targetAccountName(), r.currencyItem(),
+                    r.type().ordinal());
         }
     }
     public record GetHistoryOutput(List<HistoryRowWire> rows, long totalPaid) {
@@ -498,6 +619,20 @@ public final class AsyncCompanyManager {
         public static final ListStamperBindingsOutput EMPTY = new ListStamperBindingsOutput(List.of());
     }
 
+    // Spec §4.3 (v2.0.8) — MANAGE-gated Share Stamper unbind.
+    public record UnbindStamperInput(int companyId, BlockPos pos, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, UnbindStamperInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                BlockPos.STREAM_CODEC, p -> p.pos,
+                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
+                UnbindStamperInput::new);
+    }
+    public record UnbindStamperOutput(int resultCode) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, UnbindStamperOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.resultCode,
+                UnbindStamperOutput::new);
+    }
+
     // Task #54 (v2.0.8) — bulk visuals+info list.
     public record EmptyInput() {
         public static final StreamCodec<RegistryFriendlyByteBuf, EmptyInput> STREAM_CODEC = StreamCodec.of(
@@ -550,10 +685,142 @@ public final class AsyncCompanyManager {
         public static final ListAllVisualsOutput EMPTY = new ListAllVisualsOutput(List.of());
     }
 
+    // Task #1 (v2.0.8) — StockMarket bridge params.
+    public record OpenShareMarketInput(int companyId, float initialPrice, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, OpenShareMarketInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                ByteBufCodecs.FLOAT,   p -> p.initialPrice,
+                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
+                OpenShareMarketInput::new);
+    }
+    public record OpenShareMarketOutput(int status, String reason) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, OpenShareMarketOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT,      p -> p.status,
+                ByteBufCodecs.STRING_UTF8,  p -> p.reason == null ? "" : p.reason,
+                OpenShareMarketOutput::new);
+    }
+    public record CloseShareMarketInput(int companyId, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, CloseShareMarketInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
+                CloseShareMarketInput::new);
+    }
+    public record CloseShareMarketOutput(int status) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, CloseShareMarketOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.status,
+                CloseShareMarketOutput::new);
+    }
+    /** Task #1 (v2.0.8) — SET_MARKET_OPEN payload: companyId + desired open flag + caller for MANAGE gate. */
+    public record SetMarketOpenInput(int companyId, boolean open, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, SetMarketOpenInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                ByteBufCodecs.BOOL,    p -> p.open,
+                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
+                SetMarketOpenInput::new);
+    }
+    public record SetMarketOpenOutput(int status) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, SetMarketOpenOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.status,
+                SetMarketOpenOutput::new);
+    }
+
     public record GetCompanyInfoByAccountInput(int accountNr) {
         public static final StreamCodec<RegistryFriendlyByteBuf, GetCompanyInfoByAccountInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.accountNr,
                 GetCompanyInfoByAccountInput::new);
+    }
+
+    // ------------------------------------------------------------------
+    // Spec B.1 (v2.0.8) — filtered account listing for the split target picker.
+    // ------------------------------------------------------------------
+    public record ListPlayerAccountsInput(int companyId, UUID subject, byte filterMask, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ListPlayerAccountsInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                UUIDUtil.STREAM_CODEC, p -> p.subject,
+                ByteBufCodecs.BYTE, p -> p.filterMask,
+                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
+                ListPlayerAccountsInput::new);
+    }
+    public record AccountEntry(int accountId, String accountName, int filterBits) {}
+    public record ListPlayerAccountsOutput(int resultCode, List<AccountEntry> accounts) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ListPlayerAccountsOutput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.resultCode);
+                    buf.writeVarInt(v.accounts.size());
+                    for (AccountEntry e : v.accounts) {
+                        buf.writeVarInt(e.accountId());
+                        buf.writeUtf(e.accountName() == null ? "" : e.accountName());
+                        buf.writeVarInt(e.filterBits());
+                    }
+                },
+                buf -> {
+                    int code = buf.readVarInt();
+                    int n = buf.readVarInt();
+                    List<AccountEntry> out = new ArrayList<>(n);
+                    for (int i = 0; i < n; i++) {
+                        out.add(new AccountEntry(buf.readVarInt(), buf.readUtf(), buf.readVarInt()));
+                    }
+                    return new ListPlayerAccountsOutput(code, out);
+                });
+        public static final ListPlayerAccountsOutput EMPTY =
+                new ListPlayerAccountsOutput(CODE_INTERNAL, List.of());
+    }
+
+    // ------------------------------------------------------------------
+    // Spec B.3 (v2.0.8) — non-zero item balances on the company account.
+    // ------------------------------------------------------------------
+    public record ListItemBalancesInput(int companyId, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ListItemBalancesInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
+                ListItemBalancesInput::new);
+    }
+    public record ItemBalanceEntry(short itemShort, long balance) {}
+    /** Bug A fix (v2.0.8) — {@code moneyBalance} carries the money-bank balance so
+     *  the picker can render "Money (default)" with its balance without a second RPC. */
+    public record ListItemBalancesOutput(int resultCode, List<ItemBalanceEntry> items, long moneyBalance) {
+        public ListItemBalancesOutput(int resultCode, List<ItemBalanceEntry> items) {
+            this(resultCode, items, 0L);
+        }
+        public static final StreamCodec<RegistryFriendlyByteBuf, ListItemBalancesOutput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.resultCode);
+                    buf.writeVarInt(v.items.size());
+                    for (ItemBalanceEntry e : v.items) {
+                        buf.writeShort(e.itemShort());
+                        buf.writeVarLong(e.balance());
+                    }
+                    buf.writeVarLong(v.moneyBalance);
+                },
+                buf -> {
+                    int code = buf.readVarInt();
+                    int n = buf.readVarInt();
+                    List<ItemBalanceEntry> out = new ArrayList<>(n);
+                    for (int i = 0; i < n; i++) out.add(new ItemBalanceEntry(buf.readShort(), buf.readVarLong()));
+                    long money = buf.readVarLong();
+                    return new ListItemBalancesOutput(code, out, money);
+                });
+        public static final ListItemBalancesOutput EMPTY =
+                new ListItemBalancesOutput(CODE_INTERNAL, List.of(), 0L);
+    }
+
+    // ------------------------------------------------------------------
+    // Spec B.4 (v2.0.8) — manual missed-payout catch-up.
+    // ------------------------------------------------------------------
+    public record PayMissedInput(int companyId, long scheduleId, long amount, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, PayMissedInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                ByteBufCodecs.VAR_LONG, p -> p.scheduleId,
+                ByteBufCodecs.VAR_LONG, p -> p.amount,
+                UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
+                PayMissedInput::new);
+    }
+    public record PayMissedOutput(int resultCode, long remainingMissedAmount, int remainingMissedCount) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, PayMissedOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.resultCode,
+                ByteBufCodecs.VAR_LONG, p -> p.remainingMissedAmount,
+                ByteBufCodecs.VAR_INT, p -> p.remainingMissedCount,
+                PayMissedOutput::new);
     }
 
     // ------------------------------------------------------------------
@@ -582,6 +849,15 @@ public final class AsyncCompanyManager {
         put(FunctionType.GET_COMPANY_INFO_BY_ID, new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC, CompanyInfoOutput.STREAM_CODEC));
         put(FunctionType.COUNT_HOLDERS_FOR_COMPANY, new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC, ByteBufCodecs.VAR_INT.cast()));
         put(FunctionType.LIST_ALL_COMPANY_VISUALS, new AsyncFunctionDataCodecs(EmptyInput.STREAM_CODEC, ListAllVisualsOutput.STREAM_CODEC));
+        put(FunctionType.OPEN_SHARE_MARKET,         new AsyncFunctionDataCodecs(OpenShareMarketInput.STREAM_CODEC,  OpenShareMarketOutput.STREAM_CODEC));
+        put(FunctionType.CLOSE_SHARE_MARKET,        new AsyncFunctionDataCodecs(CloseShareMarketInput.STREAM_CODEC, CloseShareMarketOutput.STREAM_CODEC));
+        put(FunctionType.MARKET_EXISTS_FOR_COMPANY, new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC,   ByteBufCodecs.VAR_INT.cast()));
+        put(FunctionType.SET_MARKET_OPEN,           new AsyncFunctionDataCodecs(SetMarketOpenInput.STREAM_CODEC,     SetMarketOpenOutput.STREAM_CODEC));
+        put(FunctionType.IS_MARKET_OPEN,            new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC,   ByteBufCodecs.VAR_INT.cast()));
+        put(FunctionType.UNBIND_STAMPER,            new AsyncFunctionDataCodecs(UnbindStamperInput.STREAM_CODEC,     UnbindStamperOutput.STREAM_CODEC));
+        put(FunctionType.LIST_PLAYER_ACCOUNTS_WITH_FILTER, new AsyncFunctionDataCodecs(ListPlayerAccountsInput.STREAM_CODEC, ListPlayerAccountsOutput.STREAM_CODEC));
+        put(FunctionType.LIST_ACCOUNT_ITEM_BALANCES, new AsyncFunctionDataCodecs(ListItemBalancesInput.STREAM_CODEC, ListItemBalancesOutput.STREAM_CODEC));
+        put(FunctionType.PAY_MISSED,                new AsyncFunctionDataCodecs(PayMissedInput.STREAM_CODEC,        PayMissedOutput.STREAM_CODEC));
     }};
 
     // ------------------------------------------------------------------
@@ -656,6 +932,15 @@ public final class AsyncCompanyManager {
                 case GET_COMPANY_INFO_BY_ID -> handleInfoById(input.decodeParams(), bm, cm);
                 case COUNT_HOLDERS_FOR_COMPANY -> handleCountHoldersForCompany(input.decodeParams(), bm, cm);
                 case LIST_ALL_COMPANY_VISUALS -> handleListAllVisuals(bm, cm);
+                case OPEN_SHARE_MARKET         -> handleOpenShareMarket(input.decodeParams(), bm, cm);
+                case CLOSE_SHARE_MARKET        -> handleCloseShareMarket(input.decodeParams(), cm);
+                case MARKET_EXISTS_FOR_COMPANY -> handleMarketExistsForCompany(input.decodeParams(), cm);
+                case SET_MARKET_OPEN           -> handleSetMarketOpen(input.decodeParams(), bm, cm);
+                case IS_MARKET_OPEN            -> handleIsMarketOpen(input.decodeParams(), cm);
+                case UNBIND_STAMPER            -> handleUnbindStamper(input.decodeParams(), bm, cm);
+                case LIST_PLAYER_ACCOUNTS_WITH_FILTER -> handleListPlayerAccounts(input.decodeParams(), bm, cm);
+                case LIST_ACCOUNT_ITEM_BALANCES -> handleListItemBalances(input.decodeParams(), bm, cm);
+                case PAY_MISSED                -> handlePayMissed(input.decodeParams(), bm, cm);
             });
         }
 
@@ -673,7 +958,9 @@ public final class AsyncCompanyManager {
                      LIST_SCHEDULES, GET_HISTORY, GET_COMPANY_INFO_BY_ACCOUNT,
                      GET_FAILURE_COUNT_24H, GET_SHARE_VISUALS,
                      LIST_STAMPER_BINDINGS, GET_COMPANY_INFO_BY_ID,
-                     COUNT_HOLDERS_FOR_COMPANY, LIST_ALL_COMPANY_VISUALS -> true;
+                     COUNT_HOLDERS_FOR_COMPANY, LIST_ALL_COMPANY_VISUALS,
+                     MARKET_EXISTS_FOR_COMPANY, IS_MARKET_OPEN,
+                     LIST_PLAYER_ACCOUNTS_WITH_FILTER, LIST_ACCOUNT_ITEM_BALANCES -> true;
                 default -> false;
             };
         }
@@ -801,7 +1088,11 @@ public final class AsyncCompanyManager {
         IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
         boolean hasManage = account != null && account.hasPermission(in.callerUUID, BankPermission.MANAGE);
         boolean isAdmin = bm.isBanksystemAdmin(in.callerUUID);
-        if (!hasManage && !isAdmin)
+        // v2.0.8 Bug1 root cause — description save silently rejected for founders that
+        // do not carry explicit MANAGE on the linked bank account. Founder status is a
+        // company-level authority; treat it as sufficient for description edits.
+        boolean isFounder = company.isFounder(in.callerUUID);
+        if (!hasManage && !isAdmin && !isFounder)
             return OutputData.of(FunctionType.UPDATE_DESCRIPTION,
                     new DescriptionOutput(CODE_NO_PERMISSION, company.getCompanyId()));
         cm.updateDescription(company.getCompanyId(), in.text == null ? "" : in.text);
@@ -812,6 +1103,12 @@ public final class AsyncCompanyManager {
             net.kroia.banksystem.networking.general.S2CCompanyVisualUpdatePacket
                     .broadcast(srv, company.getCompanyId(), company.getShareVisuals(),
                             company.getTotalSharesIssued(), company.getMaxSupply());
+            // Task #51 (v2.0.8, spec §1.4) — the visual packet does NOT carry
+            // Company.description; push it explicitly so other clients' Overview
+            // tabs refresh. Slaves receive it via the S2S mirror upsert above and
+            // re-forward to their own clients.
+            net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket
+                    .broadcast(srv, company.getCompanyId(), company.getDescription());
         }
         return OutputData.of(FunctionType.UPDATE_DESCRIPTION,
                 new DescriptionOutput(CODE_OK, company.getCompanyId()));
@@ -870,7 +1167,147 @@ public final class AsyncCompanyManager {
             case GET_COMPANY_INFO_BY_ID -> OutputData.of(function, CompanyInfoOutput.ABSENT);
             case COUNT_HOLDERS_FOR_COMPANY -> OutputData.of(function, Integer.valueOf(0));
             case LIST_ALL_COMPANY_VISUALS -> OutputData.of(function, ListAllVisualsOutput.EMPTY);
+            case OPEN_SHARE_MARKET         -> OutputData.of(function, new OpenShareMarketOutput(SM_STATUS_UNAVAILABLE, ""));
+            case CLOSE_SHARE_MARKET        -> OutputData.of(function, new CloseShareMarketOutput(SM_STATUS_UNAVAILABLE));
+            case MARKET_EXISTS_FOR_COMPANY -> OutputData.of(function, Integer.valueOf(MARKET_EXISTS_UNAV));
+            case SET_MARKET_OPEN           -> OutputData.of(function, new SetMarketOpenOutput(SM_STATUS_UNAVAILABLE));
+            case IS_MARKET_OPEN            -> OutputData.of(function, Integer.valueOf(MARKET_OPEN_UNAV));
+            case UNBIND_STAMPER            -> OutputData.of(function, new UnbindStamperOutput(CODE_INTERNAL));
+            case LIST_PLAYER_ACCOUNTS_WITH_FILTER -> OutputData.of(function, ListPlayerAccountsOutput.EMPTY);
+            case LIST_ACCOUNT_ITEM_BALANCES -> OutputData.of(function, ListItemBalancesOutput.EMPTY);
+            case PAY_MISSED                -> OutputData.of(function, new PayMissedOutput(CODE_INTERNAL, 0L, 0));
         };
+    }
+
+    // ------------------------------------------------------------------
+    // Task #1 (v2.0.8) — StockMarket bridge handlers (master-side).
+    // Server-thread contract: SM API requires server thread. ARRS may not run
+    // handlers on the server thread; marshal via MinecraftServer.execute if
+    // needed. Existing sibling handlers touch live BankSystem state directly,
+    // so we mirror that pattern and rely on SM's own thread-safety fencing.
+    // ------------------------------------------------------------------
+
+    /** Reverse-iterate the ItemID registry to find the ONE share ItemID that belongs to companyId. */
+    private static net.kroia.banksystem.util.ItemID resolveShareItemID(int companyId) {
+        for (Map.Entry<net.kroia.banksystem.util.ItemID, net.minecraft.world.item.ItemStack> e
+                : net.kroia.banksystem.util.ItemIDManager.getItemIDMap().entrySet()) {
+            Integer cid = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                    .getCompanyIdForItemID(e.getKey());
+            if (cid != null && cid == companyId) return e.getKey();
+        }
+        return null;
+    }
+
+    private static OutputData handleOpenShareMarket(OpenShareMarketInput in, IServerBankManager bm, CompanyManager cm) {
+        int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
+        if (gate != CODE_OK) {
+            int mapped = gate == CODE_NO_PERMISSION ? SM_STATUS_NO_PERMISSION
+                       : gate == CODE_NOT_FOUND     ? SM_STATUS_NOT_FOUND
+                       : SM_STATUS_FAILED;
+            return OutputData.of(FunctionType.OPEN_SHARE_MARKET, new OpenShareMarketOutput(mapped, ""));
+        }
+        net.kroia.banksystem.util.ItemID share = resolveShareItemID(in.companyId);
+        if (share == null) {
+            return OutputData.of(FunctionType.OPEN_SHARE_MARKET,
+                    new OpenShareMarketOutput(SM_STATUS_NOT_FOUND, "no share ItemID for company"));
+        }
+        net.kroia.banksystem.integration.stockmarket.StockMarketBridge.OpenResult r =
+                runOnServerThreadSync(() -> net.kroia.banksystem.integration.stockmarket.StockMarketBridge
+                        .openMarket(share, in.initialPrice));
+        int code = switch (r == null ? net.kroia.banksystem.integration.stockmarket.StockMarketBridge.Status.UNAVAILABLE : r.status()) {
+            case SUCCESS          -> SM_STATUS_SUCCESS;
+            case ALREADY_EXISTS   -> SM_STATUS_ALREADY_EXISTS;
+            case ITEM_BLACKLISTED -> SM_STATUS_ITEM_BLACKLISTED;
+            case FAILED           -> SM_STATUS_FAILED;
+            case UNAVAILABLE      -> SM_STATUS_UNAVAILABLE;
+        };
+        String reason = r == null || r.reason() == null ? "" : r.reason();
+        return OutputData.of(FunctionType.OPEN_SHARE_MARKET, new OpenShareMarketOutput(code, reason));
+    }
+
+    private static OutputData handleCloseShareMarket(CloseShareMarketInput in, CompanyManager cm) {
+        // Founder-only (mirror handleDissolve semantics).
+        Company company = cm.getById(in.companyId);
+        if (company == null)
+            return OutputData.of(FunctionType.CLOSE_SHARE_MARKET, new CloseShareMarketOutput(SM_STATUS_NOT_FOUND));
+        if (!company.isFounder(in.callerUUID))
+            return OutputData.of(FunctionType.CLOSE_SHARE_MARKET, new CloseShareMarketOutput(SM_STATUS_NO_PERMISSION));
+        net.kroia.banksystem.util.ItemID share = resolveShareItemID(in.companyId);
+        if (share == null)
+            return OutputData.of(FunctionType.CLOSE_SHARE_MARKET, new CloseShareMarketOutput(SM_STATUS_NOT_FOUND));
+        Boolean ok = runOnServerThreadSync(() ->
+                net.kroia.banksystem.integration.stockmarket.StockMarketBridge.closeMarket(share));
+        return OutputData.of(FunctionType.CLOSE_SHARE_MARKET,
+                new CloseShareMarketOutput(Boolean.TRUE.equals(ok) ? SM_STATUS_SUCCESS : SM_STATUS_UNAVAILABLE));
+    }
+
+    /**
+     * Task #1 (v2.0.8) — pause/resume the SM market for this company's share.
+     * MANAGE-gated (mirrors {@link #gateManage}). Server-thread marshalling is
+     * handled by the bridge call itself (SM API is server-thread only).
+     */
+    private static OutputData handleSetMarketOpen(SetMarketOpenInput in, IServerBankManager bm, CompanyManager cm) {
+        int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
+        if (gate != CODE_OK) {
+            int mapped = gate == CODE_NO_PERMISSION ? SM_STATUS_NO_PERMISSION
+                       : gate == CODE_NOT_FOUND     ? SM_STATUS_NOT_FOUND
+                       : SM_STATUS_FAILED;
+            return OutputData.of(FunctionType.SET_MARKET_OPEN, new SetMarketOpenOutput(mapped));
+        }
+        net.kroia.banksystem.util.ItemID share = resolveShareItemID(in.companyId);
+        if (share == null)
+            return OutputData.of(FunctionType.SET_MARKET_OPEN, new SetMarketOpenOutput(SM_STATUS_NOT_FOUND));
+        Boolean ok = runOnServerThreadSync(() ->
+                net.kroia.banksystem.integration.stockmarket.StockMarketBridge.setMarketOpen(share, in.open));
+        return OutputData.of(FunctionType.SET_MARKET_OPEN,
+                new SetMarketOpenOutput(Boolean.TRUE.equals(ok) ? SM_STATUS_SUCCESS : SM_STATUS_UNAVAILABLE));
+    }
+
+    /** Task #1 (v2.0.8) — is the SM market open for trading? Read-only; no gate. */
+    private static OutputData handleIsMarketOpen(GetShareVisualsInput in, CompanyManager cm) {
+        net.kroia.banksystem.util.ItemID share = resolveShareItemID(in.companyId());
+        if (share == null)
+            return OutputData.of(FunctionType.IS_MARKET_OPEN, Integer.valueOf(MARKET_OPEN_UNAV));
+        net.kroia.banksystem.integration.stockmarket.StockMarketBridge.MarketOpen open =
+                runOnServerThreadSync(() ->
+                        net.kroia.banksystem.integration.stockmarket.StockMarketBridge.isMarketOpen(share));
+        int code = switch (open == null ? net.kroia.banksystem.integration.stockmarket.StockMarketBridge.MarketOpen.UNAVAILABLE : open) {
+            case YES -> MARKET_OPEN_YES;
+            case NO  -> MARKET_OPEN_NO;
+            case UNAVAILABLE -> MARKET_OPEN_UNAV;
+        };
+        return OutputData.of(FunctionType.IS_MARKET_OPEN, Integer.valueOf(code));
+    }
+
+    private static OutputData handleMarketExistsForCompany(GetShareVisualsInput in, CompanyManager cm) {
+        net.kroia.banksystem.util.ItemID share = resolveShareItemID(in.companyId());
+        if (share == null)
+            return OutputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, Integer.valueOf(MARKET_EXISTS_UNAV));
+        net.kroia.banksystem.integration.stockmarket.StockMarketBridge.MarketExists e =
+                runOnServerThreadSync(() ->
+                        net.kroia.banksystem.integration.stockmarket.StockMarketBridge.marketExistsFor(share));
+        int code = switch (e == null ? net.kroia.banksystem.integration.stockmarket.StockMarketBridge.MarketExists.UNAVAILABLE : e) {
+            case YES -> MARKET_EXISTS_YES;
+            case NO  -> MARKET_EXISTS_NO;
+            case UNAVAILABLE -> MARKET_EXISTS_UNAV;
+        };
+        return OutputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, Integer.valueOf(code));
+    }
+
+    /**
+     * Marshal a StockMarket API call onto the server thread. If we are already on it (or no
+     * server is available) run inline. Blocks the ARRS worker briefly — SM ops are cheap.
+     */
+    private static <T> T runOnServerThreadSync(java.util.function.Supplier<T> s) {
+        net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
+        if (srv == null || Thread.currentThread() == srv.getRunningThread()) {
+            try { return s.get(); } catch (Throwable t) { return null; }
+        }
+        try {
+            return srv.submit(s::get).get();
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     // Task #54 (v2.0.8) — build full Entry list from CompanyManager. Master-only.
@@ -911,6 +1348,53 @@ public final class AsyncCompanyManager {
         List<BlockPos> positions = cm.listStampers(in.companyId);
         return OutputData.of(FunctionType.LIST_STAMPER_BINDINGS,
                 new ListStamperBindingsOutput(positions));
+    }
+
+    /**
+     * Spec §4.3 (v2.0.8) — MANAGE-gated unbind of the Share Stamper at {@code pos}
+     * from {@code companyId}. Master-only side effects: clears the BE's bound
+     * company id (marks dirty via {@code unbind()}, which also drops the reverse
+     * index entry) and force-syncs the BE to nearby clients. World access is
+     * marshalled onto the server thread (mirrors the SM bridge handlers).
+     */
+    private static OutputData handleUnbindStamper(UnbindStamperInput in, IServerBankManager bm, CompanyManager cm) {
+        int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
+        if (gate != CODE_OK) return OutputData.of(FunctionType.UNBIND_STAMPER, new UnbindStamperOutput(gate));
+        Boolean ok = runOnServerThreadSync(() -> {
+            net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
+            if (srv == null) return Boolean.FALSE;
+            for (net.minecraft.server.level.ServerLevel level : srv.getAllLevels()) {
+                if (!level.isLoaded(in.pos)) continue;
+                net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(in.pos);
+                if (be instanceof net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity stamper
+                        && stamper.getBoundCompanyId() == in.companyId) {
+                    stamper.unbind();
+                    net.minecraft.world.level.block.state.BlockState st = level.getBlockState(in.pos);
+                    level.sendBlockUpdated(in.pos, st, st, 3);
+                    return Boolean.TRUE;
+                }
+            }
+            return Boolean.FALSE;
+        });
+        if (!Boolean.TRUE.equals(ok)) {
+            // Stamper missing / unloaded / already rebound — treat as stale list entry.
+            // Defensive: drop any stale reverse-index entry so the next list refresh is clean.
+            cm.unregisterStamper(in.companyId, in.pos);
+            return OutputData.of(FunctionType.UNBIND_STAMPER, new UnbindStamperOutput(CODE_NOT_FOUND));
+        }
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.info("[ShareStamper] unbound stamper at " + in.pos
+                    + " from company #" + in.companyId + " by " + in.callerUUID);
+        }
+        return OutputData.of(FunctionType.UNBIND_STAMPER, new UnbindStamperOutput(CODE_OK));
+    }
+
+    /** Spec §4.3 (v2.0.8) — slave helper: unbind the Share Stamper at pos from a company (MANAGE-gated). */
+    public static CompletableFuture<UnbindStamperOutput> unbindStamperAsync(int companyId, BlockPos pos, UUID caller) {
+        InputData input = InputData.of(FunctionType.UNBIND_STAMPER, new UnbindStamperInput(companyId, pos, caller));
+        CompletableFuture<UnbindStamperOutput> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
+        return f;
     }
 
     // Task #46 (v2.0.8) — MANAGE-gated visuals writeback + broadcast.
@@ -969,7 +1453,31 @@ public final class AsyncCompanyManager {
         IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
         boolean hasManage = account != null && account.hasPermission(callerUUID, BankPermission.MANAGE);
         boolean isAdmin = bm.isBanksystemAdmin(callerUUID);
-        return (hasManage || isAdmin) ? CODE_OK : CODE_NO_PERMISSION;
+        // v2.0.8 Bug2 root cause — visuals/tint save silently rejected for founders
+        // lacking explicit MANAGE bit on the linked bank account. Founder rights imply
+        // company-level authority; extend the gate to accept founder membership.
+        boolean isFounder = company.isFounder(callerUUID);
+        return (hasManage || isAdmin || isFounder) ? CODE_OK : CODE_NO_PERMISSION;
+    }
+
+    /** Spec A.9 — server-side snapshot resolution: player name from the user map, account name from the account. */
+    private static String[] resolveTargetNames(@Nullable UUID target, int targetAccountNr, IServerBankManager bm) {
+        String playerName = "";
+        String accountName = "";
+        if (target != null) {
+            User u = bm.getUserByUUID(target);
+            playerName = u != null ? u.getName() : target.toString();
+            IServerBankAccount account = targetAccountNr != PayoutSchedule.NO_TARGET_ACCOUNT
+                    ? bm.getBankAccount(targetAccountNr)
+                    : bm.getPersonalBankAccount(target);
+            if (account != null) accountName = account.getAccountName();
+        }
+        return new String[]{playerName, accountName};
+    }
+
+    private static PayoutSchedule.Mode modeFromByte(byte b) {
+        return b >= 0 && b < PayoutSchedule.Mode.values().length
+                ? PayoutSchedule.Mode.values()[b] : PayoutSchedule.Mode.FIXED_PAYOUT;
     }
 
     private static OutputData handleCreatePayout(CreatePayoutInput in, IServerBankManager bm, CompanyManager cm) {
@@ -977,10 +1485,12 @@ public final class AsyncCompanyManager {
         if (gate != CODE_OK) return OutputData.of(FunctionType.CREATE_PAYOUT, new CreatePayoutOutput(gate, 0L));
         IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
         if (pm == null) return OutputData.of(FunctionType.CREATE_PAYOUT, new CreatePayoutOutput(CODE_INTERNAL, 0L));
-        // Server tick isn't easily reachable from ARRS thread — fall through to client-supplied nowTick.
-        long nowTick = in.nowTick;
+        long nowTick = PayoutExecutor.getLastObservedTick() > 0L
+                ? PayoutExecutor.getLastObservedTick() : in.nowTick;
+        String[] names = resolveTargetNames(in.target, in.targetAccountNr, bm);
         IPayoutManager.CreateOutcome outcome = pm.createSchedule(in.companyId, in.target, in.amount,
-                in.intervalTicks, nowTick, in.callerUUID);
+                in.intervalTicks, nowTick, in.callerUUID, in.targetAccountNr, names[0], names[1],
+                modeFromByte(in.mode), in.currencyItem);
         return OutputData.of(FunctionType.CREATE_PAYOUT,
                 new CreatePayoutOutput(mapPayoutOp(outcome.result()), outcome.scheduleId()));
     }
@@ -990,8 +1500,128 @@ public final class AsyncCompanyManager {
         if (gate != CODE_OK) return OutputData.of(FunctionType.UPDATE_PAYOUT, new UpdatePayoutOutput(gate));
         IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
         if (pm == null) return OutputData.of(FunctionType.UPDATE_PAYOUT, new UpdatePayoutOutput(CODE_INTERNAL));
+        String[] names = resolveTargetNames(in.newTarget, in.newTargetAccountNr, bm);
         return OutputData.of(FunctionType.UPDATE_PAYOUT,
-                new UpdatePayoutOutput(mapPayoutOp(pm.updateSchedule(in.companyId, in.scheduleId, in.newAmount, in.newIntervalTicks))));
+                new UpdatePayoutOutput(mapPayoutOp(pm.updateScheduleEx(in.companyId, in.scheduleId,
+                        in.newAmount, in.newIntervalTicks, in.newTarget, in.newTargetAccountNr,
+                        names[0], names[1], modeFromByte(in.newMode), in.newCurrencyItem))));
+    }
+
+    /** Spec B.1 — filtered account listing. MANAGE-gated when caller != subject. */
+    private static OutputData handleListPlayerAccounts(ListPlayerAccountsInput in,
+                                                       IServerBankManager bm, CompanyManager cm) {
+        if (!in.callerUUID.equals(in.subject)) {
+            int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
+            if (gate != CODE_OK) {
+                return OutputData.of(FunctionType.LIST_PLAYER_ACCOUNTS_WITH_FILTER,
+                        new ListPlayerAccountsOutput(gate, List.of()));
+            }
+        }
+        // Exclude the paying company's own bank account — a self-transfer
+        // (Account1 -> Account1) is meaningless as a payout target.
+        Company payer = cm.getById(in.companyId);
+        int excludeAccountNr = payer != null ? payer.getBankAccountNr() : Integer.MIN_VALUE;
+        List<AccountEntry> entries = new ArrayList<>();
+        for (IServerBankAccount account : bm.getBankAccounts(in.subject)) {
+            if (account.getAccountNumber() == excludeAccountNr) continue;
+            int bits = account.getPermission(in.subject);
+            if (in.filterMask != 0 && (bits & in.filterMask) == 0) continue;
+            entries.add(new AccountEntry(account.getAccountNumber(), account.getAccountName(), bits));
+        }
+        // The subject's personal account is always a valid deposit target even without
+        // an explicit user row — include it if the account walk missed it (and it is
+        // not the payer's own account).
+        IServerBankAccount personal = bm.getPersonalBankAccount(in.subject);
+        if (personal != null && personal.getAccountNumber() != excludeAccountNr
+                && entries.stream().noneMatch(e -> e.accountId() == personal.getAccountNumber())) {
+            entries.add(new AccountEntry(personal.getAccountNumber(), personal.getAccountName(),
+                    BankPermission.DEPOSIT.getValue() | BankPermission.WITHDRAW.getValue()
+                            | BankPermission.MANAGE.getValue()));
+        }
+        return OutputData.of(FunctionType.LIST_PLAYER_ACCOUNTS_WITH_FILTER,
+                new ListPlayerAccountsOutput(CODE_OK, entries));
+    }
+
+    /** Spec B.3 — non-zero item balances on the company's bank account (money excluded). */
+    private static OutputData handleListItemBalances(ListItemBalancesInput in,
+                                                     IServerBankManager bm, CompanyManager cm) {
+        int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
+        if (gate != CODE_OK) {
+            return OutputData.of(FunctionType.LIST_ACCOUNT_ITEM_BALANCES,
+                    new ListItemBalancesOutput(gate, List.of()));
+        }
+        Company company = cm.getById(in.companyId);
+        if (company == null) {
+            return OutputData.of(FunctionType.LIST_ACCOUNT_ITEM_BALANCES,
+                    new ListItemBalancesOutput(CODE_NOT_FOUND, List.of()));
+        }
+        IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
+        if (account == null) {
+            return OutputData.of(FunctionType.LIST_ACCOUNT_ITEM_BALANCES,
+                    new ListItemBalancesOutput(CODE_BANK_ACCOUNT_ERROR, List.of()));
+        }
+        net.kroia.banksystem.util.ItemID moneyId =
+                net.kroia.banksystem.minecraft.item.custom.money.MoneyItem.getItemID();
+        short moneyShort = moneyId != null ? moneyId.getShort() : 0;
+        List<ItemBalanceEntry> items = new ArrayList<>();
+        long moneyBalance = 0L;
+        for (var e : account.getAllBanks().entrySet()) {
+            short s = e.getKey().getShort();
+            long balance = e.getValue().getBalance();
+            if (s == moneyShort) { moneyBalance = balance; continue; }
+            if (s == 0) continue;
+            if (balance <= 0L) continue;
+            items.add(new ItemBalanceEntry(s, balance));
+        }
+        return OutputData.of(FunctionType.LIST_ACCOUNT_ITEM_BALANCES,
+                new ListItemBalancesOutput(CODE_OK, items, moneyBalance));
+    }
+
+    /** Spec B.4 — manual missed-payout catch-up. MANAGE-gated; runs the shared transfer path. */
+    private static OutputData handlePayMissed(PayMissedInput in, IServerBankManager bm, CompanyManager cm) {
+        int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
+        if (gate != CODE_OK) return OutputData.of(FunctionType.PAY_MISSED, new PayMissedOutput(gate, 0L, 0));
+        Company company = cm.getById(in.companyId);
+        if (company == null) return OutputData.of(FunctionType.PAY_MISSED, new PayMissedOutput(CODE_NOT_FOUND, 0L, 0));
+        PayoutSchedule schedule = company.findSchedule(in.scheduleId);
+        if (schedule == null) return OutputData.of(FunctionType.PAY_MISSED, new PayMissedOutput(CODE_SCHEDULE_MISSING, 0L, 0));
+        if (in.amount <= 0L || in.amount > schedule.getMissedAmount()) {
+            return OutputData.of(FunctionType.PAY_MISSED,
+                    new PayMissedOutput(CODE_INVALID_INPUT, schedule.getMissedAmount(), schedule.getMissedCount()));
+        }
+        long nowMs = System.currentTimeMillis();
+        List<net.kroia.banksystem.data.table.record.TransactionLogRecord> ledger = new ArrayList<>();
+        PayoutExecutor.Outcome outcome = PayoutExecutor.executeOne(company, schedule, in.amount,
+                bm, nowMs, ledger);
+        PayoutHistoryRecord.Status status = outcome.reason == null
+                ? PayoutHistoryRecord.Status.OK : outcome.reason.toStatus();
+        // Catch-up attempts are audit-worthy either way — write a CATCH_UP history row.
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.PAYOUT_HISTORY_MANAGER != null) {
+            BACKEND_INSTANCES.PAYOUT_HISTORY_MANAGER.save(PayoutHistoryRecord.of(
+                    company.getCompanyId(), schedule.getScheduleId(), company.getBankAccountNr(),
+                    schedule.getTargetUUID(), in.amount, nowMs, status,
+                    outcome.targetPlayerName, outcome.targetAccountName,
+                    schedule.getCurrencyItem(), PayoutHistoryRecord.Type.CATCH_UP));
+        }
+        if (outcome.reason != null) {
+            int code = switch (outcome.reason) {
+                case INSUFFICIENT_FUNDS -> CODE_INSUFFICIENT_FUNDS;
+                case TARGET_NOT_FOUND -> CODE_MISSING_TARGET;
+                case TARGET_NO_DEPOSIT_RIGHT -> CODE_TARGET_NO_DEPOSIT;
+                case CURRENCY_ITEM_MISSING -> CODE_CURRENCY_ITEM_MISSING;
+                default -> CODE_INTERNAL;
+            };
+            return OutputData.of(FunctionType.PAY_MISSED,
+                    new PayMissedOutput(code, schedule.getMissedAmount(), schedule.getMissedCount()));
+        }
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.TRANSACTION_LOG_MANAGER != null && !ledger.isEmpty()) {
+            BACKEND_INSTANCES.TRANSACTION_LOG_MANAGER.save(ledger);
+        }
+        cm.applyCatchUpPayment(in.companyId, in.scheduleId, in.amount);
+        PayoutSchedule updated = company.findSchedule(in.scheduleId);
+        return OutputData.of(FunctionType.PAY_MISSED, new PayMissedOutput(CODE_OK,
+                updated != null ? updated.getMissedAmount() : 0L,
+                updated != null ? updated.getMissedCount() : 0));
     }
 
     private static OutputData handlePausePayout(PausePayoutInput in, IServerBankManager bm, CompanyManager cm) {
@@ -1018,7 +1648,8 @@ public final class AsyncCompanyManager {
         List<PayoutSchedule> list = pm.listSchedulesFor(in.companyId);
         List<ScheduleWire> wire = new ArrayList<>(list.size());
         for (PayoutSchedule s : list) wire.add(ScheduleWire.of(s));
-        return OutputData.of(FunctionType.LIST_SCHEDULES, new ListSchedulesOutput(wire));
+        return OutputData.of(FunctionType.LIST_SCHEDULES,
+                new ListSchedulesOutput(wire, PayoutExecutor.getLastObservedTick()));
     }
 
     private static OutputData handleGetHistory(GetHistoryInput in) {
@@ -1132,35 +1763,35 @@ public final class AsyncCompanyManager {
     public static CompletableFuture<CreateOutput> createCompanyAsync(String name, long maxSupply, UUID caller, String callerName) {
         InputData input = InputData.of(FunctionType.CREATE_COMPANY, new CreateInput(name, maxSupply, caller, callerName));
         CompletableFuture<CreateOutput> future = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(out -> future.complete(out.decodeResult()));
+        dispatchInput(input).thenAccept(out -> future.complete(out == null ? null : out.decodeResult()));
         return future;
     }
 
     public static CompletableFuture<TransferOutput> transferFounderAsync(String companyName, UUID caller, String targetName) {
         InputData input = InputData.of(FunctionType.TRANSFER_FOUNDER, new TransferInput(companyName, caller, targetName));
         CompletableFuture<TransferOutput> future = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(out -> future.complete(out.decodeResult()));
+        dispatchInput(input).thenAccept(out -> future.complete(out == null ? null : out.decodeResult()));
         return future;
     }
 
     public static CompletableFuture<DissolveOutput> dissolveCompanyAsync(String companyName, UUID caller) {
         InputData input = InputData.of(FunctionType.DISSOLVE_COMPANY, new DissolveInput(companyName, caller));
         CompletableFuture<DissolveOutput> future = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(out -> future.complete(out.decodeResult()));
+        dispatchInput(input).thenAccept(out -> future.complete(out == null ? null : out.decodeResult()));
         return future;
     }
 
     public static CompletableFuture<DescriptionOutput> updateDescriptionAsync(String companyName, UUID caller, String text) {
         InputData input = InputData.of(FunctionType.UPDATE_DESCRIPTION, new DescriptionInput(companyName, caller, text));
         CompletableFuture<DescriptionOutput> future = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(out -> future.complete(out.decodeResult()));
+        dispatchInput(input).thenAccept(out -> future.complete(out == null ? null : out.decodeResult()));
         return future;
     }
 
     public static CompletableFuture<CompanyInfoOutput> getCompanyInfoAsync(String companyName) {
         InputData input = InputData.of(FunctionType.GET_COMPANY_INFO, companyName);
         CompletableFuture<CompanyInfoOutput> future = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(out -> future.complete(out.decodeResult()));
+        dispatchInput(input).thenAccept(out -> future.complete(out == null ? null : out.decodeResult()));
         return future;
     }
 
@@ -1168,35 +1799,78 @@ public final class AsyncCompanyManager {
     public static CompletableFuture<CompanyInfoOutput> getCompanyInfoByIdAsync(int companyId) {
         InputData input = InputData.of(FunctionType.GET_COMPANY_INFO_BY_ID, new GetShareVisualsInput(companyId));
         CompletableFuture<CompanyInfoOutput> future = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(out -> future.complete(out.decodeResult()));
+        dispatchInput(input).thenAccept(out -> future.complete(out == null ? null : out.decodeResult()));
         return future;
     }
 
     public static CompletableFuture<Boolean> isNameTakenAsync(String name) {
         InputData input = InputData.of(FunctionType.IS_NAME_TAKEN, name);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(out -> future.complete(out.decodeResult()));
+        dispatchInput(input).thenAccept(out -> future.complete(out == null ? null : out.decodeResult()));
         return future;
     }
 
     // ------------------------------------------------------------------
     // Task #45a — payout slave-side helpers
     // ------------------------------------------------------------------
-    public static CompletableFuture<CreatePayoutOutput> createPayoutAsync(int companyId, UUID target, long amount,
-                                                                         long intervalTicks, long nowTick, UUID caller) {
+    public static CompletableFuture<CreatePayoutOutput> createPayoutAsync(int companyId, @Nullable UUID target, long amount,
+                                                                         long intervalTicks, long nowTick, UUID caller,
+                                                                         int targetAccountNr, byte mode, short currencyItem) {
         InputData input = InputData.of(FunctionType.CREATE_PAYOUT,
-                new CreatePayoutInput(companyId, target, amount, intervalTicks, nowTick, caller));
+                new CreatePayoutInput(companyId, target, amount, intervalTicks, nowTick, caller,
+                        targetAccountNr, mode, currencyItem));
         CompletableFuture<CreatePayoutOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
     }
 
+    /** Legacy-shape helper — personal-account money payout, FIXED mode. */
+    public static CompletableFuture<CreatePayoutOutput> createPayoutAsync(int companyId, UUID target, long amount,
+                                                                         long intervalTicks, long nowTick, UUID caller) {
+        return createPayoutAsync(companyId, target, amount, intervalTicks, nowTick, caller,
+                PayoutSchedule.NO_TARGET_ACCOUNT, (byte) PayoutSchedule.Mode.FIXED_PAYOUT.ordinal(),
+                PayoutSchedule.MONEY_CURRENCY);
+    }
+
     public static CompletableFuture<UpdatePayoutOutput> updatePayoutAsync(int companyId, long scheduleId,
-                                                                         long newAmount, long newIntervalTicks, UUID caller) {
+                                                                         long newAmount, long newIntervalTicks, UUID caller,
+                                                                         @Nullable UUID newTarget, int newTargetAccountNr,
+                                                                         byte newMode, short newCurrencyItem) {
         InputData input = InputData.of(FunctionType.UPDATE_PAYOUT,
-                new UpdatePayoutInput(companyId, scheduleId, newAmount, newIntervalTicks, caller));
+                new UpdatePayoutInput(companyId, scheduleId, newAmount, newIntervalTicks, caller,
+                        newTarget, newTargetAccountNr, newMode, newCurrencyItem));
         CompletableFuture<UpdatePayoutOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
+        return f;
+    }
+
+    /** Spec B.1 — slave helper: list a player's accounts filtered by permission mask. */
+    public static CompletableFuture<ListPlayerAccountsOutput> listPlayerAccountsWithFilterAsync(
+            int companyId, UUID subject, byte filterMask, UUID caller) {
+        InputData input = InputData.of(FunctionType.LIST_PLAYER_ACCOUNTS_WITH_FILTER,
+                new ListPlayerAccountsInput(companyId, subject, filterMask, caller));
+        CompletableFuture<ListPlayerAccountsOutput> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
+        return f;
+    }
+
+    /** Spec B.3 — slave helper: list non-zero item balances on the company account. */
+    public static CompletableFuture<ListItemBalancesOutput> listAccountItemBalancesAsync(
+            int companyId, UUID caller) {
+        InputData input = InputData.of(FunctionType.LIST_ACCOUNT_ITEM_BALANCES,
+                new ListItemBalancesInput(companyId, caller));
+        CompletableFuture<ListItemBalancesOutput> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
+        return f;
+    }
+
+    /** Spec B.4 — slave helper: pay (part of) a schedule's missed amount now. */
+    public static CompletableFuture<PayMissedOutput> payMissedAsync(int companyId, long scheduleId,
+                                                                    long amount, UUID caller) {
+        InputData input = InputData.of(FunctionType.PAY_MISSED,
+                new PayMissedInput(companyId, scheduleId, amount, caller));
+        CompletableFuture<PayMissedOutput> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
     }
 
@@ -1205,7 +1879,7 @@ public final class AsyncCompanyManager {
         InputData input = InputData.of(FunctionType.PAUSE_PAYOUT,
                 new PausePayoutInput(companyId, scheduleId, paused, caller));
         CompletableFuture<PausePayoutOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
     }
 
@@ -1213,35 +1887,35 @@ public final class AsyncCompanyManager {
         InputData input = InputData.of(FunctionType.DELETE_PAYOUT,
                 new DeletePayoutInput(companyId, scheduleId, caller));
         CompletableFuture<DeletePayoutOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
     }
 
     public static CompletableFuture<ListSchedulesOutput> listSchedulesAsync(int companyId) {
         InputData input = InputData.of(FunctionType.LIST_SCHEDULES, new ListSchedulesInput(companyId));
         CompletableFuture<ListSchedulesOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
     }
 
     public static CompletableFuture<GetHistoryOutput> getHistoryAsync(long scheduleId, int limit) {
         InputData input = InputData.of(FunctionType.GET_HISTORY, new GetHistoryInput(scheduleId, limit));
         CompletableFuture<GetHistoryOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
     }
 
     public static CompletableFuture<GetFailureCount24hOutput> getFailureCount24hAsync(int companyId) {
         InputData input = InputData.of(FunctionType.GET_FAILURE_COUNT_24H, new GetFailureCount24hInput(companyId));
         CompletableFuture<GetFailureCount24hOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
     }
 
     public static CompletableFuture<CompanyInfoOutput> getCompanyInfoByAccountAsync(int accountNr) {
         InputData input = InputData.of(FunctionType.GET_COMPANY_INFO_BY_ACCOUNT, new GetCompanyInfoByAccountInput(accountNr));
         CompletableFuture<CompanyInfoOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
     }
 
@@ -1253,7 +1927,7 @@ public final class AsyncCompanyManager {
         InputData input = InputData.of(FunctionType.UPDATE_SHARE_VISUALS,
                 new UpdateShareVisualsInput(companyId, iconPresetId, tint, displayName, description, caller));
         CompletableFuture<UpdateShareVisualsOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
     }
 
@@ -1261,12 +1935,17 @@ public final class AsyncCompanyManager {
     public static CompletableFuture<GetShareVisualsOutput> getShareVisualsAsync(int companyId) {
         InputData input = InputData.of(FunctionType.GET_SHARE_VISUALS, new GetShareVisualsInput(companyId));
         CompletableFuture<GetShareVisualsOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
     }
 
     /** Task #49 (v2.0.8) — MANAGE-gated one-shot dividend distribution. Master-only side effects. */
     private static OutputData handlePayDividend(PayDividendInput in, IServerBankManager bm, CompanyManager cm) {
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.info("[AsyncCompanyManager] PAY_DIVIDEND received: company="
+                    + in.companyId + " amountPerShareRaw=" + in.amountPerShare
+                    + " caller=" + in.callerUUID);
+        }
         int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
         if (gate != CODE_OK) return OutputData.of(FunctionType.PAY_DIVIDEND, new PayDividendOutput(gate, 0L, 0));
         net.kroia.banksystem.api.dividend.IDividendPayer payer =
@@ -1293,7 +1972,7 @@ public final class AsyncCompanyManager {
         InputData input = InputData.of(FunctionType.PAY_DIVIDEND,
                 new PayDividendInput(companyId, amountPerShare, includeCompanyAccount, caller));
         CompletableFuture<PayDividendOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
     }
 
@@ -1301,7 +1980,7 @@ public final class AsyncCompanyManager {
     public static CompletableFuture<ListStamperBindingsOutput> listStamperBindingsAsync(int companyId) {
         InputData input = InputData.of(FunctionType.LIST_STAMPER_BINDINGS, new ListStamperBindingsInput(companyId));
         CompletableFuture<ListStamperBindingsOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> f.complete(o.decodeResult()));
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
     }
 
@@ -1309,8 +1988,8 @@ public final class AsyncCompanyManager {
     public static CompletableFuture<Integer> countHoldersForCompanyAsync(int companyId) {
         InputData input = InputData.of(FunctionType.COUNT_HOLDERS_FOR_COMPANY, new GetShareVisualsInput(companyId));
         CompletableFuture<Integer> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(o -> {
-            Integer v = o.decodeResult();
+        dispatchInput(input).thenAccept(o -> {
+            Integer v = o == null ? null : o.decodeResult();
             f.complete(v == null ? 0 : v);
         });
         return f;
@@ -1320,9 +1999,97 @@ public final class AsyncCompanyManager {
     public static CompletableFuture<ListAllVisualsOutput> listAllCompanyVisualsAsync() {
         InputData input = InputData.of(FunctionType.LIST_ALL_COMPANY_VISUALS, new EmptyInput());
         CompletableFuture<ListAllVisualsOutput> f = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(out -> {
-            ListAllVisualsOutput v = out.decodeResult();
+        dispatchInput(input).thenAccept(out -> {
+            ListAllVisualsOutput v = out == null ? null : out.decodeResult();
             f.complete(v == null ? ListAllVisualsOutput.EMPTY : v);
+        });
+        return f;
+    }
+
+    /**
+     * Task #1 (v2.0.8) — dispatch an ARRS input from the client. On a slave (this JVM
+     * has a slave client), use the standard {@code sendRequestToMaster} network hop.
+     * On singleplayer / dedicated master (this JVM IS the master), the ARRS
+     * {@code sendToMaster} path errors ("master can't send packets to another
+     * master"), so short-circuit to the local handler on the integrated server
+     * thread. Returns a future that completes on the client (render) thread.
+     */
+    private static CompletableFuture<OutputData> dispatchInput(InputData input) {
+        boolean msmRunning = net.kroia.modutilities.networking.multi_server.MultiServerManager.isRunning();
+        boolean asMaster = msmRunning
+                && net.kroia.modutilities.networking.multi_server.MultiServerManager.isMaster();
+        if (!msmRunning || asMaster) {
+            // Local-master path — invoke the handler directly. In singleplayer, marshal
+            // onto the integrated server thread so we don't race server-side state.
+            net.minecraft.server.MinecraftServer server = null;
+            try {
+                if (net.minecraft.client.Minecraft.getInstance() != null) {
+                    server = net.minecraft.client.Minecraft.getInstance().getSingleplayerServer();
+                }
+            } catch (Throwable ignored) { /* headless / dedicated-server callers */ }
+            CompletableFuture<OutputData> out = new CompletableFuture<>();
+            Runnable exec = () -> {
+                try {
+                    Request.instance.handleOnMasterServer(input, "", null)
+                            .whenComplete((res, err) -> {
+                                if (err != null || res == null) out.complete(null);
+                                else out.complete(res);
+                            });
+                } catch (Throwable t) {
+                    out.complete(null);
+                }
+            };
+            if (server != null) server.execute(exec); else exec.run();
+            return out;
+        }
+        // True slave: use the standard S2S request hop.
+        return Request.instance.sendRequestToMaster(input);
+    }
+
+    /** Task #1 (v2.0.8) — slave helper: request market creation. */
+    public static CompletableFuture<OpenShareMarketOutput> openShareMarketAsync(int companyId, float initialPrice, UUID caller) {
+        InputData input = InputData.of(FunctionType.OPEN_SHARE_MARKET,
+                new OpenShareMarketInput(companyId, initialPrice, caller));
+        CompletableFuture<OpenShareMarketOutput> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
+        return f;
+    }
+
+    /** Task #1 (v2.0.8) — slave helper: request market close (founder-gated). */
+    public static CompletableFuture<CloseShareMarketOutput> closeShareMarketAsync(int companyId, UUID caller) {
+        InputData input = InputData.of(FunctionType.CLOSE_SHARE_MARKET,
+                new CloseShareMarketInput(companyId, caller));
+        CompletableFuture<CloseShareMarketOutput> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
+        return f;
+    }
+
+    /** Task #1 (v2.0.8) — slave helper: probe whether SM has a market for this company's share. */
+    public static CompletableFuture<Integer> marketExistsForCompanyAsync(int companyId) {
+        InputData input = InputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, new GetShareVisualsInput(companyId));
+        CompletableFuture<Integer> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> {
+            Integer v = o == null ? null : o.decodeResult();
+            f.complete(v == null ? MARKET_EXISTS_UNAV : v);
+        });
+        return f;
+    }
+
+    /** Task #1 (v2.0.8) — slave helper: pause / resume trading on the company's share market (MANAGE-gated). */
+    public static CompletableFuture<SetMarketOpenOutput> setMarketOpenAsync(int companyId, boolean open, UUID caller) {
+        InputData input = InputData.of(FunctionType.SET_MARKET_OPEN, new SetMarketOpenInput(companyId, open, caller));
+        CompletableFuture<SetMarketOpenOutput> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
+        return f;
+    }
+
+    /** Task #1 (v2.0.8) — slave helper: query whether the company's share market is currently open for trading. */
+    public static CompletableFuture<Integer> isMarketOpenAsync(int companyId) {
+        InputData input = InputData.of(FunctionType.IS_MARKET_OPEN, new GetShareVisualsInput(companyId));
+        CompletableFuture<Integer> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> {
+            Integer v = o == null ? null : o.decodeResult();
+            f.complete(v == null ? MARKET_OPEN_UNAV : v);
         });
         return f;
     }
@@ -1331,8 +2098,8 @@ public final class AsyncCompanyManager {
     public static CompletableFuture<List<String>> listCompanyNamesForCallerAsync(UUID caller, byte filterKind) {
         InputData input = InputData.of(FunctionType.LIST_COMPANIES_FOR_CALLER, new ListInput(caller, filterKind));
         CompletableFuture<List<String>> future = new CompletableFuture<>();
-        Request.instance.sendRequestToMaster(input).thenAccept(out -> {
-            ListOutput result = out.decodeResult();
+        dispatchInput(input).thenAccept(out -> {
+            ListOutput result = out == null ? null : out.decodeResult();
             future.complete(result == null ? List.of() : result.companyNames());
         });
         return future;

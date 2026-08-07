@@ -23,10 +23,12 @@ public class PayoutHistoryManager implements ITableManager<PayoutHistoryRecord> 
     private final DatabaseManager databaseManager;
 
     public static final String INSERT = "INSERT INTO PayoutHistory " +
-            "(company_id, schedule_id, source_account, target_uuid, amount, ts, status) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?)";
+            "(company_id, schedule_id, source_account, target_uuid, amount, ts, status, " +
+            "target_player_name, target_account_name, currency_item, type) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     public static final String SELECT_COLS =
-            "id, company_id, schedule_id, source_account, target_uuid, amount, ts, status";
+            "id, company_id, schedule_id, source_account, target_uuid, amount, ts, status, " +
+            "target_player_name, target_account_name, currency_item, type";
 
     public PayoutHistoryManager(DatabaseManager databaseManager) {
         this.databaseManager = databaseManager;
@@ -68,6 +70,10 @@ public class PayoutHistoryManager implements ITableManager<PayoutHistoryRecord> 
             stmt.setLong(5, data.amount());
             stmt.setLong(6, data.time());
             stmt.setString(7, data.status().name());
+            stmt.setString(8, data.targetPlayerName() == null ? "" : data.targetPlayerName());
+            stmt.setString(9, data.targetAccountName() == null ? "" : data.targetAccountName());
+            stmt.setInt(10, data.currencyItem());
+            stmt.setString(11, (data.type() == null ? PayoutHistoryRecord.Type.NORMAL : data.type()).name());
             stmt.addBatch();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to queue payout-history record", e);
@@ -174,9 +180,18 @@ public class PayoutHistoryManager implements ITableManager<PayoutHistoryRecord> 
             String statusStr = rs.getString(8);
             PayoutHistoryRecord.Status status;
             try { status = PayoutHistoryRecord.Status.valueOf(statusStr); }
-            catch (IllegalArgumentException ignored) { return null; }
+            catch (IllegalArgumentException ignored) { status = PayoutHistoryRecord.Status.UNKNOWN; }
+            String playerName = rs.getString(9);
+            String accountName = rs.getString(10);
+            short currencyItem = (short) rs.getInt(11);
+            PayoutHistoryRecord.Type type;
+            try { type = PayoutHistoryRecord.Type.valueOf(rs.getString(12)); }
+            catch (IllegalArgumentException | NullPointerException ignored) { type = PayoutHistoryRecord.Type.NORMAL; }
             return new PayoutHistoryRecord(id, companyId, scheduleId, sourceAccount, target,
-                    amount, time, status);
+                    amount, time, status,
+                    playerName == null ? "" : playerName,
+                    accountName == null ? "" : accountName,
+                    currencyItem, type);
         } catch (SQLException e) {
             return null;
         }

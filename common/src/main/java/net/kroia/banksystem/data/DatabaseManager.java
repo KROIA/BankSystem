@@ -90,7 +90,39 @@ public class DatabaseManager {
                 return false;
             }
         }
+        migratePayoutHistoryColumns();
         return true;
+    }
+
+    /**
+     * Spec A.9 / B.3 / B.4 (v2.0.8) — column migration for pre-existing worlds.
+     * {@code CREATE TABLE IF NOT EXISTS} does not add columns to an existing table,
+     * so add the new PayoutHistory columns via {@code ALTER TABLE} when missing.
+     * Idempotent: checks {@code PRAGMA table_info} first.
+     */
+    private void migratePayoutHistoryColumns() {
+        java.util.Map<String, String> wanted = new java.util.LinkedHashMap<>();
+        wanted.put("target_player_name", "TEXT NOT NULL DEFAULT ''");
+        wanted.put("target_account_name", "TEXT NOT NULL DEFAULT ''");
+        wanted.put("currency_item", "INTEGER NOT NULL DEFAULT 0");
+        wanted.put("type", "TEXT NOT NULL DEFAULT 'NORMAL'");
+        try (Statement stmt = connection.createStatement()) {
+            java.util.Set<String> existing = new java.util.HashSet<>();
+            try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(PayoutHistory)")) {
+                while (rs.next()) existing.add(rs.getString("name"));
+            }
+            for (var e : wanted.entrySet()) {
+                if (existing.contains(e.getKey())) continue;
+                try (Statement alter = connection.createStatement()) {
+                    alter.execute("ALTER TABLE PayoutHistory ADD COLUMN "
+                            + e.getKey() + " " + e.getValue());
+                }
+                getLogger().info("[DatabaseManager] PayoutHistory migration: added column " + e.getKey());
+            }
+            commitTransaction();
+        } catch (SQLException e) {
+            getLogger().error("PayoutHistory column migration failed: " + e.getMessage());
+        }
     }
 
     public void executeSqlFile(String resourcePath) throws IOException, SQLException {

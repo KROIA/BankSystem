@@ -86,6 +86,19 @@ public final class CompanyInfoCache {
                 prior.bankAccountNr(), prior.founderNames(), holderCount));
     }
 
+    /** Task #51 (v2.0.8, spec §1.4) — merge a fresh company description into the cached
+     *  snapshot without disturbing any other fields. Mirrors {@link #updateHolderCount}.
+     *  If no snapshot exists yet the update is dropped (bulk sync / by-id lookup heals). */
+    public static void updateDescription(int companyId, String description) {
+        Snapshot prior = infos.get(companyId);
+        if (prior == null) return;
+        String desc = description == null ? "" : description;
+        if (prior.description().equals(desc)) return;
+        infos.put(companyId, new Snapshot(prior.companyId(), prior.name(), desc,
+                prior.maxSupply(), prior.totalSharesIssued(),
+                prior.bankAccountNr(), prior.founderNames(), prior.holderCount()));
+    }
+
     /**
      * Cache-miss hint: dedupes concurrent lookups via the {@code pending} set,
      * fires a by-id ARRS query, and populates the cache on response. On any

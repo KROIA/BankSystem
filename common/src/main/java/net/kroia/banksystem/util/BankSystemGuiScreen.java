@@ -34,6 +34,46 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
         BACKEND_INSTANCES = backend;
     }
 
+    /**
+     * v2.0.8 hotfix (crash on unpause/save) — swap the active screen from inside a
+     * GUI event callback. {@code Minecraft.setScreen} mutates the screen/GUI tree;
+     * calling it while ModUtilities is still iterating element children (click
+     * dispatch, {@code GuiElement.init}) throws {@link java.util.ConcurrentModificationException}.
+     * {@code tell(...)} always enqueues (unlike {@code execute(...)}, which runs
+     * inline when already on the render thread), so the swap happens after the
+     * current event pass completes.
+     */
+    public static void switchScreen(Screen newScreen) {
+        Minecraft.getInstance().tell(() -> Minecraft.getInstance().setScreen(newScreen));
+    }
+
+    /**
+     * Tooltip auto-flip — elements hovered on the right half of the screen show
+     * their tooltip to the LEFT of the cursor so it never runs off-screen.
+     * ModUtilities only supports a static per-element alignment
+     * (see MC_ModUtilities bugreport "tooltip auto-flip"), so we retarget the
+     * alignment every frame based on the mouse position before the tooltip pass.
+     */
+    protected static void applyTooltipAutoFlip(net.kroia.modutilities.gui.Gui gui, int mouseX, int screenWidth) {
+        if (gui == null) return;
+        net.kroia.modutilities.gui.elements.base.GuiElement.Alignment alignment =
+                mouseX > screenWidth / 2
+                        ? net.kroia.modutilities.gui.elements.base.GuiElement.Alignment.TOP_RIGHT
+                        : net.kroia.modutilities.gui.elements.base.GuiElement.Alignment.TOP_LEFT;
+        for (net.kroia.modutilities.gui.elements.base.GuiElement element : gui.getElements()) {
+            applyTooltipAlignmentRecursive(element, alignment);
+        }
+    }
+
+    private static void applyTooltipAlignmentRecursive(
+            net.kroia.modutilities.gui.elements.base.GuiElement element,
+            net.kroia.modutilities.gui.elements.base.GuiElement.Alignment alignment) {
+        element.setHoverTooltipMousePositionAlignment(alignment);
+        for (net.kroia.modutilities.gui.elements.base.GuiElement child : element.getChilds()) {
+            applyTooltipAlignmentRecursive(child, alignment);
+        }
+    }
+
     protected IClientBankManager getBankManager() {
         return BACKEND_INSTANCES.CLIENT_BANK_MANAGER;
     }
@@ -61,6 +101,7 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
     @Override
     public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) {
         modTextInputFocusProxy.setFocused(getGui().getFocusedElement() instanceof TextBox);
+        applyTooltipAutoFlip(getGui(), pMouseX, this.width);
         super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
     }
 

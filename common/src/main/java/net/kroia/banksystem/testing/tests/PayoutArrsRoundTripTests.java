@@ -79,7 +79,7 @@ public class PayoutArrsRoundTripTests extends TestSuite {
 
     private TestResult testCreatePayoutRoundTrip() {
         AsyncCompanyManager.CreatePayoutInput in = new AsyncCompanyManager.CreatePayoutInput(
-                7, TARGET, 500L, 1200L, 999L, CALLER);
+                7, TARGET, 500L, 1200L, 999L, CALLER, 12, (byte) 1, (short) 7);
         AsyncCompanyManager.CreatePayoutInput ind = roundTrip(AsyncCompanyManager.CreatePayoutInput.STREAM_CODEC, in);
         if (!in.equals(ind)) return fail("CreatePayoutInput mismatch: " + ind);
         AsyncCompanyManager.CreatePayoutOutput out = new AsyncCompanyManager.CreatePayoutOutput(
@@ -91,7 +91,7 @@ public class PayoutArrsRoundTripTests extends TestSuite {
 
     private TestResult testUpdatePayoutRoundTrip() {
         AsyncCompanyManager.UpdatePayoutInput in = new AsyncCompanyManager.UpdatePayoutInput(
-                3, 11L, 250L, 72000L, CALLER);
+                3, 11L, 250L, 72000L, CALLER, TARGET, 4, (byte) 0, (short) 0);
         AsyncCompanyManager.UpdatePayoutInput ind = roundTrip(AsyncCompanyManager.UpdatePayoutInput.STREAM_CODEC, in);
         if (!in.equals(ind)) return fail("UpdatePayoutInput mismatch: " + ind);
         AsyncCompanyManager.UpdatePayoutOutput out = new AsyncCompanyManager.UpdatePayoutOutput(AsyncCompanyManager.CODE_SCHEDULE_MISSING);
@@ -126,16 +126,19 @@ public class PayoutArrsRoundTripTests extends TestSuite {
         if (in.companyId() != ind.companyId()) return fail("ListSchedulesInput mismatch");
 
         AsyncCompanyManager.ScheduleWire w1 = new AsyncCompanyManager.ScheduleWire(
-                7L, TARGET, 100L, 1200L, 5000L, false, 111L, CALLER);
+                7L, TARGET, 100L, 1200L, 5000L, false, 111L, CALLER,
+                12, "Alice", "Main", (byte) 0, (short) 0, 300L, 3);
         AsyncCompanyManager.ScheduleWire w2 = new AsyncCompanyManager.ScheduleWire(
-                8L, null, 200L, 72000L, 9000L, true, 222L, null);
-        AsyncCompanyManager.ListSchedulesOutput out = new AsyncCompanyManager.ListSchedulesOutput(List.of(w1, w2));
+                8L, null, 200L, 72000L, 9000L, true, 222L, null,
+                -1, "", "", (byte) 1, (short) 9, 0L, 0);
+        AsyncCompanyManager.ListSchedulesOutput out = new AsyncCompanyManager.ListSchedulesOutput(List.of(w1, w2), 4242L);
         AsyncCompanyManager.ListSchedulesOutput outd = roundTrip(AsyncCompanyManager.ListSchedulesOutput.STREAM_CODEC, out);
         if (outd.schedules().size() != 2) return fail("schedule count lost");
         AsyncCompanyManager.ScheduleWire d1 = outd.schedules().get(0);
         AsyncCompanyManager.ScheduleWire d2 = outd.schedules().get(1);
         if (!w1.equals(d1)) return fail("w1 mismatch: " + d1);
         if (!w2.equals(d2)) return fail("w2 mismatch: " + d2);
+        if (outd.nowTick() != 4242L) return fail("nowTick lost");
 
         AsyncCompanyManager.ListSchedulesOutput empty = roundTrip(AsyncCompanyManager.ListSchedulesOutput.STREAM_CODEC,
                 AsyncCompanyManager.ListSchedulesOutput.EMPTY);
@@ -149,9 +152,9 @@ public class PayoutArrsRoundTripTests extends TestSuite {
         if (!in.equals(ind)) return fail("GetHistoryInput mismatch: " + ind);
 
         AsyncCompanyManager.HistoryRowWire r1 = new AsyncCompanyManager.HistoryRowWire(
-                1L, 3, 11L, 42, TARGET, 500L, 1234L, 0);
+                1L, 3, 11L, 42, TARGET, 500L, 1234L, 0, "Alice", "Main", (short) 0, 0);
         AsyncCompanyManager.HistoryRowWire r2 = new AsyncCompanyManager.HistoryRowWire(
-                2L, 3, 11L, 42, null, 500L, 1235L, 2);
+                2L, 3, 11L, 42, null, 500L, 1235L, 2, "", "", (short) 9, 1);
         AsyncCompanyManager.GetHistoryOutput out = new AsyncCompanyManager.GetHistoryOutput(List.of(r1, r2), 500L);
         AsyncCompanyManager.GetHistoryOutput outd = roundTrip(AsyncCompanyManager.GetHistoryOutput.STREAM_CODEC, out);
         if (outd.rows().size() != 2) return fail("row count lost");

@@ -75,20 +75,39 @@ public final class DividendPayer implements IDividendPayer {
         Set<Integer> holderAccounts = bm.listAccountsHolding(shareItemId);
         int companyAccountNr = company.getBankAccountNr();
 
+        // BUG batch 4 (v2.0.8) — item banks store balances in RAW fixed-point units
+        // (physical count * ITEM_FRACTION_SCALE_FACTOR); ShareStamper / BankUpload
+        // deposits go through {@code depositRealAsync(count)} which multiplies by
+        // SCALE. Previously this code treated {@code getTotalBalance()} as a plain
+        // share count and produced dividend payouts inflated by exactly 100×.
+        // Convert to physical share count up front so {@code amountPerShare * shares}
+        // yields the correct raw money total.
+        final long SCALE = (long) net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+
         // Upfront snapshot — iterated even if a subsequent market match mutates a
         // holder's balance mid-run (spec §5 concurrency requirement).
         List<HolderSnap> snapshots = new ArrayList<>();
         long totalShares = 0L;
+        // Bug batch 3 #5 (v2.0.8) — the company's own account is ALWAYS excluded
+        // from dividend distribution regardless of the includeCompanyAccount flag.
+        // Paying the company its own money is a no-op and only confuses the ledger.
+        // The parameter is retained for API/wire compatibility.
         for (int accountNr : holderAccounts) {
-            if (!includeCompanyAccount && accountNr == companyAccountNr) continue;
+            if (accountNr == companyAccountNr) continue;
             IServerBankAccount account = bm.getBankAccount(accountNr);
             if (account == null) continue;
             ISyncServerBank shareBank = account.getBank(shareItemId);
             if (shareBank == null) continue;
-            long shares = shareBank.getTotalBalance();
+            long rawShares = shareBank.getTotalBalance();
+            long shares = rawShares / SCALE; // convert raw storage → physical share count
             if (shares <= 0L) continue;
             snapshots.add(new HolderSnap(accountNr, shares));
             totalShares += shares;
+        }
+        if (instances.LOGGER != null) {
+            instances.LOGGER.info("[DividendPayer] payDividend company=" + companyId
+                    + " amountPerShareRaw=" + amountPerShare + " totalHolders=" + snapshots.size()
+                    + " totalPhysicalShares=" + totalShares);
         }
         if (totalShares == 0L || snapshots.isEmpty()) {
             return PayDividendResult.of(PayDividendResult.Reason.NO_SHARES);
@@ -146,6 +165,11 @@ public final class DividendPayer implements IDividendPayer {
             }
             paid += payAmount;
             paidHolders++;
+            if (instances.LOGGER != null) {
+                instances.LOGGER.debug("[DividendPayer] company=" + companyId
+                        + " holder account=" + snap.accountNr + " physicalShares=" + snap.shares
+                        + " payAmountRaw=" + payAmount);
+            }
             // Outbound row on company account, inbound row on holder.
             ledger.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
                     companyAccountNr, actor, TransactionLogRecord.Kind.DIVIDEND, moneyShort,

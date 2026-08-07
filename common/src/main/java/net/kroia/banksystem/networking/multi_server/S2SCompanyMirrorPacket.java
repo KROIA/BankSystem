@@ -132,9 +132,15 @@ public class S2SCompanyMirrorPacket extends BankSystemNetworkPacket {
                         entry.companyId(),
                         new ShareVisuals(entry.iconPresetId(), entry.tint(), entry.displayName(), entry.description()),
                         entry.totalSharesIssued(), entry.maxSupply());
+                // Task #51 (v2.0.8, spec §1.4) — also forward the company-level
+                // description so slave-side clients' Overview tabs stay fresh.
+                net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket descFwd =
+                        new net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket(
+                                entry.companyId(), entry.companyDescription());
                 for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                     if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.NETWORKING != null) {
                         BACKEND_INSTANCES.NETWORKING.sendToClient(p, fwd);
+                        BACKEND_INSTANCES.NETWORKING.sendToClient(p, descFwd);
                     }
                 }
             }

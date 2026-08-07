@@ -113,6 +113,27 @@ public final class Company {
         return id;
     }
 
+    /**
+     * BUG batch 4 (v2.0.8) — renormalize every schedule's {@code nextRunTick} to
+     * {@code baseTick + intervalTicks}. Called from {@link CompanyManager#load}
+     * after world load because {@code payoutTickCounter} is a per-session counter
+     * that resets to {@code 0} on every server start
+     * ({@code BankSystemModBackend.onServerStart}); a persisted {@code nextRunTick}
+     * from the previous session is meaningless in the new session's clock and
+     * would show as a stale multi-minute countdown until the next fire (which
+     * itself would never happen if the persisted value was very large).
+     * <p>
+     * Semantics: after reload, every schedule's next run is exactly one full
+     * interval away from load time. Sub-interval progress is discarded — acceptable
+     * for a reload boundary.
+     */
+    void renormalizeSchedulesAfterLoad(long baseTick) {
+        for (int i = 0; i < payoutSchedules.size(); i++) {
+            PayoutSchedule s = payoutSchedules.get(i);
+            payoutSchedules.set(i, s.withNextRunTick(baseTick + s.getIntervalTicks()));
+        }
+    }
+
     void addSchedule(PayoutSchedule schedule) {
         if (schedule == null) return;
         payoutSchedules.add(schedule);

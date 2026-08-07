@@ -175,8 +175,9 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         // Task #51 (v2.0.8) — maintain reverse index (master-only; CM is null on slave/client).
         CompanyManager cm = CompanyManager.get();
         if (cm != null) {
-            if (prev >= 0 && prev != companyId) cm.unregisterStamper(prev, worldPosition);
-            if (companyId >= 0) cm.registerStamper(companyId, worldPosition);
+            String dim = dimensionKey();
+            if (prev >= 0 && prev != companyId) cm.unregisterStamper(prev, worldPosition, dim);
+            if (companyId >= 0) cm.registerStamper(companyId, worldPosition, dim);
         }
     }
     public void unbind() {
@@ -189,7 +190,12 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         setChanged();
         // Task #51 (v2.0.8) — maintain reverse index.
         CompanyManager cm = CompanyManager.get();
-        if (cm != null && prev >= 0) cm.unregisterStamper(prev, worldPosition);
+        if (cm != null && prev >= 0) cm.unregisterStamper(prev, worldPosition, dimensionKey());
+    }
+
+    /** Dimension key as a stable string; empty when level is unattached. */
+    private String dimensionKey() {
+        return level == null ? "" : level.dimension().location().toString();
     }
 
     // -------- viewer lock (Task #47, v2.0.8) --------
@@ -338,6 +344,15 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
             autoOutput = false;
         }
         processing = tag.getBoolean("Processing");
+        // v2.0.8 Bug4 root cause — vanilla BE lifecycle invokes setLevel() BEFORE
+        // loadAdditional() during chunk load, so the setLevel() reverse-index register
+        // fired with boundCompanyId still at -1 (its default) and persisted bindings
+        // were never re-added to CompanyManager's reverse index. Register here at the
+        // end of load, once boundCompanyId is the persisted value. Master-only.
+        if (level != null && !level.isClientSide && boundCompanyId >= 0) {
+            CompanyManager cm = CompanyManager.get();
+            if (cm != null) cm.registerStamper(boundCompanyId, worldPosition, dimensionKey());
+        }
     }
 
     @Override
@@ -397,7 +412,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         // Task #51 (v2.0.8) — drop reverse index entry on BE unload/removal (master-only meaningful).
         if (level != null && !level.isClientSide && boundCompanyId >= 0) {
             CompanyManager cm = CompanyManager.get();
-            if (cm != null) cm.unregisterStamper(boundCompanyId, worldPosition);
+            if (cm != null) cm.unregisterStamper(boundCompanyId, worldPosition, dimensionKey());
         }
         super.setRemoved();
     }
@@ -410,9 +425,10 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         // is null so this is a no-op there.
         if (!lvl.isClientSide && boundCompanyId >= 0) {
             CompanyManager cm = CompanyManager.get();
-            if (cm != null) cm.registerStamper(boundCompanyId, worldPosition);
+            if (cm != null) cm.registerStamper(boundCompanyId, worldPosition, dimensionKey());
         }
     }
+
 
     // WorldlyContainer
     @Override

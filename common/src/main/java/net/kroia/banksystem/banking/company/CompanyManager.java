@@ -88,11 +88,21 @@ public final class CompanyManager implements ServerSaveableChunked {
     /**
      * Task #51 (v2.0.8) — reverse index of Share Stamper bindings per company.
      * <p>
-     * Rebuilt at runtime from {@code ShareStamperBlockEntity} load/setLevel hooks;
-     * NOT persisted to NBT. Cleared in {@link #load(Map)} so a restart starts clean
-     * before BEs re-register themselves as chunks load.
+     * Persisted to NBT via {@link #save(Map)} / {@link #load(Map)} under the
+     * {@code stamper_bindings} list tag so the Shares-tab list survives a world
+     * reload even when the stamper chunks are not currently loaded. At runtime
+     * the index is also maintained by {@link net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity}
+     * load/setLevel/unbind hooks (register on chunk load, unregister on unbind
+     * / BE removal). Entries carry dimension so cross-dimension stampers with
+     * colliding {@link BlockPos} do not collapse into one.
      */
-    private final Map<Integer, Set<BlockPos>> stamperBindings = new HashMap<>();
+    public record StamperBinding(BlockPos pos, String dim) {
+        public StamperBinding {
+            pos = pos.immutable();
+            dim = dim == null ? "" : dim;
+        }
+    }
+    private final Map<Integer, Set<StamperBinding>> stamperBindings = new HashMap<>();
 
     /** Public for test injection. */
     public CompanyManager() {}
@@ -157,6 +167,12 @@ public final class CompanyManager implements ServerSaveableChunked {
         byId.put(id, company);
         byBankAccount.put(bankAccountNr, company);
         byNameLower.put(key, company);
+        if (bankManager != null && callerUUID != null) {
+            IServerBankAccount account = bankManager.getBankAccount(bankAccountNr);
+            if (account != null) {
+                account.setPermission(callerUUID, BankPermission.getAllPermissions());
+            }
+        }
         info("Created company #" + id + " '" + name + "' bound to bank account " + bankAccountNr
                 + " (founder=" + callerUUID + ", maxSupply=" + maxSupply + ")");
         return new CreateOutcome(CreateResult.OK, company);
@@ -330,14 +346,32 @@ public final class CompanyManager implements ServerSaveableChunked {
     public ScheduleCreateOutcome createSchedule(int companyId, UUID target, long amount,
                                                 long intervalTicks, long nowTick,
                                                 UUID createdBy) {
+        return createSchedule(companyId, target, amount, intervalTicks, nowTick, createdBy,
+                PayoutSchedule.NO_TARGET_ACCOUNT, "", "",
+                PayoutSchedule.Mode.FIXED_PAYOUT, PayoutSchedule.MONEY_CURRENCY);
+    }
+
+    /**
+     * Spec B.1–B.3 (v2.0.8) — extended create carrying the explicit target account,
+     * display-name snapshots (spec A.9), payout mode, and currency ItemID short.
+     * DIVIDEND-mode schedules do not require a target.
+     */
+    public ScheduleCreateOutcome createSchedule(int companyId, UUID target, long amount,
+                                                long intervalTicks, long nowTick, UUID createdBy,
+                                                int targetAccountNr, String targetPlayerName,
+                                                String targetAccountName, PayoutSchedule.Mode mode,
+                                                short currencyItem) {
         Company company = byId.get(companyId);
         if (company == null) return new ScheduleCreateOutcome(PayoutMutation.COMPANY_MISSING, null);
-        if (target == null || amount <= 0 || intervalTicks < MIN_INTERVAL_TICKS) {
+        if (mode == null) mode = PayoutSchedule.Mode.FIXED_PAYOUT;
+        boolean needsTarget = mode == PayoutSchedule.Mode.FIXED_PAYOUT;
+        if ((needsTarget && target == null) || amount <= 0 || intervalTicks < MIN_INTERVAL_TICKS) {
             return new ScheduleCreateOutcome(PayoutMutation.INVALID_INPUT, null);
         }
         long id = company.allocateScheduleId();
         PayoutSchedule schedule = new PayoutSchedule(id, target, amount, intervalTicks,
-                nowTick + intervalTicks, false, System.currentTimeMillis(), createdBy);
+                nowTick + intervalTicks, false, System.currentTimeMillis(), createdBy,
+                targetAccountNr, targetPlayerName, targetAccountName, mode, currencyItem, 0L, 0);
         company.addSchedule(schedule);
         return new ScheduleCreateOutcome(PayoutMutation.OK, schedule);
     }
@@ -351,6 +385,71 @@ public final class CompanyManager implements ServerSaveableChunked {
         PayoutSchedule existing = company.findSchedule(scheduleId);
         if (existing == null) return PayoutMutation.SCHEDULE_MISSING;
         boolean ok = company.replaceSchedule(scheduleId, existing.withAmountAndInterval(newAmount, newIntervalTicks));
+        return ok ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
+    }
+
+    /**
+     * Spec B.1–B.3 (v2.0.8) — extended update: amount, interval, target (uuid + account
+     * + name snapshots), mode, and currency. Interval-floor enforced.
+     */
+    public PayoutMutation updateScheduleEx(int companyId, long scheduleId, long newAmount,
+                                           long newIntervalTicks, UUID newTarget,
+                                           int newTargetAccountNr, String newTargetPlayerName,
+                                           String newTargetAccountName, PayoutSchedule.Mode newMode,
+                                           short newCurrencyItem) {
+        Company company = byId.get(companyId);
+        if (company == null) return PayoutMutation.COMPANY_MISSING;
+        if (newMode == null) newMode = PayoutSchedule.Mode.FIXED_PAYOUT;
+        boolean needsTarget = newMode == PayoutSchedule.Mode.FIXED_PAYOUT;
+        if ((needsTarget && newTarget == null) || newAmount <= 0 || newIntervalTicks < MIN_INTERVAL_TICKS) {
+            return PayoutMutation.INVALID_INPUT;
+        }
+        PayoutSchedule existing = company.findSchedule(scheduleId);
+        if (existing == null) return PayoutMutation.SCHEDULE_MISSING;
+        boolean ok = company.replaceSchedule(scheduleId, existing.withEditableFields(
+                newAmount, newIntervalTicks, newTarget, newTargetAccountNr,
+                newTargetPlayerName, newTargetAccountName, newMode, newCurrencyItem));
+        return ok ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
+    }
+
+    /**
+     * Spec B.4 (v2.0.8) — executor hook: accumulate a missed execution
+     * ({@code missedAmount += amount}, {@code missedCount++}) after a failed fire.
+     */
+    public void recordMissedExecution(int companyId, long scheduleId, long missedAmountDelta) {
+        Company company = byId.get(companyId);
+        if (company == null) return;
+        PayoutSchedule existing = company.findSchedule(scheduleId);
+        if (existing == null) return;
+        company.replaceSchedule(scheduleId, existing.withMissed(
+                existing.getMissedAmount() + Math.max(0L, missedAmountDelta),
+                existing.getMissedCount() + 1));
+    }
+
+    /**
+     * Spec B.4 (v2.0.8) — apply a manual catch-up payment of {@code paidAmount}.
+     * Subtracts from {@code missedAmount}; {@code missedCount} floors to the number
+     * of full executions still uncovered by the remaining missed amount
+     * ({@code ceil(remaining / schedule.amount)}), clearing entirely when the
+     * remaining amount reaches zero.
+     */
+    public PayoutMutation applyCatchUpPayment(int companyId, long scheduleId, long paidAmount) {
+        Company company = byId.get(companyId);
+        if (company == null) return PayoutMutation.COMPANY_MISSING;
+        PayoutSchedule existing = company.findSchedule(scheduleId);
+        if (existing == null) return PayoutMutation.SCHEDULE_MISSING;
+        if (paidAmount <= 0 || paidAmount > existing.getMissedAmount()) return PayoutMutation.INVALID_INPUT;
+        long remaining = existing.getMissedAmount() - paidAmount;
+        int newCount;
+        if (remaining <= 0L) {
+            newCount = 0;
+        } else if (existing.getAmount() > 0L) {
+            long uncovered = (remaining + existing.getAmount() - 1L) / existing.getAmount();
+            newCount = (int) Math.min(existing.getMissedCount(), uncovered);
+        } else {
+            newCount = existing.getMissedCount();
+        }
+        boolean ok = company.replaceSchedule(scheduleId, existing.withMissed(remaining, newCount));
         return ok ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
     }
 
@@ -459,23 +558,41 @@ public final class CompanyManager implements ServerSaveableChunked {
     // ------------------------------------------------------------------
     // Task #51 (v2.0.8) — Share Stamper binding reverse index (runtime-only)
     // ------------------------------------------------------------------
+    /** Convenience for callers without dimension info (persistence fallback / legacy paths). */
     public void registerStamper(int companyId, BlockPos pos) {
-        if (pos == null) return;
-        stamperBindings.computeIfAbsent(companyId, k -> new HashSet<>()).add(pos.immutable());
+        registerStamper(companyId, pos, "");
     }
 
+    public void registerStamper(int companyId, BlockPos pos, String dim) {
+        if (pos == null) return;
+        stamperBindings.computeIfAbsent(companyId, k -> new HashSet<>())
+                .add(new StamperBinding(pos, dim));
+    }
+
+    /** Convenience — removes any binding at {@code pos} regardless of dimension. */
     public void unregisterStamper(int companyId, BlockPos pos) {
         if (pos == null) return;
-        Set<BlockPos> set = stamperBindings.get(companyId);
+        Set<StamperBinding> set = stamperBindings.get(companyId);
         if (set == null) return;
-        set.remove(pos);
+        set.removeIf(b -> b.pos().equals(pos));
+        if (set.isEmpty()) stamperBindings.remove(companyId);
+    }
+
+    public void unregisterStamper(int companyId, BlockPos pos, String dim) {
+        if (pos == null) return;
+        Set<StamperBinding> set = stamperBindings.get(companyId);
+        if (set == null) return;
+        set.remove(new StamperBinding(pos, dim == null ? "" : dim));
         if (set.isEmpty()) stamperBindings.remove(companyId);
     }
 
     public List<BlockPos> listStampers(int companyId) {
-        Set<BlockPos> set = stamperBindings.get(companyId);
+        Set<StamperBinding> set = stamperBindings.get(companyId);
         if (set == null || set.isEmpty()) return List.of();
-        return new ArrayList<>(set);
+        // De-dupe positions across dimensions for the current BlockPos-only UI/wire format.
+        LinkedHashSet<BlockPos> distinct = new LinkedHashSet<>();
+        for (StamperBinding b : set) distinct.add(b.pos());
+        return new ArrayList<>(distinct);
     }
 
     /** Test hook — clears the runtime stamper-binding index. */
@@ -500,6 +617,24 @@ public final class CompanyManager implements ServerSaveableChunked {
             companiesList.add(entry);
         }
         listTags.put("companies", companiesList);
+
+        // v2.0.8 Bug — persist Share Stamper reverse index so the Shares-tab list
+        // survives world reload even when stamper chunks aren't loaded. Written as a
+        // flat list of {cid,x,y,z,dim} entries.
+        ListTag bindingsList = new ListTag();
+        for (Map.Entry<Integer, Set<StamperBinding>> e : stamperBindings.entrySet()) {
+            int cid = e.getKey();
+            for (StamperBinding b : e.getValue()) {
+                CompoundTag entry = new CompoundTag();
+                entry.putInt("cid", cid);
+                entry.putInt("x", b.pos().getX());
+                entry.putInt("y", b.pos().getY());
+                entry.putInt("z", b.pos().getZ());
+                entry.putString("dim", b.dim() == null ? "" : b.dim());
+                bindingsList.add(entry);
+            }
+        }
+        listTags.put("stamper_bindings", bindingsList);
         return true;
     }
 
@@ -558,12 +693,35 @@ public final class CompanyManager implements ServerSaveableChunked {
                             + " is already bound to another company.");
                     continue;
                 }
+                // BUG batch 4 (v2.0.8) — renormalize schedule nextRunTick against the
+                // fresh per-session payoutTickCounter (which resets to 0 on every server
+                // start). Without this, a persisted schedule from a previous session
+                // would show a stale countdown (e.g. "5m" for a 1m schedule) after
+                // world reload until the counter catches up to the stale value.
+                company.renormalizeSchedulesAfterLoad(
+                        net.kroia.banksystem.banking.company.PayoutExecutor.getLastObservedTick());
                 byId.put(company.getCompanyId(), company);
                 byBankAccount.put(company.getBankAccountNr(), company);
                 byNameLower.put(key, company);
                 if (company.getCompanyId() >= nextCompanyId) {
                     nextCompanyId = company.getCompanyId() + 1;
                 }
+            }
+        }
+
+        // v2.0.8 Bug — restore persisted stamper reverse index. Runtime BE hooks
+        // (setLevel / loadAdditional) will re-add entries on chunk load; Set dedupes.
+        if (listTags.containsKey("stamper_bindings")) {
+            ListTag bindingsList = listTags.get("stamper_bindings");
+            for (int i = 0; i < bindingsList.size(); i++) {
+                CompoundTag entry = bindingsList.getCompound(i);
+                if (entry == null) continue;
+                int cid = entry.getInt("cid");
+                if (!byId.containsKey(cid)) continue; // orphaned binding — drop
+                BlockPos pos = new BlockPos(entry.getInt("x"), entry.getInt("y"), entry.getInt("z"));
+                String dim = entry.contains("dim") ? entry.getString("dim") : "";
+                stamperBindings.computeIfAbsent(cid, k -> new HashSet<>())
+                        .add(new StamperBinding(pos, dim));
             }
         }
         return true;

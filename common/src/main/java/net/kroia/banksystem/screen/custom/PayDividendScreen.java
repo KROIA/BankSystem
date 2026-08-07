@@ -6,7 +6,6 @@ import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
-import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.minecraft.client.Minecraft;
@@ -34,7 +33,6 @@ public class PayDividendScreen extends BankSystemGuiScreen {
     private static final String PREFIX = "gui." + BankSystemMod.MOD_ID + ".pay_dividend_screen.";
     private static final Component TITLE = Component.translatable(PREFIX + "title");
     private static final Component AMOUNT = Component.translatable(PREFIX + "amount");
-    private static final Component INCLUDE_SELF = Component.translatable(PREFIX + "include_company_account");
     private static final Component PAY = Component.translatable(PREFIX + "pay");
     private static final Component CANCEL = Component.translatable(PREFIX + "cancel");
     private static final String RESULT_OK_KEY = PREFIX + "result_ok";
@@ -55,7 +53,6 @@ public class PayDividendScreen extends BankSystemGuiScreen {
     private Label titleLabel;
     private Label amountLabel;
     private TextBox amountBox;
-    private CheckBox includeSelfCheckBox;
     private Button payButton;
     private Button cancelButton;
     private Label statusLabel;
@@ -72,12 +69,13 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         titleLabel = new Label(TITLE.getString());
 
         amountLabel = new Label(AMOUNT.getString());
+        amountLabel.setAlignment(Label.Alignment.RIGHT);
         amountBox = new TextBox();
-        amountBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 12, 0));
-        amountBox.setText("1");
-
-        includeSelfCheckBox = new CheckBox(INCLUDE_SELF.getString());
-        includeSelfCheckBox.setChecked(false);
+        // Spec A.6 — decimal money input at the UI boundary (raw fixpoint on the wire).
+        amountBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 12, 2));
+        amountBox.setText("0.01");
+        amountBox.setHoverTooltipSupplier(() ->
+                Component.translatable(PREFIX + "amount_tooltip").getString());
 
         payButton = new Button(PAY.getString(), this::onPayClicked);
         cancelButton = new Button(CANCEL.getString(), this::onClose);
@@ -86,18 +84,14 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         addElement(titleLabel);
         addElement(amountLabel);
         addElement(amountBox);
-        addElement(includeSelfCheckBox);
         addElement(payButton);
         addElement(cancelButton);
         addElement(statusLabel);
     }
 
     private long parsedAmount() {
-        try {
-            return Long.parseLong(amountBox.getText().trim());
-        } catch (NumberFormatException e) {
-            return 0L;
-        }
+        // Spec A.6 — parse "123.45" into raw fixpoint units (12345).
+        return net.kroia.banksystem.util.MoneyFormat.parseToRaw(amountBox.getText());
     }
 
     private void onPayClicked() {
@@ -108,8 +102,14 @@ public class PayDividendScreen extends BankSystemGuiScreen {
             return;
         }
         payButton.setEnabled(false);
-        boolean includeSelf = includeSelfCheckBox.isChecked();
-        AsyncCompanyManager.payDividendAsync(companyId, amount, includeSelf, caller).thenAccept(out -> {
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.info("[PayDividendScreen] pay clicked: company="
+                    + companyId + " textInput='" + amountBox.getText() + "' parsedRaw=" + amount);
+        }
+        // Bug batch 3 #5 (v2.0.8) — paying dividends to the company's own account makes
+        // no sense (the money just returns to itself). Always exclude — the checkbox
+        // has been removed from the UI and the server enforces exclusion in DividendPayer.
+        AsyncCompanyManager.payDividendAsync(companyId, amount, false, caller).thenAccept(out -> {
             if (out == null) {
                 statusLabel.setText(RESULT_INTERNAL.getString());
                 statusLabel.setTextColor(COLOR_ERR);
@@ -119,7 +119,8 @@ public class PayDividendScreen extends BankSystemGuiScreen {
             switch (out.resultCode()) {
                 case AsyncCompanyManager.CODE_OK -> {
                     statusLabel.setText(Component.translatable(RESULT_OK_KEY,
-                            String.valueOf(out.totalPaid()), String.valueOf(out.holderCount())).getString());
+                            net.kroia.banksystem.util.MoneyFormat.format(out.totalPaid()),
+                            String.valueOf(out.holderCount())).getString());
                     statusLabel.setTextColor(COLOR_OK);
                 }
                 case AsyncCompanyManager.CODE_INSUFFICIENT_FUNDS -> {
@@ -156,11 +157,8 @@ public class PayDividendScreen extends BankSystemGuiScreen {
 
     @Override
     public void onClose() {
-        if (parent != null && this.minecraft != null) {
-            this.minecraft.setScreen(parent);
-        } else {
-            super.onClose();
-        }
+        // BUG 1 fix — deferred swap; direct setScreen inside a click callback CMEs.
+        switchScreen(parent);
     }
 
     @Override
@@ -176,9 +174,6 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         int col = width / 2;
         amountLabel.setBounds(padding, y, col - spacing, 20);
         amountBox.setBounds(padding + col, y, col - spacing, 20);
-        y += 25;
-
-        includeSelfCheckBox.setBounds(padding, y, width, 20);
         y += 25;
 
         statusLabel.setBounds(padding, y, width, 20);

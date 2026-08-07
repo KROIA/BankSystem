@@ -36,10 +36,36 @@ public final class PayoutManagerImpl implements IPayoutManager {
     }
 
     @Override
+    public CreateOutcome createSchedule(int companyId, UUID target, long amount, long intervalTicks,
+                                        long nowTick, UUID createdBy, int targetAccountNr,
+                                        String targetPlayerName, String targetAccountName,
+                                        PayoutSchedule.Mode mode, short currencyItem) {
+        CompanyManager cm = CompanyManager.get();
+        if (cm == null) return CreateOutcome.NOT_MASTER;
+        CompanyManager.ScheduleCreateOutcome out = cm.createSchedule(companyId, target, amount,
+                intervalTicks, nowTick, createdBy, targetAccountNr, targetPlayerName,
+                targetAccountName, mode, currencyItem);
+        return new CreateOutcome(mapResult(out.result),
+                out.schedule != null ? out.schedule.getScheduleId() : 0L);
+    }
+
+    @Override
     public OpResult updateSchedule(int companyId, long scheduleId, long newAmount, long newIntervalTicks) {
         CompanyManager cm = CompanyManager.get();
         if (cm == null) return OpResult.NOT_MASTER;
         return mapResult(cm.updateSchedule(companyId, scheduleId, newAmount, newIntervalTicks));
+    }
+
+    @Override
+    public OpResult updateScheduleEx(int companyId, long scheduleId, long newAmount, long newIntervalTicks,
+                                     UUID newTarget, int newTargetAccountNr, String newTargetPlayerName,
+                                     String newTargetAccountName, PayoutSchedule.Mode newMode,
+                                     short newCurrencyItem) {
+        CompanyManager cm = CompanyManager.get();
+        if (cm == null) return OpResult.NOT_MASTER;
+        return mapResult(cm.updateScheduleEx(companyId, scheduleId, newAmount, newIntervalTicks,
+                newTarget, newTargetAccountNr, newTargetPlayerName, newTargetAccountName,
+                newMode, newCurrencyItem));
     }
 
     @Override
