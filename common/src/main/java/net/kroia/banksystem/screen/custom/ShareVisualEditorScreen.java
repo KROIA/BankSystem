@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.banking.company.ShareVisuals;
 import net.kroia.banksystem.client.cache.ShareVisualCache;
 import net.kroia.banksystem.client.company.SharePresetRegistry;
+import net.kroia.banksystem.screen.uiElements.ColorPickerPopup;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.client.GuiScreen;
@@ -172,7 +173,7 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
         descriptionBox.setBounds(padding + col, y, col - spacing, 20);
         y += 22;
 
-        int listHeight = ShareLayerPanel.PANEL_HEIGHT * 2 + 4 + 8;
+        int listHeight = ShareLayerPanel.PANEL_HEIGHT * 2 + 8;
         layerList.setBounds(padding, y, width, listHeight);
         y += listHeight + spacing;
 
@@ -186,171 +187,93 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
     // -----------------------------------------------------------------------
 
     /**
-     * A self-contained {@link GuiElement} representing one visual layer (FG or BG).
-     * Contains:
-     * <ul>
-     *   <li>Bold title label ("Foreground" / "Background")</li>
-     *   <li>Symbol row: label + button showing selected preset id</li>
-     *   <li>Color row: "Color:" label + hex TextBox + R/G/B TextBoxes</li>
-     * </ul>
+     * One visual layer (Foreground or Background).
+     * Row 0: bold title label.
+     * Row 1: "Symbol:" label + button showing selected preset id (opens PresetPickerPopup).
+     * Row 2: "Color:" label + colored swatch button (opens ColorPickerPopup).
      */
     private class ShareLayerPanel extends GuiElement {
 
-        static final int PANEL_HEIGHT = 20 + 22 + 22 + 18; // title + symbol row + hex color row + rgb row
+        static final int PANEL_HEIGHT = 20 + 22 + 22; // title + symbol row + color row
 
         private final Label titleLabel;
         private final Label symbolLabel;
         private final Button symbolButton;
         private final Label colorLabel;
-        private final TextBox hexBox;
-        private final TextBox rBox;
-        private final TextBox gBox;
-        private final TextBox bBox;
+        private final Button colorSwatch;
 
         private String selectedSymbolId;
-        private boolean syncingColor = false;
+        private int selectedTint;
 
         ShareLayerPanel(String title, String initialSymbolId, int initialTint) {
             super();
             setHeight(PANEL_HEIGHT);
             selectedSymbolId = initialSymbolId == null ? "" : initialSymbolId;
+            selectedTint = (initialTint & 0xFF000000) == 0 ? (initialTint | 0xFF000000) : initialTint;
 
-            titleLabel = new Label(title);
+            titleLabel = new Label("§l" + title);
             symbolLabel = new Label("Symbol:");
             symbolButton = new Button(
-                    selectedSymbolId.isEmpty() ? "-" : selectedSymbolId,
+                    selectedSymbolId.isEmpty() ? "(none)" : selectedSymbolId,
                     this::onPickSymbol);
             symbolButton.setEnabled(canManage);
 
             colorLabel = new Label("Color:");
-            int r = (initialTint >> 16) & 0xFF;
-            int g = (initialTint >> 8) & 0xFF;
-            int b = initialTint & 0xFF;
-            hexBox = new TextBox();
-            hexBox.setText(String.format("%06X", initialTint & 0xFFFFFF));
-            hexBox.setEnabled(canManage);
-            rBox = channelBox(r);
-            gBox = channelBox(g);
-            bBox = channelBox(b);
-
-            hexBox.setOnTextChanged(t -> {
-                if (syncingColor) return;
-                syncingColor = true;
-                try {
-                    int parsed = parseHex(t);
-                    rBox.setText(String.valueOf((parsed >> 16) & 0xFF));
-                    gBox.setText(String.valueOf((parsed >> 8) & 0xFF));
-                    bBox.setText(String.valueOf(parsed & 0xFF));
-                } finally {
-                    syncingColor = false;
-                }
-            });
-            Runnable syncHex = () -> {
-                if (syncingColor) return;
-                syncingColor = true;
-                try {
-                    int rc = parseCh(rBox), gc = parseCh(gBox), bc = parseCh(bBox);
-                    hexBox.setText(String.format("%06X", (rc << 16) | (gc << 8) | bc));
-                } finally {
-                    syncingColor = false;
-                }
-            };
-            rBox.setOnTextChanged(t -> syncHex.run());
-            gBox.setOnTextChanged(t -> syncHex.run());
-            bBox.setOnTextChanged(t -> syncHex.run());
+            colorSwatch = new Button("", this::onPickColor);
+            applySwatchColor(selectedTint);
+            colorSwatch.setEnabled(canManage);
 
             addChild(titleLabel);
             addChild(symbolLabel);
             addChild(symbolButton);
             addChild(colorLabel);
-            addChild(hexBox);
-            addChild(rBox);
-            addChild(gBox);
-            addChild(bBox);
+            addChild(colorSwatch);
         }
 
-        private TextBox channelBox(int value) {
-            TextBox tb = new TextBox();
-            tb.setText(String.valueOf(value & 0xFF));
-            tb.setEnabled(canManage);
-            return tb;
+        private void applySwatchColor(int argb) {
+            colorSwatch.setBackgroundColor(argb);
+            colorSwatch.setHoverColor(argb);
+            colorSwatch.setPressedColor(argb);
         }
 
         private void onPickSymbol() {
             if (!canManage) return;
-            // Inline preset-picker: reuse the existing VerticalListView inside a small popup.
-            // For simplicity, open the standard PresetPickerPopup from SharesTabBody approach.
-            net.kroia.banksystem.util.BankSystemGuiScreen.switchScreen(
+            BankSystemGuiScreen.switchScreen(
                     new net.kroia.banksystem.screen.uiElements.PresetPickerPopup(
                             ShareVisualEditorScreen.this,
                             presetId -> {
                                 selectedSymbolId = presetId == null ? "" : presetId;
-                                symbolButton.setText(selectedSymbolId.isEmpty() ? "-" : selectedSymbolId);
+                                symbolButton.setText(selectedSymbolId.isEmpty() ? "(none)" : selectedSymbolId);
                             }));
         }
 
-        String getSymbolId() {
-            return selectedSymbolId;
+        private void onPickColor() {
+            if (!canManage) return;
+            BankSystemGuiScreen.switchScreen(
+                    new ColorPickerPopup(ShareVisualEditorScreen.this, selectedTint, argb -> {
+                        selectedTint = argb;
+                        applySwatchColor(argb);
+                    }));
         }
 
-        int getEffectiveTint() {
-            String hex = hexBox.getText().trim();
-            if (hex.matches("(?i)#?[0-9a-f]{6}")) {
-                return 0xFF000000 | parseHex(hex);
-            }
-            int r = parseCh(rBox), g = parseCh(gBox), b = parseCh(bBox);
-            return 0xFF000000 | (r << 16) | (g << 8) | b;
-        }
+        String getSymbolId() { return selectedSymbolId; }
+        int getEffectiveTint() { return selectedTint; }
 
-        private int parseHex(String s) {
-            try {
-                if (s == null) return 0xFFFFFF;
-                s = s.trim();
-                if (s.startsWith("#")) s = s.substring(1);
-                return Integer.parseInt(s, 16) & 0xFFFFFF;
-            } catch (NumberFormatException e) {
-                return 0xFFFFFF;
-            }
-        }
-
-        private int parseCh(TextBox tb) {
-            try {
-                int v = Integer.parseInt(tb.getText().trim());
-                if (v < 0) v = 0;
-                if (v > 255) v = 255;
-                return v;
-            } catch (NumberFormatException e) {
-                return 0;
-            }
-        }
-
-        @Override
-        protected void render() {}
+        @Override protected void render() {}
 
         @Override
         protected void layoutChanged() {
             int w = getWidth();
             int spacing = 4;
             int col = w / 2;
-            // Row 0: title
             titleLabel.setBounds(0, 0, w, 20);
-            // Row 1: symbol
             symbolLabel.setBounds(0, 22, col - spacing, 20);
             symbolButton.setBounds(col, 22, col, 20);
-            // Row 2: color
             colorLabel.setBounds(0, 44, col - spacing, 20);
-            int hexW = Math.max(1, col - spacing);
-            hexBox.setBounds(col, 44, hexW, 20);
-            int chW = Math.max(1, (w - col - 2 * spacing) / 3);
-            // Place R/G/B below to avoid crowding; but we only have 3 rows so put them inline after hex.
-            // Use the remaining half for 3 small channel boxes side by side.
-            rBox.setBounds(col, 66, chW, 14);
-            gBox.setBounds(col + chW + spacing, 66, chW, 14);
-            bBox.setBounds(col + 2 * (chW + spacing), 66, chW, 14);
+            colorSwatch.setBounds(col, 44, 40, 20);
         }
     }
 
-    /** Prevents unused-import warnings from being surfaced as compile errors. */
     @SuppressWarnings("unused")
     private static final List<String> _PRESETS_KEEPALIVE = SharePresetRegistry.orderedIds();
 }

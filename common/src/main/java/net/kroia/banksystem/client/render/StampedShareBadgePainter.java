@@ -3,11 +3,13 @@ package net.kroia.banksystem.client.render;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.kroia.banksystem.banking.company.ShareVisuals;
 import net.kroia.banksystem.client.cache.ShareVisualCache;
+import net.kroia.banksystem.client.company.SharePresetRegistry;
 import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FastColor;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
@@ -57,13 +59,17 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
 
         if (hasVisuals && isGuiLikeContext(context)) {
             String preset = visuals.getFgLayer().symbolId();
-            if (preset == null || preset.isBlank()) {
+            int fgTint = visuals.getFgLayer().tint();
+            if ((fgTint & 0xFF000000) == 0) fgTint |= 0xFF000000;
+            if (preset != null && !preset.isBlank()) {
+                // Draw the preset symbol texture tinted with fgLayer.tint.
+                // All presets currently share a placeholder texture; swap per-id textures when art ships.
+                ResourceLocation texture = SharePresetRegistry.getTexture(preset);
+                drawTexturedQuad(pose, buffers, texture, fgTint, packedLight);
+            } else {
                 String initials = BankSystemColorHandlers.resolveMonogramInitials(companyId, visuals);
-                int fgTint = visuals.getFgLayer().tint();
-                if ((fgTint & 0xFF000000) == 0) fgTint |= 0xFF000000;
                 drawInitials(pose, buffers, initials, fgTint, packedLight);
             }
-            // TODO(v2.0.9): preset sprite draw tinted with fg tint once atlas ships.
         }
         return true;
     }
@@ -72,6 +78,20 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
         return ctx == ItemDisplayContext.GUI
                 || ctx == ItemDisplayContext.FIXED
                 || ctx == ItemDisplayContext.GROUND;
+    }
+
+    private static void drawTexturedQuad(PoseStack pose, MultiBufferSource buffers,
+                                          ResourceLocation texture, int argb, int packedLight) {
+        var consumer = buffers.getBuffer(RenderType.text(texture));
+        Matrix4f m = pose.last().pose();
+        int a = FastColor.ARGB32.alpha(argb);
+        int r = FastColor.ARGB32.red(argb);
+        int g = FastColor.ARGB32.green(argb);
+        int b = FastColor.ARGB32.blue(argb);
+        consumer.addVertex(m,  0f,  0f, 0.01f).setColor(r, g, b, a).setUv(0f, 0f).setUv2(packedLight & 0xFFFF, (packedLight >> 16) & 0xFFFF);
+        consumer.addVertex(m,  0f, 16f, 0.01f).setColor(r, g, b, a).setUv(0f, 1f).setUv2(packedLight & 0xFFFF, (packedLight >> 16) & 0xFFFF);
+        consumer.addVertex(m, 16f, 16f, 0.01f).setColor(r, g, b, a).setUv(1f, 1f).setUv2(packedLight & 0xFFFF, (packedLight >> 16) & 0xFFFF);
+        consumer.addVertex(m, 16f,  0f, 0.01f).setColor(r, g, b, a).setUv(1f, 0f).setUv2(packedLight & 0xFFFF, (packedLight >> 16) & 0xFFFF);
     }
 
     private static void drawFilledQuad(PoseStack pose, MultiBufferSource buffers, int argb) {

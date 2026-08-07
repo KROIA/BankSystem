@@ -450,6 +450,7 @@
   "gui.banksystem.company_management_screen.action_failed": "操作无法完成。",
   "gui.banksystem.company_management_screen.new_payout": "新建工资单",
   "gui.banksystem.company_management_screen.pay_dividend": "派发股息",
+  "gui.banksystem.company_management_screen.edit_layers": "编辑视觉图层",
   "gui.banksystem.company_management_screen.save_visuals": "保存外观",
   "gui.banksystem.company_management_screen.pause_trading": "暂停交易",
   "gui.banksystem.company_management_screen.resume_trading": "恢复交易",

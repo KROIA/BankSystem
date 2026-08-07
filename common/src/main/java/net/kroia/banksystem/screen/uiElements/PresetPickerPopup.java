@@ -54,6 +54,7 @@ public class PresetPickerPopup extends BankSystemGuiScreen {
                 net.kroia.banksystem.util.BankSystemGuiScreen.switchScreen(parent);
                 onPick.accept(id);
             });
+            row.setHeight(20);
             list.addChild(row);
         }
         cancel = new Button(CANCEL.getString(), () -> net.kroia.banksystem.util.BankSystemGuiScreen.switchScreen(parent));

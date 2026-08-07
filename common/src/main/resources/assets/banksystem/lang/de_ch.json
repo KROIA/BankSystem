@@ -450,6 +450,7 @@
   "gui.banksystem.company_management_screen.action_failed": "Die Aktion konnte nicht ausgeführt werden.",
   "gui.banksystem.company_management_screen.new_payout": "Neue Auszahlung",
   "gui.banksystem.company_management_screen.pay_dividend": "Dividende zahlen",
+  "gui.banksystem.company_management_screen.edit_layers": "Visuelle Ebenen bearbeiten",
   "gui.banksystem.company_management_screen.save_visuals": "Darstellung speichern",
   "gui.banksystem.company_management_screen.pause_trading": "Handel pausieren",
   "gui.banksystem.company_management_screen.resume_trading": "Handel fortsetzen",
