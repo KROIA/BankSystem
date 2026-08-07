@@ -187,13 +187,12 @@ public class StatisticsTabBody extends TabBody {
         }
         loadingLabel.setText("");
 
-        double scale = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
         balanceLabel.setText(Component.translatable(PREFIX + "stats_balance").getString()
-                + ": " + String.format("%.2f", stats.currentBalance() / scale));
+                + ": " + fmtVal(stats.currentBalance()));
 
         long net = stats.netCashflow();
         netCashflowLabel.setText(Component.translatable(PREFIX + "stats_net_cashflow").getString()
-                + ": " + (net >= 0 ? "+" : "") + String.format("%.2f", net / scale));
+                + ": " + (net >= 0 ? "+" : "") + fmtVal(Math.abs(net)));
 
         long days = stats.daysToInsolvency();
         String daysText;
@@ -205,7 +204,7 @@ public class StatisticsTabBody extends TabBody {
 
         missedPayoutsLabel.setText(Component.translatable(PREFIX + "stats_missed_payouts").getString()
                 + ": " + stats.missedPayoutCount()
-                + " (" + String.format("%.2f", stats.missedPayoutAmount() / scale) + ")");
+                + " (" + fmtVal(stats.missedPayoutAmount()) + ")");
 
         List<AsyncCompanyManager.CashflowBucketWire> series = stats.cashflowSeries();
         chart.setData(series);
@@ -213,9 +212,9 @@ public class StatisticsTabBody extends TabBody {
         long maxVal = 1L;
         for (AsyncCompanyManager.CashflowBucketWire b : series)
             maxVal = Math.max(maxVal, Math.max(b.earnings(), b.spendings()));
-        yAxisTop.setText(String.format("%.2f", maxVal / scale));
+        yAxisTop.setText(fmtVal(maxVal));
         yAxisMid.setText("0");
-        yAxisBot.setText(String.format("%.2f", maxVal / scale));
+        yAxisBot.setText(fmtVal(maxVal));
 
         // Shareholders table
         List<AsyncCompanyManager.ShareholderWire> holders = stats.topShareholders();
@@ -228,7 +227,7 @@ public class StatisticsTabBody extends TabBody {
             for (AsyncCompanyManager.ShareholderWire h : holders) {
                 rows.add(new String[]{
                         h.accountName(),
-                        String.format("%.2f", h.shares() / 100.0),
+                        fmtVal(h.shares()),
                         String.format("%.1f%%", h.pct() * 100f)
                 });
             }
@@ -257,7 +256,7 @@ public class StatisticsTabBody extends TabBody {
                             ? s.targetAccountName() : "#" + s.targetAccountNr();
                     colors[i] = 0xFFFFFFFF;
                 }
-                String amountStr = String.format("%.2f", s.amount() / 100.0);
+                String amountStr = fmtVal(s.amount());
                 ItemStack currencyIcon = resolveCurrencyStack(s.currencyItem());
                 if (s.currencyItem() == PayoutSchedule.MONEY_CURRENCY) {
                     moneyTotal += s.amount();
@@ -269,7 +268,7 @@ public class StatisticsTabBody extends TabBody {
                 rows.add(new String[]{target, amountStr + " / " + intervalStr});
                 rowIcons.add(new ItemStack[]{null, currencyIcon});
             }
-            String totalStr = String.format("%.2f", moneyTotal / 100.0);
+            String totalStr = fmtVal(moneyTotal);
             if (hasNonMoney) totalStr += " (money only)";
             rows.add(new String[]{"§lTotal", "§l" + totalStr});
             rowIcons.add(new ItemStack[]{null, resolveCurrencyStack(PayoutSchedule.MONEY_CURRENCY)});
@@ -326,6 +325,26 @@ public class StatisticsTabBody extends TabBody {
         int tableH = Math.max(40, h - y - PADDING);
         shareholdersTable.setBounds(PADDING, y, halfW, tableH);
         payoutsTable.setBounds(PADDING + halfW + ROW_SPACING, y, halfW, tableH);
+    }
+
+    /** Converts a raw scale-100 bank value to a display string with Swiss-style thousands separators. */
+    private static String fmtVal(long raw) {
+        double scaled = raw / (double) BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        // Format to 2 decimal places, then insert ' every 3 digits left of the decimal point.
+        String base = String.format("%.2f", scaled);
+        int dotIdx = base.indexOf('.');
+        String intPart = dotIdx >= 0 ? base.substring(0, dotIdx) : base;
+        String fracPart = dotIdx >= 0 ? base.substring(dotIdx) : "";
+        boolean negative = intPart.startsWith("-");
+        String digits = negative ? intPart.substring(1) : intPart;
+        StringBuilder sb = new StringBuilder();
+        int rem = digits.length() % 3;
+        if (rem > 0) sb.append(digits, 0, rem);
+        for (int i = rem; i < digits.length(); i += 3) {
+            if (sb.length() > 0) sb.append('\'');
+            sb.append(digits, i, i + 3);
+        }
+        return (negative ? "-" : "") + sb + fracPart;
     }
 
     private static ItemStack resolveCurrencyStack(short currencyItem) {
