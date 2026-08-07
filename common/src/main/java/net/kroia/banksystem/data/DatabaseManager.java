@@ -91,6 +91,7 @@ public class DatabaseManager {
             }
         }
         migratePayoutHistoryColumns();
+        migrateTransactionLogColumns();
         return true;
     }
 
@@ -122,6 +123,33 @@ public class DatabaseManager {
             commitTransaction();
         } catch (SQLException e) {
             getLogger().error("PayoutHistory column migration failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * v2.0.9 — column migration for TransactionLog.
+     * Adds source_kind and tag columns when missing (pre-existing worlds).
+     */
+    private void migrateTransactionLogColumns() {
+        java.util.Map<String, String> wanted = new java.util.LinkedHashMap<>();
+        wanted.put("source_kind", "TEXT NOT NULL DEFAULT 'UNKNOWN'");
+        wanted.put("tag", "TEXT");
+        try (Statement stmt = connection.createStatement()) {
+            java.util.Set<String> existing = new java.util.HashSet<>();
+            try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(TransactionLog)")) {
+                while (rs.next()) existing.add(rs.getString("name"));
+            }
+            for (var e : wanted.entrySet()) {
+                if (existing.contains(e.getKey())) continue;
+                try (Statement alter = connection.createStatement()) {
+                    alter.execute("ALTER TABLE TransactionLog ADD COLUMN "
+                            + e.getKey() + " " + e.getValue());
+                }
+                getLogger().info("[DatabaseManager] TransactionLog migration: added column " + e.getKey());
+            }
+            commitTransaction();
+        } catch (SQLException e) {
+            getLogger().error("TransactionLog column migration failed: " + e.getMessage());
         }
     }
 

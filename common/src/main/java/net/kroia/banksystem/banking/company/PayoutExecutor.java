@@ -359,6 +359,17 @@ public final class PayoutExecutor {
         }
         logInfo("dividend schedule " + schedule.getScheduleId() + " company "
                 + company.getCompanyId() + ": paid " + paidTotal + " to " + paidHolders + " holder(s)");
+        // Task #52 (v2.0.8) — record the scheduled dividend event for history.
+        try {
+            BankSystemModBackend.Instances b = backend;
+            if (b != null && b.DIVIDEND_HISTORY_STORE != null) {
+                b.DIVIDEND_HISTORY_STORE.insert(new DividendEvent(
+                        company.getCompanyId(), (int) schedule.getScheduleId(), nowMs,
+                        currencyShort, 0L, paidTotal, paidHolders, "SCHEDULE"));
+            }
+        } catch (Throwable t) {
+            logWarn("Failed to record dividend history: " + t.getMessage());
+        }
         return new Outcome(null, dividendName, "");
     }
 

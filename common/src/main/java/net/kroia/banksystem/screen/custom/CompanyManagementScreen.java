@@ -55,12 +55,13 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
     private static final String PREFIX = "gui." + BankSystemMod.MOD_ID + ".company_management_screen.";
     private static final Component TITLE_KEY = Component.translatable(PREFIX + "title");
 
-    private static final Component TAB_OVERVIEW = Component.translatable(PREFIX + "tab.overview");
-    private static final Component TAB_WORKERS  = Component.translatable(PREFIX + "tab.workers");
-    private static final Component TAB_PAYOUTS  = Component.translatable(PREFIX + "tab.payouts");
-    private static final Component TAB_SHARES   = Component.translatable(PREFIX + "tab.shares");
-    private static final Component TAB_MARKET   = Component.translatable(PREFIX + "tab.market");
-    private static final Component TAB_DANGER   = Component.translatable(PREFIX + "tab.danger");
+    private static final Component TAB_OVERVIEW    = Component.translatable(PREFIX + "tab.overview");
+    private static final Component TAB_WORKERS     = Component.translatable(PREFIX + "tab.workers");
+    private static final Component TAB_PAYOUTS     = Component.translatable(PREFIX + "tab.payouts");
+    private static final Component TAB_SHARES      = Component.translatable(PREFIX + "tab.shares");
+    private static final Component TAB_MARKET      = Component.translatable(PREFIX + "tab.market");
+    private static final Component TAB_STATISTICS  = Component.translatable(PREFIX + "tab.statistics");
+    private static final Component TAB_DANGER      = Component.translatable(PREFIX + "tab.danger");
 
     /**
      * v2.0.8 — Market tab body is spec-compliant (see
@@ -213,6 +214,7 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
         if (STOCKMARKET_INTEGRATION_READY && Platform.isModLoaded("stockmarket")) {
             tabs.addTab(TAB_MARKET.getString(), buildMarketBody());
         }
+        tabs.addTab(TAB_STATISTICS.getString(), buildStatisticsBody());
         if (isFounder) tabs.addTab(TAB_DANGER.getString(), buildDangerBody());
 
         if (selectedIndex >= 0 && selectedIndex < tabs.getTabCount()) {
@@ -245,6 +247,10 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
 
     private GuiElement buildMarketBody() {
         return new net.kroia.banksystem.screen.uiElements.tabbody.MarketTabBody(this);
+    }
+
+    private GuiElement buildStatisticsBody() {
+        return new net.kroia.banksystem.screen.uiElements.tabbody.StatisticsTabBody(this);
     }
 
     private GuiElement buildDangerBody() {

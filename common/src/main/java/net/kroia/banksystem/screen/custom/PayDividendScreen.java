@@ -15,6 +15,8 @@ import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
+import net.kroia.modutilities.gui.elements.VerticalListView;
+import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -39,6 +41,10 @@ import java.util.UUID;
 public class PayDividendScreen extends BankSystemGuiScreen {
 
     private static final String PREFIX = "gui." + BankSystemMod.MOD_ID + ".pay_dividend_screen.";
+    private static final String HIST_PREFIX = "gui." + BankSystemMod.MOD_ID + ".pay_dividend_screen.history.";
+    private static final Component HISTORY_HEADER = Component.translatable(HIST_PREFIX + "header");
+    private static final Component HISTORY_EMPTY = Component.translatable(HIST_PREFIX + "empty");
+    private static final Component HISTORY_REFRESH = Component.translatable(HIST_PREFIX + "refresh");
     private static final Component TITLE = Component.translatable(PREFIX + "title");
     private static final Component CURRENCY = Component.translatable(PREFIX + "currency");
     private static final Component AMOUNT = Component.translatable(PREFIX + "amount");
@@ -56,7 +62,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
     private static final int COLOR_ERR = 0xFFe11d48;
 
     private static final int DIALOG_W = 340;
-    private static final int DIALOG_H = 145;
+    private static final int DIALOG_H = 300;
 
     private final GuiScreen parent;
     private final int companyId;
@@ -74,6 +80,10 @@ public class PayDividendScreen extends BankSystemGuiScreen {
     private Button payButton;
     private Button cancelButton;
     private Label statusLabel;
+    private VerticalListView historyListView;
+    private Label historyHeader;
+    private Label historyEmpty;
+    private Button refreshButton;
 
     public PayDividendScreen(GuiScreen parent, int companyId, UUID caller) {
         super(TITLE);
@@ -82,6 +92,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         this.caller = caller;
         this.currencyItem = DividendCurrencyPrefs.get(companyId);
         setupUi();
+        loadHistory();
     }
 
     private void setupUi() {
@@ -111,6 +122,15 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         cancelButton = new Button(CANCEL.getString(), this::onClose);
         statusLabel = new Label("");
 
+        historyHeader = new Label(HISTORY_HEADER.getString());
+        historyEmpty = new Label(HISTORY_EMPTY.getString());
+        refreshButton = new Button(HISTORY_REFRESH.getString(), this::loadHistory);
+        historyListView = new VerticalListView();
+        LayoutGrid layout = new LayoutGrid();
+        layout.stretchX = true;
+        layout.columns = 1;
+        historyListView.setLayout(layout);
+
         addElement(frame);
         frame.addChild(titleLabel);
         frame.addChild(currencyLabel);
@@ -120,6 +140,10 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         frame.addChild(statusLabel);
         frame.addChild(payButton);
         frame.addChild(cancelButton);
+        frame.addChild(historyHeader);
+        frame.addChild(historyEmpty);
+        frame.addChild(refreshButton);
+        frame.addChild(historyListView);
     }
 
     private void applyCurrency(short newItem) {
@@ -237,5 +261,33 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         int btnY = frame.getHeight() - p - 20;
         payButton.setBounds(p, btnY, btnW, 20);
         cancelButton.setBounds(p + btnW + spacing, btnY, btnW, 20);
+
+        int historyStart = btnY - 130;
+        historyHeader.setBounds(p, historyStart, fw - 70, 14);
+        refreshButton.setBounds(p + fw - 65, historyStart, 65, 14);
+        historyEmpty.setBounds(p, historyStart + 18, fw, 14);
+        int listH = btnY - historyStart - 18 - spacing;
+        historyListView.setBounds(p, historyStart + 18, fw, Math.max(10, listH));
+    }
+
+    private void loadHistory() {
+        historyEmpty.setText("");
+        historyListView.removeChilds();
+        AsyncCompanyManager.listDividendHistoryAsync(companyId, 20)
+                .thenAccept(events -> {
+            historyListView.removeChilds();
+            if (events == null || events.isEmpty()) {
+                historyEmpty.setText(HISTORY_EMPTY.getString());
+                return;
+            }
+            historyEmpty.setText("");
+            for (net.kroia.banksystem.banking.company.DividendEvent e : events) {
+                String ts = net.kroia.banksystem.util.TimeFormat.formatTimestamp(e.timestampMs());
+                String total = net.kroia.banksystem.util.MoneyFormat.format(e.totalRaw());
+                String row = ts + "  +" + total + "  (" + e.holderCount() + "×)  " + e.sourceKind();
+                Label rowLabel = new Label(row);
+                historyListView.addChild(rowLabel);
+            }
+        });
     }
 }

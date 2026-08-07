@@ -1098,9 +1098,12 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             if (isMoney) {
                                 amountToDeposit = amount * ((MoneyItem) Objects.requireNonNull(itemID.getStack()).getItem()).worth();
                             }
+                            final long finalAmountForLog = amountToDeposit;
+                            final short finalItemIdForLog = isMoney ? MoneyItem.getItemID().getShort() : itemID.getShort();
                             CompletableFuture<BankStatus> depositResult = bank.depositAsync(amountToDeposit);
                             depositResult.thenAccept(deposit -> {
                                 if (deposit == BankStatus.SUCCESS) {
+                                    logDeposit(accountNr, playerID, finalItemIdForLog, finalAmountForLog);
                                     // WHY main thread: removeItem() mutates the terminal's
                                     // TerminalInventory, which is shared with the open menu. Vanilla
                                     // only emits slot-sync packets from broadcastChanges(), run on the
@@ -1122,6 +1125,18 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 });
             });
         });
+    }
+
+    private static void logDeposit(int accountNr, UUID actor, short itemIdShort, long amount) {
+        net.kroia.banksystem.data.table.TransactionLogManager mgr =
+                BankSystemModBackend.getTransactionLogManager();
+        if (mgr == null || amount <= 0) return;
+        try {
+            mgr.save(net.kroia.banksystem.data.table.record.TransactionLogRecord.simple(
+                    accountNr, actor,
+                    net.kroia.banksystem.data.table.record.TransactionLogRecord.Kind.DEPOSIT,
+                    itemIdShort, amount, System.currentTimeMillis()));
+        } catch (RuntimeException ignored) { }
     }
 
     private void sendToBlock(UUID playerID, int accountNr, HashMap<ItemID, Long> items)

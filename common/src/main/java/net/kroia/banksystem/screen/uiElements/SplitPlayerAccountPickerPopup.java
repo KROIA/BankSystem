@@ -64,6 +64,8 @@ public class SplitPlayerAccountPickerPopup extends BankSystemGuiScreen {
     private String selectedPlayerName = "";
     private int selectedAccountId = -1;
     private String selectedAccountName = "";
+    private Button selectedPlayerButton = null;
+    private Button selectedAccountButton = null;
 
     private int frameWidth = 460;
     private int frameHeight = 260;
@@ -193,6 +195,7 @@ public class SplitPlayerAccountPickerPopup extends BankSystemGuiScreen {
 
     private void rebuildPlayerList() {
         playerList.removeChilds();
+        selectedPlayerButton = null;
         if (knownPlayers.isEmpty()) {
             Label empty = new Label(NO_PLAYERS.getString());
             empty.setHeight(20);
@@ -201,13 +204,17 @@ public class SplitPlayerAccountPickerPopup extends BankSystemGuiScreen {
             for (var entry : knownPlayers.entrySet()) {
                 UUID uuid = entry.getKey();
                 String name = entry.getValue();
-                Button row = new Button(name, () -> onPlayerSelected(uuid, name));
-                // BUG (v2.0.8) — Button(text, callback) default bounds are 0x0.
-                // LayoutGrid.stretchY=false leaves the height untouched, so rows
-                // rendered as invisible zero-height slivers. Explicitly size the
-                // row (matches CurrencyRow in ItemBalancePickerPopup).
-                row.setHeight(20);
-                playerList.addChild(row);
+                Button[] rowRef = new Button[1];
+                rowRef[0] = new Button(name, () -> {
+                    if (selectedPlayerButton != null)
+                        selectedPlayerButton.setBackgroundColor(0xFF404040);
+                    selectedPlayerButton = rowRef[0];
+                    rowRef[0].setBackgroundColor(0xFF3355AA);
+                    onPlayerSelected(uuid, name);
+                });
+                rowRef[0].setHeight(20);
+                rowRef[0].setBackgroundColor(0xFF404040);
+                playerList.addChild(rowRef[0]);
             }
         }
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
@@ -223,6 +230,7 @@ public class SplitPlayerAccountPickerPopup extends BankSystemGuiScreen {
         selectedPlayerName = name;
         selectedAccountId = -1;
         selectedAccountName = "";
+        selectedAccountButton = null;
         confirmButton.setEnabled(false);
         accountsHeader.setText(Component.translatable(ACCOUNTS_HEADER_KEY, name).getString());
         accountList.removeChilds();
@@ -244,14 +252,19 @@ public class SplitPlayerAccountPickerPopup extends BankSystemGuiScreen {
                 } else {
                     for (AsyncCompanyManager.AccountEntry entry : new ArrayList<>(accounts)) {
                         String label = entry.accountName() + "  (" + DEPOSIT_OK.getString() + ")";
-                        Button row = new Button(label, () -> {
+                        Button[] rowRef = new Button[1];
+                        rowRef[0] = new Button(label, () -> {
+                            if (selectedAccountButton != null)
+                                selectedAccountButton.setBackgroundColor(0xFF404040);
+                            selectedAccountButton = rowRef[0];
+                            rowRef[0].setBackgroundColor(0xFF3355AA);
                             selectedAccountId = entry.accountId();
                             selectedAccountName = entry.accountName();
                             confirmButton.setEnabled(true);
                         });
-                        // See rebuildPlayerList for the 0-height rationale.
-                        row.setHeight(20);
-                        accountList.addChild(row);
+                        rowRef[0].setHeight(20);
+                        rowRef[0].setBackgroundColor(0xFF404040);
+                        accountList.addChild(rowRef[0]);
                     }
                 }
                 updateLayout(getGui());

@@ -94,6 +94,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         public net.kroia.banksystem.api.payout.IPayoutManager PAYOUT_MANAGER;
         /** Task #49 (v2.0.8) — dividend payer (always non-null; degrades to fail-closed on slave). */
         public net.kroia.banksystem.api.dividend.IDividendPayer DIVIDEND_PAYER;
+        /** Task #52 (v2.0.8) — dividend event SQLite store (master-only, nullable on slaves). */
+        public net.kroia.banksystem.banking.company.DividendHistoryStore DIVIDEND_HISTORY_STORE;
 
         /**
          * External-currency binding table (Task #33, v2.0.5). Master-authoritative;
@@ -388,6 +390,9 @@ public class BankSystemModBackend implements BankSystemAPI {
             // Task #49 (v2.0.8) — dividend distributor (master-only).
             INSTANCES.DIVIDEND_PAYER =
                     new net.kroia.banksystem.banking.share.DividendPayer(INSTANCES);
+            // Task #52 (v2.0.8) — dividend event history store.
+            INSTANCES.DIVIDEND_HISTORY_STORE = new net.kroia.banksystem.banking.company.DividendHistoryStore(INSTANCES.LOGGER);
+            INSTANCES.DIVIDEND_HISTORY_STORE.open(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT));
 
             // Task #41 (v2.0.7): one-shot deprecation WARN for the old flat-cap setting.
             // Fires only when the user still has a non-zero cap on disk — the tiered
@@ -490,6 +495,10 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.PAYOUT_HISTORY_MANAGER = null;
         INSTANCES.PAYOUT_MANAGER = null;
         INSTANCES.DIVIDEND_PAYER = null;
+        if (INSTANCES.DIVIDEND_HISTORY_STORE != null) {
+            INSTANCES.DIVIDEND_HISTORY_STORE.close();
+        }
+        INSTANCES.DIVIDEND_HISTORY_STORE = null;
         INSTANCES.isSlaveServer = false;
         snapshotTickCounter = 0;
         retentionSweepTickCounter = 0;

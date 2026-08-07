@@ -2,15 +2,22 @@ package net.kroia.banksystem.screen.uiElements.tabbody;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.company.AsyncCompanyManager;
+import net.kroia.banksystem.banking.company.PayoutSchedule;
 import net.kroia.banksystem.client.cache.CompanyInfoCache;
 import net.kroia.banksystem.client.cache.ShareVisualCache;
 import net.kroia.banksystem.screen.custom.CompanyManagementScreen;
 import net.kroia.banksystem.screen.uiElements.InfoPopupScreen;
+import net.kroia.banksystem.screen.uiElements.ItemBalancePickerPopup;
+import net.kroia.banksystem.util.BankSystemGuiScreen;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.gui.elements.Button;
+import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.MultiLineTextBox;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
@@ -29,6 +36,12 @@ public class OverviewTabBody extends TabBody {
     private final Label descriptionLabel;   // read-only variant
     private final Button saveButton;
     private final boolean editable;
+
+    // Fix 10 — company currency picker (MANAGE-gated)
+    private final Label currencyLabel;
+    private final Button currencyButton;
+    private final ItemView currencyIcon;
+    private short currentCurrency = PayoutSchedule.MONEY_CURRENCY;
 
     public OverviewTabBody(CompanyManagementScreen screen) {
         super(screen);
@@ -60,6 +73,20 @@ public class OverviewTabBody extends TabBody {
             addChild(saveButton);
         } else {
             addChild(descriptionLabel);
+        }
+
+        // Fix 10 — company currency picker (MANAGE-gated)
+        currencyLabel = new Label(Component.translatable(PREFIX + "company_currency").getString() + ":");
+        currencyLabel.setAlignment(Label.Alignment.RIGHT);
+        currencyLabel.setHoverTooltipSupplier(() -> Component.translatable(PREFIX + "company_currency_tooltip").getString());
+        currencyIcon = new ItemView(ItemStack.EMPTY);
+        currencyIcon.setShowCount(false);
+        // Button has no setLabel; we use an icon-only button with the icon as child.
+        currencyButton = new Button("", this::onPickCurrencyClicked);
+        currencyButton.addChild(currencyIcon);
+        if (editable) {
+            addChild(currencyLabel);
+            addChild(currencyButton);
         }
 
         applyInfo();
@@ -96,6 +123,12 @@ public class OverviewTabBody extends TabBody {
         } else {
             descriptionLabel.setText(info.description());
         }
+
+        // Fix 10 — sync currency picker state from server info
+        if (editable) {
+            currentCurrency = info.companyCurrency();
+            applyCurrencyDisplay(currentCurrency);
+        }
     }
 
     /** Lightweight follow-up lookup — CompanyInfoOutput only carries the account number,
@@ -118,6 +151,36 @@ public class OverviewTabBody extends TabBody {
             sb.append(f).append(" ★");
         }
         return sb.toString();
+    }
+
+    private void applyCurrencyDisplay(short currency) {
+        ItemStack stack;
+        if (currency == PayoutSchedule.MONEY_CURRENCY) {
+            stack = net.kroia.banksystem.minecraft.item.BankSystemItems.MONEY.get().getDefaultInstance();
+        } else {
+            stack = ItemStack.EMPTY;
+            for (java.util.Map.Entry<ItemID, ItemStack> e : ItemIDManager.getItemIDMap().entrySet()) {
+                if (e.getKey().getShort() == currency) { stack = e.getValue(); break; }
+            }
+        }
+        currencyIcon.setItemStack(stack);
+    }
+
+    private void onPickCurrencyClicked() {
+        if (!editable) return;
+        AsyncCompanyManager.CompanyInfoOutput info = screen.info();
+        if (info == null || !info.present()) return;
+        BankSystemGuiScreen.switchScreen(new ItemBalancePickerPopup(screen, info.companyId(),
+                screen.callerUUID(), this::onCurrencyPicked));
+    }
+
+    private void onCurrencyPicked(short currency) {
+        currentCurrency = currency;
+        applyCurrencyDisplay(currency);
+        AsyncCompanyManager.CompanyInfoOutput info = screen.info();
+        if (info == null || !info.present()) return;
+        AsyncCompanyManager.setCompanyCurrencyAsync(info.companyId(), currency, screen.callerUUID())
+                .thenAccept(out -> onClientThread(screen::refreshInfo));
     }
 
     private void onSave() {
@@ -147,23 +210,38 @@ public class OverviewTabBody extends TabBody {
     @Override
     protected void layoutChanged() {
         int w = getWidth();
+        int h = getHeight();
+        int labelW = 120; // wider than LABEL_WIDTH to fit "Company Currency:" label
         int y = PADDING;
         for (int i = 0; i < rowLabels.length; i++) {
-            rowLabels[i].setBounds(PADDING, y, LABEL_WIDTH, ROW_HEIGHT);
-            rowValues[i].setBounds(PADDING + LABEL_WIDTH + ROW_SPACING, y,
-                    w - 2 * PADDING - LABEL_WIDTH - ROW_SPACING, ROW_HEIGHT);
-            y += ROW_HEIGHT - 4; // compact info rows
+            rowLabels[i].setBounds(PADDING, y, labelW, ROW_HEIGHT);
+            rowValues[i].setBounds(PADDING + labelW + ROW_SPACING, y,
+                    w - 2 * PADDING - labelW - ROW_SPACING, ROW_HEIGHT);
+            y += ROW_HEIGHT - 4;
         }
+        if (editable) {
+            currencyLabel.setBounds(PADDING, y, labelW, ROW_HEIGHT);
+            int btnX = PADDING + labelW + ROW_SPACING;
+            currencyButton.setBounds(btnX, y, 20, 20);
+            currencyIcon.setBounds(1, 1, 18, 18);
+            y += ROW_HEIGHT + ROW_SPACING;
+        }
+
         y += SECTION_SPACING;
         descriptionHeader.setBounds(PADDING, y, w - 2 * PADDING, ROW_HEIGHT);
         y += ROW_HEIGHT + ROW_SPACING;
-        int descHeight = ROW_HEIGHT * 4; // MultiLineTextBox needs more vertical space
+
+        int saveW = 80;
+        // Save button pinned to bottom-right of canvas.
+        int saveY = h - PADDING - ROW_HEIGHT;
         if (editable) {
-            descriptionBox.setBounds(PADDING, y, w - 2 * PADDING, descHeight);
-            y += descHeight + ROW_SPACING;
-            saveButton.setBounds(w - PADDING - 80, y, 80, ROW_HEIGHT);
+            // Layout save button first, then stretch textbox to its bottom edge.
+            saveButton.setBounds(w - PADDING - saveW, saveY, saveW, ROW_HEIGHT);
+            int descH = Math.max(ROW_HEIGHT, (saveY + ROW_HEIGHT) - y);
+            descriptionBox.setBounds(PADDING, y, w - 2 * PADDING - saveW - ROW_SPACING, descH);
         } else {
-            descriptionLabel.setBounds(PADDING, y, w - 2 * PADDING, descHeight * 2);
+            int descH = Math.max(ROW_HEIGHT, h - PADDING - y);
+            descriptionLabel.setBounds(PADDING, y, w - 2 * PADDING, descH);
         }
     }
 }

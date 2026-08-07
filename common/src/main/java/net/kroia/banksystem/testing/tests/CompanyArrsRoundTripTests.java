@@ -122,7 +122,7 @@ public class CompanyArrsRoundTripTests extends TestSuite {
     private TestResult testCompanyInfoCodecRoundTrip() {
         AsyncCompanyManager.CompanyInfoOutput out = new AsyncCompanyManager.CompanyInfoOutput(
                 true, 7, "Trip", 42, 12345L, 100L, "hello",
-                List.of("Alice", "Bob"));
+                List.of("Alice", "Bob"), (short) 0);
         AsyncCompanyManager.CompanyInfoOutput outd =
                 roundTrip(AsyncCompanyManager.CompanyInfoOutput.STREAM_CODEC, out);
         if (outd.present() != true) return fail("present flag lost");

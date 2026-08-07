@@ -205,6 +205,16 @@ public final class DividendPayer implements IDividendPayer {
                     new DividendPaidEvent(companyId, amountPerShare, paid, paidHolders, nowMs));
         }
 
+        // Task #52 (v2.0.8) — record the dividend event for history.
+        try {
+            if (instances != null && instances.DIVIDEND_HISTORY_STORE != null) {
+                instances.DIVIDEND_HISTORY_STORE.insert(new net.kroia.banksystem.banking.company.DividendEvent(
+                        companyId, null, nowMs, payoutShort, amountPerShare, paid, paidHolders, "MANUAL"));
+            }
+        } catch (Throwable t) {
+            if (instances.LOGGER != null)
+                instances.LOGGER.warn("[DividendPayer] Failed to record dividend history: " + t.getMessage());
+        }
         return PayDividendResult.ok(paid, paidHolders);
     }
 

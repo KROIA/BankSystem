@@ -72,6 +72,7 @@ public class PlayerPickerPopup extends BankSystemGuiScreen {
                     switchScreen(parent);
                     onPick.accept(n);
                 });
+                row.setHeight(20);
                 list.addChild(row);
             }
         }

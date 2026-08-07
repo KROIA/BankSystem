@@ -174,7 +174,7 @@ public class PayoutArrsRoundTripTests extends TestSuite {
         if (in.accountNr() != ind.accountNr()) return fail("GetCompanyInfoByAccountInput mismatch: " + ind);
 
         AsyncCompanyManager.CompanyInfoOutput out = new AsyncCompanyManager.CompanyInfoOutput(
-                true, 5, "Acme", 88, 10_000L, 0L, "d", List.of("Alice"));
+                true, 5, "Acme", 88, 10_000L, 0L, "d", List.of("Alice"), (short) 0);
         AsyncCompanyManager.CompanyInfoOutput outd = roundTrip(AsyncCompanyManager.CompanyInfoOutput.STREAM_CODEC, out);
         if (!outd.name().equals("Acme")) return fail("CompanyInfoOutput name lost");
         return pass("GetCompanyInfoByAccount round-trip preserved fields.");

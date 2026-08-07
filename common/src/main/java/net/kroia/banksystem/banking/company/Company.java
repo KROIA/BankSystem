@@ -45,6 +45,10 @@ public final class Company {
     private final List<PayoutSchedule> payoutSchedules;
     /** Task #45 — monotonic schedule id allocator, scoped per Company. */
     private long nextScheduleId = 1L;
+    /** v2.0.9 — last-used timeframe index for the Statistics tab (0=24h, 1=7d, 2=30d, 3=90d, 4=all). */
+    private int statisticsTimeframe = 1;
+    /** v2.0.9 — ItemID short of the company's default currency (0 = money). */
+    private short companyCurrency = 0;
     /** Persisted set of BlockPos positions of Share Stamper blocks bound to this company. */
     private final Set<BlockPos> boundStampers = new HashSet<>();
 
@@ -74,6 +78,10 @@ public final class Company {
     public String getDescription() { return description; }
     public Set<UUID> getFounders() { return java.util.Collections.unmodifiableSet(founders); }
     public long getTotalSharesIssued() { return totalSharesIssued; }
+    public int getStatisticsTimeframe() { return statisticsTimeframe; }
+    public void setStatisticsTimeframe(int tf) { this.statisticsTimeframe = (tf >= 0 && tf <= 4) ? tf : 1; }
+    public short getCompanyCurrency() { return companyCurrency; }
+    public void setCompanyCurrency(short c) { this.companyCurrency = c; }
     public ShareVisuals getShareVisuals() { return shareVisuals; }
     public List<PayoutSchedule> getPayoutSchedules() { return java.util.Collections.unmodifiableList(payoutSchedules); }
 
@@ -205,6 +213,8 @@ public final class Company {
         tag.putString("description", description);
         tag.putLong("totalSharesIssued", totalSharesIssued);
         tag.putLong("nextScheduleId", nextScheduleId);
+        tag.putInt("statisticsTimeframe", statisticsTimeframe);
+        tag.putShort("companyCurrency", companyCurrency);
 
         ListTag foundersTag = new ListTag();
         for (UUID founder : founders) {
@@ -287,6 +297,8 @@ public final class Company {
             if (s.getScheduleId() >= nextSchedId) nextSchedId = s.getScheduleId() + 1;
         }
         loaded.nextScheduleId = nextSchedId;
+        if (tag.contains("statisticsTimeframe")) loaded.statisticsTimeframe = tag.getInt("statisticsTimeframe");
+        if (tag.contains("companyCurrency")) loaded.companyCurrency = tag.getShort("companyCurrency");
         if (tag.contains("boundStampers", Tag.TAG_LIST)) {
             ListTag sl = tag.getList("boundStampers", Tag.TAG_COMPOUND);
             for (int i = 0; i < sl.size(); i++) {

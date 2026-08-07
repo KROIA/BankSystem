@@ -121,7 +121,13 @@ public final class AsyncCompanyManager {
         // for the payout currency picker. MANAGE-gated.
         LIST_ACCOUNT_ITEM_BALANCES,
         // Spec B.4 (v2.0.8) — manual missed-payout catch-up. MANAGE-gated.
-        PAY_MISSED
+        PAY_MISSED,
+        // Task #52 (v2.0.8) — read-only dividend history for a company.
+        LIST_DIVIDEND_HISTORY,
+        // Statistics tab (v2.0.9) — company cashflow, shareholder, solvency data.
+        GET_COMPANY_STATS,
+        // v2.0.9 — MANAGE-gated mutation: set the company's default payout currency.
+        SET_COMPANY_CURRENCY
     }
 
     /** Task #1 (v2.0.8) — SM bridge result codes for OPEN_SHARE_MARKET output. */
@@ -214,7 +220,7 @@ public final class AsyncCompanyManager {
 
     public record CompanyInfoOutput(boolean present, int companyId, String name, int bankAccountNr,
                                     long maxSupply, long totalSharesIssued, String description,
-                                    List<String> founderNames) {
+                                    List<String> founderNames, short companyCurrency) {
         public static final StreamCodec<RegistryFriendlyByteBuf, CompanyInfoOutput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {
                     buf.writeBoolean(v.present);
@@ -226,6 +232,7 @@ public final class AsyncCompanyManager {
                     buf.writeUtf(v.description);
                     buf.writeVarInt(v.founderNames.size());
                     for (String s : v.founderNames) buf.writeUtf(s);
+                    buf.writeShort(v.companyCurrency);
                 },
                 buf -> {
                     boolean present = buf.readBoolean();
@@ -238,11 +245,12 @@ public final class AsyncCompanyManager {
                     int n = buf.readVarInt();
                     List<String> founders = new ArrayList<>(n);
                     for (int i = 0; i < n; i++) founders.add(buf.readUtf());
-                    return new CompanyInfoOutput(present, id, name, accNr, ms, tsi, desc, founders);
+                    short currency = buf.readShort();
+                    return new CompanyInfoOutput(present, id, name, accNr, ms, tsi, desc, founders, currency);
                 }
         );
         public static final CompanyInfoOutput ABSENT =
-                new CompanyInfoOutput(false, 0, "", 0, 0L, 0L, "", List.of());
+                new CompanyInfoOutput(false, 0, "", 0, 0L, 0L, "", List.of(), (short) 0);
     }
 
     /** Task #43h — list company names visible to the caller under a rights filter. */
@@ -833,6 +841,157 @@ public final class AsyncCompanyManager {
     }
 
     // ------------------------------------------------------------------
+    // Task #52 (v2.0.8) — dividend history records.
+    // ------------------------------------------------------------------
+    public record ListDividendHistoryInput(int companyId, int limit) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ListDividendHistoryInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.companyId,
+                ByteBufCodecs.VAR_INT, p -> p.limit,
+                ListDividendHistoryInput::new);
+    }
+    /** Wire form of a {@link DividendEvent}. */
+    public record DividendEventWire(int companyId, int scheduleId, boolean hasScheduleId,
+                                    long timestampMs, short currencyShort,
+                                    long perShareRaw, long totalRaw, int holderCount, String sourceKind) {
+        public static void write(RegistryFriendlyByteBuf buf, DividendEventWire v) {
+            buf.writeVarInt(v.companyId);
+            buf.writeBoolean(v.hasScheduleId);
+            if (v.hasScheduleId) buf.writeVarInt(v.scheduleId);
+            buf.writeVarLong(v.timestampMs);
+            buf.writeShort(v.currencyShort);
+            buf.writeVarLong(v.perShareRaw);
+            buf.writeVarLong(v.totalRaw);
+            buf.writeVarInt(v.holderCount);
+            buf.writeUtf(v.sourceKind);
+        }
+        public static DividendEventWire read(RegistryFriendlyByteBuf buf) {
+            int cid = buf.readVarInt();
+            boolean has = buf.readBoolean();
+            int sid = has ? buf.readVarInt() : 0;
+            long ts = buf.readVarLong();
+            short cs = buf.readShort();
+            long psr = buf.readVarLong();
+            long tr = buf.readVarLong();
+            int hc = buf.readVarInt();
+            String sk = buf.readUtf();
+            return new DividendEventWire(cid, sid, has, ts, cs, psr, tr, hc, sk);
+        }
+        public static DividendEventWire of(DividendEvent e) {
+            return new DividendEventWire(e.companyId(), e.scheduleId() != null ? e.scheduleId() : 0,
+                    e.scheduleId() != null, e.timestampMs(), e.currencyShort(),
+                    e.perShareRaw(), e.totalRaw(), e.holderCount(), e.sourceKind());
+        }
+        public DividendEvent toEvent() {
+            return new DividendEvent(companyId, hasScheduleId ? scheduleId : null, timestampMs,
+                    currencyShort, perShareRaw, totalRaw, holderCount, sourceKind);
+        }
+    }
+    public record ListDividendHistoryOutput(List<DividendEventWire> events) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ListDividendHistoryOutput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.events.size());
+                    for (DividendEventWire e : v.events) DividendEventWire.write(buf, e);
+                },
+                buf -> {
+                    int n = buf.readVarInt();
+                    List<DividendEventWire> out = new ArrayList<>(n);
+                    for (int i = 0; i < n; i++) out.add(DividendEventWire.read(buf));
+                    return new ListDividendHistoryOutput(out);
+                });
+        public static final ListDividendHistoryOutput EMPTY = new ListDividendHistoryOutput(List.of());
+    }
+
+    // ------------------------------------------------------------------
+    // Statistics tab (v2.0.9) — GET_COMPANY_STATS param/result records
+    // ------------------------------------------------------------------
+    public record GetCompanyStatsInput(int companyId, int timeframeIndex) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, GetCompanyStatsInput> STREAM_CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.VAR_INT, p -> p.companyId,
+                        ByteBufCodecs.VAR_INT, p -> p.timeframeIndex,
+                        GetCompanyStatsInput::new);
+    }
+
+    public record ShareholderWire(int accountNr, String accountName, long shares, float pct) {
+        public static void write(RegistryFriendlyByteBuf buf, ShareholderWire v) {
+            buf.writeVarInt(v.accountNr);
+            buf.writeUtf(v.accountName == null ? "" : v.accountName);
+            buf.writeVarLong(v.shares);
+            buf.writeFloat(v.pct);
+        }
+        public static ShareholderWire read(RegistryFriendlyByteBuf buf) {
+            return new ShareholderWire(buf.readVarInt(), buf.readUtf(), buf.readVarLong(), buf.readFloat());
+        }
+    }
+
+    public record CashflowBucketWire(long bucketStart, long earnings, long spendings) {
+        public static void write(RegistryFriendlyByteBuf buf, CashflowBucketWire v) {
+            buf.writeVarLong(v.bucketStart);
+            buf.writeVarLong(v.earnings);
+            buf.writeVarLong(v.spendings);
+        }
+        public static CashflowBucketWire read(RegistryFriendlyByteBuf buf) {
+            return new CashflowBucketWire(buf.readVarLong(), buf.readVarLong(), buf.readVarLong());
+        }
+    }
+
+    public record CompanyStatsPayload(
+            long totalEarnings, long totalSpendings, long netCashflow,
+            int missedPayoutCount, long missedPayoutAmount,
+            long currentBalance, long daysToInsolvency,
+            List<CashflowBucketWire> cashflowSeries,
+            List<ShareholderWire> topShareholders) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, CompanyStatsPayload> STREAM_CODEC =
+                StreamCodec.of(
+                        (buf, v) -> {
+                            buf.writeVarLong(v.totalEarnings);
+                            buf.writeVarLong(v.totalSpendings);
+                            buf.writeVarLong(v.netCashflow);
+                            buf.writeVarInt(v.missedPayoutCount);
+                            buf.writeVarLong(v.missedPayoutAmount);
+                            buf.writeVarLong(v.currentBalance);
+                            buf.writeVarLong(v.daysToInsolvency);
+                            buf.writeVarInt(v.cashflowSeries.size());
+                            for (CashflowBucketWire b : v.cashflowSeries) CashflowBucketWire.write(buf, b);
+                            buf.writeVarInt(v.topShareholders.size());
+                            for (ShareholderWire s : v.topShareholders) ShareholderWire.write(buf, s);
+                        },
+                        buf -> {
+                            long earn = buf.readVarLong(), spend = buf.readVarLong(), net = buf.readVarLong();
+                            int mpc = buf.readVarInt(); long mpa = buf.readVarLong();
+                            long bal = buf.readVarLong(), days = buf.readVarLong();
+                            int nb = buf.readVarInt();
+                            List<CashflowBucketWire> buckets = new ArrayList<>(nb);
+                            for (int i = 0; i < nb; i++) buckets.add(CashflowBucketWire.read(buf));
+                            int ns = buf.readVarInt();
+                            List<ShareholderWire> holders = new ArrayList<>(ns);
+                            for (int i = 0; i < ns; i++) holders.add(ShareholderWire.read(buf));
+                            return new CompanyStatsPayload(earn, spend, net, mpc, mpa, bal, days, buckets, holders);
+                        });
+        public static final CompanyStatsPayload EMPTY = new CompanyStatsPayload(
+                0L, 0L, 0L, 0, 0L, 0L, -1L, List.of(), List.of());
+    }
+
+    // ------------------------------------------------------------------
+    // v2.0.9 — SET_COMPANY_CURRENCY param/result records
+    // ------------------------------------------------------------------
+    public record SetCompanyCurrencyInput(int companyId, short currency, UUID callerUUID) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, SetCompanyCurrencyInput> STREAM_CODEC =
+                StreamCodec.of(
+                        (buf, v) -> {
+                            buf.writeVarInt(v.companyId);
+                            buf.writeShort(v.currency);
+                            buf.writeUUID(v.callerUUID);
+                        },
+                        buf -> new SetCompanyCurrencyInput(buf.readVarInt(), buf.readShort(), buf.readUUID())
+                );
+    }
+    public record SetCompanyCurrencyOutput(int resultCode) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, SetCompanyCurrencyOutput> STREAM_CODEC =
+                StreamCodec.composite(ByteBufCodecs.VAR_INT, SetCompanyCurrencyOutput::resultCode, SetCompanyCurrencyOutput::new);
+    }
+
+    // ------------------------------------------------------------------
     // Codec map
     // ------------------------------------------------------------------
     public static final Map<FunctionType, AsyncFunctionDataCodecs> codecs = new HashMap<>() {{
@@ -867,6 +1026,9 @@ public final class AsyncCompanyManager {
         put(FunctionType.LIST_PLAYER_ACCOUNTS_WITH_FILTER, new AsyncFunctionDataCodecs(ListPlayerAccountsInput.STREAM_CODEC, ListPlayerAccountsOutput.STREAM_CODEC));
         put(FunctionType.LIST_ACCOUNT_ITEM_BALANCES, new AsyncFunctionDataCodecs(ListItemBalancesInput.STREAM_CODEC, ListItemBalancesOutput.STREAM_CODEC));
         put(FunctionType.PAY_MISSED,                new AsyncFunctionDataCodecs(PayMissedInput.STREAM_CODEC,        PayMissedOutput.STREAM_CODEC));
+        put(FunctionType.LIST_DIVIDEND_HISTORY,     new AsyncFunctionDataCodecs(ListDividendHistoryInput.STREAM_CODEC, ListDividendHistoryOutput.STREAM_CODEC));
+        put(FunctionType.GET_COMPANY_STATS,         new AsyncFunctionDataCodecs(GetCompanyStatsInput.STREAM_CODEC,  CompanyStatsPayload.STREAM_CODEC));
+        put(FunctionType.SET_COMPANY_CURRENCY,      new AsyncFunctionDataCodecs(SetCompanyCurrencyInput.STREAM_CODEC, SetCompanyCurrencyOutput.STREAM_CODEC));
     }};
 
     // ------------------------------------------------------------------
@@ -950,6 +1112,9 @@ public final class AsyncCompanyManager {
                 case LIST_PLAYER_ACCOUNTS_WITH_FILTER -> handleListPlayerAccounts(input.decodeParams(), bm, cm);
                 case LIST_ACCOUNT_ITEM_BALANCES -> handleListItemBalances(input.decodeParams(), bm, cm);
                 case PAY_MISSED                -> handlePayMissed(input.decodeParams(), bm, cm);
+                case LIST_DIVIDEND_HISTORY     -> handleListDividendHistory(input.decodeParams());
+                case GET_COMPANY_STATS         -> handleGetCompanyStats(input.decodeParams(), bm, cm);
+                case SET_COMPANY_CURRENCY      -> handleSetCompanyCurrency(input.decodeParams(), bm, cm);
             });
         }
 
@@ -969,7 +1134,8 @@ public final class AsyncCompanyManager {
                      LIST_STAMPER_BINDINGS, GET_COMPANY_INFO_BY_ID,
                      COUNT_HOLDERS_FOR_COMPANY, LIST_ALL_COMPANY_VISUALS,
                      MARKET_EXISTS_FOR_COMPANY, IS_MARKET_OPEN,
-                     LIST_PLAYER_ACCOUNTS_WITH_FILTER, LIST_ACCOUNT_ITEM_BALANCES -> true;
+                     LIST_PLAYER_ACCOUNTS_WITH_FILTER, LIST_ACCOUNT_ITEM_BALANCES,
+                     LIST_DIVIDEND_HISTORY, GET_COMPANY_STATS -> true;
                 default -> false;
             };
         }
@@ -1138,7 +1304,7 @@ public final class AsyncCompanyManager {
                         company.getBankAccountNr(), company.getMaxSupply(),
                         company.getTotalSharesIssued(),
                         company.getDescription() == null ? "" : company.getDescription(),
-                        founderNames));
+                        founderNames, company.getCompanyCurrency()));
     }
 
     private static OutputData handleListForCaller(ListInput in, CompanyManager cm) {
@@ -1185,6 +1351,9 @@ public final class AsyncCompanyManager {
             case LIST_PLAYER_ACCOUNTS_WITH_FILTER -> OutputData.of(function, ListPlayerAccountsOutput.EMPTY);
             case LIST_ACCOUNT_ITEM_BALANCES -> OutputData.of(function, ListItemBalancesOutput.EMPTY);
             case PAY_MISSED                -> OutputData.of(function, new PayMissedOutput(CODE_INTERNAL, 0L, 0));
+            case LIST_DIVIDEND_HISTORY     -> OutputData.of(function, ListDividendHistoryOutput.EMPTY);
+            case GET_COMPANY_STATS         -> OutputData.of(function, CompanyStatsPayload.EMPTY);
+            case SET_COMPANY_CURRENCY      -> OutputData.of(function, new SetCompanyCurrencyOutput(CODE_INTERNAL));
         };
     }
 
@@ -1723,7 +1892,7 @@ public final class AsyncCompanyManager {
                         company.getBankAccountNr(), company.getMaxSupply(),
                         company.getTotalSharesIssued(),
                         company.getDescription() == null ? "" : company.getDescription(),
-                        founderNames));
+                        founderNames, company.getCompanyCurrency()));
     }
 
     /** Task #52 (v2.0.8) — count of accounts holding a strictly-positive balance
@@ -1763,7 +1932,7 @@ public final class AsyncCompanyManager {
                         company.getBankAccountNr(), company.getMaxSupply(),
                         company.getTotalSharesIssued(),
                         company.getDescription() == null ? "" : company.getDescription(),
-                        founderNames));
+                        founderNames, company.getCompanyCurrency()));
     }
 
     // ------------------------------------------------------------------
@@ -2121,5 +2290,172 @@ public final class AsyncCompanyManager {
             future.complete(result == null ? List.of() : result.companyNames());
         });
         return future;
+    }
+
+    // ------------------------------------------------------------------
+    // Statistics tab (v2.0.9)
+    // ------------------------------------------------------------------
+
+    /** Task #52 (v2.0.8) — master handler: read dividend history from the SQLite store. */
+    private static OutputData handleListDividendHistory(ListDividendHistoryInput in) {
+        net.kroia.banksystem.banking.company.DividendHistoryStore store =
+                BACKEND_INSTANCES != null ? BACKEND_INSTANCES.DIVIDEND_HISTORY_STORE : null;
+        if (store == null) return OutputData.of(FunctionType.LIST_DIVIDEND_HISTORY, ListDividendHistoryOutput.EMPTY);
+        List<net.kroia.banksystem.banking.company.DividendEvent> events =
+                store.listByCompany(in.companyId, Math.min(in.limit, 100));
+        List<DividendEventWire> wires = new ArrayList<>(events.size());
+        for (var e : events) wires.add(DividendEventWire.of(e));
+        return OutputData.of(FunctionType.LIST_DIVIDEND_HISTORY, new ListDividendHistoryOutput(wires));
+    }
+
+    private static OutputData handleSetCompanyCurrency(SetCompanyCurrencyInput in, IServerBankManager bm, CompanyManager cm) {
+        Company company = cm.getById(in.companyId);
+        if (company == null)
+            return OutputData.of(FunctionType.SET_COMPANY_CURRENCY, new SetCompanyCurrencyOutput(CODE_NOT_FOUND));
+        IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
+        boolean hasManage = account != null && account.hasPermission(in.callerUUID, BankPermission.MANAGE);
+        boolean isAdmin = bm.isBanksystemAdmin(in.callerUUID);
+        if (!hasManage && !isAdmin)
+            return OutputData.of(FunctionType.SET_COMPANY_CURRENCY, new SetCompanyCurrencyOutput(CODE_NO_PERMISSION));
+        boolean ok = cm.updateCompanyCurrency(in.companyId, in.currency);
+        return OutputData.of(FunctionType.SET_COMPANY_CURRENCY, new SetCompanyCurrencyOutput(ok ? CODE_OK : CODE_INTERNAL));
+    }
+
+    private static OutputData handleGetCompanyStats(GetCompanyStatsInput in, IServerBankManager bm, CompanyManager cm) {
+        Company company = cm.getById(in.companyId);
+        if (company == null) return OutputData.of(FunctionType.GET_COMPANY_STATS, CompanyStatsPayload.EMPTY);
+
+        long nowMs = System.currentTimeMillis();
+        long fromMs = switch (in.timeframeIndex) {
+            case 0  -> nowMs - 86_400_000L;
+            case 1  -> nowMs - 7L * 86_400_000L;
+            case 2  -> nowMs - 30L * 86_400_000L;
+            case 3  -> nowMs - 90L * 86_400_000L;
+            default -> 0L;
+        };
+        long bucketMs = in.timeframeIndex == 0 ? 3_600_000L
+                : in.timeframeIndex <= 2      ? 86_400_000L
+                : 7L * 86_400_000L;
+
+        // Current balance — use company currency (default: money).
+        long currentBalance = 0L;
+        IServerBankAccount companyAccount = bm.getBankAccount(company.getBankAccountNr());
+        if (companyAccount != null) {
+            net.kroia.banksystem.util.ItemID currencyId;
+            short companyCurrencyShort = company.getCompanyCurrency();
+            if (companyCurrencyShort == PayoutSchedule.MONEY_CURRENCY) {
+                currencyId = net.kroia.banksystem.minecraft.item.custom.money.MoneyItem.getItemID();
+            } else {
+                currencyId = new net.kroia.banksystem.util.ItemID(companyCurrencyShort);
+            }
+            if (currencyId != null) {
+                net.kroia.banksystem.api.bank.IServerBank bank = companyAccount.getBank(currencyId);
+                if (bank != null) currentBalance = bank.getBalance();
+            }
+        }
+
+        // Missed payout totals from Company's schedule list
+        int missedPayoutCount = 0;
+        long missedPayoutAmount = 0L;
+        for (PayoutSchedule s : company.getPayoutSchedules()) {
+            if (s.getMissedCount() > 0) {
+                missedPayoutCount += s.getMissedCount();
+                missedPayoutAmount += s.getMissedAmount();
+            }
+        }
+
+        // DB-backed metrics
+        net.kroia.banksystem.data.DatabaseManager dbm =
+                BACKEND_INSTANCES != null ? BACKEND_INSTANCES.DATABASE_MANAGER : null;
+        List<CashflowBucketWire> buckets = new ArrayList<>();
+        long totalEarnings = 0L, totalSpendings = 0L;
+        long daysToInsolvency = -1L;
+        if (dbm != null) {
+            try {
+                java.sql.Connection conn = dbm.getConnection();
+                int acctNr = company.getBankAccountNr();
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.info("[CompanyStats] companyId=" + in.companyId
+                            + " acctNr=" + acctNr
+                            + " fromMs=" + fromMs + " nowMs=" + nowMs + " bucketMs=" + bucketMs);
+                List<CompanyStatsQuery.CashflowBucket> raw =
+                        CompanyStatsQuery.getCashflowSeries(conn, acctNr, fromMs, nowMs, bucketMs);
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.info("[CompanyStats] cashflow buckets=" + raw.size()
+                            + (raw.isEmpty() ? " (no rows — check account_number in TransactionLog)" : ""));
+                for (CompanyStatsQuery.CashflowBucket b : raw) {
+                    if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                        BACKEND_INSTANCES.LOGGER.info("[CompanyStats] bucket t=" + b.bucketStart()
+                                + " earn=" + b.earnings() + " spend=" + b.spendings());
+                    buckets.add(new CashflowBucketWire(b.bucketStart(), b.earnings(), b.spendings()));
+                }
+                CompanyStatsQuery.CompanyHeadlineMetrics metrics =
+                        CompanyStatsQuery.getHeadlineMetrics(conn, acctNr, fromMs);
+                totalEarnings = metrics.totalEarnings();
+                totalSpendings = metrics.totalSpendings();
+                daysToInsolvency = CompanyStatsQuery.getDaysToInsolvency(conn, acctNr, company, currentBalance);
+            } catch (Exception e) {
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.warn("[CompanyStats] DB query failed: " + e);
+            }
+        } else {
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                BACKEND_INSTANCES.LOGGER.warn("[CompanyStats] dbm is null — no DB-backed metrics");
+        }
+
+        long netCashflow = totalEarnings - totalSpendings;
+
+        // Top shareholders
+        List<ShareholderWire> holders = new ArrayList<>();
+        try {
+            List<CompanyStatsQuery.ShareholderEntry> sh =
+                    CompanyStatsQuery.getTopShareholders(bm, in.companyId, company.getTotalSharesIssued(), 10);
+            for (CompanyStatsQuery.ShareholderEntry e : sh)
+                holders.add(new ShareholderWire(e.accountNr(), e.accountName(), e.shares(), e.pct()));
+        } catch (Exception e) { /* fail-open */ }
+
+        return OutputData.of(FunctionType.GET_COMPANY_STATS,
+                new CompanyStatsPayload(totalEarnings, totalSpendings, netCashflow,
+                        missedPayoutCount, missedPayoutAmount,
+                        currentBalance, daysToInsolvency, buckets, holders));
+    }
+
+    /** v2.0.9 — slave helper: set the company's default payout currency (MANAGE-gated on master). */
+    public static CompletableFuture<SetCompanyCurrencyOutput> setCompanyCurrencyAsync(int companyId, short currency, UUID caller) {
+        InputData input = InputData.of(FunctionType.SET_COMPANY_CURRENCY,
+                new SetCompanyCurrencyInput(companyId, currency, caller));
+        CompletableFuture<SetCompanyCurrencyOutput> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> {
+            SetCompanyCurrencyOutput v = o == null ? null : o.decodeResult();
+            f.complete(v == null ? new SetCompanyCurrencyOutput(CODE_INTERNAL) : v);
+        });
+        return f;
+    }
+
+    /** v2.0.9 — slave helper: fetch company statistics for the Statistics tab. */
+    public static CompletableFuture<CompanyStatsPayload> getCompanyStatsAsync(int companyId, int timeframeIndex) {
+        InputData input = InputData.of(FunctionType.GET_COMPANY_STATS,
+                new GetCompanyStatsInput(companyId, timeframeIndex));
+        CompletableFuture<CompanyStatsPayload> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> {
+            CompanyStatsPayload v = o == null ? null : o.decodeResult();
+            f.complete(v == null ? CompanyStatsPayload.EMPTY : v);
+        });
+        return f;
+    }
+
+    /** Task #52 (v2.0.8) — slave helper: fetch dividend history for a company. */
+    public static CompletableFuture<List<DividendEvent>> listDividendHistoryAsync(int companyId, int limit) {
+        InputData input = InputData.of(FunctionType.LIST_DIVIDEND_HISTORY,
+                new ListDividendHistoryInput(companyId, limit));
+        CompletableFuture<List<DividendEvent>> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> {
+            ListDividendHistoryOutput out = o == null ? null : o.decodeResult();
+            if (out == null || out.events().isEmpty()) { f.complete(List.of()); return; }
+            List<DividendEvent> events = new ArrayList<>(out.events().size());
+            for (DividendEventWire w : out.events()) events.add(w.toEvent());
+            f.complete(events);
+        });
+        return f;
     }
 }

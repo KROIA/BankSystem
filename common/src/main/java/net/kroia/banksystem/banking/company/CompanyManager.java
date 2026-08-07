@@ -321,6 +321,13 @@ public final class CompanyManager implements ServerSaveableChunked {
         return true;
     }
 
+    public boolean updateCompanyCurrency(int companyId, short currency) {
+        Company company = byId.get(companyId);
+        if (company == null) return false;
+        company.setCompanyCurrency(currency);
+        return true;
+    }
+
     // ------------------------------------------------------------------
     // Task #45 (v2.0.8) — Payout schedule CRUD on Company NBT.
     // ------------------------------------------------------------------
