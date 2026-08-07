@@ -21,6 +21,8 @@ public final class BankSystemQuilt implements ModInitializer {
             ClientLifecycleEvents.READY.register(client -> {
                 BankSystemModBackend.onClientSetup();
             });
+            // Task #53 (v2.0.8) — stamped-share item icon: tint-only via ItemColor handler.
+            // Full monogram-on-item render deferred; scaffold intentionally NOT registered.
         }
 
 

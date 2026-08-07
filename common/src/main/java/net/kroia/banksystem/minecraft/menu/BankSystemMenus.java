@@ -9,9 +9,11 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.minecraft.menu.custom.BankUploadContainerMenu;
+import net.kroia.banksystem.minecraft.menu.custom.ShareStamperContainerMenu;
 import net.kroia.banksystem.screen.custom.BankDownloadScreen;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
 import net.kroia.banksystem.screen.custom.BankUploadScreen;
+import net.kroia.banksystem.screen.custom.ShareStamperScreen;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.MenuType;
@@ -42,6 +44,7 @@ public class BankSystemMenus {
         MenuRegistry.registerScreenFactory(BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
         MenuRegistry.registerScreenFactory(BANK_UPLOAD_CONTAINER_MENU.get(), BankUploadScreen::new);
         MenuRegistry.registerScreenFactory(BANK_DOWNLOAD_CONTAINER_MENU.get(), BankDownloadScreen::new);
+        MenuRegistry.registerScreenFactory(SHARE_STAMPER_CONTAINER_MENU.get(), ShareStamperScreen::new);
     }
 
 
@@ -51,6 +54,9 @@ public class BankSystemMenus {
             MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_upload_container_menu"), () -> MenuRegistry.ofExtended(BankUploadContainerMenu::new));
     public static final RegistrySupplier<MenuType<BankDownloadContainerMenu>> BANK_DOWNLOAD_CONTAINER_MENU =
             MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_download_container_menu"), () -> MenuRegistry.ofExtended(BankDownloadContainerMenu::new));
+    // Task #47 (v2.0.8) — Share Stamper menu.
+    public static final RegistrySupplier<MenuType<ShareStamperContainerMenu>> SHARE_STAMPER_CONTAINER_MENU =
+            MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "share_stamper_container_menu"), () -> MenuRegistry.ofExtended(ShareStamperContainerMenu::new));
 
 
 }

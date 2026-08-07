@@ -1,6 +1,8 @@
 package net.kroia.banksystem.api;
 
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.event.DividendPaidEvent;
+import net.kroia.banksystem.api.event.PayoutExecutedInfo;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.util.ItemID;
@@ -171,6 +173,24 @@ public interface IBankSystemEvents {
      * @return the trust-changed event.
      */
     DataEvent<TrustChangeInfo> getTrustChangedSignal();
+
+    /**
+     * Task #45 (v2.0.8) — event emitted on the <b>master server</b> every time a recurring
+     * payout schedule ticks. Fires for both successful transfers and every documented
+     * failure mode ({@code INSUFFICIENT_FUNDS}, {@code TARGET_MISSING}). See
+     * {@link PayoutExecutedInfo}. Dispatched on the server thread after the bank transfer
+     * and SQL history write have been submitted.
+     */
+    DataEvent<PayoutExecutedInfo> getPayoutExecutedEvent();
+
+    /**
+     * Task #49 (v2.0.8) — event emitted on the <b>master server</b> after a successful
+     * one-shot dividend distribution. Never fires when the run was refused (invalid
+     * input, insufficient funds, no holders). See {@link DividendPaidEvent}. Dispatched
+     * on the server thread after the transfers and the SQL ledger writes have been
+     * submitted.
+     */
+    DataEvent<DividendPaidEvent> getDividendPaidEvent();
 
     /**
      * Removes all listeners for the events and signals in this class.

@@ -1005,6 +1005,28 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         return CompletableFuture.completedFuture(getBankAccountNumbers(itemID));
     }
 
+    /**
+     * Task #48 (v2.0.8) — enumerate accounts whose item bank for {@code itemID} holds a
+     * strictly positive total balance. Consumed by the upcoming dividend distributor and
+     * by the future "Companies" holder-count column. Linear scan over all accounts —
+     * cheap enough for expected scales; may be revisited with a maintained reverse index
+     * if it becomes hot (spec §Open Items).
+     */
+    @Override
+    public java.util.Set<Integer> listAccountsHolding(ItemID itemID) {
+        java.util.Set<Integer> accounts = new java.util.LinkedHashSet<>();
+        if (itemID == null || !itemID.isValid()) return accounts;
+        for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+            ServerBankAccount account = entry.getValue();
+            net.kroia.banksystem.banking.bank.ServerBank bank = account.getBank(itemID);
+            if (bank == null) continue;
+            if (bank.getTotalBalance() > 0L) {
+                accounts.add(account.getAccountNumber());
+            }
+        }
+        return accounts;
+    }
+
 
 
 

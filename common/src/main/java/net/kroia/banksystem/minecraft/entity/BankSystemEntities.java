@@ -13,6 +13,7 @@ import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.MoneyStockpileBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity;
 import net.kroia.banksystem.minecraft.entity.renderer.MoneyStockpileEntityRenderer;
 import net.kroia.modutilities.gui.display.client.AbstractDisplayBlockEntityRenderer;
 import net.minecraft.core.registries.Registries;
@@ -54,6 +55,10 @@ public class BankSystemEntities {
     public static final RegistrySupplier<BlockEntityType<?>> MONEY_STOCKPILE_BLOCK_ENTITY =
             registerBlockEntity("money_stockpile_block_entity",
                     () -> BlockEntityType.Builder.of(MoneyStockpileBlockEntity::new, BankSystemBlocks.MONEY_STOCKPILE_BLOCK.get()).build(null));
+
+    public static final RegistrySupplier<BlockEntityType<?>> SHARE_STAMPER_BLOCK_ENTITY =
+            registerBlockEntity("share_stamper_entity",
+                    () -> BlockEntityType.Builder.of(ShareStamperBlockEntity::new, BankSystemBlocks.SHARE_STAMPER_BLOCK.get()).build(null));
 
     public static final RegistrySupplier<BlockEntityType<?>> BANKSYSTEM_DISPLAY_BLOCK_ENTITY =
             registerBlockEntity("banksystem_display_block_entity",

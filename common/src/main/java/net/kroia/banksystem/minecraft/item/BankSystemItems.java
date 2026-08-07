@@ -7,6 +7,8 @@ import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.item.custom.money.*;
+import net.kroia.banksystem.minecraft.item.custom.share.BlankShareItem;
+import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.kroia.banksystem.minecraft.item.custom.software.ATMSoftware;
 import net.kroia.banksystem.minecraft.item.custom.software.BankingSoftware;
 import net.kroia.banksystem.minecraft.item.custom.software.Software;
@@ -70,6 +72,10 @@ public class BankSystemItems {
     public static final Supplier<Item> MONEY100000 = registerItem(MoneyItem100000.NAME, MoneyItem100000::new);
     public static final Supplier<Item> MONEY500000 = registerItem(MoneyItem500000.NAME, MoneyItem500000::new);
     public static final Supplier<Item> MONEY1000000 = registerItem(MoneyItem1000000.NAME, MoneyItem1000000::new);
+
+    // Company shares (Task #46, v2.0.8) — physical stamped/blank share items.
+    public static final Supplier<Item> BLANK_SHARE   = registerItem(BlankShareItem.NAME,   BlankShareItem::new);
+    public static final Supplier<Item> STAMPED_SHARE = registerItem(StampedShareItem.NAME, StampedShareItem::new);
 
 
 

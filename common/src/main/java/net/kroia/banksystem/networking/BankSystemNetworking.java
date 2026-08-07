@@ -75,6 +75,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
         AsyncBankAccount.setupNetworkPacket();
         AsyncBank.setupNetworkPacket();
         AsyncBankSystemCommandHandler.setupNetworkPacket();
+        net.kroia.banksystem.banking.company.AsyncCompanyManager.setupNetworkPacket();
 
         this.setupARRS(); // Setup the Asynchronous Request Response System (ARRS)
         this.setupStreamSystem();
@@ -92,6 +93,18 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerS2C(SyncBankDownloadDataPacket.TYPE, SyncBankDownloadDataPacket.STREAM_CODEC);
         registerS2C(SyncItemIDsPacket.TYPE, SyncItemIDsPacket.STREAM_CODEC);
         registerS2C(PlayerJoinSyncPacket.TYPE, PlayerJoinSyncPacket.STREAM_CODEC);
+        // Task #46 (v2.0.8) — Company share visuals + supply sync (S2C).
+        registerS2C(S2CCompanyVisualUpdatePacket.TYPE, S2CCompanyVisualUpdatePacket.STREAM_CODEC);
+        registerS2C(S2CCompanyVisualBulkPacket.TYPE, S2CCompanyVisualBulkPacket.STREAM_CODEC);
+        registerS2C(S2CCompanyVisualSupplyUpdatePacket.TYPE, S2CCompanyVisualSupplyUpdatePacket.STREAM_CODEC);
+        // Task #51 (v2.0.8, spec §1.4) — Company.description propagation (S2C).
+        registerS2C(net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket.TYPE,
+                net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket.STREAM_CODEC);
+        // Task #47 (v2.0.8) — Share Stamper bind screen open (S2C).
+        registerS2C(OpenStamperBindScreenPacket.TYPE, OpenStamperBindScreenPacket.STREAM_CODEC);
+        // Task #51 (v2.0.8) — Company Management screen open (S2C).
+        registerS2C(net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket.TYPE,
+                net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket.STREAM_CODEC);
 
     }
 
@@ -112,6 +125,11 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerC2S(ConverterWithdrawPacket.TYPE, ConverterWithdrawPacket.STREAM_CODEC);
         registerC2S(ConverterDropAllPacket.TYPE, ConverterDropAllPacket.STREAM_CODEC);
         registerC2S(ConverterCommitToBankPacket.TYPE, ConverterCommitToBankPacket.STREAM_CODEC);
+        // Task #47 (v2.0.8) — Share Stamper C2S mutations.
+        registerC2S(StampSharesRequest.TYPE, StampSharesRequest.STREAM_CODEC);
+        // Task #47 (v2.0.8) — Share Stamper bind request (C2S).
+        registerC2S(SetStamperBindingRequest.TYPE, SetStamperBindingRequest.STREAM_CODEC);
+        registerC2S(CloseStamperBindScreenPacket.TYPE, CloseStamperBindScreenPacket.STREAM_CODEC);
     }
 
     @Override
@@ -119,5 +137,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
     {
         //registerS2S(PlayerJoinPacket.TYPE, PlayerJoinPacket.STREAM_CODEC);
         registerS2S(ClientConsoleMessagePacket.TYPE, ClientConsoleMessagePacket.STREAM_CODEC);
+        // Task #54 (v2.0.8) — master→slave live push for company visual mutations.
+        registerS2S(S2SCompanyMirrorPacket.TYPE, S2SCompanyMirrorPacket.STREAM_CODEC);
     }
 }

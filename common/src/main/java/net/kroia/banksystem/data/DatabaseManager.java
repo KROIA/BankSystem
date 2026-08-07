@@ -66,13 +66,62 @@ public class DatabaseManager {
         BACKEND_INSTANCES = backend;
     }
 
+    /**
+     * Classpath-resource paths of every schema file the DB layer applies at boot.
+     * <p>
+     * Task #44 (v2.0.8): converted from a single hardcoded path to a list so new
+     * tables can be added by appending an entry. Each file is executed via
+     * {@link #executeSqlFile(String)} in order; every {@code CREATE TABLE} and
+     * {@code CREATE INDEX} statement in these scripts is idempotent
+     * ({@code IF NOT EXISTS}), so re-running on an existing world is safe.
+     */
+    public static final java.util.List<String> SQL_SCHEMA_FILES = java.util.List.of(
+            "/sql/BalanceHistory.sql",
+            "/sql/TransactionLog.sql",
+            "/sql/PayoutHistory.sql"
+    );
+
     public boolean createDatabase(MinecraftServer server) {
-        try {
-            executeSqlFile("/sql/BalanceHistory.sql");
-            return true;
-        } catch (SQLException | IOException e) {
-            getLogger().error("Failed to create database table: " + e.getMessage());
-            return false;
+        for (String path : SQL_SCHEMA_FILES) {
+            try {
+                executeSqlFile(path);
+            } catch (SQLException | IOException e) {
+                getLogger().error("Failed to create database table from " + path + ": " + e.getMessage());
+                return false;
+            }
+        }
+        migratePayoutHistoryColumns();
+        return true;
+    }
+
+    /**
+     * Spec A.9 / B.3 / B.4 (v2.0.8) — column migration for pre-existing worlds.
+     * {@code CREATE TABLE IF NOT EXISTS} does not add columns to an existing table,
+     * so add the new PayoutHistory columns via {@code ALTER TABLE} when missing.
+     * Idempotent: checks {@code PRAGMA table_info} first.
+     */
+    private void migratePayoutHistoryColumns() {
+        java.util.Map<String, String> wanted = new java.util.LinkedHashMap<>();
+        wanted.put("target_player_name", "TEXT NOT NULL DEFAULT ''");
+        wanted.put("target_account_name", "TEXT NOT NULL DEFAULT ''");
+        wanted.put("currency_item", "INTEGER NOT NULL DEFAULT 0");
+        wanted.put("type", "TEXT NOT NULL DEFAULT 'NORMAL'");
+        try (Statement stmt = connection.createStatement()) {
+            java.util.Set<String> existing = new java.util.HashSet<>();
+            try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(PayoutHistory)")) {
+                while (rs.next()) existing.add(rs.getString("name"));
+            }
+            for (var e : wanted.entrySet()) {
+                if (existing.contains(e.getKey())) continue;
+                try (Statement alter = connection.createStatement()) {
+                    alter.execute("ALTER TABLE PayoutHistory ADD COLUMN "
+                            + e.getKey() + " " + e.getValue());
+                }
+                getLogger().info("[DatabaseManager] PayoutHistory migration: added column " + e.getKey());
+            }
+            commitTransaction();
+        } catch (SQLException e) {
+            getLogger().error("PayoutHistory column migration failed: " + e.getMessage());
         }
     }
 
