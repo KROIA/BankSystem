@@ -31,12 +31,15 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
     public static final Type<S2CCompanyVisualUpdatePacket> TYPE = new Type<>(
             ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2c_company_visual_update"));
 
+    // v2.0.9 two-layer wire format.
     public static final StreamCodec<RegistryFriendlyByteBuf, S2CCompanyVisualUpdatePacket> STREAM_CODEC =
             StreamCodec.of(
                     (buf, p) -> {
                         buf.writeVarInt(p.companyId);
-                        buf.writeUtf(p.iconPresetId);
-                        buf.writeInt(p.tint);
+                        buf.writeUtf(p.bgSymbolId);
+                        buf.writeInt(p.bgTint);
+                        buf.writeUtf(p.fgSymbolId);
+                        buf.writeInt(p.fgTint);
                         buf.writeUtf(p.displayName);
                         buf.writeUtf(p.description);
                         buf.writeVarLong(p.totalSharesIssued);
@@ -44,27 +47,31 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
                     },
                     buf -> new S2CCompanyVisualUpdatePacket(
                             buf.readVarInt(),
-                            buf.readUtf(),
-                            buf.readInt(),
-                            buf.readUtf(),
-                            buf.readUtf(),
-                            buf.readVarLong(),
-                            buf.readVarLong()));
+                            buf.readUtf(), buf.readInt(),
+                            buf.readUtf(), buf.readInt(),
+                            buf.readUtf(), buf.readUtf(),
+                            buf.readVarLong(), buf.readVarLong()));
 
     private final int companyId;
-    private final String iconPresetId;
-    private final int tint;
+    private final String bgSymbolId;
+    private final int bgTint;
+    private final String fgSymbolId;
+    private final int fgTint;
     private final String displayName;
     private final String description;
     private final long totalSharesIssued;
     private final long maxSupply;
 
-    public S2CCompanyVisualUpdatePacket(int companyId, String iconPresetId, int tint,
+    public S2CCompanyVisualUpdatePacket(int companyId,
+                                        String bgSymbolId, int bgTint,
+                                        String fgSymbolId, int fgTint,
                                         String displayName, String description,
                                         long totalSharesIssued, long maxSupply) {
         this.companyId = companyId;
-        this.iconPresetId = iconPresetId == null ? "" : iconPresetId;
-        this.tint = tint;
+        this.bgSymbolId = bgSymbolId == null ? "" : bgSymbolId;
+        this.bgTint = bgTint;
+        this.fgSymbolId = fgSymbolId == null ? "" : fgSymbolId;
+        this.fgTint = fgTint;
         this.displayName = displayName == null ? "" : displayName;
         this.description = description == null ? "" : description;
         this.totalSharesIssued = totalSharesIssued;
@@ -74,8 +81,10 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
     public S2CCompanyVisualUpdatePacket(int companyId, ShareVisuals visuals,
                                         long totalSharesIssued, long maxSupply) {
         this(companyId,
-                visuals != null ? visuals.getIconPresetId() : "",
-                visuals != null ? visuals.getTint() : 0xFFFFFFFF,
+                visuals != null ? visuals.getBgLayer().symbolId() : "",
+                visuals != null ? visuals.getBgLayer().tint() : 0xFFFFFFFF,
+                visuals != null ? visuals.getFgLayer().symbolId() : "",
+                visuals != null ? visuals.getFgLayer().tint() : 0xFFFFFFFF,
                 visuals != null ? visuals.getDisplayName() : "",
                 visuals != null ? visuals.getDescription() : "",
                 totalSharesIssued, maxSupply);
@@ -136,7 +145,10 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
     @Override
     public void handleOnClient(NetworkManager.PacketContext context) {
         ShareVisualCache.put(companyId,
-                new ShareVisuals(iconPresetId, tint, displayName, description),
+                new ShareVisuals(
+                        new ShareVisuals.ShareLayer(bgSymbolId, bgTint),
+                        new ShareVisuals.ShareLayer(fgSymbolId, fgTint),
+                        displayName, description),
                 totalSharesIssued, maxSupply);
     }
 }

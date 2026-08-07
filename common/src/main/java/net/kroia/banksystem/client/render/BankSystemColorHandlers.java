@@ -53,9 +53,9 @@ public final class BankSystemColorHandlers {
             // paint a tinted badge with the first ~2 initials of the company's
             // display name (or Company.name from CompanyInfoCache). Gives every
             // company a distinctive glyph without depending on 30 art assets.
-            if (visuals != null && (visuals.getIconPresetId() == null || visuals.getIconPresetId().isBlank())) {
+            if (visuals != null && (visuals.getFgLayer().symbolId() == null || visuals.getFgLayer().symbolId().isBlank())) {
                 String initials = resolveInitials(companyId, visuals);
-                int tint = 0xFF000000 | (visuals.getTint() & 0xFFFFFF);
+                int tint = 0xFF000000 | (visuals.getBgLayer().tint() & 0xFFFFFF);
                 paintMonogramBadge(gfx, x, y, w, h, tint, initials);
                 return;
             }

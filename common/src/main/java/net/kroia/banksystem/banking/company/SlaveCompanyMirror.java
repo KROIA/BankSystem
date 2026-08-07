@@ -70,8 +70,8 @@ public final class SlaveCompanyMirror {
      */
     public static void updateSupply(int companyId, long totalSharesIssued) {
         ENTRIES.computeIfPresent(companyId, (id, prev) -> new S2CCompanyVisualBulkPacket.Entry(
-                prev.companyId(), prev.iconPresetId(), prev.tint(), prev.displayName(),
-                prev.description(), totalSharesIssued, prev.maxSupply(),
+                prev.companyId(), prev.bgSymbolId(), prev.bgTint(), prev.fgSymbolId(), prev.fgTint(),
+                prev.displayName(), prev.description(), totalSharesIssued, prev.maxSupply(),
                 prev.internalName(), prev.companyDescription(),
                 prev.bankAccountNr(), prev.founderNames(), prev.holderCount()));
     }

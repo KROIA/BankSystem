@@ -42,7 +42,7 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
         if (companyId != null) {
             if (ShareVisualCache.has(companyId)) {
                 visuals = ShareVisualCache.getVisualsOrPlaceholder(companyId);
-                tint = visuals.getTint();
+                tint = visuals.getBgLayer().tint();
                 hasVisuals = true;
             } else {
                 ShareVisualCache.tryLookup(companyId);
@@ -56,12 +56,14 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
         drawFilledQuad(pose, buffers, tint);
 
         if (hasVisuals && isGuiLikeContext(context)) {
-            String preset = visuals.getIconPresetId();
+            String preset = visuals.getFgLayer().symbolId();
             if (preset == null || preset.isBlank()) {
                 String initials = BankSystemColorHandlers.resolveMonogramInitials(companyId, visuals);
-                drawInitials(pose, buffers, initials, tint, packedLight);
+                int fgTint = visuals.getFgLayer().tint();
+                if ((fgTint & 0xFF000000) == 0) fgTint |= 0xFF000000;
+                drawInitials(pose, buffers, initials, fgTint, packedLight);
             }
-            // TODO(v2.0.9): preset sprite draw tinted with `tint` once atlas ships.
+            // TODO(v2.0.9): preset sprite draw tinted with fg tint once atlas ships.
         }
         return true;
     }

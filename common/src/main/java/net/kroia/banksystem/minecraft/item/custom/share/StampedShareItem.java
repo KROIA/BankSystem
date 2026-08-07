@@ -5,7 +5,6 @@ import net.kroia.banksystem.banking.company.ShareVisuals;
 import net.kroia.banksystem.client.cache.CompanyInfoCache;
 import net.kroia.banksystem.client.cache.ShareVisualCache;
 import net.kroia.banksystem.minecraft.component.BankSystemDataComponents;
-import net.kroia.banksystem.minecraft.item.BankSystemCreativeModeTab;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -46,7 +45,7 @@ public class StampedShareItem extends Item {
             "tooltip." + BankSystemMod.MOD_ID + ".stamped_share.supply";
 
     public StampedShareItem() {
-        super(new Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB));
+        super(new Properties());
     }
 
     /** Convenience accessor: reads the {@code company_id} component, or {@code null} if unstamped. */

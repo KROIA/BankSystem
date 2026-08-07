@@ -3,34 +3,51 @@ package net.kroia.banksystem.banking.company;
 import net.minecraft.nbt.CompoundTag;
 
 /**
- * Value type for a Company's share visuals (icon preset id, tint, display name, description).
- * Populated by Task #46 (ShareVisualEditorScreen) — Phase 1 (Task #43) only carries the
- * empty default so future tasks don't need to migrate the NBT schema.
+ * Value type for a Company's share visuals. Two-layer model (v2.0.9):
+ * {@link #bgLayer} defines the background fill color/symbol;
+ * {@link #fgLayer} defines the foreground icon preset and its tint.
+ *
+ * <p>Legacy getters {@link #getIconPresetId()} and {@link #getTint()} are kept
+ * for source compatibility — they delegate to fgLayer.symbolId() and bgLayer.tint().
  */
 public final class ShareVisuals {
 
-    public static final ShareVisuals EMPTY = new ShareVisuals("", 0xFFFFFFFF, "", "");
+    /** A single visual layer: a symbol preset id (may be empty) and an ARGB tint. */
+    public record ShareLayer(String symbolId, int tint) {
+        public static final ShareLayer EMPTY = new ShareLayer("", 0xFFFFFFFF);
+    }
 
-    private final String iconPresetId;
-    private final int tint;
+    public static final ShareVisuals EMPTY = new ShareVisuals(
+            ShareLayer.EMPTY, ShareLayer.EMPTY, "", "");
+
+    private final ShareLayer bgLayer;
+    private final ShareLayer fgLayer;
     private final String displayName;
     private final String description;
 
-    public ShareVisuals(String iconPresetId, int tint, String displayName, String description) {
-        this.iconPresetId = iconPresetId == null ? "" : iconPresetId;
-        this.tint = tint;
+    public ShareVisuals(ShareLayer bgLayer, ShareLayer fgLayer,
+                        String displayName, String description) {
+        this.bgLayer = bgLayer != null ? bgLayer : ShareLayer.EMPTY;
+        this.fgLayer = fgLayer != null ? fgLayer : ShareLayer.EMPTY;
         this.displayName = displayName == null ? "" : displayName;
         this.description = description == null ? "" : description;
     }
 
-    public String getIconPresetId() { return iconPresetId; }
-    public int getTint() { return tint; }
+    public ShareLayer getBgLayer() { return bgLayer; }
+    public ShareLayer getFgLayer() { return fgLayer; }
     public String getDisplayName() { return displayName; }
     public String getDescription() { return description; }
 
+    /** Legacy compat: returns the foreground layer's symbol id. */
+    public String getIconPresetId() { return fgLayer.symbolId(); }
+    /** Legacy compat: returns the background layer's tint. */
+    public int getTint() { return bgLayer.tint(); }
+
     public void save(CompoundTag tag) {
-        tag.putString("iconPresetId", iconPresetId);
-        tag.putInt("tint", tint);
+        tag.putString("bgSymbolId", bgLayer.symbolId());
+        tag.putInt("bgTint", bgLayer.tint());
+        tag.putString("fgSymbolId", fgLayer.symbolId());
+        tag.putInt("fgTint", fgLayer.tint());
         tag.putString("displayName", displayName);
         tag.putString("description", description);
     }
@@ -39,11 +56,24 @@ public final class ShareVisuals {
         if (tag == null || tag.isEmpty()) {
             return EMPTY;
         }
-        return new ShareVisuals(
+        if (tag.contains("bgSymbolId")) {
+            // New two-layer format.
+            ShareLayer bg = new ShareLayer(
+                    tag.getString("bgSymbolId"),
+                    tag.contains("bgTint") ? tag.getInt("bgTint") : 0xFFFFFFFF);
+            ShareLayer fg = new ShareLayer(
+                    tag.contains("fgSymbolId") ? tag.getString("fgSymbolId") : "",
+                    tag.contains("fgTint") ? tag.getInt("fgTint") : 0xFFFFFFFF);
+            return new ShareVisuals(bg, fg,
+                    tag.contains("displayName") ? tag.getString("displayName") : "",
+                    tag.contains("description") ? tag.getString("description") : "");
+        }
+        // Legacy format: iconPresetId/tint → fgLayer; bgLayer = EMPTY.
+        ShareLayer fg = new ShareLayer(
                 tag.contains("iconPresetId") ? tag.getString("iconPresetId") : "",
-                tag.contains("tint") ? tag.getInt("tint") : 0xFFFFFFFF,
+                tag.contains("tint") ? tag.getInt("tint") : 0xFFFFFFFF);
+        return new ShareVisuals(ShareLayer.EMPTY, fg,
                 tag.contains("displayName") ? tag.getString("displayName") : "",
-                tag.contains("description") ? tag.getString("description") : ""
-        );
+                tag.contains("description") ? tag.getString("description") : "");
     }
 }

@@ -41,8 +41,9 @@ public class SlaveCompanyMirrorTests extends TestSuite {
     }
 
     private static S2CCompanyVisualBulkPacket.Entry sample(int id) {
+        // bgSymbolId, bgTint, fgSymbolId, fgTint, displayName, description, ...
         return new S2CCompanyVisualBulkPacket.Entry(
-                id, "leaf", 0xFF00FF00, "Green Corp", "Sustainable widgets",
+                id, "", 0xFF00FF00, "leaf", 0xFFFFFFFF, "Green Corp", "Sustainable widgets",
                 123L, 1000L, "GreenCorp", "internal desc", 4242,
                 List.of("Alex", "Bob"), 3);
     }
@@ -57,7 +58,7 @@ public class SlaveCompanyMirrorTests extends TestSuite {
                     AsyncCompanyManager.ListAllVisualsOutput.STREAM_CODEC.decode(buf);
             if (dec.entries().size() != 2) return fail("Expected 2, got " + dec.entries().size());
             if (dec.entries().get(0).companyId() != 1) return fail("cid[0] mismatch");
-            if (!"leaf".equals(dec.entries().get(1).iconPresetId())) return fail("preset[1] mismatch");
+            if (!"leaf".equals(dec.entries().get(1).fgSymbolId())) return fail("preset[1] mismatch");
             if (dec.entries().get(0).founderNames().size() != 2) return fail("founders size");
             return pass("ListAllVisualsOutput round-trip OK.");
         } finally {
@@ -95,7 +96,7 @@ public class SlaveCompanyMirrorTests extends TestSuite {
         SlaveCompanyMirror.updateSupply(21, 999L);
         S2CCompanyVisualBulkPacket.Entry got = SlaveCompanyMirror.snapshot().get(0);
         if (got.totalSharesIssued() != 999L) return fail("supply not patched: " + got.totalSharesIssued());
-        if (!"leaf".equals(got.iconPresetId())) return fail("visuals lost after supply patch");
+        if (!"leaf".equals(got.fgSymbolId())) return fail("visuals lost after supply patch");
         if (got.maxSupply() != 1000L) return fail("maxSupply changed unexpectedly");
         SlaveCompanyMirror.clear();
         return pass("Supply patch preserves visuals + max.");

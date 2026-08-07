@@ -31,7 +31,11 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
     public static final Type<S2CCompanyVisualBulkPacket> TYPE = new Type<>(
             ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2c_company_visual_bulk"));
 
-    public record Entry(int companyId, String iconPresetId, int tint, String displayName,
+    // v2.0.9 two-layer: bgSymbolId/bgTint/fgSymbolId/fgTint replace iconPresetId/tint.
+    public record Entry(int companyId,
+                        String bgSymbolId, int bgTint,
+                        String fgSymbolId, int fgTint,
+                        String displayName,
                         String description, long totalSharesIssued, long maxSupply,
                         String internalName, String companyDescription,
                         int bankAccountNr, List<String> founderNames,
@@ -39,24 +43,25 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
         public static Entry of(int companyId, ShareVisuals v, long issued, long max) {
             return of(companyId, v, issued, max, "", "", 0, List.of(), 0);
         }
-        /** Task #51 fix (v2.0.8) — extended with internal company metadata so the client
-         *  populates {@link CompanyInfoCache} at login without a follow-up ARRS lookup. */
+        /** Task #51 fix (v2.0.8) — extended with internal company metadata. */
         public static Entry of(int companyId, ShareVisuals v, long issued, long max,
                                String internalName, String companyDescription,
                                int bankAccountNr, List<String> founderNames) {
             return of(companyId, v, issued, max, internalName, companyDescription,
                     bankAccountNr, founderNames, 0);
         }
-        /** Task #52 (v2.0.8) — extended with a precomputed holderCount for the Overview tab. */
+        /** Task #52 (v2.0.8) — extended with holderCount. */
         public static Entry of(int companyId, ShareVisuals v, long issued, long max,
                                String internalName, String companyDescription,
                                int bankAccountNr, List<String> founderNames,
                                int holderCount) {
-            String preset = v != null ? v.getIconPresetId() : "";
-            int tint = v != null ? v.getTint() : 0xFFFFFFFF;
+            String bgSym = v != null ? v.getBgLayer().symbolId() : "";
+            int bgTint = v != null ? v.getBgLayer().tint() : 0xFFFFFFFF;
+            String fgSym = v != null ? v.getFgLayer().symbolId() : "";
+            int fgTint = v != null ? v.getFgLayer().tint() : 0xFFFFFFFF;
             String dn = v != null ? v.getDisplayName() : "";
             String desc = v != null ? v.getDescription() : "";
-            return new Entry(companyId, preset, tint, dn, desc, issued, max,
+            return new Entry(companyId, bgSym, bgTint, fgSym, fgTint, dn, desc, issued, max,
                     internalName == null ? "" : internalName,
                     companyDescription == null ? "" : companyDescription,
                     bankAccountNr,
@@ -70,19 +75,21 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
                     (buf, p) -> {
                         buf.writeVarInt(p.entries.size());
                         for (Entry e : p.entries) {
-                            buf.writeVarInt(e.companyId);
-                            buf.writeUtf(e.iconPresetId);
-                            buf.writeInt(e.tint);
-                            buf.writeUtf(e.displayName);
-                            buf.writeUtf(e.description);
-                            buf.writeVarLong(e.totalSharesIssued);
-                            buf.writeVarLong(e.maxSupply);
-                            buf.writeUtf(e.internalName);
-                            buf.writeUtf(e.companyDescription);
-                            buf.writeVarInt(e.bankAccountNr);
-                            buf.writeVarInt(e.founderNames.size());
-                            for (String fn : e.founderNames) buf.writeUtf(fn);
-                            buf.writeVarInt(e.holderCount);
+                            buf.writeVarInt(e.companyId());
+                            buf.writeUtf(e.bgSymbolId() == null ? "" : e.bgSymbolId());
+                            buf.writeInt(e.bgTint());
+                            buf.writeUtf(e.fgSymbolId() == null ? "" : e.fgSymbolId());
+                            buf.writeInt(e.fgTint());
+                            buf.writeUtf(e.displayName() == null ? "" : e.displayName());
+                            buf.writeUtf(e.description() == null ? "" : e.description());
+                            buf.writeVarLong(e.totalSharesIssued());
+                            buf.writeVarLong(e.maxSupply());
+                            buf.writeUtf(e.internalName() == null ? "" : e.internalName());
+                            buf.writeUtf(e.companyDescription() == null ? "" : e.companyDescription());
+                            buf.writeVarInt(e.bankAccountNr());
+                            buf.writeVarInt(e.founderNames().size());
+                            for (String fn : e.founderNames()) buf.writeUtf(fn);
+                            buf.writeVarInt(e.holderCount());
                         }
                     },
                     buf -> {
@@ -90,8 +97,10 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
                         List<Entry> out = new ArrayList<>(n);
                         for (int i = 0; i < n; i++) {
                             int cid = buf.readVarInt();
-                            String preset = buf.readUtf();
-                            int tint = buf.readInt();
+                            String bgSym = buf.readUtf();
+                            int bgTint = buf.readInt();
+                            String fgSym = buf.readUtf();
+                            int fgTint = buf.readInt();
                             String dn = buf.readUtf();
                             String desc = buf.readUtf();
                             long issued = buf.readVarLong();
@@ -103,7 +112,7 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
                             List<String> founders = new ArrayList<>(fn);
                             for (int j = 0; j < fn; j++) founders.add(buf.readUtf());
                             int holderCount = buf.readVarInt();
-                            out.add(new Entry(cid, preset, tint, dn, desc, issued, max,
+                            out.add(new Entry(cid, bgSym, bgTint, fgSym, fgTint, dn, desc, issued, max,
                                     internalName, companyDesc, accNr, founders, holderCount));
                         }
                         return new S2CCompanyVisualBulkPacket(out);
@@ -128,17 +137,20 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
     @Override
     public void handleOnClient(NetworkManager.PacketContext context) {
         for (Entry e : entries) {
-            ShareVisualCache.put(e.companyId,
-                    new ShareVisuals(e.iconPresetId, e.tint, e.displayName, e.description),
-                    e.totalSharesIssued, e.maxSupply);
+            ShareVisualCache.put(e.companyId(),
+                    new ShareVisuals(
+                            new ShareVisuals.ShareLayer(e.bgSymbolId(), e.bgTint()),
+                            new ShareVisuals.ShareLayer(e.fgSymbolId(), e.fgTint()),
+                            e.displayName(), e.description()),
+                    e.totalSharesIssued(), e.maxSupply());
             // Task #51 fix — mirror the internal Company metadata into CompanyInfoCache so
             // tooltips and CompanyManagementScreen render the canonical Company.name at login
             // even when ShareVisuals.displayName is blank.
-            if (e.internalName != null && !e.internalName.isEmpty()) {
+            if (e.internalName() != null && !e.internalName().isEmpty()) {
                 CompanyInfoCache.put(new CompanyInfoCache.Snapshot(
-                        e.companyId, e.internalName, e.companyDescription,
-                        e.maxSupply, e.totalSharesIssued,
-                        e.bankAccountNr, e.founderNames, e.holderCount));
+                        e.companyId(), e.internalName(), e.companyDescription(),
+                        e.maxSupply(), e.totalSharesIssued(),
+                        e.bankAccountNr(), e.founderNames(), e.holderCount()));
             }
         }
     }
