@@ -1,11 +1,13 @@
 package net.kroia.banksystem.banking.company;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -43,6 +45,8 @@ public final class Company {
     private final List<PayoutSchedule> payoutSchedules;
     /** Task #45 — monotonic schedule id allocator, scoped per Company. */
     private long nextScheduleId = 1L;
+    /** Persisted set of BlockPos positions of Share Stamper blocks bound to this company. */
+    private final Set<BlockPos> boundStampers = new HashSet<>();
 
     Company(int companyId, String name, int bankAccountNr, long maxSupply, long createdAt,
             String description, Set<UUID> founders, long totalSharesIssued,
@@ -151,6 +155,21 @@ public final class Company {
         return false;
     }
 
+    // ------------------------------------------------------------------
+    // Stamper binding persistence helpers (package-private)
+    // ------------------------------------------------------------------
+    void addBoundStamper(BlockPos pos) {
+        if (pos != null) boundStampers.add(pos.immutable());
+    }
+
+    void removeBoundStamper(BlockPos pos) {
+        if (pos != null) boundStampers.remove(pos.immutable());
+    }
+
+    public Set<BlockPos> getBoundStampers() {
+        return Collections.unmodifiableSet(boundStampers);
+    }
+
     boolean removeSchedule(long scheduleId) {
         return payoutSchedules.removeIf(s -> s.getScheduleId() == scheduleId);
     }
@@ -206,6 +225,16 @@ public final class Company {
             schedulesTag.add(entry);
         }
         tag.put("payoutSchedules", schedulesTag);
+
+        ListTag stampersTag = new ListTag();
+        for (BlockPos p : boundStampers) {
+            CompoundTag se = new CompoundTag();
+            se.putInt("x", p.getX());
+            se.putInt("y", p.getY());
+            se.putInt("z", p.getZ());
+            stampersTag.add(se);
+        }
+        tag.put("boundStampers", stampersTag);
     }
 
     /**
@@ -258,6 +287,13 @@ public final class Company {
             if (s.getScheduleId() >= nextSchedId) nextSchedId = s.getScheduleId() + 1;
         }
         loaded.nextScheduleId = nextSchedId;
+        if (tag.contains("boundStampers", Tag.TAG_LIST)) {
+            ListTag sl = tag.getList("boundStampers", Tag.TAG_COMPOUND);
+            for (int i = 0; i < sl.size(); i++) {
+                CompoundTag se = sl.getCompound(i);
+                loaded.boundStampers.add(new BlockPos(se.getInt("x"), se.getInt("y"), se.getInt("z")));
+            }
+        }
         return loaded;
     }
 }

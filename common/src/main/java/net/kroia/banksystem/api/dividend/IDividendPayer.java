@@ -37,5 +37,6 @@ public interface IDividendPayer {
      */
     PayDividendResult payDividend(int companyId, long amountPerShare,
                                   boolean includeCompanyAccount,
-                                  @Nullable UUID actor);
+                                  @Nullable UUID actor,
+                                  short currencyItem);
 }

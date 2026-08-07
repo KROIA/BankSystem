@@ -111,13 +111,22 @@ public final class PayoutExecutor {
                 pendingEvents.add(new PayoutExecutedInfo(company.getCompanyId(),
                         schedule.getScheduleId(), company.getBankAccountNr(),
                         schedule.getTargetUUID(), schedule.getAmount(), status, nowMs));
-                if (outcome.reason != null) {
-                    // Spec B.4 — accumulate the missed execution.
-                    cm.recordMissedExecution(company.getCompanyId(), schedule.getScheduleId(),
-                            schedule.getAmount());
+                boolean oneTime = schedule.getMode() == PayoutSchedule.Mode.ONE_TIME;
+                if (outcome.reason == null && oneTime) {
+                    // Feature C — ONE_TIME success: self-delete; no advancement needed.
+                    cm.deleteSchedule(company.getCompanyId(), schedule.getScheduleId());
+                } else {
+                    if (outcome.reason != null && !oneTime) {
+                        // Spec B.4 — accumulate the missed execution (not for ONE_TIME).
+                        cm.recordMissedExecution(company.getCompanyId(), schedule.getScheduleId(),
+                                schedule.getAmount());
+                    }
+                    // Feature C — ONE_TIME failure: retry at next tick interval (1 s) instead of
+                    // the full schedule interval (which could be hours away).
+                    long advance = oneTime ? PAYOUT_TICK_INTERVAL : schedule.getIntervalTicks();
+                    cm.advanceSchedule(company.getCompanyId(), schedule.getScheduleId(),
+                            nowTick + advance);
                 }
-                cm.advanceSchedule(company.getCompanyId(), schedule.getScheduleId(),
-                        nowTick + schedule.getIntervalTicks());
             }
         });
 

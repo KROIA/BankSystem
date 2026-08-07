@@ -582,13 +582,22 @@ public final class AsyncCompanyManager {
     }
 
     // Task #49 (v2.0.8) — dividend distribution.
-    public record PayDividendInput(int companyId, long amountPerShare, boolean includeCompanyAccount, UUID callerUUID) {
-        public static final StreamCodec<RegistryFriendlyByteBuf, PayDividendInput> STREAM_CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_INT,  p -> p.companyId,
-                ByteBufCodecs.VAR_LONG, p -> p.amountPerShare,
-                ByteBufCodecs.BOOL,     p -> p.includeCompanyAccount,
-                UUIDUtil.STREAM_CODEC,  p -> p.callerUUID,
-                PayDividendInput::new);
+    public record PayDividendInput(int companyId, long amountPerShare, boolean includeCompanyAccount, UUID callerUUID,
+                                   short currencyItem) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, PayDividendInput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.companyId);
+                    buf.writeVarLong(v.amountPerShare);
+                    buf.writeBoolean(v.includeCompanyAccount);
+                    buf.writeUUID(v.callerUUID);
+                    buf.writeShort(v.currencyItem);
+                },
+                buf -> new PayDividendInput(
+                        buf.readVarInt(),
+                        buf.readVarLong(),
+                        buf.readBoolean(),
+                        buf.readUUID(),
+                        buf.readShort()));
     }
     public record PayDividendOutput(int resultCode, long totalPaid, int holderCount) {
         public static final StreamCodec<RegistryFriendlyByteBuf, PayDividendOutput> STREAM_CODEC = StreamCodec.composite(
@@ -1952,14 +1961,15 @@ public final class AsyncCompanyManager {
                 BACKEND_INSTANCES != null ? BACKEND_INSTANCES.DIVIDEND_PAYER : null;
         if (payer == null) return OutputData.of(FunctionType.PAY_DIVIDEND, new PayDividendOutput(CODE_INTERNAL, 0L, 0));
         net.kroia.banksystem.api.PayDividendResult result =
-                payer.payDividend(in.companyId, in.amountPerShare, in.includeCompanyAccount, in.callerUUID);
+                payer.payDividend(in.companyId, in.amountPerShare, in.includeCompanyAccount, in.callerUUID,
+                        in.currencyItem);
         int code = switch (result.reason()) {
             case OK -> CODE_OK;
             case NOT_MASTER, INTERNAL -> CODE_INTERNAL;
             case COMPANY_MISSING -> CODE_NOT_FOUND;
             case INVALID_INPUT -> CODE_INVALID_INPUT;
             case NO_SHARES -> CODE_NO_SHARES;
-            case INSUFFICIENT_FUNDS -> CODE_INSUFFICIENT_FUNDS;
+            case INSUFFICIENT_FUNDS, CURRENCY_ITEM_MISSING -> CODE_INSUFFICIENT_FUNDS;
             case NO_PERMISSION -> CODE_NO_PERMISSION;
         };
         return OutputData.of(FunctionType.PAY_DIVIDEND,
@@ -1968,12 +1978,20 @@ public final class AsyncCompanyManager {
 
     /** Task #49 (v2.0.8) — slave helper: forward a dividend distribution request to master. */
     public static CompletableFuture<PayDividendOutput> payDividendAsync(int companyId, long amountPerShare,
-                                                                       boolean includeCompanyAccount, UUID caller) {
+                                                                       boolean includeCompanyAccount, UUID caller,
+                                                                       short currencyItem) {
         InputData input = InputData.of(FunctionType.PAY_DIVIDEND,
-                new PayDividendInput(companyId, amountPerShare, includeCompanyAccount, caller));
+                new PayDividendInput(companyId, amountPerShare, includeCompanyAccount, caller, currencyItem));
         CompletableFuture<PayDividendOutput> f = new CompletableFuture<>();
         dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;
+    }
+
+    /** Task #49 (v2.0.8) — slave helper: pay dividend with money (default currency). */
+    public static CompletableFuture<PayDividendOutput> payDividendAsync(int companyId, long amountPerShare,
+                                                                       boolean includeCompanyAccount, UUID caller) {
+        return payDividendAsync(companyId, amountPerShare, includeCompanyAccount, caller,
+                net.kroia.banksystem.banking.company.PayoutSchedule.MONEY_CURRENCY);
     }
 
     /** Task #51 (v2.0.8) — slave helper: fetch Share Stamper positions bound to a company. */

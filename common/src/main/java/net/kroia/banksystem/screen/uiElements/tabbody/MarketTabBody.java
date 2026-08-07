@@ -62,6 +62,7 @@ public class MarketTabBody extends TabBody {
         closeHintLabel = new Label(tr("close_market_confirm_msg"));
         closeHintLabel.setAlignment(Label.Alignment.LEFT);
         closeConfirmBox = new TextBox();
+        closeConfirmBox.setOnTextChanged(t -> updateCloseButtonState());
         closeButton = new Button(tr("close_market"), this::onClose);
 
         addChild(statusLabel);
@@ -119,7 +120,9 @@ public class MarketTabBody extends TabBody {
         pauseResumeButton.setEnabled(hasMarket && authorised);
         closeHintLabel.setEnabled(hasMarket && founder);
         closeConfirmBox.setEnabled(hasMarket && founder);
-        closeButton.setEnabled(hasMarket && founder);
+        // Close button starts disabled; enabled only when the user types the company name.
+        closeButton.setEnabled(false);
+        if (hasMarket && founder) updateCloseButtonState();
         statusLabel.setText(switch (state) {
             case LOADING -> tr("market_checking");
             case UNAVAILABLE -> tr("market_unavailable");
@@ -185,13 +188,16 @@ public class MarketTabBody extends TabBody {
                 confirmMsg));
     }
 
-    private void onClose() {
+    private void updateCloseButtonState() {
+        if (state != MarketState.HAS_MARKET || !founder) return;
         var info = screen.info();
         String canonical = info != null && info.present() ? info.name() : screen.getCompanyName();
-        if (!closeConfirmBox.getText().equals(canonical)) {
-            popup(tr("error_title"), tr("name_mismatch"));
-            return;
-        }
+        boolean matches = !closeConfirmBox.getText().isEmpty()
+                && closeConfirmBox.getText().equals(canonical);
+        closeButton.setEnabled(matches);
+    }
+
+    private void onClose() {
         net.kroia.banksystem.util.BankSystemGuiScreen.switchScreen(AskPopupScreen.warningPopup(screen,
                 () -> AsyncCompanyManager.closeShareMarketAsync(screen.getCompanyId(), screen.callerUUID())
                         .thenAccept(out -> onClientThread(() -> {

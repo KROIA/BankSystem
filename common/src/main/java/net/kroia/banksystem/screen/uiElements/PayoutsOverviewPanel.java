@@ -59,10 +59,11 @@ public class PayoutsOverviewPanel extends GuiElement {
     @Override
     protected void layoutChanged() {
         int w = getWidth();
-        int y = 0;
-        headerLabel.setBounds(0, y, w, 20); y += 22;
-        infoLabel.setBounds(0, y, w, 20); y += 24;
-        int btnW = Math.min(200, w);
-        openButton.setBounds(0, y, btnW, 20);
+        int p = 5;  // inner padding
+        int y = p;
+        headerLabel.setBounds(p, y, w - 2 * p, 20); y += 22;
+        infoLabel.setBounds(p, y, w - 2 * p, 20); y += 24;
+        int btnW = Math.min(100, (w - 2 * p) / 2);  // half of available width, max 100px
+        openButton.setBounds(p, y, btnW, 20);
     }
 }

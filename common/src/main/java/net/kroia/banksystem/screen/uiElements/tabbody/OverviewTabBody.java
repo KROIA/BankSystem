@@ -8,7 +8,7 @@ import net.kroia.banksystem.screen.custom.CompanyManagementScreen;
 import net.kroia.banksystem.screen.uiElements.InfoPopupScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.TextBox;
+import net.kroia.modutilities.gui.elements.MultiLineTextBox;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
@@ -25,7 +25,7 @@ public class OverviewTabBody extends TabBody {
     private final Label[] rowLabels;
     private final Label[] rowValues;
     private final Label descriptionHeader;
-    private final TextBox descriptionBox;   // editable variant
+    private final MultiLineTextBox descriptionBox;   // editable variant
     private final Label descriptionLabel;   // read-only variant
     private final Button saveButton;
     private final boolean editable;
@@ -50,7 +50,8 @@ public class OverviewTabBody extends TabBody {
         descriptionHeader.setAlignment(Label.Alignment.LEFT);
         addChild(descriptionHeader);
 
-        descriptionBox = new TextBox();
+        descriptionBox = new MultiLineTextBox();
+        descriptionBox.setMaxLength(512);
         descriptionLabel = new Label("");
         descriptionLabel.setAlignment(Label.Alignment.TOP_LEFT);
         saveButton = new Button(Component.translatable(PREFIX + "save").getString(), this::onSave);
@@ -156,7 +157,7 @@ public class OverviewTabBody extends TabBody {
         y += SECTION_SPACING;
         descriptionHeader.setBounds(PADDING, y, w - 2 * PADDING, ROW_HEIGHT);
         y += ROW_HEIGHT + ROW_SPACING;
-        int descHeight = ROW_HEIGHT * 2;
+        int descHeight = ROW_HEIGHT * 4; // MultiLineTextBox needs more vertical space
         if (editable) {
             descriptionBox.setBounds(PADDING, y, w - 2 * PADDING, descHeight);
             y += descHeight + ROW_SPACING;

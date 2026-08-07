@@ -87,6 +87,8 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
         payDividendButton = new Button(PAY_DIVIDEND.getString(), this::onPayDividendClicked);
         payDividendButton.setEnabled(canManage);
         totalLabel = new Label("");
+        totalLabel.setHoverTooltipSupplier(() ->
+                Component.translatable(PREFIX + "total_per_hour_tooltip").getString());
         countLabel = new Label("");
         failedLabel = new Label("");
         emptyLabel = new Label(NO_SCHEDULES.getString());
@@ -141,8 +143,9 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
                     long perHour = 0L;
                     for (PayoutSchedule s : schedules) {
                         listView.addChild(new PayoutRowWidget(companyId, s, getThisPlayerUUID(), canManage, this, this::refresh, nowTick));
-                        // Money-denominated schedules only — item currencies are not $-comparable.
-                        if (!s.isPaused() && s.getIntervalTicks() > 0 && s.isMoneyCurrency()) {
+                        // Money-only recurring schedules — items and one-time are not $-comparable.
+                        if (!s.isPaused() && s.getIntervalTicks() > 0
+                                && s.isMoneyCurrency() && !s.isOneTime()) {
                             perHour += s.getAmount() * 72000L / s.getIntervalTicks();
                         }
                     }

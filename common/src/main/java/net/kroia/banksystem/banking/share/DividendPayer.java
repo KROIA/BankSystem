@@ -51,7 +51,8 @@ public final class DividendPayer implements IDividendPayer {
     @Override
     public PayDividendResult payDividend(int companyId, long amountPerShare,
                                          boolean includeCompanyAccount,
-                                         @Nullable UUID actor) {
+                                         @Nullable UUID actor,
+                                         short currencyItem) {
         if (instances == null || instances.isSlaveServer) return PayDividendResult.of(PayDividendResult.Reason.NOT_MASTER);
         if (amountPerShare <= 0L) return PayDividendResult.of(PayDividendResult.Reason.INVALID_INPUT);
 
@@ -123,10 +124,23 @@ public final class DividendPayer implements IDividendPayer {
 
         IServerBankAccount sourceAccount = bm.getBankAccount(companyAccountNr);
         if (sourceAccount == null) return PayDividendResult.of(PayDividendResult.Reason.INTERNAL);
-        ItemID moneyId = MoneyItem.getItemID();
-        if (moneyId == null || !moneyId.isValid()) return PayDividendResult.of(PayDividendResult.Reason.INTERNAL);
-        ISyncServerBank sourceMoneyBank = sourceAccount.getBank(moneyId);
-        if (sourceMoneyBank == null) return PayDividendResult.of(PayDividendResult.Reason.INTERNAL);
+
+        // Resolve the payout currency: sentinel 0 → money, else the registered item.
+        boolean isMoney = (currencyItem == net.kroia.banksystem.banking.company.PayoutSchedule.MONEY_CURRENCY);
+        ItemID payoutId;
+        if (isMoney) {
+            payoutId = MoneyItem.getItemID();
+            if (payoutId == null || !payoutId.isValid()) return PayDividendResult.of(PayDividendResult.Reason.INTERNAL);
+        } else {
+            payoutId = new ItemID(currencyItem);
+        }
+
+        ISyncServerBank sourceMoneyBank = sourceAccount.getBank(payoutId);
+        if (sourceMoneyBank == null) {
+            return PayDividendResult.of(isMoney
+                    ? PayDividendResult.Reason.INTERNAL
+                    : PayDividendResult.Reason.CURRENCY_ITEM_MISSING);
+        }
 
         // All-or-nothing precheck — free (unlocked) balance only. Locked funds do
         // not settle dividends. Consistent with PayoutExecutor.transfer semantics
@@ -136,7 +150,7 @@ public final class DividendPayer implements IDividendPayer {
         }
 
         long nowMs = System.currentTimeMillis();
-        short moneyShort = moneyId.getShort();
+        short payoutShort = payoutId.getShort();
         List<TransactionLogRecord> ledger = new ArrayList<>(snapshots.size() * 2);
         long paid = 0L;
         int paidHolders = 0;
@@ -152,8 +166,11 @@ public final class DividendPayer implements IDividendPayer {
             }
             IServerBankAccount targetAccount = bm.getBankAccount(snap.accountNr);
             if (targetAccount == null) continue;
-            ISyncServerBank targetBank = targetAccount.getBank(moneyId);
-            if (targetBank == null) continue;
+            ISyncServerBank targetBank = targetAccount.getBank(payoutId);
+            if (targetBank == null) {
+                targetBank = targetAccount.getOrCreateBank(payoutId);
+                if (targetBank == null) continue;
+            }
             BankStatus status = sourceMoneyBank.transfer(payAmount, targetBank);
             if (status != BankStatus.SUCCESS) {
                 // Precheck should have guaranteed sufficient funds; log and skip.
@@ -172,10 +189,10 @@ public final class DividendPayer implements IDividendPayer {
             }
             // Outbound row on company account, inbound row on holder.
             ledger.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    companyAccountNr, actor, TransactionLogRecord.Kind.DIVIDEND, moneyShort,
+                    companyAccountNr, actor, TransactionLogRecord.Kind.DIVIDEND, payoutShort,
                     payAmount, snap.accountNr, companyId, nowMs, null));
             ledger.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    snap.accountNr, actor, TransactionLogRecord.Kind.DIVIDEND, moneyShort,
+                    snap.accountNr, actor, TransactionLogRecord.Kind.DIVIDEND, payoutShort,
                     payAmount, companyAccountNr, companyId, nowMs, null));
         }
 

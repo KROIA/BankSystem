@@ -567,6 +567,8 @@ public final class CompanyManager implements ServerSaveableChunked {
         if (pos == null) return;
         stamperBindings.computeIfAbsent(companyId, k -> new HashSet<>())
                 .add(new StamperBinding(pos, dim));
+        Company company = byId.get(companyId);
+        if (company != null) company.addBoundStamper(pos);
     }
 
     /** Convenience — removes any binding at {@code pos} regardless of dimension. */
@@ -576,6 +578,8 @@ public final class CompanyManager implements ServerSaveableChunked {
         if (set == null) return;
         set.removeIf(b -> b.pos().equals(pos));
         if (set.isEmpty()) stamperBindings.remove(companyId);
+        Company company = byId.get(companyId);
+        if (company != null) company.removeBoundStamper(pos);
     }
 
     public void unregisterStamper(int companyId, BlockPos pos, String dim) {
@@ -584,15 +588,19 @@ public final class CompanyManager implements ServerSaveableChunked {
         if (set == null) return;
         set.remove(new StamperBinding(pos, dim == null ? "" : dim));
         if (set.isEmpty()) stamperBindings.remove(companyId);
+        Company company = byId.get(companyId);
+        if (company != null) company.removeBoundStamper(pos);
     }
 
     public List<BlockPos> listStampers(int companyId) {
-        Set<StamperBinding> set = stamperBindings.get(companyId);
-        if (set == null || set.isEmpty()) return List.of();
-        // De-dupe positions across dimensions for the current BlockPos-only UI/wire format.
-        LinkedHashSet<BlockPos> distinct = new LinkedHashSet<>();
-        for (StamperBinding b : set) distinct.add(b.pos());
-        return new ArrayList<>(distinct);
+        // Company NBT is the persisted source of truth; the runtime index adds
+        // in-session binds that may not yet be saved.
+        LinkedHashSet<BlockPos> result = new LinkedHashSet<>();
+        Company company = byId.get(companyId);
+        if (company != null) result.addAll(company.getBoundStampers());
+        Set<StamperBinding> rt = stamperBindings.get(companyId);
+        if (rt != null) for (StamperBinding b : rt) result.add(b.pos());
+        return new ArrayList<>(result);
     }
 
     /** Test hook — clears the runtime stamper-binding index. */
@@ -722,6 +730,10 @@ public final class CompanyManager implements ServerSaveableChunked {
                 String dim = entry.contains("dim") ? entry.getString("dim") : "";
                 stamperBindings.computeIfAbsent(cid, k -> new HashSet<>())
                         .add(new StamperBinding(pos, dim));
+                // Migration: populate Company.boundStampers from legacy stamper_bindings
+                // (old saves that predate Company-embedded persistence).
+                Company migCo = byId.get(cid);
+                if (migCo != null) migCo.addBoundStamper(pos);
             }
         }
         return true;

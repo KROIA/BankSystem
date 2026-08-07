@@ -26,7 +26,15 @@ import java.util.UUID;
 public final class PayoutSchedule {
 
     /** Spec B.2 — payout mode. Persisted by name; missing tag → FIXED_PAYOUT. */
-    public enum Mode { FIXED_PAYOUT, DIVIDEND }
+    public enum Mode {
+        FIXED_PAYOUT,
+        DIVIDEND,
+        /** Feature C — executes once at the scheduled time, then self-removes. */
+        ONE_TIME
+    }
+
+    /** @return {@code true} when this schedule removes itself after one successful execution. */
+    public boolean isOneTime() { return mode == Mode.ONE_TIME; }
 
     /** Sentinel for "no explicit target account — use the target's personal account". */
     public static final int NO_TARGET_ACCOUNT = -1;

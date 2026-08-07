@@ -42,6 +42,7 @@ public class SharesTabBody extends TabBody {
     private final TextBox descriptionBox;
     private final Button saveButton;
     private final Label stamperHeader;
+    private final Button refreshButton;
     private final VerticalListView stamperList;
 
     private final boolean editable;
@@ -91,6 +92,7 @@ public class SharesTabBody extends TabBody {
 
         stamperHeader = new Label(Component.translatable(PREFIX + "stamper_bindings").getString() + ":");
         stamperHeader.setAlignment(Label.Alignment.LEFT);
+        refreshButton = new Button(Component.translatable(PREFIX + "refresh").getString(), this::fetchStampers);
         stamperList = new VerticalListView();
         LayoutGrid l = new LayoutGrid();
         l.columns = 1; l.rows = 0; l.spacing = 2; l.padding = 2;
@@ -109,6 +111,7 @@ public class SharesTabBody extends TabBody {
         addChild(descriptionBox);
         addChild(saveButton);
         addChild(stamperHeader);
+        addChild(refreshButton);
         addChild(stamperList);
 
         fetchStampers();
@@ -262,7 +265,8 @@ public class SharesTabBody extends TabBody {
         y += ROW_HEIGHT + ROW_SPACING;
         saveButton.setBounds(w - PADDING - 100, y, 100, ROW_HEIGHT);
         y += ROW_HEIGHT + SECTION_SPACING;
-        stamperHeader.setBounds(PADDING, y, w - 2 * PADDING, ROW_HEIGHT);
+        stamperHeader.setBounds(PADDING, y, w - 2 * PADDING - 60, ROW_HEIGHT);
+        refreshButton.setBounds(w - PADDING - 55, y, 55, ROW_HEIGHT);
         y += ROW_HEIGHT + ROW_SPACING;
         int listHeight = Math.min(120, Math.max(ROW_HEIGHT, h - y - PADDING));
         stamperList.setBounds(PADDING, y, w - 2 * PADDING, listHeight);

@@ -2,14 +2,22 @@ package net.kroia.banksystem.screen.custom;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.company.AsyncCompanyManager;
+import net.kroia.banksystem.banking.company.PayoutSchedule;
+import net.kroia.banksystem.screen.util.DividendCurrencyPrefs;
+import net.kroia.banksystem.screen.uiElements.ItemBalancePickerPopup;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
+import net.kroia.modutilities.gui.elements.Frame;
+import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.UUID;
 
@@ -32,6 +40,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
 
     private static final String PREFIX = "gui." + BankSystemMod.MOD_ID + ".pay_dividend_screen.";
     private static final Component TITLE = Component.translatable(PREFIX + "title");
+    private static final Component CURRENCY = Component.translatable(PREFIX + "currency");
     private static final Component AMOUNT = Component.translatable(PREFIX + "amount");
     private static final Component PAY = Component.translatable(PREFIX + "pay");
     private static final Component CANCEL = Component.translatable(PREFIX + "cancel");
@@ -46,11 +55,20 @@ public class PayDividendScreen extends BankSystemGuiScreen {
     private static final int COLOR_OK = 0xFF10b981;
     private static final int COLOR_ERR = 0xFFe11d48;
 
+    private static final int DIALOG_W = 340;
+    private static final int DIALOG_H = 145;
+
     private final GuiScreen parent;
     private final int companyId;
     private final UUID caller;
 
+    private short currencyItem = PayoutSchedule.MONEY_CURRENCY;
+
+    private final Frame frame = new Frame();
     private Label titleLabel;
+    private Label currencyLabel;
+    private Button currencyButton;
+    private ItemView currencyIcon;
     private Label amountLabel;
     private TextBox amountBox;
     private Button payButton;
@@ -62,11 +80,23 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         this.parent = parent;
         this.companyId = companyId;
         this.caller = caller;
+        this.currencyItem = DividendCurrencyPrefs.get(companyId);
         setupUi();
     }
 
     private void setupUi() {
         titleLabel = new Label(TITLE.getString());
+
+        // Currency picker row.
+        currencyLabel = new Label(CURRENCY.getString());
+        currencyLabel.setAlignment(Label.Alignment.RIGHT);
+        currencyButton = new Button("", this::onPickCurrencyClicked);
+        currencyButton.setHoverTooltipSupplier(() ->
+                Component.translatable(PREFIX + "currency_tooltip").getString());
+        currencyIcon = new ItemView();
+        currencyIcon.setShowCount(false);
+        currencyButton.addChild(currencyIcon);
+        applyCurrency(currencyItem);
 
         amountLabel = new Label(AMOUNT.getString());
         amountLabel.setAlignment(Label.Alignment.RIGHT);
@@ -81,12 +111,31 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         cancelButton = new Button(CANCEL.getString(), this::onClose);
         statusLabel = new Label("");
 
-        addElement(titleLabel);
-        addElement(amountLabel);
-        addElement(amountBox);
-        addElement(payButton);
-        addElement(cancelButton);
-        addElement(statusLabel);
+        addElement(frame);
+        frame.addChild(titleLabel);
+        frame.addChild(currencyLabel);
+        frame.addChild(currencyButton);
+        frame.addChild(amountLabel);
+        frame.addChild(amountBox);
+        frame.addChild(statusLabel);
+        frame.addChild(payButton);
+        frame.addChild(cancelButton);
+    }
+
+    private void applyCurrency(short newItem) {
+        currencyItem = newItem;
+        DividendCurrencyPrefs.set(companyId, newItem);
+        ItemStack stack;
+        if (newItem == PayoutSchedule.MONEY_CURRENCY) {
+            stack = net.kroia.banksystem.minecraft.item.BankSystemItems.MONEY.get().getDefaultInstance();
+        } else {
+            stack = ItemIDManager.getItemStack(new ItemID(newItem));
+        }
+        if (currencyIcon != null) currencyIcon.setItemStack(stack);
+    }
+
+    private void onPickCurrencyClicked() {
+        switchScreen(new ItemBalancePickerPopup(this, companyId, caller, this::applyCurrency));
     }
 
     private long parsedAmount() {
@@ -109,7 +158,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         // Bug batch 3 #5 (v2.0.8) — paying dividends to the company's own account makes
         // no sense (the money just returns to itself). Always exclude — the checkbox
         // has been removed from the UI and the server enforces exclusion in DividendPayer.
-        AsyncCompanyManager.payDividendAsync(companyId, amount, false, caller).thenAccept(out -> {
+        AsyncCompanyManager.payDividendAsync(companyId, amount, false, caller, currencyItem).thenAccept(out -> {
             if (out == null) {
                 statusLabel.setText(RESULT_INTERNAL.getString());
                 statusLabel.setTextColor(COLOR_ERR);
@@ -163,23 +212,30 @@ public class PayDividendScreen extends BankSystemGuiScreen {
 
     @Override
     protected void updateLayout(Gui gui) {
-        int spacing = 5;
-        int padding = 5;
-        int width = getWidth() - 2 * padding;
         if (titleLabel == null) return;
+        frame.setBounds((getWidth() - DIALOG_W) / 2, (getHeight() - DIALOG_H) / 2, DIALOG_W, DIALOG_H);
 
-        int y = padding;
-        titleLabel.setBounds(padding, y, width, 20); y += 25;
+        int p = 8;
+        int spacing = 5;
+        int fw = frame.getWidth() - 2 * p;
+        int y = p;
+        titleLabel.setBounds(p, y, fw, 16); y += 22;
 
-        int col = width / 2;
-        amountLabel.setBounds(padding, y, col - spacing, 20);
-        amountBox.setBounds(padding + col, y, col - spacing, 20);
-        y += 25;
+        int col = fw / 2;
+        currencyLabel.setBounds(p, y, fw - 20 - spacing, 20);
+        currencyButton.setBounds(p + fw - 20, y, 20, 20);
+        currencyIcon.setBounds(2, 2, 16, 16);
+        y += 26;
 
-        statusLabel.setBounds(padding, y, width, 20);
+        amountLabel.setBounds(p, y, col - spacing, 20);
+        amountBox.setBounds(p + col, y, col, 20);
+        y += 26;
 
-        int btnW = (width - spacing) / 2;
-        payButton.setBounds(padding, getHeight() - 25, btnW, 20);
-        cancelButton.setBounds(padding + btnW + spacing, getHeight() - 25, btnW, 20);
+        statusLabel.setBounds(p, y, fw, 16);
+
+        int btnW = (fw - spacing) / 2;
+        int btnY = frame.getHeight() - p - 20;
+        payButton.setBounds(p, btnY, btnW, 20);
+        cancelButton.setBounds(p + btnW + spacing, btnY, btnW, 20);
     }
 }

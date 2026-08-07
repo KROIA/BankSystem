@@ -105,7 +105,9 @@ public class PayoutRowWidget extends BankSystemGuiElement {
         // BUG 1 fix (v2.0.8) — fixed-point applies to ALL currencies (money AND items).
         amountLabel = new Label(MoneyFormat.format(schedule.getAmount()));
         amountLabel.setHoverTooltipSupplier(TT_AMOUNT::getString);
-        intervalLabel = new Label(TimeFormat.formatTickDuration(schedule.getIntervalTicks()));
+        intervalLabel = new Label(schedule.getMode() == PayoutSchedule.Mode.ONE_TIME
+                ? Component.translatable(PREFIX + "one_time").getString()
+                : TimeFormat.formatTickDuration(schedule.getIntervalTicks()));
         intervalLabel.setHoverTooltipSupplier(TT_INTERVAL::getString);
         // Bug C fix (v2.0.8) — cache the master-observed "now" so the countdown can
         // be recomputed each frame from the client's world tick without waiting on
@@ -171,7 +173,8 @@ public class PayoutRowWidget extends BankSystemGuiElement {
             String str = uuid.toString();
             player = str.length() > 8 ? str.substring(0, 8) : str;
         }
-        return s.getTargetAccountName().isEmpty() ? player : player + " — " + s.getTargetAccountName();
+        return s.getTargetAccountName().isEmpty() ? player
+                : "Player: \"" + player + "\", Bank: \"" + s.getTargetAccountName() + "\"";
     }
 
     /** Spec A.8 — translated per-reason status text (was a cryptic "!?" glyph). */
@@ -255,7 +258,7 @@ public class PayoutRowWidget extends BankSystemGuiElement {
         // the button is absent) so column widths don't reshuffle when a schedule
         // starts failing. Slot is left empty when missedCount == 0.
         int missedW = getTextWidth(PAY_MISSED.getString()) + spacing * 2;
-        int iconW = 18;
+        int iconW = 20;
         int rest = Math.max(0, width - editW - missedW - iconW);
         // BUG 3 rebalance — Target 35 / Amount 12 / Interval 12 / Next 15 / Status 26.
         int targetW = rest * 35 / 100;
@@ -263,7 +266,7 @@ public class PayoutRowWidget extends BankSystemGuiElement {
         int intervalW = rest * 12 / 100;
         int nextW = rest * 15 / 100;
         int statusW = rest - targetW - amountW - intervalW - nextW;
-        currencyIcon.setBounds(0, (height - 16) / 2, 16, 16);
+        currencyIcon.setBounds(2, (height - 16) / 2, 16, 16);
         int x = iconW;
         nameLabel.setBounds(x, 0, targetW, height); x += targetW;
         amountLabel.setBounds(x, 0, amountW, height); x += amountW;

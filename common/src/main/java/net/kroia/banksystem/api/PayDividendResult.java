@@ -33,7 +33,13 @@ public record PayDividendResult(Reason reason, long totalPaid, int holderCount) 
          */
         NO_PERMISSION,
         /** Internal error (bank manager missing, source account missing, ...). */
-        INTERNAL
+        INTERNAL,
+        /**
+         * The company's bank account does not hold the requested currency item —
+         * raised when {@code currencyItem != MONEY_CURRENCY} and no matching item
+         * bank exists on the source account.
+         */
+        CURRENCY_ITEM_MISSING
     }
 
     public boolean success() { return reason == Reason.OK; }

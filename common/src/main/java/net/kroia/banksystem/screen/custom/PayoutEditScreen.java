@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.banking.company.PayoutSchedule;
 import net.kroia.banksystem.screen.uiElements.ItemBalancePickerPopup;
 import net.kroia.banksystem.screen.uiElements.SplitPlayerAccountPickerPopup;
+import net.kroia.banksystem.screen.util.PayoutCurrencyPrefs;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
@@ -15,6 +16,7 @@ import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.ItemView;
+import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.VerticalListView;
@@ -54,6 +56,10 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
     private static final Component INTERVAL_CUSTOM = Component.translatable(PREFIX + "interval_custom");
     private static final Component PAUSED = Component.translatable(PREFIX + "paused");
     private static final Component PAUSED_TOOLTIP = Component.translatable(PREFIX + "paused_tooltip");
+    private static final Component ONE_TIME = Component.translatable(PREFIX + "one_time");
+    private static final Component ONE_TIME_TOOLTIP = Component.translatable(PREFIX + "one_time_tooltip");
+    private static final Component EXECUTE_IN = Component.translatable(PREFIX + "execute_in");
+    private static final Component EXECUTE_IN_TOOLTIP = Component.translatable(PREFIX + "execute_in_tooltip");
     private static final Component MODE_DIVIDEND = Component.translatable(PREFIX + "mode_dividend");
     private static final Component MODE_DIVIDEND_TOOLTIP = Component.translatable(PREFIX + "mode_dividend_tooltip");
     private static final Component TARGET = Component.translatable(PREFIX + "target");
@@ -109,6 +115,11 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
     private TextBox customMinutesBox;
     private CheckBox pausedCheckBox;
     private CheckBox dividendCheckBox;
+    private CheckBox oneTimeCheckBox;
+    private TextBox executeInBox;
+    private Frame timingFrame;
+    private Frame targetFrame;
+    private Frame historyFrame;
     private Label targetLabel;
     private Button pickTargetButton;
     private Label historyLabel;
@@ -134,6 +145,9 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
             this.targetAccountName = schedule.getTargetAccountName();
             this.currencyItem = schedule.getCurrencyItem();
             if (targetName.isEmpty() && targetUUID != null) this.targetName = truncate(targetUUID);
+        } else {
+            // New schedule: pre-select the last used currency for this company.
+            this.currencyItem = PayoutCurrencyPrefs.get(companyId);
         }
         setupUi();
     }
@@ -167,8 +181,8 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         applyCurrency(currencyItem, original == null ? MoneyFormat.format(100L * MoneyFormat.SCALE)
                 : MoneyFormat.format(original.getAmount()));
 
-        intervalLabel = new Label(INTERVAL.getString());
-        intervalLabel.setAlignment(Label.Alignment.RIGHT); // Spec A.5
+        intervalLabel = new Label(INTERVAL.getString() + ":");
+        intervalLabel.setAlignment(Label.Alignment.RIGHT);
         // REDESIGN 1 (v2.0.8) — radio-button row replaces the DropDownMenu.
         int startIdx = 1; // 1h default
         if (original != null) {
@@ -215,11 +229,28 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         dividendCheckBox.setChecked(original != null && original.getMode() == PayoutSchedule.Mode.DIVIDEND);
         dividendCheckBox.setEnabled(canManage);
         dividendCheckBox.setHoverTooltipSupplier(MODE_DIVIDEND_TOOLTIP::getString);
-        dividendCheckBox.setOnStateChanged(this::applyModeVisibility);
+        dividendCheckBox.setOnStateChanged(checked -> applyModeVisibility(checked || (oneTimeCheckBox != null && oneTimeCheckBox.isChecked())));
+
+        // Feature C — ONE_TIME mode toggle.
+        oneTimeCheckBox = new CheckBox(ONE_TIME.getString());
+        oneTimeCheckBox.setChecked(original != null && original.getMode() == PayoutSchedule.Mode.ONE_TIME);
+        oneTimeCheckBox.setEnabled(canManage);
+        oneTimeCheckBox.setHoverTooltipSupplier(ONE_TIME_TOOLTIP::getString);
+        oneTimeCheckBox.setOnStateChanged(this::applyOneTimeModeVisibility);
+
+        // Feature C — delay text box for ONE_TIME mode (entered in real-time minutes).
+        executeInBox = new TextBox();
+        executeInBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 9, 0));
+        executeInBox.setText("1");
+        executeInBox.setHoverTooltipSupplier(EXECUTE_IN_TOOLTIP::getString);
+        executeInBox.setEnabled(canManage && oneTimeCheckBox.isChecked());
 
         targetLabel = new Label(TARGET.getString() + ": " + targetDisplay());
         pickTargetButton = new Button(PICK_TARGET.getString(), this::onPickTargetClicked);
         pickTargetButton.setEnabled(canManage);
+        pickTargetButton.setHoverTooltipSupplier(
+                Component.translatable(PREFIX + "pick_target_tooltip")::getString);
+        pickTargetButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.LEFT);
 
         historyLabel = new Label(HISTORY.getString());
         totalPaidLabel = new Label(Component.translatable(TOTAL_PAID_KEY, "0.00").getString());
@@ -240,17 +271,25 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
             deleteButton = new Button(DELETE.getString(), this::onDeleteClicked);
         }
 
+        timingFrame = new Frame();
+        targetFrame = new Frame();
+        historyFrame = new Frame();
         addElement(titleLabel);
         addElement(amountLabel);
         addElement(amountBox);
         addElement(currencyButton);
+        addElement(timingFrame);
         addElement(intervalLabel);
         for (Button b : intervalButtons) addElement(b);
         addElement(customMinutesBox);
         addElement(pausedCheckBox);
+        addElement(targetFrame);
         addElement(dividendCheckBox);
+        addElement(oneTimeCheckBox);
+        addElement(executeInBox);
         addElement(targetLabel);
         addElement(pickTargetButton);
+        addElement(historyFrame);
         addElement(historyLabel);
         addElement(totalPaidLabel);
         addElement(historyListView);
@@ -259,6 +298,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         if (deleteButton != null) addElement(deleteButton);
 
         applyModeVisibility(dividendCheckBox.isChecked());
+        applyOneTimeModeVisibility(oneTimeCheckBox.isChecked());
         applyIntervalSelection();
 
         // Populate total-paid + last-20 history rows best-effort.
@@ -286,28 +326,43 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
     }
 
     private void applyIntervalSelection() {
+        boolean oneTime = oneTimeCheckBox != null && oneTimeCheckBox.isChecked();
         for (int i = 0; i < intervalButtons.length; i++) {
             intervalButtons[i].setBackgroundColor(
                     i == selectedIntervalIdx ? RADIO_SELECTED_COLOR : RADIO_IDLE_COLOR);
+            intervalButtons[i].setEnabled(canManage && !oneTime);
         }
-        // The custom-minutes TextBox only shows while "Custom" is selected.
-        customMinutesBox.setEnabled(canManage && selectedIntervalIdx == intervalButtons.length - 1);
+        // The custom-minutes TextBox only shows while "Custom" is selected and not ONE_TIME.
+        customMinutesBox.setEnabled(canManage && !oneTime && selectedIntervalIdx == intervalButtons.length - 1);
+        if (executeInBox != null) executeInBox.setEnabled(canManage && oneTime);
     }
 
     private void applyModeVisibility(boolean dividend) {
+        // Hide target row only in dividend mode; ONE_TIME + FIXED still has a target.
         targetLabel.setEnabled(!dividend);
         pickTargetButton.setEnabled(!dividend && canManage);
     }
 
+    private void applyOneTimeModeVisibility(boolean oneTime) {
+        // Toggle between preset intervals+custom and the one-time delay box.
+        for (Button b : intervalButtons) b.setEnabled(!oneTime && canManage);
+        customMinutesBox.setEnabled(!oneTime && canManage && selectedIntervalIdx == intervalButtons.length - 1);
+        executeInBox.setEnabled(oneTime && canManage);
+        // ONE_TIME + DIVIDEND is valid; re-apply dividend visibility.
+        applyModeVisibility(dividendCheckBox.isChecked());
+    }
+
     private String targetDisplay() {
         if (targetName.isEmpty()) return "-";
-        // Spec A.9 — "<player-name> — <bank-account-name>".
-        return targetAccountName.isEmpty() ? targetName : targetName + " — " + targetAccountName;
+        // Spec A.9 — Player: "<player-name>", Bank: "<bank-account-name>".
+        return targetAccountName.isEmpty() ? targetName
+                : "Player: \"" + targetName + "\", Bank: \"" + targetAccountName + "\"";
     }
 
     /** Apply the chosen currency: icon, amount regex (2 decimals for money, integers for items). */
     private void applyCurrency(short newCurrency, String amountText) {
         currencyItem = newCurrency;
+        PayoutCurrencyPrefs.set(companyId, newCurrency);
         boolean money = isMoneyCurrency();
         // BUG 1 fix — all currencies use fixed-point with 2 decimals.
         amountBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 12, 2));
@@ -363,7 +418,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
             String amount = MoneyFormat.format(row.amount());
             String target = row.targetPlayerName().isEmpty() ? "" :
                     (row.targetAccountName().isEmpty() ? row.targetPlayerName()
-                            : row.targetPlayerName() + " — " + row.targetAccountName());
+                            : "Player: \"" + row.targetPlayerName() + "\", Bank: \"" + row.targetAccountName() + "\"");
             String catchUp = row.typeOrdinal() == 1 ? " [" + TYPE_CATCH_UP.getString() + "]" : "";
             label = new Label(TimeFormat.formatTimestamp(row.time()) + "  " + amount
                     + (target.isEmpty() ? "" : "  " + target)
@@ -384,6 +439,16 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
     }
 
     private long selectedIntervalTicks() {
+        // ONE_TIME: delay is taken from executeInBox (in real-time minutes).
+        if (oneTimeCheckBox != null && oneTimeCheckBox.isChecked()) {
+            try {
+                long minutes = Long.parseLong(executeInBox.getText().trim());
+                if (minutes < 1L) return 0L;
+                return Math.multiplyExact(minutes, TICKS_PER_MINUTE);
+            } catch (NumberFormatException | ArithmeticException e) {
+                return 0L;
+            }
+        }
         int idx = selectedIntervalIdx;
         if (idx >= 0 && idx < INTERVAL_PRESETS.length) return INTERVAL_PRESETS[idx];
         try {
@@ -427,10 +492,13 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         if (amount <= 0L) return;
         long intervalTicks = selectedIntervalTicks();
         if (intervalTicks <= 0L) return;
-        boolean paused = pausedCheckBox.isChecked();
         boolean dividend = dividendCheckBox.isChecked();
-        byte mode = (byte) (dividend ? PayoutSchedule.Mode.DIVIDEND.ordinal()
-                : PayoutSchedule.Mode.FIXED_PAYOUT.ordinal());
+        boolean oneTime = oneTimeCheckBox.isChecked();
+        // ONE_TIME schedules must not be paused (they self-delete after one run).
+        boolean paused = !oneTime && pausedCheckBox.isChecked();
+        PayoutSchedule.Mode modeEnum = oneTime ? PayoutSchedule.Mode.ONE_TIME
+                : (dividend ? PayoutSchedule.Mode.DIVIDEND : PayoutSchedule.Mode.FIXED_PAYOUT);
+        byte mode = (byte) modeEnum.ordinal();
         UUID target = dividend ? null : targetUUID;
         int accountNr = dividend ? PayoutSchedule.NO_TARGET_ACCOUNT : targetAccountNr;
 
@@ -496,52 +564,83 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         if (titleLabel == null) return;
 
         int y = padding;
-        titleLabel.setBounds(padding, y, width, 20); y += 25;
-
         int col = width / 2;
-        amountLabel.setBounds(padding, y, col - spacing, 20);
+        // Title (1/4 width) shares the row with the amount label + textbox + currency button.
+        int titleW = width / 4;
+        titleLabel.setBounds(padding, y, titleW - spacing, 20);
+        amountLabel.setBounds(padding + titleW, y, col - titleW - spacing, 20);
         amountBox.setBounds(padding + col, y, col - spacing - 24, 20);
         currencyButton.setBounds(padding + col + (col - spacing - 22), y, 22, 20);
         currencyIcon.setBounds(3, 2, 16, 16);
         y += 25;
 
-        intervalLabel.setBounds(padding, y, col - spacing, 20);
-        // BUG 5 fix (v2.0.8) — weighted radio widths: "1 MC day" text overflowed
-        // the equal-width slot. Weights 0.9 / 0.9 / 1.4 / 0.8 (sum = 4).
-        int radioTotal = col - spacing - 3 * 2;
+        int fp = 3; // frame inner padding
+        int frameY = y - fp;
+
+        // Row A: oneTimeCheckBox (left ~35%) | intervalLabel (narrow) | radio buttons (remaining)
+        int oneTimeW = width * 35 / 100;
+        int intervalLabelW = col / 3;  // ~1/6 of total width
+        oneTimeCheckBox.setBounds(padding + fp, y, oneTimeW - fp - spacing, 20);
+        intervalLabel.setBounds(padding + fp + oneTimeW - fp, y, intervalLabelW, 20);
+        // Radio buttons start after the interval label:
+        int radioStart = padding + fp + oneTimeW + intervalLabelW + spacing;
+        int radioAvail = (padding + width - fp) - radioStart;
+        int gapTotal = 3 * 2;
+        int buttonTotal = radioAvail - gapTotal;
         float[] radioWeights = { 0.9f, 0.9f, 1.4f, 0.8f };
         int[] radioWs = new int[intervalButtons.length];
         int consumed = 0;
         for (int i = 0; i < intervalButtons.length - 1; i++) {
-            radioWs[i] = Math.round(radioTotal * radioWeights[i] / 4.0f);
+            radioWs[i] = Math.round(buttonTotal * radioWeights[i] / 4.0f);
             consumed += radioWs[i];
         }
-        radioWs[intervalButtons.length - 1] = radioTotal - consumed;
-        int rx = padding + col;
+        radioWs[intervalButtons.length - 1] = buttonTotal - consumed;
+        int rx = radioStart;
         for (int i = 0; i < intervalButtons.length; i++) {
             intervalButtons[i].setBounds(rx, y, radioWs[i], 20);
             rx += radioWs[i] + 2;
         }
         y += 25;
 
-        customMinutesBox.setBounds(padding + col, y, col - spacing, 20);
+        // Row B: textbox (right half); executeInBox and customMinutesBox overlap.
+        customMinutesBox.setBounds(padding + col, y, col - spacing - fp, 20);
+        executeInBox.setBounds(padding + col, y, col - spacing - fp, 20);
         y += 25;
 
-        pausedCheckBox.setBounds(padding, y, col - spacing, 20);
-        dividendCheckBox.setBounds(padding + col, y, col - spacing, 20);
+        // Row C: pausedCheckBox (1/4 width inside frame)
+        pausedCheckBox.setBounds(padding + fp, y, (width - fp * 2) / 4, 20);
+        int rowCBottom = y + 20;  // actual pixel bottom of the checkbox
         y += 25;
 
-        targetLabel.setBounds(padding, y, col - spacing, 20);
+        // Frame covers rows A–C with equal fp padding top and bottom.
+        timingFrame.setBounds(padding, frameY, width, rowCBottom - frameY + fp);
+        y += fp + spacing;
+
+        // dividendCheckBox + target row inside targetFrame.
+        int dividendCheckBoxY = y;
+        dividendCheckBox.setBounds(padding + fp, y, width / 2, 20);
+        y += 25;
+
+        targetLabel.setBounds(padding + fp, y, col - spacing - fp, 20);
         pickTargetButton.setBounds(padding + col, y, col - spacing, 20);
         y += 25;
 
-        historyLabel.setBounds(padding, y, col - spacing, 20);
+        targetFrame.setBounds(padding, dividendCheckBoxY - fp, width, y - (dividendCheckBoxY - fp) + fp);
+
+        // Clear gap so history frame does not touch target frame.
+        y += spacing * 2;
+
+        int historyY = y;
+        historyLabel.setBounds(padding + fp, y, col - spacing - fp, 20);
         totalPaidLabel.setBounds(padding + col, y, col - spacing, 20);
         y += 25;
 
-        int listBottom = getHeight() - 30;
-        int listHeight = Math.max(0, listBottom - y);
+        // History frame ends just above the button row (buttons at getHeight()-25).
+        int btnAreaTop = getHeight() - 25;
+        int historyFrameBottom = btnAreaTop - spacing;
+        int listHeight = Math.max(0, historyFrameBottom - y);
         historyListView.setBounds(padding, y, width, listHeight);
+        historyFrame.setBounds(padding, historyY - fp, width, historyFrameBottom - (historyY - fp));
 
         int btnW = (width - 2 * spacing) / 3;
         saveButton.setBounds(padding, getHeight() - 25, btnW, 20);
