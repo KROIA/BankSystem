@@ -41,9 +41,9 @@ public class SlaveCompanyMirrorTests extends TestSuite {
     }
 
     private static S2CCompanyVisualBulkPacket.Entry sample(int id) {
-        // bgSymbolId, bgTint, fgSymbolId, fgTint, displayName, description, ...
+        // bgSymbolId, bgTint, fgSymbolId, fgTint, baseTint, displayName, description, ...
         return new S2CCompanyVisualBulkPacket.Entry(
-                id, "", 0xFF00FF00, "leaf", 0xFFFFFFFF, "Green Corp", "Sustainable widgets",
+                id, "", 0xFF00FF00, "leaf", 0xFFFFFFFF, 0xFFFFFFFF, "Green Corp", "Sustainable widgets",
                 123L, 1000L, "GreenCorp", "internal desc", 4242,
                 List.of("Alex", "Bob"), 3);
     }

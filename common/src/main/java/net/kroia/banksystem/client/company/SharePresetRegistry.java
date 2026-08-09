@@ -14,15 +14,16 @@ import java.util.Set;
  * Server uses {@link #isValidPresetId(String)} to validate the client's editor submission;
  * client uses {@link #getTexture(String)} to draw the icon overlay.
  *
- * <p>All 30 preset ids currently point to a single placeholder texture
- * ({@code assets/banksystem/textures/company/share_preset/_placeholder.png}) — art is
- * deferred per Task #46 deliverable notes. Registration structure (id → RL) is production
- * shape so filling in real art later is a data-only change.
+ * <p>Each preset id maps to its own texture at
+ * {@code assets/banksystem/textures/item/share_symbol/<id>.png}. The RLs are full file
+ * paths (with {@code textures/} prefix and {@code .png} extension) because they are used
+ * for direct GUI/render blits ({@code RenderType.text(rl)}), not atlas sprite lookups.
+ * Unknown ids fall back to {@link #placeholder()}.
  */
 public final class SharePresetRegistry {
 
     private static final ResourceLocation PLACEHOLDER = ResourceLocation.fromNamespaceAndPath(
-            BankSystemMod.MOD_ID, "textures/company/share_preset/_placeholder.png");
+            BankSystemMod.MOD_ID, "textures/item/share_symbol/_placeholder.png");
 
     private static final Map<String, ResourceLocation> PRESETS = new LinkedHashMap<>();
 
@@ -31,12 +32,13 @@ public final class SharePresetRegistry {
                 "leaf", "gear", "anvil", "pickaxe", "sword", "shield", "crown", "star",
                 "diamond", "emerald", "gold_ingot", "iron_ingot", "wheat", "apple", "fish",
                 "boat", "bow", "potion", "book", "map", "compass", "clock", "key", "lantern",
-                "torch", "bell", "heart", "skull", "flame", "snowflake"
+                "torch", "bell", "heart", "skull", "flame", "snowflake",
+                "coin", "scales", "chest", "barrel", "house", "tower", "tree", "mountain",
+                "sun", "moon", "bolt", "anchor", "hammer", "axe", "minecart"
         };
         for (String id : ids) {
-            // NOTE: all ids resolve to the placeholder texture in this ship (art deferred).
-            // Swap the RHS to `textures/company/share_preset/<id>.png` when art lands.
-            PRESETS.put(id, PLACEHOLDER);
+            PRESETS.put(id, ResourceLocation.fromNamespaceAndPath(
+                    BankSystemMod.MOD_ID, "textures/item/share_symbol/" + id + ".png"));
         }
     }
 

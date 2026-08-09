@@ -5,12 +5,16 @@ import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.banking.company.ShareVisuals;
 import net.kroia.banksystem.client.cache.ShareVisualCache;
 import net.kroia.banksystem.client.company.SharePresetRegistry;
+import net.kroia.banksystem.client.render.ShareVisualPreview;
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
+import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.kroia.banksystem.screen.uiElements.ColorPickerPopup;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CloseButton;
+import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.VerticalListView;
@@ -18,6 +22,7 @@ import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 import java.util.UUID;
@@ -41,6 +46,8 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
     private static final Component SAVE         = Component.translatable(PREFIX + "save");
     private static final Component DISPLAY_NAME = Component.translatable(PREFIX + "display_name");
     private static final Component DESCRIPTION  = Component.translatable(PREFIX + "description");
+    private static final Component PREVIEW      = Component.translatable(PREFIX + "preview");
+    private static final Component CARD_COLOR   = Component.translatable(PREFIX + "card_color");
 
     private final GuiScreen parent;
     private final int companyId;
@@ -59,6 +66,13 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
     private VerticalListView layerList;
     private ShareLayerPanel fgPanel;
     private ShareLayerPanel bgPanel;
+
+    private Label cardColorLabel;
+    private Button cardColorSwatch;
+    private int selectedBaseTint;
+
+    private Label previewLabel;
+    private ScaledItemView previewItem;
 
     public ShareVisualEditorScreen(GuiScreen parent, int companyId, ShareVisuals initial,
                                    UUID caller, boolean canManage) {
@@ -93,6 +107,14 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
         descriptionBox.setText(initial.getDescription() == null ? "" : initial.getDescription());
         descriptionBox.setEnabled(canManage);
 
+        // Stage 1 — base card tint (applies to the stamped_share card texture itself).
+        selectedBaseTint = initial.getBaseTint();
+        if ((selectedBaseTint & 0xFF000000) == 0) selectedBaseTint |= 0xFF000000;
+        cardColorLabel = new Label(CARD_COLOR.getString());
+        cardColorSwatch = new Button("", this::onPickCardColor);
+        applyCardSwatchColor(selectedBaseTint);
+        cardColorSwatch.setEnabled(canManage);
+
         // FG first (top of scroll list = foreground visual layer), BG second.
         fgPanel = new ShareLayerPanel("Foreground",
                 initial.getFgLayer().symbolId(), initial.getFgLayer().tint());
@@ -115,14 +137,54 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
             saveButton = new Button(SAVE.getString(), this::onSaveClicked);
         }
 
+        // Live item preview — renders the actual stamped share stack; the model +
+        // tint handlers pick up the unsaved editor state via ShareVisualPreview.
+        previewLabel = new Label(PREVIEW.getString());
+        previewItem = new ScaledItemView();
+        previewItem.setItemStack(StampedShareItem.ofCompany(
+                BankSystemItems.STAMPED_SHARE.get(), companyId));
+        previewItem.setShowTooltip(false);
+
         addElement(titleLabel);
         addElement(closeButton);
         addElement(displayNameLabel);
         addElement(displayNameBox);
         addElement(descriptionLabel);
         addElement(descriptionBox);
+        addElement(cardColorLabel);
+        addElement(cardColorSwatch);
         addElement(layerList);
+        addElement(previewLabel);
+        addElement(previewItem);
         if (saveButton != null) addElement(saveButton);
+
+        updatePreview();
+    }
+
+    /** Publish the current (unsaved) editor state so the preview stack renders it. */
+    private void updatePreview() {
+        ShareVisuals v = new ShareVisuals(
+                new ShareVisuals.ShareLayer(bgPanel.getSymbolId(), bgPanel.getEffectiveTint()),
+                new ShareVisuals.ShareLayer(fgPanel.getSymbolId(), fgPanel.getEffectiveTint()),
+                selectedBaseTint,
+                displayNameBox.getText(), descriptionBox.getText());
+        ShareVisualPreview.set(companyId, v);
+    }
+
+    private void applyCardSwatchColor(int argb) {
+        cardColorSwatch.setBackgroundColor(argb);
+        cardColorSwatch.setHoverColor(argb);
+        cardColorSwatch.setPressedColor(argb);
+    }
+
+    private void onPickCardColor() {
+        if (!canManage) return;
+        BankSystemGuiScreen.switchScreen(
+                new ColorPickerPopup(this, selectedBaseTint, argb -> {
+                    selectedBaseTint = argb;
+                    applyCardSwatchColor(argb);
+                    updatePreview();
+                }));
     }
 
     private void onSaveClicked() {
@@ -135,11 +197,12 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
         int fgTint = fgPanel.getEffectiveTint();
 
         AsyncCompanyManager.updateShareVisualsAsync(
-                        companyId, bgSym, bgTint, fgSym, fgTint, displayName, description, caller)
+                        companyId, bgSym, bgTint, fgSym, fgTint, selectedBaseTint, displayName, description, caller)
                 .thenAccept(out -> Minecraft.getInstance().execute(this::closeToParent));
     }
 
     private void closeToParent() {
+        ShareVisualPreview.clear();
         if (parent != null && this.minecraft != null) {
             this.minecraft.setScreen(parent);
         } else {
@@ -173,9 +236,17 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
         descriptionBox.setBounds(padding + col, y, col - spacing, 20);
         y += 22;
 
+        cardColorLabel.setBounds(padding, y, col - spacing, 20);
+        cardColorSwatch.setBounds(padding + col, y, 40, 20);
+        y += 22;
+
         int listHeight = ShareLayerPanel.PANEL_HEIGHT * 2 + 8;
         layerList.setBounds(padding, y, width, listHeight);
         y += listHeight + spacing;
+
+        int previewSize = 48;
+        previewLabel.setBounds(padding, y, col - spacing, previewSize);
+        previewItem.setBounds(padding + col, y, previewSize, previewSize);
 
         if (saveButton != null) {
             saveButton.setBounds(padding, getHeight() - 25, width, 20);
@@ -244,6 +315,7 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
                             presetId -> {
                                 selectedSymbolId = presetId == null ? "" : presetId;
                                 symbolButton.setText(selectedSymbolId.isEmpty() ? "(none)" : selectedSymbolId);
+                                updatePreview();
                             }));
         }
 
@@ -253,6 +325,7 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
                     new ColorPickerPopup(ShareVisualEditorScreen.this, selectedTint, argb -> {
                         selectedTint = argb;
                         applySwatchColor(argb);
+                        updatePreview();
                     }));
         }
 
@@ -271,6 +344,26 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
             symbolButton.setBounds(col, 22, col, 20);
             colorLabel.setBounds(0, 44, col - spacing, 20);
             colorSwatch.setBounds(col, 44, 40, 20);
+        }
+    }
+
+    /**
+     * {@link ItemView} that scales the item render up to fill its bounds (the stock
+     * ItemView only scales down; oversized bounds render a centered 16px icon).
+     */
+    private static final class ScaledItemView extends ItemView {
+        @Override
+        protected void render() {
+            ItemStack stack = getItemStack();
+            if (stack == null || stack.isEmpty()) return;
+            int size = Math.min(getWidth(), getHeight());
+            var graphics = getGraphics();
+            graphics.pushPose();
+            graphics.translate((getWidth() - size) / 2, (getHeight() - size) / 2, 0);
+            float scale = size / (float) DEFAULT_WIDTH;
+            graphics.scale(scale, scale, 1);
+            drawItem(stack, 0, 0);
+            graphics.popPose();
         }
     }
 

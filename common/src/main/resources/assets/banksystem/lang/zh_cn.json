@@ -415,6 +415,8 @@
   "gui.banksystem.share_visual_editor.tint": "颜色",
   "gui.banksystem.share_visual_editor.display_name": "显示名称",
   "gui.banksystem.share_visual_editor.description": "描述",
+  "gui.banksystem.share_visual_editor.preview": "预览",
+  "gui.banksystem.share_visual_editor.card_color": "卡片颜色",
   "gui.banksystem.bank_account_management_screen.share_visuals": "股票外观",
   "block.banksystem.share_stamper": "股票印章机",
   "container.banksystem.share_stamper": "股票印章机",

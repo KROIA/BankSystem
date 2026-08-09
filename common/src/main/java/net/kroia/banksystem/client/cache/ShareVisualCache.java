@@ -88,7 +88,7 @@ public final class ShareVisualCache {
                 ShareVisuals v = new ShareVisuals(
                         new ShareVisuals.ShareLayer(out.bgSymbolId(), out.bgTint()),
                         new ShareVisuals.ShareLayer(out.fgSymbolId(), out.fgTint()),
-                        out.displayName(), out.description());
+                        out.baseTint(), out.displayName(), out.description());
                 put(companyId, v, out.totalIssued(), out.maxSupply());
             });
         } catch (Throwable t) {

@@ -22,19 +22,29 @@ public final class ShareVisuals {
 
     private final ShareLayer bgLayer;
     private final ShareLayer fgLayer;
+    /** ARGB base card color; multiplied under both layers. Default white (no tint). */
+    private final int baseTint;
     private final String displayName;
     private final String description;
 
-    public ShareVisuals(ShareLayer bgLayer, ShareLayer fgLayer,
+    public ShareVisuals(ShareLayer bgLayer, ShareLayer fgLayer, int baseTint,
                         String displayName, String description) {
         this.bgLayer = bgLayer != null ? bgLayer : ShareLayer.EMPTY;
         this.fgLayer = fgLayer != null ? fgLayer : ShareLayer.EMPTY;
+        // Zero-alpha would render the card invisible — normalize to opaque.
+        this.baseTint = (baseTint & 0xFF000000) == 0 ? baseTint | 0xFF000000 : baseTint;
         this.displayName = displayName == null ? "" : displayName;
         this.description = description == null ? "" : description;
     }
 
+    public ShareVisuals(ShareLayer bgLayer, ShareLayer fgLayer,
+                        String displayName, String description) {
+        this(bgLayer, fgLayer, 0xFFFFFFFF, displayName, description);
+    }
+
     public ShareLayer getBgLayer() { return bgLayer; }
     public ShareLayer getFgLayer() { return fgLayer; }
+    public int getBaseTint() { return baseTint; }
     public String getDisplayName() { return displayName; }
     public String getDescription() { return description; }
 
@@ -48,6 +58,7 @@ public final class ShareVisuals {
         tag.putInt("bgTint", bgLayer.tint());
         tag.putString("fgSymbolId", fgLayer.symbolId());
         tag.putInt("fgTint", fgLayer.tint());
+        tag.putInt("baseTint", baseTint);
         tag.putString("displayName", displayName);
         tag.putString("description", description);
     }
@@ -65,6 +76,7 @@ public final class ShareVisuals {
                     tag.contains("fgSymbolId") ? tag.getString("fgSymbolId") : "",
                     tag.contains("fgTint") ? tag.getInt("fgTint") : 0xFFFFFFFF);
             return new ShareVisuals(bg, fg,
+                    tag.contains("baseTint") ? tag.getInt("baseTint") : 0xFFFFFFFF,
                     tag.contains("displayName") ? tag.getString("displayName") : "",
                     tag.contains("description") ? tag.getString("description") : "");
         }
@@ -73,6 +85,7 @@ public final class ShareVisuals {
                 tag.contains("iconPresetId") ? tag.getString("iconPresetId") : "",
                 tag.contains("tint") ? tag.getInt("tint") : 0xFFFFFFFF);
         return new ShareVisuals(ShareLayer.EMPTY, fg,
+                tag.contains("baseTint") ? tag.getInt("baseTint") : 0xFFFFFFFF,
                 tag.contains("displayName") ? tag.getString("displayName") : "",
                 tag.contains("description") ? tag.getString("description") : "");
     }

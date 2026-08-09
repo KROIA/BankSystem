@@ -545,6 +545,7 @@ public final class AsyncCompanyManager {
     public record UpdateShareVisualsInput(int companyId,
                                           String bgSymbolId, int bgTint,
                                           String fgSymbolId, int fgTint,
+                                          int baseTint,
                                           String displayName, String description, UUID callerUUID) {
         public static final StreamCodec<RegistryFriendlyByteBuf, UpdateShareVisualsInput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {
@@ -553,6 +554,7 @@ public final class AsyncCompanyManager {
                     buf.writeInt(v.bgTint);
                     buf.writeUtf(v.fgSymbolId == null ? "" : v.fgSymbolId);
                     buf.writeInt(v.fgTint);
+                    buf.writeInt(v.baseTint);
                     buf.writeUtf(v.displayName == null ? "" : v.displayName);
                     buf.writeUtf(v.description == null ? "" : v.description);
                     buf.writeUUID(v.callerUUID);
@@ -561,6 +563,7 @@ public final class AsyncCompanyManager {
                         buf.readVarInt(),
                         buf.readUtf(), buf.readInt(),
                         buf.readUtf(), buf.readInt(),
+                        buf.readInt(),
                         buf.readUtf(), buf.readUtf(), buf.readUUID()));
     }
     public record UpdateShareVisualsOutput(int resultCode) {
@@ -579,6 +582,7 @@ public final class AsyncCompanyManager {
     public record GetShareVisualsOutput(boolean present,
                                         String bgSymbolId, int bgTint,
                                         String fgSymbolId, int fgTint,
+                                        int baseTint,
                                         String displayName, String description,
                                         long totalIssued, long maxSupply) {
         public static final StreamCodec<RegistryFriendlyByteBuf, GetShareVisualsOutput> STREAM_CODEC = StreamCodec.of(
@@ -588,6 +592,7 @@ public final class AsyncCompanyManager {
                     buf.writeInt(v.bgTint);
                     buf.writeUtf(v.fgSymbolId == null ? "" : v.fgSymbolId);
                     buf.writeInt(v.fgTint);
+                    buf.writeInt(v.baseTint);
                     buf.writeUtf(v.displayName == null ? "" : v.displayName);
                     buf.writeUtf(v.description == null ? "" : v.description);
                     buf.writeVarLong(v.totalIssued);
@@ -597,10 +602,11 @@ public final class AsyncCompanyManager {
                         buf.readBoolean(),
                         buf.readUtf(), buf.readInt(),
                         buf.readUtf(), buf.readInt(),
+                        buf.readInt(),
                         buf.readUtf(), buf.readUtf(),
                         buf.readVarLong(), buf.readVarLong()));
         public static final GetShareVisualsOutput ABSENT =
-                new GetShareVisualsOutput(false, "", 0xFFFFFFFF, "", 0xFFFFFFFF, "", "", 0L, 0L);
+                new GetShareVisualsOutput(false, "", 0xFFFFFFFF, "", 0xFFFFFFFF, 0xFFFFFFFF, "", "", 0L, 0L);
     }
 
     // Task #49 (v2.0.8) — dividend distribution.
@@ -680,6 +686,7 @@ public final class AsyncCompanyManager {
                         buf.writeInt(e.bgTint());
                         buf.writeUtf(e.fgSymbolId() == null ? "" : e.fgSymbolId());
                         buf.writeInt(e.fgTint());
+                        buf.writeInt(e.baseTint());
                         buf.writeUtf(e.displayName() == null ? "" : e.displayName());
                         buf.writeUtf(e.description() == null ? "" : e.description());
                         buf.writeVarLong(e.totalSharesIssued());
@@ -701,6 +708,7 @@ public final class AsyncCompanyManager {
                         int bgTint = buf.readInt();
                         String fgSym = buf.readUtf();
                         int fgTint = buf.readInt();
+                        int baseTint = buf.readInt();
                         String dn = buf.readUtf();
                         String desc = buf.readUtf();
                         long issued = buf.readVarLong();
@@ -713,7 +721,7 @@ public final class AsyncCompanyManager {
                         for (int j = 0; j < fn; j++) founders.add(buf.readUtf());
                         int hc = buf.readVarInt();
                         out.add(new net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry(
-                                cid, bgSym, bgTint, fgSym, fgTint, dn, desc, issued, max, iname, cdesc, accNr, founders, hc));
+                                cid, bgSym, bgTint, fgSym, fgTint, baseTint, dn, desc, issued, max, iname, cdesc, accNr, founders, hc));
                     }
                     return new ListAllVisualsOutput(out);
                 });
@@ -1619,6 +1627,7 @@ public final class AsyncCompanyManager {
                 new net.kroia.banksystem.banking.company.ShareVisuals(
                         new net.kroia.banksystem.banking.company.ShareVisuals.ShareLayer(bgSym, in.bgTint),
                         new net.kroia.banksystem.banking.company.ShareVisuals.ShareLayer(fgSym, in.fgTint),
+                        in.baseTint,
                         displayName, description);
         if (!cm.updateShareVisuals(in.companyId, visuals)) {
             return OutputData.of(FunctionType.UPDATE_SHARE_VISUALS, new UpdateShareVisualsOutput(CODE_NOT_FOUND));
@@ -1901,6 +1910,7 @@ public final class AsyncCompanyManager {
                         v.getBgLayer().tint(),
                         v.getFgLayer().symbolId(),
                         v.getFgLayer().tint(),
+                        v.getBaseTint(),
                         v.getDisplayName() == null ? "" : v.getDisplayName(),
                         v.getDescription() == null ? "" : v.getDescription(),
                         company.getTotalSharesIssued(),
@@ -2130,10 +2140,11 @@ public final class AsyncCompanyManager {
     public static CompletableFuture<UpdateShareVisualsOutput> updateShareVisualsAsync(int companyId,
                                                                                      String bgSymbolId, int bgTint,
                                                                                      String fgSymbolId, int fgTint,
+                                                                                     int baseTint,
                                                                                      String displayName, String description,
                                                                                      UUID caller) {
         InputData input = InputData.of(FunctionType.UPDATE_SHARE_VISUALS,
-                new UpdateShareVisualsInput(companyId, bgSymbolId, bgTint, fgSymbolId, fgTint, displayName, description, caller));
+                new UpdateShareVisualsInput(companyId, bgSymbolId, bgTint, fgSymbolId, fgTint, baseTint, displayName, description, caller));
         CompletableFuture<UpdateShareVisualsOutput> f = new CompletableFuture<>();
         dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
         return f;

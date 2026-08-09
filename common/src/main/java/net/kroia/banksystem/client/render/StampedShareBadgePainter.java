@@ -26,6 +26,9 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
 
     public static final StampedShareBadgePainter INSTANCE = new StampedShareBadgePainter();
 
+    private static final ResourceLocation BASE_TEXTURE =
+            ResourceLocation.fromNamespaceAndPath("banksystem", "textures/item/stamped_share.png");
+
     private StampedShareBadgePainter() {}
 
     @Override
@@ -55,15 +58,35 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
         }
         if ((tint & 0xFF000000) == 0) tint |= 0xFF000000;
 
-        drawFilledQuad(pose, buffers, tint);
+        // ItemRenderer.renderGuiItem pre-applies scale(16, -16, 16) before calling BEWLR.
+        // Correct for this so the painter's 0-16 pixel coordinates land in the 16x16 slot.
+        // For GUI: translate to top-left corner and cancel the (16,-16,16) scale.
+        // For other contexts: center and scale to ~1-unit footprint.
+        pose.pushPose();
+        if (context == ItemDisplayContext.GUI) {
+            pose.translate(0f, 1f, 0f);
+            pose.scale(1f / 16f, -1f / 16f, 1f / 16f);
+        } else {
+            // World contexts (frame, ground, hands): vanilla has already applied
+            // the display transform plus translate(-0.5,-0.5,-0.5), so map the
+            // painter's 0-16 pixels onto the 0-1 item cube. The +0.5 z pushes the
+            // quad back onto the item plane (frame face) instead of floating half
+            // a unit in front. Z stays unscaled so the 0.01 painter-space layer
+            // offsets remain real depth separation (avoids z-fighting on ground).
+            pose.translate(0f, 1f, 0.5f);
+            pose.scale(1f / 16f, -1f / 16f, 1f);
+        }
+
+        drawFilledQuad(pose, buffers, tint, packedLight);
+        if (context != ItemDisplayContext.GUI) {
+            drawCardEdges(pose, buffers, tint, packedLight);
+        }
 
         if (hasVisuals && isGuiLikeContext(context)) {
             String preset = visuals.getFgLayer().symbolId();
             int fgTint = visuals.getFgLayer().tint();
             if ((fgTint & 0xFF000000) == 0) fgTint |= 0xFF000000;
             if (preset != null && !preset.isBlank()) {
-                // Draw the preset symbol texture tinted with fgLayer.tint.
-                // All presets currently share a placeholder texture; swap per-id textures when art ships.
                 ResourceLocation texture = SharePresetRegistry.getTexture(preset);
                 drawTexturedQuad(pose, buffers, texture, fgTint, packedLight);
             } else {
@@ -71,6 +94,8 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
                 drawInitials(pose, buffers, initials, fgTint, packedLight);
             }
         }
+
+        pose.popPose();
         return true;
     }
 
@@ -88,23 +113,69 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
         int r = FastColor.ARGB32.red(argb);
         int g = FastColor.ARGB32.green(argb);
         int b = FastColor.ARGB32.blue(argb);
-        consumer.addVertex(m,  0f,  0f, 0.01f).setColor(r, g, b, a).setUv(0f, 0f).setUv2(packedLight & 0xFFFF, (packedLight >> 16) & 0xFFFF);
-        consumer.addVertex(m,  0f, 16f, 0.01f).setColor(r, g, b, a).setUv(0f, 1f).setUv2(packedLight & 0xFFFF, (packedLight >> 16) & 0xFFFF);
-        consumer.addVertex(m, 16f, 16f, 0.01f).setColor(r, g, b, a).setUv(1f, 1f).setUv2(packedLight & 0xFFFF, (packedLight >> 16) & 0xFFFF);
-        consumer.addVertex(m, 16f,  0f, 0.01f).setColor(r, g, b, a).setUv(1f, 0f).setUv2(packedLight & 0xFFFF, (packedLight >> 16) & 0xFFFF);
+        int lu = packedLight & 0xFFFF, lv = (packedLight >> 16) & 0xFFFF;
+        // front face
+        consumer.addVertex(m,  0f,  0f, 0.01f).setColor(r, g, b, a).setUv(0f, 0f).setUv2(lu, lv);
+        consumer.addVertex(m,  0f, 16f, 0.01f).setColor(r, g, b, a).setUv(0f, 1f).setUv2(lu, lv);
+        consumer.addVertex(m, 16f, 16f, 0.01f).setColor(r, g, b, a).setUv(1f, 1f).setUv2(lu, lv);
+        consumer.addVertex(m, 16f,  0f, 0.01f).setColor(r, g, b, a).setUv(1f, 0f).setUv2(lu, lv);
+        // back face (reversed winding, mirrored U)
+        consumer.addVertex(m,  0f,  0f, -0.0625f).setColor(r, g, b, a).setUv(1f, 0f).setUv2(lu, lv);
+        consumer.addVertex(m, 16f,  0f, -0.0625f).setColor(r, g, b, a).setUv(0f, 0f).setUv2(lu, lv);
+        consumer.addVertex(m, 16f, 16f, -0.0625f).setColor(r, g, b, a).setUv(0f, 1f).setUv2(lu, lv);
+        consumer.addVertex(m,  0f, 16f, -0.0625f).setColor(r, g, b, a).setUv(1f, 1f).setUv2(lu, lv);
     }
 
-    private static void drawFilledQuad(PoseStack pose, MultiBufferSource buffers, int argb) {
-        var consumer = buffers.getBuffer(RenderType.gui());
+    private static void drawFilledQuad(PoseStack pose, MultiBufferSource buffers, int argb, int packedLight) {
+        var consumer = buffers.getBuffer(RenderType.text(BASE_TEXTURE));
         Matrix4f m = pose.last().pose();
         int a = FastColor.ARGB32.alpha(argb);
         int r = FastColor.ARGB32.red(argb);
         int g = FastColor.ARGB32.green(argb);
         int b = FastColor.ARGB32.blue(argb);
-        consumer.addVertex(m, 0f,  0f,  0f).setColor(r, g, b, a);
-        consumer.addVertex(m, 0f,  16f, 0f).setColor(r, g, b, a);
-        consumer.addVertex(m, 16f, 16f, 0f).setColor(r, g, b, a);
-        consumer.addVertex(m, 16f, 0f,  0f).setColor(r, g, b, a);
+        int lu = packedLight & 0xFFFF, lv = (packedLight >> 16) & 0xFFFF;
+        // front face
+        consumer.addVertex(m,  0f,  0f, 0f).setColor(r, g, b, a).setUv(0f, 0f).setUv2(lu, lv);
+        consumer.addVertex(m,  0f, 16f, 0f).setColor(r, g, b, a).setUv(0f, 1f).setUv2(lu, lv);
+        consumer.addVertex(m, 16f, 16f, 0f).setColor(r, g, b, a).setUv(1f, 1f).setUv2(lu, lv);
+        consumer.addVertex(m, 16f,  0f, 0f).setColor(r, g, b, a).setUv(1f, 0f).setUv2(lu, lv);
+        // back face (reversed winding, mirrored U)
+        consumer.addVertex(m,  0f,  0f, -0.0625f).setColor(r, g, b, a).setUv(1f, 0f).setUv2(lu, lv);
+        consumer.addVertex(m, 16f,  0f, -0.0625f).setColor(r, g, b, a).setUv(0f, 0f).setUv2(lu, lv);
+        consumer.addVertex(m, 16f, 16f, -0.0625f).setColor(r, g, b, a).setUv(0f, 1f).setUv2(lu, lv);
+        consumer.addVertex(m,  0f, 16f, -0.0625f).setColor(r, g, b, a).setUv(1f, 1f).setUv2(lu, lv);
+    }
+
+    private static void drawCardEdges(PoseStack pose, MultiBufferSource buffers, int argb, int packedLight) {
+        var consumer = buffers.getBuffer(RenderType.text(BASE_TEXTURE));
+        Matrix4f m = pose.last().pose();
+        int a = FastColor.ARGB32.alpha(argb);
+        int r = (int)(FastColor.ARGB32.red(argb)   * 0.65f);
+        int g = (int)(FastColor.ARGB32.green(argb) * 0.65f);
+        int b = (int)(FastColor.ARGB32.blue(argb)  * 0.65f);
+        int lu = packedLight & 0xFFFF, lv = (packedLight >> 16) & 0xFFFF;
+        float f = 0.01f;   // front z — matches fg face so edges seal flush
+        float t = -0.0625f; // back z
+        // top edge (y=0)
+        consumer.addVertex(m,  0f, 0f,  f).setColor(r,g,b,a).setUv(0f,0f).setUv2(lu,lv);
+        consumer.addVertex(m, 16f, 0f,  f).setColor(r,g,b,a).setUv(1f,0f).setUv2(lu,lv);
+        consumer.addVertex(m, 16f, 0f,  t).setColor(r,g,b,a).setUv(1f,1f).setUv2(lu,lv);
+        consumer.addVertex(m,  0f, 0f,  t).setColor(r,g,b,a).setUv(0f,1f).setUv2(lu,lv);
+        // bottom edge (y=16)
+        consumer.addVertex(m,  0f, 16f, t).setColor(r,g,b,a).setUv(0f,0f).setUv2(lu,lv);
+        consumer.addVertex(m, 16f, 16f, t).setColor(r,g,b,a).setUv(1f,0f).setUv2(lu,lv);
+        consumer.addVertex(m, 16f, 16f, f).setColor(r,g,b,a).setUv(1f,1f).setUv2(lu,lv);
+        consumer.addVertex(m,  0f, 16f, f).setColor(r,g,b,a).setUv(0f,1f).setUv2(lu,lv);
+        // left edge (x=0)
+        consumer.addVertex(m,  0f,  0f, t).setColor(r,g,b,a).setUv(0f,0f).setUv2(lu,lv);
+        consumer.addVertex(m,  0f,  0f, f).setColor(r,g,b,a).setUv(1f,0f).setUv2(lu,lv);
+        consumer.addVertex(m,  0f, 16f, f).setColor(r,g,b,a).setUv(1f,1f).setUv2(lu,lv);
+        consumer.addVertex(m,  0f, 16f, t).setColor(r,g,b,a).setUv(0f,1f).setUv2(lu,lv);
+        // right edge (x=16)
+        consumer.addVertex(m, 16f,  0f, f).setColor(r,g,b,a).setUv(0f,0f).setUv2(lu,lv);
+        consumer.addVertex(m, 16f,  0f, t).setColor(r,g,b,a).setUv(1f,0f).setUv2(lu,lv);
+        consumer.addVertex(m, 16f, 16f, t).setColor(r,g,b,a).setUv(1f,1f).setUv2(lu,lv);
+        consumer.addVertex(m, 16f, 16f, f).setColor(r,g,b,a).setUv(0f,1f).setUv2(lu,lv);
     }
 
     private static void drawInitials(PoseStack pose, MultiBufferSource buffers, String initials,

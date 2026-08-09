@@ -35,6 +35,7 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
     public record Entry(int companyId,
                         String bgSymbolId, int bgTint,
                         String fgSymbolId, int fgTint,
+                        int baseTint,
                         String displayName,
                         String description, long totalSharesIssued, long maxSupply,
                         String internalName, String companyDescription,
@@ -59,9 +60,10 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
             int bgTint = v != null ? v.getBgLayer().tint() : 0xFFFFFFFF;
             String fgSym = v != null ? v.getFgLayer().symbolId() : "";
             int fgTint = v != null ? v.getFgLayer().tint() : 0xFFFFFFFF;
+            int baseTint = v != null ? v.getBaseTint() : 0xFFFFFFFF;
             String dn = v != null ? v.getDisplayName() : "";
             String desc = v != null ? v.getDescription() : "";
-            return new Entry(companyId, bgSym, bgTint, fgSym, fgTint, dn, desc, issued, max,
+            return new Entry(companyId, bgSym, bgTint, fgSym, fgTint, baseTint, dn, desc, issued, max,
                     internalName == null ? "" : internalName,
                     companyDescription == null ? "" : companyDescription,
                     bankAccountNr,
@@ -80,6 +82,7 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
                             buf.writeInt(e.bgTint());
                             buf.writeUtf(e.fgSymbolId() == null ? "" : e.fgSymbolId());
                             buf.writeInt(e.fgTint());
+                            buf.writeInt(e.baseTint());
                             buf.writeUtf(e.displayName() == null ? "" : e.displayName());
                             buf.writeUtf(e.description() == null ? "" : e.description());
                             buf.writeVarLong(e.totalSharesIssued());
@@ -101,6 +104,7 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
                             int bgTint = buf.readInt();
                             String fgSym = buf.readUtf();
                             int fgTint = buf.readInt();
+                            int baseTint = buf.readInt();
                             String dn = buf.readUtf();
                             String desc = buf.readUtf();
                             long issued = buf.readVarLong();
@@ -112,7 +116,7 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
                             List<String> founders = new ArrayList<>(fn);
                             for (int j = 0; j < fn; j++) founders.add(buf.readUtf());
                             int holderCount = buf.readVarInt();
-                            out.add(new Entry(cid, bgSym, bgTint, fgSym, fgTint, dn, desc, issued, max,
+                            out.add(new Entry(cid, bgSym, bgTint, fgSym, fgTint, baseTint, dn, desc, issued, max,
                                     internalName, companyDesc, accNr, founders, holderCount));
                         }
                         return new S2CCompanyVisualBulkPacket(out);
@@ -141,7 +145,7 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
                     new ShareVisuals(
                             new ShareVisuals.ShareLayer(e.bgSymbolId(), e.bgTint()),
                             new ShareVisuals.ShareLayer(e.fgSymbolId(), e.fgTint()),
-                            e.displayName(), e.description()),
+                            e.baseTint(), e.displayName(), e.description()),
                     e.totalSharesIssued(), e.maxSupply());
             // Task #51 fix — mirror the internal Company metadata into CompanyInfoCache so
             // tooltips and CompanyManagementScreen render the canonical Company.name at login

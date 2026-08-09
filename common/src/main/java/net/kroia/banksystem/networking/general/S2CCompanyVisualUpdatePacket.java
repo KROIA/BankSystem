@@ -40,6 +40,7 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
                         buf.writeInt(p.bgTint);
                         buf.writeUtf(p.fgSymbolId);
                         buf.writeInt(p.fgTint);
+                        buf.writeInt(p.baseTint);
                         buf.writeUtf(p.displayName);
                         buf.writeUtf(p.description);
                         buf.writeVarLong(p.totalSharesIssued);
@@ -49,6 +50,7 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
                             buf.readVarInt(),
                             buf.readUtf(), buf.readInt(),
                             buf.readUtf(), buf.readInt(),
+                            buf.readInt(),
                             buf.readUtf(), buf.readUtf(),
                             buf.readVarLong(), buf.readVarLong()));
 
@@ -57,6 +59,7 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
     private final int bgTint;
     private final String fgSymbolId;
     private final int fgTint;
+    private final int baseTint;
     private final String displayName;
     private final String description;
     private final long totalSharesIssued;
@@ -65,6 +68,7 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
     public S2CCompanyVisualUpdatePacket(int companyId,
                                         String bgSymbolId, int bgTint,
                                         String fgSymbolId, int fgTint,
+                                        int baseTint,
                                         String displayName, String description,
                                         long totalSharesIssued, long maxSupply) {
         this.companyId = companyId;
@@ -72,6 +76,7 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
         this.bgTint = bgTint;
         this.fgSymbolId = fgSymbolId == null ? "" : fgSymbolId;
         this.fgTint = fgTint;
+        this.baseTint = baseTint;
         this.displayName = displayName == null ? "" : displayName;
         this.description = description == null ? "" : description;
         this.totalSharesIssued = totalSharesIssued;
@@ -85,6 +90,7 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
                 visuals != null ? visuals.getBgLayer().tint() : 0xFFFFFFFF,
                 visuals != null ? visuals.getFgLayer().symbolId() : "",
                 visuals != null ? visuals.getFgLayer().tint() : 0xFFFFFFFF,
+                visuals != null ? visuals.getBaseTint() : 0xFFFFFFFF,
                 visuals != null ? visuals.getDisplayName() : "",
                 visuals != null ? visuals.getDescription() : "",
                 totalSharesIssued, maxSupply);
@@ -148,7 +154,7 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
                 new ShareVisuals(
                         new ShareVisuals.ShareLayer(bgSymbolId, bgTint),
                         new ShareVisuals.ShareLayer(fgSymbolId, fgTint),
-                        displayName, description),
+                        baseTint, displayName, description),
                 totalSharesIssued, maxSupply);
     }
 }

@@ -304,9 +304,6 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemGuiElement.setBackend(INSTANCES);
         BankSystemEntities.registerRenderers();
 
-        // Task #50 (v2.0.8) — register the stamped-share ARGB tint handler.
-        net.kroia.banksystem.client.render.BankSystemColorHandlers.register();
-
         ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(BankSystemModBackend::onPlayerLeaveClientSide);
         ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(BankSystemModBackend::onPlayerJoinClientSide);
     }

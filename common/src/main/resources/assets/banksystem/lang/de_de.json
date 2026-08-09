@@ -415,6 +415,8 @@
   "gui.banksystem.share_visual_editor.tint": "Farbton",
   "gui.banksystem.share_visual_editor.display_name": "Anzeigename",
   "gui.banksystem.share_visual_editor.description": "Beschreibung",
+  "gui.banksystem.share_visual_editor.preview": "Vorschau",
+  "gui.banksystem.share_visual_editor.card_color": "Kartenfarbe",
   "gui.banksystem.bank_account_management_screen.share_visuals": "Aktien-Design",
   "block.banksystem.share_stamper": "Aktien-Prägestation",
   "container.banksystem.share_stamper": "Aktien-Prägestation",

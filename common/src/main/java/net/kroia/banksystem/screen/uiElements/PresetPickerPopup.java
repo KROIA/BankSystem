@@ -4,10 +4,13 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.client.company.SharePresetRegistry;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
+import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
+import net.kroia.modutilities.gui.elements.EmptyButton;
 import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.Label;
+import net.kroia.modutilities.gui.elements.TextureElement;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
@@ -50,7 +53,7 @@ public class PresetPickerPopup extends BankSystemGuiScreen {
         l.alignment = GuiElement.Alignment.TOP;
         list.setLayout(l);
         for (String id : SharePresetRegistry.orderedIds()) {
-            Button row = new Button(id, () -> {
+            PresetRow row = new PresetRow(id, () -> {
                 net.kroia.banksystem.util.BankSystemGuiScreen.switchScreen(parent);
                 onPick.accept(id);
             });
@@ -80,5 +83,32 @@ public class PresetPickerPopup extends BankSystemGuiScreen {
         cancel.setBounds(frame.getWidth() - p - 60, frame.getHeight() - p - 20, 60, 20);
         list.setBounds(p, titleLabel.getBottom() + 2, frame.getWidth() - 2 * p,
                 frame.getHeight() - titleLabel.getBottom() - 30);
+    }
+
+    /**
+     * One picker row: symbol preview (the full-size glyph texture from
+     * {@link SharePresetRegistry#getTexture(String)}) followed by the preset id.
+     */
+    private static final class PresetRow extends EmptyButton {
+        private final TextureElement icon;
+        private final Label label;
+
+        PresetRow(String id, Runnable onFallingEdge) {
+            super(onFallingEdge);
+            icon = new TextureElement(new GuiTexture(BankSystemMod.MOD_ID,
+                    SharePresetRegistry.getTexture(id).getPath(), 16, 16));
+            label = new Label(id);
+            label.setAlignment(Alignment.LEFT);
+            addChild(icon);
+            addChild(label);
+        }
+
+        @Override
+        protected void layoutChanged() {
+            int iconSize = Math.min(16, Math.max(8, getHeight() - 4));
+            icon.setBounds(3, (getHeight() - iconSize) / 2, iconSize, iconSize);
+            int textX = 3 + iconSize + 5;
+            label.setBounds(textX, 0, Math.max(0, getWidth() - textX - 2), getHeight());
+        }
     }
 }

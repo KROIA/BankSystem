@@ -1,7 +1,6 @@
 package net.kroia.banksystem.client.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import dev.architectury.registry.client.rendering.ColorHandlerRegistry;
 import net.kroia.banksystem.api.company.IShareIconRenderer;
 import net.kroia.banksystem.banking.company.ShareVisuals;
 import net.kroia.banksystem.client.cache.CompanyInfoCache;
@@ -16,21 +15,16 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Task #50 (v2.0.8) — Client-only wiring for stamped share visuals:
- * <ul>
- *   <li>Registers the {@link StampedShareItemColors} ARGB tint handler for the stamped
- *       share item via Architectury's {@link ColorHandlerRegistry} — cross-loader on
- *       Fabric / NeoForge / Quilt.</li>
- *   <li>Provides an {@link IShareIconRenderer} implementation that renders the
- *       stamped-share {@link ItemStack} for a given {@link ItemID} into an arbitrary
- *       screen-space rect via {@link GuiGraphics#renderItem} (tint applied by the
- *       registered {@link ItemColor} handler) — this is the concrete implementation
- *       returned from {@code BankSystemAPI.getShareIconRenderer()}.</li>
- * </ul>
+ * Task #50 (v2.0.8) — provides the {@link IShareIconRenderer} implementation that
+ * renders the stamped-share {@link ItemStack} for a given {@link ItemID} into an
+ * arbitrary screen-space rect via {@link GuiGraphics#renderItem} (card, tint and
+ * symbol layers drawn by {@link StampedShareRenderer} through the item's custom
+ * renderer) — this is the concrete implementation returned from
+ * {@code BankSystemAPI.getShareIconRenderer()}.
  *
- * <p>Both hooks live on the client only. On dedicated servers this class is never
- * loaded — the public API accessor returns {@code null}, matching the interface
- * contract (see {@code IShareIconRenderer} Javadoc).
+ * <p>Client only. On dedicated servers this class is never loaded — the public API
+ * accessor returns {@code null}, matching the interface contract (see
+ * {@code IShareIconRenderer} Javadoc).
  */
 public final class BankSystemColorHandlers {
 
@@ -156,18 +150,4 @@ public final class BankSystemColorHandlers {
     }
 
     private BankSystemColorHandlers() {}
-
-    /**
-     * Client-setup hook. Registers the tint handler for {@code BankSystemItems.STAMPED_SHARE}.
-     * Safe to call multiple times — {@link ColorHandlerRegistry} is idempotent per item.
-     */
-    public static void register() {
-        ColorHandlerRegistry.registerItemColors(new StampedShareItemColors(),
-                BankSystemItems.STAMPED_SHARE.get());
-    }
-
-    // Reference the class so the compiler keeps the import even if IDEs auto-prune it —
-    // StampedShareItem is the source of the companyId lookup underlying the tint handler.
-    @SuppressWarnings("unused")
-    private static final Class<?> KEEP_IMPORT = StampedShareItem.class;
 }
