@@ -569,6 +569,9 @@ public class BankSystemCommandsRegistration {
         // Task #43 (v2.0.8) — /company command tree (Phase 1: Company foundation).
         registerCompanyCommands(dispatcher);
 
+        // Task #54 (v2.0.9) — /banksystem symbols admin commands (master-gated, op-only).
+        registerSymbolCommands(dispatcher);
+
         boolean isSlave = BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer;
         if (BankSystemMod.ENABLE_DEV_FEATURES)
             TestCommandRegistration.register(dispatcher, "banksystem", "BankSystem", "banksystem", isSlave);
@@ -826,5 +829,98 @@ public class BankSystemCommandsRegistration {
     private static void debug(String msg)
     {
         BACKEND_INSTANCES.LOGGER.debug("[Commands] " + msg);
+    }
+
+    // ── Task #54 (v2.0.9) — /banksystem symbols ──────────────────────────────
+
+    private static void registerSymbolCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(
+            Commands.literal("banksystem")
+                .then(Commands.literal("symbols")
+                    .requires(src -> src.hasPermission(2))
+                    // list
+                    .then(Commands.literal("list")
+                        .executes(ctx -> {
+                            if (!isMasterSymbols(ctx.getSource())) return 0;
+                            net.kroia.banksystem.banking.company.ShareSymbolStore store =
+                                    BACKEND_INSTANCES.SHARE_SYMBOL_STORE;
+                            List<net.kroia.banksystem.banking.company.ShareSymbolStore.SymbolEntry> es =
+                                    store.getEntries();
+                            ctx.getSource().sendSuccess(() -> Component.literal(
+                                    "Symbols (revision " + store.getRevision() + "): " + es.size() + " total"), false);
+                            for (net.kroia.banksystem.banking.company.ShareSymbolStore.SymbolEntry e : es) {
+                                String hex8 = e.sha256Hex().substring(0, 8);
+                                ctx.getSource().sendSuccess(() -> Component.literal(
+                                        "  " + e.id() + "  ordinal=" + e.ordinal()
+                                        + "  sha256=" + hex8 + "…  " + e.size() + "b"), false);
+                            }
+                            return Command.SINGLE_SUCCESS;
+                        })
+                    )
+                    // add <id>
+                    .then(Commands.literal("add")
+                        .then(Commands.argument("id", StringArgumentType.word())
+                            .executes(ctx -> {
+                                if (!isMasterSymbols(ctx.getSource())) return 0;
+                                String id = StringArgumentType.getString(ctx, "id");
+                                String err = BACKEND_INSTANCES.SHARE_SYMBOL_STORE.adminAdd(id);
+                                if (err != null) {
+                                    ctx.getSource().sendFailure(Component.literal("[symbols] " + err));
+                                    return 0;
+                                }
+                                ctx.getSource().sendSuccess(() -> Component.literal(
+                                        "[symbols] Added symbol '" + id + "'."), true);
+                                return Command.SINGLE_SUCCESS;
+                            })
+                        )
+                    )
+                    // remove <id>
+                    .then(Commands.literal("remove")
+                        .then(Commands.argument("id", StringArgumentType.word())
+                            .suggests((ctx, builder) -> {
+                                if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SHARE_SYMBOL_STORE == null)
+                                    return builder.buildFuture();
+                                BACKEND_INSTANCES.SHARE_SYMBOL_STORE.getEntries()
+                                        .forEach(e -> builder.suggest(e.id()));
+                                return builder.buildFuture();
+                            })
+                            .executes(ctx -> {
+                                if (!isMasterSymbols(ctx.getSource())) return 0;
+                                String id = StringArgumentType.getString(ctx, "id");
+                                String err = BACKEND_INSTANCES.SHARE_SYMBOL_STORE.adminRemove(id);
+                                if (err != null) {
+                                    ctx.getSource().sendFailure(Component.literal("[symbols] " + err));
+                                    return 0;
+                                }
+                                ctx.getSource().sendSuccess(() -> Component.literal(
+                                        "[symbols] Removed symbol '" + id + "'. Ordinals compacted."), true);
+                                return Command.SINGLE_SUCCESS;
+                            })
+                        )
+                    )
+                    // reload
+                    .then(Commands.literal("reload")
+                        .executes(ctx -> {
+                            if (!isMasterSymbols(ctx.getSource())) return 0;
+                            String result = BACKEND_INSTANCES.SHARE_SYMBOL_STORE.adminReload();
+                            String msg = result != null ? result : "Reloaded — no changes.";
+                            ctx.getSource().sendSuccess(() -> Component.literal("[symbols] " + msg), true);
+                            return Command.SINGLE_SUCCESS;
+                        })
+                    )
+                )
+        );
+    }
+
+    private static boolean isMasterSymbols(CommandSourceStack src) {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SHARE_SYMBOL_STORE == null) {
+            src.sendFailure(Component.literal("[symbols] Store not initialized."));
+            return false;
+        }
+        if (BACKEND_INSTANCES.isSlaveServer) {
+            src.sendFailure(Component.literal("[symbols] Must run on the master server."));
+            return false;
+        }
+        return true;
     }
 }

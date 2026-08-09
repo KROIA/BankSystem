@@ -6,7 +6,7 @@ import net.kroia.banksystem.client.cache.CompanyInfoCache;
 import net.kroia.banksystem.client.cache.ShareVisualCache;
 import net.kroia.banksystem.minecraft.component.BankSystemDataComponents;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.gui.screens.Screen;
+import net.kroia.banksystem.util.BankSystemClientHooks;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
@@ -140,7 +140,7 @@ public class StampedShareItem extends Item {
                 .withStyle(ChatFormatting.DARK_GRAY));
 
         // Shift-hold → expanded info (description + preset id, other-mod convention).
-        if (Screen.hasShiftDown()) {
+        if (BankSystemClientHooks.isShiftDown()) {
             String desc = visuals.getDescription();
             if (desc != null && !desc.isBlank()) {
                 for (String line : desc.split("\\r?\\n")) {
@@ -171,15 +171,15 @@ public class StampedShareItem extends Item {
     @Override
     public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
+        Integer companyId = getCompanyId(stack);
+        if (companyId == null) return InteractionResultHolder.pass(stack);
+
         if (level.isClientSide) {
-            Integer companyId = getCompanyId(stack);
-            if (companyId != null) {
-                ShareVisuals sv = ShareVisualCache.getVisualsOrPlaceholder(companyId);
-                String name = (sv != null && sv.getDisplayName() != null) ? sv.getDisplayName() : "";
-                net.kroia.banksystem.client.company.CompanyManagementScreenLauncher.open(companyId, name);
-                return InteractionResultHolder.success(stack);
-            }
-            return InteractionResultHolder.pass(stack);
+            // Send a C2S request so the server can resolve rights and push them back via
+            // S2COpenCompanyManagementPacket. This avoids ARRS calls from the client that
+            // may fail before the channel is fully established on dedicated servers.
+            net.kroia.banksystem.networking.general.C2SRequestCompanyManagementScreen.send(companyId);
+            return InteractionResultHolder.success(stack);
         }
         return InteractionResultHolder.pass(stack);
     }

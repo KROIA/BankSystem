@@ -82,6 +82,8 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
     private AsyncCompanyManager.CompanyInfoOutput info;
     private boolean isFounder = false;
     private boolean canManage = false;
+    /** True when rights were pre-resolved by the server — suppresses client-side re-fetch. */
+    private boolean rightsPreloaded = false;
 
     // ----- persistent widgets -----
     private CloseButton closeButton;
@@ -102,6 +104,28 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
         rebuildTabs();
         loadInfoAsync();
         loadRightsAsync();
+    }
+
+    /**
+     * Constructor used when the server has pre-resolved rights (e.g. via
+     * {@link net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket}).
+     * Skips the client-side rights ARRS call — correct tabs are shown immediately.
+     * Still fetches company info async for the overview tab content.
+     */
+    public CompanyManagementScreen(int companyId, String companyName,
+                                   boolean serverIsFounder, boolean serverCanManage) {
+        super(TITLE_KEY);
+        this.companyId  = companyId;
+        this.companyName = companyName == null ? "" : companyName;
+        this.callerUUID = safeCallerUUID();
+        this.isFounder  = serverIsFounder;
+        this.canManage  = serverCanManage;
+        this.rightsPreloaded = true; // suppress any rights re-fetch from loadInfoAsync
+        screenIsOpen = true;
+        buildHeader();
+        rebuildTabs(); // correct tabs immediately (rights pre-loaded)
+        loadInfoAsync(); // still fetch overview data async
+        // loadRightsAsync() suppressed by rightsPreloaded flag
     }
 
     public int getCompanyId() { return companyId; }
@@ -146,7 +170,7 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
                 info = out;
                 if (info != null && info.present()) {
                     CompanyInfoCache.put(info);
-                    loadRightsAsync();
+                    if (!rightsPreloaded) loadRightsAsync();
                     String myName = safeCallerName();
                     isFounder = info.founderNames() != null && info.founderNames().contains(myName);
                     if (titleLabel != null) {

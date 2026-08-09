@@ -127,7 +127,11 @@ public final class AsyncCompanyManager {
         // Statistics tab (v2.0.9) — company cashflow, shareholder, solvency data.
         GET_COMPANY_STATS,
         // v2.0.9 — MANAGE-gated mutation: set the company's default payout currency.
-        SET_COMPANY_CURRENCY
+        SET_COMPANY_CURRENCY,
+        // Task #54 (v2.0.9) — slave→master: fetch current share symbol manifest.
+        GET_SYMBOL_MANIFEST,
+        // Task #54 (v2.0.9) — slave→master: request byte push for specific symbol hashes.
+        PULL_SYMBOL_BYTES
     }
 
     /** Task #1 (v2.0.8) — SM bridge result codes for OPEN_SHARE_MARKET output. */
@@ -728,6 +732,57 @@ public final class AsyncCompanyManager {
         public static final ListAllVisualsOutput EMPTY = new ListAllVisualsOutput(List.of());
     }
 
+    // Task #54 (v2.0.9) — symbol store ARRS params.
+    public record SymbolManifestOutput(int revision,
+                                       List<ShareSymbolStore.SymbolEntry> entries) {
+        public static final SymbolManifestOutput EMPTY = new SymbolManifestOutput(0, List.of());
+        public static final StreamCodec<RegistryFriendlyByteBuf, SymbolManifestOutput> STREAM_CODEC =
+                StreamCodec.of(
+                        (buf, v) -> {
+                            buf.writeVarInt(v.revision);
+                            buf.writeVarInt(v.entries.size());
+                            for (ShareSymbolStore.SymbolEntry e : v.entries) {
+                                buf.writeUtf(e.id());
+                                buf.writeVarInt(e.ordinal());
+                                buf.writeBytes(e.sha256()); // 32 bytes
+                                buf.writeVarInt(e.size());
+                            }
+                        },
+                        buf -> {
+                            int rev = buf.readVarInt();
+                            int count = buf.readVarInt();
+                            List<ShareSymbolStore.SymbolEntry> list = new ArrayList<>(count);
+                            for (int i = 0; i < count; i++) {
+                                String id = buf.readUtf();
+                                int ord = buf.readVarInt();
+                                byte[] sha256 = new byte[32];
+                                buf.readBytes(sha256);
+                                int size = buf.readVarInt();
+                                list.add(new ShareSymbolStore.SymbolEntry(id, ord, sha256, size));
+                            }
+                            return new SymbolManifestOutput(rev, list);
+                        });
+    }
+
+    public record PullSymbolBytesInput(List<byte[]> hashes) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, PullSymbolBytesInput> STREAM_CODEC =
+                StreamCodec.of(
+                        (buf, v) -> {
+                            buf.writeVarInt(v.hashes.size());
+                            for (byte[] h : v.hashes) buf.writeBytes(h); // 32 bytes each
+                        },
+                        buf -> {
+                            int count = Math.min(buf.readVarInt(), 8);
+                            List<byte[]> list = new ArrayList<>(count);
+                            for (int i = 0; i < count; i++) {
+                                byte[] h = new byte[32];
+                                buf.readBytes(h);
+                                list.add(h);
+                            }
+                            return new PullSymbolBytesInput(list);
+                        });
+    }
+
     // Task #1 (v2.0.8) — StockMarket bridge params.
     public record OpenShareMarketInput(int companyId, float initialPrice, UUID callerUUID) {
         public static final StreamCodec<RegistryFriendlyByteBuf, OpenShareMarketInput> STREAM_CODEC = StreamCodec.composite(
@@ -1055,6 +1110,9 @@ public final class AsyncCompanyManager {
         put(FunctionType.LIST_DIVIDEND_HISTORY,     new AsyncFunctionDataCodecs(ListDividendHistoryInput.STREAM_CODEC, ListDividendHistoryOutput.STREAM_CODEC));
         put(FunctionType.GET_COMPANY_STATS,         new AsyncFunctionDataCodecs(GetCompanyStatsInput.STREAM_CODEC,  CompanyStatsPayload.STREAM_CODEC));
         put(FunctionType.SET_COMPANY_CURRENCY,      new AsyncFunctionDataCodecs(SetCompanyCurrencyInput.STREAM_CODEC, SetCompanyCurrencyOutput.STREAM_CODEC));
+        // Task #54 (v2.0.9) — symbol store ARRS.
+        put(FunctionType.GET_SYMBOL_MANIFEST,       new AsyncFunctionDataCodecs(EmptyInput.STREAM_CODEC,            SymbolManifestOutput.STREAM_CODEC));
+        put(FunctionType.PULL_SYMBOL_BYTES,         new AsyncFunctionDataCodecs(PullSymbolBytesInput.STREAM_CODEC,  EmptyInput.STREAM_CODEC));
     }};
 
     // ------------------------------------------------------------------
@@ -1141,14 +1199,33 @@ public final class AsyncCompanyManager {
                 case LIST_DIVIDEND_HISTORY     -> handleListDividendHistory(input.decodeParams());
                 case GET_COMPANY_STATS         -> handleGetCompanyStats(input.decodeParams(), bm, cm);
                 case SET_COMPANY_CURRENCY      -> handleSetCompanyCurrency(input.decodeParams(), bm, cm);
+                // Task #54 (v2.0.9) — symbol store (don't need bm/cm).
+                case GET_SYMBOL_MANIFEST -> handleGetSymbolManifest();
+                case PULL_SYMBOL_BYTES   -> handlePullSymbolBytes(input.decodeParams(), slaveID);
             });
         }
 
         @Override
         protected boolean isAllowedToCallByClient(InputData input) {
-            // Never allow raw client calls — all /company commands go through the server-side
-            // command handler which then forwards on slave. Reads still hop via that server.
-            return false;
+            return switch (input.function) {
+                // ── Read-only queries used by client screens ──────────────────────────
+                case GET_COMPANY_INFO, GET_COMPANY_INFO_BY_ID, GET_COMPANY_INFO_BY_ACCOUNT,
+                     LIST_COMPANIES_FOR_CALLER, GET_COMPANY_STATS, COUNT_HOLDERS_FOR_COMPANY,
+                     LIST_ALL_COMPANY_VISUALS, GET_SHARE_VISUALS, MARKET_EXISTS_FOR_COMPANY,
+                     IS_MARKET_OPEN, LIST_STAMPER_BINDINGS, LIST_SCHEDULES, GET_HISTORY,
+                     GET_FAILURE_COUNT_24H, LIST_DIVIDEND_HISTORY, LIST_ACCOUNT_ITEM_BALANCES,
+                     LIST_PLAYER_ACCOUNTS_WITH_FILTER, IS_NAME_TAKEN,
+                     GET_SYMBOL_MANIFEST, PULL_SYMBOL_BYTES -> true;
+                // ── MANAGE-gated mutations from client screens ────────────────────────
+                // The server-side handler re-checks rights via gateManage / gateFounder,
+                // so allowing these from the client is safe.
+                case UPDATE_SHARE_VISUALS,
+                     CREATE_PAYOUT, UPDATE_PAYOUT, PAUSE_PAYOUT, DELETE_PAYOUT,
+                     PAY_DIVIDEND, PAY_MISSED, UNBIND_STAMPER,
+                     OPEN_SHARE_MARKET, CLOSE_SHARE_MARKET, SET_MARKET_OPEN,
+                     SET_COMPANY_CURRENCY -> true;
+                default -> false;
+            };
         }
 
         @Override
@@ -1161,7 +1238,9 @@ public final class AsyncCompanyManager {
                      COUNT_HOLDERS_FOR_COMPANY, LIST_ALL_COMPANY_VISUALS,
                      MARKET_EXISTS_FOR_COMPANY, IS_MARKET_OPEN,
                      LIST_PLAYER_ACCOUNTS_WITH_FILTER, LIST_ACCOUNT_ITEM_BALANCES,
-                     LIST_DIVIDEND_HISTORY, GET_COMPANY_STATS -> true;
+                     LIST_DIVIDEND_HISTORY, GET_COMPANY_STATS,
+                     // Task #54 (v2.0.9) — read-only symbol store queries.
+                     GET_SYMBOL_MANIFEST, PULL_SYMBOL_BYTES -> true;
                 default -> false;
             };
         }
@@ -1380,6 +1459,9 @@ public final class AsyncCompanyManager {
             case LIST_DIVIDEND_HISTORY     -> OutputData.of(function, ListDividendHistoryOutput.EMPTY);
             case GET_COMPANY_STATS         -> OutputData.of(function, CompanyStatsPayload.EMPTY);
             case SET_COMPANY_CURRENCY      -> OutputData.of(function, new SetCompanyCurrencyOutput(CODE_INTERNAL));
+            // Task #54 (v2.0.9)
+            case GET_SYMBOL_MANIFEST -> OutputData.of(function, SymbolManifestOutput.EMPTY);
+            case PULL_SYMBOL_BYTES   -> OutputData.of(function, new EmptyInput());
         };
     }
 
@@ -1608,13 +1690,11 @@ public final class AsyncCompanyManager {
         if (gate != CODE_OK) return OutputData.of(FunctionType.UPDATE_SHARE_VISUALS, new UpdateShareVisualsOutput(gate));
         // Preset id validation — reject arbitrary client-supplied ids. Empty allowed (no preset).
         String bgSym = in.bgSymbolId == null ? "" : in.bgSymbolId;
-        if (!bgSym.isEmpty()
-                && !net.kroia.banksystem.client.company.SharePresetRegistry.isValidPresetId(bgSym)) {
+        if (!bgSym.isEmpty() && !isValidSymbolId(bgSym)) {
             return OutputData.of(FunctionType.UPDATE_SHARE_VISUALS, new UpdateShareVisualsOutput(CODE_INVALID_INPUT));
         }
         String fgSym = in.fgSymbolId == null ? "" : in.fgSymbolId;
-        if (!fgSym.isEmpty()
-                && !net.kroia.banksystem.client.company.SharePresetRegistry.isValidPresetId(fgSym)) {
+        if (!fgSym.isEmpty() && !isValidSymbolId(fgSym)) {
             return OutputData.of(FunctionType.UPDATE_SHARE_VISUALS, new UpdateShareVisualsOutput(CODE_INVALID_INPUT));
         }
         // Length caps mirror the editor's client-side caps — defense in depth.
@@ -1660,6 +1740,14 @@ public final class AsyncCompanyManager {
      * MANAGE gate for a mutation. Returns {@link #CODE_OK} on pass, or a specific error code
      * to short-circuit with. Non-mutating queries do not use this.
      */
+    /** Symbol-id validation: use ShareSymbolStore when available, fall back to client registry. */
+    private static boolean isValidSymbolId(String id) {
+        ShareSymbolStore store = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.SHARE_SYMBOL_STORE : null;
+        if (store != null) return store.isValidSymbolId(id);
+        // Fallback while store is not yet initialized (test env / singleplayer first tick)
+        return net.kroia.banksystem.client.company.SharePresetRegistry.isValidPresetId(id);
+    }
+
     private static int gateManage(int companyId, UUID callerUUID, IServerBankManager bm, CompanyManager cm) {
         Company company = cm.getById(companyId);
         if (company == null) return CODE_NOT_FOUND;
@@ -2235,43 +2323,49 @@ public final class AsyncCompanyManager {
     }
 
     /**
-     * Task #1 (v2.0.8) — dispatch an ARRS input from the client. On a slave (this JVM
-     * has a slave client), use the standard {@code sendRequestToMaster} network hop.
-     * On singleplayer / dedicated master (this JVM IS the master), the ARRS
-     * {@code sendToMaster} path errors ("master can't send packets to another
-     * master"), so short-circuit to the local handler on the integrated server
-     * thread. Returns a future that completes on the client (render) thread.
+     * Task #1 (v2.0.8) — dispatch an ARRS input from wherever the caller sits.
+     * <p>
+     * {@code sendRequestToMaster} is a <b>slave-server → master</b> hop only: it
+     * allocates a server-side byte buf (null on a dedicated-server client JVM →
+     * "Can't create byte buf … Is the server running?") and sends via
+     * {@code MultiServerManager.sendToMaster}, which silently drops the packet
+     * unless this JVM is a running MSM <i>slave</i>. So route per topology:
+     * <ul>
+     *   <li><b>Physical client, no local server</b> (dedicated server connection) —
+     *       standard C2S ARRS hop via {@code sendRequestToServer}; the game server
+     *       handles it as master, or ARRS forwards it to the bank master when that
+     *       server is an MSM slave ({@code needsRoutingToMaster()}).</li>
+     *   <li><b>MSM slave server</b> — S2S hop via {@code sendRequestToMaster}.</li>
+     *   <li><b>This JVM is the master</b> (dedicated master server code, or
+     *       singleplayer integrated server) — invoke the handler locally,
+     *       marshalled onto the server thread.</li>
+     * </ul>
      */
     private static CompletableFuture<OutputData> dispatchInput(InputData input) {
-        boolean msmRunning = net.kroia.modutilities.networking.multi_server.MultiServerManager.isRunning();
-        boolean asMaster = msmRunning
-                && net.kroia.modutilities.networking.multi_server.MultiServerManager.isMaster();
-        if (!msmRunning || asMaster) {
-            // Local-master path — invoke the handler directly. In singleplayer, marshal
-            // onto the integrated server thread so we don't race server-side state.
-            net.minecraft.server.MinecraftServer server = null;
-            try {
-                if (net.minecraft.client.Minecraft.getInstance() != null) {
-                    server = net.minecraft.client.Minecraft.getInstance().getSingleplayerServer();
-                }
-            } catch (Throwable ignored) { /* headless / dedicated-server callers */ }
-            CompletableFuture<OutputData> out = new CompletableFuture<>();
-            Runnable exec = () -> {
-                try {
-                    Request.instance.handleOnMasterServer(input, "", null)
-                            .whenComplete((res, err) -> {
-                                if (err != null || res == null) out.complete(null);
-                                else out.complete(res);
-                            });
-                } catch (Throwable t) {
-                    out.complete(null);
-                }
-            };
-            if (server != null) server.execute(exec); else exec.run();
-            return out;
+        net.minecraft.server.MinecraftServer server = dev.architectury.utils.GameInstance.getServer();
+        if (server == null) {
+            // Physical client connected to a dedicated server — C2S over the game
+            // connection (same path AsyncBankManager uses from the client side).
+            return Request.instance.sendRequestToServer(input);
         }
-        // True slave: use the standard S2S request hop.
-        return Request.instance.sendRequestToMaster(input);
+        if (net.kroia.modutilities.networking.multi_server.MultiServerManager.isRunning()
+                && !net.kroia.modutilities.networking.multi_server.MultiServerManager.isMaster()) {
+            // True slave server — standard S2S request hop to the bank master.
+            return Request.instance.sendRequestToMaster(input);
+        }
+        // Local master (dedicated master or singleplayer integrated server) — the MSM
+        // sendToMaster path would drop the packet, so short-circuit to the handler on
+        // the server thread.
+        CompletableFuture<OutputData> out = new CompletableFuture<>();
+        server.execute(() -> {
+            try {
+                Request.instance.handleOnMasterServer(input, "", null)
+                        .whenComplete((res, err) -> out.complete(err != null ? null : res));
+            } catch (Throwable t) {
+                out.complete(null);
+            }
+        });
+        return out;
     }
 
     /** Task #1 (v2.0.8) — slave helper: request market creation. */
@@ -2489,5 +2583,62 @@ public final class AsyncCompanyManager {
             f.complete(events);
         });
         return f;
+    }
+
+    // ------------------------------------------------------------------
+    // Task #54 (v2.0.9) — symbol store ARRS handlers + helpers
+    // ------------------------------------------------------------------
+
+    private static OutputData handleGetSymbolManifest() {
+        ShareSymbolStore store = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.SHARE_SYMBOL_STORE : null;
+        if (store == null) return OutputData.of(FunctionType.GET_SYMBOL_MANIFEST, SymbolManifestOutput.EMPTY);
+        return OutputData.of(FunctionType.GET_SYMBOL_MANIFEST,
+                new SymbolManifestOutput(store.getRevision(), store.getEntries()));
+    }
+
+    private static OutputData handlePullSymbolBytes(PullSymbolBytesInput in, String slaveID) {
+        if (in == null || slaveID == null || slaveID.isEmpty())
+            return OutputData.of(FunctionType.PULL_SYMBOL_BYTES, new EmptyInput());
+        ShareSymbolStore store = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.SHARE_SYMBOL_STORE : null;
+        if (store == null) return OutputData.of(FunctionType.PULL_SYMBOL_BYTES, new EmptyInput());
+        for (byte[] requestedHash : in.hashes()) {
+            for (ShareSymbolStore.SymbolEntry e : store.getEntries()) {
+                if (java.util.Arrays.equals(e.sha256(), requestedHash)) {
+                    byte[] bytes = store.getSymbolBytes(e.id());
+                    if (bytes != null) {
+                        net.kroia.banksystem.networking.multi_server.S2SShareSymbolDataPacket
+                                .sendChunksToSlave(slaveID, e.sha256(), bytes);
+                    }
+                    break;
+                }
+            }
+        }
+        return OutputData.of(FunctionType.PULL_SYMBOL_BYTES, new EmptyInput());
+    }
+
+    /**
+     * Task #54 (v2.0.9) — slave helper: fetch the current share symbol manifest from master on boot.
+     * On success, caller should call {@link ShareSymbolStore#mirrorApplyManifest} and then
+     * {@link #pullSymbolBytesAsync} for any missing entries.
+     */
+    public static CompletableFuture<SymbolManifestOutput> getSymbolManifestAsync() {
+        InputData input = InputData.of(FunctionType.GET_SYMBOL_MANIFEST, new EmptyInput());
+        CompletableFuture<SymbolManifestOutput> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> {
+            SymbolManifestOutput v = o == null ? null : o.decodeResult();
+            f.complete(v == null ? SymbolManifestOutput.EMPTY : v);
+        });
+        return f;
+    }
+
+    /**
+     * Task #54 (v2.0.9) — slave helper: request master to push PNG bytes for the given SHA-256 hashes.
+     * The bytes arrive as {@link net.kroia.banksystem.networking.multi_server.S2SShareSymbolDataPacket}
+     * chunks pushed directly to this slave. Fire-and-forget; no result needed.
+     */
+    public static void pullSymbolBytesAsync(List<byte[]> hashes) {
+        if (hashes == null || hashes.isEmpty()) return;
+        InputData input = InputData.of(FunctionType.PULL_SYMBOL_BYTES, new PullSymbolBytesInput(hashes));
+        dispatchInput(input); // fire and forget
     }
 }

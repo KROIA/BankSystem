@@ -175,6 +175,30 @@ public final class CompanyManager implements ServerSaveableChunked {
         }
         info("Created company #" + id + " '" + name + "' bound to bank account " + bankAccountNr
                 + " (founder=" + callerUUID + ", maxSupply=" + maxSupply + ")");
+
+        // Auto-register and allow the stamped share for this company so players can deposit it.
+        // Each company's share is uniquely identified by its company_id data component.
+        try {
+            net.minecraft.world.item.Item stampedShareItem =
+                    net.kroia.banksystem.minecraft.item.BankSystemItems.STAMPED_SHARE.get();
+            if (stampedShareItem != null && bankManager != null) {
+                net.minecraft.world.item.ItemStack shareStack =
+                        net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                                .ofCompany(stampedShareItem, id);
+                net.kroia.banksystem.util.ItemID shareItemID =
+                        net.kroia.banksystem.util.ItemIDManager
+                                .registerItemStackServerSide_direct(shareStack);
+                if (shareItemID != null && shareItemID.isValid()) {
+                    bankManager.allowItemID(shareItemID);
+                }
+            }
+        } catch (Throwable t) {
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                BACKEND_INSTANCES.LOGGER.warn("[CompanyManager] Failed to auto-allow stamped share for company #"
+                        + id + ": " + t.getMessage());
+            }
+        }
+
         return new CreateOutcome(CreateResult.OK, company);
     }
 

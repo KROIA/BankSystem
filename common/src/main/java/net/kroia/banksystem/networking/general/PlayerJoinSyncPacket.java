@@ -112,6 +112,11 @@ public class PlayerJoinSyncPacket extends BankSystemNetworkPacket {
                 net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.sendTo(player, mirrored);
             }
         }
+        // Task #54 (v2.0.9) — send share symbol manifest to joining player.
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SHARE_SYMBOL_STORE != null) {
+            net.kroia.banksystem.networking.general.S2CShareSymbolManifestPacket.sendTo(
+                    player, BACKEND_INSTANCES.SHARE_SYMBOL_STORE);
+        }
     }
 
     @Override

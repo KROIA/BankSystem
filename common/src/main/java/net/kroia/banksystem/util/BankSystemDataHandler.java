@@ -1111,6 +1111,14 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         if (bankAccountBindingsLoadState == LoadState.NOT_LOADED
                 && backupPath(getAbsoluteSavePath(BANK_ACCOUNT_BINDINGS_FILE_NAME), suffix))
             bankAccountBindingsLoadState = LoadState.FRESH;
+        // Task #43 (v2.0.8) — Companies folder must also be backed up when it was never
+        // loaded this session (companiesLoadState stays NOT_LOADED when loadAll() took the
+        // compatibility-mode early-return path and skipped load_companies()).  Without this,
+        // the retry loadAll() in loadDataFromFiles() finds the existing on-disk Companies/
+        // folder and loads it, giving stale company data from a previous world/session.
+        if (companiesLoadState == LoadState.NOT_LOADED
+                && backupPath(getAbsoluteSavePath(COMPANIES_FOLDER_NAME), suffix))
+            companiesLoadState = LoadState.FRESH;
     }
 
     /**

@@ -105,6 +105,9 @@ public class BankSystemNetworking extends NetworkPacketManager {
         // Task #51 (v2.0.8) — Company Management screen open (S2C).
         registerS2C(net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket.TYPE,
                 net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket.STREAM_CODEC);
+        // Task #54 (v2.0.9) — share symbol manifest + chunk sync (S2C).
+        registerS2C(S2CShareSymbolManifestPacket.TYPE, S2CShareSymbolManifestPacket.STREAM_CODEC);
+        registerS2C(S2CShareSymbolDataPacket.TYPE, S2CShareSymbolDataPacket.STREAM_CODEC);
 
     }
 
@@ -130,6 +133,11 @@ public class BankSystemNetworking extends NetworkPacketManager {
         // Task #47 (v2.0.8) — Share Stamper bind request (C2S).
         registerC2S(SetStamperBindingRequest.TYPE, SetStamperBindingRequest.STREAM_CODEC);
         registerC2S(CloseStamperBindScreenPacket.TYPE, CloseStamperBindScreenPacket.STREAM_CODEC);
+        // Task #54 (v2.0.9) — share symbol byte request (C2S).
+        registerC2S(C2SShareSymbolDataRequest.TYPE, C2SShareSymbolDataRequest.STREAM_CODEC);
+        // Task #51 (v2.0.8) — share right-click requests server to open management screen.
+        registerC2S(net.kroia.banksystem.networking.general.C2SRequestCompanyManagementScreen.TYPE,
+                net.kroia.banksystem.networking.general.C2SRequestCompanyManagementScreen.STREAM_CODEC);
     }
 
     @Override
@@ -139,5 +147,8 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerS2S(ClientConsoleMessagePacket.TYPE, ClientConsoleMessagePacket.STREAM_CODEC);
         // Task #54 (v2.0.8) — master→slave live push for company visual mutations.
         registerS2S(S2SCompanyMirrorPacket.TYPE, S2SCompanyMirrorPacket.STREAM_CODEC);
+        // Task #54 (v2.0.9) — master→slave share symbol manifest + chunk sync (S2S).
+        registerS2S(S2SShareSymbolManifestPacket.TYPE, S2SShareSymbolManifestPacket.STREAM_CODEC);
+        registerS2S(S2SShareSymbolDataPacket.TYPE, S2SShareSymbolDataPacket.STREAM_CODEC);
     }
 }

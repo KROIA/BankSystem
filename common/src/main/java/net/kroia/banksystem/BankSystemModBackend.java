@@ -96,6 +96,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         public net.kroia.banksystem.api.dividend.IDividendPayer DIVIDEND_PAYER;
         /** Task #52 (v2.0.8) — dividend event SQLite store (master-only, nullable on slaves). */
         public net.kroia.banksystem.banking.company.DividendHistoryStore DIVIDEND_HISTORY_STORE;
+        /** Task #54 (v2.0.9) — share symbol texture store (master: authoritative; slave: mirror). */
+        public net.kroia.banksystem.banking.company.ShareSymbolStore SHARE_SYMBOL_STORE;
 
         /**
          * External-currency binding table (Task #33, v2.0.5). Master-authoritative;
@@ -298,6 +300,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemMenus.setupScreens();
         ClientBankManager.setBackend(INSTANCES);
         INSTANCES.CLIENT_BANK_MANAGER = BankManager.createClient();
+        // Task #54 (v2.0.9) — initialise client-side symbol cache directory.
+        net.kroia.banksystem.client.company.ClientSymbolRegistry.init();
 
         BankSystemGuiScreen.setBackend(INSTANCES);
         BankSystemGuiContainerScreen.setBackend(INSTANCES);
@@ -363,6 +367,9 @@ public class BankSystemModBackend implements BankSystemAPI {
             slaveLatchWatchTicks = 0;
             slaveLatchTimeoutWarned = false;
             TickEvent.SERVER_POST.register(BankSystemModBackend::onSlaveLatchTimeoutTick);
+            // Task #54 (v2.0.9) — share symbol store (slave: mirror mode, populated by S2S sync).
+            INSTANCES.SHARE_SYMBOL_STORE = new net.kroia.banksystem.banking.company.ShareSymbolStore(INSTANCES.LOGGER);
+            INSTANCES.SHARE_SYMBOL_STORE.open(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT), true);
         }
         else
         {
@@ -390,6 +397,29 @@ public class BankSystemModBackend implements BankSystemAPI {
             // Task #52 (v2.0.8) — dividend event history store.
             INSTANCES.DIVIDEND_HISTORY_STORE = new net.kroia.banksystem.banking.company.DividendHistoryStore(INSTANCES.LOGGER);
             INSTANCES.DIVIDEND_HISTORY_STORE.open(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT));
+            // Task #54 (v2.0.9) — share symbol store (master: authoritative).
+            INSTANCES.SHARE_SYMBOL_STORE = new net.kroia.banksystem.banking.company.ShareSymbolStore(INSTANCES.LOGGER);
+            INSTANCES.SHARE_SYMBOL_STORE.open(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT), false);
+            // On revision bump, push manifest to all clients and all slaves, then push all bytes to slaves.
+            INSTANCES.SHARE_SYMBOL_STORE.setBroadcastListener(() -> {
+                if (server.isRunning()) {
+                    net.kroia.banksystem.networking.general.S2CShareSymbolManifestPacket
+                            .broadcastToAll(server, INSTANCES.SHARE_SYMBOL_STORE);
+                    if (net.kroia.modutilities.networking.multi_server.MultiServerManager.isRunning()
+                            && net.kroia.modutilities.networking.multi_server.MultiServerManager.isMaster()) {
+                        net.kroia.banksystem.networking.multi_server.S2SShareSymbolManifestPacket
+                                .broadcastToSlaves(INSTANCES.SHARE_SYMBOL_STORE);
+                        for (net.kroia.banksystem.banking.company.ShareSymbolStore.SymbolEntry e
+                                : INSTANCES.SHARE_SYMBOL_STORE.getEntries()) {
+                            byte[] bytes = INSTANCES.SHARE_SYMBOL_STORE.getSymbolBytes(e.id());
+                            if (bytes != null) {
+                                net.kroia.banksystem.networking.multi_server.S2SShareSymbolDataPacket
+                                        .broadcastChunksToSlaves(e.sha256(), bytes);
+                            }
+                        }
+                    }
+                }
+            });
 
             // Task #41 (v2.0.7): one-shot deprecation WARN for the old flat-cap setting.
             // Fires only when the user still has a non-zero cap on disk — the tiered
@@ -496,6 +526,10 @@ public class BankSystemModBackend implements BankSystemAPI {
             INSTANCES.DIVIDEND_HISTORY_STORE.close();
         }
         INSTANCES.DIVIDEND_HISTORY_STORE = null;
+        if (INSTANCES.SHARE_SYMBOL_STORE != null) {
+            INSTANCES.SHARE_SYMBOL_STORE.close();
+        }
+        INSTANCES.SHARE_SYMBOL_STORE = null;
         INSTANCES.isSlaveServer = false;
         snapshotTickCounter = 0;
         retentionSweepTickCounter = 0;
@@ -560,6 +594,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         // Reset the synced isMasterServer flag to its safe default (false) — the next
         // server the client joins re-syncs it via PlayerJoinSyncPacket.
         INSTANCES.CLIENT_SETTINGS.setMasterServer(false);
+        // Task #54 (v2.0.9) — purge in-flight symbol sync state on disconnect.
+        net.kroia.banksystem.client.company.ClientSymbolRegistry.clear();
     }
     // Called from the client side
     private static void onPlayerJoinClientSide(@Nullable LocalPlayer localPlayer)
@@ -1004,6 +1040,29 @@ public class BankSystemModBackend implements BankSystemAPI {
         } catch (Throwable t) {
             if (INSTANCES.LOGGER != null) {
                 INSTANCES.LOGGER.warn("[BankSystemModBackend] listAllCompanyVisualsAsync request failed: " + t);
+            }
+        }
+
+        // Task #54 (v2.0.9) — slave requests current symbol manifest from master on handshake,
+        // then pulls bytes for any entries it doesn't have on disk yet.
+        try {
+            net.kroia.banksystem.banking.company.AsyncCompanyManager.getSymbolManifestAsync()
+                    .whenComplete((out, err) -> {
+                        if (err != null || out == null || INSTANCES.SHARE_SYMBOL_STORE == null) return;
+                        INSTANCES.SHARE_SYMBOL_STORE.mirrorApplyManifest(out.revision(), out.entries());
+                        java.util.List<byte[]> missing = new java.util.ArrayList<>();
+                        for (net.kroia.banksystem.banking.company.ShareSymbolStore.SymbolEntry e : out.entries()) {
+                            if (INSTANCES.SHARE_SYMBOL_STORE.getSymbolBytes(e.id()) == null) {
+                                missing.add(e.sha256());
+                            }
+                        }
+                        if (!missing.isEmpty()) {
+                            net.kroia.banksystem.banking.company.AsyncCompanyManager.pullSymbolBytesAsync(missing);
+                        }
+                    });
+        } catch (Throwable t) {
+            if (INSTANCES.LOGGER != null) {
+                INSTANCES.LOGGER.warn("[BankSystemModBackend] getSymbolManifestAsync request failed: " + t);
             }
         }
 

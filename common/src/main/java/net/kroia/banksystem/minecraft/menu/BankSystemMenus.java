@@ -10,10 +10,6 @@ import net.kroia.banksystem.minecraft.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.minecraft.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.minecraft.menu.custom.ShareStamperContainerMenu;
-import net.kroia.banksystem.screen.custom.BankDownloadScreen;
-import net.kroia.banksystem.screen.custom.BankTerminalScreen;
-import net.kroia.banksystem.screen.custom.BankUploadScreen;
-import net.kroia.banksystem.screen.custom.ShareStamperScreen;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.MenuType;
@@ -39,12 +35,9 @@ public class BankSystemMenus {
 
     }
 
-    public static void setupScreens()
-    {
-        MenuRegistry.registerScreenFactory(BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
-        MenuRegistry.registerScreenFactory(BANK_UPLOAD_CONTAINER_MENU.get(), BankUploadScreen::new);
-        MenuRegistry.registerScreenFactory(BANK_DOWNLOAD_CONTAINER_MENU.get(), BankDownloadScreen::new);
-        MenuRegistry.registerScreenFactory(SHARE_STAMPER_CONTAINER_MENU.get(), ShareStamperScreen::new);
+    /** @deprecated use {@link net.kroia.banksystem.util.BankSystemClientHooks#setupMenuScreens()} */
+    public static void setupScreens() {
+        net.kroia.banksystem.util.BankSystemClientHooks.setupMenuScreens();
     }
 
 

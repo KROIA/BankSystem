@@ -61,9 +61,7 @@ public class OpenStamperBindScreenPacket extends BankSystemNetworkPacket {
 
     @Override
     protected void handleOnClient(NetworkManager.PacketContext context) {
-        net.minecraft.client.Minecraft.getInstance().execute(() ->
-                net.minecraft.client.Minecraft.getInstance().setScreen(
-                        new net.kroia.banksystem.screen.custom.StamperBindScreen(pos, entries)));
+        net.kroia.banksystem.util.BankSystemClientHooks.openStamperBindScreen(pos, entries);
     }
 
     @Override

@@ -5,10 +5,12 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.company.ShareVisuals;
 import net.kroia.banksystem.client.cache.ShareVisualCache;
+import net.kroia.banksystem.client.company.ClientSymbolRegistry;
 import net.kroia.banksystem.client.company.SharePresetRegistry;
 import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlas;
@@ -120,15 +122,22 @@ public final class StampedShareRenderer {
         }
 
         if (visuals != null) {
-            drawSymbol(vc, pose, atlas, visuals.getBgLayer(), BG_X, BG_Y, BG_SIZE,
+            drawSymbol(buffers, vc, pose, atlas, visuals.getBgLayer(), BG_X, BG_Y, BG_SIZE,
                     DECAL_EPS, light, overlay);
-            drawSymbol(vc, pose, atlas, visuals.getFgLayer(), FG_X, FG_Y, FG_SIZE,
+            drawSymbol(buffers, vc, pose, atlas, visuals.getFgLayer(), FG_X, FG_Y, FG_SIZE,
                     2 * DECAL_EPS, light, overlay);
         }
     }
 
-    /** Draw one symbol layer as front + back decal quads flush on the card faces. */
-    private static void drawSymbol(VertexConsumer vc, PoseStack.Pose pose,
+    /**
+     * Draw one symbol layer as front + back decal quads flush on the card faces.
+     * Bundled symbols use the blocks atlas (same render type as the card).
+     * Server-synced dynamic symbols use a {@link net.minecraft.client.renderer.texture.DynamicTexture}
+     * registered under {@code banksystem:dynamic/share_symbol/<id>} via
+     * {@link net.minecraft.client.renderer.RenderType#entityCutoutNoCull}.
+     */
+    private static void drawSymbol(MultiBufferSource buffers, VertexConsumer atlasVc,
+                                   PoseStack.Pose pose,
                                    Function<ResourceLocation, TextureAtlasSprite> atlas,
                                    ShareVisuals.ShareLayer layer,
                                    float x0, float y0, float size, float eps,
@@ -136,17 +145,34 @@ public final class StampedShareRenderer {
         if (layer == null) return;
         String id = layer.symbolId();
         if (id == null || id.isBlank() || !SharePresetRegistry.isValidPresetId(id)) return;
-        TextureAtlasSprite sprite = atlas.apply(ResourceLocation.fromNamespaceAndPath(
-                BankSystemMod.MOD_ID, "item/share_symbol/" + id));
         int tint = opaque(layer.tint());
         float x1 = x0 + size, y1 = y0 + size;
         float zf = Z_FRONT + eps, zb = Z_BACK - eps;
-        emit(vc, pose, new Quad(
-                new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
-                new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), sprite, tint, light, overlay);
-        emit(vc, pose, new Quad(
-                new float[]{x0, y0, zb, x0, y1, zb, x1, y1, zb, x1, y0, zb},
-                new float[]{0, 1, 0, 0, 1, 0, 1, 1}, 0, 0, -1), sprite, tint, light, overlay);
+
+        if (SharePresetRegistry.isBundledId(id)) {
+            // Bundled symbol: render via blocks atlas sprite.
+            TextureAtlasSprite sprite = atlas.apply(ResourceLocation.fromNamespaceAndPath(
+                    BankSystemMod.MOD_ID, "item/share_symbol/" + id));
+            emit(atlasVc, pose, new Quad(
+                    new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
+                    new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), sprite, tint, light, overlay);
+            emit(atlasVc, pose, new Quad(
+                    new float[]{x0, y0, zb, x0, y1, zb, x1, y1, zb, x1, y0, zb},
+                    new float[]{0, 1, 0, 0, 1, 0, 1, 1}, 0, 0, -1), sprite, tint, light, overlay);
+        } else if (ClientSymbolRegistry.hasDynamicTexture(id)) {
+            // Dynamic synced symbol: render via DynamicTexture registered with TextureManager.
+            ResourceLocation dynRl = ClientSymbolRegistry.getDynamicRL(id);
+            VertexConsumer dynVc = buffers.getBuffer(RenderType.entityCutoutNoCull(dynRl));
+            emitRaw(dynVc, pose, new Quad(
+                    new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
+                    new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), tint, light, overlay);
+            emitRaw(dynVc, pose, new Quad(
+                    new float[]{x0, y0, zb, x0, y1, zb, x1, y1, zb, x1, y0, zb},
+                    new float[]{0, 1, 0, 0, 1, 0, 1, 1}, 0, 0, -1), tint, light, overlay);
+        }
+        // else: symbol is in ClientSymbolRegistry but DynamicTexture not yet registered
+        //       (bytes arrived, but registration is scheduled for next render tick).
+        //       Render nothing — base card shows through. Resolves on the next frame.
     }
 
     private static void emit(VertexConsumer vc, PoseStack.Pose pose, Quad q,
@@ -158,6 +184,22 @@ public final class StampedShareRenderer {
             vc.addVertex(pose, q.pos[3 * i], q.pos[3 * i + 1], q.pos[3 * i + 2])
                     .setColor(r, g, b, 0xFF)
                     .setUv(sprite.getU(q.uv[2 * i]), sprite.getV(q.uv[2 * i + 1]))
+                    .setOverlay(overlay)
+                    .setLight(light)
+                    .setNormal(pose, q.nx, q.ny, q.nz);
+        }
+    }
+
+    /** Like {@link #emit} but uses raw [0,1] UV directly (for DynamicTexture, not atlas sprites). */
+    private static void emitRaw(VertexConsumer vc, PoseStack.Pose pose, Quad q,
+                                int tintARGB, int light, int overlay) {
+        int r = (tintARGB >> 16) & 0xFF;
+        int g = (tintARGB >> 8) & 0xFF;
+        int b = tintARGB & 0xFF;
+        for (int i = 0; i < 4; i++) {
+            vc.addVertex(pose, q.pos[3 * i], q.pos[3 * i + 1], q.pos[3 * i + 2])
+                    .setColor(r, g, b, 0xFF)
+                    .setUv(q.uv[2 * i], q.uv[2 * i + 1])
                     .setOverlay(overlay)
                     .setLight(light)
                     .setNormal(pose, q.nx, q.ny, q.nz);

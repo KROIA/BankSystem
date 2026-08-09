@@ -13,9 +13,14 @@ public final class CompanyManagementScreenLauncher {
     private CompanyManagementScreenLauncher() {}
 
     public static void open(int companyId, String companyName) {
+        open(companyId, companyName, false, false);
+    }
+
+    public static void open(int companyId, String companyName, boolean isFounder, boolean canManage) {
         try {
             Minecraft.getInstance().setScreen(
-                    new net.kroia.banksystem.screen.custom.CompanyManagementScreen(companyId, companyName));
+                    new net.kroia.banksystem.screen.custom.CompanyManagementScreen(
+                            companyId, companyName, isFounder, canManage));
         } catch (NoClassDefFoundError e) {
             System.err.println("[BankSystem] CompanyManagementScreen not available on client: " + e);
         } catch (Throwable t) {

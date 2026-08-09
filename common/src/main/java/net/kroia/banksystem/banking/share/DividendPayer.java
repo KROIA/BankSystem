@@ -137,8 +137,10 @@ public final class DividendPayer implements IDividendPayer {
 
         ISyncServerBank sourceMoneyBank = sourceAccount.getBank(payoutId);
         if (sourceMoneyBank == null) {
+            // No bank slot for this currency means zero balance — report as insufficient funds
+            // rather than INTERNAL (INTERNAL would surface as a generic "Internal Error" in the UI).
             return PayDividendResult.of(isMoney
-                    ? PayDividendResult.Reason.INTERNAL
+                    ? PayDividendResult.Reason.INSUFFICIENT_FUNDS
                     : PayDividendResult.Reason.CURRENCY_ITEM_MISSING);
         }
 

@@ -1,8 +1,14 @@
 package net.kroia.banksystem.util;
 
+import dev.architectury.registry.menu.MenuRegistry;
+import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.screen.custom.ATMScreen;
 import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
+import net.kroia.banksystem.screen.custom.BankDownloadScreen;
 import net.kroia.banksystem.screen.custom.BankSystemSettingScreen;
+import net.kroia.banksystem.screen.custom.BankTerminalScreen;
+import net.kroia.banksystem.screen.custom.BankUploadScreen;
+import net.kroia.banksystem.screen.custom.ShareStamperScreen;
 import net.kroia.modutilities.gui.client.RecipeImageExporter;
 import net.minecraft.client.Minecraft;
 import org.apache.logging.log4j.LogManager;
@@ -14,6 +20,39 @@ import java.util.Map;
 
 public class BankSystemClientHooks {
     private static final Logger LOGGER = LogManager.getLogger("BankSystem");
+
+    /** Delegates {@code Screen.hasShiftDown()} to avoid a direct Screen import in common item classes. */
+    public static boolean isShiftDown() {
+        return net.minecraft.client.gui.screens.Screen.hasShiftDown();
+    }
+
+    public static void openStamperBindScreen(net.minecraft.core.BlockPos pos,
+            java.util.List<net.kroia.banksystem.networking.entity.OpenStamperBindScreenPacket.Entry> entries) {
+        Minecraft.getInstance().execute(() ->
+                Minecraft.getInstance().setScreen(
+                        new net.kroia.banksystem.screen.custom.StamperBindScreen(pos, entries)));
+    }
+
+    public static void openCompanyManagementScreen(int companyId, String companyName) {
+        Minecraft.getInstance().execute(() ->
+                net.kroia.banksystem.client.company.CompanyManagementScreenLauncher.open(
+                        companyId, companyName, false, false));
+    }
+
+    public static void openCompanyManagementScreen(int companyId, String companyName,
+                                                   boolean isFounder, boolean canManage) {
+        Minecraft.getInstance().execute(() ->
+                net.kroia.banksystem.client.company.CompanyManagementScreenLauncher.open(
+                        companyId, companyName, isFounder, canManage));
+    }
+
+    public static void setupMenuScreens() {
+        MenuRegistry.registerScreenFactory(BankSystemMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
+        MenuRegistry.registerScreenFactory(BankSystemMenus.BANK_UPLOAD_CONTAINER_MENU.get(), BankUploadScreen::new);
+        MenuRegistry.registerScreenFactory(BankSystemMenus.BANK_DOWNLOAD_CONTAINER_MENU.get(), BankDownloadScreen::new);
+        MenuRegistry.registerScreenFactory(BankSystemMenus.SHARE_STAMPER_CONTAINER_MENU.get(), ShareStamperScreen::new);
+    }
+
     public static void openBankSystemSettingScreen()
     {
         // Ensuring the code runs on the main thread

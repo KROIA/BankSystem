@@ -13,8 +13,12 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * Task #51 (v2.0.8) — S2C packet instructing the client to open the
- * CompanyManagementScreen for a given company. Sent by the server-side
- * {@code /company manage} handler after resolving + MANAGE-gating.
+ * CompanyManagementScreen for a given company.
+ *
+ * <p>Carries pre-resolved {@code isFounder} / {@code canManage} flags so the screen
+ * can display the correct tab set immediately without an extra ARRS round-trip.
+ * Both the {@code /company manage} command handler and the share right-click C2S
+ * ({@link C2SRequestCompanyManagementScreen}) use this packet.
  */
 public class S2COpenCompanyManagementPacket extends BankSystemNetworkPacket {
 
@@ -25,24 +29,37 @@ public class S2COpenCompanyManagementPacket extends BankSystemNetworkPacket {
             StreamCodec.composite(
                     ByteBufCodecs.VAR_INT,     p -> p.companyId,
                     ByteBufCodecs.STRING_UTF8, p -> p.companyName,
+                    ByteBufCodecs.BOOL,        p -> p.isFounder,
+                    ByteBufCodecs.BOOL,        p -> p.canManage,
                     S2COpenCompanyManagementPacket::new);
 
     private final int companyId;
     private final String companyName;
+    private final boolean isFounder;
+    private final boolean canManage;
 
-    public S2COpenCompanyManagementPacket(int companyId, String companyName) {
-        this.companyId = companyId;
+    public S2COpenCompanyManagementPacket(int companyId, String companyName,
+                                          boolean isFounder, boolean canManage) {
+        this.companyId  = companyId;
         this.companyName = companyName == null ? "" : companyName;
+        this.isFounder  = isFounder;
+        this.canManage  = canManage;
     }
 
+    /** Convenience overload for callers that don't yet have rights resolved (defaults to no rights). */
     public static void send(ServerPlayer player, int companyId, String companyName) {
-        new S2COpenCompanyManagementPacket(companyId, companyName).sendToClient(player);
+        new S2COpenCompanyManagementPacket(companyId, companyName, false, false).sendToClient(player);
+    }
+
+    public static void sendWithRights(ServerPlayer player, int companyId, String companyName,
+                                      boolean isFounder, boolean canManage) {
+        new S2COpenCompanyManagementPacket(companyId, companyName, isFounder, canManage).sendToClient(player);
     }
 
     @Override
     protected void handleOnClient(NetworkManager.PacketContext context) {
-        net.minecraft.client.Minecraft.getInstance().execute(() ->
-                net.kroia.banksystem.client.company.CompanyManagementScreenLauncher.open(companyId, companyName));
+        net.kroia.banksystem.util.BankSystemClientHooks.openCompanyManagementScreen(
+                companyId, companyName, isFounder, canManage);
     }
 
     @Override public @NotNull Type<? extends CustomPacketPayload> type() { return TYPE; }
