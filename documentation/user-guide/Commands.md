@@ -15,6 +15,14 @@
 | `/banksystem untrust <slaveID>` | Removes a slave server from the trusted list (master only) | X | |
 | `/banksystem serverInfo` | Shows information about this server | | |
 | `/banksystem serverNetworkInfo` | Shows information about the server network and trust status | | |
+| `/banksystem backup pause` | Pauses database writes so the world files can be copied safely (master only) | X | |
+| `/banksystem backup resume` | Resumes database writes after a pause (master only) | X | |
+| `/banksystem backup status` | Shows whether database writes are currently paused (master only) | X | |
+| `/banksystem backup snapshot <path>` | Writes a consistent database snapshot to the given path (master only) | X | |
+| `/banksystem symbols list` | Lists every share symbol in the server's symbol library (master only) | X | |
+| `/banksystem symbols add <id>` | Imports a PNG from the server inbox folder as a new share symbol (master only) | X | |
+| `/banksystem symbols remove <id>` | Deletes a share symbol; remaining ids are compacted automatically (master only) | X | |
+| `/banksystem symbols reload` | Re-reads the symbol manifest from disk and pushes it to all clients (master only) | X | |
 
 ## Money Commands
 
@@ -42,3 +50,25 @@
 | `/bank create <accountname>` | Create a new bank account with the given name | | |
 | `/bank <username> manage` | Open the management GUI for a specific player's account | | X |
 | `/bank <username> show` | Show another player's bank balance | | X |
+
+## Company Commands
+
+| Command | Description | Admin only | BS Admin only |
+|---------|-------------|:----------:|:-------------:|
+| `/company create <name> <maxSupply>` | Founds a company with a bound bank account, with you as founder. `maxSupply` is the share cap, between 1 and 1,000,000,000 | | |
+| `/company info <companyName>` | Prints company metadata to chat — founders, max supply, issued shares and description | | |
+| `/company manage <companyName>` | Opens the Company Management screen (requires MANAGE on the company's account) | | |
+
+Company names are case-insensitive, and tab-completion is scoped to your rights: `info` suggests every company on the server, `manage` only those where you hold MANAGE.
+
+Everything else is done in the game world rather than in chat:
+
+| Action | Where |
+|--------|-------|
+| Edit the description | Company Management → Overview |
+| Hire workers, change their permissions | Company Management → Workers |
+| Create payouts, pay dividends | Company Management → Payouts |
+| Design the share card, unbind stampers | Company Management → Shares |
+| Open, pause or close a share market | Company Management → Market (needs StockMarket) |
+| Transfer the founder role, dissolve the company | Company Management → Danger Zone (founder only) |
+| Bind a Share Stamper to a company | Right-click an unbound Share Stamper |

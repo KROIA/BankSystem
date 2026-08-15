@@ -51,9 +51,10 @@ The async forwarding system solves this by providing **a single unified API** (`
 GenericRequest<IN, OUT>                          (ModUtilities — ARRS framework)
   └─ BankSystemGenericRequest<IN, OUT>           (BankSystem — adds admin checks, routing)
        └─ AsyncForwardingRequest<Enum, IN, OUT>  (BankSystem — generic forwarding base)
-            ├─ AsyncBank.Request                 (44 forwarded bank operations)
-            ├─ AsyncBankAccount.Request           (26 forwarded account operations)
-            └─ AsyncBankManager.Request           (61 forwarded manager operations)
+            ├─ AsyncBank.Request                  (46 forwarded bank operations)
+            ├─ AsyncBankAccount.Request           (28 forwarded account operations)
+            ├─ AsyncBankManager.Request           (51 forwarded manager operations)
+            └─ AsyncCompanyManager.Request        (36 forwarded company operations)
 ```
 
 Each `Request` class is a **singleton** registered with the `AsynchronousRequestResponseSystem` (ARRS) from ModUtilities. ARRS handles packet transport, request-response matching, and future completion.
@@ -321,18 +322,19 @@ BankStatus myNewMethod(long param);
 | `util/async_function_forwarding/AsyncFunctionOutputData.java` | Encode/decode function return values |
 | `util/async_function_forwarding/AsyncFunctionDataCodecs.java` | Codec pair holder (input + output) |
 | `util/BankSystemGenericRequest.java` | BankSystem-specific request base (admin checks, routing) |
-| `banking/bank/AsyncBank.java` | 44 forwarded bank operations |
-| `banking/bankaccount/AsyncBankAccount.java` | 26 forwarded account operations |
-| `banking/bankmanager/AsyncBankManager.java` | 61 forwarded manager operations |
-| `api/bank/IAsyncBank.java` | Async bank interface (48 methods) |
-| `api/bankaccount/IAsyncBankAccount.java` | Async account interface (35+ methods) |
-| `api/bankmanager/IAsyncBankManager.java` | Async manager interface (60+ methods) |
+| `banking/bank/AsyncBank.java` | 46 forwarded bank operations |
+| `banking/bankaccount/AsyncBankAccount.java` | 28 forwarded account operations |
+| `banking/bankmanager/AsyncBankManager.java` | 51 forwarded manager operations |
+| `banking/company/AsyncCompanyManager.java` | 36 forwarded company operations (lifecycle, payouts, dividends, share visuals, symbols, market control, statistics) |
+| `api/bank/IAsyncBank.java` | Async bank interface |
+| `api/bankaccount/IAsyncBankAccount.java` | Async account interface |
+| `api/bankmanager/IAsyncBankManager.java` | Async manager interface |
 
 All paths relative to `common/src/main/java/net/kroia/banksystem/`.
 
 ## Statistics
 
-- **131 total forwarded functions** across the three async classes
-- **131 codec pairs** registered (one per function)
+- **161 total forwarded functions** across the four async classes
+- One codec pair registered per function
 - Wire format per call: enum ordinal (4 bytes) + encoded params (variable)
 - Transport: ModUtilities ARRS (Asynchronous Request-Response System) over TCP

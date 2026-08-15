@@ -46,7 +46,18 @@ Crafting with bank items also works on multi-server setups (player on one server
 If [JEI](https://www.curseforge.com/minecraft/mc-mods/jei) is installed:
 
 - The **+** button in the JEI recipe view fills the crafting grid with the ingredients from your inventory.
+- Clicking an item in the bank list looks up its recipes and applies the best one your bank account can actually satisfy.
 - The JEI item panel sits beside the Bank Terminal screen without overlapping it.
+
+### Balance History Chart
+
+The **History** button in the top-right of the Bank Terminal opens a line chart of the selected account's balances over time — one colour-coded series per item.
+
+- **Timescale buttons** (`1h`, `6h`, `1d`, `7d`, `30d`, `all`) in the top-left reframe the chart in one click. The view always spans the window you picked, even when the account is younger than that.
+- **Pan and zoom** with drag and mouse wheel. On a finite timescale, older history is streamed in the background before you reach the edge of the loaded data, and zooming out stops at the selected window — pick a bigger timescale to see further back.
+- A **search box** filters the series by item name or tag, and per-item checkboxes turn individual series on and off. Both are remembered between sessions.
+
+How often the underlying snapshots are taken, and how long they are kept, is controlled by the `BALANCE_SNAPSHOT_*` and `BALANCE_HISTORY_RETENTION_SWEEP_MINUTES` settings — see [Configuration](Configuration.md#utilities-section).
 
 ---
 ## ATM Block
@@ -55,7 +66,22 @@ If [JEI](https://www.curseforge.com/minecraft/mc-mods/jei) is installed:
     <img src="../images/ATMBlock.gif"> 
 </div>
 
-The ATM Block lets you withdraw money as specific bank notes.
+The ATM Block has two tabs; the account selector between them applies to both.
+
+### Withdraw tab
+
+Withdraw money from the selected bank account as specific bank notes. Pick a count per denomination with the `+N` / `-N` buttons or by typing into the field. Denominations you cannot afford are greyed out with an **Insufficient balance** tooltip, and typed amounts are clamped to what the account covers.
+
+### Convert tab
+
+Exchange notes for a different mix of the same value, without touching a bank account:
+
+1. **Deposit money from inventory** sweeps every coin and note you carry into a temporary cache.
+2. Pick any combination of denominations up to the cached total and withdraw it.
+3. If something is left over, either **Deposit remainder to bank** (into the selected account, as a normal deposit) or **Drop remainder** to get it at your feet as the fewest possible notes.
+
+> [!NOTE]
+> Closing the screen or disconnecting with a non-zero cache drops the remainder at the ATM as a minimum-item split — nothing is lost.
 
 ---
 ## Automation Blocks
@@ -122,6 +148,14 @@ The Bank Display block shows live bank account data on its screen. Right-click t
 |--------------|-------------|
 | **Balance Overview** | A compact grid showing the current balances of the highest-value items in the account. Displays item icons with their amounts. Updates every second. |
 | **Balance History** | A line chart tracking balance changes over time for all items in the account. Each item is color-coded with a legend on the right. Updates every 60 seconds. |
+
+> [!TIP]
+> Place displays next to each other to build a larger screen: a freshly placed display adopts the configuration of an already configured neighbour, so the whole multi-block shows one continuous image.
+
+---
+## Share Stamper
+
+The **Share Stamper** mints a company's physical shares from Blank Shares, and turns them back in Redeem mode. Because it only makes sense together with a company, it is documented in the [Companies guide](Companies.md#issuing-physical-shares).
 
 ---
 ## Money Stockpile

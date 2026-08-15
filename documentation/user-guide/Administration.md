@@ -89,6 +89,25 @@ BankSystem stores its per-world server configuration in `<world>/data/BankSystem
 See the [Configuration guide](Configuration.md) for the full annotated reference of every setting, including when the file is created and rewritten by the server.
 
 ---
+## Backups
+
+BankSystem keeps its balance history and transaction ledger in a SQLite database (`banksystem.db`) written by a background worker, so a plain file copy taken while the server runs can catch it mid-write. Four op-only commands make an external backup safe (master server only):
+
+| Command | What it does |
+|---------|--------------|
+| `/banksystem backup snapshot <path>` | Writes a consistent copy of the database to `<path>` using SQLite's `VACUUM INTO`. No pause needed, writers stay live. **This is the recommended route.** |
+| `/banksystem backup pause` | Blocks the database worker so an external archiver (`tar`, `rsync`, …) sees a quiet file. Logs `[BankSystem] db-worker paused for backup`, which a backup script can grep for as an acknowledgement. |
+| `/banksystem backup resume` | Releases the worker again. A safety timer auto-resumes after 120 seconds, so a forgotten pause can never soft-lock the server. |
+| `/banksystem backup status` | Reports whether the worker is currently paused. |
+
+Bank accounts, the item registry and `settings.json` are ordinary NBT/JSON files under `<world>/data/BankSystem/` and are written on the auto-save interval — copy them with the rest of the world folder as usual.
+
+---
+## Transaction Ledger
+
+Every deposit, withdrawal, transfer, payout, dividend and share stamp is recorded in the database with a timestamp, the account, and the kind of movement. It is what the company [Statistics tab](Companies.md#statistics-tab) and the payout history read from; there is no separate cleanup step for admins.
+
+---
 ## Volatile Item Components
 
 Some mods attach **time-varying data components** to item stacks — for example TerraFirmaCraft's food-decay timestamp (`tfc:food`) or heat state (`tfc:heat`). Because BankSystem identifies items by their full component data, such components would make identical items look different over time (e.g. every freshly caught fish would count as a "new" item, and stored food templates could rot inside the bank's item registry).

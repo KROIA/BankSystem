@@ -47,6 +47,11 @@ Permissions for each player can be configured individually:
 > [!NOTE]
 > Only manually created bank accounts can be deleted. The personal bank account cannot be deleted.
 
+Managers also get two extra buttons on the management screen:
+
+- **Bindings** — link a slot to an external currency mod's account. See [Currency Bindings](CurrencyBindings.md).
+- **Payouts** — only on accounts bound to a company: recurring wages and dividends. See [Companies](Companies.md#payouts-tab).
+
 ---
 ## Selecting a Bank Account
 

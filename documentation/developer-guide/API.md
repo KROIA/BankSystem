@@ -16,11 +16,24 @@ The `BankSystemAPI` interface provides access to all subsystems:
 
 | Method | Returns | Description |
 |--------|---------|-------------|
+| `getModID()` | `String` | BankSystem's mod id |
+| `getModVersion()` | `String` | The loaded BankSystem version |
 | `getServerBankManager()` | `IBankManager` | Server-side bank manager (sync + async access) |
 | `getClientBankManager()` | `IClientBankManager` | Client-side bank manager |
 | `getEvents()` | `IBankSystemEvents` | Event/signal subscriptions |
 | `getDataHandler()` | `IBankSystemDataHandler` | Save/load operations |
 | `isSlave()` | `boolean` | Whether this server is a slave in multi-server mode |
+| `setItemPriceProvider(ItemPriceProvider)` / `getItemPriceProvider()` | `void` / `ItemPriceProvider` *(nullable)* | Supply market prices for total-wealth tracking — see [Item Price Provider API](ItemPriceProviderAPI.md) |
+| `setPriceCurrencyItem(short)` / `getPriceCurrencyItem()` | `void` / `short` | The item prices are denominated in |
+| `registerCurrencyProvider(ExternalCurrencyProvider)` | `void` | Register a currency-mod adapter — see [Currency Integration](CurrencyIntegration.md) |
+| `unregisterCurrencyProvider(String providerId)` | `boolean` | Remove a previously registered provider |
+| `getCurrencyProviders()` | `Collection<ExternalCurrencyProvider>` | Every registered currency provider |
+| `getPayoutManager()` | `IPayoutManager` | Company payout schedules (create / update / pause / delete / history) |
+| `getDividendPayer()` | `IDividendPayer` | One-shot dividend runs to every share holder |
+| `getVisualLookup()` | `IBankSystemVisualLookup` | Client-side share-visual lookup per `ItemID` (never null; each query returns `null` on a dedicated server) |
+| `getShareIconRenderer()` | `IShareIconRenderer` *(nullable)* | Paints a company's share badge; `null` on dedicated servers |
+
+> Payout and dividend operations are **master-only**. On a slave, `getPayoutManager()` and `getDividendPayer()` return fail-closed shims — route company mutations through the async request surface instead.
 
 ## Sync vs Async Access
 
@@ -237,8 +250,17 @@ Subscribe to events for reactive integration via `api.getEvents()`:
 | `getSettingsSavedToFileSignal()` → `Signal` | Fires after settings are saved |
 | `getSettingsLoadedFromFileSignal()` → `Signal` | Fires after settings are loaded |
 | `getBanksystemSetupCompleteSignal()` → `Signal` | Fires when the bank system is ready to use |
+| `getItemIDsMergedEvent()` → `DataEvent<Map<ItemID,ItemID>>` | Fires after an ItemID merge (alias → canonical) |
 | `getMasterServerSlaveConnected()` → `Signal` | Fires when a slave connects to the master |
+| `getMasterServerSlaveDisconnected()` → `DataEvent<String>` | Fires when a slave disconnects (payload: slaveID) |
+| `getSlaveConnectionAcceptedSignal()` → `Signal` | Slave side: this server's handshake with its master completed |
+| `getSlaveConnectionLostSignal()` → `Signal` | Slave side: the master link dropped (edge-triggered) |
+| `getTrustChangedSignal()` → `DataEvent<TrustChangeInfo>` | Fires when a slave is trusted/untrusted |
+| `getPayoutExecutedEvent()` → `DataEvent<PayoutExecutedInfo>` | Fires on every payout-schedule evaluation, success or failure |
+| `getDividendPaidEvent()` → `DataEvent<DividendPaidEvent>` | Fires after a successful dividend run |
 | `removeListeners()` → `void` | Unsubscribe all listeners |
+
+Threading, which JVM each one fires on, and full payload contracts: [Events & Signals](EventsAndSignals.md).
 
 ## API Package Structure
 
@@ -249,22 +271,42 @@ api/
 ├── BankSystemAPI.java              — Main entry point
 ├── IBankSystemEvents.java          — Event subscriptions
 ├── IBankSystemDataHandler.java     — Data persistence
+├── ItemPriceProvider.java          — Price source for total-wealth tracking
+├── PayDividendResult.java          — Dividend run result + typed reason
 ├── bank/
-│   ├── IAsyncBank.java             — Async bank operations (48 methods)
+│   ├── IAsyncBank.java             — Async bank operations
 │   ├── ISyncServerBank.java        — Sync bank operations (master only)
+│   ├── IServerBank.java            — Server-side bank interface
 │   ├── IClientBank.java            — Client-side read-only bank
 │   ├── BankStatus.java             — Operation result enum
 │   └── BankType.java               — Bank type enum
 ├── bankaccount/
-│   ├── IAsyncBankAccount.java      — Async account operations (35+ methods)
+│   ├── IAsyncBankAccount.java      — Async account operations
 │   ├── ISyncServerBankAccount.java — Sync account operations (master only)
 │   └── IServerBankAccount.java     — Server-side account interface
 ├── bankmanager/
 │   ├── IBankManager.java           — Access point (sync/async routing)
-│   ├── IAsyncBankManager.java      — Async manager operations (60+ methods)
+│   ├── IAsyncBankManager.java      — Async manager operations
 │   ├── ISyncServerBankManager.java — Sync manager operations (master only)
 │   ├── IClientBankManager.java     — Client-side manager
 │   └── IServerBankManager.java     — Server-side manager interface
+├── company/
+│   ├── ShareVisuals.java           — A share's visual identity (layers, name, supply)
+│   ├── IBankSystemVisualLookup.java— Client-side per-ItemID visual lookup
+│   └── IShareIconRenderer.java     — Optional share badge painter
+├── payout/
+│   └── IPayoutManager.java         — Company payout schedules (master only)
+├── dividend/
+│   └── IDividendPayer.java         — One-shot dividend runs (master only)
+├── currency/
+│   ├── ExternalCurrencyProvider.java — SPI for currency mods
+│   ├── ExternalAccount.java        — An account inside a currency mod
+│   ├── ExternalAccountRef.java     — Stable reference to such an account
+│   └── ProviderFeature.java        — Optional capability flags
+├── event/
+│   ├── TrustChangeInfo.java        — Payload of getTrustChangedSignal()
+│   ├── PayoutExecutedInfo.java     — Payload of getPayoutExecutedEvent()
+│   └── DividendPaidEvent.java      — Payload of getDividendPaidEvent()
 └── command/
     ├── IBankSystemCommands.java     — Command registration
     ├── IAsyncBankSystemCommandHandler.java  — Async command handlers
@@ -273,4 +315,7 @@ api/
 
 ## Further Reading
 
+- [Events & Signals](EventsAndSignals.md) — Full event catalog with threading and side contracts
+- [Currency Integration](CurrencyIntegration.md) — Implementing `ExternalCurrencyProvider`
+- [Item Price Provider API](ItemPriceProviderAPI.md) — Supplying prices for total-wealth tracking
 - [Async Forwarding Architecture](AsyncForwardingArchitecture.md) — How that system works internally
