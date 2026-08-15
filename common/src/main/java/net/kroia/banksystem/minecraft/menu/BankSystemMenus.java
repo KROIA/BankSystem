@@ -35,12 +35,6 @@ public class BankSystemMenus {
 
     }
 
-    /** @deprecated use {@link net.kroia.banksystem.util.BankSystemClientHooks#setupMenuScreens()} */
-    public static void setupScreens() {
-        net.kroia.banksystem.util.BankSystemClientHooks.setupMenuScreens();
-    }
-
-
     public static final RegistrySupplier<MenuType<BankTerminalContainerMenu>> BANK_TERMINAL_CONTAINER_MENU =
             MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_terminal_container_menu"), () -> MenuRegistry.ofExtended(BankTerminalContainerMenu::new));
     public static final RegistrySupplier<MenuType<BankUploadContainerMenu>> BANK_UPLOAD_CONTAINER_MENU =

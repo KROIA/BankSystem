@@ -297,7 +297,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the client side
     public static void onClientSetup()
     {
-        BankSystemMenus.setupScreens();
+        BankSystemClientHooks.setupMenuScreens();
         ClientBankManager.setBackend(INSTANCES);
         INSTANCES.CLIENT_BANK_MANAGER = BankManager.createClient();
         // Task #54 (v2.1.0) — initialise client-side symbol cache directory.
