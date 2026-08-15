@@ -125,4 +125,47 @@ public interface BankSystemAPI {
      * @since 2.0.5
      */
     @Nullable ExternalCurrencyProvider getCurrencyProvider(@Nullable String providerId);
+
+    /**
+     * Task #45 (v2.1.0) — recurring payout API. Never {@code null}; on slaves the returned
+     * instance is a fail-closed shim that returns {@code NOT_MASTER} for every mutation and
+     * an empty list/future for every read.
+     *
+     * @return the payout manager. Downstream mods and UI callers use this interface only.
+     */
+    net.kroia.banksystem.api.payout.IPayoutManager getPayoutManager();
+
+    /**
+     * Task #49 (v2.1.0) — one-shot dividend distributor. Never {@code null}; on slaves
+     * the returned instance is a fail-closed shim that returns
+     * {@link net.kroia.banksystem.api.PayDividendResult.Reason#NOT_MASTER} for every
+     * call. Callers reaching this from a slave should route through the ARRS
+     * {@code AsyncCompanyManager.PAY_DIVIDEND} function instead.
+     *
+     * @return the dividend payer. Downstream mods and UI callers use this interface only.
+     */
+    net.kroia.banksystem.api.dividend.IDividendPayer getDividendPayer();
+
+    /**
+     * Task #50 (v2.1.0) — client-side per-share visual lookup. Consumed by external
+     * mods (e.g. StockMarket) from render paths. Never {@code null}; on dedicated
+     * servers the returned lookup always resolves to {@code null} because the client
+     * visual cache is not populated there.
+     *
+     * @return the visual lookup. Downstream mods and UI callers use this interface only.
+     * @since 2.0.8
+     */
+    net.kroia.banksystem.api.company.IBankSystemVisualLookup getVisualLookup();
+
+    /**
+     * Task #50 R4 (v2.1.0) — optional icon renderer for company shares.
+     *
+     * <p>Returns {@code null} when no renderer is available (dedicated servers, or
+     * before the client render pipeline is wired). Callers should fall back to the
+     * vanilla {@code ItemStack} renderer in that case.
+     *
+     * @return the share icon renderer, or {@code null} if unavailable.
+     * @since 2.0.8
+     */
+    @Nullable net.kroia.banksystem.api.company.IShareIconRenderer getShareIconRenderer();
 }

@@ -324,7 +324,7 @@ public class ArithmeticTests extends TestSuite {
                 return fail("Long.MAX_VALUE produced NaN/Infinity: " + result);
             }
             // double has ~15-17 significant digits, can represent Long.MAX_VALUE/100 within epsilon
-            double expected = (double) Long.MAX_VALUE / 100.0;
+            double expected = (double) Long.MAX_VALUE / (double) BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
             double diff = Math.abs(result - expected);
             if (diff > 1.0) {
                 return fail("Issue #20 regression — convertToRealAmountStatic(Long.MAX_VALUE) "

@@ -90,10 +90,10 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
     public static final int CRAFT_RESULT_SLOT_INDEX = CRAFT_GRID_SLOT_START + CRAFT_GRID_SLOT_COUNT;
 
     // Crafting panel slot positions (element-local coordinates of the screen's container view)
-    public static final int CRAFT_GRID_X = 12;
-    public static final int CRAFT_GRID_Y = 4;
-    public static final int CRAFT_RESULT_X = 92;
-    public static final int CRAFT_RESULT_Y = 22;
+    public static final int CRAFT_GRID_X = 30;
+    public static final int CRAFT_GRID_Y = 13;
+    public static final int CRAFT_RESULT_X = 124;
+    public static final int CRAFT_RESULT_Y = 31;
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 

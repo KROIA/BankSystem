@@ -3,6 +3,8 @@ package net.kroia.banksystem.minecraft.command;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.FloatArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
@@ -11,6 +13,8 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
 import net.kroia.banksystem.api.command.IServerBankSystemCommandHandler;
+import net.kroia.banksystem.banking.company.AsyncCompanyManager;
+import net.kroia.banksystem.banking.company.CompanyManager;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
 import net.kroia.modutilities.testing.TestCommandRegistration;
@@ -562,9 +566,112 @@ public class BankSystemCommandsRegistration {
                         )
         );
 
+        // Task #43 (v2.1.0) — /company command tree (Phase 1: Company foundation).
+        registerCompanyCommands(dispatcher);
+
+        // Task #54 (v2.1.0) — /banksystem symbols admin commands (master-gated, op-only).
+        registerSymbolCommands(dispatcher);
+
         boolean isSlave = BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer;
         if (BankSystemMod.ENABLE_DEV_FEATURES)
             TestCommandRegistration.register(dispatcher, "banksystem", "BankSystem", "banksystem", isSlave);
+    }
+
+    /**
+     * Task #43 (v2.1.0). Registers the {@code /company} command tree — Phase 1 subset:
+     * {@code create}, {@code transfer}, {@code dissolve}, {@code description}, {@code info}.
+     * <p>
+     * Master-only in this phase. Slaves print a "master only" notice — full slave-side ARRS
+     * forwarding is a follow-up task (deferred from Task #43 spec item 8).
+     */
+    private static void registerCompanyCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(
+                Commands.literal("company")
+                    .then(Commands.literal("create")
+                        .then(Commands.argument("name", StringArgumentType.string())
+                            .then(Commands.argument("maxSupply", LongArgumentType.longArg(1L, 1_000_000_000L))
+                                .executes(ctx -> {
+                                    ServerPlayer player = ctx.getSource().getPlayerOrException();
+                                    String name = StringArgumentType.getString(ctx, "name");
+                                    long maxSupply = LongArgumentType.getLong(ctx, "maxSupply");
+                                    CompanyCommandLogic.create(player, name, maxSupply);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                            )
+                        )
+                    )
+                    // transfer / dissolve / description live in the Company Management screen
+                    // (Danger Zone and Overview tabs) — no chat equivalent, so there is exactly
+                    // one place each of them is done.
+                    .then(Commands.literal("info")
+                        .then(Commands.argument("companyName", StringArgumentType.string())
+                                .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_ALL))
+                            .executes(ctx -> {
+                                ServerPlayer player = ctx.getSource().getPlayerOrException();
+                                String companyName = StringArgumentType.getString(ctx, "companyName");
+                                CompanyCommandLogic.info(player, companyName);
+                                return Command.SINGLE_SUCCESS;
+                            })
+                        )
+                    )
+                    // Task #51 (v2.1.0) — /company manage <companyName>: opens the
+                    // CompanyManagementScreen on the caller's client if they have MANAGE.
+                    .then(Commands.literal("manage")
+                        .then(Commands.argument("companyName", StringArgumentType.string())
+                                .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_MANAGE))
+                            .executes(ctx -> {
+                                ServerPlayer player = ctx.getSource().getPlayerOrException();
+                                String companyName = StringArgumentType.getString(ctx, "companyName");
+                                CompanyCommandLogic.manage(player, companyName);
+                                return Command.SINGLE_SUCCESS;
+                            })
+                        )
+                    )
+                    // Stamper binding is done at the block: right-click an unbound Share Stamper
+                    // to pick a company, and use Unbind in its screen or the Shares tab.
+        );
+    }
+
+    /**
+     * Task #43h — company-name suggestion provider, filtered by caller's rights.
+     * On master, iterates {@link CompanyManager} directly. On slave, forwards to master
+     * via {@link AsyncCompanyManager} — ARRS response completes the returned future.
+     */
+    private static CompletableFuture<Suggestions> getCompanyNameSuggestion(
+            com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+            SuggestionsBuilder builder,
+            byte filterKind) {
+        CommandSourceStack source = ctx.getSource();
+        UUID callerUUID;
+        try {
+            callerUUID = source.getPlayerOrException().getUUID();
+        } catch (Exception e) {
+            return CompletableFuture.completedFuture(builder.build());
+        }
+
+        CompanyManager cm = CompanyManager.get();
+        IServerBankSystemCommandHandler master = BACKEND_INSTANCES == null ? null
+                : BACKEND_INSTANCES.COMMAND_HANDLER.getSync();
+        if (cm != null && master != null) {
+            // Master side — walk indices directly, no ARRS.
+            java.util.Set<net.kroia.banksystem.banking.company.Company> set = switch (filterKind) {
+                case AsyncCompanyManager.FILTER_FOUNDER -> cm.listCompaniesFounderedBy(callerUUID);
+                case AsyncCompanyManager.FILTER_MANAGE  -> cm.listCompaniesManagedBy(callerUUID);
+                default                                 -> cm.listAllCompanies();
+            };
+            for (net.kroia.banksystem.banking.company.Company c : set) {
+                builder.suggest("\"" + c.getName() + "\"");
+            }
+            return CompletableFuture.completedFuture(builder.build());
+        }
+        // Slave — ARRS forward.
+        CompletableFuture<Suggestions> future = new CompletableFuture<>();
+        AsyncCompanyManager.listCompanyNamesForCallerAsync(callerUUID, filterKind)
+                .thenAccept(names -> {
+                    for (String n : names) builder.suggest("\"" + n + "\"");
+                    future.complete(builder.build());
+                });
+        return future;
     }
 
     private static CompletableFuture<Suggestions> getPlayerNamesSuggestion(SuggestionsBuilder builder)
@@ -612,5 +719,98 @@ public class BankSystemCommandsRegistration {
     private static void debug(String msg)
     {
         BACKEND_INSTANCES.LOGGER.debug("[Commands] " + msg);
+    }
+
+    // ── Task #54 (v2.1.0) — /banksystem symbols ──────────────────────────────
+
+    private static void registerSymbolCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(
+            Commands.literal("banksystem")
+                .then(Commands.literal("symbols")
+                    .requires(src -> src.hasPermission(2))
+                    // list
+                    .then(Commands.literal("list")
+                        .executes(ctx -> {
+                            if (!isMasterSymbols(ctx.getSource())) return 0;
+                            net.kroia.banksystem.banking.company.ShareSymbolStore store =
+                                    BACKEND_INSTANCES.SHARE_SYMBOL_STORE;
+                            List<net.kroia.banksystem.banking.company.ShareSymbolStore.SymbolEntry> es =
+                                    store.getEntries();
+                            ctx.getSource().sendSuccess(() -> Component.literal(
+                                    "Symbols (revision " + store.getRevision() + "): " + es.size() + " total"), false);
+                            for (net.kroia.banksystem.banking.company.ShareSymbolStore.SymbolEntry e : es) {
+                                String hex8 = e.sha256Hex().substring(0, 8);
+                                ctx.getSource().sendSuccess(() -> Component.literal(
+                                        "  " + e.id() + "  ordinal=" + e.ordinal()
+                                        + "  sha256=" + hex8 + "…  " + e.size() + "b"), false);
+                            }
+                            return Command.SINGLE_SUCCESS;
+                        })
+                    )
+                    // add <id>
+                    .then(Commands.literal("add")
+                        .then(Commands.argument("id", StringArgumentType.word())
+                            .executes(ctx -> {
+                                if (!isMasterSymbols(ctx.getSource())) return 0;
+                                String id = StringArgumentType.getString(ctx, "id");
+                                String err = BACKEND_INSTANCES.SHARE_SYMBOL_STORE.adminAdd(id);
+                                if (err != null) {
+                                    ctx.getSource().sendFailure(Component.literal("[symbols] " + err));
+                                    return 0;
+                                }
+                                ctx.getSource().sendSuccess(() -> Component.literal(
+                                        "[symbols] Added symbol '" + id + "'."), true);
+                                return Command.SINGLE_SUCCESS;
+                            })
+                        )
+                    )
+                    // remove <id>
+                    .then(Commands.literal("remove")
+                        .then(Commands.argument("id", StringArgumentType.word())
+                            .suggests((ctx, builder) -> {
+                                if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SHARE_SYMBOL_STORE == null)
+                                    return builder.buildFuture();
+                                BACKEND_INSTANCES.SHARE_SYMBOL_STORE.getEntries()
+                                        .forEach(e -> builder.suggest(e.id()));
+                                return builder.buildFuture();
+                            })
+                            .executes(ctx -> {
+                                if (!isMasterSymbols(ctx.getSource())) return 0;
+                                String id = StringArgumentType.getString(ctx, "id");
+                                String err = BACKEND_INSTANCES.SHARE_SYMBOL_STORE.adminRemove(id);
+                                if (err != null) {
+                                    ctx.getSource().sendFailure(Component.literal("[symbols] " + err));
+                                    return 0;
+                                }
+                                ctx.getSource().sendSuccess(() -> Component.literal(
+                                        "[symbols] Removed symbol '" + id + "'. Ordinals compacted."), true);
+                                return Command.SINGLE_SUCCESS;
+                            })
+                        )
+                    )
+                    // reload
+                    .then(Commands.literal("reload")
+                        .executes(ctx -> {
+                            if (!isMasterSymbols(ctx.getSource())) return 0;
+                            String result = BACKEND_INSTANCES.SHARE_SYMBOL_STORE.adminReload();
+                            String msg = result != null ? result : "Reloaded — no changes.";
+                            ctx.getSource().sendSuccess(() -> Component.literal("[symbols] " + msg), true);
+                            return Command.SINGLE_SUCCESS;
+                        })
+                    )
+                )
+        );
+    }
+
+    private static boolean isMasterSymbols(CommandSourceStack src) {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SHARE_SYMBOL_STORE == null) {
+            src.sendFailure(Component.literal("[symbols] Store not initialized."));
+            return false;
+        }
+        if (BACKEND_INSTANCES.isSlaveServer) {
+            src.sendFailure(Component.literal("[symbols] Must run on the master server."));
+            return false;
+        }
+        return true;
     }
 }

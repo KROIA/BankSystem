@@ -44,11 +44,13 @@ import java.util.Map;
  * exactly ONE vanilla recipe is completable — the matcher scans all crafting
  * recipes in registry order and returns the first hit, so uniqueness is what
  * makes the assertions deterministic. Recipes used: oak planks (from log),
- * bucket (3 iron), bow (3 sticks + 3 string, mirrored), book (3 paper +
- * 1 leather, shapeless), torch (coal/charcoal + stick). A heavily modded test
+ * bucket (3 iron), bow (3 sticks + 3 string, mirrored), beetroot soup (1 bowl +
+ * 6 beetroot, shapeless), torch (coal/charcoal + stick). A heavily modded test
  * world that adds competing crafting recipes over these exact ingredient sets
  * could change which recipe matches first; the suite targets dev/vanilla-ish
- * servers, consistent with the other suites' vanilla assumptions.
+ * servers, consistent with the other suites' vanilla assumptions. This is not
+ * hypothetical: banksystem's own blank_share (shapeless paper + leather) is why
+ * the shapeless fixtures use beetroot soup instead of book.
  * <p>
  * <b>MASTER_ONLY:</b> the fixtures register vanilla item templates through
  * {@link ItemIDManager#registerItemStackServerSide_direct(ItemStack)}, which is
@@ -67,7 +69,7 @@ import java.util.Map;
  *   <li><i>a genuine shapeless backtracking dead-end</i> (physical item matching
  *       two DIFFERENT overlapping ingredient sets where greedy assignment fails)
  *       — vanilla has no shapeless recipe with two distinct overlapping
- *       ingredient sets. The book test still exercises the backtracking
+ *       ingredient sets. The beetroot-soup test still exercises the backtracking
  *       assignment across duplicate ingredients.</li>
  * </ul>
  */
@@ -90,7 +92,7 @@ public class BankCraftingMatcherTests extends TestSuite {
         addTest("shaped_bank_fill_completes_bucket", this::testShapedBankFillCompletesBucket);
         addTest("shaped_offset_placement_matches", this::testShapedOffsetPlacementMatches);
         addTest("shaped_mirrored_placement_matches", this::testShapedMirroredPlacementMatches);
-        addTest("shapeless_bank_fill_completes_book", this::testShapelessBankFillCompletesBook);
+        addTest("shapeless_bank_fill_completes_soup", this::testShapelessBankFillCompletesSoup);
         addTest("insufficient_cumulative_balance_rejects", this::testInsufficientCumulativeBalanceRejects);
         addTest("balance_below_one_item_excluded", this::testBalanceBelowOneItemExcluded);
         addTest("money_never_sourced_from_bank", this::testMoneyNeverSourcedFromBank);
@@ -360,58 +362,66 @@ public class BankCraftingMatcherTests extends TestSuite {
     }
 
     /**
-     * Shapeless bank fill with duplicate ingredients: book = 3 paper + 1 leather.
-     * Physical paper (slot 0) and leather (slot 3) seed the grid; the bank
-     * supplies the remaining TWO paper. Exercises the backtracking assignment of
-     * physical items to ingredient indices and the empty-slot fill order.
+     * Shapeless bank fill with duplicate ingredients: beetroot soup = 1 bowl +
+     * 6 beetroot. Physical beetroot (slot 0) and bowl (slot 3) seed the grid;
+     * the bank supplies the remaining FIVE beetroot. Exercises the backtracking
+     * assignment of physical items to ingredient indices and the empty-slot
+     * fill order.
+     * <p>
+     * Beetroot soup rather than book (3 paper + 1 leather): banksystem's own
+     * blank_share is shapeless paper + leather, so a paper/leather seed grid is
+     * a complete recipe on its own and the matcher rightly takes it without
+     * touching the bank. Neither bowl nor beetroot appears in any banksystem
+     * recipe, so this fixture stays unambiguous.
      */
-    private TestResult testShapelessBankFillCompletesBook() {
+    private TestResult testShapelessBankFillCompletesSoup() {
         Level level = level();
         if (level == null) return fail("No server level available");
-        ItemID paper = id(Items.PAPER);
+        ItemID beetroot = id(Items.BEETROOT);
         List<ItemStack> grid = emptyGrid();
-        grid.set(0, new ItemStack(Items.PAPER));
-        grid.set(3, new ItemStack(Items.LEATHER));
+        grid.set(0, new ItemStack(Items.BEETROOT));
+        grid.set(3, new ItemStack(Items.BOWL));
         BankCraftingMatcher.Match match =
-                BankCraftingMatcher.findMatch(level, grid, true, bank(paper, 2L * ONE_ITEM));
-        if (match == null) return fail("book seed layout (paper + leather) produced no match");
-        TestResult r = assertTrue("result is a book", match.result().is(Items.BOOK));
+                BankCraftingMatcher.findMatch(level, grid, true, bank(beetroot, 5L * ONE_ITEM));
+        if (match == null) return fail("soup seed layout (beetroot + bowl) produced no match");
+        TestResult r = assertTrue("result is beetroot soup", match.result().is(Items.BEETROOT_SOUP));
         if (!r.passed()) return r;
-        r = assertEquals("exactly two slots are bank-filled with paper", 2, countBankSlots(match, paper));
+        r = assertEquals("exactly five slots are bank-filled with beetroot", 5,
+                countBankSlots(match, beetroot));
         if (!r.passed()) return r;
-        r = assertEquals("two whole paper are reserved per craft",
-                Integer.valueOf(2), match.bankCountsPerCraft().get(paper));
+        r = assertEquals("five whole beetroot are reserved per craft",
+                Integer.valueOf(5), match.bankCountsPerCraft().get(beetroot));
         if (!r.passed()) return r;
         r = assertTrue("physical seeds keep their slots in the virtual grid",
-                match.virtualGrid()[0].is(Items.PAPER) && match.virtualGrid()[3].is(Items.LEATHER));
+                match.virtualGrid()[0].is(Items.BEETROOT) && match.virtualGrid()[3].is(Items.BOWL));
         if (!r.passed()) return r;
         return pass("shapeless recipes are bank-completed via the assignment/backtracking path");
     }
 
     /**
-     * Cumulative reservation: book needs THREE paper from the bank when only the
-     * leather is physical. With a free balance of (3 items - 1 raw unit) the
-     * third pick must fail (needs are summed against the same balance) — no
-     * match. With exactly 3 items it must succeed (boundary control).
+     * Cumulative reservation: beetroot soup needs SIX beetroot from the bank
+     * when only the bowl is physical. With a free balance of (6 items - 1 raw
+     * unit) the last pick must fail (needs are summed against the same balance)
+     * — no match. With exactly 6 items it must succeed (boundary control).
      */
     private TestResult testInsufficientCumulativeBalanceRejects() {
         Level level = level();
         if (level == null) return fail("No server level available");
-        ItemID paper = id(Items.PAPER);
-        List<ItemStack> grid = gridWith(Items.LEATHER, 0);
+        ItemID beetroot = id(Items.BEETROOT);
+        List<ItemStack> grid = gridWith(Items.BOWL, 0);
 
         BankCraftingMatcher.Match tooFew =
-                BankCraftingMatcher.findMatch(level, grid, true, bank(paper, 3L * ONE_ITEM - 1));
-        TestResult r = assertNull("2.99 paper cannot cover a 3-paper need", tooFew);
+                BankCraftingMatcher.findMatch(level, grid, true, bank(beetroot, 6L * ONE_ITEM - 1));
+        TestResult r = assertNull("5.99 beetroot cannot cover a 6-beetroot need", tooFew);
         if (!r.passed()) return r;
 
         BankCraftingMatcher.Match exact =
-                BankCraftingMatcher.findMatch(level, grid, true, bank(paper, 3L * ONE_ITEM));
-        if (exact == null) return fail("exactly 3 bank paper did not complete the book");
-        r = assertTrue("boundary control result is a book", exact.result().is(Items.BOOK));
+                BankCraftingMatcher.findMatch(level, grid, true, bank(beetroot, 6L * ONE_ITEM));
+        if (exact == null) return fail("exactly 6 bank beetroot did not complete the soup");
+        r = assertTrue("boundary control result is beetroot soup", exact.result().is(Items.BEETROOT_SOUP));
         if (!r.passed()) return r;
-        r = assertEquals("all three paper are reserved cumulatively",
-                Integer.valueOf(3), exact.bankCountsPerCraft().get(paper));
+        r = assertEquals("all six beetroot are reserved cumulatively",
+                Integer.valueOf(6), exact.bankCountsPerCraft().get(beetroot));
         if (!r.passed()) return r;
         return pass("cumulative needs are reserved against the free balance");
     }

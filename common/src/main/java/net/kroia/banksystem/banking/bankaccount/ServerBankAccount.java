@@ -32,6 +32,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 
 public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
@@ -41,6 +42,28 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         ServerBankAccount.BACKEND_INSTANCES = backend;
         User.setBackend(backend);
         ServerBank.setBackend(backend);
+    }
+
+    /**
+     * Task #43 (v2.1.0) — founder invariant hook. {@code CompanyManager.install()} wires
+     * this in with a real predicate; when {@code null} (slaves, or unit tests that don't
+     * install CompanyManager) the founder branch of {@link #enforceManageInvariant}
+     * degrades to the plain manage-invariant check.
+     *
+     * <p>Signature: {@code (accountNr, uuid) -> isFounderOfAccount}. Static because the
+     * invariant helper itself is static — see the caller in {@code UpdateBankAccountRequest}.
+     */
+    @Nullable
+    private static BiPredicate<Integer, UUID> founderChecker;
+
+    public static void setFounderChecker(@Nullable BiPredicate<Integer, UUID> checker) {
+        founderChecker = checker;
+    }
+
+    /** Test-visible read of the current founder checker. */
+    @Nullable
+    public static BiPredicate<Integer, UUID> getFounderChecker() {
+        return founderChecker;
     }
     public static final int INVALID_ACCOUNT_NUMBER = 0;
 
@@ -638,7 +661,12 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         /** No user held MANAGE; one retained user was auto-granted MANAGE (map mutated). */
         PROMOTED,
         /** The proposed set is empty; applying it would orphan the account — caller must refuse. */
-        REFUSED_ORPHAN
+        REFUSED_ORPHAN,
+        /**
+         * Task #43 (v2.1.0) — a Company founder's MANAGE would be removed by the proposed
+         * change. Caller must refuse the user-set change and preserve the previous state.
+         */
+        REFUSED_FOUNDER
     }
 
     /**
@@ -695,6 +723,56 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         int promotedMask = (pick.getValue() == null ? 0 : pick.getValue()) | BankPermission.MANAGE.getValue();
         proposed.put(pick.getKey(), promotedMask); // Key already present → value update, not structural.
         return ManageInvariantOutcome.PROMOTED;
+    }
+
+    /**
+     * Task #43 (v2.1.0) — founder-aware variant of {@link #enforceManageInvariant(Map, boolean)}.
+     * <p>
+     * Additional pre-check: if the account is bound to a Company (per the installed
+     * {@link #founderChecker}) and any UUID that <b>previously</b> held MANAGE is a founder
+     * but would <b>not</b> hold MANAGE in {@code proposed} (either dropped from the set or
+     * present without the MANAGE bit), returns {@link ManageInvariantOutcome#REFUSED_FOUNDER}
+     * without mutating {@code proposed}. Callers must then skip the user-set change.
+     * <p>
+     * Personal accounts and accounts with no live founder-checker fall straight through to
+     * the two-arg helper (behavior unchanged for accounts not bound to a Company).
+     *
+     * @param proposed  the complete proposed users→permission-mask map (mutated only on PROMOTED)
+     * @param previous  the CURRENT users→permission-mask map on the account (immutable snapshot;
+     *                  used to identify who was MANAGE-holder-before-the-change)
+     * @param hasOwner  true if the account has a personal bank owner
+     * @param accountNr the bank account number (looked up in the founder registry)
+     */
+    public static ManageInvariantOutcome enforceManageInvariant(
+            Map<User, Integer> proposed,
+            Map<User, Integer> previous,
+            boolean hasOwner,
+            int accountNr) {
+        if (!hasOwner && founderChecker != null && previous != null) {
+            for (Map.Entry<User, Integer> prevEntry : previous.entrySet()) {
+                User user = prevEntry.getKey();
+                if (user == null) continue;
+                int prevMask = prevEntry.getValue() == null ? 0 : prevEntry.getValue();
+                if (!BankPermission.hasPermission(prevMask, BankPermission.MANAGE.getValue())) continue;
+                if (!founderChecker.test(accountNr, user.getUUID())) continue;
+                // This user is a founder AND had MANAGE before — check proposed.
+                Integer proposedMask = null;
+                if (proposed != null) {
+                    for (Map.Entry<User, Integer> pe : proposed.entrySet()) {
+                        if (pe.getKey() != null && pe.getKey().getUUID().equals(user.getUUID())) {
+                            proposedMask = pe.getValue();
+                            break;
+                        }
+                    }
+                }
+                boolean stillManages = proposedMask != null
+                        && BankPermission.hasPermission(proposedMask, BankPermission.MANAGE.getValue());
+                if (!stillManages) {
+                    return ManageInvariantOutcome.REFUSED_FOUNDER;
+                }
+            }
+        }
+        return enforceManageInvariant(proposed, hasOwner);
     }
 
 

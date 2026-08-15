@@ -69,7 +69,12 @@ public final class BankSystemModSettings extends ModSettings {
 
     public static final class Utilities extends SettingsGroup
     {
-        public final Setting<Long> SAVE_INTERVAL_MINUTES = registerSetting("SAVE_INTERVAL_MINUTES",5L, Long.class); // 5 minutes
+        /**
+         * Seconds between autosaves. Was minute-based until v2.1.0; a crash between a
+         * withdrawal and the next save let the bank keep items the player already had in
+         * their inventory (item duplication), so the window is now seconds, not minutes.
+         */
+        public final Setting<Long> SAVE_INTERVAL_SECONDS = registerSetting("SAVE_INTERVAL_SECONDS",5L, Long.class); // 5 seconds
         public final Setting<Long> BALANCE_SNAPSHOT_INTERVAL_MINUTES = registerSetting("BALANCE_SNAPSHOT_INTERVAL_MINUTES",1L, Long.class); // 1 minute; combined with sample-on-change dedup this is now safe for production.
         /**
          * @deprecated Task #41 (v2.0.7): the tiered retention model supersedes this flat cap.

@@ -4,7 +4,10 @@ import dev.architectury.platform.Platform;
 import net.fabricmc.api.EnvType;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.banksystem.client.render.StampedShareRenderer;
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
+import net.kroia.banksystem.minecraft.compat.NEZNAMY_TAB_Placeholders;
+import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
 import org.quiltmc.loader.api.ModContainer;
 import org.quiltmc.loader.api.minecraft.MinecraftQuiltLoader;
 import org.quiltmc.qsl.base.api.entrypoint.ModInitializer;
@@ -53,5 +56,13 @@ public final class BankSystemQuilt implements ModInitializer {
         });
 
         BankSystemMod.init();
+
+        // Custom item renderer registration requires items to exist — must be after
+        // BankSystemMod.init(). Uses the Fabric rendering API (provided on Quilt by QFAPI).
+        if (MinecraftQuiltLoader.getEnvironmentType() == EnvType.CLIENT) {
+            BuiltinItemRendererRegistry.INSTANCE.register(BankSystemItems.STAMPED_SHARE.get(),
+                    (stack, ctx, pose, buffers, light, overlay) ->
+                            StampedShareRenderer.render(stack, ctx, pose, buffers, light, overlay));
+        }
     }
 }

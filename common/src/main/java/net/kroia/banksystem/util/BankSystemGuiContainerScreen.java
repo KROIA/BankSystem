@@ -70,6 +70,8 @@ public abstract class BankSystemGuiContainerScreen<T extends AbstractContainerMe
         // query it. Focus only changes through mouse clicks / key events, so a
         // per-frame sync is always current by the time the next key arrives.
         modTextInputFocusProxy.setFocused(gui.getFocusedElement() instanceof TextBox);
+        // Tooltip auto-flip: right-half hover → tooltip left of the cursor.
+        BankSystemGuiScreen.applyTooltipAutoFlip(gui, pMouseX, this.width);
         super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
     }
 

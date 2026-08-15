@@ -127,6 +127,8 @@ public class BankUserWidget extends BankSystemGuiElement {
     private final boolean canManage;
     private final GuiScreen parentScreen;
     private final Consumer<BankUserWidget> onRemoveUser;
+    /** Optional hook fired after the permission edit screen saved a new permission mask. */
+    private Runnable onPermissionChanged = null;
 
 
     public BankUserWidget(BankUserData userData, Consumer<BankUserWidget> onRemoveUser, boolean canManage, GuiScreen parentScreen)
@@ -150,6 +152,11 @@ public class BankUserWidget extends BankSystemGuiElement {
 
             addChild(permissionEditButton);
             addChild(removeButton);
+            // The X sits at the right edge of a narrow row, so its "why is this locked"
+            // tooltip always opens to the LEFT of the cursor instead of running off the row.
+            // TOP_RIGHT = the tooltip's top-right corner is pinned to the cursor, so its
+            // body extends leftwards (same convention as applyTooltipAutoFlip).
+            BankSystemGuiScreen.pinTooltipAlignment(removeButton, Alignment.TOP_RIGHT);
             defaultRemoveButtonTextColor = removeButton.getTextColor();
         }
         else
@@ -164,6 +171,15 @@ public class BankUserWidget extends BankSystemGuiElement {
 
     public BankUserData getUserData() {
         return userData;
+    }
+
+    /**
+     * Registers a callback invoked once the permission edit screen has been saved.
+     * Owners that persist immediately (e.g. the company Workers tab) use this instead of
+     * a separate save button; owners with their own save button simply leave it unset.
+     */
+    public void setOnPermissionChanged(Runnable callback) {
+        this.onPermissionChanged = callback;
     }
 
     /**
@@ -217,7 +233,8 @@ public class BankUserWidget extends BankSystemGuiElement {
             PermissionEditScreen permissionEditScreen = new PermissionEditScreen(userData, (permission)->
             {
                 userData.permissions = permission;
-
+                if (onPermissionChanged != null)
+                    onPermissionChanged.run();
             }, parentScreen);
             Minecraft.getInstance().setScreen(permissionEditScreen);
         }

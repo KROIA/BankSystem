@@ -50,7 +50,7 @@ public class ModSettingsTests extends TestSuite {
      */
     private TestResult test_jsonRoundTrip() {
         BankSystemModSettings source = new BankSystemModSettings();
-        source.UTILITIES.SAVE_INTERVAL_MINUTES.set(7L);
+        source.UTILITIES.SAVE_INTERVAL_SECONDS.set(7L);
         source.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.set(15L);
         source.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.set(500L);
         source.UTILITIES.LOGGING_ENABLE_DEBUG.set(true);
@@ -72,7 +72,7 @@ public class ModSettingsTests extends TestSuite {
         BankSystemModSettings target = new BankSystemModSettings();
         store.fromJson(target.getEditableGroups(), JsonParser.parseString(json));
 
-        TestResult r = assertEquals("SAVE_INTERVAL_MINUTES survives round-trip", 7L, (long) target.UTILITIES.SAVE_INTERVAL_MINUTES.get());
+        TestResult r = assertEquals("SAVE_INTERVAL_SECONDS survives round-trip", 7L, (long) target.UTILITIES.SAVE_INTERVAL_SECONDS.get());
         if (!r.passed()) return r;
         r = assertEquals("BALANCE_SNAPSHOT_INTERVAL_MINUTES survives round-trip", 15L, (long) target.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.get());
         if (!r.passed()) return r;
@@ -113,7 +113,7 @@ public class ModSettingsTests extends TestSuite {
      */
     private TestResult test_sanitizeClampsLowerBounds() {
         BankSystemModSettings settings = new BankSystemModSettings();
-        settings.UTILITIES.SAVE_INTERVAL_MINUTES.set(0L);
+        settings.UTILITIES.SAVE_INTERVAL_SECONDS.set(0L);
         settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.set(-5L);
         settings.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.set(-1L);
         settings.PLAYER.STARTING_BALANCE.set(-100L);
@@ -126,7 +126,7 @@ public class ModSettingsTests extends TestSuite {
         ModSettingsRequest.sanitize(settings);
 
         TestResult r = assertEquals("save interval clamped to minimum",
-                ModSettingsRequest.MIN_SAVE_INTERVAL_MINUTES, (long) settings.UTILITIES.SAVE_INTERVAL_MINUTES.get());
+                ModSettingsRequest.MIN_SAVE_INTERVAL_SECONDS, (long) settings.UTILITIES.SAVE_INTERVAL_SECONDS.get());
         if (!r.passed()) return r;
         r = assertEquals("snapshot interval clamped to minimum (0 = disabled)",
                 ModSettingsRequest.MIN_SNAPSHOT_INTERVAL_MINUTES, (long) settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.get());
@@ -157,7 +157,7 @@ public class ModSettingsTests extends TestSuite {
      */
     private TestResult test_sanitizeClampsUpperBounds() {
         BankSystemModSettings settings = new BankSystemModSettings();
-        settings.UTILITIES.SAVE_INTERVAL_MINUTES.set(Long.MAX_VALUE);
+        settings.UTILITIES.SAVE_INTERVAL_SECONDS.set(Long.MAX_VALUE);
         settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.set(Long.MAX_VALUE);
         settings.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.set(Long.MAX_VALUE);
         settings.PLAYER.STARTING_BALANCE.set(Long.MAX_VALUE);
@@ -170,7 +170,7 @@ public class ModSettingsTests extends TestSuite {
         ModSettingsRequest.sanitize(settings);
 
         TestResult r = assertEquals("save interval clamped to maximum",
-                ModSettingsRequest.MAX_SAVE_INTERVAL_MINUTES, (long) settings.UTILITIES.SAVE_INTERVAL_MINUTES.get());
+                ModSettingsRequest.MAX_SAVE_INTERVAL_SECONDS, (long) settings.UTILITIES.SAVE_INTERVAL_SECONDS.get());
         if (!r.passed()) return r;
         r = assertEquals("snapshot interval clamped to maximum",
                 ModSettingsRequest.MAX_SNAPSHOT_INTERVAL_MINUTES, (long) settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.get());
@@ -244,7 +244,7 @@ public class ModSettingsTests extends TestSuite {
      */
     private TestResult test_partialPayloadKeepsOtherValues() {
         BankSystemModSettings settings = new BankSystemModSettings();
-        settings.UTILITIES.SAVE_INTERVAL_MINUTES.set(99L);
+        settings.UTILITIES.SAVE_INTERVAL_SECONDS.set(99L);
         settings.BANK.ITEM_TRANSFER_TICK_INTERVAL.set(33);
 
         // Payload containing ONLY the ServerBank group with ONLY one setting
@@ -255,7 +255,7 @@ public class ModSettingsTests extends TestSuite {
 
         new SettingsStore().fromJson(settings.getEditableGroups(), root);
 
-        TestResult r = assertEquals("untouched Utilities value preserved", 99L, (long) settings.UTILITIES.SAVE_INTERVAL_MINUTES.get());
+        TestResult r = assertEquals("untouched Utilities value preserved", 99L, (long) settings.UTILITIES.SAVE_INTERVAL_SECONDS.get());
         if (!r.passed()) return r;
         r = assertTrue("ServerBank.CONFIRM_ITEMID_MERGE applied from partial payload", settings.BANK.CONFIRM_ITEMID_MERGE.get());
         if (!r.passed()) return r;

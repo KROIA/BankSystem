@@ -37,6 +37,8 @@ public class BankSystemBlocks {
     public static final RegistrySupplier<Block> BANK_DOWNLOAD_BLOCK = registerBlock(BankDownloadBlock.NAME, BankDownloadBlock::new);
     public static final RegistrySupplier<Block> MONEY_STOCKPILE_BLOCK = registerBlockNoItem(MoneyStockpileBlock.NAME, MoneyStockpileBlock::new);
     public static final RegistrySupplier<Block> BANKSYSTEM_DISPLAY_BLOCK = registerBlock(BankSystemDisplayBlock.NAME, BankSystemDisplayBlock::new);
+    // Task #47 (v2.1.0) — Share Stamper block.
+    public static final RegistrySupplier<Block> SHARE_STAMPER_BLOCK = registerBlock(ShareStamperBlock.NAME, ShareStamperBlock::new);
 
 
     public static <T extends Block> RegistrySupplier<T> registerBlock(String name, Supplier<T> block)

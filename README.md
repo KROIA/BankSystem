@@ -34,6 +34,7 @@ You want to support me?<br>
 - Bank Upload / Download blocks for redstone-powered automation with hoppers and pipes
 - Bank Display blocks that show live balance overviews or history charts
 - Money system with coins and bills that can be placed as decorative blocks
+- **Companies** — found a company with its own bank account and workers, mint physical shares with the Share Stamper, design the share card, and pay dividends or recurring wages on a timer
 - Multi-server support to share bank accounts across connected servers
 - **Currency mod bindings** — link a bank slot to an external currency mod's account ([Numismatics](https://modrinth.com/mod/numismatics), [Lightman's Currency](https://modrinth.com/mod/lightmans-currency)) so BankSystem, StockMarket, and the currency mod share one balance
 - Mod API for developers to integrate with the banking system
@@ -62,8 +63,7 @@ You want to support me?<br>
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/banksystem)
 | Minecraft | Fabric | Forge | Quilt | Neoforge |
 |-----------|--------|-------|-------|----------|
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v2.0.7--alpha-orange)][2.0.7-fabric-1.21.1] |                                                                            |                                                                            | [![Version](https://img.shields.io/badge/v2.0.7--alpha-orange)][2.0.7-neoforge-1.21.1] |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.21.1] |                                                                            |                                                                            | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-neoforge-1.21.1] |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.21.1] [![Version](https://img.shields.io/badge/v2.0.7--alpha-orange)][2.0.7-fabric-1.21.1] |                                                                            |                                                                            | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-neoforge-1.21.1] [![Version](https://img.shields.io/badge/v2.0.7--alpha-orange)][2.0.7-neoforge-1.21.1] |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21-green)      | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.21]   |                                                                            |                                                                            | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-neoforge-1.21]   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.20.6] |                                                                            |                                                                            | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-neoforge-1.20.6] |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.20.4] | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-forge-1.20.4] | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-quilt-1.20.4] |                                                                               |
@@ -224,6 +224,7 @@ Notes:
 | **Bank Upload Block** | Sends items to a bank account. Can be connected to pipes and hoppers. Needs redstone power. |
 | **Bank Download Block** | Receives items from a bank account. Can be connected to pipes and hoppers. Needs redstone power. |
 | **Bank Display** | Displays bank account information on its screen. Can show a balance overview or balance history chart. Right-click to configure. |
+| **Share Stamper** | Mints a company's physical shares. Right-click it once to bind it to a company, then it converts Blank Shares into Stamped Shares — or back again in Redeem mode. Auto-input / auto-output make it hopper- and pipe-friendly. |
 
 ---
 ## Items
@@ -237,6 +238,8 @@ Notes:
 | **ATM Software** | Programs a Terminal Block into an ATM Block. |
 | **Bank Transmitter Module** | Component for the Bank Upload Block. |
 | **Bank Receiver Module** | Component for the Bank Download Block. |
+| **Blank Share** | Unstamped share certificate. Feed it to a Share Stamper to turn it into a share of that stamper's company. |
+| **Stamped Share** | A physical share of a company. Carries the company's name, card design and live issued/max supply in its tooltip, can be deposited like any other item, and right-clicking it opens that company's management screen. |
 
 ### Money
 
@@ -244,9 +247,9 @@ Notes:
     <img src="documentation/images/moneyCollection.png"> 
 </div>
 
-Money comes in coins ($1-$50) and bills ($5-$1000). All denominations can be converted between each other using the crafting table. Money can also be placed in the world as decorative blocks.
+Money includes cent coins (1¢, 5¢, 10¢, 20¢, 50¢), a &dollar;1 coin, everyday notes (&dollar;5–&dollar;1000) and a high-value tier for large economies (&dollar;5K, &dollar;10K, &dollar;20K, &dollar;50K, &dollar;100K, &dollar;500K, &dollar;1M) — 21 denominations in all. Each has its own colour and artwork, as shown above. All denominations can be converted between each other using the crafting table. Money can also be placed in the world as decorative blocks.
 The server administrator controls how money enters circulation.
-See [Money Conversions](#money-conversions) for all crafting recipes.
+See [Money Conversions](#money-conversions) for crafting recipes.
 
 ---
 
@@ -262,6 +265,10 @@ Key commands for players and admins:
 | `/bank manage` | Open the bank account management GUI |
 | `/bank create <accountname>` | Create a new bank account |
 | `/banksystem manage` | Open the banking settings (admin only) |
+| `/company create <name> <maxSupply>` | Found a company and its bank account |
+| `/company info <name>` | Print a company's details to chat |
+| `/company manage <name>` | Open the Company Management screen |
+| `/banksystem symbols list\|add\|remove\|reload` | Manage the share symbol library (admin only) |
 
 For the full command reference, see [Commands](documentation/user-guide/Commands.md).
 
@@ -274,6 +281,7 @@ Detailed guides are available in the [documentation](documentation/README.md) fo
 **For Mod Users:**
 - [Block Usage](documentation/user-guide/Usage.md) — How to use the Bank Terminal (including its crafting grid), ATM, automation blocks, bank displays, and money stockpiles
 - [Bank Accounts](documentation/user-guide/BankAccounts.md) — Shared accounts, creating accounts, permissions
+- [Companies](documentation/user-guide/Companies.md) — Found a company, hire workers, mint shares with the Share Stamper, pay dividends and recurring payouts
 - [Currency Bindings](documentation/user-guide/CurrencyBindings.md) — Link a bank slot to a Numismatics or Lightman's Currency account
 - [Administration](documentation/user-guide/Administration.md) — Managing banking items, player accounts, locked amounts
 - [Configuration](documentation/user-guide/Configuration.md) — Per-world `settings.json` reference; volatile & deposit-gated item components
@@ -357,127 +365,37 @@ Detailed guides are available in the [documentation](documentation/README.md) fo
 </tr>
 </table>
 
+### Company
+<table>
+<tr>
+<td><b>Share Stamper</b></td>
+<td><b>Blank Share</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_share_stamper.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_bank_share.png" width="350"></td>
+</tr>
+</table>
+
 ### Money Conversions
 
-#### $1
-<table>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money_1.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money_2.png" width="350"></td>
-</tr>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money_3.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money_4.png" width="350"></td>
-</tr>
-</table>
+Every denomination converts into its neighbours in an ordinary crafting grid, in both
+directions, all the way from 1¢ up to &dollar;1,000,000. Two recipes stand for the whole chain:
 
-#### $5
 <table>
+<tr>
+<td><b>Combine — 5 × &dollar;1 into &dollar;5</b></td>
+<td><b>Split — &dollar;5 back into 5 × &dollar;1</b></td>
+</tr>
 <tr>
 <td><img src="documentation/images/recipes/recipe_money5_1.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money5_2.png" width="350"></td>
-</tr>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money5_3.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money5_4.png" width="350"></td>
-</tr>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money5_5.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money5_6.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money_1.png" width="350"></td>
 </tr>
 </table>
 
-#### $10
-<table>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money10_1.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money10_2.png" width="350"></td>
-</tr>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money10_3.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money10_4.png" width="350"></td>
-</tr>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money10_5.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money10_6.png" width="350"></td>
-</tr>
-</table>
-
-#### $20
-<table>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money20_1.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money20_2.png" width="350"></td>
-</tr>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money20_3.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money20_4.png" width="350"></td>
-</tr>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money20_5.png" width="350"></td>
-<td></td>
-</tr>
-</table>
-
-#### $50
-<table>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money50_1.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money50_2.png" width="350"></td>
-</tr>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money50_3.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money50_4.png" width="350"></td>
-</tr>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money50_5.png" width="350"></td>
-<td></td>
-</tr>
-</table>
-
-#### $100
-<table>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money100_1.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money100_2.png" width="350"></td>
-</tr>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money100_3.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money100_4.png" width="350"></td>
-</tr>
-</table>
-
-#### $200
-<table>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money200_1.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money200_2.png" width="350"></td>
-</tr>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money200_3.png" width="350"></td>
-<td></td>
-</tr>
-</table>
-
-#### $500
-<table>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money500_1.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money500_2.png" width="350"></td>
-</tr>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money500_3.png" width="350"></td>
-<td></td>
-</tr>
-</table>
-
-#### $1000
-<table>
-<tr>
-<td><img src="documentation/images/recipes/recipe_money1000_1.png" width="350"></td>
-<td><img src="documentation/images/recipes/recipe_money1000_2.png" width="350"></td>
-</tr>
-</table>
+Every other denomination follows the same idea. There are over a hundred conversion
+recipes in total, so they are not all reproduced here — look an item up in the in-game
+recipe book, or in JEI if you have it installed, to see every way to craft it.
 
 ---
 
@@ -487,7 +405,7 @@ All notable changes are documented in version-specific files under `changelog/`.
 
 ### Current
 
-- [2.0.8](changelog/v2.0.8.md) — In Development
+- [2.1.0](changelog/v2.1.0.md) — Released 2026-08-15 · Company system — found companies, hire workers, mint physical shares, pay dividends and recurring payouts, track it all on a live statistics dashboard
 
 ### Previous
 

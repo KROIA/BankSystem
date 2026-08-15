@@ -268,6 +268,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
         if(!bankManager.isItemIDAllowed(itemID)) {
             return null; // Item not allowed in bank
         }
+        // Every item that gets a bank slot joins the explicit allow-list. With
+        // ALLOW_ALL_ITEMS on, a deposit of an unlisted item used to succeed without the ID
+        // ever entering the list, so the Bank Download block's item picker (which is fed by
+        // that list) never offered it — and switching the setting back off would have made
+        // the stored balance unbankable. No-op when the ID is already listed.
+        bankManager.allowItemID(itemID);
 
         return new ServerBank(itemID, balance);
     }
@@ -732,7 +738,10 @@ public class ServerBank implements ServerSaveable, IServerBank {
             BankStatus w = this.withdraw(amount);
             if (w != BankStatus.SUCCESS) return w;
             BankStatus d = other.deposit(amount);
-            if (d == BankStatus.SUCCESS) return BankStatus.SUCCESS;
+            if (d == BankStatus.SUCCESS) {
+                logTransferLedger(other, amount);
+                return BankStatus.SUCCESS;
+            }
             // Best-effort rollback: deposit back what we just withdrew.
             this.deposit(amount);
             return d;
@@ -748,10 +757,42 @@ public class ServerBank implements ServerSaveable, IServerBank {
         addBalanceInternal(-amount);
         BankStatus otherBankStatus = other.deposit(amount);
         if(otherBankStatus == BankStatus.SUCCESS) {
+            logTransferLedger(other, amount);
             return BankStatus.SUCCESS;
         }
         addBalanceInternal(amount);
         return otherBankStatus;
+    }
+
+    /**
+     * Task #44 (v2.1.0) — Transaction Ledger write for a successful transfer. Two rows:
+     * one TRANSFER_OUT on the source account and one TRANSFER_IN on the destination.
+     * Actor is unknown at this layer (the transfer primitive carries no player context),
+     * so both rows are actor-null. Best-effort: manager missing (slave / shutdown) or
+     * counterparty not a {@code ServerBank} (unknown accountId) simply skips the write.
+     */
+    private void logTransferLedger(ISyncServerBank other, long amount) {
+        if (amount <= 0) return;
+        net.kroia.banksystem.data.table.TransactionLogManager mgr =
+                BankSystemModBackend.getTransactionLogManager();
+        if (mgr == null) return;
+        if (!(other instanceof ServerBank otherBank)) return;
+        int srcAccount = this.accountId;
+        int dstAccount = otherBank.accountId;
+        if (srcAccount == UNATTACHED_ACCOUNT_ID || dstAccount == UNATTACHED_ACCOUNT_ID) return;
+        long now = System.currentTimeMillis();
+        short srcItem = this.itemID == null ? 0 : this.itemID.getShort();
+        short dstItem = otherBank.itemID == null ? srcItem : otherBank.itemID.getShort();
+        try {
+            mgr.save(net.kroia.banksystem.data.table.record.TransactionLogRecord.transfer(
+                    srcAccount, null,
+                    net.kroia.banksystem.data.table.record.TransactionLogRecord.Kind.TRANSFER_OUT,
+                    srcItem, amount, dstAccount, now));
+            mgr.save(net.kroia.banksystem.data.table.record.TransactionLogRecord.transfer(
+                    dstAccount, null,
+                    net.kroia.banksystem.data.table.record.TransactionLogRecord.Kind.TRANSFER_IN,
+                    dstItem, amount, srcAccount, now));
+        } catch (RuntimeException ignored) { }
     }
     @Override
     public BankStatus transfer(long amount, int toAccount)

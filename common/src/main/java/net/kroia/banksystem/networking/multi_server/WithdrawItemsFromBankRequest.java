@@ -1,5 +1,7 @@
 package net.kroia.banksystem.networking.multi_server;
 
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
@@ -130,7 +132,38 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
                 }
             }
         }
+        // Task #44 (v2.1.0) — Transaction Ledger. One WITHDRAW row per item actually
+        // withdrawn. Best-effort — see DepositItemsInBankRequest#logDeposits.
+        logWithdrawals(input, withdrawnItems);
         return CompletableFuture.completedFuture(new OutputData(withdrawnItems));
+    }
+
+    private static void logWithdrawals(InputData input, Map<ItemID, Long> withdrawn) {
+        net.kroia.banksystem.data.table.TransactionLogManager mgr =
+                BankSystemModBackend.getTransactionLogManager();
+        if (mgr == null) return;
+        long now = System.currentTimeMillis();
+        for (Map.Entry<ItemID, Long> entry : withdrawn.entrySet()) {
+            long amount = entry.getValue();
+            if (amount <= 0) continue;
+            try {
+                // Task #48 (v2.1.0) — share movements are logged as SHARE_TRADE with the
+                // originating company id populated. Symmetric with the deposit hook in
+                // DepositItemsInBankRequest#logDeposits.
+                Integer companyId = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                        .getCompanyIdForItemID(entry.getKey());
+                if (companyId != null) {
+                    mgr.save(TransactionLogRecord.shareTrade(
+                            input.bankAccount, input.executor,
+                            entry.getKey().getShort(), amount, companyId, now));
+                } else {
+                    mgr.save(TransactionLogRecord.simple(
+                            input.bankAccount, input.executor,
+                            TransactionLogRecord.Kind.WITHDRAW,
+                            entry.getKey().getShort(), amount, now));
+                }
+            } catch (RuntimeException ignored) { }
+        }
     }
 
 

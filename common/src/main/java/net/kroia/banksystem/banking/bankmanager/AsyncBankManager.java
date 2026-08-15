@@ -38,6 +38,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * The AsyncBankManager is used to forward the methods to a server or master server
@@ -1426,12 +1427,48 @@ public class AsyncBankManager implements IAsyncBankManager {
         return future;
     }
 
+    /**
+     * Queued player-join notifications that arrived before the slave→master
+     * handshake completed. Drained on {@link #flushPendingJoins()} which is
+     * invoked from {@code BankSystemModBackend.onSlaveConnectionAccepted}.
+     * ConcurrentLinkedQueue: player-join callbacks fire on the server thread
+     * but the drain runs on a netty event-loop thread.
+     */
+    private static final Queue<QueuedJoin> PENDING_JOINS = new ConcurrentLinkedQueue<>();
+
+    public record QueuedJoin(UUID uuid, String name) {}
+
     @Override
     public void onPlayerJoinAsync(UUID playerUUID, String playerName) {
         if(!MultiServerUtils.canInteractWithBankSystem())
+        {
+            // Silent-drop bugfix: without this queue, a player who joins the slave
+            // before the slave→master link is up would never get a default account
+            // created on the master. Enqueue and replay on handshake accept.
+            PENDING_JOINS.add(new QueuedJoin(playerUUID, playerName));
+            info("queueing join for " + playerName + "/" + playerUUID + " — master not reachable yet");
             return;
+        }
+        debug("forwarding join for " + playerName);
         InputData inputData = InputData.of(FunctionType.OnPlayerJoinAsync, new ParamGroup_UUID_String(playerUUID, playerName));
         sendRequest(inputData);
+    }
+
+    /**
+     * Drain the queued player-join notifications accumulated while the slave→master
+     * link was down. Returns the set of UUIDs replayed so the caller can dedupe
+     * against currently-online players before iterating them.
+     */
+    public Set<UUID> flushPendingJoins() {
+        Set<UUID> replayed = new HashSet<>();
+        QueuedJoin q;
+        while ((q = PENDING_JOINS.poll()) != null) {
+            if (!replayed.add(q.uuid())) continue;
+            debug("replaying queued join for " + q.name());
+            InputData inputData = InputData.of(FunctionType.OnPlayerJoinAsync, new ParamGroup_UUID_String(q.uuid(), q.name()));
+            sendRequest(inputData);
+        }
+        return replayed;
     }
 
 

@@ -1,6 +1,8 @@
 package net.kroia.banksystem.networking.entity;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
@@ -211,6 +213,11 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             if(moneyBank.withdraw(totalValue) == BankStatus.SUCCESS)
             {
                 requestedBankNotes.put(itemID, requestedAmount);
+                // Task #44 (v2.1.0) — Transaction Ledger. Money withdrawals are logged
+                // against the base money ItemID (not the banknote denomination) so a
+                // downstream reader sees the same currency identity regardless of which
+                // denomination was chosen at the terminal. Amount is base-money units.
+                logMoneyWithdraw(finalCurrentSelectedAccountNumber, player, totalValue);
             }
         }
 
@@ -225,6 +232,20 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         {
             dropRequestToSlave(slaveID, player, finalCurrentSelectedAccountNumber, requestedBankNotes);
         }
+    }
+
+    private static void logMoneyWithdraw(int accountNr, UUID player, long amount) {
+        net.kroia.banksystem.data.table.TransactionLogManager mgr =
+                BankSystemModBackend.getTransactionLogManager();
+        if (mgr == null || amount <= 0) return;
+        try {
+            mgr.save(TransactionLogRecord.simple(
+                    accountNr, player,
+                    TransactionLogRecord.Kind.WITHDRAW,
+                    MoneyItem.getItemID().getShort(),
+                    amount,
+                    System.currentTimeMillis()));
+        } catch (RuntimeException ignored) { }
     }
 
     private void dropRequestToSlave(String slaveID, UUID player, int bankaccountNr, Map<ItemID, Long> items)

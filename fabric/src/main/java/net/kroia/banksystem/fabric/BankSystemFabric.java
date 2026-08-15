@@ -9,6 +9,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.fabric.client.FabricShareRendererBootstrap;
 import net.kroia.banksystem.minecraft.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 
@@ -61,6 +62,11 @@ public final class BankSystemFabric implements ModInitializer {
 
         // Run our common setup.
         BankSystemMod.init();
+
+        // Custom item renderer registration requires items to exist — must be after BankSystemMod.init().
+        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+            FabricShareRendererBootstrap.register();
+        }
 
         // Register Fabric Transfer API item storage providers (must run after BE types exist).
         FabricItemStorageProviders.register();
