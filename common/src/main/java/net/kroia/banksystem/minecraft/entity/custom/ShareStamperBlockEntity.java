@@ -36,7 +36,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.UUID;
 
 /**
- * Task #47 (v2.0.8) — Share Stamper Block Entity. Two slots: input (0), output (1).
+ * Task #47 (v2.1.0) — Share Stamper Block Entity. Two slots: input (0), output (1).
  * Master-only tick; slave BEs idle. Bound via {@code /company stamper-bind}.
  */
 public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements MenuProvider, WorldlyContainer {
@@ -45,7 +45,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
 
     public static final int SLOT_INPUT = 0;
     public static final int SLOT_OUTPUT = 1;
-    // Task v2.0.8 — 3x faster (was 200) per user feedback.
+    // Task v2.1.0 — 3x faster (was 200) per user feedback.
     public static final int STAMP_TICKS_PER_CYCLE = 67;
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
@@ -61,11 +61,11 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     private long linkedAt = 0L;
     private int stampProgress = 0;
     private Mode mode = Mode.STAMP;
-    // Task v2.0.8 — Start/Stop control replaces the queued-stamps counter.
+    // Task v2.1.0 — Start/Stop control replaces the queued-stamps counter.
     // While `processing` is true the BE ticks one stamp/redeem per cycle; it auto-stops when
     // input empty / output full / max supply reached (see serverTick).
     private boolean processing = false;
-    // Task v2.0.8 — split hopper toggle: autoInput gates INSERT via UP face,
+    // Task v2.1.0 — split hopper toggle: autoInput gates INSERT via UP face,
     // autoOutput gates EXTRACT via DOWN face (both default off; NBT-migrated from
     // legacy `AllowHopperRedeem`).
     private boolean autoInput = false;
@@ -73,7 +73,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
 
     private boolean idleLoggedOnce = false;
 
-    // Task #47 (v2.0.8) — single-viewer lock (transient; never persisted).
+    // Task #47 (v2.1.0) — single-viewer lock (transient; never persisted).
     // Held by whichever player currently has either the bind screen or the main
     // stamper screen open on this BE. Cleared on menu close, bind-screen close,
     // or BE removal. Concurrent right-clicks from other players get rejected.
@@ -172,7 +172,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         this.linkedAt = System.currentTimeMillis();
         this.stampProgress = 0;
         setChanged();
-        // Task #51 (v2.0.8) — maintain reverse index (master-only; CM is null on slave/client).
+        // Task #51 (v2.1.0) — maintain reverse index (master-only; CM is null on slave/client).
         CompanyManager cm = CompanyManager.get();
         if (cm != null) {
             String dim = dimensionKey();
@@ -188,7 +188,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         this.stampProgress = 0;
         this.processing = false;
         setChanged();
-        // Task #51 (v2.0.8) — maintain reverse index.
+        // Task #51 (v2.1.0) — maintain reverse index.
         CompanyManager cm = CompanyManager.get();
         if (cm != null && prev >= 0) cm.unregisterStamper(prev, worldPosition, dimensionKey());
     }
@@ -198,7 +198,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         return level == null ? "" : level.dimension().location().toString();
     }
 
-    // -------- viewer lock (Task #47, v2.0.8) --------
+    // -------- viewer lock (Task #47, v2.1.0) --------
     /** @return true if the caller may now open a stamper GUI on this BE (bind or main). */
     public synchronized boolean tryAcquireViewer(UUID uuid) {
         if (currentViewer == null || currentViewer.equals(uuid)) {
@@ -246,7 +246,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         ItemStack input = items.get(SLOT_INPUT);
         ItemStack output = items.get(SLOT_OUTPUT);
 
-        // Task v2.0.8 — auto-stop `processing` when the current mode can't advance
+        // Task v2.1.0 — auto-stop `processing` when the current mode can't advance
         // for one of the well-known "stuck" reasons: input empty, output full, or
         // (STAMP mode only) company hit maxSupply. Setting processing=false also
         // ripples through ContainerData index 1 so the client button flips back
@@ -330,7 +330,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         linkedAt = tag.getLong("LinkedAt");
         stampProgress = tag.getInt("StampProgress");
         mode = tag.getInt("Mode") == 1 ? Mode.REDEEM : Mode.STAMP;
-        // Task v2.0.8 — NBT migration: legacy single `AllowHopperRedeem` flag maps to
+        // Task v2.1.0 — NBT migration: legacy single `AllowHopperRedeem` flag maps to
         // both new autoInput / autoOutput toggles. Legacy `QueuedStamps` field discarded
         // (no back-compat needed beyond load — see COMPLETED_TASKS.md).
         if (tag.contains("AutoInput") || tag.contains("AutoOutput")) {
@@ -344,7 +344,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
             autoOutput = false;
         }
         processing = tag.getBoolean("Processing");
-        // v2.0.8 Bug4 root cause — vanilla BE lifecycle invokes setLevel() BEFORE
+        // v2.1.0 Bug4 root cause — vanilla BE lifecycle invokes setLevel() BEFORE
         // loadAdditional() during chunk load, so the setLevel() reverse-index register
         // fired with boundCompanyId still at -1 (its default) and persisted bindings
         // were never re-added to CompanyManager's reverse index. Register here at the
@@ -398,7 +398,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
     @Override public void clearContent() { items.clear(); }
 
-    // Task #47 (v2.0.8) — release viewer lock when the container menu closes and when
+    // Task #47 (v2.1.0) — release viewer lock when the container menu closes and when
     // the BE unloads. AbstractContainerMenu#removed calls Container#stopOpen(Player).
     @Override
     public void stopOpen(Player p) {
@@ -409,7 +409,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     @Override
     public void setRemoved() {
         currentViewer = null;
-        // Task #51 (v2.0.8) — drop reverse index entry on BE unload/removal (master-only meaningful).
+        // Task #51 (v2.1.0) — drop reverse index entry on BE unload/removal (master-only meaningful).
         if (level != null && !level.isClientSide && boundCompanyId >= 0) {
             CompanyManager cm = CompanyManager.get();
             if (cm != null) cm.unregisterStamper(boundCompanyId, worldPosition, dimensionKey());
@@ -420,7 +420,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     @Override
     public void setLevel(Level lvl) {
         super.setLevel(lvl);
-        // Task #51 (v2.0.8) — after NBT load + level attach, register this BE in the
+        // Task #51 (v2.1.0) — after NBT load + level attach, register this BE in the
         // Company reverse index. Master-only; on client and slave CompanyManager.get()
         // is null so this is a no-op there.
         if (!lvl.isClientSide && boundCompanyId >= 0) {
@@ -439,7 +439,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
     @Override
     public boolean canPlaceItemThroughFace(int slot, ItemStack stack, Direction dir) {
-        // Task v2.0.8 — insert only when autoInput gate is on AND the face is UP.
+        // Task v2.1.0 — insert only when autoInput gate is on AND the face is UP.
         if (slot != SLOT_INPUT || dir != Direction.UP || !autoInput) return false;
         if (mode == Mode.STAMP) return stack.getItem() instanceof BlankShareItem;
         // REDEEM
@@ -449,11 +449,11 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
     @Override
     public boolean canTakeItemThroughFace(int slot, ItemStack stack, Direction dir) {
-        // Task v2.0.8 — extract only when autoOutput gate is on AND face is DOWN.
+        // Task v2.1.0 — extract only when autoOutput gate is on AND face is DOWN.
         return slot == SLOT_OUTPUT && dir == Direction.DOWN && autoOutput && !stack.isEmpty();
     }
 
-    // Task #47 (v2.0.8) — client sync of the binding + mode so tooltip / getDestroyProgress
+    // Task #47 (v2.1.0) — client sync of the binding + mode so tooltip / getDestroyProgress
     // can react without opening the menu. Contents are intentionally NOT synced to keep the
     // update tag small; only the identity-relevant fields ship.
     @Override

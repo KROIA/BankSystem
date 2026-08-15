@@ -11,7 +11,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Task #51 fix (v2.0.8) — client-side cache of {@link CompanyInfoOutput} snapshots
+ * Task #51 fix (v2.1.0) — client-side cache of {@link CompanyInfoOutput} snapshots
  * keyed by {@code companyId}. Mirrors {@link ShareVisualCache} in shape.
  *
  * <p>Read path: {@link #get(int)} returns the cached snapshot or {@code null}.
@@ -34,7 +34,7 @@ public final class CompanyInfoCache {
                            long maxSupply, long totalSharesIssued,
                            int bankAccountNr, List<String> founderNames,
                            int holderCount) {
-        /** Task #52 (v2.0.8) — {@link CompanyInfoOutput} does not carry a holder count;
+        /** Task #52 (v2.1.0) — {@link CompanyInfoOutput} does not carry a holder count;
          *  it is populated separately via the login bulk-sync packet path. */
         public static Snapshot of(CompanyInfoOutput out) {
             return new Snapshot(out.companyId(), out.name() == null ? "" : out.name(),
@@ -74,7 +74,7 @@ public final class CompanyInfoCache {
         put(fresh);
     }
 
-    /** Task #52 (v2.0.8) — merge a fresh holder count into the cached snapshot without
+    /** Task #52 (v2.1.0) — merge a fresh holder count into the cached snapshot without
      *  disturbing any of the other fields. If no snapshot exists yet the update is dropped
      *  (the login bulk sync or a subsequent by-id lookup will populate it). */
     public static void updateHolderCount(int companyId, int holderCount) {
@@ -86,7 +86,7 @@ public final class CompanyInfoCache {
                 prior.bankAccountNr(), prior.founderNames(), holderCount));
     }
 
-    /** Task #51 (v2.0.8, spec §1.4) — merge a fresh company description into the cached
+    /** Task #51 (v2.1.0, spec §1.4) — merge a fresh company description into the cached
      *  snapshot without disturbing any other fields. Mirrors {@link #updateHolderCount}.
      *  If no snapshot exists yet the update is dropped (bulk sync / by-id lookup heals). */
     public static void updateDescription(int companyId, String description) {

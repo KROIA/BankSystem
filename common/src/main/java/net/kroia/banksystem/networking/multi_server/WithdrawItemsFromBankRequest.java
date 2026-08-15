@@ -132,7 +132,7 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
                 }
             }
         }
-        // Task #44 (v2.0.8) — Transaction Ledger. One WITHDRAW row per item actually
+        // Task #44 (v2.1.0) — Transaction Ledger. One WITHDRAW row per item actually
         // withdrawn. Best-effort — see DepositItemsInBankRequest#logDeposits.
         logWithdrawals(input, withdrawnItems);
         return CompletableFuture.completedFuture(new OutputData(withdrawnItems));
@@ -147,7 +147,7 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
             long amount = entry.getValue();
             if (amount <= 0) continue;
             try {
-                // Task #48 (v2.0.8) — share movements are logged as SHARE_TRADE with the
+                // Task #48 (v2.1.0) — share movements are logged as SHARE_TRADE with the
                 // originating company id populated. Symmetric with the deposit hook in
                 // DepositItemsInBankRequest#logDeposits.
                 Integer companyId = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem

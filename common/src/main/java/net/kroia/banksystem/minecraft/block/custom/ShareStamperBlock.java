@@ -1,6 +1,6 @@
 package net.kroia.banksystem.minecraft.block.custom;
 
-// TODO_ART Task #47 (v2.0.8) — placeholder model reuses iron_block texture; dedicated art pending.
+// TODO_ART Task #47 (v2.1.0) — placeholder model reuses iron_block texture; dedicated art pending.
 
 import net.kroia.banksystem.minecraft.component.BankSystemDataComponents;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
@@ -110,7 +110,7 @@ public class ShareStamperBlock extends Block implements EntityBlock {
     }
 
     /**
-     * Task #47 (v2.0.8) — Compute the set of companies the caller may bind {@code pos}
+     * Task #47 (v2.1.0) — Compute the set of companies the caller may bind {@code pos}
      * to (founder OR MANAGE OR banksystem admin) and dispatch the bind-screen open S2C.
      * Master-only meaningful: on a slave the {@link net.kroia.banksystem.banking.company.CompanyManager}
      * is null and we fall back to a chat hint.
@@ -178,7 +178,7 @@ public class ShareStamperBlock extends Block implements EntityBlock {
     }
 
     /**
-     * Task #47 (v2.0.8) — Bound stampers break {@code /20} for non-MANAGE callers.
+     * Task #47 (v2.1.0) — Bound stampers break {@code /20} for non-MANAGE callers.
      * Client-side path: {@link ShareStamperBlockEntity#hasManagePermission} returns
      * false because {@code CompanyManager.get()} is server-only, so all breakers see
      * the slowed rate on their client. Server-authoritative breaking is unchanged.

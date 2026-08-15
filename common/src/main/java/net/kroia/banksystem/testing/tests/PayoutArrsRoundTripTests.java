@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Task #45a (v2.0.8) — wire-contract coverage for the payout ARRS functions added to
+ * Task #45a (v2.1.0) — wire-contract coverage for the payout ARRS functions added to
  * {@link AsyncCompanyManager}. Guarantees byte-for-byte round-trip preservation across
  * every {@code Input}/{@code Output} pair, plus enum + codec-map coverage.
  */

@@ -3,13 +3,13 @@ package net.kroia.banksystem.data.table.record;
 import java.util.UUID;
 
 /**
- * Task #45 (v2.0.8) — one row in the {@code PayoutHistory} SQLite table.
+ * Task #45 (v2.1.0) — one row in the {@code PayoutHistory} SQLite table.
  * <p>
  * Written by {@code PayoutExecutor} on every payout tick attempt (success or
  * failure). {@link Status} distinguishes the outcome — a failed payout still
  * writes a row so operators can audit misconfigured schedules.
  * <p>
- * Spec A.9 / B.3 / B.4 (v2.0.8) additions — all load-compatible with existing
+ * Spec A.9 / B.3 / B.4 (v2.1.0) additions — all load-compatible with existing
  * databases; missing columns default at read time:
  * <ul>
  *   <li>{@code targetPlayerName} / {@code targetAccountName} — snapshots resolved

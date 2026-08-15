@@ -15,7 +15,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Task #47 (v2.0.8) — C2S packet: bind the Share Stamper at {@code pos} to companyId.
+ * Task #47 (v2.1.0) — C2S packet: bind the Share Stamper at {@code pos} to companyId.
  * Master validates MANAGE on the target company + proximity.
  */
 public class SetStamperBindingRequest extends BankSystemNetworkPacket {
@@ -93,7 +93,7 @@ public class SetStamperBindingRequest extends BankSystemNetworkPacket {
         net.minecraft.world.level.block.state.BlockState st = player.level().getBlockState(pos);
         player.level().sendBlockUpdated(pos, st, st, 3);
 
-        // Task v2.0.8 follow-up — auto-open the main Share Stamper GUI after a
+        // Task v2.1.0 follow-up — auto-open the main Share Stamper GUI after a
         // successful bind so the player doesn't have to right-click the block a
         // second time. Only on the bind path (companyId != 0); the unbind path
         // above returns early. The viewer lock stays with this player through the

@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Task #43g (v2.0.8) — slave-side ARRS forwarding for the {@code /company} tree.
+ * Task #43g (v2.1.0) — slave-side ARRS forwarding for the {@code /company} tree.
  * <p>
  * These tests validate the wire contract that carries every {@code /company}
  * subcommand from a slave to the master: enum coverage, codec presence, and

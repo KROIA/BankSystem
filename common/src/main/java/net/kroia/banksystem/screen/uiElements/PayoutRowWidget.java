@@ -20,9 +20,9 @@ import net.minecraft.world.item.ItemStack;
 import java.util.UUID;
 
 /**
- * Task #45a (v2.0.8) — one row in the payouts overview list.
+ * Task #45a (v2.1.0) — one row in the payouts overview list.
  * <p>
- * Spec A.4/A.9/B.3/B.4 (v2.0.8): columns match the header row of
+ * Spec A.4/A.9/B.3/B.4 (v2.1.0): columns match the header row of
  * {@code PayoutsOverviewScreen} (Target | Amount | Interval | Next | Status), the
  * target renders the name snapshots ("player — account"), the currency item's icon
  * is drawn at the row start, "Next" decodes to a friendly countdown, every column
@@ -31,7 +31,7 @@ import java.util.UUID;
  */
 public class PayoutRowWidget extends BankSystemGuiElement {
 
-    /** REDESIGN 4 (v2.0.8) — shared row/header font scale for the schedules list. */
+    /** REDESIGN 4 (v2.1.0) — shared row/header font scale for the schedules list. */
     public static final float ROW_FONT_SCALE = 0.75f;
 
     private static final String PREFIX = "gui." + BankSystemMod.MOD_ID + ".payout_row_widget.";
@@ -76,7 +76,7 @@ public class PayoutRowWidget extends BankSystemGuiElement {
     private final long clientTickAtRefresh;
     /** Cache to avoid rebuilding the label string every frame. */
     private String lastNextText = "";
-    /** Bug batch 3 #1 (v2.0.8) — one-shot refresh trigger when the local countdown
+    /** Bug batch 3 #1 (v2.1.0) — one-shot refresh trigger when the local countdown
      *  crosses zero; without this the row stays frozen on the stale server tick
      *  snapshot after the schedule fires master-side. */
     private boolean refreshFiredAtZero = false;
@@ -102,14 +102,14 @@ public class PayoutRowWidget extends BankSystemGuiElement {
 
         nameLabel = new Label(targetDisplay(schedule));
         nameLabel.setHoverTooltipSupplier(TT_TARGET::getString);
-        // BUG 1 fix (v2.0.8) — fixed-point applies to ALL currencies (money AND items).
+        // BUG 1 fix (v2.1.0) — fixed-point applies to ALL currencies (money AND items).
         amountLabel = new Label(MoneyFormat.format(schedule.getAmount()));
         amountLabel.setHoverTooltipSupplier(TT_AMOUNT::getString);
         intervalLabel = new Label(schedule.getMode() == PayoutSchedule.Mode.ONE_TIME
                 ? Component.translatable(PREFIX + "one_time").getString()
                 : TimeFormat.formatTickDuration(schedule.getIntervalTicks()));
         intervalLabel.setHoverTooltipSupplier(TT_INTERVAL::getString);
-        // Bug C fix (v2.0.8) — cache the master-observed "now" so the countdown can
+        // Bug C fix (v2.1.0) — cache the master-observed "now" so the countdown can
         // be recomputed each frame from the client's world tick without waiting on
         // another RPC. Falls back to Minecraft.level.getGameTime() when master
         // hasn't observed a tick yet (getLastObservedTick == 0) — otherwise the
@@ -150,7 +150,7 @@ public class PayoutRowWidget extends BankSystemGuiElement {
         addChild(editButton);
 
         // Best-effort last-status lookup (may fail on slave — that's fine, label just stays blank).
-        // Bug D fix (v2.0.8) — hop to render thread; mutating a Label off-thread races
+        // Bug D fix (v2.1.0) — hop to render thread; mutating a Label off-thread races
         // with GUI init/layout iteration (VerticalListView.updateElementPositions).
         try {
             AsyncCompanyManager.getHistoryAsync(schedule.getScheduleId(), 1).thenAccept(out ->
@@ -201,7 +201,7 @@ public class PayoutRowWidget extends BankSystemGuiElement {
                 new PayoutEditScreen(parentScreen, companyId, schedule, viewer, canManage, onDirty));
     }
 
-    /** Bug 2 fix (v2.0.8) — build the "Next" cell text from the ticks elapsed on the
+    /** Bug 2 fix (v2.1.0) — build the "Next" cell text from the ticks elapsed on the
      *  CLIENT since the row was refreshed, applied to the master-observed delta.
      *  <p>Root cause of the previous "0s" bug: {@code nextRunTick} lives in the
      *  master's {@code payoutTickCounter} clock (a per-session counter that starts
@@ -223,13 +223,13 @@ public class PayoutRowWidget extends BankSystemGuiElement {
 
     @Override
     protected void render() {
-        // Bug C fix (v2.0.8) — live countdown; refreshes each frame with no RPCs.
+        // Bug C fix (v2.1.0) — live countdown; refreshes each frame with no RPCs.
         String next = computeNextText();
         if (!next.equals(lastNextText)) {
             lastNextText = next;
             nextRunLabel.setText(next);
         }
-        // Bug batch 3 #1 (v2.0.8) — when the row's cached snapshot elapses, master
+        // Bug batch 3 #1 (v2.1.0) — when the row's cached snapshot elapses, master
         // has already fired (or refused) the schedule; re-fetch once so nextRunTick /
         // missedCount / status stay live. Debounced by the boolean so we don't spam
         // listSchedulesAsync every frame while the label reads "0s".
@@ -254,7 +254,7 @@ public class PayoutRowWidget extends BankSystemGuiElement {
         int width = getWidth();
         int height = getHeight();
         int editW = getTextWidth(EDIT.getString()) + spacing * 2;
-        // BUG 3 fix (v2.0.8) — ALWAYS reserve the Pay-Missed button slot (even when
+        // BUG 3 fix (v2.1.0) — ALWAYS reserve the Pay-Missed button slot (even when
         // the button is absent) so column widths don't reshuffle when a schedule
         // starts failing. Slot is left empty when missedCount == 0.
         int missedW = getTextWidth(PAY_MISSED.getString()) + spacing * 2;

@@ -45,9 +45,9 @@ public final class Company {
     private final List<PayoutSchedule> payoutSchedules;
     /** Task #45 — monotonic schedule id allocator, scoped per Company. */
     private long nextScheduleId = 1L;
-    /** v2.0.9 — last-used timeframe index for the Statistics tab (0=24h, 1=7d, 2=30d, 3=90d, 4=all). */
+    /** v2.1.0 — last-used timeframe index for the Statistics tab (0=24h, 1=7d, 2=30d, 3=90d, 4=all). */
     private int statisticsTimeframe = 1;
-    /** v2.0.9 — ItemID short of the company's default currency (0 = money). */
+    /** v2.1.0 — ItemID short of the company's default currency (0 = money). */
     private short companyCurrency = 0;
     /** Persisted set of BlockPos positions of Share Stamper blocks bound to this company. */
     private final Set<BlockPos> boundStampers = new HashSet<>();
@@ -115,7 +115,7 @@ public final class Company {
     }
 
     // ------------------------------------------------------------------
-    // Task #45 (v2.0.8) — payout schedule mutation (package-private; only
+    // Task #45 (v2.1.0) — payout schedule mutation (package-private; only
     // CompanyManager / PayoutExecutor may call these).
     // ------------------------------------------------------------------
 
@@ -126,7 +126,7 @@ public final class Company {
     }
 
     /**
-     * BUG batch 4 (v2.0.8) — renormalize every schedule's {@code nextRunTick} to
+     * BUG batch 4 (v2.1.0) — renormalize every schedule's {@code nextRunTick} to
      * {@code baseTick + intervalTicks}. Called from {@link CompanyManager#load}
      * after world load because {@code payoutTickCounter} is a per-session counter
      * that resets to {@code 0} on every server start

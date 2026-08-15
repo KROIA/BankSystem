@@ -6,8 +6,8 @@ import net.minecraft.resources.ResourceLocation;
 import java.util.*;
 
 /**
- * Task #46 (v2.0.8) — shared client + server preset icon registry for company share visuals.
- * Task #54 (v2.0.9) — extended to include server-synced dynamic symbols via
+ * Task #46 (v2.1.0) — shared client + server preset icon registry for company share visuals.
+ * Task #54 (v2.1.0) — extended to include server-synced dynamic symbols via
  * {@link ClientSymbolRegistry}. The bundled 45 presets are the primary set; synced symbols
  * extend it at runtime.
  *

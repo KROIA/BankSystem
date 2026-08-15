@@ -316,7 +316,7 @@ public interface ISyncServerBankManager {
     List<Integer> getBankAccountNumbers(ItemID itemID);
 
     /**
-     * Task #48 (v2.0.8) — holder index for the dividend payer + share-holder queries.
+     * Task #48 (v2.1.0) — holder index for the dividend payer + share-holder queries.
      * <p>
      * Enumerates account numbers whose item bank for {@code itemID} currently holds a
      * <b>strictly positive total balance</b> (free + locked). Unlike

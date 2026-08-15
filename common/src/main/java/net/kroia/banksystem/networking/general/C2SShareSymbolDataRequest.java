@@ -14,7 +14,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Task #54 (v2.0.9) — C2S: client requests up to 8 symbol PNGs by SHA-256 hash.
+ * Task #54 (v2.1.0) — C2S: client requests up to 8 symbol PNGs by SHA-256 hash.
  * Server locates each symbol in the {@link ShareSymbolStore}, chunks the bytes, and
  * replies with {@link S2CShareSymbolDataPacket} frames.
  * <p>

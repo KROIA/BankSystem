@@ -1006,7 +1006,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
 
     /**
-     * Task #48 (v2.0.8) — enumerate accounts whose item bank for {@code itemID} holds a
+     * Task #48 (v2.1.0) — enumerate accounts whose item bank for {@code itemID} holds a
      * strictly positive total balance. Consumed by the upcoming dividend distributor and
      * by the future "Companies" holder-count column. Linear scan over all accounts —
      * cheap enough for expected scales; may be revisited with a maintained reverse index
@@ -1953,7 +1953,40 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             }
         }
 
+        reconcileAllowedItemsWithBanks();
         return true;
+    }
+
+    /**
+     * Adds every ItemID that currently holds a bank slot to the allowed-items list.
+     * <p>
+     * Keeps the invariant "anything that sits in a bank stays bankable" true, which matters
+     * in two places: the Bank Download block's item picker is built from the allowed list, so
+     * without this it would silently omit items deposited while {@code ALLOW_ALL_ITEMS} was
+     * on; and turning that setting back off would otherwise strand the balances those items
+     * already have. New deposits are covered at the source by {@code ServerBank.create} —
+     * this sweep heals worlds whose banks predate that.
+     * <p>
+     * Runs after the accounts are loaded (the allowed set is restored before them, so the
+     * additions cannot be cleared again). Blacklisted IDs are skipped silently: the blacklist
+     * always wins, and a blacklisted item holding a balance is reported elsewhere.
+     */
+    private void reconcileAllowedItemsWithBanks() {
+        int added = 0;
+        for (ServerBankAccount account : bankAccounts.values()) {
+            for (ItemID itemID : account.getAllBanks().keySet()) {
+                if (itemID == null || !itemID.isValid())
+                    continue;
+                ItemID canonical = ItemIDManager.resolveAlias(itemID);
+                if (allowedItemIDs.contains(canonical) || isItemIDBlacklisted(canonical))
+                    continue;
+                if (allowItemID(canonical))
+                    added++;
+            }
+        }
+        if (added > 0)
+            info("load: " + added + " item(s) hold a bank balance without being on the "
+                    + "allowed-items list (deposited while ALLOW_ALL_ITEMS was on) — added.");
     }
 
     public boolean load_compatibilityMode_setNextAccountNumber(int nextAccountNumber)

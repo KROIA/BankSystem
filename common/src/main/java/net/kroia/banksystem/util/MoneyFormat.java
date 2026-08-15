@@ -3,7 +3,7 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.BankSystemModSettings;
 
 /**
- * Spec A.6 (v2.0.8) — UI-boundary conversion between the fixed-point money
+ * Spec A.6 (v2.1.0) — UI-boundary conversion between the fixed-point money
  * representation (scale {@link BankSystemModSettings#ITEM_FRACTION_SCALE_FACTOR},
  * i.e. raw {@code 12345} = {@code 123.45} currency units) and decimal text.
  * <p>

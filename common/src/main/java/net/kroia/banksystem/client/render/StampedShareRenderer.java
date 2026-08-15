@@ -26,7 +26,7 @@ import java.util.WeakHashMap;
 import java.util.function.Function;
 
 /**
- * v2.0.9 — runtime layered renderer for the stamped share item (replaces the
+ * v2.1.0 — runtime layered renderer for the stamped share item (replaces the
  * generated per-combination model set, which grew quadratically with the symbol
  * count).
  *

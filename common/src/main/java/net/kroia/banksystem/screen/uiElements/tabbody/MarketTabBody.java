@@ -12,7 +12,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 /**
- * Task #51 / Task #1 (v2.0.8, spec §5) — Market tab: create / pause-resume /
+ * Task #51 / Task #1 (v2.1.0, spec §5) — Market tab: create / pause-resume /
  * permanently close a StockMarket market for the company's share item.
  *
  * <p>Three-state FSM ({@code LOADING → UNAVAILABLE | NO_MARKET | HAS_MARKET}); on

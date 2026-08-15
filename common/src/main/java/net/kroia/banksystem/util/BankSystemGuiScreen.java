@@ -35,7 +35,7 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
     }
 
     /**
-     * v2.0.8 hotfix (crash on unpause/save) — swap the active screen from inside a
+     * v2.1.0 hotfix (crash on unpause/save) — swap the active screen from inside a
      * GUI event callback. {@code Minecraft.setScreen} mutates the screen/GUI tree;
      * calling it while ModUtilities is still iterating element children (click
      * dispatch, {@code GuiElement.init}) throws {@link java.util.ConcurrentModificationException}.
@@ -54,6 +54,22 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
      * (see MC_ModUtilities bugreport "tooltip auto-flip"), so we retarget the
      * alignment every frame based on the mouse position before the tooltip pass.
      */
+    /**
+     * Elements whose tooltip side is fixed by the caller. {@link #applyTooltipAutoFlip}
+     * leaves these alone instead of re-deciding the side from the mouse position — used
+     * for controls that sit at the right edge of a narrow row, where the auto-flip
+     * heuristic (screen halves) picks the wrong side.
+     */
+    private static final java.util.Map<net.kroia.modutilities.gui.elements.base.GuiElement,
+            net.kroia.modutilities.gui.elements.base.GuiElement.Alignment> PINNED_TOOLTIPS =
+            new java.util.WeakHashMap<>();
+
+    public static void pinTooltipAlignment(net.kroia.modutilities.gui.elements.base.GuiElement element,
+                                           net.kroia.modutilities.gui.elements.base.GuiElement.Alignment alignment) {
+        PINNED_TOOLTIPS.put(element, alignment);
+        element.setHoverTooltipMousePositionAlignment(alignment);
+    }
+
     protected static void applyTooltipAutoFlip(net.kroia.modutilities.gui.Gui gui, int mouseX, int screenWidth) {
         if (gui == null) return;
         net.kroia.modutilities.gui.elements.base.GuiElement.Alignment alignment =
@@ -68,7 +84,8 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
     private static void applyTooltipAlignmentRecursive(
             net.kroia.modutilities.gui.elements.base.GuiElement element,
             net.kroia.modutilities.gui.elements.base.GuiElement.Alignment alignment) {
-        element.setHoverTooltipMousePositionAlignment(alignment);
+        net.kroia.modutilities.gui.elements.base.GuiElement.Alignment pinned = PINNED_TOOLTIPS.get(element);
+        element.setHoverTooltipMousePositionAlignment(pinned != null ? pinned : alignment);
         for (net.kroia.modutilities.gui.elements.base.GuiElement child : element.getChilds()) {
             applyTooltipAlignmentRecursive(child, alignment);
         }

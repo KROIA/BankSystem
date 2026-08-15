@@ -4,7 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.minecraft.client.gui.GuiGraphics;
 
 /**
- * Task #50 R4 (v2.0.8) — optional renderer that paints a company's tinted preset icon
+ * Task #50 R4 (v2.1.0) — optional renderer that paints a company's tinted preset icon
  * into a screen-space rect. Provided so downstream mods can render share icons in
  * arbitrary rectangles (row entries, orderbook headers) without re-implementing the
  * preset atlas + tint pipeline.

@@ -14,7 +14,7 @@ import java.util.UUID;
 import java.util.function.BiPredicate;
 
 /**
- * Task #43 (v2.0.8) Phase 1 — {@link ServerBankAccount#enforceManageInvariant(Map, Map, boolean, int)}
+ * Task #43 (v2.1.0) Phase 1 — {@link ServerBankAccount#enforceManageInvariant(Map, Map, boolean, int)}
  * founder-aware overload. Tests are pure: no world state, no manager.
  */
 public class CompanyFounderInvariantTests extends TestSuite {

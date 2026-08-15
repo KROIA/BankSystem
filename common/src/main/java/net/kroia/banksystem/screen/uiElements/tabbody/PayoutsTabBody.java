@@ -10,7 +10,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 /**
- * Task #51 (v2.0.8, spec §3) — Payouts tab: embeds the shared
+ * Task #51 (v2.1.0, spec §3) — Payouts tab: embeds the shared
  * {@link PayoutsOverviewPanel} (which links out to the authoritative
  * {@code PayoutsOverviewScreen} schedule list) plus the New Payout and
  * Pay Dividend actions.

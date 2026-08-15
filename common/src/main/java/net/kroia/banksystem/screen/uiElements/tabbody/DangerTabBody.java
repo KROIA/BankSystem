@@ -13,7 +13,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 /**
- * Task #51 (v2.0.8, spec §6) — Danger Zone tab (founder-only): transfer founder
+ * Task #51 (v2.1.0, spec §6) — Danger Zone tab (founder-only): transfer founder
  * role via {@link PlayerPickerPopup}, or dissolve the company after typing the
  * exact company name. Both actions require an {@link AskPopupScreen} confirmation
  * and close the screen on success.

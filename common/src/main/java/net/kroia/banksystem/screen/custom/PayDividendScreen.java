@@ -24,7 +24,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.UUID;
 
 /**
- * Task #49 (v2.0.8) — one-shot dividend distribution modal.
+ * Task #49 (v2.1.0) — one-shot dividend distribution modal.
  * <p>
  * MANAGE-gated at the caller ({@link PayoutsOverviewScreen} only opens the screen for
  * viewers with MANAGE); the server re-checks MANAGE via
@@ -179,7 +179,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
             BACKEND_INSTANCES.LOGGER.info("[PayDividendScreen] pay clicked: company="
                     + companyId + " textInput='" + amountBox.getText() + "' parsedRaw=" + amount);
         }
-        // Bug batch 3 #5 (v2.0.8) — paying dividends to the company's own account makes
+        // Bug batch 3 #5 (v2.1.0) — paying dividends to the company's own account makes
         // no sense (the money just returns to itself). Always exclude — the checkbox
         // has been removed from the UI and the server enforces exclusion in DividendPayer.
         AsyncCompanyManager.payDividendAsync(companyId, amount, false, caller, currencyItem).thenAccept(out -> {

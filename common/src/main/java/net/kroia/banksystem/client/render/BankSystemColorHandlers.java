@@ -15,7 +15,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Task #50 (v2.0.8) — provides the {@link IShareIconRenderer} implementation that
+ * Task #50 (v2.1.0) — provides the {@link IShareIconRenderer} implementation that
  * renders the stamped-share {@link ItemStack} for a given {@link ItemID} into an
  * arbitrary screen-space rect via {@link GuiGraphics#renderItem} (card, tint and
  * symbol layers drawn by {@link StampedShareRenderer} through the item's custom
@@ -43,7 +43,7 @@ public final class BankSystemColorHandlers {
                     ? ShareVisualCache.getVisualsOrPlaceholder(companyId)
                     : null;
 
-            // Monogram fallback (Option A, v2.0.8): when no preset icon is chosen,
+            // Monogram fallback (Option A, v2.1.0): when no preset icon is chosen,
             // paint a tinted badge with the first ~2 initials of the company's
             // display name (or Company.name from CompanyInfoCache). Gives every
             // company a distinctive glyph without depending on 30 art assets.
@@ -73,7 +73,7 @@ public final class BankSystemColorHandlers {
      * the first letter of up to 2 words; if the name is a single word, take its
      * first 2 letters. Uppercased. Never returns null / empty.
      */
-    /** Task #53 (v2.0.8) — public delegate used by {@link StampedShareBadgePainter}. */
+    /** Task #53 (v2.1.0) — public delegate used by {@link StampedShareBadgePainter}. */
     public static String resolveMonogramInitials(Integer companyId, ShareVisuals visuals) {
         return resolveInitials(companyId, visuals);
     }

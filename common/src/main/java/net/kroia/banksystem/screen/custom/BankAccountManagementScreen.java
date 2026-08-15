@@ -249,7 +249,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         bindingsButton = new Button(BINDINGS_BUTTON.getString(), this::onBindingsButtonClicked);
         addElement(bindingsButton);
 
-        // Task #45a / Spec A.3 (v2.0.8) — Payouts entry on its own second row (the
+        // Task #45a / Spec A.3 (v2.1.0) — Payouts entry on its own second row (the
         // "Share Visuals" button was removed; those settings live in the Company
         // screen's Shares tab). Visibility gated on company presence via async lookup.
         payoutsButton = new Button(PAYOUTS_BUTTON.getString(), this::onPayoutsButtonClicked);
@@ -345,7 +345,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         addUserButton.setBounds(padding, selectAccountButton.getBottom()+accountNameY, leftWidth, closeButton.getHeight());
         userElementListView.setBounds(padding, addUserButton.getBottom()+spacing, leftWidth, height-(addUserButton.getBottom()+spacing)+padding);
 
-        // Spec A.3 (v2.0.8) — company-specific "Payouts" button on its own second row
+        // Spec A.3 (v2.1.0) — company-specific "Payouts" button on its own second row
         // above the bank list; the bank list is pushed down by the row's height (20 + 4).
         int bankListTop = closeButton.getBottom() + spacing;
         if (payoutsButton != null && companyIdForPayouts != null) {

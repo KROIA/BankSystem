@@ -6,7 +6,7 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Task #53 (v2.0.8) — cross-loader contract for the stamped-share item renderer.
+ * Task #53 (v2.1.0) — cross-loader contract for the stamped-share item renderer.
  *
  * <p>Implementations plug into the per-loader render pipeline (Fabric / Quilt:
  * {@code BuiltinItemRendererRegistry}; NeoForge: {@code IClientItemExtensions} +
@@ -16,7 +16,7 @@ import net.minecraft.world.item.ItemStack;
  * <p>Only GUI / FIXED / GROUND contexts are painted as a monogram badge (when no
  * preset icon is configured) or as a preset-tinted texture. Held-in-hand contexts
  * fall through to the vanilla item-model path with a TODO — a proper
- * builtin/entity model + a full BEWLR body-and-hand render is deferred to v2.0.9.
+ * builtin/entity model + a full BEWLR body-and-hand render is deferred to v2.1.0.
  */
 public interface IShareItemBadgePainter {
 

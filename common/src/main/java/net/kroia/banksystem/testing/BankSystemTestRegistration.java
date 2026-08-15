@@ -75,22 +75,22 @@ public class BankSystemTestRegistration {
         // Task #39 (v2.0.7) — ATM Money Converter tab
         TestRegistry.register(new MoneyDenominationOptimizerTests());
         TestRegistry.register(new ConverterCacheTests());
-        // Task #43 (v2.0.8) — Company feature Phase 1 (POJO + manager + founder invariant).
+        // Task #43 (v2.1.0) — Company feature Phase 1 (POJO + manager + founder invariant).
         TestRegistry.register(new CompanyManagerTests());
         TestRegistry.register(new CompanyFounderInvariantTests());
-        // Task #43g (v2.0.8) — slave-side ARRS forwarding for /company subcommands.
+        // Task #43g (v2.1.0) — slave-side ARRS forwarding for /company subcommands.
         TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyArrsRoundTripTests());
-        // Task #45a (v2.0.8) — payout ARRS wire-contract coverage.
+        // Task #45a (v2.1.0) — payout ARRS wire-contract coverage.
         TestRegistry.register(new net.kroia.banksystem.testing.tests.PayoutArrsRoundTripTests());
-        // Task #44 (v2.0.8) — SQLite Transaction Ledger round-trip + read API.
+        // Task #44 (v2.1.0) — SQLite Transaction Ledger round-trip + read API.
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransactionLogManagerTests());
-        // Task #45 (v2.0.8) — recurring payouts (schedule mutation, NBT roundtrip, cascade-strip).
+        // Task #45 (v2.1.0) — recurring payouts (schedule mutation, NBT roundtrip, cascade-strip).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.PayoutManagerTests());
-        // Task #48 (v2.0.8) — share ItemID volatility guard (distinct companies, distinct ItemIDs).
+        // Task #48 (v2.1.0) — share ItemID volatility guard (distinct companies, distinct ItemIDs).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyShareItemIDTests());
-        // Task #51 (v2.0.8) — CompanyManagementScreen construct-smoke (client-only; skips on servers).
+        // Task #51 (v2.1.0) — CompanyManagementScreen construct-smoke (client-only; skips on servers).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyManagementScreenSmokeTests());
-        // Task #54 (v2.0.8) — slave-side company visual mirror + LIST_ALL_COMPANY_VISUALS ARRS.
+        // Task #54 (v2.1.0) — slave-side company visual mirror + LIST_ALL_COMPANY_VISUALS ARRS.
         TestRegistry.register(new net.kroia.banksystem.testing.tests.SlaveCompanyMirrorTests());
     }
 }

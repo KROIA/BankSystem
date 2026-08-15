@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Task #54 (v2.0.9) — master→slave S2S packet mirroring the share symbol manifest.
+ * Task #54 (v2.1.0) — master→slave S2S packet mirroring the share symbol manifest.
  * Slave applies the manifest via {@link ShareSymbolStore#mirrorApplyManifest} and
  * fans out {@link S2CShareSymbolManifestPacket} to all locally-connected players.
  */

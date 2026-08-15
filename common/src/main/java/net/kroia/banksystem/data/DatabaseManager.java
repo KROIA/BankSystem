@@ -69,7 +69,7 @@ public class DatabaseManager {
     /**
      * Classpath-resource paths of every schema file the DB layer applies at boot.
      * <p>
-     * Task #44 (v2.0.8): converted from a single hardcoded path to a list so new
+     * Task #44 (v2.1.0): converted from a single hardcoded path to a list so new
      * tables can be added by appending an entry. Each file is executed via
      * {@link #executeSqlFile(String)} in order; every {@code CREATE TABLE} and
      * {@code CREATE INDEX} statement in these scripts is idempotent
@@ -96,7 +96,7 @@ public class DatabaseManager {
     }
 
     /**
-     * Spec A.9 / B.3 / B.4 (v2.0.8) — column migration for pre-existing worlds.
+     * Spec A.9 / B.3 / B.4 (v2.1.0) — column migration for pre-existing worlds.
      * {@code CREATE TABLE IF NOT EXISTS} does not add columns to an existing table,
      * so add the new PayoutHistory columns via {@code ALTER TABLE} when missing.
      * Idempotent: checks {@code PRAGMA table_info} first.
@@ -127,7 +127,7 @@ public class DatabaseManager {
     }
 
     /**
-     * v2.0.9 — column migration for TransactionLog.
+     * v2.1.0 — column migration for TransactionLog.
      * Adds source_kind and tag columns when missing (pre-existing worlds).
      */
     private void migrateTransactionLogColumns() {

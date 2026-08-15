@@ -14,7 +14,7 @@ import net.minecraft.network.chat.Component;
 import java.util.function.IntConsumer;
 
 /**
- * Task #51 (v2.0.8, spec §11.3) — modal RGB color picker for the share tint.
+ * Task #51 (v2.1.0, spec §11.3) — modal RGB color picker for the share tint.
  * Replaces the raw hex TextBox in the Shares tab. Three 0–255 sliders (R, G, B),
  * a live preview swatch, and a read-only {@code #RRGGBB} hex label. Alpha is
  * fixed at {@code 0xFF} (opaque). Apply invokes {@code onPicked(argb)} and

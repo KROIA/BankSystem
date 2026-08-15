@@ -18,7 +18,7 @@ import java.util.UUID;
 
 /**
  * Master-side logic for {@code /company create|transfer|dissolve|description|info}
- * (Task #43, v2.0.8 Phase 1). Task #43g wired slave-side ARRS dispatch so slaves
+ * (Task #43, v2.1.0 Phase 1). Task #43g wired slave-side ARRS dispatch so slaves
  * forward every subcommand to master via {@link AsyncCompanyManager}. Task #43h
  * switched every subcommand except {@code create} to take a company <em>name</em>
  * instead of the internal id.
@@ -99,136 +99,6 @@ public final class CompanyCommandLogic {
     }
 
     // ------------------------------------------------------------------
-    // /company transfer <companyName> <newFounder>
-    // ------------------------------------------------------------------
-    public static void transfer(ServerPlayer player, String rawCompanyName, String newFounderName) {
-        String companyName = cleanName(rawCompanyName);
-        if (isSlave()) {
-            AsyncCompanyManager.transferFounderAsync(companyName, player.getUUID(), newFounderName)
-                    .thenAccept(out -> renderTransfer(player, companyName, newFounderName, out));
-            return;
-        }
-        CompanyManager cm = CompanyManager.get();
-        IServerBankManager bm = sync();
-
-        Company company = cm.getByName(companyName);
-        if (company == null) {
-            send(player, "No such company '" + companyName + "'.");
-            return;
-        }
-        if (!company.isFounder(player.getUUID())) {
-            send(player, "Only a founder of company '" + companyName + "' can transfer it.");
-            return;
-        }
-        String cleaned = cleanName(newFounderName);
-        User target = bm.getUserByName(cleaned);
-        if (target == null) {
-            send(player, "No known user named '" + cleaned + "'.");
-            return;
-        }
-        UUID from = player.getUUID();
-        UUID to = target.getUUID();
-        CompanyManager.TransferResult r = cm.transferFounder(company.getCompanyId(), from, to);
-        switch (r) {
-            case OK -> send(player, "Transferred founder of company '" + company.getName()
-                    + "' from " + player.getName().getString() + " to " + target.getName() + ".");
-            case COMPANY_MISSING -> send(player, "No such company '" + companyName + "'.");
-            case NOT_A_FOUNDER -> send(player, "You are not a founder of company '" + companyName + "'.");
-            case ALREADY_A_FOUNDER -> send(player, target.getName() + " is already a founder.");
-        }
-    }
-
-    private static void renderTransfer(ServerPlayer player, String companyName, String targetName, AsyncCompanyManager.TransferOutput out) {
-        switch (out.resultCode()) {
-            case AsyncCompanyManager.CODE_OK -> send(player, "Transferred founder of company '" + companyName
-                    + "' from " + out.fromName() + " to " + out.toName() + ".");
-            case AsyncCompanyManager.CODE_NOT_FOUND -> send(player, "No such company '" + companyName + "'.");
-            case AsyncCompanyManager.CODE_NOT_FOUNDER -> send(player, "You are not a founder of company '" + companyName + "'.");
-            case AsyncCompanyManager.CODE_ALREADY_FOUNDER -> send(player, out.toName() + " is already a founder.");
-            case AsyncCompanyManager.CODE_MISSING_TARGET -> send(player, "No known user named '" + cleanName(targetName) + "'.");
-            default -> send(player, "Failed to transfer company '" + companyName + "': " + describeCode(out.resultCode()));
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // /company dissolve <companyName>
-    // ------------------------------------------------------------------
-    public static void dissolve(ServerPlayer player, String rawCompanyName) {
-        String companyName = cleanName(rawCompanyName);
-        if (isSlave()) {
-            AsyncCompanyManager.dissolveCompanyAsync(companyName, player.getUUID())
-                    .thenAccept(out -> renderDissolve(player, companyName, out));
-            return;
-        }
-        CompanyManager cm = CompanyManager.get();
-        Company company = cm.getByName(companyName);
-        if (company == null) {
-            send(player, "No such company '" + companyName + "'.");
-            return;
-        }
-        if (!company.isFounder(player.getUUID())) {
-            send(player, "Only a founder may dissolve company '" + company.getName() + "'.");
-            return;
-        }
-        int id = company.getCompanyId();
-        String name = company.getName();
-        int accNr = company.getBankAccountNr();
-        if (cm.deleteCompany(id)) {
-            send(player, "Dissolved company '" + name
-                    + "'. Bank account " + accNr + " remains as a multi-user account.");
-        } else {
-            send(player, "Failed to dissolve company '" + name + "'.");
-        }
-    }
-
-    private static void renderDissolve(ServerPlayer player, String companyName, AsyncCompanyManager.DissolveOutput out) {
-        switch (out.resultCode()) {
-            case AsyncCompanyManager.CODE_OK -> send(player, "Dissolved company '" + out.companyName()
-                    + "'. Bank account " + out.bankAccountNr() + " remains as a multi-user account.");
-            case AsyncCompanyManager.CODE_NOT_FOUND -> send(player, "No such company '" + companyName + "'.");
-            case AsyncCompanyManager.CODE_NOT_FOUNDER -> send(player, "Only a founder may dissolve company '" + companyName + "'.");
-            default -> send(player, "Failed to dissolve company '" + companyName + "': " + describeCode(out.resultCode()));
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // /company description <companyName> <text>
-    // ------------------------------------------------------------------
-    public static void description(ServerPlayer player, String rawCompanyName, String text) {
-        String companyName = cleanName(rawCompanyName);
-        if (isSlave()) {
-            AsyncCompanyManager.updateDescriptionAsync(companyName, player.getUUID(), text)
-                    .thenAccept(out -> renderDescription(player, companyName, out));
-            return;
-        }
-        CompanyManager cm = CompanyManager.get();
-        IServerBankManager bm = sync();
-        Company company = cm.getByName(companyName);
-        if (company == null) {
-            send(player, "No such company '" + companyName + "'.");
-            return;
-        }
-        IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
-        boolean hasManage = account != null && account.hasPermission(player.getUUID(), BankPermission.MANAGE);
-        boolean isAdmin = bm.isBanksystemAdmin(player.getUUID());
-        if (!hasManage && !isAdmin) {
-            send(player, "You need MANAGE on the company's bank account to edit the description.");
-            return;
-        }
-        cm.updateDescription(company.getCompanyId(), text);
-        send(player, "Updated description of company '" + company.getName() + "'.");
-    }
-
-    private static void renderDescription(ServerPlayer player, String companyName, AsyncCompanyManager.DescriptionOutput out) {
-        switch (out.resultCode()) {
-            case AsyncCompanyManager.CODE_OK -> send(player, "Updated description of company '" + companyName + "'.");
-            case AsyncCompanyManager.CODE_NOT_FOUND -> send(player, "No such company '" + companyName + "'.");
-            case AsyncCompanyManager.CODE_NO_PERMISSION -> send(player, "You need MANAGE on the company's bank account to edit the description.");
-            default -> send(player, "Failed to update description of company '" + companyName + "': " + describeCode(out.resultCode()));
-        }
-    }
-
-    // ------------------------------------------------------------------
     // /company info <companyName>
     // ------------------------------------------------------------------
     public static void info(ServerPlayer player, String rawCompanyName) {
@@ -288,7 +158,7 @@ public final class CompanyCommandLogic {
     }
 
     // ------------------------------------------------------------------
-    // /company manage <companyName>  (Task #51, v2.0.8)
+    // /company manage <companyName>  (Task #51, v2.1.0)
     // ------------------------------------------------------------------
     /**
      * Resolves company by name, checks MANAGE, and if OK dispatches

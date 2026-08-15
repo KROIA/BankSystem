@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * v2.0.9 — Statistics tab for CompanyManagementScreen.
+ * v2.1.0 — Statistics tab for CompanyManagementScreen.
  */
 public class StatisticsTabBody extends TabBody {
 

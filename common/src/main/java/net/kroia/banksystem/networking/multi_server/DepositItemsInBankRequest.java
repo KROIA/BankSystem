@@ -180,7 +180,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                 notDepositedItems.put(itemID, toDeposit);
             }
         }
-        // Task #44 (v2.0.8) — Transaction Ledger. One DEPOSIT row per ItemID whose net
+        // Task #44 (v2.1.0) — Transaction Ledger. One DEPOSIT row per ItemID whose net
         // deposited amount was > 0. Best-effort: manager is null on slaves / pre-init,
         // and a save failure must never fail the deposit. Runs async on the DB worker.
         logDeposits(input, notDepositedItems);
@@ -198,7 +198,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
             long deposited = requested - remaining;
             if (deposited <= 0) continue;
             try {
-                // Task #48 (v2.0.8) — if this ItemID resolves to a stamped share, log a
+                // Task #48 (v2.1.0) — if this ItemID resolves to a stamped share, log a
                 // SHARE_TRADE row (with company id populated) instead of a plain DEPOSIT
                 // so the ledger records share flow distinctly. This is the placeholder
                 // hook until a StockMarket match-observer surface exists — see spec §4c.

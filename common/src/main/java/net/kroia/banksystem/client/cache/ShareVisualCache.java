@@ -10,7 +10,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Task #46 (v2.0.8) — client-side cache of company share visuals, share supply, and
+ * Task #46 (v2.1.0) — client-side cache of company share visuals, share supply, and
  * max supply, keyed by {@code companyId}. Populated by the S2C packets
  * {@link net.kroia.banksystem.networking.general.S2CCompanyVisualUpdatePacket},
  * {@link net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket},
@@ -76,7 +76,7 @@ public final class ShareVisualCache {
     public static void tryLookup(int companyId) {
         if (visuals.containsKey(companyId)) return;
         if (!pending.add(companyId)) return;
-        // Task #46 (v2.0.8) — by-id ARRS lookup. Dedupe via `pending` set mirrors
+        // Task #46 (v2.1.0) — by-id ARRS lookup. Dedupe via `pending` set mirrors
         // ItemID.tryUpdateNameCache. On response: on present, populate cache (self-heal
         // on next frame); on missing/error, clear pending so a later miss can retry.
         try {

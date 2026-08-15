@@ -12,12 +12,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Task #47 (v2.0.8) — Share-Stamper company picker. Now a thin adapter over the
+ * Task #47 (v2.1.0) — Share-Stamper company picker. Now a thin adapter over the
  * reusable {@link CompanySelectionScreen} widget: forwards row-click to
  * {@link SetStamperBindingRequest} and releases the server-side viewer lock on
  * close via {@link CloseStamperBindScreenPacket}.
  * <p>
- * Follow-up (v2.0.8) — after a successful bind the server auto-opens the main
+ * Follow-up (v2.1.0) — after a successful bind the server auto-opens the main
  * {@link ShareStamperScreen}, which naturally replaces this screen and fires
  * {@link #removed()}. To keep the viewer lock across that transition (the
  * container-menu path re-acquires the same lock via {@code stopOpen}), we set

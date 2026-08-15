@@ -22,7 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Task #45 (v2.0.8) — recurring payout tick executor. Master-only.
+ * Task #45 (v2.1.0) — recurring payout tick executor. Master-only.
  * <p>
  * Called every {@link #PAYOUT_TICK_INTERVAL} ticks from
  * {@code BankSystemModBackend.onServerTick}. Iterates every Company via
@@ -31,7 +31,7 @@ import java.util.UUID;
  * a transfer, and writes a {@code PayoutHistory} row with the outcome status. Advances the
  * schedule's {@code nextRunTick} even on failure so a broken schedule does not hammer.
  * <p>
- * Spec A.8/A.9/B.1–B.4 (v2.0.8):
+ * Spec A.8/A.9/B.1–B.4 (v2.1.0):
  * <ul>
  *   <li>Typed {@link PayoutFailureReason} set at the actual failure site.</li>
  *   <li>Target player + account names snapshotted into the history row at write time.</li>
@@ -217,7 +217,7 @@ public final class PayoutExecutor {
             return new Outcome(money ? PayoutFailureReason.INSUFFICIENT_FUNDS
                     : PayoutFailureReason.CURRENCY_ITEM_MISSING, playerName, accountName);
         }
-        // BUG 4 fix (v2.0.8) — auto-create the receiver's item bank if it doesn't
+        // BUG 4 fix (v2.1.0) — auto-create the receiver's item bank if it doesn't
         // exist yet. Deposit permission was already verified above; a missing item
         // bank on the target should NEVER surface as CURRENCY_ITEM_MISSING.
         ISyncServerBank targetBank = targetAccount.getBank(currency);
@@ -318,7 +318,7 @@ public final class PayoutExecutor {
             }
             IServerBankAccount targetAccount = bm.getBankAccount(accountNr);
             if (targetAccount == null) continue;
-            // BUG 4 fix (v2.0.8) — auto-create the holder's item bank on demand so
+            // BUG 4 fix (v2.1.0) — auto-create the holder's item bank on demand so
             // dividend distribution can always deposit to a valid target.
             ISyncServerBank targetBank = targetAccount.getBank(currency);
             if (targetBank == null) {
@@ -346,7 +346,7 @@ public final class PayoutExecutor {
                     accountNr, null, TransactionLogRecord.Kind.DIVIDEND, currencyShort,
                     payAmount, companyAccountNr, company.getCompanyId(), nowMs, null));
         }
-        // BUG 4 fix (v2.0.8) — a run that moved no money must not report success.
+        // BUG 4 fix (v2.1.0) — a run that moved no money must not report success.
         // Previously every transfer inside the loop could silently skip (rounding
         // to 0, missing target bank, failed transfer) and the schedule still wrote
         // an OK history row while no balance changed anywhere.
@@ -359,7 +359,7 @@ public final class PayoutExecutor {
         }
         logInfo("dividend schedule " + schedule.getScheduleId() + " company "
                 + company.getCompanyId() + ": paid " + paidTotal + " to " + paidHolders + " holder(s)");
-        // Task #52 (v2.0.8) — record the scheduled dividend event for history.
+        // Task #52 (v2.1.0) — record the scheduled dividend event for history.
         try {
             BankSystemModBackend.Instances b = backend;
             if (b != null && b.DIVIDEND_HISTORY_STORE != null) {

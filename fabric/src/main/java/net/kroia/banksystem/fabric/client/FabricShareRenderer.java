@@ -9,20 +9,20 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Task #53 (v2.0.8) — Fabric / Quilt-side wiring for the stamped-share monogram badge.
+ * Task #53 (v2.1.0) — Fabric / Quilt-side wiring for the stamped-share monogram badge.
  *
  * <p>Registers a {@link BuiltinItemRendererRegistry.DynamicItemRenderer} that
  * delegates to the cross-loader {@link StampedShareBadgePainter}. The painter
  * only paints for GUI / FIXED / GROUND contexts; other contexts return
  * {@code false} and the vanilla tinted texture path continues to be used.
  *
- * <p>Note (v2.0.8): {@code BuiltinItemRendererRegistry} on Fabric only invokes
+ * <p>Note (v2.1.0): {@code BuiltinItemRendererRegistry} on Fabric only invokes
  * the registered renderer for items whose model JSON declares
  * {@code "parent": "builtin/entity"}. The stamped_share model is currently
  * {@code item/generated} so this hook is presently a no-op — the ARGB tint
  * handler still drives the inventory icon. Migrating the model JSON to
  * builtin/entity + providing proper item-display transforms is a follow-up
- * for v2.0.9 (see TODO in {@link StampedShareBadgePainter}). Shipping the
+ * for v2.1.0 (see TODO in {@link StampedShareBadgePainter}). Shipping the
  * registration now so the follow-up is a single JSON edit + display-transforms
  * block, not a plumbing rewrite.
  */
@@ -42,7 +42,7 @@ public final class FabricShareRenderer implements BuiltinItemRendererRegistry.Dy
                        MultiBufferSource buffers, int packedLight, int packedOverlay) {
         // Painter returns false for non-GUI/FIXED/GROUND, preset paths, and
         // cache misses — in every such case we currently fall back to leaving
-        // the frame blank. TODO(v2.0.9): render the vanilla tinted quad here as
+        // the frame blank. TODO(v2.1.0): render the vanilla tinted quad here as
         // the fallback once the model JSON migrates to builtin/entity.
         StampedShareBadgePainter.INSTANCE.paint(stack, context, pose, buffers, packedLight, packedOverlay);
     }

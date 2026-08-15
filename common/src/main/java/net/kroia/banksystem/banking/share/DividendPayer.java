@@ -26,7 +26,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Task #49 (v2.0.8) — Company Feature Phase 5: one-shot dividend distributor. Master-only.
+ * Task #49 (v2.1.0) — Company Feature Phase 5: one-shot dividend distributor. Master-only.
  * <p>
  * Resolves the company's stamped-share {@link ItemID}, snapshots the balance of every
  * account holding that share via {@link ISyncServerBankManager#listAccountsHolding(ItemID)},
@@ -76,7 +76,7 @@ public final class DividendPayer implements IDividendPayer {
         Set<Integer> holderAccounts = bm.listAccountsHolding(shareItemId);
         int companyAccountNr = company.getBankAccountNr();
 
-        // BUG batch 4 (v2.0.8) — item banks store balances in RAW fixed-point units
+        // BUG batch 4 (v2.1.0) — item banks store balances in RAW fixed-point units
         // (physical count * ITEM_FRACTION_SCALE_FACTOR); ShareStamper / BankUpload
         // deposits go through {@code depositRealAsync(count)} which multiplies by
         // SCALE. Previously this code treated {@code getTotalBalance()} as a plain
@@ -89,7 +89,7 @@ public final class DividendPayer implements IDividendPayer {
         // holder's balance mid-run (spec §5 concurrency requirement).
         List<HolderSnap> snapshots = new ArrayList<>();
         long totalShares = 0L;
-        // Bug batch 3 #5 (v2.0.8) — the company's own account is ALWAYS excluded
+        // Bug batch 3 #5 (v2.1.0) — the company's own account is ALWAYS excluded
         // from dividend distribution regardless of the includeCompanyAccount flag.
         // Paying the company its own money is a no-op and only confuses the ledger.
         // The parameter is retained for API/wire compatibility.
@@ -207,7 +207,7 @@ public final class DividendPayer implements IDividendPayer {
                     new DividendPaidEvent(companyId, amountPerShare, paid, paidHolders, nowMs));
         }
 
-        // Task #52 (v2.0.8) — record the dividend event for history.
+        // Task #52 (v2.1.0) — record the dividend event for history.
         try {
             if (instances != null && instances.DIVIDEND_HISTORY_STORE != null) {
                 instances.DIVIDEND_HISTORY_STORE.insert(new net.kroia.banksystem.banking.company.DividendEvent(

@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * v2.0.9 — Static SQL helpers for the Statistics tab of CompanyManagementScreen.
+ * v2.1.0 — Static SQL helpers for the Statistics tab of CompanyManagementScreen.
  * All methods are safe to call from any thread; they only read from the DB connection.
  *
  * Queries filter by account_number (the company's linked bank account) rather than

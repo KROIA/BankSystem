@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Task #45 (v2.0.8) — Company + CompanyManager payout schedule persistence, mutation,
+ * Task #45 (v2.1.0) — Company + CompanyManager payout schedule persistence, mutation,
  * cascade-strip, and interval-floor validation. All tests use fresh in-memory managers.
  */
 public class PayoutManagerTests extends TestSuite {

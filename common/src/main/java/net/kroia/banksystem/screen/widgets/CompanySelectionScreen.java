@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.function.IntConsumer;
 
 /**
- * Task #47 follow-up (v2.0.8) — Reusable company picker widget. Given a list
+ * Task #47 follow-up (v2.1.0) — Reusable company picker widget. Given a list
  * of {@link CompanyOption}s, renders a vertical scrollable list of
  * {@link CompanySelectionButton}s and fires {@code onSelect} with the chosen
  * company id. Disabled options remain visible (grayed out) with the

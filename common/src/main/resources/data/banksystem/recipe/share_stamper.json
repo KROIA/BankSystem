@@ -1,0 +1,31 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "#": {
+      "item": "banksystem:circuit_board"
+    },
+    "P": {
+      "item": "minecraft:piston"
+    },
+    "Y": {
+      "item": "banksystem:metal_case_block"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    },
+    "I": {
+      "item": "minecraft:iron_nugget"
+    }
+  },
+  "pattern": [
+    "IYI",
+    "RPR",
+    "I#I"
+  ],
+  "result": {
+    "count": 1,
+    "id": "banksystem:share_stamper"
+  },
+  "show_notification": true
+}

@@ -73,7 +73,7 @@ public class BankSystemItems {
     public static final Supplier<Item> MONEY500000 = registerItem(MoneyItem500000.NAME, MoneyItem500000::new);
     public static final Supplier<Item> MONEY1000000 = registerItem(MoneyItem1000000.NAME, MoneyItem1000000::new);
 
-    // Company shares (Task #46, v2.0.8) — physical stamped/blank share items.
+    // Company shares (Task #46, v2.1.0) — physical stamped/blank share items.
     public static final Supplier<Item> BLANK_SHARE   = registerItem(BlankShareItem.NAME,   BlankShareItem::new);
     public static final Supplier<Item> STAMPED_SHARE = registerItem(StampedShareItem.NAME, StampedShareItem::new);
 

@@ -9,7 +9,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 
 /**
- * Task #1 (v2.0.8) — Reflection-based soft-dependency bridge to the StockMarket
+ * Task #1 (v2.1.0) — Reflection-based soft-dependency bridge to the StockMarket
  * Market Creation API. This class deliberately contains NO {@code net.kroia.stockmarket.*}
  * imports so BankSystem builds and runs cleanly without StockMarket on the classpath.
  *

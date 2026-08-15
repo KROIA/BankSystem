@@ -14,7 +14,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Task #54 (v2.0.9) — CLIENT-ONLY registry for share symbol PNG data.
+ * Task #54 (v2.1.0) — CLIENT-ONLY registry for share symbol PNG data.
  * <p>
  * Receives the manifest from
  * {@link net.kroia.banksystem.networking.general.S2CShareSymbolManifestPacket}

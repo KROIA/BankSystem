@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Task #46 (v2.0.8) — bulk sync of every registered Company's share visuals + supply,
+ * Task #46 (v2.1.0) — bulk sync of every registered Company's share visuals + supply,
  * sent to a fresh client at login (and to slaves attaching to master, once slave-side
  * mirror is wired). Applied to {@link ShareVisualCache}.
  *
@@ -31,7 +31,7 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
     public static final Type<S2CCompanyVisualBulkPacket> TYPE = new Type<>(
             ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2c_company_visual_bulk"));
 
-    // v2.0.9 two-layer: bgSymbolId/bgTint/fgSymbolId/fgTint replace iconPresetId/tint.
+    // v2.1.0 two-layer: bgSymbolId/bgTint/fgSymbolId/fgTint replace iconPresetId/tint.
     public record Entry(int companyId,
                         String bgSymbolId, int bgTint,
                         String fgSymbolId, int fgTint,
@@ -44,14 +44,14 @@ public class S2CCompanyVisualBulkPacket extends BankSystemNetworkPacket {
         public static Entry of(int companyId, ShareVisuals v, long issued, long max) {
             return of(companyId, v, issued, max, "", "", 0, List.of(), 0);
         }
-        /** Task #51 fix (v2.0.8) — extended with internal company metadata. */
+        /** Task #51 fix (v2.1.0) — extended with internal company metadata. */
         public static Entry of(int companyId, ShareVisuals v, long issued, long max,
                                String internalName, String companyDescription,
                                int bankAccountNr, List<String> founderNames) {
             return of(companyId, v, issued, max, internalName, companyDescription,
                     bankAccountNr, founderNames, 0);
         }
-        /** Task #52 (v2.0.8) — extended with holderCount. */
+        /** Task #52 (v2.1.0) — extended with holderCount. */
         public static Entry of(int companyId, ShareVisuals v, long issued, long max,
                                String internalName, String companyDescription,
                                int bankAccountNr, List<String> founderNames,

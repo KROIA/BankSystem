@@ -23,7 +23,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
- * Spec B.3 (v2.0.8) — payout currency picker. Lists "Money (default)" plus every
+ * Spec B.3 (v2.1.0) — payout currency picker. Lists "Money (default)" plus every
  * item the company's bank account holds a non-zero balance in (with quantity).
  * Emits the chosen currency's ItemID short value ({@link PayoutSchedule#MONEY_CURRENCY}
  * for money) back to the caller.
@@ -88,7 +88,7 @@ public class ItemBalancePickerPopup extends BankSystemGuiScreen {
         AsyncCompanyManager.listAccountItemBalancesAsync(companyId, caller).thenAccept(out ->
                 Minecraft.getInstance().execute(() -> {
                     list.removeChilds();
-                    // Bug A fix (v2.0.8) — Money row is always first, rendered as a proper
+                    // Bug A fix (v2.1.0) — Money row is always first, rendered as a proper
                     // CurrencyRow (fixed height) with the money icon and formatted balance.
                     long moneyBalance = out != null ? out.moneyBalance() : 0L;
                     ItemStack moneyStack = net.kroia.banksystem.minecraft.item.BankSystemItems

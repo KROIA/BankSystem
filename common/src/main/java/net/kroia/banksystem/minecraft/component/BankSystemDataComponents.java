@@ -10,7 +10,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 
 /**
- * Task #46 (v2.0.8) — Registration of BankSystem-owned data component types.
+ * Task #46 (v2.1.0) — Registration of BankSystem-owned data component types.
  * <p>
  * Currently declares {@code banksystem:company_id} — the identity-relevant integer
  * component stamped onto {@code stamped_share} items to tie a physical share stack
@@ -31,7 +31,7 @@ public final class BankSystemDataComponents {
                             .build());
 
     /**
-     * Task #47 (v2.0.8) — Share Stamper binding component. Persists the companyId a
+     * Task #47 (v2.1.0) — Share Stamper binding component. Persists the companyId a
      * dropped Share Stamper block-item is bound to. 0 or absent means unbound.
      */
     public static final RegistrySupplier<DataComponentType<Integer>> STAMPER_BINDING =

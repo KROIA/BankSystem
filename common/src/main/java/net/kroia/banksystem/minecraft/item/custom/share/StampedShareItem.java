@@ -24,7 +24,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * Task #46 (v2.0.8) — physical company-stamped share. Carries the identity-relevant
+ * Task #46 (v2.1.0) — physical company-stamped share. Carries the identity-relevant
  * {@code banksystem:company_id} int data component (see {@link BankSystemDataComponents}).
  * Two stamped stacks that differ only in {@code company_id} produce distinct
  * {@link net.kroia.banksystem.util.ItemID ItemID}s because that component is NOT
@@ -56,7 +56,7 @@ public class StampedShareItem extends Item {
     }
 
     /**
-     * Task #48 (v2.0.8) — resolve the company id from an {@link net.kroia.banksystem.util.ItemID}
+     * Task #48 (v2.1.0) — resolve the company id from an {@link net.kroia.banksystem.util.ItemID}
      * if (and only if) it points at a stamped-share template. Returns {@code null} for any
      * other item, an unstamped share, or an unresolvable ItemID. Used by the ledger write
      * hooks in {@code DepositItemsInBankRequest} / {@code WithdrawItemsFromBankRequest} to
@@ -164,7 +164,7 @@ public class StampedShareItem extends Item {
     }
 
     /**
-     * Task #51 (v2.0.8) — right-click a stamped share to open the Company Management
+     * Task #51 (v2.1.0) — right-click a stamped share to open the Company Management
      * screen for that stack's company. Client-side only; server-side is a no-op pass
      * so no bogus interaction packet reaches the block/entity layer.
      */

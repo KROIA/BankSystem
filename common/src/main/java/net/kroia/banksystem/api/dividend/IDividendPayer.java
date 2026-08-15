@@ -6,7 +6,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 /**
- * Task #49 (v2.0.8) — public dividend distributor API. Reachable via
+ * Task #49 (v2.1.0) — public dividend distributor API. Reachable via
  * {@code BankSystemAPI.getDividendPayer()}.
  * <p>
  * Master-only surface — calling on a slave returns

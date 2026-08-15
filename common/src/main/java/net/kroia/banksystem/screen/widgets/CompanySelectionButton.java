@@ -4,7 +4,7 @@ import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 
 /**
- * Task #47 follow-up (v2.0.8) — Reusable single-row company button used by
+ * Task #47 follow-up (v2.1.0) — Reusable single-row company button used by
  * {@link CompanySelectionScreen}. Renders the company display name; when the
  * option is marked disabled the row grays out and stops accepting clicks but
  * still shows the description as a hover tooltip anchored BELOW the cursor.

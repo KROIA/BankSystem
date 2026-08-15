@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Task #46 (v2.0.8) / v2.0.9 two-layer redesign — modal editor for a Company's
+ * Task #46 (v2.1.0) / v2.1.0 two-layer redesign — modal editor for a Company's
  * {@link ShareVisuals}. MANAGE-gated: when {@code canManage} is false, save + edit
  * widgets render read-only (Save hidden, boxes disabled).
  *

@@ -13,7 +13,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import java.util.List;
 
 /**
- * Task #54 (v2.0.8) — coverage for the slave-side company visual mirror.
+ * Task #54 (v2.1.0) — coverage for the slave-side company visual mirror.
  * <ul>
  *   <li>{@code LIST_ALL_COMPANY_VISUALS} ARRS output codec round-trips.</li>
  *   <li>{@link SlaveCompanyMirror} upserts + supply patch + remove behave.</li>

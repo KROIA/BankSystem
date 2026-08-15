@@ -30,7 +30,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Task #43g (v2.0.8) — slave-side ARRS dispatcher for the {@code /company} subcommands.
+ * Task #43g (v2.1.0) — slave-side ARRS dispatcher for the {@code /company} subcommands.
  * <p>
  * Mirrors {@link net.kroia.banksystem.banking.bankmanager.AsyncBankManager} in shape.
  * Slave initiates via the static {@code *Async} helpers below; master receives on
@@ -60,13 +60,13 @@ public final class AsyncCompanyManager {
     public static final int CODE_BANK_ACCOUNT_ERROR    = 8;
     public static final int CODE_INTERNAL              = 9;
     public static final int CODE_SCHEDULE_MISSING      = 10;
-    /** Task #49 (v2.0.8) — company money bank cannot cover the dividend outflow. */
+    /** Task #49 (v2.1.0) — company money bank cannot cover the dividend outflow. */
     public static final int CODE_INSUFFICIENT_FUNDS    = 11;
-    /** Task #49 (v2.0.8) — no account holds this company's shares. */
+    /** Task #49 (v2.1.0) — no account holds this company's shares. */
     public static final int CODE_NO_SHARES             = 12;
-    /** Spec B.3 (v2.0.8) — company account lacks enough of the chosen currency item. */
+    /** Spec B.3 (v2.1.0) — company account lacks enough of the chosen currency item. */
     public static final int CODE_CURRENCY_ITEM_MISSING = 13;
-    /** Spec B.1 (v2.0.8) — target lacks DEPOSIT right on the chosen account. */
+    /** Spec B.1 (v2.1.0) — target lacks DEPOSIT right on the chosen account. */
     public static final int CODE_TARGET_NO_DEPOSIT     = 14;
 
     // ------------------------------------------------------------------
@@ -80,7 +80,7 @@ public final class AsyncCompanyManager {
         GET_COMPANY_INFO,
         IS_NAME_TAKEN,
         LIST_COMPANIES_FOR_CALLER,
-        // Task #45a (v2.0.8) — payout scheduling.
+        // Task #45a (v2.1.0) — payout scheduling.
         CREATE_PAYOUT,
         UPDATE_PAYOUT,
         PAUSE_PAYOUT,
@@ -89,52 +89,52 @@ public final class AsyncCompanyManager {
         GET_HISTORY,
         GET_COMPANY_INFO_BY_ACCOUNT,
         GET_FAILURE_COUNT_24H,
-        // Task #46 (v2.0.8) — share visuals editor writeback (MANAGE-gated on master).
+        // Task #46 (v2.1.0) — share visuals editor writeback (MANAGE-gated on master).
         UPDATE_SHARE_VISUALS,
-        // Task #46 (v2.0.8) — by-id share visuals lookup for tooltip self-heal.
+        // Task #46 (v2.1.0) — by-id share visuals lookup for tooltip self-heal.
         GET_SHARE_VISUALS,
-        // Task #49 (v2.0.8) — one-shot dividend distribution.
+        // Task #49 (v2.1.0) — one-shot dividend distribution.
         PAY_DIVIDEND,
-        // Task #51 (v2.0.8) — list Share Stamper block-entity positions bound to a company.
+        // Task #51 (v2.1.0) — list Share Stamper block-entity positions bound to a company.
         LIST_STAMPER_BINDINGS,
-        // Task #51 fix (v2.0.8) — by-id company info lookup (CompanyManagementScreen needs
+        // Task #51 fix (v2.1.0) — by-id company info lookup (CompanyManagementScreen needs
         // the full CompanyInfoOutput given only the companyId from a stamped-share stack).
         GET_COMPANY_INFO_BY_ID,
-        // Task #52 (v2.0.8) — read-only holder count for a company's stamped shares.
+        // Task #52 (v2.1.0) — read-only holder count for a company's stamped shares.
         COUNT_HOLDERS_FOR_COMPANY,
-        // Task #54 (v2.0.8) — slave→master bulk request for all companies' visuals+info.
+        // Task #54 (v2.1.0) — slave→master bulk request for all companies' visuals+info.
         // Used at slave-master handshake to populate SlaveCompanyMirror.
         LIST_ALL_COMPANY_VISUALS,
-        // Task #1 (v2.0.8) — StockMarket integration: create/close/query share market.
+        // Task #1 (v2.1.0) — StockMarket integration: create/close/query share market.
         OPEN_SHARE_MARKET,
         CLOSE_SHARE_MARKET,
         MARKET_EXISTS_FOR_COMPANY,
-        // Task #1 (v2.0.8) — StockMarket pause/resume trading (distinct from delete).
+        // Task #1 (v2.1.0) — StockMarket pause/resume trading (distinct from delete).
         SET_MARKET_OPEN,
         IS_MARKET_OPEN,
-        // Spec §4.3 (v2.0.8) — MANAGE-gated unbind of a Share Stamper from a company.
+        // Spec §4.3 (v2.1.0) — MANAGE-gated unbind of a Share Stamper from a company.
         UNBIND_STAMPER,
-        // Spec B.1 (v2.0.8) — list a player's bank accounts filtered by permission mask.
+        // Spec B.1 (v2.1.0) — list a player's bank accounts filtered by permission mask.
         // MANAGE-gated when caller != subject.
         LIST_PLAYER_ACCOUNTS_WITH_FILTER,
-        // Spec B.3 (v2.0.8) — list all non-zero item balances on the company account
+        // Spec B.3 (v2.1.0) — list all non-zero item balances on the company account
         // for the payout currency picker. MANAGE-gated.
         LIST_ACCOUNT_ITEM_BALANCES,
-        // Spec B.4 (v2.0.8) — manual missed-payout catch-up. MANAGE-gated.
+        // Spec B.4 (v2.1.0) — manual missed-payout catch-up. MANAGE-gated.
         PAY_MISSED,
-        // Task #52 (v2.0.8) — read-only dividend history for a company.
+        // Task #52 (v2.1.0) — read-only dividend history for a company.
         LIST_DIVIDEND_HISTORY,
-        // Statistics tab (v2.0.9) — company cashflow, shareholder, solvency data.
+        // Statistics tab (v2.1.0) — company cashflow, shareholder, solvency data.
         GET_COMPANY_STATS,
-        // v2.0.9 — MANAGE-gated mutation: set the company's default payout currency.
+        // v2.1.0 — MANAGE-gated mutation: set the company's default payout currency.
         SET_COMPANY_CURRENCY,
-        // Task #54 (v2.0.9) — slave→master: fetch current share symbol manifest.
+        // Task #54 (v2.1.0) — slave→master: fetch current share symbol manifest.
         GET_SYMBOL_MANIFEST,
-        // Task #54 (v2.0.9) — slave→master: request byte push for specific symbol hashes.
+        // Task #54 (v2.1.0) — slave→master: request byte push for specific symbol hashes.
         PULL_SYMBOL_BYTES
     }
 
-    /** Task #1 (v2.0.8) — SM bridge result codes for OPEN_SHARE_MARKET output. */
+    /** Task #1 (v2.1.0) — SM bridge result codes for OPEN_SHARE_MARKET output. */
     public static final int SM_STATUS_SUCCESS          = 0;
     public static final int SM_STATUS_ALREADY_EXISTS   = 1;
     public static final int SM_STATUS_ITEM_BLACKLISTED = 2;
@@ -288,10 +288,10 @@ public final class AsyncCompanyManager {
     }
 
     // ------------------------------------------------------------------
-    // Task #45a (v2.0.8) — payout ARRS records
+    // Task #45a (v2.1.0) — payout ARRS records
     // ------------------------------------------------------------------
     /**
-     * Spec B.1–B.3 (v2.0.8) — extended payout create payload. {@code target} is nullable
+     * Spec B.1–B.3 (v2.1.0) — extended payout create payload. {@code target} is nullable
      * for DIVIDEND-mode schedules. Name snapshots are resolved on the master (spec A.9),
      * never trusted from the client.
      */
@@ -332,7 +332,7 @@ public final class AsyncCompanyManager {
                 CreatePayoutOutput::new);
     }
 
-    /** Spec B.1–B.3 (v2.0.8) — extended payout update payload (target/mode/currency editable). */
+    /** Spec B.1–B.3 (v2.1.0) — extended payout update payload (target/mode/currency editable). */
     public record UpdatePayoutInput(int companyId, long scheduleId, long newAmount,
                                     long newIntervalTicks, UUID callerUUID, @Nullable UUID newTarget,
                                     int newTargetAccountNr, byte newMode, short newCurrencyItem) implements HasCallerUUID {
@@ -553,7 +553,7 @@ public final class AsyncCompanyManager {
                 GetFailureCount24hOutput::new);
     }
 
-    // Task #46 (v2.0.8) / v2.0.9 two-layer — share visuals editor.
+    // Task #46 (v2.1.0) / v2.1.0 two-layer — share visuals editor.
     public record UpdateShareVisualsInput(int companyId,
                                           String bgSymbolId, int bgTint,
                                           String fgSymbolId, int fgTint,
@@ -584,13 +584,13 @@ public final class AsyncCompanyManager {
                 UpdateShareVisualsOutput::new);
     }
 
-    // Task #46 (v2.0.8) — by-id share visuals lookup for tooltip self-heal.
+    // Task #46 (v2.1.0) — by-id share visuals lookup for tooltip self-heal.
     public record GetShareVisualsInput(int companyId) {
         public static final StreamCodec<RegistryFriendlyByteBuf, GetShareVisualsInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
                 GetShareVisualsInput::new);
     }
-    // v2.0.9 two-layer: bgSymbolId/bgTint/fgSymbolId/fgTint replace iconPresetId/tint.
+    // v2.1.0 two-layer: bgSymbolId/bgTint/fgSymbolId/fgTint replace iconPresetId/tint.
     public record GetShareVisualsOutput(boolean present,
                                         String bgSymbolId, int bgTint,
                                         String fgSymbolId, int fgTint,
@@ -621,7 +621,7 @@ public final class AsyncCompanyManager {
                 new GetShareVisualsOutput(false, "", 0xFFFFFFFF, "", 0xFFFFFFFF, 0xFFFFFFFF, "", "", 0L, 0L);
     }
 
-    // Task #49 (v2.0.8) — dividend distribution.
+    // Task #49 (v2.1.0) — dividend distribution.
     public record PayDividendInput(int companyId, long amountPerShare, boolean includeCompanyAccount, UUID callerUUID,
                                    short currencyItem) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, PayDividendInput> STREAM_CODEC = StreamCodec.of(
@@ -647,7 +647,7 @@ public final class AsyncCompanyManager {
                 PayDividendOutput::new);
     }
 
-    // Task #51 (v2.0.8) — list Share Stamper positions bound to a company.
+    // Task #51 (v2.1.0) — list Share Stamper positions bound to a company.
     public record ListStamperBindingsInput(int companyId) {
         public static final StreamCodec<RegistryFriendlyByteBuf, ListStamperBindingsInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
@@ -668,7 +668,7 @@ public final class AsyncCompanyManager {
         public static final ListStamperBindingsOutput EMPTY = new ListStamperBindingsOutput(List.of());
     }
 
-    // Spec §4.3 (v2.0.8) — MANAGE-gated Share Stamper unbind.
+    // Spec §4.3 (v2.1.0) — MANAGE-gated Share Stamper unbind.
     public record UnbindStamperInput(int companyId, BlockPos pos, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, UnbindStamperInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
@@ -682,7 +682,7 @@ public final class AsyncCompanyManager {
                 UnbindStamperOutput::new);
     }
 
-    // Task #54 (v2.0.8) — bulk visuals+info list.
+    // Task #54 (v2.1.0) — bulk visuals+info list.
     public record EmptyInput() {
         public static final StreamCodec<RegistryFriendlyByteBuf, EmptyInput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {},
@@ -740,7 +740,7 @@ public final class AsyncCompanyManager {
         public static final ListAllVisualsOutput EMPTY = new ListAllVisualsOutput(List.of());
     }
 
-    // Task #54 (v2.0.9) — symbol store ARRS params.
+    // Task #54 (v2.1.0) — symbol store ARRS params.
     public record SymbolManifestOutput(int revision,
                                        List<ShareSymbolStore.SymbolEntry> entries) {
         public static final SymbolManifestOutput EMPTY = new SymbolManifestOutput(0, List.of());
@@ -791,7 +791,7 @@ public final class AsyncCompanyManager {
                         });
     }
 
-    // Task #1 (v2.0.8) — StockMarket bridge params.
+    // Task #1 (v2.1.0) — StockMarket bridge params.
     public record OpenShareMarketInput(int companyId, float initialPrice, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, OpenShareMarketInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
@@ -816,7 +816,7 @@ public final class AsyncCompanyManager {
                 ByteBufCodecs.VAR_INT, p -> p.status,
                 CloseShareMarketOutput::new);
     }
-    /** Task #1 (v2.0.8) — SET_MARKET_OPEN payload: companyId + desired open flag + caller for MANAGE gate. */
+    /** Task #1 (v2.1.0) — SET_MARKET_OPEN payload: companyId + desired open flag + caller for MANAGE gate. */
     public record SetMarketOpenInput(int companyId, boolean open, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, SetMarketOpenInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
@@ -837,7 +837,7 @@ public final class AsyncCompanyManager {
     }
 
     // ------------------------------------------------------------------
-    // Spec B.1 (v2.0.8) — filtered account listing for the split target picker.
+    // Spec B.1 (v2.1.0) — filtered account listing for the split target picker.
     // ------------------------------------------------------------------
     public record ListPlayerAccountsInput(int companyId, UUID subject, byte filterMask, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, ListPlayerAccountsInput> STREAM_CODEC = StreamCodec.composite(
@@ -873,7 +873,7 @@ public final class AsyncCompanyManager {
     }
 
     // ------------------------------------------------------------------
-    // Spec B.3 (v2.0.8) — non-zero item balances on the company account.
+    // Spec B.3 (v2.1.0) — non-zero item balances on the company account.
     // ------------------------------------------------------------------
     public record ListItemBalancesInput(int companyId, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, ListItemBalancesInput> STREAM_CODEC = StreamCodec.composite(
@@ -882,7 +882,7 @@ public final class AsyncCompanyManager {
                 ListItemBalancesInput::new);
     }
     public record ItemBalanceEntry(short itemShort, long balance) {}
-    /** Bug A fix (v2.0.8) — {@code moneyBalance} carries the money-bank balance so
+    /** Bug A fix (v2.1.0) — {@code moneyBalance} carries the money-bank balance so
      *  the picker can render "Money (default)" with its balance without a second RPC. */
     public record ListItemBalancesOutput(int resultCode, List<ItemBalanceEntry> items, long moneyBalance) {
         public ListItemBalancesOutput(int resultCode, List<ItemBalanceEntry> items) {
@@ -911,7 +911,7 @@ public final class AsyncCompanyManager {
     }
 
     // ------------------------------------------------------------------
-    // Spec B.4 (v2.0.8) — manual missed-payout catch-up.
+    // Spec B.4 (v2.1.0) — manual missed-payout catch-up.
     // ------------------------------------------------------------------
     public record PayMissedInput(int companyId, long scheduleId, long amount, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, PayMissedInput> STREAM_CODEC = StreamCodec.composite(
@@ -930,7 +930,7 @@ public final class AsyncCompanyManager {
     }
 
     // ------------------------------------------------------------------
-    // Task #52 (v2.0.8) — dividend history records.
+    // Task #52 (v2.1.0) — dividend history records.
     // ------------------------------------------------------------------
     public record ListDividendHistoryInput(int companyId, int limit) {
         public static final StreamCodec<RegistryFriendlyByteBuf, ListDividendHistoryInput> STREAM_CODEC = StreamCodec.composite(
@@ -991,7 +991,7 @@ public final class AsyncCompanyManager {
     }
 
     // ------------------------------------------------------------------
-    // Statistics tab (v2.0.9) — GET_COMPANY_STATS param/result records
+    // Statistics tab (v2.1.0) — GET_COMPANY_STATS param/result records
     // ------------------------------------------------------------------
     public record GetCompanyStatsInput(int companyId, int timeframeIndex) {
         public static final StreamCodec<RegistryFriendlyByteBuf, GetCompanyStatsInput> STREAM_CODEC =
@@ -1062,7 +1062,7 @@ public final class AsyncCompanyManager {
     }
 
     // ------------------------------------------------------------------
-    // v2.0.9 — SET_COMPANY_CURRENCY param/result records
+    // v2.1.0 — SET_COMPANY_CURRENCY param/result records
     // ------------------------------------------------------------------
     public record SetCompanyCurrencyInput(int companyId, short currency, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, SetCompanyCurrencyInput> STREAM_CODEC =
@@ -1118,7 +1118,7 @@ public final class AsyncCompanyManager {
         put(FunctionType.LIST_DIVIDEND_HISTORY,     new AsyncFunctionDataCodecs(ListDividendHistoryInput.STREAM_CODEC, ListDividendHistoryOutput.STREAM_CODEC));
         put(FunctionType.GET_COMPANY_STATS,         new AsyncFunctionDataCodecs(GetCompanyStatsInput.STREAM_CODEC,  CompanyStatsPayload.STREAM_CODEC));
         put(FunctionType.SET_COMPANY_CURRENCY,      new AsyncFunctionDataCodecs(SetCompanyCurrencyInput.STREAM_CODEC, SetCompanyCurrencyOutput.STREAM_CODEC));
-        // Task #54 (v2.0.9) — symbol store ARRS.
+        // Task #54 (v2.1.0) — symbol store ARRS.
         put(FunctionType.GET_SYMBOL_MANIFEST,       new AsyncFunctionDataCodecs(EmptyInput.STREAM_CODEC,            SymbolManifestOutput.STREAM_CODEC));
         put(FunctionType.PULL_SYMBOL_BYTES,         new AsyncFunctionDataCodecs(PullSymbolBytesInput.STREAM_CODEC,  EmptyInput.STREAM_CODEC));
     }};
@@ -1219,7 +1219,7 @@ public final class AsyncCompanyManager {
                 case LIST_DIVIDEND_HISTORY     -> handleListDividendHistory(input.decodeParams());
                 case GET_COMPANY_STATS         -> handleGetCompanyStats(input.decodeParams(), bm, cm);
                 case SET_COMPANY_CURRENCY      -> handleSetCompanyCurrency(input.decodeParams(), bm, cm);
-                // Task #54 (v2.0.9) — symbol store (don't need bm/cm).
+                // Task #54 (v2.1.0) — symbol store (don't need bm/cm).
                 case GET_SYMBOL_MANIFEST -> handleGetSymbolManifest();
                 case PULL_SYMBOL_BYTES   -> handlePullSymbolBytes(input.decodeParams(), slaveID);
             });
@@ -1262,7 +1262,7 @@ public final class AsyncCompanyManager {
                      MARKET_EXISTS_FOR_COMPANY, IS_MARKET_OPEN,
                      LIST_PLAYER_ACCOUNTS_WITH_FILTER, LIST_ACCOUNT_ITEM_BALANCES,
                      LIST_DIVIDEND_HISTORY, GET_COMPANY_STATS,
-                     // Task #54 (v2.0.9) — read-only symbol store queries.
+                     // Task #54 (v2.1.0) — read-only symbol store queries.
                      GET_SYMBOL_MANIFEST, PULL_SYMBOL_BYTES -> true;
                 default -> false;
             };
@@ -1311,7 +1311,7 @@ public final class AsyncCompanyManager {
             return OutputData.of(FunctionType.CREATE_COMPANY,
                     new CreateOutput(code, 0, 0, in.name, in.maxSupply));
         }
-        // Task #54 (v2.0.8) — broadcast the fresh company to all clients + slaves so
+        // Task #54 (v2.1.0) — broadcast the fresh company to all clients + slaves so
         // stamped-share tooltips and slave mirrors learn about it immediately (rather
         // than waiting for the next join-time bulk sync).
         Company created = outcome.company;
@@ -1348,7 +1348,7 @@ public final class AsyncCompanyManager {
         };
         User from = bm.getUserByUUID(in.callerUUID);
         String fromName = from != null ? from.getName() : in.callerUUID.toString();
-        // Task #54 (v2.0.8) — republish so slave mirrors and clients see the founder list change.
+        // Task #54 (v2.1.0) — republish so slave mirrors and clients see the founder list change.
         if (r == CompanyManager.TransferResult.OK) {
             net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
             if (srv != null) {
@@ -1373,7 +1373,7 @@ public final class AsyncCompanyManager {
         int accNr = company.getBankAccountNr();
         int id = company.getCompanyId();
         boolean ok = cm.deleteCompany(id);
-        // Task #54 (v2.0.8) — broadcast a REMOVE to slaves so their mirror drops the row.
+        // Task #54 (v2.1.0) — broadcast a REMOVE to slaves so their mirror drops the row.
         if (ok && net.kroia.modutilities.networking.multi_server.MultiServerManager.isRunning()
                 && net.kroia.modutilities.networking.multi_server.MultiServerManager.isMaster()) {
             net.kroia.modutilities.networking.multi_server.MultiServerManager.broadcastToSlaves(
@@ -1391,7 +1391,7 @@ public final class AsyncCompanyManager {
         IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
         boolean hasManage = account != null && account.hasPermission(in.callerUUID, BankPermission.MANAGE);
         boolean isAdmin = bm.isBanksystemAdmin(in.callerUUID);
-        // v2.0.8 Bug1 root cause — description save silently rejected for founders that
+        // v2.1.0 Bug1 root cause — description save silently rejected for founders that
         // do not carry explicit MANAGE on the linked bank account. Founder status is a
         // company-level authority; treat it as sufficient for description edits.
         boolean isFounder = company.isFounder(in.callerUUID);
@@ -1399,14 +1399,14 @@ public final class AsyncCompanyManager {
             return OutputData.of(FunctionType.UPDATE_DESCRIPTION,
                     new DescriptionOutput(CODE_NO_PERMISSION, company.getCompanyId()));
         cm.updateDescription(company.getCompanyId(), in.text == null ? "" : in.text);
-        // Task #54 (v2.0.8) — republish so slave mirrors + all clients pick up the new
+        // Task #54 (v2.1.0) — republish so slave mirrors + all clients pick up the new
         // description via the standard update broadcast (also carries current visuals).
         net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
         if (srv != null) {
             net.kroia.banksystem.networking.general.S2CCompanyVisualUpdatePacket
                     .broadcast(srv, company.getCompanyId(), company.getShareVisuals(),
                             company.getTotalSharesIssued(), company.getMaxSupply());
-            // Task #51 (v2.0.8, spec §1.4) — the visual packet does NOT carry
+            // Task #51 (v2.1.0, spec §1.4) — the visual packet does NOT carry
             // Company.description; push it explicitly so other clients' Overview
             // tabs refresh. Slaves receive it via the S2S mirror upsert above and
             // re-forward to their own clients.
@@ -1482,14 +1482,14 @@ public final class AsyncCompanyManager {
             case LIST_DIVIDEND_HISTORY     -> OutputData.of(function, ListDividendHistoryOutput.EMPTY);
             case GET_COMPANY_STATS         -> OutputData.of(function, CompanyStatsPayload.EMPTY);
             case SET_COMPANY_CURRENCY      -> OutputData.of(function, new SetCompanyCurrencyOutput(CODE_INTERNAL));
-            // Task #54 (v2.0.9)
+            // Task #54 (v2.1.0)
             case GET_SYMBOL_MANIFEST -> OutputData.of(function, SymbolManifestOutput.EMPTY);
             case PULL_SYMBOL_BYTES   -> OutputData.of(function, new EmptyInput());
         };
     }
 
     // ------------------------------------------------------------------
-    // Task #1 (v2.0.8) — StockMarket bridge handlers (master-side).
+    // Task #1 (v2.1.0) — StockMarket bridge handlers (master-side).
     // Server-thread contract: SM API requires server thread. ARRS may not run
     // handlers on the server thread; marshal via MinecraftServer.execute if
     // needed. Existing sibling handlers touch live BankSystem state directly,
@@ -1551,7 +1551,7 @@ public final class AsyncCompanyManager {
     }
 
     /**
-     * Task #1 (v2.0.8) — pause/resume the SM market for this company's share.
+     * Task #1 (v2.1.0) — pause/resume the SM market for this company's share.
      * MANAGE-gated (mirrors {@link #gateManage}). Server-thread marshalling is
      * handled by the bridge call itself (SM API is server-thread only).
      */
@@ -1572,7 +1572,7 @@ public final class AsyncCompanyManager {
                 new SetMarketOpenOutput(Boolean.TRUE.equals(ok) ? SM_STATUS_SUCCESS : SM_STATUS_UNAVAILABLE));
     }
 
-    /** Task #1 (v2.0.8) — is the SM market open for trading? Read-only; no gate. */
+    /** Task #1 (v2.1.0) — is the SM market open for trading? Read-only; no gate. */
     private static OutputData handleIsMarketOpen(GetShareVisualsInput in, CompanyManager cm) {
         net.kroia.banksystem.util.ItemID share = resolveShareItemID(in.companyId());
         if (share == null)
@@ -1619,7 +1619,7 @@ public final class AsyncCompanyManager {
         }
     }
 
-    // Task #54 (v2.0.8) — build full Entry list from CompanyManager. Master-only.
+    // Task #54 (v2.1.0) — build full Entry list from CompanyManager. Master-only.
     private static OutputData handleListAllVisuals(IServerBankManager bm, CompanyManager cm) {
         List<net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.Entry> entries = new ArrayList<>();
         for (Company c : cm.getAll()) {
@@ -1652,7 +1652,7 @@ public final class AsyncCompanyManager {
         return OutputData.of(FunctionType.LIST_ALL_COMPANY_VISUALS, new ListAllVisualsOutput(entries));
     }
 
-    // Task #51 (v2.0.8) — read-only lookup of Share Stamper positions bound to a company.
+    // Task #51 (v2.1.0) — read-only lookup of Share Stamper positions bound to a company.
     private static OutputData handleListStamperBindings(ListStamperBindingsInput in, CompanyManager cm) {
         List<BlockPos> positions = cm.listStampers(in.companyId);
         return OutputData.of(FunctionType.LIST_STAMPER_BINDINGS,
@@ -1660,7 +1660,7 @@ public final class AsyncCompanyManager {
     }
 
     /**
-     * Spec §4.3 (v2.0.8) — MANAGE-gated unbind of the Share Stamper at {@code pos}
+     * Spec §4.3 (v2.1.0) — MANAGE-gated unbind of the Share Stamper at {@code pos}
      * from {@code companyId}. Master-only side effects: clears the BE's bound
      * company id (marks dirty via {@code unbind()}, which also drops the reverse
      * index entry) and force-syncs the BE to nearby clients. World access is
@@ -1698,7 +1698,7 @@ public final class AsyncCompanyManager {
         return OutputData.of(FunctionType.UNBIND_STAMPER, new UnbindStamperOutput(CODE_OK));
     }
 
-    /** Spec §4.3 (v2.0.8) — slave helper: unbind the Share Stamper at pos from a company (MANAGE-gated). */
+    /** Spec §4.3 (v2.1.0) — slave helper: unbind the Share Stamper at pos from a company (MANAGE-gated). */
     public static CompletableFuture<UnbindStamperOutput> unbindStamperAsync(int companyId, BlockPos pos, UUID caller) {
         InputData input = InputData.of(FunctionType.UNBIND_STAMPER, new UnbindStamperInput(companyId, pos, caller));
         CompletableFuture<UnbindStamperOutput> f = new CompletableFuture<>();
@@ -1706,7 +1706,7 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    // Task #46 (v2.0.8) — MANAGE-gated visuals writeback + broadcast.
+    // Task #46 (v2.1.0) — MANAGE-gated visuals writeback + broadcast.
     private static OutputData handleUpdateShareVisuals(UpdateShareVisualsInput in,
                                                        IServerBankManager bm, CompanyManager cm) {
         int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
@@ -1777,7 +1777,7 @@ public final class AsyncCompanyManager {
         IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
         boolean hasManage = account != null && account.hasPermission(callerUUID, BankPermission.MANAGE);
         boolean isAdmin = bm.isBanksystemAdmin(callerUUID);
-        // v2.0.8 Bug2 root cause — visuals/tint save silently rejected for founders
+        // v2.1.0 Bug2 root cause — visuals/tint save silently rejected for founders
         // lacking explicit MANAGE bit on the linked bank account. Founder rights imply
         // company-level authority; extend the gate to accept founder membership.
         boolean isFounder = company.isFounder(callerUUID);
@@ -2008,7 +2008,7 @@ public final class AsyncCompanyManager {
         return OutputData.of(FunctionType.GET_FAILURE_COUNT_24H, new GetFailureCount24hOutput(count));
     }
 
-    // Task #46 (v2.0.8) — by-id share visuals lookup (read-only; no permission gate).
+    // Task #46 (v2.1.0) — by-id share visuals lookup (read-only; no permission gate).
     private static OutputData handleGetShareVisuals(GetShareVisualsInput in, CompanyManager cm) {
         Company company = cm.getById(in.companyId);
         if (company == null)
@@ -2045,7 +2045,7 @@ public final class AsyncCompanyManager {
                         founderNames, company.getCompanyCurrency()));
     }
 
-    /** Task #52 (v2.0.8) — count of accounts holding a strictly-positive balance
+    /** Task #52 (v2.1.0) — count of accounts holding a strictly-positive balance
      *  of the company's stamped-share ItemID. Read-only, no permission gate.
      *  Iterates the ItemID registry via {@code StampedShareItem.getCompanyIdForItemID}
      *  (reverse lookup) to find every share ItemID that belongs to this company,
@@ -2123,7 +2123,7 @@ public final class AsyncCompanyManager {
         return future;
     }
 
-    /** Task #51 fix (v2.0.8) — full CompanyInfoOutput lookup by companyId. */
+    /** Task #51 fix (v2.1.0) — full CompanyInfoOutput lookup by companyId. */
     public static CompletableFuture<CompanyInfoOutput> getCompanyInfoByIdAsync(int companyId) {
         InputData input = InputData.of(FunctionType.GET_COMPANY_INFO_BY_ID, new GetShareVisualsInput(companyId));
         CompletableFuture<CompanyInfoOutput> future = new CompletableFuture<>();
@@ -2247,7 +2247,7 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** v2.0.9 — slave helper: forward two-layer share-visuals writeback to master. */
+    /** v2.1.0 — slave helper: forward two-layer share-visuals writeback to master. */
     public static CompletableFuture<UpdateShareVisualsOutput> updateShareVisualsAsync(int companyId,
                                                                                      String bgSymbolId, int bgTint,
                                                                                      String fgSymbolId, int fgTint,
@@ -2261,7 +2261,7 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** Task #46 (v2.0.8) — slave helper: fetch share visuals + supply for a companyId. */
+    /** Task #46 (v2.1.0) — slave helper: fetch share visuals + supply for a companyId. */
     public static CompletableFuture<GetShareVisualsOutput> getShareVisualsAsync(int companyId) {
         InputData input = InputData.of(FunctionType.GET_SHARE_VISUALS, new GetShareVisualsInput(companyId));
         CompletableFuture<GetShareVisualsOutput> f = new CompletableFuture<>();
@@ -2269,7 +2269,7 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** Task #49 (v2.0.8) — MANAGE-gated one-shot dividend distribution. Master-only side effects. */
+    /** Task #49 (v2.1.0) — MANAGE-gated one-shot dividend distribution. Master-only side effects. */
     private static OutputData handlePayDividend(PayDividendInput in, IServerBankManager bm, CompanyManager cm) {
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
             BACKEND_INSTANCES.LOGGER.info("[AsyncCompanyManager] PAY_DIVIDEND received: company="
@@ -2297,7 +2297,7 @@ public final class AsyncCompanyManager {
                 new PayDividendOutput(code, result.totalPaid(), result.holderCount()));
     }
 
-    /** Task #49 (v2.0.8) — slave helper: forward a dividend distribution request to master. */
+    /** Task #49 (v2.1.0) — slave helper: forward a dividend distribution request to master. */
     public static CompletableFuture<PayDividendOutput> payDividendAsync(int companyId, long amountPerShare,
                                                                        boolean includeCompanyAccount, UUID caller,
                                                                        short currencyItem) {
@@ -2308,14 +2308,14 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** Task #49 (v2.0.8) — slave helper: pay dividend with money (default currency). */
+    /** Task #49 (v2.1.0) — slave helper: pay dividend with money (default currency). */
     public static CompletableFuture<PayDividendOutput> payDividendAsync(int companyId, long amountPerShare,
                                                                        boolean includeCompanyAccount, UUID caller) {
         return payDividendAsync(companyId, amountPerShare, includeCompanyAccount, caller,
                 net.kroia.banksystem.banking.company.PayoutSchedule.MONEY_CURRENCY);
     }
 
-    /** Task #51 (v2.0.8) — slave helper: fetch Share Stamper positions bound to a company. */
+    /** Task #51 (v2.1.0) — slave helper: fetch Share Stamper positions bound to a company. */
     public static CompletableFuture<ListStamperBindingsOutput> listStamperBindingsAsync(int companyId) {
         InputData input = InputData.of(FunctionType.LIST_STAMPER_BINDINGS, new ListStamperBindingsInput(companyId));
         CompletableFuture<ListStamperBindingsOutput> f = new CompletableFuture<>();
@@ -2323,7 +2323,7 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** Task #52 (v2.0.8) — slave helper: fetch the count of accounts holding a company's shares. */
+    /** Task #52 (v2.1.0) — slave helper: fetch the count of accounts holding a company's shares. */
     public static CompletableFuture<Integer> countHoldersForCompanyAsync(int companyId) {
         InputData input = InputData.of(FunctionType.COUNT_HOLDERS_FOR_COMPANY, new GetShareVisualsInput(companyId));
         CompletableFuture<Integer> f = new CompletableFuture<>();
@@ -2334,7 +2334,7 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** Task #54 (v2.0.8) — slave helper: fetch every company's visuals+info in one shot for the mirror. */
+    /** Task #54 (v2.1.0) — slave helper: fetch every company's visuals+info in one shot for the mirror. */
     public static CompletableFuture<ListAllVisualsOutput> listAllCompanyVisualsAsync() {
         InputData input = InputData.of(FunctionType.LIST_ALL_COMPANY_VISUALS, new EmptyInput());
         CompletableFuture<ListAllVisualsOutput> f = new CompletableFuture<>();
@@ -2346,7 +2346,7 @@ public final class AsyncCompanyManager {
     }
 
     /**
-     * Task #1 (v2.0.8) — dispatch an ARRS input from wherever the caller sits.
+     * Task #1 (v2.1.0) — dispatch an ARRS input from wherever the caller sits.
      * <p>
      * {@code sendRequestToMaster} is a <b>slave-server → master</b> hop only: it
      * allocates a server-side byte buf (null on a dedicated-server client JVM →
@@ -2391,7 +2391,7 @@ public final class AsyncCompanyManager {
         return out;
     }
 
-    /** Task #1 (v2.0.8) — slave helper: request market creation. */
+    /** Task #1 (v2.1.0) — slave helper: request market creation. */
     public static CompletableFuture<OpenShareMarketOutput> openShareMarketAsync(int companyId, float initialPrice, UUID caller) {
         InputData input = InputData.of(FunctionType.OPEN_SHARE_MARKET,
                 new OpenShareMarketInput(companyId, initialPrice, caller));
@@ -2400,7 +2400,7 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** Task #1 (v2.0.8) — slave helper: request market close (founder-gated). */
+    /** Task #1 (v2.1.0) — slave helper: request market close (founder-gated). */
     public static CompletableFuture<CloseShareMarketOutput> closeShareMarketAsync(int companyId, UUID caller) {
         InputData input = InputData.of(FunctionType.CLOSE_SHARE_MARKET,
                 new CloseShareMarketInput(companyId, caller));
@@ -2409,7 +2409,7 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** Task #1 (v2.0.8) — slave helper: probe whether SM has a market for this company's share. */
+    /** Task #1 (v2.1.0) — slave helper: probe whether SM has a market for this company's share. */
     public static CompletableFuture<Integer> marketExistsForCompanyAsync(int companyId) {
         InputData input = InputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, new GetShareVisualsInput(companyId));
         CompletableFuture<Integer> f = new CompletableFuture<>();
@@ -2420,7 +2420,7 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** Task #1 (v2.0.8) — slave helper: pause / resume trading on the company's share market (MANAGE-gated). */
+    /** Task #1 (v2.1.0) — slave helper: pause / resume trading on the company's share market (MANAGE-gated). */
     public static CompletableFuture<SetMarketOpenOutput> setMarketOpenAsync(int companyId, boolean open, UUID caller) {
         InputData input = InputData.of(FunctionType.SET_MARKET_OPEN, new SetMarketOpenInput(companyId, open, caller));
         CompletableFuture<SetMarketOpenOutput> f = new CompletableFuture<>();
@@ -2428,7 +2428,7 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** Task #1 (v2.0.8) — slave helper: query whether the company's share market is currently open for trading. */
+    /** Task #1 (v2.1.0) — slave helper: query whether the company's share market is currently open for trading. */
     public static CompletableFuture<Integer> isMarketOpenAsync(int companyId) {
         InputData input = InputData.of(FunctionType.IS_MARKET_OPEN, new GetShareVisualsInput(companyId));
         CompletableFuture<Integer> f = new CompletableFuture<>();
@@ -2451,10 +2451,10 @@ public final class AsyncCompanyManager {
     }
 
     // ------------------------------------------------------------------
-    // Statistics tab (v2.0.9)
+    // Statistics tab (v2.1.0)
     // ------------------------------------------------------------------
 
-    /** Task #52 (v2.0.8) — master handler: read dividend history from the SQLite store. */
+    /** Task #52 (v2.1.0) — master handler: read dividend history from the SQLite store. */
     private static OutputData handleListDividendHistory(ListDividendHistoryInput in) {
         net.kroia.banksystem.banking.company.DividendHistoryStore store =
                 BACKEND_INSTANCES != null ? BACKEND_INSTANCES.DIVIDEND_HISTORY_STORE : null;
@@ -2569,7 +2569,7 @@ public final class AsyncCompanyManager {
                         currentBalance, daysToInsolvency, buckets, holders));
     }
 
-    /** v2.0.9 — slave helper: set the company's default payout currency (MANAGE-gated on master). */
+    /** v2.1.0 — slave helper: set the company's default payout currency (MANAGE-gated on master). */
     public static CompletableFuture<SetCompanyCurrencyOutput> setCompanyCurrencyAsync(int companyId, short currency, UUID caller) {
         InputData input = InputData.of(FunctionType.SET_COMPANY_CURRENCY,
                 new SetCompanyCurrencyInput(companyId, currency, caller));
@@ -2581,7 +2581,7 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** v2.0.9 — slave helper: fetch company statistics for the Statistics tab. */
+    /** v2.1.0 — slave helper: fetch company statistics for the Statistics tab. */
     public static CompletableFuture<CompanyStatsPayload> getCompanyStatsAsync(int companyId, int timeframeIndex) {
         InputData input = InputData.of(FunctionType.GET_COMPANY_STATS,
                 new GetCompanyStatsInput(companyId, timeframeIndex));
@@ -2593,7 +2593,7 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** Task #52 (v2.0.8) — slave helper: fetch dividend history for a company. */
+    /** Task #52 (v2.1.0) — slave helper: fetch dividend history for a company. */
     public static CompletableFuture<List<DividendEvent>> listDividendHistoryAsync(int companyId, int limit) {
         InputData input = InputData.of(FunctionType.LIST_DIVIDEND_HISTORY,
                 new ListDividendHistoryInput(companyId, limit));
@@ -2609,7 +2609,7 @@ public final class AsyncCompanyManager {
     }
 
     // ------------------------------------------------------------------
-    // Task #54 (v2.0.9) — symbol store ARRS handlers + helpers
+    // Task #54 (v2.1.0) — symbol store ARRS handlers + helpers
     // ------------------------------------------------------------------
 
     private static OutputData handleGetSymbolManifest() {
@@ -2640,7 +2640,7 @@ public final class AsyncCompanyManager {
     }
 
     /**
-     * Task #54 (v2.0.9) — slave helper: fetch the current share symbol manifest from master on boot.
+     * Task #54 (v2.1.0) — slave helper: fetch the current share symbol manifest from master on boot.
      * On success, caller should call {@link ShareSymbolStore#mirrorApplyManifest} and then
      * {@link #pullSymbolBytesAsync} for any missing entries.
      */
@@ -2655,7 +2655,7 @@ public final class AsyncCompanyManager {
     }
 
     /**
-     * Task #54 (v2.0.9) — slave helper: request master to push PNG bytes for the given SHA-256 hashes.
+     * Task #54 (v2.1.0) — slave helper: request master to push PNG bytes for the given SHA-256 hashes.
      * The bytes arrive as {@link net.kroia.banksystem.networking.multi_server.S2SShareSymbolDataPacket}
      * chunks pushed directly to this slave. Fire-and-forget; no result needed.
      */

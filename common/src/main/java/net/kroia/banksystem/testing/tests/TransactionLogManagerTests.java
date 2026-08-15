@@ -19,7 +19,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Task #44 (v2.0.8) — round-trip + read-API coverage for the SQLite transaction ledger.
+ * Task #44 (v2.1.0) — round-trip + read-API coverage for the SQLite transaction ledger.
  * <p>
  * Same in-memory SQLite setup pattern as {@link BalanceHistoryTests}: schema mirrored
  * from {@code common/src/main/resources/sql/TransactionLog.sql}, backed by a private

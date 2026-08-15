@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Task #54 (v2.0.9) — S2C packet carrying the share symbol manifest
+ * Task #54 (v2.1.0) — S2C packet carrying the share symbol manifest
  * (revision + entry list). Sent on player join and on every revision bump.
  * Client handler delegates to {@link ClientSymbolRegistry#handleManifest}.
  */

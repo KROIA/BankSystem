@@ -80,10 +80,10 @@ public class BankSystemEvents implements IBankSystemEvents {
      */
     public final DataEvent<TrustChangeInfo> TRUST_CHANGED = new DataEvent<>();
 
-    /** Task #45 (v2.0.8) — one event per payout tick (success or failure). Master-only. */
+    /** Task #45 (v2.1.0) — one event per payout tick (success or failure). Master-only. */
     public final DataEvent<PayoutExecutedInfo> PAYOUT_EXECUTED = new DataEvent<>();
 
-    /** Task #49 (v2.0.8) — one event per successful dividend run. Master-only. */
+    /** Task #49 (v2.1.0) — one event per successful dividend run. Master-only. */
     public final DataEvent<DividendPaidEvent> DIVIDEND_PAID = new DataEvent<>();
 
 

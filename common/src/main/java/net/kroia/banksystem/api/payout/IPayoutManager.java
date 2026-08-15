@@ -8,7 +8,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Task #45 (v2.0.8) — public payout API. Reachable via {@code BankSystemAPI.getPayoutManager()}.
+ * Task #45 (v2.1.0) — public payout API. Reachable via {@code BankSystemAPI.getPayoutManager()}.
  * Master-only surface — calling on a slave returns fail-closed defaults (empty lists,
  * {@link OpResult#COMPANY_MISSING}). Downstream mods and UI code use this interface — never
  * the concrete manager.
@@ -33,7 +33,7 @@ public interface IPayoutManager {
                                  long nowTick, UUID createdBy);
 
     /**
-     * Spec B.1–B.3 (v2.0.8) — extended create with explicit target account, display-name
+     * Spec B.1–B.3 (v2.1.0) — extended create with explicit target account, display-name
      * snapshots, payout mode, and currency ItemID short ({@code 0} = money).
      */
     CreateOutcome createSchedule(int companyId, UUID target, long amount, long intervalTicks,
@@ -43,7 +43,7 @@ public interface IPayoutManager {
 
     OpResult updateSchedule(int companyId, long scheduleId, long newAmount, long newIntervalTicks);
 
-    /** Spec B.1–B.3 (v2.0.8) — extended update including target/mode/currency. */
+    /** Spec B.1–B.3 (v2.1.0) — extended update including target/mode/currency. */
     OpResult updateScheduleEx(int companyId, long scheduleId, long newAmount, long newIntervalTicks,
                               long nowTick, UUID newTarget, int newTargetAccountNr,
                               String newTargetPlayerName, String newTargetAccountName,

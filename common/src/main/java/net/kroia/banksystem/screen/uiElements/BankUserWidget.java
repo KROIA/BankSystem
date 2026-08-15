@@ -152,6 +152,11 @@ public class BankUserWidget extends BankSystemGuiElement {
 
             addChild(permissionEditButton);
             addChild(removeButton);
+            // The X sits at the right edge of a narrow row, so its "why is this locked"
+            // tooltip always opens to the LEFT of the cursor instead of running off the row.
+            // TOP_RIGHT = the tooltip's top-right corner is pinned to the cursor, so its
+            // body extends leftwards (same convention as applyTooltipAutoFlip).
+            BankSystemGuiScreen.pinTooltipAlignment(removeButton, Alignment.TOP_RIGHT);
             defaultRemoveButtonTextColor = removeButton.getTextColor();
         }
         else

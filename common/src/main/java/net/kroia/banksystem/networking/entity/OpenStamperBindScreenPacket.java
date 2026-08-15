@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Task #47 (v2.0.8) — S2C payload delivering the list of companies the caller may bind
+ * Task #47 (v2.1.0) — S2C payload delivering the list of companies the caller may bind
  * a Share Stamper to. Sent from the server-side {@code useWithoutItem} handler when the
  * clicked stamper is unbound and the caller has at least one manageable company.
  */

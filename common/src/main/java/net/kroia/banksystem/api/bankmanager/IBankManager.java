@@ -52,7 +52,7 @@ public interface IBankManager {
 
 
     /**
-     * Task #48 (v2.0.8) — top-level convenience for the dividend distributor and share-holder
+     * Task #48 (v2.1.0) — top-level convenience for the dividend distributor and share-holder
      * queries. Returns the set of account numbers currently holding a strictly positive total
      * balance of the given {@code itemID}.
      * <p>

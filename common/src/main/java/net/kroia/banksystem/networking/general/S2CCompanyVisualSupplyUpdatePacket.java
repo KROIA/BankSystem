@@ -15,7 +15,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.List;
 
 /**
- * Task #46 (v2.0.8) — lightweight S2C broadcast of a Company's {@code totalSharesIssued}
+ * Task #46 (v2.1.0) — lightweight S2C broadcast of a Company's {@code totalSharesIssued}
  * counter change, without touching visuals or maxSupply. Writers live in Task #47
  * (share stamper) — this packet is registered now so the wire contract is stable.
  */
@@ -49,7 +49,7 @@ public class S2CCompanyVisualSupplyUpdatePacket extends BankSystemNetworkPacket 
         for (ServerPlayer p : players) {
             packet.sendToClient(p);
         }
-        // Task #54 (v2.0.8) — fanout supply update to slaves so their mirror
+        // Task #54 (v2.1.0) — fanout supply update to slaves so their mirror
         // stays fresh; slave forwards a matching S2C to locally-connected players.
         if (net.kroia.modutilities.networking.multi_server.MultiServerManager.isRunning()
                 && net.kroia.modutilities.networking.multi_server.MultiServerManager.isMaster()) {

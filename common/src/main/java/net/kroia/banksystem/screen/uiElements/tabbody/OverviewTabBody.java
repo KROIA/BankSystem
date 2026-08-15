@@ -22,7 +22,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.List;
 
 /**
- * Task #51 (v2.0.8, spec §1) — Overview tab: read-only company summary rows +
+ * Task #51 (v2.1.0, spec §1) — Overview tab: read-only company summary rows +
  * description editor (MANAGE / founder only).
  */
 public class OverviewTabBody extends TabBody {

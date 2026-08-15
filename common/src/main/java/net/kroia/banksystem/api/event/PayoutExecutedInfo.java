@@ -5,7 +5,7 @@ import net.kroia.banksystem.data.table.record.PayoutHistoryRecord;
 import java.util.UUID;
 
 /**
- * Task #45 (v2.0.8) — payload for {@code IBankSystemEvents.getPayoutExecutedEvent()}.
+ * Task #45 (v2.1.0) — payload for {@code IBankSystemEvents.getPayoutExecutedEvent()}.
  * <p>
  * Fired on the master server every time {@code PayoutExecutor} evaluates a schedule —
  * success or failure. Downstream mods listen to build reactive UIs, badges, or metrics.

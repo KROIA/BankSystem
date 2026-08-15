@@ -54,7 +54,7 @@ public class PlayerJoinSyncPacket extends BankSystemNetworkPacket {
         PlayerJoinSyncPacket packet = new PlayerJoinSyncPacket(settings);
         packet.sendToClient(player);
 
-        // Task #46 (v2.0.8) — piggyback the initial bulk sync of Company share visuals on
+        // Task #46 (v2.1.0) — piggyback the initial bulk sync of Company share visuals on
         // the login handshake. Master-only: on slaves the CompanyManager singleton is null
         // (all Company state lives on master) and slaves receive their visuals via S2C
         // updates forwarded from master through the standard broadcast path.
@@ -71,7 +71,7 @@ public class PlayerJoinSyncPacket extends BankSystemNetworkPacket {
                     net.kroia.banksystem.banking.User u = bm != null ? bm.getUserByUUID(uuid) : null;
                     founderNames.add(u != null ? u.getName() : uuid.toString());
                 }
-                // Task #52 fix (v2.0.8) — count holders by iterating the ItemID registry and
+                // Task #52 fix (v2.1.0) — count holders by iterating the ItemID registry and
                 // reverse-mapping each ItemID to a companyId via StampedShareItem. The forward
                 // template-match path (ofCompany → getItemID) is fragile against extra default
                 // components on the persisted stack; iterating the registry sidesteps that.
@@ -100,7 +100,7 @@ public class PlayerJoinSyncPacket extends BankSystemNetworkPacket {
                 net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.sendTo(player, entries);
             }
         } else if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer) {
-            // Task #54 (v2.0.8) — slave-side branch: master's CompanyManager is null here
+            // Task #54 (v2.1.0) — slave-side branch: master's CompanyManager is null here
             // (all Company state lives on master). Serve the join-time bulk sync from the
             // slave-side mirror populated by the master→slave push (see SlaveCompanyMirror).
             // If the mirror is empty (fresh boot, master unreachable, or the master→slave
@@ -112,7 +112,7 @@ public class PlayerJoinSyncPacket extends BankSystemNetworkPacket {
                 net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket.sendTo(player, mirrored);
             }
         }
-        // Task #54 (v2.0.9) — send share symbol manifest to joining player.
+        // Task #54 (v2.1.0) — send share symbol manifest to joining player.
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SHARE_SYMBOL_STORE != null) {
             net.kroia.banksystem.networking.general.S2CShareSymbolManifestPacket.sendTo(
                     player, BACKEND_INSTANCES.SHARE_SYMBOL_STORE);

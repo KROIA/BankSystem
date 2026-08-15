@@ -3,7 +3,7 @@ package net.kroia.banksystem.client.render;
 import net.kroia.banksystem.banking.company.ShareVisuals;
 
 /**
- * v2.0.9 — client-side preview override for the share visual editor.
+ * v2.1.0 — client-side preview override for the share visual editor.
  *
  * <p>While the {@code ShareVisualEditorScreen} is open it publishes the current
  * (unsaved) editor state here. {@link StampedShareRenderer} consults this override

@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Task #45a (v2.0.8) — payouts overview list for a company-linked bank account.
+ * Task #45a (v2.1.0) — payouts overview list for a company-linked bank account.
  * <p>
  * Deviation from spec: implemented as a dedicated screen (parent = {@link BankAccountManagementScreen})
  * rather than an inline tab on the management screen — cleaner separation and easier navigation.
@@ -83,7 +83,7 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
         closeButton = new CloseButton(this::onClose);
         newPayoutButton = new Button(NEW_PAYOUT.getString(), this::onNewPayoutClicked);
         newPayoutButton.setEnabled(canManage);
-        // Task #49 (v2.0.8) — one-shot dividend distribution entry-point.
+        // Task #49 (v2.1.0) — one-shot dividend distribution entry-point.
         payDividendButton = new Button(PAY_DIVIDEND.getString(), this::onPayDividendClicked);
         payDividendButton.setEnabled(canManage);
         totalLabel = new Label("");
@@ -128,7 +128,7 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
     }
 
     private void refresh() {
-        // Bug D fix (v2.0.8) — dispatch mutation onto the render thread. Direct
+        // Bug D fix (v2.1.0) — dispatch mutation onto the render thread. Direct
         // mutation from the CompletableFuture thread races with GUI init and CMEs
         // in VerticalListView.updateElementPositions / GuiElement.updateTransform.
         AsyncCompanyManager.listSchedulesAsync(companyId).thenAccept(out ->
@@ -196,7 +196,7 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
         countLabel.setBounds(padding, totalLabel.getBottom() + spacing, width / 2, 20);
         failedLabel.setBounds(padding + width / 2, totalLabel.getBottom() + spacing, width / 2, 20);
 
-        // Spec A.4 / BUG 3 fix (v2.0.8) — mirrors PayoutRowWidget's column layout:
+        // Spec A.4 / BUG 3 fix (v2.1.0) — mirrors PayoutRowWidget's column layout:
         // 18px icon gutter, reserved slot for Pay-Missed (always), and weighted
         // columns Target 35 / Amount 12 / Interval 12 / Next 15 / Status 26.
         int headerTop = countLabel.getBottom() + spacing;

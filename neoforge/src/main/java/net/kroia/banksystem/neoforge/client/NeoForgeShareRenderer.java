@@ -12,7 +12,7 @@ import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 
 /**
- * Task #53 (v2.0.8) — NeoForge-side wiring for the stamped-share monogram badge.
+ * Task #53 (v2.1.0) — NeoForge-side wiring for the stamped-share monogram badge.
  * Registers an {@link IClientItemExtensions#getCustomRenderer()} hand-off to a
  * BEWLR that delegates to the cross-loader {@link StampedShareBadgePainter}.
  * Requires the stamped_share model JSON parent to be {@code builtin/entity}

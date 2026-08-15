@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * Value type for a recurring payout schedule attached to a Company.
  * <p>
- * Spec B.1–B.4 (v2.0.8) schema extensions — all fields are load-compatible with
+ * Spec B.1–B.4 (v2.1.0) schema extensions — all fields are load-compatible with
  * pre-B NBT saves (missing tags default):
  * <ul>
  *   <li>{@code targetAccountNr} — explicit target bank account (spec B.1 split
@@ -99,7 +99,7 @@ public final class PayoutSchedule {
     public Mode getMode() { return mode; }
     public short getCurrencyItem() { return currencyItem; }
     /**
-     * Bug B fix (v2.0.8) — treat both the canonical sentinel {@code 0} AND the
+     * Bug B fix (v2.1.0) — treat both the canonical sentinel {@code 0} AND the
      * live MoneyItem short as money. Prevents UI unscaled-display when a schedule
      * was created/persisted with the raw MoneyItem short rather than the sentinel.
      */

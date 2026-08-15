@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Task #43 (v2.0.8) Phase 1 — {@link CompanyManager} persistence + validation tests.
+ * Task #43 (v2.1.0) Phase 1 — {@link CompanyManager} persistence + validation tests.
  * Master-only. All tests use a fresh in-memory {@link CompanyManager} — no world state.
  */
 public class CompanyManagerTests extends TestSuite {

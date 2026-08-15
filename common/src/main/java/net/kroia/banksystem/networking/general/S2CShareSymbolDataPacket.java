@@ -12,7 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Task #54 (v2.0.9) — S2C packet carrying one chunk of a symbol PNG.
+ * Task #54 (v2.1.0) — S2C packet carrying one chunk of a symbol PNG.
  * Reassembly and SHA-256 verification happen in {@link ClientSymbolRegistry}.
  */
 public class S2CShareSymbolDataPacket extends BankSystemNetworkPacket {

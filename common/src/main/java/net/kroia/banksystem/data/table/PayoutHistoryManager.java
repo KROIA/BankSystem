@@ -13,7 +13,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Task #45 (v2.0.8) — SQLite writer/reader for the {@code PayoutHistory} table.
+ * Task #45 (v2.1.0) — SQLite writer/reader for the {@code PayoutHistory} table.
  * <p>
  * Master-only. Mirrors {@link TransactionLogManager}'s pattern: writes run async on the
  * shared {@code banksystem-db-worker} executor, each write commits its own transaction.

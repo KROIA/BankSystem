@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Spec B.1 (v2.0.8) — split-screen payout target picker. Left pane: all known
+ * Spec B.1 (v2.1.0) — split-screen payout target picker. Left pane: all known
  * players; right pane: the selected player's bank accounts that grant the player
  * DEPOSIT right, fetched lazily via the {@code LIST_PLAYER_ACCOUNTS_WITH_FILTER}
  * ARRS function (MANAGE-gated on master when caller != subject). Confirm returns
@@ -111,7 +111,7 @@ public class SplitPlayerAccountPickerPopup extends BankSystemGuiScreen {
     }
 
     /**
-     * BUG 2 fix (v2.0.8) — the popup previously relied solely on the async
+     * BUG 2 fix (v2.1.0) — the popup previously relied solely on the async
      * bank-manager user map; when that response was empty/late the left pane
      * stayed blank. Seed the list synchronously from the currently-online
      * players (same source as the working {@link PlayerPickerPopup}), then
@@ -121,7 +121,7 @@ public class SplitPlayerAccountPickerPopup extends BankSystemGuiScreen {
 
     private void loadPlayers() {
         // Synchronous seed: everyone currently online (always available client-side).
-        // BUG batch 4 (v2.0.8) — hard invariant: opening this popup while in-world
+        // BUG batch 4 (v2.1.0) — hard invariant: opening this popup while in-world
         // MUST always show at least the local player. Seed the caller UUID first
         // (guaranteed non-null on the client path — the popup requires MANAGE) and
         // then the local player, so we never fall back to "no players" when the

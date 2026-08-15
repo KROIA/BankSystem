@@ -25,11 +25,11 @@ import net.minecraft.world.entity.player.Inventory;
 import java.util.List;
 
 /**
- * Task #47 (v2.0.8) — Share Stamper screen rebuilt on the ModUtilities framework
+ * Task #47 (v2.1.0) — Share Stamper screen rebuilt on the ModUtilities framework
  * ({@link BankSystemGuiContainerScreen} + {@link ContainerView}) to match the
  * visual language of {@link BankUploadScreen} / {@link BankDownloadScreen}.
  * <p>
- * v2.0.8 overhaul (Task #56):
+ * v2.1.0 overhaul (Task #56):
  * <ul>
  *   <li>Replaced the "Stamp (N)" queued-stamps counter with a Start / Stop toggle
  *       driven by the BE's new {@code processing} ContainerData slot.</li>
@@ -169,7 +169,7 @@ public class ShareStamperScreen extends BankSystemGuiContainerScreen<ShareStampe
     public ShareStamperScreen(ShareStamperContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
         super(pMenu, pPlayerInventory, pTitle);
         this.pos = pMenu.getBlockPos();
-        // Task v2.0.8 — arriving at the main stamper screen (either directly or via
+        // Task v2.1.0 — arriving at the main stamper screen (either directly or via
         // the post-bind auto-open handoff) closes the suppression window that the
         // bind screen opened. The viewer lock is now this container menu's problem.
         StamperBindScreen.suppressCloseRelease = false;
@@ -331,7 +331,7 @@ public class ShareStamperScreen extends BankSystemGuiContainerScreen<ShareStampe
     }
 
     /**
-     * Task v2.0.8 — unbind confirm uses the reusable {@link AskPopupScreen}
+     * Task v2.1.0 — unbind confirm uses the reusable {@link AskPopupScreen}
      * (see {@code BankAccountManagementScreen.onDeleteAccountButtonClicked} for the
      * canonical usage pattern). Note: opening a non-container screen releases the
      * BE viewer lock via {@code stopOpen}; the SetStamperBindingRequest still

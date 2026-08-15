@@ -9,7 +9,7 @@ import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.minecraft.network.chat.Component;
 
 /**
- * Task #51 (v2.0.8) — shared launcher panel for the payouts overview UI.
+ * Task #51 (v2.1.0) — shared launcher panel for the payouts overview UI.
  *
  * <p>Deviation from spec: {@link net.kroia.banksystem.screen.custom.BankAccountManagementScreen}
  * never inlined a payouts body — it always used a header button to open the standalone

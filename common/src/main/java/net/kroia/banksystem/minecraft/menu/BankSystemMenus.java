@@ -47,7 +47,7 @@ public class BankSystemMenus {
             MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_upload_container_menu"), () -> MenuRegistry.ofExtended(BankUploadContainerMenu::new));
     public static final RegistrySupplier<MenuType<BankDownloadContainerMenu>> BANK_DOWNLOAD_CONTAINER_MENU =
             MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_download_container_menu"), () -> MenuRegistry.ofExtended(BankDownloadContainerMenu::new));
-    // Task #47 (v2.0.8) — Share Stamper menu.
+    // Task #47 (v2.1.0) — Share Stamper menu.
     public static final RegistrySupplier<MenuType<ShareStamperContainerMenu>> SHARE_STAMPER_CONTAINER_MENU =
             MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "share_stamper_container_menu"), () -> MenuRegistry.ofExtended(ShareStamperContainerMenu::new));
 

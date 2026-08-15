@@ -3,7 +3,7 @@ package net.kroia.banksystem.banking.company;
 import net.kroia.banksystem.data.table.record.PayoutHistoryRecord;
 
 /**
- * Spec A.8 (v2.0.8) — typed failure reason set by the payout executor at the
+ * Spec A.8 (v2.1.0) — typed failure reason set by the payout executor at the
  * actual failure site. Translated at display time; persisted through
  * {@link PayoutHistoryRecord.Status}.
  */

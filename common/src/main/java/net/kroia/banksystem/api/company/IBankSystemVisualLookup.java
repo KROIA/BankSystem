@@ -4,7 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Task #50 (v2.0.8) — client-side lookup for per-share visual metadata + supply.
+ * Task #50 (v2.1.0) — client-side lookup for per-share visual metadata + supply.
  *
  * <p>Called by external mods (e.g. StockMarket) from render paths. Implementations
  * must be cheap, cache-backed, thread-safe for the client thread, and non-blocking.

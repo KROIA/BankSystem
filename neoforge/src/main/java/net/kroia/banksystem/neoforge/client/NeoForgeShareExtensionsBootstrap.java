@@ -16,7 +16,7 @@ import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 
 /**
- * v2.0.9 — NeoForge client hook for the stamped share's custom item renderer.
+ * v2.1.0 — NeoForge client hook for the stamped share's custom item renderer.
  *
  * <p>The item model is {@code builtin/entity}, so vanilla routes rendering through
  * {@link IClientItemExtensions#getCustomRenderer()}; the BEWLR delegates straight to

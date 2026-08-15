@@ -45,7 +45,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
 
     /**
-     * Task #43 (v2.0.8) — founder invariant hook. {@code CompanyManager.install()} wires
+     * Task #43 (v2.1.0) — founder invariant hook. {@code CompanyManager.install()} wires
      * this in with a real predicate; when {@code null} (slaves, or unit tests that don't
      * install CompanyManager) the founder branch of {@link #enforceManageInvariant}
      * degrades to the plain manage-invariant check.
@@ -663,7 +663,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         /** The proposed set is empty; applying it would orphan the account — caller must refuse. */
         REFUSED_ORPHAN,
         /**
-         * Task #43 (v2.0.8) — a Company founder's MANAGE would be removed by the proposed
+         * Task #43 (v2.1.0) — a Company founder's MANAGE would be removed by the proposed
          * change. Caller must refuse the user-set change and preserve the previous state.
          */
         REFUSED_FOUNDER
@@ -726,7 +726,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
 
     /**
-     * Task #43 (v2.0.8) — founder-aware variant of {@link #enforceManageInvariant(Map, boolean)}.
+     * Task #43 (v2.1.0) — founder-aware variant of {@link #enforceManageInvariant(Map, boolean)}.
      * <p>
      * Additional pre-check: if the account is bound to a Company (per the installed
      * {@link #founderChecker}) and any UUID that <b>previously</b> held MANAGE is a founder

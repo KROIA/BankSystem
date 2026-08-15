@@ -10,7 +10,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Task #45 (v2.0.8) — thin adapter that maps {@link IPayoutManager} onto {@link CompanyManager}
+ * Task #45 (v2.1.0) — thin adapter that maps {@link IPayoutManager} onto {@link CompanyManager}
  * (schedule state, master-only) and {@link PayoutHistoryManager} (SQLite history, master-only).
  * <p>
  * On a slave (or before startup finishes) both underlying managers are {@code null} — every

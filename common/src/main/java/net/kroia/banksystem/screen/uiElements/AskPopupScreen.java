@@ -54,7 +54,7 @@ public class AskPopupScreen extends BankSystemGuiScreen {
     }
 
     /**
-     * Spec A.1 (v2.0.8) — standard destructive-action confirm popup: wide frame
+     * Spec A.1 (v2.1.0) — standard destructive-action confirm popup: wide frame
      * (460x140 so multi-sentence messages fit) + the shared orange warning color set.
      * Callers put a {@code \n} after each sentence in {@code message}.
      */

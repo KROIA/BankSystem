@@ -3,7 +3,7 @@ package net.kroia.banksystem.banking.company;
 import net.minecraft.nbt.CompoundTag;
 
 /**
- * Value type for a Company's share visuals. Two-layer model (v2.0.9):
+ * Value type for a Company's share visuals. Two-layer model (v2.1.0):
  * {@link #bgLayer} defines the background fill color/symbol;
  * {@link #fgLayer} defines the foreground icon preset and its tint.
  *

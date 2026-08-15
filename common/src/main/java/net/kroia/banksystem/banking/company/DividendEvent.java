@@ -3,7 +3,7 @@ package net.kroia.banksystem.banking.company;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Task #52 (v2.0.8) — immutable snapshot of one dividend distribution event,
+ * Task #52 (v2.1.0) — immutable snapshot of one dividend distribution event,
  * persisted by {@link DividendHistoryStore}.
  */
 public record DividendEvent(

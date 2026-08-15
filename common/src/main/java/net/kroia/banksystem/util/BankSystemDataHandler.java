@@ -32,7 +32,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     private final String BANK_SETTINGS_FILE_NAME = "settings.json";
     /** Filename holding the external-currency binding table (Task #33, v2.0.5). */
     private final String BANK_ACCOUNT_BINDINGS_FILE_NAME = "BankAccountBindings.nbt";
-    /** Task #43 (v2.0.8): chunked-NBT folder for Company persistence (master only). */
+    /** Task #43 (v2.1.0): chunked-NBT folder for Company persistence (master only). */
     private final String COMPANIES_FOLDER_NAME = "Companies";
     public static final Path BASE_PATH = Path.of("data", "BankSystem");
     private static final Path OLD_PATH = Path.of("Finance", "BankSystem");
@@ -68,7 +68,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     private LoadState bankLoadState = LoadState.NOT_LOADED;
     /** Load-state gate for {@code BankAccountBindings.nbt} (Task #33, v2.0.5). */
     private LoadState bankAccountBindingsLoadState = LoadState.NOT_LOADED;
-    /** Task #43 (v2.0.8): load-state gate for the Companies chunked folder (master only). */
+    /** Task #43 (v2.1.0): load-state gate for the Companies chunked folder (master only). */
     private LoadState companiesLoadState = LoadState.NOT_LOADED;
 
     /**
@@ -352,7 +352,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             // BEFORE the balance-history snapshot (which reads through ServerBank and
             // would otherwise see 0 for bound slots).
             success &= load_bankAccountBindings();
-            // Task #43 (v2.0.8) — Company data. Loaded AFTER bank accounts so companies
+            // Task #43 (v2.1.0) — Company data. Loaded AFTER bank accounts so companies
             // can resolve their bank-account references (missing bank accounts are logged
             // and the company is dropped rather than crashing the load).
             success &= load_companies();
@@ -595,7 +595,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     }
 
     /**
-     * Task #43 (v2.0.8). Persists the {@code CompanyManager} to
+     * Task #43 (v2.1.0). Persists the {@code CompanyManager} to
      * {@code <world>/data/BankSystem/Companies/} as a chunked-NBT folder mirroring
      * {@code Bank_data/}. Master only.
      */
@@ -611,7 +611,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     }
 
     /**
-     * Task #43 (v2.0.8). Loads the Companies chunked-NBT folder. Missing folder →
+     * Task #43 (v2.1.0). Loads the Companies chunked-NBT folder. Missing folder →
      * fresh world (LoadState.FRESH so the first save may create it). Unreadable → NOT_LOADED
      * to gate the save. Called from {@link #loadAll()} after {@code load_bank()} +
      * {@code load_bankAccountBindings()} so Company bank-account references can resolve.
@@ -1111,7 +1111,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         if (bankAccountBindingsLoadState == LoadState.NOT_LOADED
                 && backupPath(getAbsoluteSavePath(BANK_ACCOUNT_BINDINGS_FILE_NAME), suffix))
             bankAccountBindingsLoadState = LoadState.FRESH;
-        // Task #43 (v2.0.8) — Companies folder must also be backed up when it was never
+        // Task #43 (v2.1.0) — Companies folder must also be backed up when it was never
         // loaded this session (companiesLoadState stays NOT_LOADED when loadAll() took the
         // compatibility-mode early-return path and skipped load_companies()).  Without this,
         // the retry loadAll() in loadDataFromFiles() finds the existing on-disk Companies/

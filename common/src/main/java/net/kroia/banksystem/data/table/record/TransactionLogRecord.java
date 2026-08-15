@@ -5,7 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 /**
- * Task #44 (v2.0.8) — Transaction Ledger row.
+ * Task #44 (v2.1.0) — Transaction Ledger row.
  * <p>
  * Persisted to the SQLite {@code TransactionLog} table (see {@code
  * common/src/main/resources/sql/TransactionLog.sql}). One row per user-facing money-or-item
@@ -66,7 +66,7 @@ public record TransactionLogRecord(
     }
 
     /**
-     * Task #48 (v2.0.8) — factory for a {@link Kind#SHARE_TRADE} row emitted when stamped
+     * Task #48 (v2.1.0) — factory for a {@link Kind#SHARE_TRADE} row emitted when stamped
      * shares change hands via a bank deposit/withdraw (which is where StockMarket
      * settlement lands in the absence of a dedicated match-observer hook). Populates
      * {@code companyId} so the future company ledger UI can filter share flows.

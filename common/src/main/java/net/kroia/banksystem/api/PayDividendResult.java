@@ -1,7 +1,7 @@
 package net.kroia.banksystem.api;
 
 /**
- * Task #49 (v2.0.8) — result of a one-shot dividend distribution.
+ * Task #49 (v2.1.0) — result of a one-shot dividend distribution.
  * <p>
  * Returned by {@code IDividendPayer.payDividend(...)}. On any non-{@link Reason#OK}
  * outcome, {@link #totalPaid} and {@link #holderCount} are zero — the distributor

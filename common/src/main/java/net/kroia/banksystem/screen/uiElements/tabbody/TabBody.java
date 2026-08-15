@@ -5,7 +5,7 @@ import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.minecraft.client.Minecraft;
 
 /**
- * Task #51 (v2.0.8, spec §0.5) — base class for CompanyManagementScreen tab bodies.
+ * Task #51 (v2.1.0, spec §0.5) — base class for CompanyManagementScreen tab bodies.
  *
  * <p>Layout discipline: NO {@code LayoutGrid} / {@code VerticalListView} for the tab
  * body itself (LayoutGrid silently drops children past its row count, and TabElement's

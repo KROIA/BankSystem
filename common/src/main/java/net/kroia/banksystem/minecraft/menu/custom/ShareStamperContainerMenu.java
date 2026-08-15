@@ -15,7 +15,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Task #47 (v2.0.8) — Share Stamper container menu. Two BE slots (input, output),
+ * Task #47 (v2.1.0) — Share Stamper container menu. Two BE slots (input, output),
  * player inventory + hotbar, and a {@link ContainerData} carrying progress/mode/supply.
  */
 public class ShareStamperContainerMenu extends AbstractContainerMenu {

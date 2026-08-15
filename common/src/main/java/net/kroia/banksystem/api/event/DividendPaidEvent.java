@@ -1,7 +1,7 @@
 package net.kroia.banksystem.api.event;
 
 /**
- * Task #49 (v2.0.8) — payload for {@code IBankSystemEvents.getDividendPaidEvent()}.
+ * Task #49 (v2.1.0) — payload for {@code IBankSystemEvents.getDividendPaidEvent()}.
  * <p>
  * Fired on the master server after a successful one-shot dividend run
  * (see {@code IDividendPayer.payDividend}). Never fires for a refused run.

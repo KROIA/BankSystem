@@ -5,7 +5,7 @@ import net.kroia.banksystem.client.render.StampedShareRenderer;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 
 /**
- * v2.0.9 — Fabric client hook for the stamped share's custom item renderer.
+ * v2.1.0 — Fabric client hook for the stamped share's custom item renderer.
  *
  * <p>The item model is {@code builtin/entity}, so Fabric invokes the registered
  * {@code DynamicItemRenderer} for every display context; it delegates straight to

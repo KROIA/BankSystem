@@ -566,10 +566,10 @@ public class BankSystemCommandsRegistration {
                         )
         );
 
-        // Task #43 (v2.0.8) — /company command tree (Phase 1: Company foundation).
+        // Task #43 (v2.1.0) — /company command tree (Phase 1: Company foundation).
         registerCompanyCommands(dispatcher);
 
-        // Task #54 (v2.0.9) — /banksystem symbols admin commands (master-gated, op-only).
+        // Task #54 (v2.1.0) — /banksystem symbols admin commands (master-gated, op-only).
         registerSymbolCommands(dispatcher);
 
         boolean isSlave = BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer;
@@ -578,7 +578,7 @@ public class BankSystemCommandsRegistration {
     }
 
     /**
-     * Task #43 (v2.0.8). Registers the {@code /company} command tree — Phase 1 subset:
+     * Task #43 (v2.1.0). Registers the {@code /company} command tree — Phase 1 subset:
      * {@code create}, {@code transfer}, {@code dissolve}, {@code description}, {@code info}.
      * <p>
      * Master-only in this phase. Slaves print a "master only" notice — full slave-side ARRS
@@ -600,46 +600,9 @@ public class BankSystemCommandsRegistration {
                             )
                         )
                     )
-                    .then(Commands.literal("transfer")
-                        .then(Commands.argument("companyName", StringArgumentType.string())
-                                .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_FOUNDER))
-                            .then(Commands.argument("newFounder", StringArgumentType.string())
-                                    .suggests((c, b) -> getPlayerNamesSuggestion(b))
-                                .executes(ctx -> {
-                                    ServerPlayer player = ctx.getSource().getPlayerOrException();
-                                    String companyName = StringArgumentType.getString(ctx, "companyName");
-                                    String targetName = StringArgumentType.getString(ctx, "newFounder");
-                                    CompanyCommandLogic.transfer(player, companyName, targetName);
-                                    return Command.SINGLE_SUCCESS;
-                                })
-                            )
-                        )
-                    )
-                    .then(Commands.literal("dissolve")
-                        .then(Commands.argument("companyName", StringArgumentType.string())
-                                .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_FOUNDER))
-                            .executes(ctx -> {
-                                ServerPlayer player = ctx.getSource().getPlayerOrException();
-                                String companyName = StringArgumentType.getString(ctx, "companyName");
-                                CompanyCommandLogic.dissolve(player, companyName);
-                                return Command.SINGLE_SUCCESS;
-                            })
-                        )
-                    )
-                    .then(Commands.literal("description")
-                        .then(Commands.argument("companyName", StringArgumentType.string())
-                                .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_MANAGE))
-                            .then(Commands.argument("text", StringArgumentType.greedyString())
-                                .executes(ctx -> {
-                                    ServerPlayer player = ctx.getSource().getPlayerOrException();
-                                    String companyName = StringArgumentType.getString(ctx, "companyName");
-                                    String text = StringArgumentType.getString(ctx, "text");
-                                    CompanyCommandLogic.description(player, companyName, text);
-                                    return Command.SINGLE_SUCCESS;
-                                })
-                            )
-                        )
-                    )
+                    // transfer / dissolve / description live in the Company Management screen
+                    // (Danger Zone and Overview tabs) — no chat equivalent, so there is exactly
+                    // one place each of them is done.
                     .then(Commands.literal("info")
                         .then(Commands.argument("companyName", StringArgumentType.string())
                                 .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_ALL))
@@ -651,7 +614,7 @@ public class BankSystemCommandsRegistration {
                             })
                         )
                     )
-                    // Task #51 (v2.0.8) — /company manage <companyName>: opens the
+                    // Task #51 (v2.1.0) — /company manage <companyName>: opens the
                     // CompanyManagementScreen on the caller's client if they have MANAGE.
                     .then(Commands.literal("manage")
                         .then(Commands.argument("companyName", StringArgumentType.string())
@@ -664,82 +627,9 @@ public class BankSystemCommandsRegistration {
                             })
                         )
                     )
-                    // Task #47 (v2.0.8) — Share Stamper bind/unbind commands.
-                    .then(Commands.literal("stamper-bind")
-                        .then(Commands.argument("pos", net.minecraft.commands.arguments.coordinates.BlockPosArgument.blockPos())
-                            .then(Commands.argument("companyName", StringArgumentType.string())
-                                    .suggests((c, b) -> getCompanyNameSuggestion(c, b, AsyncCompanyManager.FILTER_MANAGE))
-                                .executes(ctx -> stamperBind(ctx, false))
-                            )
-                        )
-                    )
-                    .then(Commands.literal("stamper-unbind")
-                        .then(Commands.argument("pos", net.minecraft.commands.arguments.coordinates.BlockPosArgument.blockPos())
-                            .executes(ctx -> stamperBind(ctx, true))
-                        )
-                    )
+                    // Stamper binding is done at the block: right-click an unbound Share Stamper
+                    // to pick a company, and use Unbind in its screen or the Shares tab.
         );
-    }
-
-    /** Task #47 — /company stamper-bind and stamper-unbind executor. */
-    private static int stamperBind(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
-                                   boolean unbind) {
-        CommandSourceStack src = ctx.getSource();
-        ServerPlayer player;
-        try { player = src.getPlayerOrException(); }
-        catch (Exception e) {
-            src.sendFailure(Component.literal("Console cannot bind stampers (need player context)."));
-            return 0;
-        }
-        net.minecraft.core.BlockPos pos =
-                net.minecraft.commands.arguments.coordinates.BlockPosArgument.getBlockPos(ctx, "pos");
-        net.minecraft.world.level.block.entity.BlockEntity be = player.level().getBlockEntity(pos);
-        if (!(be instanceof net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity stamper)) {
-            src.sendFailure(Component.literal("No Share Stamper at " + pos));
-            return 0;
-        }
-        if (unbind) {
-            if (stamper.getBoundCompanyId() >= 0 && !stamper.hasManagePermission(player.getUUID())
-                    && !src.hasPermission(2)) {
-                src.sendFailure(Component.literal("No permission to unbind."));
-                return 0;
-            }
-            stamper.unbind();
-            src.sendSuccess(() -> Component.literal("Stamper unbound."), true);
-            return Command.SINGLE_SUCCESS;
-        }
-        String companyName = StringArgumentType.getString(ctx, "companyName");
-        CompanyManager cm = CompanyManager.get();
-        if (cm == null) {
-            src.sendFailure(Component.literal("CompanyManager unavailable (slave server?)."));
-            return 0;
-        }
-        net.kroia.banksystem.banking.company.Company company = cm.getByName(companyName);
-        if (company == null) {
-            src.sendFailure(Component.literal("Unknown company: " + companyName));
-            return 0;
-        }
-        // MANAGE gate — founder OR MANAGE on account OR perm-level-2 console/admin.
-        boolean allowed = src.hasPermission(2) || company.isFounder(player.getUUID());
-        if (!allowed && BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_BANK_MANAGER != null) {
-            IServerBankManager bm = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
-            if (bm != null) {
-                if (bm.isBanksystemAdmin(player.getUUID())) allowed = true;
-                else {
-                    net.kroia.banksystem.api.bankaccount.IServerBankAccount acc =
-                            bm.getBankAccount(company.getBankAccountNr());
-                    if (acc != null && acc.hasPermission(player.getUUID(),
-                            net.kroia.banksystem.banking.BankPermission.MANAGE)) allowed = true;
-                }
-            }
-        }
-        if (!allowed) {
-            src.sendFailure(Component.literal("No permission to bind to " + companyName));
-            return 0;
-        }
-        stamper.bind(company.getCompanyId(), player.getUUID());
-        src.sendSuccess(() -> Component.literal("Stamper bound to " + companyName), true);
-        return Command.SINGLE_SUCCESS;
     }
 
     /**
@@ -831,7 +721,7 @@ public class BankSystemCommandsRegistration {
         BACKEND_INSTANCES.LOGGER.debug("[Commands] " + msg);
     }
 
-    // ── Task #54 (v2.0.9) — /banksystem symbols ──────────────────────────────
+    // ── Task #54 (v2.1.0) — /banksystem symbols ──────────────────────────────
 
     private static void registerSymbolCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(

@@ -3,7 +3,7 @@ package net.kroia.banksystem.screen.uiElements;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 
 /**
- * Spec A.2 (v2.0.8) — primitive 1-px horizontal section divider. Replaces the
+ * Spec A.2 (v2.1.0) — primitive 1-px horizontal section divider. Replaces the
  * ad-hoc "─────" text labels. Reusable anywhere a section break is needed.
  */
 public class HorizontalDivider extends GuiElement {

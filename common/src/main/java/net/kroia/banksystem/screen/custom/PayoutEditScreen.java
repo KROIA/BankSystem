@@ -30,12 +30,12 @@ import net.minecraft.world.item.ItemStack;
 import java.util.UUID;
 
 /**
- * Task #45a (v2.0.8) — modal editor for a single {@link PayoutSchedule}.
+ * Task #45a (v2.1.0) — modal editor for a single {@link PayoutSchedule}.
  * <p>
  * MANAGE-gated via {@code canManage}: when false the edit widgets render read-only
  * (Save + Delete hidden, target picker disabled).
  * <p>
- * Spec A.5/A.6/A.7/A.8/A.9 + B.1/B.2/B.3 (v2.0.8): right-aligned labels, decimal
+ * Spec A.5/A.6/A.7/A.8/A.9 + B.1/B.2/B.3 (v2.1.0): right-aligned labels, decimal
  * money input, formatted timestamps, typed failure reasons, name-snapshot target
  * display, split player+account target picker, dividend mode toggle, and a
  * currency-item slot next to the amount input.
@@ -109,7 +109,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
     private Button currencyButton;
     private ItemView currencyIcon;
     private Label intervalLabel;
-    /** REDESIGN 1 (v2.0.8) — 4 radio-style buttons: 1 min | 1 hour | 1 MC day | Custom. */
+    /** REDESIGN 1 (v2.1.0) — 4 radio-style buttons: 1 min | 1 hour | 1 MC day | Custom. */
     private Button[] intervalButtons;
     private int selectedIntervalIdx;
     private TextBox customMinutesBox;
@@ -177,13 +177,13 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         currencyIcon = new ItemView();
         currencyIcon.setShowCount(false);
         currencyButton.addChild(currencyIcon);
-        // BUG 1 fix (v2.0.8) — fixed-point applies to all currencies (money AND items).
+        // BUG 1 fix (v2.1.0) — fixed-point applies to all currencies (money AND items).
         applyCurrency(currencyItem, original == null ? MoneyFormat.format(100L * MoneyFormat.SCALE)
                 : MoneyFormat.format(original.getAmount()));
 
         intervalLabel = new Label(INTERVAL.getString() + ":");
         intervalLabel.setAlignment(Label.Alignment.RIGHT);
-        // REDESIGN 1 (v2.0.8) — radio-button row replaces the DropDownMenu.
+        // REDESIGN 1 (v2.1.0) — radio-button row replaces the DropDownMenu.
         int startIdx = 1; // 1h default
         if (original != null) {
             long ticks = original.getIntervalTicks();
@@ -217,7 +217,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         pausedCheckBox = new CheckBox(PAUSED.getString());
         pausedCheckBox.setChecked(original != null && original.isPaused());
         pausedCheckBox.setEnabled(canManage);
-        // Bug batch 3 #3 (v2.0.8) — explain pause semantics on hover. Missed runs
+        // Bug batch 3 #3 (v2.1.0) — explain pause semantics on hover. Missed runs
         // are NOT accumulated while paused: PayoutExecutor skips paused schedules
         // via the isPaused() early-continue, and never invokes recordMissedExecution
         // for them (verified in PayoutExecutor.tick loop).
@@ -302,7 +302,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         applyIntervalSelection();
 
         // Populate total-paid + last-20 history rows best-effort.
-        // Bug D fix (v2.0.8) — mutate on render thread; async completion off-thread
+        // Bug D fix (v2.1.0) — mutate on render thread; async completion off-thread
         // races GUI init and CMEs during layout iteration.
         if (original != null) {
             AsyncCompanyManager.getHistoryAsync(original.getScheduleId(), 20).thenAccept(out ->
@@ -461,7 +461,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         }
     }
 
-    /** BUG 1 fix (v2.0.8) — fixed-point applies to all currencies (money AND items). */
+    /** BUG 1 fix (v2.1.0) — fixed-point applies to all currencies (money AND items). */
     private long parsedAmount() {
         return MoneyFormat.parseToRaw(amountBox.getText());
     }
@@ -506,7 +506,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
             if (!dividend && targetUUID == null) return;
             AsyncCompanyManager.createPayoutAsync(companyId, target, amount, intervalTicks, 0L, caller,
                             accountNr, mode, currencyItem)
-                    // Bug D fix (v2.0.8) — hop to render thread before firing onDirty
+                    // Bug D fix (v2.1.0) — hop to render thread before firing onDirty
                     // (refresh) and swapping screens. Off-thread refresh races GUI init.
                     .thenAccept(out -> Minecraft.getInstance().tell(() -> {
                         if (out != null && out.resultCode() == AsyncCompanyManager.CODE_OK
@@ -532,7 +532,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
 
     private void onDeleteClicked() {
         if (!canManage || original == null) return;
-        // Bug D fix (v2.0.8) — hop to render thread before onDirty/refresh + screen swap.
+        // Bug D fix (v2.1.0) — hop to render thread before onDirty/refresh + screen swap.
         AsyncCompanyManager.deletePayoutAsync(companyId, original.getScheduleId(), caller).thenAccept(o ->
                 Minecraft.getInstance().tell(() -> {
                     if (onDirty != null) onDirty.run();
@@ -541,7 +541,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
     }
 
     /**
-     * BUG 1 fix (v2.0.8) — always defer the screen swap via {@link #switchScreen}.
+     * BUG 1 fix (v2.1.0) — always defer the screen swap via {@link #switchScreen}.
      * The previous direct {@code minecraft.setScreen(parent)} crashed with a
      * ConcurrentModificationException when invoked from inside a click callback
      * (ModUtilities GuiElement.init was still iterating the child list).

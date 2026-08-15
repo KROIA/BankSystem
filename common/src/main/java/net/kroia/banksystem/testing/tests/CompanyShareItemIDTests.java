@@ -13,7 +13,7 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Task #48 (v2.0.8) — verifies that {@code banksystem:company_id} is treated as an
+ * Task #48 (v2.1.0) — verifies that {@code banksystem:company_id} is treated as an
  * identity-relevant data component (NOT volatile) so two stamped shares of different
  * companies produce distinct {@link ItemID}s while two of the same company collapse
  * to a single ItemID.

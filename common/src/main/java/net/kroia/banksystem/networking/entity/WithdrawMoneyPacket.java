@@ -213,7 +213,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             if(moneyBank.withdraw(totalValue) == BankStatus.SUCCESS)
             {
                 requestedBankNotes.put(itemID, requestedAmount);
-                // Task #44 (v2.0.8) — Transaction Ledger. Money withdrawals are logged
+                // Task #44 (v2.1.0) — Transaction Ledger. Money withdrawals are logged
                 // against the base money ItemID (not the banknote denomination) so a
                 // downstream reader sees the same currency identity regardless of which
                 // denomination was chosen at the terminal. Amount is base-money units.

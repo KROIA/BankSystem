@@ -15,12 +15,12 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Task #47 (v2.0.8) — C2S request to mutate a {@link ShareStamperBlockEntity}. All ops
+ * Task #47 (v2.1.0) — C2S request to mutate a {@link ShareStamperBlockEntity}. All ops
  * gated by proximity + MANAGE permission on master.
  */
 public class StampSharesRequest extends BankSystemNetworkPacket {
 
-    // Task v2.0.8 — QUEUE_STAMPS + TOGGLE_HOPPER_REDEEM retired. Replaced by
+    // Task v2.1.0 — QUEUE_STAMPS + TOGGLE_HOPPER_REDEEM retired. Replaced by
     // SET_PROCESSING (Start/Stop toggle) and SET_AUTO_IO (bit0=autoInput,
     // bit1=autoOutput carried in `count`).
     public enum Op { UNUSED_LEGACY_0, SET_MODE, UNUSED_LEGACY_1, BIND_COMPANY, SET_PROCESSING, SET_AUTO_IO }

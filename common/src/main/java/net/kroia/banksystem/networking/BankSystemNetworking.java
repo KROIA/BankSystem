@@ -93,19 +93,19 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerS2C(SyncBankDownloadDataPacket.TYPE, SyncBankDownloadDataPacket.STREAM_CODEC);
         registerS2C(SyncItemIDsPacket.TYPE, SyncItemIDsPacket.STREAM_CODEC);
         registerS2C(PlayerJoinSyncPacket.TYPE, PlayerJoinSyncPacket.STREAM_CODEC);
-        // Task #46 (v2.0.8) — Company share visuals + supply sync (S2C).
+        // Task #46 (v2.1.0) — Company share visuals + supply sync (S2C).
         registerS2C(S2CCompanyVisualUpdatePacket.TYPE, S2CCompanyVisualUpdatePacket.STREAM_CODEC);
         registerS2C(S2CCompanyVisualBulkPacket.TYPE, S2CCompanyVisualBulkPacket.STREAM_CODEC);
         registerS2C(S2CCompanyVisualSupplyUpdatePacket.TYPE, S2CCompanyVisualSupplyUpdatePacket.STREAM_CODEC);
-        // Task #51 (v2.0.8, spec §1.4) — Company.description propagation (S2C).
+        // Task #51 (v2.1.0, spec §1.4) — Company.description propagation (S2C).
         registerS2C(net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket.TYPE,
                 net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket.STREAM_CODEC);
-        // Task #47 (v2.0.8) — Share Stamper bind screen open (S2C).
+        // Task #47 (v2.1.0) — Share Stamper bind screen open (S2C).
         registerS2C(OpenStamperBindScreenPacket.TYPE, OpenStamperBindScreenPacket.STREAM_CODEC);
-        // Task #51 (v2.0.8) — Company Management screen open (S2C).
+        // Task #51 (v2.1.0) — Company Management screen open (S2C).
         registerS2C(net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket.TYPE,
                 net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket.STREAM_CODEC);
-        // Task #54 (v2.0.9) — share symbol manifest + chunk sync (S2C).
+        // Task #54 (v2.1.0) — share symbol manifest + chunk sync (S2C).
         registerS2C(S2CShareSymbolManifestPacket.TYPE, S2CShareSymbolManifestPacket.STREAM_CODEC);
         registerS2C(S2CShareSymbolDataPacket.TYPE, S2CShareSymbolDataPacket.STREAM_CODEC);
 
@@ -128,14 +128,14 @@ public class BankSystemNetworking extends NetworkPacketManager {
         registerC2S(ConverterWithdrawPacket.TYPE, ConverterWithdrawPacket.STREAM_CODEC);
         registerC2S(ConverterDropAllPacket.TYPE, ConverterDropAllPacket.STREAM_CODEC);
         registerC2S(ConverterCommitToBankPacket.TYPE, ConverterCommitToBankPacket.STREAM_CODEC);
-        // Task #47 (v2.0.8) — Share Stamper C2S mutations.
+        // Task #47 (v2.1.0) — Share Stamper C2S mutations.
         registerC2S(StampSharesRequest.TYPE, StampSharesRequest.STREAM_CODEC);
-        // Task #47 (v2.0.8) — Share Stamper bind request (C2S).
+        // Task #47 (v2.1.0) — Share Stamper bind request (C2S).
         registerC2S(SetStamperBindingRequest.TYPE, SetStamperBindingRequest.STREAM_CODEC);
         registerC2S(CloseStamperBindScreenPacket.TYPE, CloseStamperBindScreenPacket.STREAM_CODEC);
-        // Task #54 (v2.0.9) — share symbol byte request (C2S).
+        // Task #54 (v2.1.0) — share symbol byte request (C2S).
         registerC2S(C2SShareSymbolDataRequest.TYPE, C2SShareSymbolDataRequest.STREAM_CODEC);
-        // Task #51 (v2.0.8) — share right-click requests server to open management screen.
+        // Task #51 (v2.1.0) — share right-click requests server to open management screen.
         registerC2S(net.kroia.banksystem.networking.general.C2SRequestCompanyManagementScreen.TYPE,
                 net.kroia.banksystem.networking.general.C2SRequestCompanyManagementScreen.STREAM_CODEC);
     }
@@ -145,9 +145,9 @@ public class BankSystemNetworking extends NetworkPacketManager {
     {
         //registerS2S(PlayerJoinPacket.TYPE, PlayerJoinPacket.STREAM_CODEC);
         registerS2S(ClientConsoleMessagePacket.TYPE, ClientConsoleMessagePacket.STREAM_CODEC);
-        // Task #54 (v2.0.8) — master→slave live push for company visual mutations.
+        // Task #54 (v2.1.0) — master→slave live push for company visual mutations.
         registerS2S(S2SCompanyMirrorPacket.TYPE, S2SCompanyMirrorPacket.STREAM_CODEC);
-        // Task #54 (v2.0.9) — master→slave share symbol manifest + chunk sync (S2S).
+        // Task #54 (v2.1.0) — master→slave share symbol manifest + chunk sync (S2S).
         registerS2S(S2SShareSymbolManifestPacket.TYPE, S2SShareSymbolManifestPacket.STREAM_CODEC);
         registerS2S(S2SShareSymbolDataPacket.TYPE, S2SShareSymbolDataPacket.STREAM_CODEC);
     }

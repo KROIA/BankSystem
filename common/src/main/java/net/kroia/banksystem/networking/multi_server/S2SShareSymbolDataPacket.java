@@ -16,7 +16,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 
 /**
- * Task #54 (v2.0.9) — master→slave S2S packet carrying one chunk of a symbol PNG.
+ * Task #54 (v2.1.0) — master→slave S2S packet carrying one chunk of a symbol PNG.
  * <p>
  * Slave reassembles chunks, verifies SHA-256, writes to the slave's
  * {@link ShareSymbolStore} mirror via {@link ShareSymbolStore#mirrorWrite}, then

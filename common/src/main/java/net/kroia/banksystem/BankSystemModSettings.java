@@ -70,7 +70,7 @@ public final class BankSystemModSettings extends ModSettings {
     public static final class Utilities extends SettingsGroup
     {
         /**
-         * Seconds between autosaves. Was minute-based until v2.0.8; a crash between a
+         * Seconds between autosaves. Was minute-based until v2.1.0; a crash between a
          * withdrawal and the next save let the bank keep items the player already had in
          * their inventory (item duplication), so the window is now seconds, not minutes.
          */

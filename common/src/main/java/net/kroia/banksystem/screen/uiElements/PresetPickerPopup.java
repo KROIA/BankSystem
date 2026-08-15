@@ -20,7 +20,7 @@ import net.minecraft.network.chat.Component;
 import java.util.function.Consumer;
 
 /**
- * v2.0.8 UX6 — modal picker for {@link SharePresetRegistry} ids.
+ * v2.1.0 UX6 — modal picker for {@link SharePresetRegistry} ids.
  * Replaces the raw preset TextBox in the Shares tab. On selection, invokes the
  * caller-supplied {@link Consumer} with the chosen id, then closes back to the
  * parent screen. Founders / MANAGE-holders drive this; no permission checks here

@@ -16,7 +16,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.List;
 
 /**
- * Task #46 (v2.0.8) — S2C broadcast when a Company's share visuals change on the master.
+ * Task #46 (v2.1.0) — S2C broadcast when a Company's share visuals change on the master.
  * Applied to the client-side {@link ShareVisualCache}; every rendered stamped_share
  * tooltip and every open share-visual GUI refreshes on the next frame.
  *
@@ -31,7 +31,7 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
     public static final Type<S2CCompanyVisualUpdatePacket> TYPE = new Type<>(
             ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2c_company_visual_update"));
 
-    // v2.0.9 two-layer wire format.
+    // v2.1.0 two-layer wire format.
     public static final StreamCodec<RegistryFriendlyByteBuf, S2CCompanyVisualUpdatePacket> STREAM_CODEC =
             StreamCodec.of(
                     (buf, p) -> {
@@ -109,7 +109,7 @@ public class S2CCompanyVisualUpdatePacket extends BankSystemNetworkPacket {
         for (ServerPlayer p : players) {
             packet.sendToClient(p);
         }
-        // Task #54 (v2.0.8) — also fanout to slave servers so their
+        // Task #54 (v2.1.0) — also fanout to slave servers so their
         // SlaveCompanyMirror stays in sync with master for join-time bulks.
         broadcastMirrorEntryToSlaves(server, companyId, visuals, totalSharesIssued, maxSupply);
     }

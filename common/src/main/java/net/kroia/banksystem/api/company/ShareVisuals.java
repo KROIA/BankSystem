@@ -3,11 +3,11 @@ package net.kroia.banksystem.api.company;
 import net.minecraft.network.chat.Component;
 
 /**
- * Task #50 (v2.0.8) / v2.0.9 two-layer — public read-only value type for per-company
+ * Task #50 (v2.1.0) / v2.1.0 two-layer — public read-only value type for per-company
  * share visuals + supply. Consumed by external mods (e.g. StockMarket) via
  * {@link IBankSystemVisualLookup#getShareVisuals(net.kroia.banksystem.util.ItemID)}.
  *
- * <p>v2.0.9 adds {@link #bgSymbolId()}/{@link #bgTint()} for the background layer and
+ * <p>v2.1.0 adds {@link #bgSymbolId()}/{@link #bgTint()} for the background layer and
  * {@link #fgSymbolId()}/{@link #fgTint()} for the foreground layer. Legacy accessors
  * {@link #iconPresetId()} and {@link #tint()} are kept as compat shims:
  * {@code iconPresetId()} → {@code fgSymbolId()}, {@code tint()} → {@code bgTint()}.

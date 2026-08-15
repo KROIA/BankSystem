@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Task #54 (v2.0.8) — master→slave S2S packet carrying company visual+info
+ * Task #54 (v2.1.0) — master→slave S2S packet carrying company visual+info
  * mutations. Discriminator {@code op}:
  * <ul>
  *   <li>{@code OP_UPSERT} — one full {@link S2CCompanyVisualBulkPacket.Entry};
@@ -141,7 +141,7 @@ public class S2SCompanyMirrorPacket extends BankSystemNetworkPacket {
                                 new ShareVisuals.ShareLayer(entry.fgSymbolId(), entry.fgTint()),
                                 entry.baseTint(), entry.displayName(), entry.description()),
                         entry.totalSharesIssued(), entry.maxSupply());
-                // Task #51 (v2.0.8, spec §1.4) — also forward the company-level
+                // Task #51 (v2.1.0, spec §1.4) — also forward the company-level
                 // description so slave-side clients' Overview tabs stay fresh.
                 net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket descFwd =
                         new net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket(

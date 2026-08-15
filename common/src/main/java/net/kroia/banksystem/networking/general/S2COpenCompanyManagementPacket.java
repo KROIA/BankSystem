@@ -12,7 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Task #51 (v2.0.8) — S2C packet instructing the client to open the
+ * Task #51 (v2.1.0) — S2C packet instructing the client to open the
  * CompanyManagementScreen for a given company.
  *
  * <p>Carries pre-resolved {@code isFounder} / {@code canManage} flags so the screen

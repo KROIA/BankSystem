@@ -21,7 +21,7 @@ import net.minecraft.network.chat.Component;
 import java.util.*;
 
 /**
- * Task #51 (v2.0.8, spec §2) — Workers tab: every user with permissions on the
+ * Task #51 (v2.1.0, spec §2) — Workers tab: every user with permissions on the
  * company's bound bank account.  MANAGE/founder users get full edit controls
  * (permission edit + remove via {@link BankUserWidget}); read-only viewers see
  * name-only rows.
@@ -121,10 +121,14 @@ public class WorkersTabBody extends TabBody {
     }
 
     /**
-     * Locks the remove button on the sole remaining non-founder user (removing
-     * the last user would orphan the account on the server side).
+     * Founders can never be removed here. Everybody else is removable as long as a
+     * founder row is present — a founder always keeps MANAGE on the bound account, so
+     * removing the last worker cannot orphan it. The "last one standing" lock only
+     * applies when no founder is in the list at all.
      */
     private void refreshRemoveButtonStates(List<String> founders) {
+        boolean founderPresent = userWidgets.values().stream()
+                .anyMatch(w -> founders.contains(w.getUserData().userName));
         long nonFounderCount = userWidgets.values().stream()
                 .filter(w -> !founders.contains(w.getUserData().userName))
                 .count();
@@ -133,8 +137,7 @@ public class WorkersTabBody extends TabBody {
             if (isFounder) {
                 w.setRemoveButtonEnabled(false);
             } else {
-                // Last non-founder must not be removed — would orphan the account.
-                w.setRemoveButtonEnabled(nonFounderCount > 1);
+                w.setRemoveButtonEnabled(founderPresent || nonFounderCount > 1);
             }
         }
     }

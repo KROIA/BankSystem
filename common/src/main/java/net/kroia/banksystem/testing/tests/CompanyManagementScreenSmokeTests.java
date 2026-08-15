@@ -9,7 +9,7 @@ import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 
 /**
- * Task #51 (v2.0.8) — client-only smoke test for {@link CompanyManagementScreen}.
+ * Task #51 (v2.1.0) — client-only smoke test for {@link CompanyManagementScreen}.
  *
  * <p>MVP scope: only asserts that the screen constructs without throwing when given
  * a synthetic (companyId, companyName) pair. The tab-visibility logic runs off two

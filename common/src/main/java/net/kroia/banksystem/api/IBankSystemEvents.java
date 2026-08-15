@@ -175,7 +175,7 @@ public interface IBankSystemEvents {
     DataEvent<TrustChangeInfo> getTrustChangedSignal();
 
     /**
-     * Task #45 (v2.0.8) — event emitted on the <b>master server</b> every time a recurring
+     * Task #45 (v2.1.0) — event emitted on the <b>master server</b> every time a recurring
      * payout schedule ticks. Fires for both successful transfers and every documented
      * failure mode ({@code INSUFFICIENT_FUNDS}, {@code TARGET_MISSING}). See
      * {@link PayoutExecutedInfo}. Dispatched on the server thread after the bank transfer
@@ -184,7 +184,7 @@ public interface IBankSystemEvents {
     DataEvent<PayoutExecutedInfo> getPayoutExecutedEvent();
 
     /**
-     * Task #49 (v2.0.8) — event emitted on the <b>master server</b> after a successful
+     * Task #49 (v2.1.0) — event emitted on the <b>master server</b> after a successful
      * one-shot dividend distribution. Never fires when the run was refused (invalid
      * input, insufficient funds, no holders). See {@link DividendPaidEvent}. Dispatched
      * on the server thread after the transfers and the SQL ledger writes have been

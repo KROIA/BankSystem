@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Task #54 (v2.0.8) — slave-side mirror of the master's per-company visual + info
+ * Task #54 (v2.1.0) — slave-side mirror of the master's per-company visual + info
  * payload.
  *
  * <p>{@link CompanyManager#get()} returns {@code null} on slave servers (all
@@ -26,11 +26,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p><b>Population (deferred to a follow-up):</b>
  * <ul>
  *   <li>On slave-master handshake: request bulk via a new ARRS function
- *       {@code LIST_ALL_COMPANY_VISUALS} — TODO(v2.0.9).</li>
+ *       {@code LIST_ALL_COMPANY_VISUALS} — TODO(v2.1.0).</li>
  *   <li>Live master→slave mutation broadcasts (UPDATE_SHARE_VISUALS, stamp / redeem,
  *       description, create / dissolve / transfer): route master's existing S2C
  *       packets through a slave-side listener that updates this mirror AND
- *       forwards to locally-connected players — TODO(v2.0.9).</li>
+ *       forwards to locally-connected players — TODO(v2.1.0).</li>
  * </ul>
  *
  * <p>Cleared on slave→master disconnect via {@link #clear()} so a stale mirror

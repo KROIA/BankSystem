@@ -7,6 +7,7 @@ import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
@@ -63,6 +64,8 @@ public class BankManagerTests extends TestSuite {
                 this::testAllowAllItemsOnPermitsAnyNonBlacklistedItem);
         addTest("allow_all_items_on_still_refuses_blacklisted",
                 this::testAllowAllItemsOnStillRefusesBlacklisted);
+        addTest("banked_item_stays_allowed_after_allow_all_revert",
+                this::testBankedItemStaysAllowedAfterAllowAllRevert);
     }
 
     @Override
@@ -423,6 +426,57 @@ public class BankManagerTests extends TestSuite {
             settings.BANK.ALLOW_ALL_ITEMS.set(savedAllowAll);
             if (wasInAllowList) {
                 manager.allowItemID(freshItem);
+            }
+        }
+    }
+
+    /**
+     * Opening a bank slot for an item registers that item in the explicit allow-list, so it
+     * stays bankable — and stays offered by the Bank Download block's item picker — after
+     * ALLOW_ALL_ITEMS is switched back off. Without this, an item deposited during allow-all
+     * became unbankable and invisible to the picker the moment the setting was reverted.
+     */
+    private TestResult testBankedItemStaysAllowedAfterAllowAllRevert() {
+        if (manager == null) {
+            return fail("ServerBankManager is null -- cannot run on slave server");
+        }
+        BankSystemModSettings settings = getSettings();
+        if (settings == null) {
+            return fail("SERVER_SETTINGS is null -- backend not fully initialized");
+        }
+
+        // Gravel: vanilla, not in INITIAL_ALLOWED_ITEMS, not in INITIAL_BLACKLIST_ITEMS.
+        ItemID freshItem = ItemID.getOrRegisterFromItemStackServerSide_direct(
+                Items.GRAVEL.getDefaultInstance());
+        if (!freshItem.isValid()) {
+            return fail("Could not register GRAVEL for the banked-item test");
+        }
+
+        boolean wasInAllowList = manager.getAllowedItems().contains(freshItem);
+        boolean savedAllowAll = settings.BANK.ALLOW_ALL_ITEMS.get();
+        if (wasInAllowList) {
+            manager.disallowItemID(freshItem);
+        }
+
+        try {
+            // Deposit-equivalent: opening the bank slot is what a first deposit does.
+            settings.BANK.ALLOW_ALL_ITEMS.set(true);
+            if (ServerBank.create(freshItem, 0) == null) {
+                return fail("ServerBank.create refused an allowed item under ALLOW_ALL_ITEMS=true");
+            }
+            if (!manager.getAllowedItems().contains(freshItem)) {
+                return fail("Opening a bank slot did not add the item to the allowed-items list");
+            }
+
+            // The point of the fix: reverting the setting must not strand the balance.
+            settings.BANK.ALLOW_ALL_ITEMS.set(false);
+            return assertTrue(
+                    "An item that holds a bank slot must stay allowed after ALLOW_ALL_ITEMS is turned off",
+                    manager.isItemIDAllowed(freshItem));
+        } finally {
+            settings.BANK.ALLOW_ALL_ITEMS.set(savedAllowAll);
+            if (!wasInAllowList) {
+                manager.disallowItemID(freshItem);
             }
         }
     }

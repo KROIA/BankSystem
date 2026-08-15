@@ -17,9 +17,9 @@ public class BankManager implements IBankManager {
 
         ServerBankManager.setBackend(BACKEND_INSTANCES);
         AsyncBankManager.setBackend(BACKEND_INSTANCES);
-        // Task #43 (v2.0.8) — CompanyManager master registry + founder-invariant hook.
+        // Task #43 (v2.1.0) — CompanyManager master registry + founder-invariant hook.
         net.kroia.banksystem.banking.company.CompanyManager.setBackend(BACKEND_INSTANCES);
-        // Task #43g (v2.0.8) — AsyncCompanyManager needs the backend handle for master-side dispatch.
+        // Task #43g (v2.1.0) — AsyncCompanyManager needs the backend handle for master-side dispatch.
         net.kroia.banksystem.banking.company.AsyncCompanyManager.setBackend(BACKEND_INSTANCES);
     }
 
@@ -31,7 +31,7 @@ public class BankManager implements IBankManager {
     public static BankManager createMaster()
     {
         ServerBankManager syncManager = new ServerBankManager();
-        // Task #43 (v2.0.8) — install the CompanyManager singleton on master.
+        // Task #43 (v2.1.0) — install the CompanyManager singleton on master.
         net.kroia.banksystem.banking.company.CompanyManager.install();
         return new BankManager(syncManager, syncManager);
     }

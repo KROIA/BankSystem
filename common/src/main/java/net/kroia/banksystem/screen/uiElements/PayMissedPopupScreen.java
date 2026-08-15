@@ -17,7 +17,7 @@ import net.minecraft.network.chat.Component;
 import java.util.UUID;
 
 /**
- * Spec B.4 (v2.0.8) — "Pay Missed" confirm popup. Shows the missed execution count
+ * Spec B.4 (v2.1.0) — "Pay Missed" confirm popup. Shows the missed execution count
  * and total, prefills the input with the full missed amount, and allows a partial
  * amount. Forwards to the MANAGE-gated {@code PAY_MISSED} ARRS function; the master
  * writes a {@code CATCH_UP} history row and floors the missed counter by the number
@@ -72,7 +72,7 @@ public class PayMissedPopupScreen extends BankSystemGuiScreen {
         this.money = schedule.isMoneyCurrency();
 
         titleLabel = new Label(TITLE.getString());
-        // BUG 1 fix (v2.0.8) — fixed-point applies to all currencies.
+        // BUG 1 fix (v2.1.0) — fixed-point applies to all currencies.
         String total = MoneyFormat.format(schedule.getMissedAmount()) + (money ? " $" : "x");
         summaryLabel = new Label(Component.translatable(MISSED_KEY,
                 String.valueOf(schedule.getMissedCount()), total).getString());

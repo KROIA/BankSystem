@@ -4,7 +4,7 @@ import net.kroia.banksystem.minecraft.item.BankSystemCreativeModeTab;
 import net.minecraft.world.item.Item;
 
 /**
- * Task #46 (v2.0.8) — inert blank share. Crafted from paper + leather. Fed into the
+ * Task #46 (v2.1.0) — inert blank share. Crafted from paper + leather. Fed into the
  * (future, Task #47) share stamper to produce stamped shares bound to a company.
  * Right-click is deliberately inert — the item is a raw material with no in-hand action.
  */

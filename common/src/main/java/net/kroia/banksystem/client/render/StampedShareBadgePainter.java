@@ -16,7 +16,7 @@ import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
 
 /**
- * Task #53 (v2.0.8) — shared body of the stamped-share item renderer.
+ * Task #53 (v2.1.0) — shared body of the stamped-share item renderer.
  * The stamped_share model uses {@code builtin/entity} so the vanilla item-model
  * quad path is bypassed; this painter is the complete visual for every display
  * context. Tinted 16x16 quad everywhere, plus monogram initials in GUI / FIXED

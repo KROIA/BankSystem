@@ -13,7 +13,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Task #44 (v2.0.8) — SQLite writer + reader for the {@code TransactionLog} table.
+ * Task #44 (v2.1.0) — SQLite writer + reader for the {@code TransactionLog} table.
  * <p>
  * Mirrors {@link BalanceHistoryManager}'s pattern:
  * <ul>

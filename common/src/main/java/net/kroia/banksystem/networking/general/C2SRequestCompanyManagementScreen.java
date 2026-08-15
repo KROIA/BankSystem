@@ -14,7 +14,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Task #51 (v2.0.8) — C2S: client requests the server to open
+ * Task #51 (v2.1.0) — C2S: client requests the server to open
  * {@link net.kroia.banksystem.screen.custom.CompanyManagementScreen} for a stamped
  * share right-click.
  *

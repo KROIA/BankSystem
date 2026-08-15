@@ -16,7 +16,7 @@ import net.minecraft.network.chat.Component;
 import java.util.UUID;
 
 /**
- * Task #51 (v2.0.8) — Dedicated company management UI.
+ * Task #51 (v2.1.0) — Dedicated company management UI.
  *
  * <p><b>Status: SKELETON.</b> Full implementation is spec'd in
  * {@code .claude/Features/CompanyManagementScreenSpec.md} and will be delivered
@@ -64,7 +64,7 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
     private static final Component TAB_DANGER      = Component.translatable(PREFIX + "tab.danger");
 
     /**
-     * v2.0.8 — Market tab body is spec-compliant (see
+     * v2.1.0 — Market tab body is spec-compliant (see
      * {@link net.kroia.banksystem.screen.uiElements.tabbody.MarketTabBody}); the tab
      * shows whenever StockMarket is installed. Backend: {@code StockMarketBridge} +
      * {@code AsyncCompanyManager} functions {@code OPEN_SHARE_MARKET /

@@ -12,7 +12,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * Task #51 (v2.0.8) — S2C broadcast when {@code Company.description} changes on the
+ * Task #51 (v2.1.0) — S2C broadcast when {@code Company.description} changes on the
  * master (spec §1.4). Closes the propagation gap: {@link S2CCompanyVisualUpdatePacket}
  * only carries {@code ShareVisuals} (icon/tint/displayName/visual description) + supply,
  * NOT the company-level description shown on the Overview tab. Client handler patches

@@ -10,19 +10,23 @@ import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
+import net.kroia.banksystem.banking.clientdata.BankManagerData;
+import net.kroia.banksystem.banking.clientdata.UserData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.player.Player;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
- * v2.0.8 UX6 — modal picker for currently-online players. Replaces the raw
- * transfer-target TextBox in the Danger tab. Emits the selected display name
- * back to the caller and returns to the parent screen. Own name is filtered
- * (transferring to self is meaningless).
+ * v2.1.0 UX6 — modal player picker. Replaces the raw transfer-target TextBox in
+ * the Danger tab. Emits the selected display name back to the caller and returns
+ * to the parent screen. Own name is filtered (transferring to self is meaningless).
+ * <p>
+ * The list comes from the BankSystem user registry, NOT from the players currently
+ * loaded on this client — so offline players, and players who have only ever joined
+ * another slave server, can be picked too.
  */
 public class PlayerPickerPopup extends BankSystemGuiScreen {
 
@@ -34,6 +38,7 @@ public class PlayerPickerPopup extends BankSystemGuiScreen {
             "gui." + BankSystemMod.MOD_ID + ".player_picker.empty");
 
     private final GuiScreen parent;
+    private final Consumer<String> onPick;
     private final Frame frame = new Frame();
     private final Label titleLabel;
     private final VerticalListView list;
@@ -45,6 +50,7 @@ public class PlayerPickerPopup extends BankSystemGuiScreen {
     public PlayerPickerPopup(GuiScreen parent, Consumer<String> onPick) {
         super(TITLE);
         this.parent = parent;
+        this.onPick = onPick;
         titleLabel = new Label(TITLE.getString());
         list = new VerticalListView();
         LayoutGrid l = new LayoutGrid();
@@ -53,15 +59,32 @@ public class PlayerPickerPopup extends BankSystemGuiScreen {
         l.alignment = GuiElement.Alignment.TOP;
         list.setLayout(l);
 
-        List<String> names = new ArrayList<>();
-        String self = "";
-        try {
-            self = Minecraft.getInstance().player.getDisplayName().getString();
-            for (Player p : Minecraft.getInstance().level.players()) {
-                String n = p.getDisplayName().getString();
-                if (!n.equals(self)) names.add(n);
-            }
-        } catch (Throwable ignored) { /* empty list falls through */ }
+        list.addChild(new Label(EMPTY.getString()));
+
+        cancel = new Button(CANCEL.getString(), () -> switchScreen(parent));
+        addElement(frame);
+        frame.addChild(titleLabel);
+        frame.addChild(list);
+        frame.addChild(cancel);
+
+        getBankManager().getBankManagerDataAsync()
+                .thenAccept(data -> Minecraft.getInstance().tell(() -> populate(data)));
+    }
+
+    /**
+     * Fills the list from the server's registered-user map — every player the bank
+     * system has ever seen, on this server or on any other server of the network,
+     * online or not.
+     */
+    private void populate(BankManagerData data) {
+        list.removeChilds();
+        UUID self = getThisPlayerUUID();
+        List<String> names = data == null ? List.of()
+                : data.userMapData().userMap().values().stream()
+                        .filter(u -> !u.userUUID().equals(self))
+                        .map(UserData::userName)
+                        .sorted(String.CASE_INSENSITIVE_ORDER)
+                        .toList();
 
         if (names.isEmpty()) {
             list.addChild(new Label(EMPTY.getString()));
@@ -76,11 +99,7 @@ public class PlayerPickerPopup extends BankSystemGuiScreen {
                 list.addChild(row);
             }
         }
-        cancel = new Button(CANCEL.getString(), () -> switchScreen(parent));
-        addElement(frame);
-        frame.addChild(titleLabel);
-        frame.addChild(list);
-        frame.addChild(cancel);
+        if (getGui() != null) updateLayout(getGui());
     }
 
     public void setSize(int w, int h) {

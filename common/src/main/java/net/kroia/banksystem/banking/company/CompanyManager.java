@@ -86,7 +86,7 @@ public final class CompanyManager implements ServerSaveableChunked {
     private int nextCompanyId = 1;
 
     /**
-     * Task #51 (v2.0.8) — reverse index of Share Stamper bindings per company.
+     * Task #51 (v2.1.0) — reverse index of Share Stamper bindings per company.
      * <p>
      * Persisted to NBT via {@link #save(Map)} / {@link #load(Map)} under the
      * {@code stamper_bindings} list tag so the Shares-tab list survives a world
@@ -278,14 +278,14 @@ public final class CompanyManager implements ServerSaveableChunked {
     }
 
     /**
-     * Task #46 (v2.0.8) — MANAGE-gated update of a Company's {@link ShareVisuals}.
+     * Task #46 (v2.1.0) — MANAGE-gated update of a Company's {@link ShareVisuals}.
      * Permission gating happens at the ARRS entry point (see {@code AsyncCompanyManager});
      * this method is the pure mutator. Master-only.
      *
      * @return {@code true} when the Company exists and was updated; {@code false} otherwise.
      */
     /**
-     * Task #47 (v2.0.8) — increment {@link Company#getTotalSharesIssued()} by one,
+     * Task #47 (v2.1.0) — increment {@link Company#getTotalSharesIssued()} by one,
      * capped by {@link Company#getMaxSupply()}. Master-only; broadcasts a supply update
      * on success. Returns {@code false} if company is missing or cap reached.
      */
@@ -300,7 +300,7 @@ public final class CompanyManager implements ServerSaveableChunked {
     }
 
     /**
-     * Task #47 (v2.0.8) — decrement {@link Company#getTotalSharesIssued()} by one,
+     * Task #47 (v2.1.0) — decrement {@link Company#getTotalSharesIssued()} by one,
      * floored at zero. Master-only; broadcasts a supply update on success. Returns
      * {@code false} if company is missing or supply already zero.
      */
@@ -309,7 +309,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         if (company == null) return false;
         long cur = company.getTotalSharesIssued();
         if (cur <= 0L) {
-            // Task v2.0.8 — hardening: totalSharesIssued was 0 but a valid stamped share
+            // Task v2.1.0 — hardening: totalSharesIssued was 0 but a valid stamped share
             // was presented for redemption. Warn (possible share duplication somewhere
             // in the world) but still succeed so the item conversion proceeds.
             if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
@@ -353,7 +353,7 @@ public final class CompanyManager implements ServerSaveableChunked {
     }
 
     // ------------------------------------------------------------------
-    // Task #45 (v2.0.8) — Payout schedule CRUD on Company NBT.
+    // Task #45 (v2.1.0) — Payout schedule CRUD on Company NBT.
     // ------------------------------------------------------------------
 
     /** Hard-floor per spec Open Items — no schedule may run more frequently than once per second. */
@@ -383,7 +383,7 @@ public final class CompanyManager implements ServerSaveableChunked {
     }
 
     /**
-     * Spec B.1–B.3 (v2.0.8) — extended create carrying the explicit target account,
+     * Spec B.1–B.3 (v2.1.0) — extended create carrying the explicit target account,
      * display-name snapshots (spec A.9), payout mode, and currency ItemID short.
      * DIVIDEND-mode schedules do not require a target.
      */
@@ -420,7 +420,7 @@ public final class CompanyManager implements ServerSaveableChunked {
     }
 
     /**
-     * Spec B.1–B.3 (v2.0.8) — extended update: amount, interval, target (uuid + account
+     * Spec B.1–B.3 (v2.1.0) — extended update: amount, interval, target (uuid + account
      * + name snapshots), mode, and currency. Interval-floor enforced.
      */
     public PayoutMutation updateScheduleEx(int companyId, long scheduleId, long newAmount,
@@ -447,7 +447,7 @@ public final class CompanyManager implements ServerSaveableChunked {
     }
 
     /**
-     * Spec B.4 (v2.0.8) — executor hook: accumulate a missed execution
+     * Spec B.4 (v2.1.0) — executor hook: accumulate a missed execution
      * ({@code missedAmount += amount}, {@code missedCount++}) after a failed fire.
      */
     public void recordMissedExecution(int companyId, long scheduleId, long missedAmountDelta) {
@@ -461,7 +461,7 @@ public final class CompanyManager implements ServerSaveableChunked {
     }
 
     /**
-     * Spec B.4 (v2.0.8) — apply a manual catch-up payment of {@code paidAmount}.
+     * Spec B.4 (v2.1.0) — apply a manual catch-up payment of {@code paidAmount}.
      * Subtracts from {@code missedAmount}; {@code missedCount} floors to the number
      * of full executions still uncovered by the remaining missed amount
      * ({@code ceil(remaining / schedule.amount)}), clearing entirely when the
@@ -590,7 +590,7 @@ public final class CompanyManager implements ServerSaveableChunked {
     }
 
     // ------------------------------------------------------------------
-    // Task #51 (v2.0.8) — Share Stamper binding reverse index (runtime-only)
+    // Task #51 (v2.1.0) — Share Stamper binding reverse index (runtime-only)
     // ------------------------------------------------------------------
     /** Convenience for callers without dimension info (persistence fallback / legacy paths). */
     public void registerStamper(int companyId, BlockPos pos) {
@@ -660,7 +660,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         }
         listTags.put("companies", companiesList);
 
-        // v2.0.8 Bug — persist Share Stamper reverse index so the Shares-tab list
+        // v2.1.0 Bug — persist Share Stamper reverse index so the Shares-tab list
         // survives world reload even when stamper chunks aren't loaded. Written as a
         // flat list of {cid,x,y,z,dim} entries.
         ListTag bindingsList = new ListTag();
@@ -735,7 +735,7 @@ public final class CompanyManager implements ServerSaveableChunked {
                             + " is already bound to another company.");
                     continue;
                 }
-                // BUG batch 4 (v2.0.8) — renormalize schedule nextRunTick against the
+                // BUG batch 4 (v2.1.0) — renormalize schedule nextRunTick against the
                 // fresh per-session payoutTickCounter (which resets to 0 on every server
                 // start). Without this, a persisted schedule from a previous session
                 // would show a stale countdown (e.g. "5m" for a 1m schedule) after
@@ -751,7 +751,7 @@ public final class CompanyManager implements ServerSaveableChunked {
             }
         }
 
-        // v2.0.8 Bug — restore persisted stamper reverse index. Runtime BE hooks
+        // v2.1.0 Bug — restore persisted stamper reverse index. Runtime BE hooks
         // (setLevel / loadAdditional) will re-add entries on chunk load; Set dedupes.
         if (listTags.containsKey("stamper_bindings")) {
             ListTag bindingsList = listTags.get("stamper_bindings");

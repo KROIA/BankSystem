@@ -6,7 +6,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Spec A.4 / A.7 (v2.0.8) — human-readable durations from game ticks and
+ * Spec A.4 / A.7 (v2.1.0) — human-readable durations from game ticks and
  * timestamps from epoch millis.
  */
 public final class TimeFormat {

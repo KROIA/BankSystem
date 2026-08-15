@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.concurrent.*;
 
 /**
- * Task #52 (v2.0.8) — SQLite store for dividend distribution events.
+ * Task #52 (v2.1.0) — SQLite store for dividend distribution events.
  * Master-only; {@code DIVIDEND_HISTORY_STORE} is null on slaves.
  * All DB access is serialised on a single background thread; every
  * public method is fail-open (catches {@link Throwable}, logs WARN).

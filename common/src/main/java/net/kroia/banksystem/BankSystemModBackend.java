@@ -86,17 +86,17 @@ public class BankSystemModBackend implements BankSystemAPI {
         public BankSystemLogger LOGGER;
         public DatabaseManager DATABASE_MANAGER;
         public BalanceHistoryManager BALANCE_HISTORY_MANAGER;
-        /** Task #44 (v2.0.8) — SQLite transaction ledger (master-only, nullable on slaves). */
+        /** Task #44 (v2.1.0) — SQLite transaction ledger (master-only, nullable on slaves). */
         public net.kroia.banksystem.data.table.TransactionLogManager TRANSACTION_LOG_MANAGER;
-        /** Task #45 (v2.0.8) — payout history SQLite writer (master-only, nullable on slaves). */
+        /** Task #45 (v2.1.0) — payout history SQLite writer (master-only, nullable on slaves). */
         public net.kroia.banksystem.data.table.PayoutHistoryManager PAYOUT_HISTORY_MANAGER;
-        /** Task #45 (v2.0.8) — public payout API impl (always non-null; degrades to fail-closed on slave). */
+        /** Task #45 (v2.1.0) — public payout API impl (always non-null; degrades to fail-closed on slave). */
         public net.kroia.banksystem.api.payout.IPayoutManager PAYOUT_MANAGER;
-        /** Task #49 (v2.0.8) — dividend payer (always non-null; degrades to fail-closed on slave). */
+        /** Task #49 (v2.1.0) — dividend payer (always non-null; degrades to fail-closed on slave). */
         public net.kroia.banksystem.api.dividend.IDividendPayer DIVIDEND_PAYER;
-        /** Task #52 (v2.0.8) — dividend event SQLite store (master-only, nullable on slaves). */
+        /** Task #52 (v2.1.0) — dividend event SQLite store (master-only, nullable on slaves). */
         public net.kroia.banksystem.banking.company.DividendHistoryStore DIVIDEND_HISTORY_STORE;
-        /** Task #54 (v2.0.9) — share symbol texture store (master: authoritative; slave: mirror). */
+        /** Task #54 (v2.1.0) — share symbol texture store (master: authoritative; slave: mirror). */
         public net.kroia.banksystem.banking.company.ShareSymbolStore SHARE_SYMBOL_STORE;
 
         /**
@@ -124,7 +124,7 @@ public class BankSystemModBackend implements BankSystemAPI {
      */
     private static long retentionSweepTickCounter = 0;
     /**
-     * Task #45 (v2.0.8) — monotonic tick counter for the payout scheduler. Advances on every
+     * Task #45 (v2.1.0) — monotonic tick counter for the payout scheduler. Advances on every
      * master-side server tick; the scheduler evaluates due schedules every
      * {@link net.kroia.banksystem.banking.company.PayoutExecutor#PAYOUT_TICK_INTERVAL} ticks.
      * Reset on server start / stop.
@@ -182,7 +182,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     /**
      * Master-only accessor for the transaction-ledger SQLite manager
-     * (Task #44, v2.0.8). Returns {@code null} on slaves / pre-startup / shutdown so
+     * (Task #44, v2.1.0). Returns {@code null} on slaves / pre-startup / shutdown so
      * write-site hooks can no-op without a special path.
      */
     public static @Nullable net.kroia.banksystem.data.table.TransactionLogManager getTransactionLogManager() {
@@ -300,7 +300,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemMenus.setupScreens();
         ClientBankManager.setBackend(INSTANCES);
         INSTANCES.CLIENT_BANK_MANAGER = BankManager.createClient();
-        // Task #54 (v2.0.9) — initialise client-side symbol cache directory.
+        // Task #54 (v2.1.0) — initialise client-side symbol cache directory.
         net.kroia.banksystem.client.company.ClientSymbolRegistry.init();
 
         BankSystemGuiScreen.setBackend(INSTANCES);
@@ -367,7 +367,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             slaveLatchWatchTicks = 0;
             slaveLatchTimeoutWarned = false;
             TickEvent.SERVER_POST.register(BankSystemModBackend::onSlaveLatchTimeoutTick);
-            // Task #54 (v2.0.9) — share symbol store (slave: mirror mode, populated by S2S sync).
+            // Task #54 (v2.1.0) — share symbol store (slave: mirror mode, populated by S2S sync).
             INSTANCES.SHARE_SYMBOL_STORE = new net.kroia.banksystem.banking.company.ShareSymbolStore(INSTANCES.LOGGER);
             INSTANCES.SHARE_SYMBOL_STORE.open(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT), true);
         }
@@ -383,21 +383,21 @@ public class BankSystemModBackend implements BankSystemAPI {
             INSTANCES.DATABASE_MANAGER = new DatabaseManager();
             INSTANCES.DATABASE_MANAGER.connectToDatabase(server);
             INSTANCES.BALANCE_HISTORY_MANAGER = new BalanceHistoryManager(INSTANCES.DATABASE_MANAGER);
-            // Task #44 (v2.0.8) — transaction ledger writer/reader.
+            // Task #44 (v2.1.0) — transaction ledger writer/reader.
             INSTANCES.TRANSACTION_LOG_MANAGER =
                     new net.kroia.banksystem.data.table.TransactionLogManager(INSTANCES.DATABASE_MANAGER);
-            // Task #45 (v2.0.8) — payout history writer + IPayoutManager impl.
+            // Task #45 (v2.1.0) — payout history writer + IPayoutManager impl.
             INSTANCES.PAYOUT_HISTORY_MANAGER =
                     new net.kroia.banksystem.data.table.PayoutHistoryManager(INSTANCES.DATABASE_MANAGER);
             INSTANCES.PAYOUT_MANAGER =
                     new net.kroia.banksystem.banking.company.PayoutManagerImpl(INSTANCES);
-            // Task #49 (v2.0.8) — dividend distributor (master-only).
+            // Task #49 (v2.1.0) — dividend distributor (master-only).
             INSTANCES.DIVIDEND_PAYER =
                     new net.kroia.banksystem.banking.share.DividendPayer(INSTANCES);
-            // Task #52 (v2.0.8) — dividend event history store.
+            // Task #52 (v2.1.0) — dividend event history store.
             INSTANCES.DIVIDEND_HISTORY_STORE = new net.kroia.banksystem.banking.company.DividendHistoryStore(INSTANCES.LOGGER);
             INSTANCES.DIVIDEND_HISTORY_STORE.open(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT));
-            // Task #54 (v2.0.9) — share symbol store (master: authoritative).
+            // Task #54 (v2.1.0) — share symbol store (master: authoritative).
             INSTANCES.SHARE_SYMBOL_STORE = new net.kroia.banksystem.banking.company.ShareSymbolStore(INSTANCES.LOGGER);
             INSTANCES.SHARE_SYMBOL_STORE.open(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT), false);
             // On revision bump, push manifest to all clients and all slaves, then push all bytes to slaves.
@@ -594,7 +594,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         // Reset the synced isMasterServer flag to its safe default (false) — the next
         // server the client joins re-syncs it via PlayerJoinSyncPacket.
         INSTANCES.CLIENT_SETTINGS.setMasterServer(false);
-        // Task #54 (v2.0.9) — purge in-flight symbol sync state on disconnect.
+        // Task #54 (v2.1.0) — purge in-flight symbol sync state on disconnect.
         net.kroia.banksystem.client.company.ClientSymbolRegistry.clear();
     }
     // Called from the client side
@@ -663,7 +663,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             }
         }
 
-        // Task #45 (v2.0.8) — recurring payout evaluator. Master-only; the executor
+        // Task #45 (v2.1.0) — recurring payout evaluator. Master-only; the executor
         // internally short-circuits on slave/pre-startup state.
         payoutTickCounter++;
         if (payoutTickCounter % net.kroia.banksystem.banking.company.PayoutExecutor.PAYOUT_TICK_INTERVAL == 0) {
@@ -885,7 +885,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
 
     /**
-     * Task #45 (v2.0.8) — payout manager accessor. On slaves / before startup completes,
+     * Task #45 (v2.1.0) — payout manager accessor. On slaves / before startup completes,
      * returns a fail-closed shim (a fresh {@code PayoutManagerImpl} bound to the shared
      * {@link Instances}) so callers never have to null-check.
      */
@@ -898,7 +898,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
 
     /**
-     * Task #49 (v2.0.8) — dividend payer accessor. Always non-null; on slaves / before
+     * Task #49 (v2.1.0) — dividend payer accessor. Always non-null; on slaves / before
      * startup completes the returned instance short-circuits with
      * {@link net.kroia.banksystem.api.PayDividendResult.Reason#NOT_MASTER}. Callers on
      * the slave should hop through the ARRS {@code AsyncCompanyManager.PAY_DIVIDEND}
@@ -913,7 +913,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
 
     /**
-     * Task #50 (v2.0.8) — client-side visual lookup. Delegates to {@code ShareVisualCache}
+     * Task #50 (v2.1.0) — client-side visual lookup. Delegates to {@code ShareVisualCache}
      * (populated by S2C visual packets) and self-heals on cache miss via
      * {@code ShareVisualCache.tryLookup}. On dedicated servers the cache is unpopulated
      * so every call returns {@code null}, which matches the interface contract.
@@ -945,7 +945,7 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
 
     /**
-     * Task #50 R4 (v2.0.8) — client-side share icon renderer. Returns the concrete
+     * Task #50 R4 (v2.1.0) — client-side share icon renderer. Returns the concrete
      * implementation wired in {@code BankSystemColorHandlers}; on dedicated servers
      * the client class is never loaded and the accessor returns {@code null}, matching
      * the interface contract.
@@ -1027,7 +1027,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             manager.onPlayerJoinAsync(player.getUUID(), player.getName().getString());
         }
 
-        // Task #54 (v2.0.8) — slave requests the full company visuals+info snapshot
+        // Task #54 (v2.1.0) — slave requests the full company visuals+info snapshot
         // from master on every handshake and populates SlaveCompanyMirror. Failures
         // (master unreachable, timeout) leave the mirror empty — join-time bulk sync
         // then silently skips and per-id ARRS self-heal covers the miss.
@@ -1043,7 +1043,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             }
         }
 
-        // Task #54 (v2.0.9) — slave requests current symbol manifest from master on handshake,
+        // Task #54 (v2.1.0) — slave requests current symbol manifest from master on handshake,
         // then pulls bytes for any entries it doesn't have on disk yet.
         try {
             net.kroia.banksystem.banking.company.AsyncCompanyManager.getSymbolManifestAsync()
@@ -1093,7 +1093,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         // registry (mod update on master while slave was disconnected), and we want a single
         // fresh retry per unknown item per reconnect. Idempotent on master (no-op).
         ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
-        // Task #54 (v2.0.8) — drop the slave-side company mirror so a stale snapshot
+        // Task #54 (v2.1.0) — drop the slave-side company mirror so a stale snapshot
         // cannot leak across reconnects when the master might have mutated companies.
         net.kroia.banksystem.banking.company.SlaveCompanyMirror.clear();
         // Pair to onSlaveConnectionAccepted: tell dependent mods that master is no longer
@@ -1111,7 +1111,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         // Same rationale as onSlaveConnectionLost above — clear the negative cache so
         // reconnect retries formerly-INVALID lookups exactly once.
         ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
-        // Task #54 (v2.0.8) — drop the slave-side company mirror on clean disconnect.
+        // Task #54 (v2.1.0) — drop the slave-side company mirror on clean disconnect.
         net.kroia.banksystem.banking.company.SlaveCompanyMirror.clear();
         // Clean-disconnect path (local disconnect() call). Dependent mods invalidate their
         // caches the same way — the semantics are identical: master is unreachable.
