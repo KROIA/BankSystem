@@ -19,7 +19,7 @@ Lifecycle:
 
 - **Auto-created** with default values the first time the world is loaded with BankSystem installed (a warning `ServerBank settings file not found, creating default settings file.` is logged).
 - **Loaded** every time the world/server starts.
-- **Rewritten regularly while the server runs**: BankSystem saves all its data (including this file) on its save interval (`SAVE_INTERVAL_MINUTES`, default every 5 minutes while players are online), whenever the world is saved (autosave, `/save-all`), and on server shutdown.
+- **Rewritten regularly while the server runs**: BankSystem saves all its data (including this file) on its save interval (`SAVE_INTERVAL_SECONDS`, default every 5 seconds while players are online), whenever the world is saved (autosave, `/save-all`), and on server shutdown.
 
 > [!TIP]
 > **Prefer the in-game settings GUI.** Ops can run `/banksystem manage` to open the bankable-items management screen and, from there, click the **Mod Settings** button to open the editor for every value in this file — booleans, numbers, and the component lists. Edits made there go through the normal save cycle instead of being overwritten. This is the recommended way to change settings at runtime; the section below documents the file for reference and for cases where the GUI is not available (e.g. bootstrap edits before the first server start).
@@ -41,9 +41,11 @@ A freshly created `settings.json` looks like this:
 ```json
 {
   "Utilities": {
-    "SAVE_INTERVAL_MINUTES": 5,
+    "SAVE_INTERVAL_SECONDS": 5,
     "BALANCE_SNAPSHOT_INTERVAL_MINUTES": 1,
     "BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM": 1440,
+    "BALANCE_SNAPSHOT_HEARTBEAT_MINUTES": 60,
+    "BALANCE_HISTORY_RETENTION_SWEEP_MINUTES": 60,
     "LOGGING_ENABLE_INFO": true,
     "LOGGING_ENABLE_WARNING": true,
     "LOGGING_ENABLE_ERROR": true,
@@ -58,6 +60,7 @@ A freshly created `settings.json` looks like this:
     "ADDITIONAL_DEPOSIT_GATED_COMPONENTS": [],
     "ALLOW_ALL_ITEMS": false,
     "CONFIRM_ITEMID_MERGE": false,
+    "CONFIRM_ITEMID_REPAIR": false,
     "BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL": 20,
     "BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL": 20
   },
@@ -91,9 +94,11 @@ A freshly created `settings.json` looks like this:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `SAVE_INTERVAL_MINUTES` | number | `5` | Interval in minutes at which BankSystem auto-saves all its data (bank accounts, item registry, and this settings file). Saves only run while at least one player is online, plus one final save after the last player leaves. |
-| `BALANCE_SNAPSHOT_INTERVAL_MINUTES` | number | `1` | Interval in minutes between balance snapshots. Snapshots feed the **Balance History** chart of the [Bank Display block](Usage.md#bank-display). One snapshot is also taken at server start. Set to `0` to disable periodic snapshots. |
-| `BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM` | number | `1440` | Maximum number of snapshot records kept per item per account; the oldest records are pruned when the limit is exceeded. `0` means unlimited — **the history database file can grow extremely large over time** (a warning is logged at startup in that case). |
+| `SAVE_INTERVAL_SECONDS` | number | `5` | Interval in **seconds** at which BankSystem auto-saves all its data (bank accounts, item registry, and this settings file). Valid range `1`–`86400`; out-of-range values are clamped. Saves only run while at least one player is online, plus one final save after the last player leaves. <br>**Renamed in v2.1.0** (was `SAVE_INTERVAL_MINUTES`). A file still carrying the old key falls back to the 5-second default — if you ran a custom interval, set it again in seconds. The shorter window closes an item-duplication gap where a crash between a withdrawal and the next save left the items in both the bank and the player's inventory. |
+| `BALANCE_SNAPSHOT_INTERVAL_MINUTES` | number | `1` | Interval in minutes between balance snapshots. Snapshots feed the **Balance History** chart of the [Bank Terminal](Usage.md#balance-history-chart) and the [Bank Display block](Usage.md#bank-display). A row is only written when the balance actually changed since the last one (see `BALANCE_SNAPSHOT_HEARTBEAT_MINUTES`). One snapshot is also taken at server start. Set to `0` to disable periodic snapshots. |
+| `BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM` | number | `1440` | **Deprecated since v2.0.7 and no longer enforced** — the tiered retention plan below replaced it. The key is kept so existing files load unchanged; a non-zero value logs a one-shot warning at server start. |
+| `BALANCE_SNAPSHOT_HEARTBEAT_MINUTES` | number | `60` | Maximum minutes between forced snapshot rows for an idle account, so long-untouched series still have data points to draw. `0` disables the heartbeat — only real balance changes are recorded (chart lines still connect across the gaps). |
+| `BALANCE_HISTORY_RETENTION_SWEEP_MINUTES` | number | `60` | How often the balance-history downsample/prune sweep runs. One sweep also runs synchronously at server start, so histories written by v2.0.6 or earlier are compacted on the first boot after upgrading. Higher values mean less database work but a larger file between sweeps. `0` disables retention entirely — **the history database then grows without bound.** <br>The sweep keeps full resolution for the last 24 hours, one row per 15 minutes from 24 hours to 7 days, one row per hour from 7 to 30 days, one row per day from 30 days to a year, and deletes everything older than a year. |
 | `LOGGING_ENABLE_INFO` | boolean | `true` | Enables BankSystem's info-level log messages. |
 | `LOGGING_ENABLE_WARNING` | boolean | `true` | Enables BankSystem's warning-level log messages. |
 | `LOGGING_ENABLE_ERROR` | boolean | `true` | Enables BankSystem's error-level log messages. |
@@ -116,6 +121,7 @@ A freshly created `settings.json` looks like this:
 | `ADDITIONAL_DEPOSIT_GATED_COMPONENTS` | list of strings | `[]` | Extra **deposit-gated** item component type ids. Gated components are ignored for identification too, but deposits of items carrying them are only accepted in withdrawal-fresh condition. Extends the datapack tag `banksystem:deposit_gated_components`. See the [deep dive](#volatile--deposit-gated-item-components) below. |
 | `ALLOW_ALL_ITEMS` | boolean | `false` | **Blacklist-only mode.** When `false` (default), only items in the explicit allow-list (see [Administration → allow / disallow items](Administration.md)) can carry a balance — this is the historical whitelist behavior and existing worlds keep it. When `true`, every valid item is bankable except those in the built-in blacklist (bedrock, barrier, command blocks, debug stick, knowledge book, all sub-denomination money items, …); useful for admins running large modpacks who don't want to curate the allow-list item-by-item. The blacklist always wins regardless of this setting. Toggling the value takes effect immediately — no restart needed — and the explicit allow-list is preserved as advisory data if you flip it back off later. |
 | `CONFIRM_ITEMID_MERGE` | boolean | `false` | **One-shot confirmation flag for the ItemID merge guard.** When a change to the component lists would irreversibly merge genuinely distinct bank items, the server refuses to start and logs a report. Setting this to `true` approves that merge on the next startup; the flag automatically resets to `false` afterwards. See [Changing the Lists on an Existing World](#changing-the-lists-on-an-existing-world). |
+| `CONFIRM_ITEMID_REPAIR` | boolean | `false` | **One-shot confirmation flag for the ItemID world-repair guard.** When world load detects the pre-v2.0.3 cent-shift corruption signature (`ItemIDs.nbt` overwritten with a fresh mapping while the rest of the world data still references the old shorts), the master server refuses to start and logs the proposed remap table. Setting this to `true` approves that repair on the next startup: the old mapping is restored, the previous file is copied aside as `ItemIDs.nbt.pre-repair-<timestamp>`, and the flag resets itself to `false`. Healthy worlds never trigger the guard. |
 | `BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL` | number | `20` | Interval in game ticks between work cycles of the [Bank Download Block](Usage.md#bank-download-block) (20 ticks = 1 second). |
 | `BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL` | number | `20` | Interval in game ticks between work cycles of the [Bank Upload Block](Usage.md#bank-upload-block) (20 ticks = 1 second). |
 

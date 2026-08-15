@@ -70,6 +70,8 @@ Each entry below states its side and thread. When in doubt, marshal to the serve
 | `getSlaveConnectionAcceptedSignal()` | `Signal` | — | **slave** | Netty | this slave's handshake with its master completed |
 | `getSlaveConnectionLostSignal()` | `Signal` | — | **slave** | Netty | this slave lost its master connection (edge-triggered) |
 | `getTrustChangedSignal()` | `DataEvent<TrustChangeInfo>` | `{slaveID, trusted}` | **master** | server main | a slave was trusted/untrusted at runtime |
+| `getPayoutExecutedEvent()` | `DataEvent<PayoutExecutedInfo>` | `{companyId, scheduleId, sourceAccount, targetUuid, amount, status, time}` | **master** | server | a company payout schedule was evaluated — success **or** failure |
+| `getDividendPaidEvent()` | `DataEvent<DividendPaidEvent>` | `{companyId, perShareAmount, totalPaid, holderCount, time}` | **master** | server | a dividend run completed successfully |
 
 ---
 
@@ -151,6 +153,32 @@ Contract:
 Fires on the **master** after a volatile-component ItemID merge (see the Async Forwarding / ItemID docs) has been fully consolidated into BankSystem's own state (balances, locked balances, allowed items, account icons). Payload is an **unmodifiable** `Map<ItemID, ItemID>` of merged alias → canonical ItemID.
 
 Dependent mods must consolidate their own ItemID-keyed state (markets, orders, price histories, ...) under the canonical IDs when this fires. Dispatched on the **server thread**, after BankSystem's own consolidation completed.
+
+---
+
+## Company payouts and dividends
+
+Both events fire on the **master** only — slaves hold no payout state — and are dispatched on the server thread after the bank transfer and the SQL history write have been submitted.
+
+### `getPayoutExecutedEvent()`
+
+Fires every time the payout scheduler evaluates a schedule, **including failures**, so a listener can drive badges, metrics, or an alerting hook without polling the history table:
+
+```java
+events.getPayoutExecutedEvent().addListener(info -> {
+    if (info.status() != PayoutHistoryRecord.Status.OK) {
+        // e.g. INSUFFICIENT_FUNDS, TARGET_MISSING — warn the company's managers
+    }
+});
+```
+
+`amount()` is the raw fixed-point value (scale 100) in the schedule's currency, and `sourceAccount()` is the company's bound bank account number.
+
+### `getDividendPaidEvent()`
+
+Fires **once per successful run** of `IDividendPayer.payDividend`. Refused runs (invalid input, insufficient funds, no holders) never fire it, so receiving the event means every holder was paid.
+
+`perShareAmount()` and `totalPaid()` are raw fixed-point values; `holderCount()` is the number of accounts credited.
 
 ---
 
