@@ -61,10 +61,10 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
     // server agree on a single source of truth.
     // ------------------------------------------------------------------
 
-    /** Minimum autosave interval in minutes (avoid save-spam every tick). */
-    public static final long MIN_SAVE_INTERVAL_MINUTES = 1L;
-    /** Maximum autosave interval in minutes (1 day). */
-    public static final long MAX_SAVE_INTERVAL_MINUTES = 1440L;
+    /** Minimum autosave interval in seconds (avoid save-spam every tick). */
+    public static final long MIN_SAVE_INTERVAL_SECONDS = 1L;
+    /** Maximum autosave interval in seconds (1 day). */
+    public static final long MAX_SAVE_INTERVAL_SECONDS = 86_400L;
 
     /** Minimum balance-snapshot interval in minutes; 0 disables snapshots entirely. */
     public static final long MIN_SNAPSHOT_INTERVAL_MINUTES = 0L;
@@ -270,7 +270,7 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
      * <p>
      * Bounds (see the constants above):
      * <ul>
-     *   <li>{@code Utilities.SAVE_INTERVAL_MINUTES} ∈ [1, 1440]</li>
+     *   <li>{@code Utilities.SAVE_INTERVAL_SECONDS} ∈ [1, 86,400]</li>
      *   <li>{@code Utilities.BALANCE_SNAPSHOT_INTERVAL_MINUTES} ∈ [0, 10,080] (0 = disabled)</li>
      *   <li>{@code Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM} ∈ [0, 10,000,000] (0 = unlimited)</li>
      *   <li>{@code Player.STARTING_BALANCE} ∈ [0, 10^12]</li>
@@ -288,8 +288,8 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
      */
     public static void sanitize(BankSystemModSettings settings) {
         // Utilities
-        settings.UTILITIES.SAVE_INTERVAL_MINUTES.set(
-                clamp(settings.UTILITIES.SAVE_INTERVAL_MINUTES.get(), MIN_SAVE_INTERVAL_MINUTES, MAX_SAVE_INTERVAL_MINUTES));
+        settings.UTILITIES.SAVE_INTERVAL_SECONDS.set(
+                clamp(settings.UTILITIES.SAVE_INTERVAL_SECONDS.get(), MIN_SAVE_INTERVAL_SECONDS, MAX_SAVE_INTERVAL_SECONDS));
         settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.set(
                 clamp(settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.get(), MIN_SNAPSHOT_INTERVAL_MINUTES, MAX_SNAPSHOT_INTERVAL_MINUTES));
         settings.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.set(

@@ -159,7 +159,15 @@ public final class AsyncCompanyManager {
     // ------------------------------------------------------------------
     // Param records + codecs
     // ------------------------------------------------------------------
-    public record CreateInput(String name, long maxSupply, UUID callerUUID, String callerName) {
+
+    /**
+     * Implemented by every param record that names the acting player. The record's own
+     * {@code callerUUID()} accessor satisfies it — add it to any new caller-bearing input so
+     * the master can verify the claim against the packet sender instead of trusting the payload.
+     */
+    public interface HasCallerUUID { UUID callerUUID(); }
+
+    public record CreateInput(String name, long maxSupply, UUID callerUUID, String callerName) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, CreateInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.STRING_UTF8, p -> p.name,
                 ByteBufCodecs.VAR_LONG, p -> p.maxSupply,
@@ -177,7 +185,7 @@ public final class AsyncCompanyManager {
                 CreateOutput::new);
     }
 
-    public record TransferInput(String companyName, UUID callerUUID, String targetName) {
+    public record TransferInput(String companyName, UUID callerUUID, String targetName) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, TransferInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.STRING_UTF8, p -> p.companyName,
                 UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
@@ -193,7 +201,7 @@ public final class AsyncCompanyManager {
                 TransferOutput::new);
     }
 
-    public record DissolveInput(String companyName, UUID callerUUID) {
+    public record DissolveInput(String companyName, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, DissolveInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.STRING_UTF8, p -> p.companyName,
                 UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
@@ -208,7 +216,7 @@ public final class AsyncCompanyManager {
                 DissolveOutput::new);
     }
 
-    public record DescriptionInput(String companyName, UUID callerUUID, String text) {
+    public record DescriptionInput(String companyName, UUID callerUUID, String text) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, DescriptionInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.STRING_UTF8, p -> p.companyName,
                 UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
@@ -258,7 +266,7 @@ public final class AsyncCompanyManager {
     }
 
     /** Task #43h — list company names visible to the caller under a rights filter. */
-    public record ListInput(UUID callerUUID, byte filterKind) {
+    public record ListInput(UUID callerUUID, byte filterKind) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, ListInput> STREAM_CODEC = StreamCodec.composite(
                 UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
                 ByteBufCodecs.BYTE, p -> p.filterKind,
@@ -289,7 +297,7 @@ public final class AsyncCompanyManager {
      */
     public record CreatePayoutInput(int companyId, @Nullable UUID target, long amount, long intervalTicks,
                                     long nowTick, UUID callerUUID, int targetAccountNr,
-                                    byte mode, short currencyItem) {
+                                    byte mode, short currencyItem) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, CreatePayoutInput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {
                     buf.writeVarInt(v.companyId);
@@ -327,7 +335,7 @@ public final class AsyncCompanyManager {
     /** Spec B.1–B.3 (v2.0.8) — extended payout update payload (target/mode/currency editable). */
     public record UpdatePayoutInput(int companyId, long scheduleId, long newAmount,
                                     long newIntervalTicks, UUID callerUUID, @Nullable UUID newTarget,
-                                    int newTargetAccountNr, byte newMode, short newCurrencyItem) {
+                                    int newTargetAccountNr, byte newMode, short newCurrencyItem) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, UpdatePayoutInput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {
                     buf.writeVarInt(v.companyId);
@@ -361,7 +369,7 @@ public final class AsyncCompanyManager {
                 UpdatePayoutOutput::new);
     }
 
-    public record PausePayoutInput(int companyId, long scheduleId, boolean paused, UUID callerUUID) {
+    public record PausePayoutInput(int companyId, long scheduleId, boolean paused, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, PausePayoutInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
                 ByteBufCodecs.VAR_LONG, p -> p.scheduleId,
@@ -375,7 +383,7 @@ public final class AsyncCompanyManager {
                 PausePayoutOutput::new);
     }
 
-    public record DeletePayoutInput(int companyId, long scheduleId, UUID callerUUID) {
+    public record DeletePayoutInput(int companyId, long scheduleId, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, DeletePayoutInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
                 ByteBufCodecs.VAR_LONG, p -> p.scheduleId,
@@ -550,7 +558,7 @@ public final class AsyncCompanyManager {
                                           String bgSymbolId, int bgTint,
                                           String fgSymbolId, int fgTint,
                                           int baseTint,
-                                          String displayName, String description, UUID callerUUID) {
+                                          String displayName, String description, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, UpdateShareVisualsInput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {
                     buf.writeVarInt(v.companyId);
@@ -615,7 +623,7 @@ public final class AsyncCompanyManager {
 
     // Task #49 (v2.0.8) — dividend distribution.
     public record PayDividendInput(int companyId, long amountPerShare, boolean includeCompanyAccount, UUID callerUUID,
-                                   short currencyItem) {
+                                   short currencyItem) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, PayDividendInput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {
                     buf.writeVarInt(v.companyId);
@@ -661,7 +669,7 @@ public final class AsyncCompanyManager {
     }
 
     // Spec §4.3 (v2.0.8) — MANAGE-gated Share Stamper unbind.
-    public record UnbindStamperInput(int companyId, BlockPos pos, UUID callerUUID) {
+    public record UnbindStamperInput(int companyId, BlockPos pos, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, UnbindStamperInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
                 BlockPos.STREAM_CODEC, p -> p.pos,
@@ -784,7 +792,7 @@ public final class AsyncCompanyManager {
     }
 
     // Task #1 (v2.0.8) — StockMarket bridge params.
-    public record OpenShareMarketInput(int companyId, float initialPrice, UUID callerUUID) {
+    public record OpenShareMarketInput(int companyId, float initialPrice, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, OpenShareMarketInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
                 ByteBufCodecs.FLOAT,   p -> p.initialPrice,
@@ -797,7 +805,7 @@ public final class AsyncCompanyManager {
                 ByteBufCodecs.STRING_UTF8,  p -> p.reason == null ? "" : p.reason,
                 OpenShareMarketOutput::new);
     }
-    public record CloseShareMarketInput(int companyId, UUID callerUUID) {
+    public record CloseShareMarketInput(int companyId, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, CloseShareMarketInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
                 UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
@@ -809,7 +817,7 @@ public final class AsyncCompanyManager {
                 CloseShareMarketOutput::new);
     }
     /** Task #1 (v2.0.8) — SET_MARKET_OPEN payload: companyId + desired open flag + caller for MANAGE gate. */
-    public record SetMarketOpenInput(int companyId, boolean open, UUID callerUUID) {
+    public record SetMarketOpenInput(int companyId, boolean open, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, SetMarketOpenInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
                 ByteBufCodecs.BOOL,    p -> p.open,
@@ -831,7 +839,7 @@ public final class AsyncCompanyManager {
     // ------------------------------------------------------------------
     // Spec B.1 (v2.0.8) — filtered account listing for the split target picker.
     // ------------------------------------------------------------------
-    public record ListPlayerAccountsInput(int companyId, UUID subject, byte filterMask, UUID callerUUID) {
+    public record ListPlayerAccountsInput(int companyId, UUID subject, byte filterMask, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, ListPlayerAccountsInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
                 UUIDUtil.STREAM_CODEC, p -> p.subject,
@@ -867,7 +875,7 @@ public final class AsyncCompanyManager {
     // ------------------------------------------------------------------
     // Spec B.3 (v2.0.8) — non-zero item balances on the company account.
     // ------------------------------------------------------------------
-    public record ListItemBalancesInput(int companyId, UUID callerUUID) {
+    public record ListItemBalancesInput(int companyId, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, ListItemBalancesInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
                 UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
@@ -905,7 +913,7 @@ public final class AsyncCompanyManager {
     // ------------------------------------------------------------------
     // Spec B.4 (v2.0.8) — manual missed-payout catch-up.
     // ------------------------------------------------------------------
-    public record PayMissedInput(int companyId, long scheduleId, long amount, UUID callerUUID) {
+    public record PayMissedInput(int companyId, long scheduleId, long amount, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, PayMissedInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
                 ByteBufCodecs.VAR_LONG, p -> p.scheduleId,
@@ -1056,7 +1064,7 @@ public final class AsyncCompanyManager {
     // ------------------------------------------------------------------
     // v2.0.9 — SET_COMPANY_CURRENCY param/result records
     // ------------------------------------------------------------------
-    public record SetCompanyCurrencyInput(int companyId, short currency, UUID callerUUID) {
+    public record SetCompanyCurrencyInput(int companyId, short currency, UUID callerUUID) implements HasCallerUUID {
         public static final StreamCodec<RegistryFriendlyByteBuf, SetCompanyCurrencyInput> STREAM_CODEC =
                 StreamCodec.of(
                         (buf, v) -> {
@@ -1157,6 +1165,18 @@ public final class AsyncCompanyManager {
             if (!isRequestAllowed(input, slaveID, playerSender, playerName))
                 return CompletableFuture.completedFuture(fallbackOutput(input.function));
 
+            // The acting player travels inside the payload, so a modified client could otherwise
+            // claim to be somebody else (e.g. dissolve a company it is not a founder of). For
+            // player-initiated calls the claimed caller must be the packet sender. Server-side
+            // callers (commands, internal ARRS) carry no sender and stay exempt.
+            Object params = input.decodeParams();
+            if (playerSender != null && params instanceof HasCallerUUID p
+                    && !playerSender.equals(p.callerUUID())) {
+                warn("The player '" + playerName + "' try's to call the function: '" + input.function
+                        + "' on behalf of '" + p.callerUUID() + "' — rejected.");
+                return CompletableFuture.completedFuture(fallbackOutput(input.function));
+            }
+
             IServerBankManager bm = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
             CompanyManager cm = CompanyManager.get();
             if (bm == null || cm == null) {
@@ -1218,12 +1238,15 @@ public final class AsyncCompanyManager {
                      GET_SYMBOL_MANIFEST, PULL_SYMBOL_BYTES -> true;
                 // ── MANAGE-gated mutations from client screens ────────────────────────
                 // The server-side handler re-checks rights via gateManage / gateFounder,
-                // so allowing these from the client is safe.
-                case UPDATE_SHARE_VISUALS,
+                // and the caller UUID inside the payload is verified against the packet
+                // sender (see handleOnMasterServer), so allowing these from the client is safe.
+                case UPDATE_SHARE_VISUALS, UPDATE_DESCRIPTION,
                      CREATE_PAYOUT, UPDATE_PAYOUT, PAUSE_PAYOUT, DELETE_PAYOUT,
                      PAY_DIVIDEND, PAY_MISSED, UNBIND_STAMPER,
                      OPEN_SHARE_MARKET, CLOSE_SHARE_MARKET, SET_MARKET_OPEN,
                      SET_COMPANY_CURRENCY -> true;
+                // ── Founder-gated mutations from the Danger tab ───────────────────────
+                case TRANSFER_FOUNDER, DISSOLVE_COMPANY -> true;
                 default -> false;
             };
         }

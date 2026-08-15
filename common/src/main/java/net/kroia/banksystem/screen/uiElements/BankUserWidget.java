@@ -127,6 +127,8 @@ public class BankUserWidget extends BankSystemGuiElement {
     private final boolean canManage;
     private final GuiScreen parentScreen;
     private final Consumer<BankUserWidget> onRemoveUser;
+    /** Optional hook fired after the permission edit screen saved a new permission mask. */
+    private Runnable onPermissionChanged = null;
 
 
     public BankUserWidget(BankUserData userData, Consumer<BankUserWidget> onRemoveUser, boolean canManage, GuiScreen parentScreen)
@@ -164,6 +166,15 @@ public class BankUserWidget extends BankSystemGuiElement {
 
     public BankUserData getUserData() {
         return userData;
+    }
+
+    /**
+     * Registers a callback invoked once the permission edit screen has been saved.
+     * Owners that persist immediately (e.g. the company Workers tab) use this instead of
+     * a separate save button; owners with their own save button simply leave it unset.
+     */
+    public void setOnPermissionChanged(Runnable callback) {
+        this.onPermissionChanged = callback;
     }
 
     /**
@@ -217,7 +228,8 @@ public class BankUserWidget extends BankSystemGuiElement {
             PermissionEditScreen permissionEditScreen = new PermissionEditScreen(userData, (permission)->
             {
                 userData.permissions = permission;
-
+                if (onPermissionChanged != null)
+                    onPermissionChanged.run();
             }, parentScreen);
             Minecraft.getInstance().setScreen(permissionEditScreen);
         }

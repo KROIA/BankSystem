@@ -127,7 +127,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public void tickUpdate()
     {
         tickCounter++;
-        if(tickCounter >= BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.SAVE_INTERVAL_MINUTES.get() * 1200) // 1 minute = 1200 ticks
+        if(tickCounter >= BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.SAVE_INTERVAL_SECONDS.get() * 20) // 1 second = 20 ticks
         {
             tickCounter = 0;
             // Check if any player is online

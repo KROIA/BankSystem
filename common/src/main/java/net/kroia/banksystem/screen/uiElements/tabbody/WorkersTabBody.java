@@ -33,7 +33,6 @@ public class WorkersTabBody extends TabBody {
     private final Label titleLabel;
     private final VerticalListView userList;
     private final Button addUserButton;
-    private final Button saveButton;
     private final Button openAccountButton;
     private final boolean canManage;
 
@@ -56,18 +55,14 @@ public class WorkersTabBody extends TabBody {
 
         addUserButton = new Button(
                 Component.translatable(PREFIX + "add_worker").getString(), this::onAddUser);
-        saveButton = new Button(
-                Component.translatable(PREFIX + "save_workers").getString(), this::onSave);
         openAccountButton = new Button(
                 Component.translatable(PREFIX + "open_bank_account").getString(), this::onOpenAccount);
 
         addUserButton.setEnabled(canManage);
-        saveButton.setEnabled(canManage);
 
         addChild(titleLabel);
         addChild(userList);
         addChild(addUserButton);
-        addChild(saveButton);
         addChild(openAccountButton);
 
         fetchUsers();
@@ -108,6 +103,7 @@ public class WorkersTabBody extends TabBody {
 
         for (BankUserData u : data.users.values()) {
             BankUserWidget widget = new BankUserWidget(u, this::scheduleRemove, canManage, screen);
+            widget.setOnPermissionChanged(this::save);
             // Founders' remove buttons are locked — founder management is the Danger tab's domain.
             if (founders.contains(u.userName)) {
                 widget.setRemoveButtonEnabled(false);
@@ -156,6 +152,7 @@ public class WorkersTabBody extends TabBody {
                     ? info.founderNames() : List.of();
             refreshRemoveButtonStates(founders);
             layoutChangedInternal();
+            save();
         });
     }
 
@@ -174,6 +171,7 @@ public class WorkersTabBody extends TabBody {
                             userData.userUUID(), userData.userName(), false,
                             BankPermission.DEPOSIT.getValue());
                     BankUserWidget widget = new BankUserWidget(bud, this::scheduleRemove, canManage, screen);
+                    widget.setOnPermissionChanged(this::save);
                     userWidgets.put(userData.userUUID(), widget);
                     userList.addChild(widget);
                     var info = screen.info();
@@ -181,6 +179,7 @@ public class WorkersTabBody extends TabBody {
                             ? info.founderNames() : List.of();
                     refreshRemoveButtonStates(founders);
                     layoutChangedInternal();
+                    save();
                 });
                 List<UserData> all = new ArrayList<>(
                         bankManagerData.userMapData().userMap().values());
@@ -191,7 +190,8 @@ public class WorkersTabBody extends TabBody {
         });
     }
 
-    private void onSave() {
+    /** Pushes the current worker roster + permissions to the server. Fired by every edit. */
+    private void save() {
         if (!canManage) return;
         var info = screen.info();
         if (info == null || !info.present()) return;
@@ -242,12 +242,10 @@ public class WorkersTabBody extends TabBody {
         int openBtnW = Math.min(220, w - 2 * PADDING);
 
         if (canManage) {
-            int manageBtnW = Math.min(120, (w - 2 * PADDING - ROW_SPACING * 2 - openBtnW) / 2);
+            int manageBtnW = Math.min(120, w - 2 * PADDING - ROW_SPACING - openBtnW);
             addUserButton.setBounds(PADDING, btnRowY, manageBtnW, ROW_HEIGHT);
-            saveButton.setBounds(PADDING + manageBtnW + ROW_SPACING, btnRowY, manageBtnW, ROW_HEIGHT);
         } else {
             addUserButton.setBounds(0, 0, 0, 0);
-            saveButton.setBounds(0, 0, 0, 0);
         }
         openAccountButton.setBounds(w - PADDING - openBtnW, btnRowY, openBtnW, ROW_HEIGHT);
 
