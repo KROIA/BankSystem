@@ -45,8 +45,16 @@ public class CompanyManagerTests extends TestSuite {
         addTest("list_companies_managed_by_falls_back_to_founder", this::testListCompaniesManagedByFallsBackToFounder);
     }
 
+    /**
+     * A throwaway manager detached from the live bank manager. These tests use
+     * synthetic bank account numbers (2, 3, 5, 42, 77, ...) that do not exist in
+     * the running world; without detaching, every create but account 1 would be
+     * rejected with BANK_ACCOUNT_MISSING.
+     */
     private CompanyManager fresh() {
-        return new CompanyManager();
+        CompanyManager cm = new CompanyManager();
+        cm.detachBankManager();
+        return cm;
     }
 
     // ------------------------------------------------------------------

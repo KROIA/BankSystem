@@ -44,7 +44,12 @@ public class PayoutManagerTests extends TestSuite {
         addTest("schedule_immutable_copy_with", this::testScheduleImmutableCopyWith);
     }
 
-    private CompanyManager fresh() { return new CompanyManager(); }
+    /** Detached from the live bank manager — see CompanyManagerTests#fresh(). */
+    private CompanyManager fresh() {
+        CompanyManager cm = new CompanyManager();
+        cm.detachBankManager();
+        return cm;
+    }
 
     private Company make(CompanyManager cm, String name, int account) {
         return cm.createCompany(name, account, CALLER, 100L).company;

@@ -376,9 +376,14 @@ public class DatabaseManager {
      * Writes a transactionally-consistent snapshot of the live DB to
      * {@code target} using SQLite's {@code VACUUM INTO} (driver-agnostic;
      * available in SQLite 3.27+). Runs on the DB worker thread so it is
-     * serialized against writes but does not need a pause -- concurrent
-     * transactions are captured against VACUUM's read snapshot and land
-     * in the rollback journal, invisible to the copy.
+     * serialized against writes and needs no pause.
+     * <p>
+     * The shared connection runs with {@code autoCommit=false}, so an implicit
+     * transaction is open by the time we get here and SQLite refuses to VACUUM
+     * inside one. Pending work is committed and the connection is taken out of
+     * transaction mode for the copy, then restored. Because we hold the DB
+     * worker thread, that pending work is our own queued writes -- committing
+     * them means the snapshot includes everything written up to this call.
      * <p>
      * Parent directories are created if missing. The target path is
      * interpolated into a SQL literal after doubling single-quotes
@@ -400,8 +405,15 @@ public class DatabaseManager {
                     return;
                 }
                 String escaped = abs.toString().replace("'", "''");
+                boolean wasInTransaction = !c.getAutoCommit();
+                if (wasInTransaction) {
+                    c.commit();
+                    c.setAutoCommit(true);
+                }
                 try (Statement stmt = c.createStatement()) {
                     stmt.execute("VACUUM INTO '" + escaped + "'");
+                } finally {
+                    if (wasInTransaction) c.setAutoCommit(false);
                 }
                 logInfo("[BankSystem] snapshot written to " + abs);
                 result.complete(true);

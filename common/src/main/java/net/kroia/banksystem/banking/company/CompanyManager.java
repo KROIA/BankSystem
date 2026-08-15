@@ -86,6 +86,25 @@ public final class CompanyManager implements ServerSaveableChunked {
     private int nextCompanyId = 1;
 
     /**
+     * When set, {@link #getBankManager()} reports "no bank manager" instead of
+     * resolving the live server singleton. Unit tests construct throwaway
+     * managers and reference synthetic bank account numbers; without this they
+     * would be validated against the running world, where only the accounts of
+     * actually-joined players exist. See {@link #detachBankManager()}.
+     */
+    private boolean bankManagerDetached = false;
+
+    /**
+     * Detach this instance from the live bank manager — unit-test seam, never
+     * called in production. Once detached, bank-account existence checks and
+     * permission grants are skipped, which is the "bank manager unavailable"
+     * branch the validation paths already handle.
+     */
+    public void detachBankManager() {
+        bankManagerDetached = true;
+    }
+
+    /**
      * Task #51 (v2.1.0) — reverse index of Share Stamper bindings per company.
      * <p>
      * Persisted to NBT via {@link #save(Map)} / {@link #load(Map)} under the
@@ -777,7 +796,8 @@ public final class CompanyManager implements ServerSaveableChunked {
     // Helpers
     // ------------------------------------------------------------------
     @Nullable
-    private static IServerBankManager getBankManager() {
+    private IServerBankManager getBankManager() {
+        if (bankManagerDetached) return null;
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_BANK_MANAGER == null) return null;
         return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
     }
