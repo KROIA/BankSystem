@@ -55,7 +55,6 @@ A freshly created `settings.json` looks like this:
     "STARTING_BALANCE": 0
   },
   "ServerBank": {
-    "ITEM_TRANSFER_TICK_INTERVAL": 2,
     "ADDITIONAL_VOLATILE_COMPONENTS": [],
     "ADDITIONAL_DEPOSIT_GATED_COMPONENTS": [],
     "ALLOW_ALL_ITEMS": false,
@@ -116,7 +115,6 @@ A freshly created `settings.json` looks like this:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `ITEM_TRANSFER_TICK_INTERVAL` | number | `2` | Reserved. This setting is present in the file but is not used by any active code path in the current version. |
 | `ADDITIONAL_VOLATILE_COMPONENTS` | list of strings | `[]` | Extra **volatile** item component type ids (e.g. `"tfc:food"`) that are ignored for item identification. Extends the datapack tag `banksystem:volatile_item_components`. See the [deep dive](#volatile--deposit-gated-item-components) below. |
 | `ADDITIONAL_DEPOSIT_GATED_COMPONENTS` | list of strings | `[]` | Extra **deposit-gated** item component type ids. Gated components are ignored for identification too, but deposits of items carrying them are only accepted in withdrawal-fresh condition. Extends the datapack tag `banksystem:deposit_gated_components`. See the [deep dive](#volatile--deposit-gated-item-components) below. |
 | `ALLOW_ALL_ITEMS` | boolean | `false` | **Blacklist-only mode.** When `false` (default), only items in the explicit allow-list (see [Administration → allow / disallow items](Administration.md)) can carry a balance — this is the historical whitelist behavior and existing worlds keep it. When `true`, every valid item is bankable except those in the built-in blacklist (bedrock, barrier, command blocks, debug stick, knowledge book, all sub-denomination money items, …); useful for admins running large modpacks who don't want to curate the allow-list item-by-item. The blacklist always wins regardless of this setting. Toggling the value takes effect immediately — no restart needed — and the explicit allow-list is preserved as advisory data if you flip it back off later. |

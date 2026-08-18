@@ -96,7 +96,7 @@ public class SerializationTests extends TestSuite {
         BankManagerData original = new BankManagerData(
                 new BankManagerData.UserMapData(new HashMap<>()),
                 new BankManagerData.BankAccountsData(new HashMap<>()),
-                new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+                new ArrayList<>(), new ArrayList<>());
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
         try {
             rawCodec.encode(buf, original);
@@ -112,8 +112,6 @@ public class SerializationTests extends TestSuite {
             r = assertEquals("allowedItems.size()", original.allowedItems().size(), d.allowedItems().size());
             if (!r.passed()) return r;
             r = assertEquals("blacklistedItems.size()", original.blacklistedItems().size(), d.blacklistedItems().size());
-            if (!r.passed()) return r;
-            r = assertEquals("notRemovableItems.size()", original.notRemovableItems().size(), d.notRemovableItems().size());
             if (!r.passed()) return r;
             return pass("BankManagerData codec round-trip preserved all fields");
         } finally {

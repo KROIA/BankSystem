@@ -83,6 +83,16 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
      * A personal bank account can still have multiple users, but only one personal bank owner.
      */
     private @Nullable User personalBankOwner;
+
+    /**
+     * Task #58 (v2.1.1) — the UUID of the player who CREATED this account via
+     * {@code /bank create} or {@code /company create}. {@code null} for the auto-created
+     * personal account and for legacy accounts loaded from pre-#58 worlds. Used only to
+     * enforce the per-player account cap ({@code ServerBankManager.countAccountsCreatedBy})
+     * — shared-account membership and company-employee status never set it, so they do not
+     * count against the creator's quota.
+     */
+    private @Nullable UUID creatorUUID;
     private final Map<UUID, BankUser> users = new HashMap<>();
     private final Map<ItemID, ServerBank> banks = new HashMap<>();
     private boolean hasChanges = false;
@@ -137,12 +147,14 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             return null; // Invalid user or account number
         }
 
-        ServerBank moneyBank = ServerBank.create(MoneyItem.getItemID(), startMoneyBalance);
-        if (moneyBank == null) {
-            return null; // Failed to create money bank
-        }
         Map<ItemID, ServerBank> banks = new HashMap<>();
-        banks.put(MoneyItem.getItemID(), moneyBank); // Add money bank to the account
+        // Task #57: money is a default-on item, gated like every other slot. ServerBank.create
+        // returns null for a disallowed/blacklisted item, so a blacklisted money item now
+        // yields a VALID account with no money bank rather than failing account creation.
+        ServerBank moneyBank = ServerBank.create(MoneyItem.getItemID(), startMoneyBalance);
+        if (moneyBank != null) {
+            banks.put(MoneyItem.getItemID(), moneyBank); // Add money bank to the account
+        }
         ServerBankAccount acc = new ServerBankAccount(accountNumber, user, new ArrayList<>(), banks);
         BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_CREATED.notifyListeners(acc); // Notify listeners that a new bank account has been created
         return acc; // Return the newly created bank account
@@ -823,6 +835,13 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
 
     @Override
+    public @Nullable UUID getCreatorUUID() {
+        return creatorUUID;
+    }
+    @Override
+    public void setCreatorUUID(@Nullable UUID creatorUUID) {
+        this.creatorUUID = creatorUUID;
+    }
     public @Nullable User getPersonalBankOwner() {
         return personalBankOwner; // Get the personalBankOwnerData of the bank account
     }
@@ -845,6 +864,13 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         itemID = ItemIDManager.resolveAlias(itemID); // alias safety net (see getAccountData)
         if (banks.containsKey(itemID)) {
             return banks.get(itemID); // Return existing bank if it already exists
+        }
+        // Task #57 chokepoint: never create a slot for a blacklisted item (incl. a disallowed
+        // money bank). Stops blacklist bypass via getOrCreate…-style resurrection. Callers
+        // already tolerate a null return. ServerBank.create also gates on isItemIDAllowed, but
+        // this explicit check makes the skip deliberate (no phantom slot).
+        if (BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isItemIDBlacklisted(itemID)) {
+            return null;
         }
         ServerBank bank = ServerBank.create(itemID, startBalance); // Create a new bank with 0 balance
         if (bank != null) {
@@ -910,7 +936,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         List<ItemID> emptyBanks = new ArrayList<>();
         for (Map.Entry<ItemID, ServerBank> entry : banks.entrySet()) {
             ServerBank bank = entry.getValue();
-            if (bank.getTotalBalance() <= 0 && !BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isItemIDNotRemovable(entry.getKey())) {
+            // Task #57: no "not-removable" special-casing anymore — an empty money slot is
+            // pruned like any other empty slot.
+            if (bank.getTotalBalance() <= 0) {
                 emptyBanks.add(entry.getKey());
             }
         }
@@ -1053,6 +1081,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if(personalBankOwner != null)
             tag.putUUID("personalBankOwnerDataUUID", personalBankOwner.getUUID());
 
+        if(creatorUUID != null)
+            tag.putUUID("creatorUUID", creatorUUID); // Task #58 — per-player account cap
+
         if (accountIcon != null) {
             CompoundTag iconTag = new CompoundTag();
             accountIcon.save(iconTag); // Save the account icon if set
@@ -1101,6 +1132,12 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             this.personalBankOwner = bankManager.getUserByUUID(personalBankOwnerDataUUID);
         } else {
             this.personalBankOwner = null; // No personalBankOwnerData set
+        }
+
+        if(tag.contains("creatorUUID")) {
+            this.creatorUUID = tag.getUUID("creatorUUID"); // Task #58 — per-player account cap
+        } else {
+            this.creatorUUID = null; // Legacy account (pre-#58) — does not count against any cap
         }
 
         if(tag.contains("accountIcon")) {

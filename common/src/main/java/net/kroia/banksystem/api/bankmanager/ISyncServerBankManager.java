@@ -19,6 +19,15 @@ import java.util.function.Consumer;
 
 public interface ISyncServerBankManager {
 
+    /**
+     * Task #55: mark the bank-data save unit dirty. Master-side persistence hint — call after
+     * mutating any persisted manager state that is NOT caught by the 1&nbsp;Hz account-change
+     * aggregation (e.g. a {@link net.kroia.banksystem.banking.User} field setter, whose owning
+     * {@code User} is serialized inside the manager's save). A missed mark risks silent data
+     * loss on a hard kill because the timer-gated save skips clean units.
+     */
+    void markPersistDirty();
+
 
     void subscribeBankChanges(int accountNr, Consumer<BankAccountData> callback);
     void unsubscribeBankChanges(int accountNr, Consumer<BankAccountData> callback);
@@ -100,13 +109,6 @@ public interface ISyncServerBankManager {
      * @return A list of blacklisted items that cannot be stored in the bank.
      */
     List<ItemID> getBlacklistedItems();
-
-    /**
-     * Returns a list of all items that cannot be removed from the bank.
-     * These items are not allowed to be removed from the bank account.
-     * @return A list of items that cannot be removed from the bank.
-     */
-    List<ItemID> getNotRemovableItems();
 
     /**
      * Returns minimalistic data about the bank manager.
@@ -309,6 +311,18 @@ public interface ISyncServerBankManager {
     List<Integer> getBankAccountNumbers(UUID userUUID);
 
     /**
+     * Task #58 (v2.1.1) — counts ONLY the bank accounts that the given player CREATED
+     * (via {@code /bank create} or {@code /company create}), i.e. accounts whose
+     * {@code creatorUUID} equals {@code userUUID}. The auto-created personal account,
+     * shared-account memberships and company-employee status are all excluded — unlike
+     * {@link #getBankAccountNumbers(UUID)}, which counts membership. Backs the per-player
+     * account cap.
+     * @param userUUID the creating player's UUID
+     * @return the number of accounts created by this player
+     */
+    int countAccountsCreatedBy(UUID userUUID);
+
+    /**
      * Gets a list of bank account numbers that contain an item bank for the specified item
      * @param itemID to search for
      * @return list of bank account numbers
@@ -507,12 +521,29 @@ public interface ISyncServerBankManager {
     boolean disallowItemID(ItemID itemID);
 
     /**
-     * Checks if the given item ID is not removable and cannot be removed from a bank account.
+     * Task #57: disallows the given item ID (incl. {@code banksystem:money}) and returns the
+     * list of holder accounts that were cleared, each with its captured free + locked balance
+     * at clear time. The full holder dump is also written to the server console. NO REFUND is
+     * issued. Backs the (capped) chat summary the command handler shows the executor.
      *
-     * @param itemID The item ID to check.
-     * @return True if the item ID is not removable, false otherwise.
+     * @param itemID The item ID to disallow.
+     * @return The cleared holders (possibly empty), or {@code null} if the input was invalid.
      */
-    boolean isItemIDNotRemovable(ItemID itemID);
+    @Nullable
+    List<DisallowedHolder> disallowItemIDAndReport(ItemID itemID);
+
+    /**
+     * Audit record of one account that held a just-disallowed item (Task #57).
+     *
+     * @param accountNr the holder's bank account number
+     * @param ownerName the account's personal-bank owner name, or the account name for a
+     *                  shared account
+     * @param free      the free (unlocked) balance cleared, in raw units
+     * @param locked    the locked balance cleared, in raw units
+     */
+    record DisallowedHolder(int accountNr, String ownerName, long free, long locked) {
+        public long total() { return free + locked; }
+    }
 
     /**
      * Checks if the given item ID is blacklisted and cannot be stored in a bank account.

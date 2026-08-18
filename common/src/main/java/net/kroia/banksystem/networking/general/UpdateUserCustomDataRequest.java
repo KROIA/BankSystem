@@ -35,6 +35,7 @@ public class UpdateUserCustomDataRequest extends BankSystemGenericRequest<Compou
         User user = manager.getUserByUUID(sender);
         if (user == null) return CompletableFuture.completedFuture(false);
         user.setCustomData(input);
+        manager.markPersistDirty(); // Task #55: User is serialized inside the bank-data save unit
         return CompletableFuture.completedFuture(true);
     }
 

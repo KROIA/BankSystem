@@ -169,14 +169,47 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
 
-        if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().disallowItemID(itemID)) {
-            sendMessage(executor, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
-            return true;
-        }
-        else {
+        // Task #57: disallow any item (incl. banksystem:money). The manager writes the full
+        // holder dump to the server console and returns the cleared holders for the capped
+        // chat summary below.
+        java.util.List<net.kroia.banksystem.api.bankmanager.ISyncServerBankManager.DisallowedHolder> cleared =
+                BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().disallowItemIDAndReport(itemID);
+        if (cleared == null) {
             sendMessage(executor, BankSystemTextMessages.getItemNotAllowedFailedMessage(itemID.getName()));
             return false;
         }
+        sendMessage(executor, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
+        long total = 0;
+        for (var h : cleared) total += h.total();
+        sendMessage(executor, BankSystemTextMessages.getDisallowClearedSummaryMessage(
+                itemID.getName(), cleared.size(), ServerBank.getFormattedAmountStatic(total)));
+        int cap = Math.min(cleared.size(), 20); // cap chat flood; console has the full dump
+        for (int i = 0; i < cap; i++) {
+            var h = cleared.get(i);
+            sendMessage(executor, BankSystemTextMessages.getDisallowClearedRowMessage(
+                    h.accountNr(), h.ownerName(),
+                    ServerBank.getFormattedAmountStatic(h.free()),
+                    ServerBank.getFormattedAmountStatic(h.locked())));
+        }
+        if (cleared.size() > cap) {
+            sendMessage(executor, BankSystemTextMessages.getDisallowClearedMoreMessage(cleared.size() - cap));
+        }
+
+        // Task #57b — capped company-currency / schedule-pause summary (console has the full dump).
+        net.kroia.banksystem.banking.company.CompanyManager cm =
+                net.kroia.banksystem.banking.company.CompanyManager.get();
+        if (cm != null) {
+            var report = cm.getLastCurrencyBanReport();
+            if (report != null && (!report.affectedCompanies().isEmpty() || report.pausedSchedules() > 0)) {
+                java.util.List<String> names = report.affectedCompanies();
+                int nameCap = Math.min(names.size(), 20);
+                String joined = String.join(", ", names.subList(0, nameCap));
+                if (names.size() > nameCap) joined += ", …";
+                sendMessage(executor, BankSystemTextMessages.getCurrencyBanSummaryMessage(
+                        names.size(), report.pausedSchedules(), joined));
+            }
+        }
+        return true;
     }
     @Override
     public CompletableFuture<Boolean> banksystem_disallowItem_async(@NotNull UUID executor, ItemID itemID) {
@@ -456,6 +489,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
         bankUser.setEnableBankNotifications(true);
+        BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().markPersistDirty(); // Task #55: User is serialized in the bank-data save unit
         sendMessage(executor, BankSystemTextMessages.getBankUserNotificationEnabledMessage());
         return true;
     }
@@ -477,6 +511,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
         bankUser.setEnableBankNotifications(false);
+        BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().markPersistDirty(); // Task #55: User is serialized in the bank-data save unit
         sendMessage(executor, BankSystemTextMessages.getBankUserNotificationDisabledMessage());
         return true;
     }
@@ -572,12 +607,20 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             sendMessage(executor, BankSystemTextMessages.getUserNotFoundMessage(tryGetPlayerName(executor)));
             return 0;
         }
+        // Task #58 — per-player bank-account cap. -1 = unlimited; 0 = none allowed.
+        int accountCap = BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.MAX_BANK_ACCOUNTS_PER_PLAYER.get();
+        if(accountCap >= 0 && BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().countAccountsCreatedBy(executor) >= accountCap)
+        {
+            sendMessage(executor, BankSystemTextMessages.getCapBankAccountsReachedMessage(accountCap));
+            return 0;
+        }
         IServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().createBankAccount(accountName);
         if(account == null)
         {
             sendMessage(executor, BankSystemTextMessages.getCantCreateBankAccountMessage());
             return 0;
         }
+        account.setCreatorUUID(executor); // Task #58 — mark creator for the per-player cap
         boolean isAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isBanksystemAdmin(executor);
         account.addUser(user, BankPermission.getAllPermissions());
         ServerBankManager.addDefaultBankSlots(account);

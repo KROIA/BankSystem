@@ -68,6 +68,10 @@ public final class AsyncCompanyManager {
     public static final int CODE_CURRENCY_ITEM_MISSING = 13;
     /** Spec B.1 (v2.1.0) — target lacks DEPOSIT right on the chosen account. */
     public static final int CODE_TARGET_NO_DEPOSIT     = 14;
+    /** Task #58 (v2.1.1) — caller is at the per-player company cap. */
+    public static final int CODE_PER_PLAYER_COMPANY_LIMIT = 15;
+    /** Task #58 (v2.1.1) — caller is at the per-player bank-account cap (company needs a slot). */
+    public static final int CODE_PER_PLAYER_ACCOUNT_LIMIT = 16;
 
     // ------------------------------------------------------------------
     // Function enum
@@ -1306,11 +1310,14 @@ public final class AsyncCompanyManager {
                 case NAME_TAKEN -> CODE_NAME_TAKEN;
                 case INVALID_NAME, INVALID_MAX_SUPPLY -> CODE_INVALID_INPUT;
                 case BANK_ACCOUNT_MISSING, BANK_ACCOUNT_ALREADY_HAS_COMPANY -> CODE_BANK_ACCOUNT_ERROR;
+                case PER_PLAYER_COMPANY_LIMIT -> CODE_PER_PLAYER_COMPANY_LIMIT;
+                case PER_PLAYER_ACCOUNT_LIMIT -> CODE_PER_PLAYER_ACCOUNT_LIMIT;
                 default -> CODE_INTERNAL;
             };
             return OutputData.of(FunctionType.CREATE_COMPANY,
                     new CreateOutput(code, 0, 0, in.name, in.maxSupply));
         }
+        account.setCreatorUUID(in.callerUUID); // Task #58 — company account counts against the founder's cap
         // Task #54 (v2.1.0) — broadcast the fresh company to all clients + slaves so
         // stamped-share tooltips and slave mirrors learn about it immediately (rather
         // than waiting for the next join-time bulk sync).
@@ -2504,6 +2511,9 @@ public final class AsyncCompanyManager {
             short companyCurrencyShort = company.getCompanyCurrency();
             if (companyCurrencyShort == PayoutSchedule.MONEY_CURRENCY) {
                 currencyId = net.kroia.banksystem.minecraft.item.custom.money.MoneyItem.getItemID();
+            } else if (companyCurrencyShort == Company.CURRENCY_UNSET) {
+                // Task #57b — no currency configured: show a zero balance, no invalid ItemID.
+                currencyId = null;
             } else {
                 currencyId = new net.kroia.banksystem.util.ItemID(companyCurrencyShort);
             }

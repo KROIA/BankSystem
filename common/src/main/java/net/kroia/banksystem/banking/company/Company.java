@@ -47,7 +47,15 @@ public final class Company {
     private long nextScheduleId = 1L;
     /** v2.1.0 — last-used timeframe index for the Statistics tab (0=24h, 1=7d, 2=30d, 3=90d, 4=all). */
     private int statisticsTimeframe = 1;
-    /** v2.1.0 — ItemID short of the company's default currency (0 = money). */
+    /**
+     * Task #57b — sentinel for "no currency configured" (currency item was blacklisted while
+     * money itself was also banned, so there was nothing to fall back to). Distinct from
+     * {@code 0} (money) and from any valid item short (which are positive). Every currency
+     * reader treats this as "refuse to pay, no crash" and prompts a reconfigure.
+     */
+    public static final short CURRENCY_UNSET = Short.MIN_VALUE;
+
+    /** v2.1.0 — ItemID short of the company's default currency (0 = money; {@link #CURRENCY_UNSET} = none). */
     private short companyCurrency = 0;
     /** Persisted set of BlockPos positions of Share Stamper blocks bound to this company. */
     private final Set<BlockPos> boundStampers = new HashSet<>();
@@ -166,12 +174,14 @@ public final class Company {
     // ------------------------------------------------------------------
     // Stamper binding persistence helpers (package-private)
     // ------------------------------------------------------------------
-    void addBoundStamper(BlockPos pos) {
-        if (pos != null) boundStampers.add(pos.immutable());
+    /** @return {@code true} when the bound-stamper set actually changed (Task #55). */
+    boolean addBoundStamper(BlockPos pos) {
+        return pos != null && boundStampers.add(pos.immutable());
     }
 
-    void removeBoundStamper(BlockPos pos) {
-        if (pos != null) boundStampers.remove(pos.immutable());
+    /** @return {@code true} when the bound-stamper set actually changed (Task #55). */
+    boolean removeBoundStamper(BlockPos pos) {
+        return pos != null && boundStampers.remove(pos.immutable());
     }
 
     public Set<BlockPos> getBoundStampers() {

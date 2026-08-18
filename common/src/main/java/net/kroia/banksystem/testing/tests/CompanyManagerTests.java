@@ -1,5 +1,7 @@
 package net.kroia.banksystem.testing.tests;
 
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
 import net.kroia.banksystem.banking.company.ShareVisuals;
@@ -9,6 +11,7 @@ import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -43,6 +46,57 @@ public class CompanyManagerTests extends TestSuite {
         addTest("list_all_companies_returns_all", this::testListAllCompaniesReturnsAll);
         addTest("list_companies_foundered_by_filters", this::testListCompaniesFounderedByFilters);
         addTest("list_companies_managed_by_falls_back_to_founder", this::testListCompaniesManagedByFallsBackToFounder);
+        // Task #58 — per-player company cap
+        addTest("per_player_company_cap_at_over_unlimited", this::testPerPlayerCompanyCap);
+    }
+
+    @Nullable
+    private BankSystemModSettings settings() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        return i == null ? null : i.SERVER_SETTINGS;
+    }
+
+    /**
+     * Task #58 — company-count gate in {@code createCompany}: at cap rejects, unlimited (-1)
+     * and 0 behave correctly. Uses a detached manager (bank-account-count gate skipped) so
+     * only the company-count gate is exercised. Restores the live setting afterwards.
+     */
+    private TestResult testPerPlayerCompanyCap() {
+        BankSystemModSettings s = settings();
+        if (s == null) return fail("SERVER_SETTINGS null -- cannot run on slave server");
+        int original = s.PLAYER.MAX_COMPANIES_PER_PLAYER.get();
+        try {
+            // cap = 2 -> third company for the same founder is rejected
+            s.PLAYER.MAX_COMPANIES_PER_PLAYER.set(2);
+            CompanyManager cm = fresh();
+            if (cm.createCompany("Cap1", 1, FOUNDER_A, 100L).result != CompanyManager.CreateResult.OK)
+                return fail("1st create under cap=2 should be OK");
+            if (cm.createCompany("Cap2", 2, FOUNDER_A, 100L).result != CompanyManager.CreateResult.OK)
+                return fail("2nd create under cap=2 should be OK");
+            CompanyManager.CreateResult third = cm.createCompany("Cap3", 3, FOUNDER_A, 100L).result;
+            if (third != CompanyManager.CreateResult.PER_PLAYER_COMPANY_LIMIT)
+                return fail("3rd create at cap=2 should be PER_PLAYER_COMPANY_LIMIT, got " + third);
+            // A different founder is unaffected by A's count
+            if (cm.createCompany("OtherFounder", 4, FOUNDER_B, 100L).result != CompanyManager.CreateResult.OK)
+                return fail("different founder should not be blocked by A's cap");
+
+            // cap = 0 -> even the first is rejected
+            s.PLAYER.MAX_COMPANIES_PER_PLAYER.set(0);
+            CompanyManager cmZero = fresh();
+            if (cmZero.createCompany("Zero1", 1, FOUNDER_A, 100L).result != CompanyManager.CreateResult.PER_PLAYER_COMPANY_LIMIT)
+                return fail("cap=0 should reject the first create");
+
+            // cap = -1 (unlimited) -> many allowed
+            s.PLAYER.MAX_COMPANIES_PER_PLAYER.set(-1);
+            CompanyManager cmUnlimited = fresh();
+            for (int n = 1; n <= 5; n++) {
+                if (cmUnlimited.createCompany("Unl" + n, n, FOUNDER_A, 100L).result != CompanyManager.CreateResult.OK)
+                    return fail("unlimited (-1) should allow create #" + n);
+            }
+            return pass("Per-player company cap enforced at/over/zero/unlimited.");
+        } finally {
+            s.PLAYER.MAX_COMPANIES_PER_PLAYER.set(original);
+        }
     }
 
     /**

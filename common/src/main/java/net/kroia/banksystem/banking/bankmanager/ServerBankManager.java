@@ -15,6 +15,7 @@ import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager.DisallowedHolder;
 import net.kroia.banksystem.api.currency.ExternalAccount;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
@@ -73,6 +74,15 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      */
     private final Set<ItemID> allowedItemIDs = new HashSet<>();
 
+    /**
+     * Task #57: runtime (admin-set) blacklist. The static {@code INITIAL_BLACKLIST_ITEMS}
+     * setting covers items that may never be banked (air, command blocks, banknote
+     * denominations). This set holds items an admin disallowed at runtime via
+     * {@code /banksystem disallowItem} — including {@code banksystem:money}. It is persisted
+     * alongside the allowed set and always wins over ALLOW_ALL_ITEMS. Canonical IDs only.
+     */
+    private final Set<ItemID> blacklistedItemIDs = new HashSet<>();
+
 
     /**
      * Using the account number as key.
@@ -83,6 +93,34 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     private int nextAccountNumber = 1; // Start with account number 1
     private int tickCounter = 0;
+
+    /**
+     * Task #55: persistence dirty flag for the whole bank-data save unit ({@code Bank_data/}).
+     * Distinct from the per-bank/per-account {@code changeFlag}/{@code hasChanges} network
+     * change-stream signals (which are cleared by the publish path and would drop saves if
+     * reused). Set true when any persisted state changes:
+     * <ul>
+     *   <li>per-account/per-bank balance, lock, name, icon, user or bank mutations — caught
+     *       wholesale in {@link #update(MinecraftServer)} at the same 1&nbsp;Hz chokepoint the
+     *       network change stream drains (see the {@code hasChanges()} probe there), so the
+     *       high-frequency money-movement surface needs no per-site instrumentation;</li>
+     *   <li>manager-global structural fields not owned by any single account
+     *       ({@code allowedItemIDs}, {@code trustedSlaveServers}, {@code userMap},
+     *       {@code nextAccountNumber}, account add/remove) — marked explicitly at each such
+     *       mutating API below.</li>
+     * </ul>
+     * Reset to false only after a confirmed successful {@code Bank_data/} write.
+     * NOTE: deliberately NOT set from {@link #load(Map)} so a freshly loaded, unmutated world
+     * stays clean and the first timer save skips it.
+     */
+    private boolean persistDirty = false;
+
+    /** Task #55: mark the bank-data save unit dirty (a mutation to persisted state occurred). */
+    public void markPersistDirty() { persistDirty = true; }
+    /** Task #55: @return whether the bank-data save unit has unsaved changes. */
+    public boolean isPersistDirty() { return persistDirty; }
+    /** Task #55: clear the dirty flag — called by the data handler after a successful write. */
+    public void clearPersistDirty() { persistDirty = false; }
 
     /**
      * Task #41 (v2.0.7): last (balance, lockedBalance, time) written for each (account, item)
@@ -165,8 +203,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     /**
      * Deliberately performs <b>no ItemID registration</b> (Task #16 root-cause fix).
      * <p>
-     * Historically this constructor "warmed up" {@link #getBlacklistedItems()},
-     * {@link #getNotRemovableItems()} and {@link #setupDefaultItems()} — all of which
+     * Historically this constructor "warmed up" {@link #getBlacklistedItems()} and
+     * {@link #setupDefaultItems()} — both of which
      * REGISTER ItemIDs. Because {@code BankManager.createMaster()} runs BEFORE
      * {@code loadDataFromFiles()} (see {@code BankSystemModBackend.onServerStart}), every
      * master boot minted ~27 fresh low shorts (bedrock=1, ..., money200=19, ...) into the
@@ -178,7 +216,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      * merged/renumbered by the healing merge (persisted bedrock@71 aliased to session
      * bedrock@1, balance history of short 71 purged).
      * <p>
-     * Nothing is lost by removing the warm-up: the blacklist/not-removable results were
+     * Nothing is lost by removing the warm-up: the blacklist results were
      * discarded here and are recomputed (register-if-absent) on every later call, and
      * {@code setupDefaultItems()} is invoked post-load by
      * {@code BankSystemDataHandler.load_bank()} / {@link #load(Map)} on both the
@@ -207,8 +245,18 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         for(ServerBankAccount account : bankAccounts.values())
             account.pollAllExternalDrifts();
 
-        for(ServerBankAccount account : bankAccounts.values())
+        for(ServerBankAccount account : bankAccounts.values()) {
+            // Task #55: persistence dirty aggregation. account.hasChanges() aggregates the
+            // account's own field flag AND every child bank's changeFlag — the exact set the
+            // network change stream is about to publish. We observe it HERE, at 1 Hz, right
+            // BEFORE account.update() clears those flags for the publish, and copy the signal
+            // into the persistence-dedicated flag (never cleared by publish). Any balance,
+            // lock, name, icon, user or bank mutation on any account therefore marks the
+            // bank-data save unit dirty without instrumenting each low-level mutation site.
+            if(account.hasChanges())
+                persistDirty = true;
             account.update(server);
+        }
     }
 
 
@@ -237,8 +285,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 getBankManagerUserMapData(),
                 getBankManagerBankAccountsData(),
                 getAllowedItems(),
-                getBlacklistedItems(),
-                getNotRemovableItems()
+                getBlacklistedItems()
         );
     }
 
@@ -283,6 +330,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         if (user == null)
             return false;
         user.setBanksystemAdmin(isAdmin);
+        markPersistDirty(); // Task #55 (User field is serialized in the bank-data save unit)
         return true;
     }
 
@@ -332,6 +380,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public void trustSlaveServer(String slaveID)
     {
         trustedSlaveServers.add(slaveID);
+        markPersistDirty(); // Task #55
         // T-128 (cross-repo): notify dependent mods (e.g. StockMarket) that the
         // trust set changed so they can propagate the new state to their own
         // connected slaves/clients without polling. Fired AFTER the mutation so
@@ -348,6 +397,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public void untrustSlaveServer(String slaveID)
     {
         trustedSlaveServers.remove(slaveID);
+        markPersistDirty(); // Task #55
         // T-128 (cross-repo): see trustSlaveServer above for the full rationale.
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_EVENTS != null) {
             BACKEND_INSTANCES.SERVER_EVENTS.TRUST_CHANGED.notifyListeners(
@@ -369,24 +419,19 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public List<ItemID> getBlacklistedItems() {
-        List<ItemID> ids = ItemIDManager.registerItemStackServerSide_direct(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS);
+        // Static (settings) blacklist ∪ runtime (admin-set, Task #57) blacklist.
+        List<ItemID> ids = new ArrayList<>(
+                ItemIDManager.registerItemStackServerSide_direct(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS));
+        for (ItemID id : blacklistedItemIDs) {
+            if (!ids.contains(id))
+                ids.add(id);
+        }
         return ids;
     }
 
     @Override
     public CompletableFuture<List<ItemID>> getBlacklistedItemsAsync() {
         return CompletableFuture.completedFuture(getBlacklistedItems());
-    }
-
-    @Override
-    public List<ItemID> getNotRemovableItems() {
-        List<ItemID> ids = ItemIDManager.registerItemStackServerSide_direct(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_NOT_REMOVABLE_ITEMS);
-        return ids;
-    }
-
-    @Override
-    public CompletableFuture<List<ItemID>> getNotRemovableItemsAsync() {
-        return CompletableFuture.completedFuture(getNotRemovableItems());
     }
 
     @Override
@@ -440,6 +485,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return;
         }
         userMap.put(userUUID, user);
+        markPersistDirty(); // Task #55
         info("Added new user: " + user.getName() + " with UUID: " + userUUID);
         BACKEND_INSTANCES.SERVER_EVENTS.USER_ADDED.notifyListeners(user);
     }
@@ -453,6 +499,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public boolean removeUser(UUID userUUID) {
         if (userMap.containsKey(userUUID)) {
             User user = userMap.remove(userUUID);
+            markPersistDirty(); // Task #55 (also cascades account removals below)
 
             // Collect non-zero balances from accounts that will be deleted or are personal accounts of the removed user
             Map<ItemID, Long> itemsToDrop = new HashMap<>();
@@ -675,6 +722,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return false;
         User newUser = User.createWithChangedName(user,  playerName);
         userMap.put(playerUUID, newUser);
+        markPersistDirty(); // Task #55
         return true;
     }
 
@@ -850,6 +898,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         account.setAccountName(accountName);
         account.setAccountIcon(ItemIDManager.registerItemStackServerSide_direct(Items.CHEST.getDefaultInstance()));
         bankAccounts.put(accountNumber, account);
+        markPersistDirty(); // Task #55 (new account + advanced nextAccountNumber)
         info("Created new bank account with number: " + accountNumber + " and name: " + accountName);
         return account;
     }
@@ -877,6 +926,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         account.setAccountName(accountName);
         account.setAccountIcon(ItemIDManager.registerItemStackServerSide_direct(Items.CHEST.getDefaultInstance()));
         bankAccounts.put(accountNumber, account);
+        markPersistDirty(); // Task #55 (new account + advanced nextAccountNumber)
         info("Created new bank account with number: " + accountNumber + " and name: " + accountName);
         return CompletableFuture.completedFuture(account);
     }
@@ -981,6 +1031,21 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public CompletableFuture<List<Integer>> getBankAccountNumbersAsync(UUID userUUID)
     {
         return CompletableFuture.completedFuture(getBankAccountNumbers(userUUID));
+    }
+
+    @Override
+    public int countAccountsCreatedBy(UUID userUUID)
+    {
+        if (userUUID == null) return 0;
+        int count = 0;
+        for (ServerBankAccount account : bankAccounts.values()) {
+            // Task #58 — creator-only count. Deliberately NOT hasUser/getBankAccountNumbers,
+            // which count membership (shared accounts + company employees).
+            if (userUUID.equals(account.getCreatorUUID())) {
+                count++;
+            }
+        }
+        return count;
     }
 
 
@@ -1243,6 +1308,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 return false; // Cannot delete personal bank accounts
             }
             bankAccounts.remove(accountNumber);
+            markPersistDirty(); // Task #55 (removed account is no longer iterated by update())
             // Task #33 (v2.0.5): cascade-drop every external-currency binding row for
             // the deleted account so stale rows never re-materialize on next load.
             BankAccountBindings bindings = BankAccountBindings.get();
@@ -1354,8 +1420,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         IServerBank bank = account.getBank(itemID);
         if(bank != null)
             return bank;
-        else
-            return account.createBank(itemID, 0);
+        // Task #57 chokepoint: never resurrect a slot for a blacklisted item (incl. a
+        // disallowed money bank). Callers already tolerate null. account.createBank() also
+        // gates on this, but the explicit check here keeps the intent obvious and skips the
+        // account.createBank round trip.
+        if(isItemIDBlacklisted(itemID))
+            return null;
+        return account.createBank(itemID, 0);
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getOrCreatePersonalBankAsync(UUID owner, ItemID itemID) {
@@ -1426,13 +1497,35 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return false;
         // Only ever store canonical IDs in the allowed set (see isItemIDAllowed).
         itemID = ItemIDManager.resolveAlias(itemID);
-        if(isItemIDBlacklisted(itemID))
+        // Static blacklist entries (air, command blocks, banknote denominations) can never be
+        // re-allowed. A runtime disallow (Task #57) IS reversible: re-allowing clears the
+        // runtime-blacklist entry first so a previously disallowed item (incl. money) becomes
+        // bankable again and rejoins the default auto-create schedule (acceptance B).
+        if(isStaticBlacklisted(itemID))
         {
             warn("It is not allowed to add the itemID: " + itemID + " because it is blacklisted.");
             return false;
         }
-
+        // Perf: allowItemID runs on EVERY new bank slot (ServerBank.create). The O(companies×
+        // schedules) resume scan below is only meaningful when this item was actually on the
+        // runtime blacklist — a normal allowed deposit has no ban-marked schedules. Gate on the
+        // remove() result so the common path (nothing removed) skips the scan entirely.
+        boolean wasBlacklisted = this.blacklistedItemIDs.remove(itemID);
         this.allowedItemIDs.add(itemID);
+        markPersistDirty(); // Task #55 / #57 (allowed-set + runtime-blacklist change)
+
+        // Task #57b — re-allow resume: auto-resume ONLY schedules paused by this item's ban
+        // (never a user-paused schedule). Company currency is NOT auto-restored. Master-only.
+        if (wasBlacklisted) {
+            net.kroia.banksystem.banking.company.CompanyManager cm =
+                    net.kroia.banksystem.banking.company.CompanyManager.get();
+            if (cm != null) {
+                ItemID moneyId = MoneyItem.getItemID();
+                boolean allowedIsMoney = moneyId != null && moneyId.isValid()
+                        && moneyId.getShort() == itemID.getShort();
+                cm.resumeCurrencyBannedSchedules(itemID.getShort(), allowedIsMoney);
+            }
+        }
         return true;
     }
     @Override
@@ -1444,24 +1537,70 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean disallowItemID(ItemID itemID)
     {
+        // Task #57: any item (incl. banksystem:money) can be disallowed. Delegate to the
+        // reporting variant; a null return signals invalid input.
+        return disallowItemIDAndReport(itemID) != null;
+    }
+
+    @Override
+    public @Nullable List<DisallowedHolder> disallowItemIDAndReport(ItemID itemID)
+    {
         if(itemID == null || !itemID.isValid())
-            return false;
+            return null;
         // The allowed set and the account banks are keyed by canonical IDs only.
         itemID = ItemIDManager.resolveAlias(itemID);
-        if(isItemIDNotRemovable(itemID))
-        {
-            warn("It is not allowed to remove the itemID: " + itemID);
-            return false;
-        }
+        final ItemID finalItemID = itemID;
+        final String itemName = itemID.getName();
 
+        // 1) Audit BEFORE removal: capture every holder's free + locked balance, account
+        //    number and owner name. Full dump goes to the server console; the returned list
+        //    backs the (capped) chat summary shown to the command executor. NO REFUND.
+        List<DisallowedHolder> cleared = new ArrayList<>();
         for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
             ServerBankAccount account = entry.getValue();
-            if(account.hasBank(itemID)) {
-                account.removeBank(itemID);
-                info("Removed item bank for itemID: " + itemID + " from account number: " + entry.getKey());
-            }
+            if(!account.hasBank(finalItemID))
+                continue;
+            ServerBank bank = account.getBank(finalItemID);
+            long free = bank != null ? bank.getBalance() : 0L;
+            long locked = bank != null ? bank.getLockedBalance() : 0L;
+            String ownerName = account.getAccountName();
+            User owner = account.getPersonalBankOwner();
+            if(owner != null)
+                ownerName = owner.getName();
+            cleared.add(new DisallowedHolder(entry.getKey(), ownerName, free, locked));
+            info("[disallowItem] '" + itemName + "' held by account #" + entry.getKey()
+                    + " (" + ownerName + "): free=" + free + " locked=" + locked
+                    + " total=" + (free + locked) + " — clearing (NO REFUND)");
         }
-        return allowedItemIDs.remove(itemID);
+
+        // 2) Remove the slot from every holder.
+        for(DisallowedHolder holder : cleared) {
+            ServerBankAccount account = bankAccounts.get(holder.accountNr());
+            if(account != null)
+                account.removeBank(finalItemID);
+        }
+
+        // 3) Drop from the allowed set and add to the runtime blacklist so the disallow sticks
+        //    even with ALLOW_ALL_ITEMS on, and survives a restart (persisted, Task #57).
+        allowedItemIDs.remove(finalItemID);
+        blacklistedItemIDs.add(finalItemID);
+        markPersistDirty(); // Task #55 (allowed-set change + cleared holder banks) / #57 (runtime blacklist)
+        info("[disallowItem] '" + itemName + "' disallowed — cleared " + cleared.size()
+                + " holder account(s).");
+
+        // Task #57b — company-currency fallback + payout-schedule pause on ban. Master-only
+        // direct call (CompanyManager is master-only; null on slave/test). Full console dump
+        // happens inside cascadeCurrencyBan; the command handler reads getLastCurrencyBanReport()
+        // for the capped admin-chat summary.
+        net.kroia.banksystem.banking.company.CompanyManager cm =
+                net.kroia.banksystem.banking.company.CompanyManager.get();
+        if (cm != null) {
+            ItemID moneyId = MoneyItem.getItemID();
+            boolean bannedIsMoney = moneyId != null && moneyId.isValid()
+                    && moneyId.getShort() == finalItemID.getShort();
+            cm.cascadeCurrencyBan(finalItemID.getShort(), bannedIsMoney);
+        }
+        return cleared;
     }
     @Override
     public CompletableFuture<Boolean> disallowItemIDAsync(ItemID itemID) {
@@ -1469,26 +1608,23 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
 
     @Override
-    public boolean isItemIDNotRemovable(ItemID itemID)
+    public boolean isItemIDBlacklisted(ItemID itemID)
     {
-        List<ItemStack> notRemovable = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_NOT_REMOVABLE_ITEMS;
-        List<ItemID> itemIDs = ItemIDManager.registerItemStackServerSide_direct(notRemovable);
-        for(ItemID id : itemIDs)
-        {
-            if(id.equals(itemID))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-    @Override
-    public CompletableFuture<Boolean> isItemIDNotRemovableAsync(ItemID itemID) {
-        return CompletableFuture.completedFuture(isItemIDNotRemovable(itemID));
+        if (itemID == null)
+            return false;
+        ItemID canonical = ItemIDManager.resolveAlias(itemID);
+        // Runtime (admin-set, Task #57) blacklist wins the same as the static list.
+        if (blacklistedItemIDs.contains(canonical))
+            return true;
+        return isStaticBlacklisted(canonical);
     }
 
-    @Override
-    public boolean isItemIDBlacklisted(ItemID itemID)
+    /**
+     * Task #57: the compile-time settings blacklist ({@code INITIAL_BLACKLIST_ITEMS}) only.
+     * Items here can never be re-allowed (air, command blocks, banknote denominations),
+     * unlike the runtime blacklist which {@code allowItemID} can clear.
+     */
+    private boolean isStaticBlacklisted(ItemID itemID)
     {
         List<ItemStack> blacklistItems = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.INITIAL_BLACKLIST_ITEMS;
         List<ItemID> itemIDs = ItemIDManager.registerItemStackServerSide_direct(blacklistItems);
@@ -1758,6 +1894,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             warn("setupDefaultItems: " + refused + " of " + itemIDs.size() + " default allowed "
                     + "item(s) could not be registered (see preceding ItemIDManager log) and "
                     + "were NOT added to the allowed set.");
+        if (refused < itemIDs.size())
+            markPersistDirty(); // Task #55 (seeded the default allowed set — fresh-world path)
     }
 
     /**
@@ -1789,6 +1927,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 allowedItemIDs.add(entry.getValue());
                 remappedAllowed++;
             }
+            // Task #57: keep the runtime blacklist keyed by canonical IDs too.
+            if (blacklistedItemIDs.remove(entry.getKey())) {
+                blacklistedItemIDs.add(entry.getValue());
+                remappedAllowed++;
+            }
         }
 
         // 2) Bank accounts: merge alias-keyed banks into the canonical bank.
@@ -1798,6 +1941,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
 
         if (remappedAllowed > 0 || mergedBanks > 0) {
+            markPersistDirty(); // Task #55 (allowed-set remap / bank merges changed persisted state)
             info("Consolidated ItemID merge: " + mergedBanks + " bank(s) merged into their canonical ItemID, "
                     + remappedAllowed + " allowed-item entr(y/ies) remapped (" + aliasToCanonical.size()
                     + " alias pair(s)). Balances and locked balances were preserved.");
@@ -1841,6 +1985,20 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             allowedItems.add(pairTag);
         }
         listTags.put("allowedItems", allowedItems);
+
+        // Task #57: persist the runtime (admin-set) blacklist so a disallow (incl. money)
+        // survives a restart. Same INVALID-short guard as the allowed set.
+        ListTag blacklistedItems = new ListTag();
+        for (ItemID itemID : blacklistedItemIDs) {
+            if (itemID == null || itemID.getShort() == ItemID.INVALID_ID.getShort())
+                continue;
+            CompoundTag pairTag = new CompoundTag();
+            CompoundTag itemTag = new CompoundTag();
+            itemID.save(itemTag);
+            pairTag.put("itemID", itemTag);
+            blacklistedItems.add(pairTag);
+        }
+        listTags.put("blacklistedItems", blacklistedItems);
 
         ListTag accountsList = new ListTag();
         for (Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
@@ -1895,12 +2053,14 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 // before consolidation existed.
                 allowedItemIDs.add(ItemIDManager.resolveAlias(itemID));
             }
-            // A legitimately persisted allowed set can never be EMPTY: the not-removable
-            // items (base money) cannot be disallowed (disallowItemID refuses them), so an
-            // empty restored set only ever comes from a degenerate save — e.g. the
+            // An empty restored allowed set normally comes from a degenerate save — e.g. the
             // unreadable-ItemIDs.nbt recovery pass, where every default registration was
             // refused by the registration latch (Task #16 review). Re-seed the defaults so
-            // the recovered world is bankable again.
+            // the recovered world is bankable again. (Task #57: base money is no longer
+            // "not-removable", so a legitimately empty allowed set is now also possible if an
+            // admin disallowed everything — but re-seeding defaults is still the safe recovery
+            // for the far-more-common degenerate case, and any runtime blacklist loaded below
+            // still suppresses re-seeded-then-disallowed items.)
             if (allowedItemIDs.isEmpty()) {
                 warn("load: the persisted allowed-items set restored EMPTY (degenerate save, "
                         + "e.g. an unreadable-ItemIDs recovery pass) — re-seeding the default "
@@ -1910,6 +2070,25 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         else {
             setupDefaultItems(); // Setup default items if no scale factors are present
+        }
+
+        // Task #57: restore the runtime (admin-set) blacklist. Loaded AFTER the allowed set so
+        // a re-seeded default (e.g. money) that the admin had disallowed is pruned back out of
+        // the allowed set here, keeping the two views consistent.
+        blacklistedItemIDs.clear();
+        if(listTags.containsKey("blacklistedItems")) {
+            ListTag blacklistedItems = listTags.get("blacklistedItems");
+            for (int i = 0; i < blacklistedItems.size(); i++) {
+                CompoundTag idTag = blacklistedItems.getCompound(i);
+                if(!idTag.contains("itemID"))
+                    continue;
+                ItemID itemID = ItemID.createFromTag(idTag.getCompound("itemID"));
+                if (itemID.getShort() == ItemID.INVALID_ID.getShort())
+                    continue;
+                ItemID canonical = ItemIDManager.resolveAlias(itemID);
+                blacklistedItemIDs.add(canonical);
+                allowedItemIDs.remove(canonical);
+            }
         }
 
 
@@ -2071,9 +2250,10 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return null;
         }
         bankAccounts.put(accountNumber, account);
-        // Seed external-currency slots so a first-time player joining with Numismatics /
-        // Lightman's installed gets a spur / coin slot ready to bind, matching the
-        // /bank create shortcut path. Money slot is already added by createPersonal.
+        markPersistDirty(); // Task #55 (new personal account + advanced nextAccountNumber)
+        // Seed the default slots (money + each available external-currency provider) through
+        // the allow/blacklist gate. Idempotent with createPersonal's own gated money seed, and
+        // the single source of truth for what a fresh account starts with (Task #57).
         addDefaultBankSlots(account);
         return account;
     }
@@ -2091,10 +2271,17 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     public static void addDefaultBankSlots(IServerBankAccount account)
     {
         if (account == null || BACKEND_INSTANCES == null) return;
-        account.createBank(MoneyItem.getItemID(), 0);
-
         IServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER != null
                 ? BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync() : null;
+
+        // Task #57: ONE default-items list = { money } ∪ { each available external provider's
+        // base currency item }. Every entry — money included — passes the same gate
+        // (!blacklisted && (allowed || ALLOW_ALL)) before its slot is created. Money is just a
+        // default-on entry now: a disallowed money item yields an account with no money slot,
+        // no special-case path. External items are auto-allowlisted (as before) so they become
+        // bankable; a blacklisted external is skipped deliberately (no phantom empty slot).
+        seedDefaultSlot(account, bankManager, MoneyItem.getItemID(), false);
+
         Collection<ExternalCurrencyProvider> providers = BankSystemMod.getAPI().getCurrencyProviders();
         if (BACKEND_INSTANCES.LOGGER != null) {
             BACKEND_INSTANCES.LOGGER.info("[ServerBankManager] addDefaultBankSlots on account "
@@ -2132,17 +2319,36 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                             + itemIdStr + "' (provider '" + providerId + "') — skipping slot seed");
                 continue;
             }
-            // Allowlist the external currency item so it participates in normal bank ops.
-            // allowItemID is idempotent (Set backing) and refuses blacklisted items with a WARN.
-            if (bankManager != null) {
-                bankManager.allowItemID(itemID);
-            }
-            account.createBank(itemID, 0);
-            if (BACKEND_INSTANCES.LOGGER != null)
+            boolean seeded = seedDefaultSlot(account, bankManager, itemID, true);
+            if (seeded && BACKEND_INSTANCES.LOGGER != null)
                 BACKEND_INSTANCES.LOGGER.info("[ServerBankManager] seeded '" + itemIdStr
                         + "' slot on account " + account.getAccountNumber() + " (provider '" + providerId
                         + "', itemID short=" + itemID.getShort() + ")");
         }
+    }
+
+    /**
+     * Task #57: seeds a single default slot through the allow/blacklist gate. Returns true iff
+     * a slot was created (or already existed). Skips deliberately — no phantom empty slot —
+     * when the item is blacklisted or not allowed and ALLOW_ALL_ITEMS is off.
+     *
+     * @param autoAllow when true (external-currency items), the item is added to the allowed
+     *                  set before the gate so it becomes bankable — matching the historical
+     *                  behaviour. Money relies on the default allowed set instead.
+     */
+    private static boolean seedDefaultSlot(IServerBankAccount account, IServerBankManager bankManager,
+                                           ItemID itemID, boolean autoAllow)
+    {
+        if (account == null || itemID == null || !itemID.isValid()) return false;
+        if (bankManager != null) {
+            if (bankManager.isItemIDBlacklisted(itemID))
+                return false; // blacklist wins — no phantom slot (deliverable 2/E)
+            if (autoAllow)
+                bankManager.allowItemID(itemID); // idempotent; refuses static-blacklisted with a WARN
+            if (!bankManager.isItemIDAllowed(itemID))
+                return false; // not allowed and ALLOW_ALL off → skip deliberately
+        }
+        return account.createBank(itemID, 0) != null;
     }
 
 

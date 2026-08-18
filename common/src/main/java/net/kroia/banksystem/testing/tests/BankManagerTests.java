@@ -3,9 +3,12 @@ package net.kroia.banksystem.testing.tests;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
+import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
@@ -54,7 +57,6 @@ public class BankManagerTests extends TestSuite {
         addTest("createBankAccount_returns_valid", this::testCreateBankAccountReturnsValid);
         addTest("deleteBankAccount_removes", this::testDeleteBankAccountRemoves);
         addTest("removeUser_no_concurrent_modification", this::testRemoveUserNoConcurrentModification);
-        addTest("getNotRemovableItems_returns_correct_list", this::testGetNotRemovableItemsReturnsCorrectList);
         addTest("isBanksystemAdmin_after_set", this::testIsBanksystemAdminAfterSet);
         addTest("isBanksystemAdmin_after_revoke", this::testIsBanksystemAdminAfterRevoke);
         // Task #39 — ALLOW_ALL_ITEMS blacklist-only mode
@@ -66,6 +68,15 @@ public class BankManagerTests extends TestSuite {
                 this::testAllowAllItemsOnStillRefusesBlacklisted);
         addTest("banked_item_stays_allowed_after_allow_all_revert",
                 this::testBankedItemStaysAllowedAfterAllowAllRevert);
+        // Task #58 — creator-only account count backing the per-player cap
+        addTest("count_accounts_created_by_counts_creator_only",
+                this::testCountAccountsCreatedByCountsCreatorOnly);
+        // Task #57 — item allow/blacklist overhaul
+        addTest("money_blacklist_round_trip", this::testMoneyBlacklistRoundTrip);
+        addTest("blacklist_beats_allow_all", this::testBlacklistBeatsAllowAll);
+        addTest("disallow_clears_holders_with_amount_capture",
+                this::testDisallowClearsHoldersWithAmountCapture);
+        addTest("money_absent_crash_safety", this::testMoneyAbsentCrashSafety);
     }
 
     @Override
@@ -151,6 +162,44 @@ public class BankManagerTests extends TestSuite {
                     user.getUUID().toString());
         }
         return pass("addUser registers user and getUserByUUID retrieves it correctly");
+    }
+
+    // ================= Task #58 — creator-only account count =================
+
+    /**
+     * {@code countAccountsCreatedBy} must count ONLY accounts whose creatorUUID equals the
+     * given player — not shared-account membership. A second account with a different
+     * creator, and membership on the first account, must not inflate the creator's count.
+     */
+    private TestResult testCountAccountsCreatedByCountsCreatorOnly() {
+        if (manager == null) {
+            return fail("ServerBankManager is null -- cannot run on slave server");
+        }
+        int baseA = manager.countAccountsCreatedBy(TEST_USER_A);
+        int baseB = manager.countAccountsCreatedBy(TEST_USER_B);
+
+        IServerBankAccount accA = manager.createBankAccount("CapTestA");
+        if (accA == null) return fail("createBankAccount returned null");
+        createdAccountNumbers.add(accA.getAccountNumber());
+        accA.setCreatorUUID(TEST_USER_A);
+
+        // Membership by B on A's account must NOT count against B.
+        User userB = manager.getUserByUUID(TEST_USER_B);
+        if (userB != null) {
+            accA.addUser(userB, net.kroia.banksystem.banking.BankPermission.getAllPermissions());
+        }
+
+        IServerBankAccount accB = manager.createBankAccount("CapTestB");
+        if (accB == null) return fail("createBankAccount returned null");
+        createdAccountNumbers.add(accB.getAccountNumber());
+        accB.setCreatorUUID(TEST_USER_B);
+
+        int afterA = manager.countAccountsCreatedBy(TEST_USER_A);
+        int afterB = manager.countAccountsCreatedBy(TEST_USER_B);
+        if (afterA != baseA + 1) return fail("A creator count expected " + (baseA + 1) + " got " + afterA);
+        if (afterB != baseB + 1) return fail("B creator count expected " + (baseB + 1) + " got " + afterB
+                + " (membership must not count)");
+        return pass("countAccountsCreatedBy counts creator only, not membership.");
     }
 
     // ========================= Bank Account CRUD =========================
@@ -254,47 +303,6 @@ public class BankManagerTests extends TestSuite {
         }
 
         return pass("removeUser completed without ConcurrentModificationException");
-    }
-
-    // ========================= Item Filter Correctness =========================
-
-    /**
-     * Issue #24: getNotRemovableItems() is supposed to return items from
-     * INITIAL_NOT_REMOVABLE_ITEMS but currently reads from INITIAL_BLACKLIST_ITEMS
-     * instead. The not-removable list should be a subset (typically just the money item),
-     * while the blacklist is much larger.
-     *
-     * We verify the returned list size matches the expected NOT_REMOVABLE list, not
-     * the BLACKLIST. If the blacklist is larger than the not-removable list, the bug
-     * is detectable by comparing sizes.
-     */
-    private TestResult testGetNotRemovableItemsReturnsCorrectList() {
-        if (manager == null) {
-            return fail("ServerBankManager is null -- cannot run on slave server");
-        }
-
-        List<ItemID> notRemovable = manager.getNotRemovableItems();
-        List<ItemID> blacklisted = manager.getBlacklistedItems();
-
-        // The NOT_REMOVABLE list should contain fewer items than the BLACKLIST
-        // (INITIAL_NOT_REMOVABLE_ITEMS has 1 item: money;
-        //  INITIAL_BLACKLIST_ITEMS has 13+ items)
-        // If getNotRemovableItems() incorrectly reads from BLACKLIST,
-        // its size will equal the blacklist size.
-        if (notRemovable.size() == blacklisted.size() && blacklisted.size() > 1) {
-            return TestResult.fail("",
-                    "getNotRemovableItems returns same list as getBlacklistedItems -- " +
-                    "likely reading from INITIAL_BLACKLIST_ITEMS instead of INITIAL_NOT_REMOVABLE_ITEMS (Issue #24)",
-                    "size <= " + 1 + " (not-removable items)",
-                    "size = " + notRemovable.size() + " (matches blacklist size)");
-        }
-
-        if (notRemovable.isEmpty()) {
-            return fail("getNotRemovableItems returned an empty list -- expected at least the money item");
-        }
-
-        return pass("getNotRemovableItems returns the correct NOT_REMOVABLE list (size="
-                + notRemovable.size() + "), distinct from blacklist (size=" + blacklisted.size() + ")");
     }
 
     // ========================= Admin Status =========================
@@ -515,6 +523,139 @@ public class BankManagerTests extends TestSuite {
                     allowed);
         } finally {
             settings.BANK.ALLOW_ALL_ITEMS.set(savedAllowAll);
+        }
+    }
+
+    // ================= Task #57 — allow/blacklist overhaul =================
+
+    /**
+     * Acceptance A/B: money is no longer "not-removable". Disallowing it blacklists +
+     * forbids it and a freshly seeded account gets NO money slot; re-allowing restores it.
+     */
+    private TestResult testMoneyBlacklistRoundTrip() {
+        if (manager == null) return fail("ServerBankManager is null -- cannot run on slave server");
+        ItemID money = MoneyItem.getItemID();
+        if (money == null || !money.isValid()) return fail("money ItemID is not registered");
+        boolean wasBlacklisted = manager.isItemIDBlacklisted(money);
+        try {
+            if (!manager.disallowItemID(money))
+                return fail("disallowItemID(money) returned false -- money must be disallowable now");
+            if (!manager.isItemIDBlacklisted(money))
+                return fail("money not blacklisted after disallow");
+            if (manager.isItemIDAllowed(money))
+                return fail("money still reported allowed after disallow");
+
+            // A freshly seeded account must have NO money slot while money is disallowed.
+            IServerBankAccount acc = manager.createBankAccount("Task57MoneyRoundTrip");
+            if (acc == null) return fail("createBankAccount returned null");
+            createdAccountNumbers.add(acc.getAccountNumber());
+            net.kroia.banksystem.banking.bankmanager.ServerBankManager.addDefaultBankSlots(acc);
+            if (acc.hasBank(money))
+                return fail("new account seeded a money slot despite money being disallowed");
+
+            if (!manager.allowItemID(money))
+                return fail("allowItemID(money) returned false after disallow");
+            if (manager.isItemIDBlacklisted(money))
+                return fail("money still blacklisted after re-allow");
+            if (!manager.isItemIDAllowed(money))
+                return fail("money not allowed after re-allow");
+            return pass("money blacklist round-trip: disallow blacklists+forbids+skips seed, re-allow restores");
+        } finally {
+            if (!wasBlacklisted && manager.isItemIDBlacklisted(money))
+                manager.allowItemID(money);
+        }
+    }
+
+    /**
+     * Acceptance D: a RUNTIME-disallowed item stays refused even with ALLOW_ALL_ITEMS=true
+     * (blacklist beats allow-all), and ServerBank.create refuses to open a slot for it.
+     */
+    private TestResult testBlacklistBeatsAllowAll() {
+        if (manager == null) return fail("ServerBankManager is null -- cannot run on slave server");
+        BankSystemModSettings settings = getSettings();
+        if (settings == null) return fail("SERVER_SETTINGS is null -- backend not fully initialized");
+        ItemID dirt = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.DIRT.getDefaultInstance());
+        if (!dirt.isValid()) return fail("Could not register DIRT for the blacklist-beats-allow-all test");
+        boolean wasBlacklisted = manager.isItemIDBlacklisted(dirt);
+        boolean savedAllowAll = settings.BANK.ALLOW_ALL_ITEMS.get();
+        try {
+            manager.disallowItemID(dirt); // runtime-blacklist it
+            settings.BANK.ALLOW_ALL_ITEMS.set(true);
+            if (manager.isItemIDAllowed(dirt))
+                return fail("a runtime-blacklisted item was reported allowed under ALLOW_ALL_ITEMS=true");
+            if (ServerBank.create(dirt, 0) != null)
+                return fail("ServerBank.create opened a slot for a blacklisted item under ALLOW_ALL");
+            return pass("runtime blacklist beats ALLOW_ALL_ITEMS");
+        } finally {
+            settings.BANK.ALLOW_ALL_ITEMS.set(savedAllowAll);
+            if (!wasBlacklisted) manager.allowItemID(dirt);
+        }
+    }
+
+    /**
+     * Acceptance C: disallowing a held item captures every holder's exact free + locked
+     * balance in the report and clears the slot from the account.
+     */
+    private TestResult testDisallowClearsHoldersWithAmountCapture() {
+        if (manager == null) return fail("ServerBankManager is null -- cannot run on slave server");
+        ItemID gravel = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.GRAVEL.getDefaultInstance());
+        if (!gravel.isValid()) return fail("Could not register GRAVEL for the disallow-clears-holders test");
+        boolean wasBlacklisted = manager.isItemIDBlacklisted(gravel);
+        try {
+            manager.allowItemID(gravel);
+            IServerBankAccount acc = manager.createBankAccount("Task57DisallowClears");
+            if (acc == null) return fail("createBankAccount returned null");
+            createdAccountNumbers.add(acc.getAccountNumber());
+            if (acc.createBank(gravel, 5000L) == null)
+                return fail("could not open a gravel bank with a 5000 balance");
+
+            List<ISyncServerBankManager.DisallowedHolder> report = manager.disallowItemIDAndReport(gravel);
+            if (report == null) return fail("disallowItemIDAndReport returned null");
+            ISyncServerBankManager.DisallowedHolder found = null;
+            for (ISyncServerBankManager.DisallowedHolder h : report) {
+                if (h.accountNr() == acc.getAccountNumber()) { found = h; break; }
+            }
+            if (found == null) return fail("holding account missing from the disallow report");
+            if (found.free() != 5000L)
+                return TestResult.fail("", "captured free balance mismatch", "5000", String.valueOf(found.free()));
+            if (found.locked() != 0L)
+                return TestResult.fail("", "captured locked balance mismatch", "0", String.valueOf(found.locked()));
+            if (acc.hasBank(gravel))
+                return fail("gravel slot was not cleared from the holder after disallow");
+            return pass("disallow captured free+locked amounts and cleared the holder slot");
+        } finally {
+            if (!wasBlacklisted) manager.allowItemID(gravel);
+        }
+    }
+
+    /**
+     * Acceptance H: with money disallowed, seeding, resurrection and money getters degrade
+     * gracefully (no slot, null bank, no exception) instead of crashing.
+     */
+    private TestResult testMoneyAbsentCrashSafety() {
+        if (manager == null) return fail("ServerBankManager is null -- cannot run on slave server");
+        ItemID money = MoneyItem.getItemID();
+        if (money == null || !money.isValid()) return fail("money ItemID is not registered");
+        boolean wasBlacklisted = manager.isItemIDBlacklisted(money);
+        try {
+            manager.disallowItemID(money);
+            IServerBankAccount acc = manager.createBankAccount("Task57MoneyAbsent");
+            if (acc == null) return fail("createBankAccount returned null");
+            createdAccountNumbers.add(acc.getAccountNumber());
+            // Seeding must not crash and must not create a money slot.
+            net.kroia.banksystem.banking.bankmanager.ServerBankManager.addDefaultBankSlots(acc);
+            if (acc.hasBank(money))
+                return fail("money slot seeded despite blacklist");
+            // Resurrection chokepoint must return null, not throw.
+            if (manager.getOrCreatePersonalBank(TEST_USER_A, money) != null)
+                return fail("getOrCreatePersonalBank(money) resurrected a blacklisted money bank");
+            if (acc.getBank(money) != null)
+                return fail("getBank(money) returned non-null on a money-less account");
+            // Money circulation getter must degrade, not throw.
+            manager.getRealMoneyCirculation();
+            return pass("money-absent: no seed, null resurrection, money getters do not crash");
+        } finally {
+            if (!wasBlacklisted) manager.allowItemID(money);
         }
     }
 }
