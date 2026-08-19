@@ -55,7 +55,6 @@ public class OldBankDataLoader {
 
         public UUID playerUUID;
         public String playerName;
-        public boolean enableNotifications;
         public final List<BankData> banks = new ArrayList<>();
 
         public static AccountData loadFromTag(CompoundTag tag)
@@ -63,8 +62,6 @@ public class OldBankDataLoader {
             AccountData accountData = new AccountData();
             accountData.playerUUID = tag.getUUID("userUUID");
             accountData.playerName = tag.getString("userName");
-            accountData.enableNotifications = tag.getBoolean("enableBankNotifications");
-
             ListTag bankList = tag.getList("bankMap", Tag.TAG_COMPOUND);
             for (int i = 0; i < bankList.size(); i++) {
                 CompoundTag bankTag = bankList.getCompound(i);
@@ -216,8 +213,7 @@ public class OldBankDataLoader {
         for (AccountData accountData : accountDataList) {
             User user = new User(
                     accountData.playerUUID,
-                    accountData.playerName,
-                    accountData.enableNotifications
+                    accountData.playerName
             );
             manager.addUser(user);
         }

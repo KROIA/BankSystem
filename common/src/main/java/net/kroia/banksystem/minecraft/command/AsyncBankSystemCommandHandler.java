@@ -69,8 +69,6 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
 
 
-        Bank_enableNotifications,
-        Bank_disableNotifications,
         Bank_create,
         Bank_show_user
 
@@ -108,8 +106,6 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         put(FunctionType.Money_send_user,                           codecPacket(ParamGroup_String_Float.STREAM_CODEC));
         put(FunctionType.Money_circulation,                         codecPacket(null));
 
-        put(FunctionType.Bank_enableNotifications,                  codecPacket(null));
-        put(FunctionType.Bank_disableNotifications,                 codecPacket(null));
         put(FunctionType.Bank_create,                               codecPacket(ByteBufCodecs.STRING_UTF8.cast(), ByteBufCodecs.INT.cast()));
         put(FunctionType.Bank_show_user,                            codecPacket(ByteBufCodecs.STRING_UTF8.cast()));
 
@@ -247,8 +243,6 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
                     result = commandHandler.money_send_user(executorPlayer, data.string, data.floatValue);
                 }
                 case FunctionType.Money_circulation ->				        result = commandHandler.money_circulation(executorPlayer);
-                case FunctionType.Bank_enableNotifications ->				result = commandHandler.bank_enableNotifications(executorPlayer);
-                case FunctionType.Bank_disableNotifications ->				result = commandHandler.bank_disableNotifications(executorPlayer);
                 case FunctionType.Bank_create -> {
                     int accountNr = commandHandler.bank_create(executorPlayer, (String)inputData.extra);
                     return CompletableFuture.completedFuture(OutputData.of(input.function, accountNr));
@@ -616,31 +610,6 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         return future;
     }
 
-    @Override
-    public CompletableFuture<Boolean> bank_enableNotifications_async(@NotNull UUID executor) {
-        if(!MultiServerUtils.checkConnectionToMaster(executor))
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Bank_enableNotifications, executor));
-        handleResponse(outputDataFuture, executor);
-        CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
-        return future;
-    }
-
-    @Override
-    public CompletableFuture<Boolean> bank_disableNotifications_async(@NotNull UUID executor) {
-        if(!MultiServerUtils.checkConnectionToMaster(executor))
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Bank_disableNotifications, executor));
-        handleResponse(outputDataFuture, executor);
-        CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
-        return future;
-    }
 
 
 

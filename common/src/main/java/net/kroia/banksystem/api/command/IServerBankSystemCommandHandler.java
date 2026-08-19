@@ -26,8 +26,6 @@ public interface IServerBankSystemCommandHandler {
 
 
 
-    boolean bank_enableNotifications(@NotNull UUID executor);
-    boolean bank_disableNotifications(@NotNull UUID executor);
     boolean bank_manage(@NotNull UUID executor);
     boolean bank_manage_account(@NotNull UUID executor, String accountName);
     boolean bank_manage_account(@NotNull UUID executor, int accountNr);

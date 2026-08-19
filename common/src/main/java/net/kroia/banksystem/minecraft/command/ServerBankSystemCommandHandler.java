@@ -480,45 +480,8 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
 
 
 
-    @Override
-    public boolean bank_enableNotifications(@NotNull UUID executor) {
-        User bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getUserByUUID(executor);
-        if(bankUser == null)
-        {
-            sendMessage(executor, BankSystemTextMessages.getUserNotFoundMessage(tryGetPlayerName(executor)));
-            return false;
-        }
-        bankUser.setEnableBankNotifications(true);
-        BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().markPersistDirty(); // Task #55: User is serialized in the bank-data save unit
-        sendMessage(executor, BankSystemTextMessages.getBankUserNotificationEnabledMessage());
-        return true;
-    }
-    @Override
-    public CompletableFuture<Boolean> bank_enableNotifications_async(@NotNull UUID executor) {
-        return CompletableFuture.completedFuture(bank_enableNotifications(executor));
-    }
 
 
-
-
-
-    @Override
-    public boolean bank_disableNotifications(@NotNull UUID executor) {
-        User bankUser = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getUserByUUID(executor);
-        if(bankUser == null)
-        {
-            sendMessage(executor, BankSystemTextMessages.getUserNotFoundMessage(tryGetPlayerName(executor)));
-            return false;
-        }
-        bankUser.setEnableBankNotifications(false);
-        BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().markPersistDirty(); // Task #55: User is serialized in the bank-data save unit
-        sendMessage(executor, BankSystemTextMessages.getBankUserNotificationDisabledMessage());
-        return true;
-    }
-    @Override
-    public CompletableFuture<Boolean> bank_disableNotifications_async(@NotNull UUID executor) {
-        return CompletableFuture.completedFuture(bank_disableNotifications(executor));
-    }
 
 
 

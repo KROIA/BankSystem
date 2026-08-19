@@ -481,8 +481,6 @@ public class BankSystemCommandsRegistration {
 
 
         // /bank                                                - Show bank balance (money and items)
-        // /bank enableNotifications                            - Enables bank notifications on transactions
-        // /bank disableNotifications                           - Disables bank notifications on transactions
         // /bank manage                                         - Opens the management window to manage own bank accounts
         // /bank manage <accountname>                           - Opens the management window to manage the specific bank account
         // /bank create <accountname>                           - Create a new bank account with the given name
@@ -498,22 +496,6 @@ public class BankSystemCommandsRegistration {
                             handler().bank_show_user_async(player.getUUID(), player.getName().getString());
                             return Command.SINGLE_SUCCESS;
                         })
-                        .then(Commands.literal("enableNotifications")
-                                .executes(context -> {
-                                    CommandSourceStack source = context.getSource();
-                                    ServerPlayer player = source.getPlayerOrException();
-                                    handler().bank_enableNotifications_async(player.getUUID());
-                                    return Command.SINGLE_SUCCESS;
-                                })
-                        )
-                        .then(Commands.literal("disableNotifications")
-                                .executes(context -> {
-                                    CommandSourceStack source = context.getSource();
-                                    ServerPlayer player = source.getPlayerOrException();
-                                    handler().bank_disableNotifications_async(player.getUUID());
-                                    return Command.SINGLE_SUCCESS;
-                                })
-                        )
                         .then(Commands.literal("manage")
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();

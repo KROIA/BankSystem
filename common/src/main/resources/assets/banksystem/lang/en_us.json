@@ -266,8 +266,6 @@
   "message.banksystem.no_permission_deposit": "You don't have the permission to deposit to the account \"{account_number}\"",
   "message.banksystem.no_permission_withdraw": "You don't have the permission to withdraw from the account \"{account_number}\"",
   "message.banksystem.no_permission_manage": "You don't have the permission to manage the account \"{account_number}\"",
-  "message.banksystem.bank_user_notification_enabled": "You will now receive notifications when a bank transaction happens",
-  "message.banksystem.bank_user_notification_disabled": "You will no longer receive notifications when a bank transaction happens",
   "message.banksystem.bank_of": "Bank of {user_name}",
   "message.banksystem.bank_not_found": "{user_name}'s bank for {item_name} not found",
   "message.banksystem.cant_create_bank": "Can't create bank for {user_name} for item {item_name}",

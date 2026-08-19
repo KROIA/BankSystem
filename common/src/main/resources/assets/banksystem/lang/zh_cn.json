@@ -267,8 +267,6 @@
   "message.banksystem.no_permission_deposit": "你没有权限向账户 \"{account_number}\" 存款",
   "message.banksystem.no_permission_withdraw": "你没有权限从账户 \"{account_number}\" 取款",
   "message.banksystem.no_permission_manage": "你没有权限管理账户 \"{account_number}\"",
-  "message.banksystem.bank_user_notification_enabled": "你将收到银行交易的相关通知",
-  "message.banksystem.bank_user_notification_disabled": "你将不再收到银行交易的相关通知",
   "message.banksystem.bank_of": "{user_name} 的银行账户",
   "message.banksystem.bank_not_found": "未找到 {user_name} 对应 {item_name} 的银行账户",
   "message.banksystem.cant_create_bank": "无法为 {user_name} 创建 {item_name} 对应的银行账户",
