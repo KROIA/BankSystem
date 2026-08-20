@@ -9,6 +9,7 @@ import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
+import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -67,9 +68,12 @@ public final class CompanyCommandLogic {
             send(player, "Failed to create bank account for company '" + name + "'.");
             return;
         }
+        // Company bank accounts need the same default money/currency slots as personal
+        // accounts (Task #57) — createBankAccount() alone leaves the account empty.
+        net.kroia.banksystem.banking.bankmanager.ServerBankManager.addDefaultBankSlots(account);
         User callerUser = bm.getUserByUUID(player.getUUID());
         if (callerUser == null) {
-            bm.addUser(new User(player.getUUID(), player.getName().getString(), true));
+            bm.addUser(new User(player.getUUID(), player.getName().getString()));
             callerUser = bm.getUserByUUID(player.getUUID());
         }
         if (callerUser != null) {
@@ -80,9 +84,12 @@ public final class CompanyCommandLogic {
                 cm.createCompany(name, account.getAccountNumber(), player.getUUID(), maxSupply);
         if (outcome.result != CompanyManager.CreateResult.OK) {
             bm.deleteBankAccount(account.getAccountNumber());
-            send(player, "Failed to create company '" + name + "': " + outcome.result.name());
+            String capMsg = capMessageFor(outcome.result);
+            send(player, capMsg != null ? capMsg
+                    : "Failed to create company '" + name + "': " + outcome.result.name());
             return;
         }
+        account.setCreatorUUID(player.getUUID()); // Task #58 — company account counts against the founder's cap
         send(player, "Created company #" + outcome.company.getCompanyId() + " '" + name
                 + "' bound to bank account " + account.getAccountNumber()
                 + " (maxSupply=" + maxSupply + ").");
@@ -94,8 +101,33 @@ public final class CompanyCommandLogic {
                     + "' bound to bank account " + out.bankAccountNr()
                     + " (maxSupply=" + maxSupply + ").");
         } else {
-            send(player, "Failed to create company '" + name + "': " + describeCode(out.resultCode()));
+            String capMsg = capMessageForCode(out.resultCode());
+            send(player, capMsg != null ? capMsg
+                    : "Failed to create company '" + name + "': " + describeCode(out.resultCode()));
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Task #58 — per-player cap rejection messages (localized)
+    // ------------------------------------------------------------------
+    /** Master path: maps the two cap {@link CompanyManager.CreateResult}s to a localized chat line. */
+    private static String capMessageFor(CompanyManager.CreateResult result) {
+        return switch (result) {
+            case PER_PLAYER_COMPANY_LIMIT ->
+                    BankSystemTextMessages.getCapCompaniesReachedMessage(CompanyManager.perPlayerCompanyCap());
+            case PER_PLAYER_ACCOUNT_LIMIT ->
+                    BankSystemTextMessages.getCapCompanyBlockedByAccountLimitMessage(CompanyManager.perPlayerAccountCap());
+            default -> null;
+        };
+    }
+
+    /** Slave path: maps the two cap result codes to a localized chat line. */
+    private static String capMessageForCode(int code) {
+        if (code == AsyncCompanyManager.CODE_PER_PLAYER_COMPANY_LIMIT)
+            return BankSystemTextMessages.getCapCompaniesReachedMessage(CompanyManager.perPlayerCompanyCap());
+        if (code == AsyncCompanyManager.CODE_PER_PLAYER_ACCOUNT_LIMIT)
+            return BankSystemTextMessages.getCapCompanyBlockedByAccountLimitMessage(CompanyManager.perPlayerAccountCap());
+        return null;
     }
 
     // ------------------------------------------------------------------

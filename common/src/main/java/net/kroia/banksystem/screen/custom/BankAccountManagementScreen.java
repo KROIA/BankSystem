@@ -264,6 +264,10 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     companyIdForPayouts = info.companyId();
                     boolean visible = canManage || isAdminMode;
                     payoutsButton.setEnabled(visible);
+                    // ServerBankManager.deleteBankAccount() rejects accounts still owned by a
+                    // company, so grey the button out here rather than letting the click fail silently.
+                    if (deleteBankAccountButton != null)
+                        deleteBankAccountButton.setEnabled(false);
                 });
     }
     private void setupAdminWindow()
@@ -637,7 +641,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     (userData) -> {
                         if(bankUserWidgets.containsKey(userData.userUUID()))
                             return;
-                        BankUserData bankUserData = new BankUserData(userData.userUUID(), userData.userName(), false, BankPermission.DEPOSIT.getValue());
+                        BankUserData bankUserData = new BankUserData(userData.userUUID(), userData.userName(), BankPermission.DEPOSIT.getValue());
                         BankUserWidget userWidget = new BankUserWidget(bankUserData, toRemoveUserWidgets::add, canManage, this);
                         bankUserWidgets.put(userData.userUUID(), userWidget);
                         userElementListView.addChild(userWidget);

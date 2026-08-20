@@ -388,7 +388,8 @@ public final class ItemIDWorldRepair {
      * <i>before</i> {@code ItemIDs.nbt} was loaded (verified against the current constructor
      * code and {@code git show 7265ef15}): the constructor prefix —
      * {@code INITIAL_BLACKLIST_ITEMS} in list order ({@code getBlacklistedItems()}), then
-     * {@code INITIAL_NOT_REMOVABLE_ITEMS} ({@code getNotRemovableItems()}), then
+     * the historical initial "money default" ({@code banksystem:money}; formerly the deleted
+     * not-removable list, Task #57), then
      * {@code INITIAL_ALLOWED_ITEMS} ({@code setupDefaultItems()}) — followed by
      * {@code createDefaultItemIDs()}'s money list + full registry iteration. This yields
      * bedrock=1, ..., money200=19, ..., {@code banksystem:money}=22, iron=23, ..., coal=27,
@@ -445,7 +446,12 @@ public final class ItemIDWorldRepair {
     private static List<ItemStack> bootPrefixItems() {
         List<ItemStack> prefix = new ArrayList<>();
         prefix.addAll(net.kroia.banksystem.BankSystemModSettings.Bank.createInitialBlacklistItems());
-        prefix.addAll(net.kroia.banksystem.BankSystemModSettings.Bank.createInitialNotRemovableItems());
+        // Historical boot order: old builds registered the (now-deleted, Task #57) initial
+        // "not-removable" list here, which contained exactly banksystem:money. This constant
+        // literal reproduces that historical short-assignment position — it is frozen history
+        // for the repair simulation, NOT a live setting, so it must stay even though the
+        // runtime not-removable concept is gone.
+        prefix.add(BankSystemItems.MONEY.get().getDefaultInstance());
         prefix.addAll(net.kroia.banksystem.BankSystemModSettings.Bank.createInitialAllowedItems());
         prefix.addAll(BankSystemItems.getMoneyItems());
         return prefix;
@@ -454,8 +460,8 @@ public final class ItemIDWorldRepair {
     /**
      * The money/cent items in the order the BOOT registration sequence first encounters
      * them: the 13 money items of {@code INITIAL_BLACKLIST_ITEMS} (cent1..cent50,
-     * money5..money1000), then {@code banksystem:money} from
-     * {@code INITIAL_NOT_REMOVABLE_ITEMS}. Derived from the boot prefix (not hardcoded) so
+     * money5..money1000), then the historical {@code banksystem:money} money-default
+     * prefix entry (Task #57). Derived from the boot prefix (not hardcoded) so
      * a settings-list change cannot silently desync the two. Counterpart of
      * {@link BankSystemItems#getMoneyItems()} for the boot-order money-block signature.
      */

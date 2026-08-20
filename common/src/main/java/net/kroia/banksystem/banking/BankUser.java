@@ -24,7 +24,7 @@ public class BankUser {
 
 
     public BankUserData toBankUserData() {
-        return new BankUserData(user.getUUID(), user.getName(), user.isEnableBankNotifications(), permission);
+        return new BankUserData(user.getUUID(), user.getName(), permission);
     }
 
     public User getUser() {
@@ -66,9 +66,7 @@ public class BankUser {
 
         UUID uuid = UUID.fromString(userJson.get("userUUID").getAsString());
         String name = userJson.get("userName").getAsString();
-        boolean enableNotifications = userJson.has("enableBankNotifications") && userJson.get("enableBankNotifications").getAsBoolean();
-
-        User user = new User(uuid, name, enableNotifications);
+        User user = new User(uuid, name);
         int permissionValue = jsonObject.get("permissionValue").getAsInt();
         return new BankUser(user, permissionValue);
     }

@@ -87,7 +87,6 @@ public class AsyncBankManager implements IAsyncBankManager {
         IsSlaveServerTrustedAsync,
         GetAllowedItemsAsync,
         GetBlacklistedItemsAsync,
-        GetNotRemovableItemsAsync,
         GetItemInfoDataAsync,
         AddUserAsync_1,
         RemoveUserAsync,
@@ -129,7 +128,6 @@ public class AsyncBankManager implements IAsyncBankManager {
         IsItemIDAllowedAsync,
         AllowItemIDAsync,
         DisallowItemIDAsync,
-        IsItemIDNotRemovableAsync,
         IsItemIDBlacklistedAsync,
         GetItemFractionScaleFactorAsync,
         GetRealMoneyCirculationAsync,
@@ -161,7 +159,6 @@ public class AsyncBankManager implements IAsyncBankManager {
         put(FunctionType.IsSlaveServerTrustedAsync,				    new AsyncFunctionDataCodecs(ByteBufCodecs.STRING_UTF8.cast(), ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetAllowedItemsAsync,					    new AsyncFunctionDataCodecs(null, ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC)));
         put(FunctionType.GetBlacklistedItemsAsync,				    new AsyncFunctionDataCodecs(null, ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC)));
-        put(FunctionType.GetNotRemovableItemsAsync,				    new AsyncFunctionDataCodecs(null, ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC)));
         put(FunctionType.GetItemInfoDataAsync,					    new AsyncFunctionDataCodecs(ItemID.STREAM_CODEC, ItemInfoData.STREAM_CODEC));
         put(FunctionType.AddUserAsync_1,						    new AsyncFunctionDataCodecs(ParamGroup_UUID_String.STREAM_CODEC, null));
         //put(FunctionType.AddUserAsync_2,						    new AsyncFunctionDataCodecs(null, null));
@@ -205,7 +202,6 @@ public class AsyncBankManager implements IAsyncBankManager {
         put(FunctionType.IsItemIDAllowedAsync,					    new AsyncFunctionDataCodecs(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.AllowItemIDAsync,						    new AsyncFunctionDataCodecs(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.DisallowItemIDAsync,					    new AsyncFunctionDataCodecs(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
-        put(FunctionType.IsItemIDNotRemovableAsync,				    new AsyncFunctionDataCodecs(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.IsItemIDBlacklistedAsync,				    new AsyncFunctionDataCodecs(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetItemFractionScaleFactorAsync,			new AsyncFunctionDataCodecs(null, ByteBufCodecs.INT.cast()));
         put(FunctionType.GetRealMoneyCirculationAsync,			    new AsyncFunctionDataCodecs(null, ByteBufCodecs.DOUBLE.cast()));
@@ -327,7 +323,6 @@ public class AsyncBankManager implements IAsyncBankManager {
                 case FunctionType.IsSlaveServerTrustedAsync -> OutputData.of(input.function, bankManager.isSlaveServerTrusted(input.decodeParams()));
                 case FunctionType.GetAllowedItemsAsync -> OutputData.of(input.function, bankManager.getAllowedItems());
                 case FunctionType.GetBlacklistedItemsAsync -> OutputData.of(input.function, bankManager.getBlacklistedItems());
-                case FunctionType.GetNotRemovableItemsAsync -> OutputData.of(input.function, bankManager.getNotRemovableItems());
                 case FunctionType.GetItemInfoDataAsync -> OutputData.of(input.function, bankManager.getItemInfoData(input.decodeParams()));
                 case FunctionType.AddUserAsync_1 -> {
                     ParamGroup_UUID_String param = input.decodeParams();
@@ -419,7 +414,6 @@ public class AsyncBankManager implements IAsyncBankManager {
                     }
                     yield OutputData.of(input.function, bankManager.disallowItemID(input.decodeParams()) );
                 }
-                case FunctionType.IsItemIDNotRemovableAsync -> OutputData.of(input.function, bankManager.isItemIDNotRemovable(input.decodeParams()) );
                 case FunctionType.IsItemIDBlacklistedAsync -> OutputData.of(input.function, bankManager.isItemIDBlacklisted(input.decodeParams()) );
                 case FunctionType.GetItemFractionScaleFactorAsync -> OutputData.of(input.function, bankManager.getItemFractionScaleFactor());
                 case FunctionType.GetRealMoneyCirculationAsync -> OutputData.of(input.function, bankManager.getRealMoneyCirculation() );
@@ -451,7 +445,6 @@ public class AsyncBankManager implements IAsyncBankManager {
                      FunctionType.IsSlaveServerTrustedAsync,
                      FunctionType.GetAllowedItemsAsync,
                      FunctionType.GetBlacklistedItemsAsync,
-                     FunctionType.GetNotRemovableItemsAsync,
                      FunctionType.GetItemInfoDataAsync,
                      FunctionType.UserExistsAsync,
                      FunctionType.GetUserByUUIDAsync,
@@ -474,7 +467,6 @@ public class AsyncBankManager implements IAsyncBankManager {
                      FunctionType.IsItemIDAllowedAsync,
                      FunctionType.AllowItemIDAsync,
                      FunctionType.DisallowItemIDAsync,
-                     FunctionType.IsItemIDNotRemovableAsync,
                      FunctionType.IsItemIDBlacklistedAsync,
                      FunctionType.GetItemFractionScaleFactorAsync,
                      FunctionType.GetRealMoneyCirculationAsync,
@@ -499,7 +491,6 @@ public class AsyncBankManager implements IAsyncBankManager {
                      FunctionType.IsSlaveServerTrustedAsync,
                      FunctionType.GetAllowedItemsAsync,
                      FunctionType.GetBlacklistedItemsAsync,
-                     FunctionType.GetNotRemovableItemsAsync,
                      FunctionType.GetItemInfoDataAsync,
                      FunctionType.UserExistsAsync,
                      FunctionType.GetUserByUUIDAsync,
@@ -522,7 +513,6 @@ public class AsyncBankManager implements IAsyncBankManager {
                      FunctionType.IsItemIDAllowedAsync,
                      //FunctionType.AllowItemIDAsync,
                      //FunctionType.DisallowItemIDAsync,
-                     FunctionType.IsItemIDNotRemovableAsync,
                      FunctionType.IsItemIDBlacklistedAsync,
                      FunctionType.GetItemFractionScaleFactorAsync,
                      FunctionType.GetRealMoneyCirculationAsync,
@@ -628,7 +618,7 @@ public class AsyncBankManager implements IAsyncBankManager {
     @Override
     public CompletableFuture<BankManagerData> getBankManagerDataAsync() {
         if(!MultiServerUtils.canInteractWithBankSystem())
-            return CompletableFuture.completedFuture(new BankManagerData(new BankManagerData.UserMapData(Map.of()), new BankManagerData.BankAccountsData(Map.of()), List.of(), List.of(), List.of()));
+            return CompletableFuture.completedFuture(new BankManagerData(new BankManagerData.UserMapData(Map.of()), new BankManagerData.BankAccountsData(Map.of()), List.of(), List.of()));
         CompletableFuture<BankManagerData> future = new CompletableFuture<>();
         InputData inputData = new InputData(FunctionType.GetBankManagerDataAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -710,17 +700,6 @@ public class AsyncBankManager implements IAsyncBankManager {
             return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetBlacklistedItemsAsync);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
-    }
-
-    @Override
-    public CompletableFuture<List<ItemID>> getNotRemovableItemsAsync() {
-        if(!MultiServerUtils.canInteractWithBankSystem())
-            return CompletableFuture.completedFuture(List.of());
-        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetNotRemovableItemsAsync);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
@@ -1298,17 +1277,6 @@ public class AsyncBankManager implements IAsyncBankManager {
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.DisallowItemIDAsync, itemID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
-    }
-
-    @Override
-    public CompletableFuture<Boolean> isItemIDNotRemovableAsync(ItemID itemID) {
-        if(!MultiServerUtils.canInteractWithBankSystem())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.IsItemIDNotRemovableAsync, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;

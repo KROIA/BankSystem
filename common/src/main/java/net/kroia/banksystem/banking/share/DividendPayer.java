@@ -125,6 +125,11 @@ public final class DividendPayer implements IDividendPayer {
         IServerBankAccount sourceAccount = bm.getBankAccount(companyAccountNr);
         if (sourceAccount == null) return PayDividendResult.of(PayDividendResult.Reason.INTERNAL);
 
+        // Task #57b — "unset" currency (its item was blacklisted while money was also banned):
+        // refuse to pay with a clear reason instead of constructing an invalid ItemID.
+        if (currencyItem == net.kroia.banksystem.banking.company.Company.CURRENCY_UNSET) {
+            return PayDividendResult.of(PayDividendResult.Reason.CURRENCY_ITEM_MISSING);
+        }
         // Resolve the payout currency: sentinel 0 → money, else the registered item.
         boolean isMoney = (currencyItem == net.kroia.banksystem.banking.company.PayoutSchedule.MONEY_CURRENCY);
         ItemID payoutId;

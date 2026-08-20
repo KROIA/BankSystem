@@ -77,8 +77,10 @@ public class ShareSymbolStore {
      */
     public void open(Path worldDir, boolean mirrorMode) {
         this.mirrorMode = mirrorMode;
-        this.symbolDir  = worldDir.resolve("banksystem").resolve("share_symbols");
+        this.symbolDir  = worldDir.resolve("data").resolve("BankSystem").resolve("share_symbols");
         this.inboxDir   = symbolDir.resolve("inbox");
+
+        migrateFromOldPath(worldDir);
 
         try {
             Files.createDirectories(symbolDir);
@@ -98,6 +100,26 @@ public class ShareSymbolStore {
 
     public void close() {
         // manifest already written on every mutation; nothing extra needed
+    }
+
+    /**
+     * One-time migration: relocate an old {@code <world>/banksystem/share_symbols/} tree to the
+     * canonical {@code <world>/data/BankSystem/share_symbols/} root. Fail-soft — on any error the
+     * old data is left untouched and seeding/re-sync repopulates the bundled symbols.
+     */
+    private void migrateFromOldPath(Path worldDir) {
+        Path oldDir = worldDir.resolve("banksystem").resolve("share_symbols");
+        if (!Files.isDirectory(oldDir) || Files.exists(symbolDir)) {
+            return;
+        }
+        try {
+            Files.createDirectories(symbolDir.getParent());
+            Files.move(oldDir, symbolDir);
+            logger.info("[ShareSymbolStore] Migrated symbol store from " + oldDir + " to " + symbolDir);
+        } catch (IOException e) {
+            logger.warn("[ShareSymbolStore] Failed to migrate symbol store from " + oldDir
+                + ": " + e.getMessage() + " — leaving old data in place");
+        }
     }
 
     // ── Public API ────────────────────────────────────────────────────────────

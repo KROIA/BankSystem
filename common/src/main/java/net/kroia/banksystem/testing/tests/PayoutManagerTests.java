@@ -42,6 +42,68 @@ public class PayoutManagerTests extends TestSuite {
         addTest("cascade_strip_leaves_others_alone", this::testCascadeStripLeavesOthersAlone);
         addTest("advance_updates_next_run", this::testAdvanceUpdatesNextRun);
         addTest("schedule_immutable_copy_with", this::testScheduleImmutableCopyWith);
+        addTest("currency_ban_fallback_pause_resume", this::testCurrencyBanFallbackPauseResume);
+        addTest("currency_ban_money_sets_unset", this::testCurrencyBanMoneySetsUnset);
+    }
+
+    private long makeScheduleWithCurrency(CompanyManager cm, int companyId, UUID target, short currency) {
+        return cm.createSchedule(companyId, target, 100L, 40L, 0L, CALLER,
+                PayoutSchedule.NO_TARGET_ACCOUNT, "", "",
+                PayoutSchedule.Mode.FIXED_PAYOUT, currency).schedule.getScheduleId();
+    }
+
+    /**
+     * Task #57b — ban a non-money currency item: company currency falls back to money,
+     * matching non-paused schedules pause with the ban marker, a user-paused schedule keeps
+     * its own pause (no marker), and re-allow resumes ONLY the ban-marked schedule.
+     */
+    private TestResult testCurrencyBanFallbackPauseResume() {
+        CompanyManager cm = fresh();
+        Company c = make(cm, "CurBan", 5);
+        int id = c.getCompanyId();
+        cm.updateCompanyCurrency(id, (short) 5);
+        long a = makeScheduleWithCurrency(cm, id, WORKER1, (short) 5); // banned currency, running
+        long b = makeScheduleWithCurrency(cm, id, WORKER2, (short) 7); // other currency, untouched
+        long cc = makeScheduleWithCurrency(cm, id, WORKER1, (short) 5); // banned currency, user-paused
+        cm.pauseSchedule(id, cc, true); // user pause clears any marker
+
+        CompanyManager.CurrencyBanReport report = cm.cascadeCurrencyBan((short) 5, false);
+
+        if (c.getCompanyCurrency() != PayoutSchedule.MONEY_CURRENCY)
+            return fail("company currency should fall back to money, got " + c.getCompanyCurrency());
+        PayoutSchedule sa = c.findSchedule(a), sb = c.findSchedule(b), scc = c.findSchedule(cc);
+        if (!sa.isPaused() || !sa.isPausedByCurrencyBan()) return fail("schedule A must be ban-paused");
+        if (sb.isPaused()) return fail("schedule B (other currency) must stay running");
+        if (!scc.isPaused() || scc.isPausedByCurrencyBan())
+            return fail("user-paused schedule C must stay paused WITHOUT the ban marker");
+        if (report.pausedSchedules() != 1) return fail("expected 1 newly-paused schedule, got " + report.pausedSchedules());
+        if (!report.affectedCompanies().contains("CurBan")) return fail("report missing company name");
+
+        int resumed = cm.resumeCurrencyBannedSchedules((short) 5, false);
+        if (resumed != 1) return fail("expected 1 resumed schedule, got " + resumed);
+        if (c.findSchedule(a).isPaused() || c.findSchedule(a).isPausedByCurrencyBan())
+            return fail("schedule A must resume and clear its marker");
+        if (!c.findSchedule(cc).isPaused()) return fail("user-paused C must remain paused after re-allow");
+        if (c.getCompanyCurrency() != PayoutSchedule.MONEY_CURRENCY)
+            return fail("company currency must NOT auto-restore (stays money)");
+        return pass("currency ban: fallback-to-money, marked pause, and marker-only resume all correct.");
+    }
+
+    /** Task #57b — ban money itself: company currency goes to the UNSET sentinel (reconfigure). */
+    private TestResult testCurrencyBanMoneySetsUnset() {
+        CompanyManager cm = fresh();
+        Company c = make(cm, "MoneyBan", 6);
+        int id = c.getCompanyId();
+        // company currency 0 (money) by default; a money-currency schedule too.
+        long m = makeScheduleWithCurrency(cm, id, WORKER1, PayoutSchedule.MONEY_CURRENCY);
+        cm.cascadeCurrencyBan((short) 999, true); // bannedIsMoney=true
+
+        if (c.getCompanyCurrency() != Company.CURRENCY_UNSET)
+            return fail("money ban must set currency to UNSET, got " + c.getCompanyCurrency());
+        PayoutSchedule sm = c.findSchedule(m);
+        if (!sm.isPaused() || !sm.isPausedByCurrencyBan())
+            return fail("money-currency schedule must be ban-paused");
+        return pass("money ban: company currency = UNSET, money schedule ban-paused.");
     }
 
     /** Detached from the live bank manager — see CompanyManagerTests#fresh(). */

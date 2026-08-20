@@ -79,13 +79,6 @@ public interface IAsyncBankManager {
     CompletableFuture<List<ItemID>> getBlacklistedItemsAsync();
 
     /**
-     * Returns a list of all items that cannot be removed from the bank.
-     * These items are not allowed to be removed from the bank account.
-     * @return A list of items that cannot be removed from the bank.
-     */
-    CompletableFuture<List<ItemID>> getNotRemovableItemsAsync();
-
-    /**
      * Returns minimalistic data about the bank manager.
      * This data can be requested by the client using the ClientBankManager.
      *
@@ -468,14 +461,6 @@ public interface IAsyncBankManager {
      * @return True if the item ID was successfully disallowed, false otherwise.
      */
     CompletableFuture<Boolean> disallowItemIDAsync(ItemID itemID);
-
-    /**
-     * Checks if the given item ID is not removable and cannot be removed from a bank account.
-     *
-     * @param itemID The item ID to check.
-     * @return True if the item ID is not removable, false otherwise.
-     */
-    CompletableFuture<Boolean> isItemIDNotRemovableAsync(ItemID itemID);
 
     /**
      * Checks if the given item ID is blacklisted and cannot be stored in a bank account.

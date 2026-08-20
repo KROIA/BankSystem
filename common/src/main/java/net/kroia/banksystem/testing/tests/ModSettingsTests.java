@@ -56,7 +56,6 @@ public class ModSettingsTests extends TestSuite {
         source.UTILITIES.LOGGING_ENABLE_DEBUG.set(true);
         source.UTILITIES.LOGGING_ENABLE_INFO.set(false);
         source.PLAYER.STARTING_BALANCE.set(12345L);
-        source.BANK.ITEM_TRANSFER_TICK_INTERVAL.set(9);
         source.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(40);
         source.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(60);
         source.BANK.ADDITIONAL_VOLATILE_COMPONENTS.set(new ArrayList<>(List.of("tfc:food", "somemod:decay")));
@@ -83,8 +82,6 @@ public class ModSettingsTests extends TestSuite {
         r = assertFalse("LOGGING_ENABLE_INFO survives round-trip", target.UTILITIES.LOGGING_ENABLE_INFO.get());
         if (!r.passed()) return r;
         r = assertEquals("STARTING_BALANCE survives round-trip", 12345L, (long) target.PLAYER.STARTING_BALANCE.get());
-        if (!r.passed()) return r;
-        r = assertEquals("ITEM_TRANSFER_TICK_INTERVAL survives round-trip", 9, (int) target.BANK.ITEM_TRANSFER_TICK_INTERVAL.get());
         if (!r.passed()) return r;
         r = assertEquals("BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL survives round-trip", 40, (int) target.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.get());
         if (!r.passed()) return r;
@@ -117,7 +114,6 @@ public class ModSettingsTests extends TestSuite {
         settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.set(-5L);
         settings.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.set(-1L);
         settings.PLAYER.STARTING_BALANCE.set(-100L);
-        settings.BANK.ITEM_TRANSFER_TICK_INTERVAL.set(0);
         settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(-20);
         settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(0);
         settings.PLACEHOLDER.PLAYER_BALANCE.set(
@@ -136,9 +132,6 @@ public class ModSettingsTests extends TestSuite {
         if (!r.passed()) return r;
         r = assertEquals("negative starting balance clamped to 0",
                 ModSettingsRequest.MIN_STARTING_BALANCE, (long) settings.PLAYER.STARTING_BALANCE.get());
-        if (!r.passed()) return r;
-        r = assertEquals("item transfer interval clamped to minimum",
-                ModSettingsRequest.MIN_TICK_INTERVAL, (int) settings.BANK.ITEM_TRANSFER_TICK_INTERVAL.get());
         if (!r.passed()) return r;
         r = assertEquals("download block interval clamped to minimum",
                 ModSettingsRequest.MIN_TICK_INTERVAL, (int) settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.get());
@@ -161,7 +154,6 @@ public class ModSettingsTests extends TestSuite {
         settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.set(Long.MAX_VALUE);
         settings.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.set(Long.MAX_VALUE);
         settings.PLAYER.STARTING_BALANCE.set(Long.MAX_VALUE);
-        settings.BANK.ITEM_TRANSFER_TICK_INTERVAL.set(Integer.MAX_VALUE);
         settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(Integer.MAX_VALUE);
         settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(Integer.MAX_VALUE);
         settings.PLACEHOLDER.PLAYER_BALANCE.set(
@@ -180,9 +172,6 @@ public class ModSettingsTests extends TestSuite {
         if (!r.passed()) return r;
         r = assertEquals("starting balance clamped to maximum",
                 ModSettingsRequest.MAX_STARTING_BALANCE, (long) settings.PLAYER.STARTING_BALANCE.get());
-        if (!r.passed()) return r;
-        r = assertEquals("item transfer interval clamped to maximum",
-                ModSettingsRequest.MAX_TICK_INTERVAL, (int) settings.BANK.ITEM_TRANSFER_TICK_INTERVAL.get());
         if (!r.passed()) return r;
         r = assertEquals("download block interval clamped to maximum",
                 ModSettingsRequest.MAX_TICK_INTERVAL, (int) settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.get());
@@ -245,7 +234,7 @@ public class ModSettingsTests extends TestSuite {
     private TestResult test_partialPayloadKeepsOtherValues() {
         BankSystemModSettings settings = new BankSystemModSettings();
         settings.UTILITIES.SAVE_INTERVAL_SECONDS.set(99L);
-        settings.BANK.ITEM_TRANSFER_TICK_INTERVAL.set(33);
+        settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(33);
 
         // Payload containing ONLY the ServerBank group with ONLY one setting
         JsonObject bankGroup = new JsonObject();
@@ -259,7 +248,7 @@ public class ModSettingsTests extends TestSuite {
         if (!r.passed()) return r;
         r = assertTrue("ServerBank.CONFIRM_ITEMID_MERGE applied from partial payload", settings.BANK.CONFIRM_ITEMID_MERGE.get());
         if (!r.passed()) return r;
-        r = assertEquals("ServerBank setting missing from payload preserved", 33, (int) settings.BANK.ITEM_TRANSFER_TICK_INTERVAL.get());
+        r = assertEquals("ServerBank setting missing from payload preserved", 33, (int) settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.get());
         if (!r.passed()) return r;
         return pass("Partial payloads only change the settings they contain");
     }

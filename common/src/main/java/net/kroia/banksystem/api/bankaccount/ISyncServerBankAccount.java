@@ -77,6 +77,21 @@ public interface ISyncServerBankAccount {
      */
     @Nullable UserData getPersonalBankOwnerData();
 
+    /**
+     * Task #58 (v2.1.1) — the UUID of the player who created this account via
+     * {@code /bank create} or {@code /company create}, or {@code null} for the personal
+     * auto-account and legacy pre-#58 accounts. Used to enforce the per-player account cap.
+     * @return the creator UUID, or {@code null}
+     */
+    @Nullable UUID getCreatorUUID();
+
+    /**
+     * Task #58 (v2.1.1) — sets the creator UUID (see {@link #getCreatorUUID()}). Should only
+     * be called once, immediately after account creation.
+     * @param creatorUUID the creating player's UUID, or {@code null}
+     */
+    void setCreatorUUID(@Nullable UUID creatorUUID);
+
 
     /**
      * Gets the account number of this bank account.

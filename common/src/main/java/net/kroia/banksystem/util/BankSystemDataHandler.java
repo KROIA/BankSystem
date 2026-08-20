@@ -84,6 +84,14 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     private boolean savingProhibited = false;
 
     /**
+     * Task #55: persistence dirty flag for {@code Meta_data.nbt}. Set true by the metadata
+     * setters (applied-component-set, world-repair audit record, warn-path acknowledgment)
+     * and read by {@link #save_metadata(boolean)} alongside the ItemIDManager digest flag.
+     * Reset to false only after a confirmed successful write.
+     */
+    private boolean metadataDirty = false;
+
+    /**
      * The effective volatile/deposit-gated component set (sorted id strings, see
      * {@link VolatileItemComponents#getEffectiveComponentIds()}) as read from
      * {@code Meta_data.nbt} at load time. {@code null} = the world has no record yet
@@ -134,7 +142,10 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             int playerCount = ServerPlayerUtilities.getOnlinePlayers().size();
             if(playerCount > 0 || lastPlayerCount > 0) {
                 lastPlayerCount = playerCount;
-                saveAll();
+                // Task #55: timer path is dirty-gated — only units mutated since their last
+                // write are rewritten (forced=false). Shutdown / world-save / recovery paths
+                // call the no-arg saveAll() which forces every unit (see saveAll(boolean)).
+                saveAll(false);
             }
         }
     }
@@ -210,8 +221,28 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         return true;
     }
 
+    /**
+     * No-arg override reached by the base {@link DataPersistence} contract and by every
+     * non-timer save path (world-save {@code SERVER_LEVEL_SAVE}, shutdown save via
+     * {@code saveDataToFiles}, load-failure recovery re-save, compatibility-mode re-save).
+     * Always {@code forced=true} — a forced save ignores the per-unit dirty flag so a unit
+     * skipped by an earlier timer tick can never be lost.
+     */
     @Override
     public boolean saveAll()
+    {
+        return saveAll(true);
+    }
+
+    /**
+     * Task #55: dirty-gated save-all. When {@code forced} is false (periodic timer path),
+     * each save unit is written only if its persistence dirty flag is set; clean units are
+     * skipped, sparing the disk churn of rewriting unchanged NBT every interval. When
+     * {@code forced} is true every unit is written regardless of its flag (shutdown /
+     * world-save / recovery). The existing {@code savingProhibited} and per-unit
+     * {@code canSave(...)} load-state gates still apply on top.
+     */
+    public boolean saveAll(boolean forced)
     {
         // Merge-guard abort: nothing of this session may be saved (see savingProhibited).
         // This intercepts the crash-save (SERVER_LEVEL_SAVE), the shutdown save and the
@@ -225,13 +256,13 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         }
         debug("Saving BankSystem Mod data...");
         boolean success = true;
-        success &= save_metadata();
+        success &= save_metadata(forced);
         success &= save_globalSettings();
         if(!BACKEND_INSTANCES.isSlaveServer) {
-            success &= save_bank();
-            success &= save_itemIDs();
-            success &= save_bankAccountBindings();
-            success &= save_companies();
+            success &= save_bank(forced);
+            success &= save_itemIDs(forced);
+            success &= save_bankAccountBindings(forced);
+            success &= save_companies(forced);
         }
 
 
@@ -383,10 +414,18 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
     public boolean save_itemIDs()
     {
+        return save_itemIDs(true);
+    }
+
+    public boolean save_itemIDs(boolean forced)
+    {
         // Save gate: never overwrite ItemIDs.nbt when it was not successfully loaded this
         // session (see LoadState / savingProhibited).
         if (!canSave("ItemIDs", itemIDsLoadState))
             return false;
+        // Task #55: timer path skips a clean registry. A forced save always writes.
+        if (!forced && !ItemIDManager.isPersistDirty())
+            return true;
         boolean success = true;
         CompoundTag tag  = new CompoundTag();
         success = BACKEND_INSTANCES.ITEM_ID_MANAGER.save(tag);
@@ -395,6 +434,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
         if(success)
         {
+            // Only a confirmed successful write clears the dirty flag.
+            ItemIDManager.clearPersistDirty();
            // BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_SAVED_TO_FILE.notifyListeners();
         }
         return success;
@@ -496,6 +537,11 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     @Override
     public boolean save_bank()
     {
+        return save_bank(true);
+    }
+
+    public boolean save_bank(boolean forced)
+    {
         // Save gate: never overwrite Bank_data/ when the bank data was not successfully
         // loaded this session — an aborted/failed load would otherwise be crash-saved as
         // an EMPTY bank manager, destroying every account (see LoadState).
@@ -504,12 +550,17 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         ServerBankManager bankManager = (ServerBankManager)BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(bankManager == null)
             return false;
+        // Task #55: timer path skips clean bank data. A forced save always writes.
+        if (!forced && !bankManager.isPersistDirty())
+            return true;
         boolean success = true;
         Map<String, ListTag> bankData = new HashMap<>();
         success = bankManager.save(bankData);
         saveDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME), bankData);
         if(success)
         {
+            // Only a confirmed successful write clears the dirty flag.
+            bankManager.clearPersistDirty();
             BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_SAVED_TO_FILE.notifyListeners();
         }
         return success;
@@ -549,15 +600,26 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
      */
     public boolean save_bankAccountBindings()
     {
+        return save_bankAccountBindings(true);
+    }
+
+    public boolean save_bankAccountBindings(boolean forced)
+    {
         if (!canSave("BankAccountBindings", bankAccountBindingsLoadState))
             return false;
         if (BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS == null)
             return false;
+        // Task #55: timer path skips a clean binding table. A forced save always writes.
+        // BankAccountBindings already tracks a single dirty flag (hasChanges/clearChanges);
+        // this just stops honouring it on the timer path only when nothing changed.
+        if (!forced && !BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.hasChanges())
+            return true;
         CompoundTag tag = new CompoundTag();
         boolean success = BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.save(tag);
-        if (success)
+        if (success) {
             saveDataCompound(getAbsoluteSavePath(BANK_ACCOUNT_BINDINGS_FILE_NAME), tag);
-        BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.clearChanges();
+            BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.clearChanges();
+        }
         return success;
     }
 
@@ -600,13 +662,22 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
      * {@code Bank_data/}. Master only.
      */
     public boolean save_companies() {
+        return save_companies(true);
+    }
+
+    public boolean save_companies(boolean forced) {
         if (!canSave("Companies", companiesLoadState)) return false;
         net.kroia.banksystem.banking.company.CompanyManager mgr =
                 net.kroia.banksystem.banking.company.CompanyManager.get();
         if (mgr == null) return true; // Slave / not installed — nothing to save.
+        // Task #55: timer path skips a clean company store. A forced save always writes.
+        if (!forced && !mgr.isPersistDirty())
+            return true;
         Map<String, ListTag> data = new HashMap<>();
         boolean success = mgr.save(data);
         saveDataCompoundListMap(getAbsoluteSavePath(COMPANIES_FOLDER_NAME), data);
+        if (success)
+            mgr.clearPersistDirty();
         return success;
     }
 
@@ -813,10 +884,22 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
     public boolean save_metadata()
     {
+        return save_metadata(true);
+    }
+
+    public boolean save_metadata(boolean forced)
+    {
         // Save gate: never overwrite Meta_data.nbt when it exists but could not be loaded
         // (its appliedComponentSet record steers the merge guard — see LoadState).
         if (!canSave("Meta_data", metadataLoadState))
             return false;
+        // Task #55: Meta_data.nbt has no manager of its own, so its dirtiness is derived from
+        // (a) a handler-local flag flipped by the component-set / repair-record setters and
+        // (b) the ItemIDManager dirty flag — the persisted short→name digest is a projection
+        // of the ItemID registry, so any registry change must re-stamp the metadata. This
+        // check runs BEFORE save_itemIDs() in saveAll(), while the ItemID flag is still set.
+        if (!forced && !metadataDirty && !ItemIDManager.isPersistDirty())
+            return true;
         CompoundTag data = new CompoundTag();
         // Save-format stamp (BankSystemSaveFormat): legacy files carry no such key and are
         // re-stamped by this very call on their first post-update save (save_metadata()
@@ -859,7 +942,10 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
                 data.put(BankSystemSaveFormat.KEY_ITEM_ID_DIGEST, digest);
         }
         // Save metadata to a separate file
-        return saveDataCompound(getMetaDataFilePath(), data);
+        boolean success = saveDataCompound(getMetaDataFilePath(), data);
+        if (success)
+            metadataDirty = false; // reset only after a confirmed successful write (Task #55)
+        return success;
     }
     public boolean load_metadata()
     {
@@ -981,6 +1067,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public void setAcknowledgedRepairEvidenceHash(String hash)
     {
         acknowledgedRepairEvidenceHash = hash;
+        metadataDirty = true; // Task #55
     }
 
     /**
@@ -1009,6 +1096,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         repairAppliedTimestamp = timestamp;
         repairAppliedModVersion = modVersion;
         repairAppliedChangedShortCount = changedShortCount;
+        metadataDirty = true; // Task #55
     }
 
     /**
@@ -1060,6 +1148,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public void setAppliedEffectiveComponentSet(List<String> set)
     {
         appliedEffectiveComponentSet = set == null ? null : new ArrayList<>(set);
+        metadataDirty = true; // Task #55
     }
 
     /**

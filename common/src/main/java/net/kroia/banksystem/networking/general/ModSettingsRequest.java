@@ -81,6 +81,11 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
     /** Maximum starting balance for new players (sanity guard, in money cents). */
     public static final long MAX_STARTING_BALANCE = 1_000_000_000_000L;
 
+    /** Task #58: minimum per-player cap ({@code -1} = unlimited sentinel; {@code 0} = none). */
+    public static final int MIN_PER_PLAYER_CAP = -1;
+    /** Task #58: maximum per-player cap (sanity guard). */
+    public static final int MAX_PER_PLAYER_CAP = 100_000;
+
     /** Minimum block-update tick interval (1 tick — every tick). */
     public static final int MIN_TICK_INTERVAL = 1;
     /** Maximum block-update tick interval (1200 ticks = 1 minute). */
@@ -302,10 +307,12 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         // Player
         settings.PLAYER.STARTING_BALANCE.set(
                 clamp(settings.PLAYER.STARTING_BALANCE.get(), MIN_STARTING_BALANCE, MAX_STARTING_BALANCE));
+        settings.PLAYER.MAX_BANK_ACCOUNTS_PER_PLAYER.set(
+                clamp(settings.PLAYER.MAX_BANK_ACCOUNTS_PER_PLAYER.get(), MIN_PER_PLAYER_CAP, MAX_PER_PLAYER_CAP));
+        settings.PLAYER.MAX_COMPANIES_PER_PLAYER.set(
+                clamp(settings.PLAYER.MAX_COMPANIES_PER_PLAYER.get(), MIN_PER_PLAYER_CAP, MAX_PER_PLAYER_CAP));
 
         // ServerBank
-        settings.BANK.ITEM_TRANSFER_TICK_INTERVAL.set(
-                clamp(settings.BANK.ITEM_TRANSFER_TICK_INTERVAL.get(), MIN_TICK_INTERVAL, MAX_TICK_INTERVAL));
         settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(
                 clamp(settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.get(), MIN_TICK_INTERVAL, MAX_TICK_INTERVAL));
         settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(

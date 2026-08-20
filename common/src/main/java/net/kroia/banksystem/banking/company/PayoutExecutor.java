@@ -174,6 +174,8 @@ public final class PayoutExecutor {
     /** Resolve the payout currency's ItemID ({@code 0} short → money). */
     private static @Nullable ItemID resolveCurrency(PayoutSchedule schedule) {
         if (schedule.isMoneyCurrency()) return MoneyItem.getItemID();
+        // Task #57b — "unset" sentinel means no currency configured: refuse (null → CURRENCY_ITEM_MISSING).
+        if (schedule.getCurrencyItem() == Company.CURRENCY_UNSET) return null;
         return new ItemID(schedule.getCurrencyItem());
     }
 

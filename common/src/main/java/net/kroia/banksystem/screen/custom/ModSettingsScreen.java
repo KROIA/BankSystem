@@ -113,6 +113,15 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
     private static final Type STRING_LIST_TYPE = new TypeToken<List<String>>() {}.getType();
 
     /**
+     * Settings that accept negative integers (e.g. -1 for "unlimited").
+     * The editor uses a signed regex for these instead of the positive-only default.
+     */
+    private static final Set<String> SIGNED_INTEGER_SETTINGS = Set.of(
+            "Player.MAX_BANK_ACCOUNTS_PER_PLAYER",
+            "Player.MAX_COMPANIES_PER_PLAYER"
+    );
+
+    /**
      * Settings ("&lt;GroupName&gt;.&lt;SETTING_NAME&gt;") whose value is only read once at
      * startup and cached/applied for the server lifetime — editing them requires a
      * server restart to take effect. Verified consumption points:
@@ -300,7 +309,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             nameLabel.setHoverTooltipFontScale(hoverToolTipFontSize);
             addChild(nameLabel);
 
-            createEditor(setting, tooltip);
+            createEditor(group.getName(), setting, tooltip);
 
             // Placeholder rows wrap onto two lines (label + marker on top, the long
             // identifier box + refresh-rate box spanning the full width below), so
@@ -331,7 +340,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
          * the widget was chosen from {@code setting.getType()}).
          */
         @SuppressWarnings("unchecked")
-        private void createEditor(Setting<?> setting, String tooltip) {
+        private void createEditor(String groupName, Setting<?> setting, String tooltip) {
             Type type = setting.getType();
 
             if (type == Boolean.class) {
@@ -353,9 +362,9 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
                 });
             }
             else if (type == Integer.class || type == Long.class) {
+                boolean signed = SIGNED_INTEGER_SETTINGS.contains(groupName + "." + setting.getName());
                 textBox = new TextBox();
-                // Positive whole numbers only (all current int/long settings are positive).
-                textBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 14, 0));
+                textBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, signed, 14, 0));
                 textBox.setHoverTooltipSupplier(() -> tooltip);
                 textBox.setHoverTooltipFontScale(hoverToolTipFontSize);
                 // Editors stretch to the right screen edge — tooltip extends left.

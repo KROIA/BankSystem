@@ -92,5 +92,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyManagementScreenSmokeTests());
         // Task #54 (v2.1.0) — slave-side company visual mirror + LIST_ALL_COMPANY_VISUALS ARRS.
         TestRegistry.register(new net.kroia.banksystem.testing.tests.SlaveCompanyMirrorTests());
+        // Task #55 (v2.1.1) — persistence dirty-flag contract (timer-gated save safety).
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.SaveDirtyFlagTests());
     }
 }

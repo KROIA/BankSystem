@@ -109,6 +109,24 @@ public final class BankSystemModSettings extends ModSettings {
     {
         public final Setting<Long> STARTING_BALANCE = registerSetting("STARTING_BALANCE", 0L, Long.class); // Starting balance for new players
 
+        /**
+         * Task #58 (v2.1.1). Maximum number of bank accounts a single player may CREATE.
+         * The auto-created personal account is NOT counted; membership on someone else's
+         * shared account and being a company employee also do NOT count — only accounts the
+         * player created via {@code /bank create} or {@code /company create} count.
+         * A company create consumes one of these slots too.
+         * Sentinel {@code -1} = unlimited; {@code 0} = none allowed. Read live at creation
+         * time (no restart required).
+         */
+        public final Setting<Integer> MAX_BANK_ACCOUNTS_PER_PLAYER = registerSetting("MAX_BANK_ACCOUNTS_PER_PLAYER", 3, Integer.class);
+
+        /**
+         * Task #58 (v2.1.1). Maximum number of companies a single player may found.
+         * Sentinel {@code -1} = unlimited; {@code 0} = none allowed. Read live at creation
+         * time (no restart required).
+         */
+        public final Setting<Integer> MAX_COMPANIES_PER_PLAYER = registerSetting("MAX_COMPANIES_PER_PLAYER", 3, Integer.class);
+
         public Player() { super("Player"); }
     }
 
@@ -176,7 +194,6 @@ public final class BankSystemModSettings extends ModSettings {
                 return itemList;
             }
         }*/
-        public final Setting<Integer> ITEM_TRANSFER_TICK_INTERVAL = registerSetting("ITEM_TRANSFER_TICK_INTERVAL", 2, Integer.class); // Interval in ticks for item transfer operations
 
         /**
          * Additional <b>volatile item component</b> type ids (e.g. {@code "tfc:food"}) that are
@@ -370,24 +387,9 @@ public final class BankSystemModSettings extends ModSettings {
                 new ItemIDArrayParser()); // List of allowed item IDs for bank transactions
 */
 
-        public final List<ItemStack> INITIAL_NOT_REMOVABLE_ITEMS = createInitialNotRemovableItems();
-
-        /**
-         * Builds the initial not-removable list. Static for the same reason as
-         * {@link #createInitialAllowedItems()} (boot-order reconstruction in
-         * {@code ItemIDWorldRepair}).
-         */
-        public static List<ItemStack> createInitialNotRemovableItems() {
-            return List.of(
-                    BankSystemItems.MONEY.get().getDefaultInstance()
-            );
-        }
-
-        //public final Setting<List<ItemID>> NOT_REMOVABLE_ITEM_IDS = registerSetting("NOT_REMOVABLE_ITEM_IDS",
-        //        new ArrayList<>(List.of(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME)
-        //        )), // Default allowed item IDs
-        //        new TypeToken<List<ItemID>>() {}.getType(),
-        //        new ItemIDArrayParser()); // List of allowed item IDs for bank transactions
+        // Task #57: the "not-removable" list was deleted end to end. Any item, including
+        // banksystem:money, can now be blacklisted. Money is simply a default-on item that
+        // leaves the auto-create schedule when disallowed.
 
         public final Setting<Integer> BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL = registerSetting("BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL", 20, Integer.class); // Interval in ticks for bank download block updates
         public final Setting<Integer> BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL = registerSetting("BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL", 20, Integer.class); // Interval in ticks for bank upload block updates

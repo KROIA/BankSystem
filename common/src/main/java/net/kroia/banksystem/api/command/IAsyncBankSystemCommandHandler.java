@@ -29,8 +29,6 @@ public interface IAsyncBankSystemCommandHandler {
 
 
 
-    CompletableFuture<Boolean> bank_enableNotifications_async(@NotNull UUID executor);
-    CompletableFuture<Boolean> bank_disableNotifications_async(@NotNull UUID executor);
     CompletableFuture<Boolean> bank_manage_async(@NotNull UUID executor);
     CompletableFuture<Boolean> bank_manage_account_async(@NotNull UUID executor, String accountName);
     CompletableFuture<Boolean> bank_manage_account_async(@NotNull UUID executor, int accountNr);

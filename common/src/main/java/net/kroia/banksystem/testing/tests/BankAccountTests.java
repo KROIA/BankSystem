@@ -83,10 +83,10 @@ public class BankAccountTests extends TestSuite {
 
         // Register test users if they do not already exist
         if (!manager.userExists(TEST_USER_A)) {
-            manager.addUser(new User(TEST_USER_A, TEST_USER_A_NAME, false));
+            manager.addUser(new User(TEST_USER_A, TEST_USER_A_NAME));
         }
         if (!manager.userExists(TEST_USER_B)) {
-            manager.addUser(new User(TEST_USER_B, TEST_USER_B_NAME, false));
+            manager.addUser(new User(TEST_USER_B, TEST_USER_B_NAME));
         }
 
         // Create a non-personal bank account for testing
@@ -425,7 +425,7 @@ public class BankAccountTests extends TestSuite {
     // account never loses its last MANAGE holder.
 
     private static User makeUser(UUID uuid, String name) {
-        return new User(uuid, name, false);
+        return new User(uuid, name);
     }
 
     /**

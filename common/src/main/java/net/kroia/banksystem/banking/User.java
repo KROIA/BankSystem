@@ -25,7 +25,6 @@ public class User implements ServerSaveable {
     public static final StreamCodec<RegistryFriendlyByteBuf, User> STREAM_CODEC = StreamCodec.composite(
             UUIDUtil.STREAM_CODEC, p -> p.userUUID,
             ByteBufCodecs.STRING_UTF8, p -> p.userName,
-            ByteBufCodecs.BOOL, p -> p.enableBankNotifications,
             ByteBufCodecs.BOOL, p -> p.isBanksystemAdmin,
             ByteBufCodecs.TRUSTED_COMPOUND_TAG, p -> p.customData,
             User::new
@@ -33,7 +32,6 @@ public class User implements ServerSaveable {
 
     private UUID userUUID;
     private String userName;
-    private boolean enableBankNotifications = true;
     private boolean isBanksystemAdmin = false;
     private CompoundTag customData = new CompoundTag();
 
@@ -41,22 +39,20 @@ public class User implements ServerSaveable {
     {
 
     }
-    private User(UUID userUUID, String userName, boolean enableBankNotifications, boolean isBankModAdmin, CompoundTag customData)
+    private User(UUID userUUID, String userName, boolean isBankModAdmin, CompoundTag customData)
     {
         this.userUUID = userUUID;
         this.userName = userName;
-        this.enableBankNotifications = enableBankNotifications;
         this.isBanksystemAdmin = isBankModAdmin;
         this.customData = customData != null ? customData : new CompoundTag();
     }
-    public User(UUID userUUID, String userName, boolean enableBankNotifications) {
+    public User(UUID userUUID, String userName) {
         this.userUUID = userUUID;
         this.userName = userName;
-        this.enableBankNotifications = enableBankNotifications;
     }
     public static User createWithChangedName(User oldUser, String newName)
     {
-        return new User(oldUser.userUUID, newName, oldUser.enableBankNotifications, oldUser.isBanksystemAdmin, oldUser.customData.copy());
+        return new User(oldUser.userUUID, newName, oldUser.isBanksystemAdmin, oldUser.customData.copy());
     }
     public static @Nullable User createFromTag(CompoundTag tag)
     {
@@ -68,7 +64,7 @@ public class User implements ServerSaveable {
     }
 
     public UserData getUserData() {
-        return new UserData(userUUID, userName, enableBankNotifications, customData.copy());
+        return new UserData(userUUID, userName, customData.copy());
     }
 
     public UUID getUUID() {
@@ -76,12 +72,6 @@ public class User implements ServerSaveable {
     }
     public String getName() {
         return userName;
-    }
-    public boolean isEnableBankNotifications() {
-        return enableBankNotifications;
-    }
-    public void setEnableBankNotifications(boolean enableBankNotifications) {
-        this.enableBankNotifications = enableBankNotifications;
     }
     public boolean isBanksystemAdmin() {
         return isBanksystemAdmin;
@@ -100,7 +90,6 @@ public class User implements ServerSaveable {
     public boolean save(CompoundTag tag) {
         tag.putUUID("userUUID", userUUID);
         tag.putString("userName", userName);
-        tag.putBoolean("enableBankNotifications", enableBankNotifications);
         tag.putBoolean("isBanksystemAdmin", isBanksystemAdmin);
         tag.put("customData", customData);
         return true;
@@ -113,7 +102,6 @@ public class User implements ServerSaveable {
         }
         this.userUUID = tag.getUUID("userUUID");
         this.userName = tag.getString("userName");
-        this.enableBankNotifications = tag.getBoolean("enableBankNotifications");
         if(tag.contains("isBanksystemAdmin"))
             this.isBanksystemAdmin = tag.getBoolean("isBanksystemAdmin");
         else
@@ -130,7 +118,6 @@ public class User implements ServerSaveable {
         JsonObject jsonObject = new JsonObject();
         jsonObject.addProperty("userUUID", userUUID.toString());
         jsonObject.addProperty("userName", userName);
-        jsonObject.addProperty("enableBankNotifications", enableBankNotifications);
         jsonObject.addProperty("isBanksystemAdmin", isBanksystemAdmin);
         return jsonObject;
     }

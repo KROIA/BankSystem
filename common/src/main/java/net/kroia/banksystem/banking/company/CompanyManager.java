@@ -123,6 +123,24 @@ public final class CompanyManager implements ServerSaveableChunked {
     }
     private final Map<Integer, Set<StamperBinding>> stamperBindings = new HashMap<>();
 
+    /**
+     * Task #55: persistence dirty flag for the {@code Companies/} save unit. Set true by
+     * every runtime mutation of the persisted state (company create/delete, description /
+     * currency / founder / share-visuals / share-count changes, payout-schedule add / update
+     * / pause / delete / advance, stamper-binding register / unregister). Read by
+     * {@code BankSystemDataHandler.save_companies(boolean)} on the timer path and reset after
+     * a confirmed successful write. Deliberately NOT set from {@link #load(Map)} so a freshly
+     * loaded, unmutated world stays clean and the first timer save skips it.
+     */
+    private boolean persistDirty = false;
+
+    /** Task #55: mark the Companies save unit dirty (a persisted-state mutation occurred). */
+    public void markPersistDirty() { persistDirty = true; }
+    /** Task #55: @return whether the Companies save unit has unsaved changes. */
+    public boolean isPersistDirty() { return persistDirty; }
+    /** Task #55: clear the flag — called by the data handler after a successful write. */
+    public void clearPersistDirty() { persistDirty = false; }
+
     /** Public for test injection. */
     public CompanyManager() {}
 
@@ -137,7 +155,11 @@ public final class CompanyManager implements ServerSaveableChunked {
         INVALID_NAME,
         INVALID_MAX_SUPPLY,
         BANK_ACCOUNT_MISSING,
-        BANK_ACCOUNT_ALREADY_HAS_COMPANY
+        BANK_ACCOUNT_ALREADY_HAS_COMPANY,
+        /** Task #58 — caller already founds the max number of companies allowed per player. */
+        PER_PLAYER_COMPANY_LIMIT,
+        /** Task #58 — caller is already at the per-player bank-account cap (a company create needs a slot). */
+        PER_PLAYER_ACCOUNT_LIMIT
     }
 
     public static final class CreateOutcome {
@@ -177,6 +199,22 @@ public final class CompanyManager implements ServerSaveableChunked {
             return new CreateOutcome(CreateResult.BANK_ACCOUNT_MISSING, null);
         }
 
+        // Task #58 — per-player caps. Both gates run here so they cover the master direct
+        // path AND the slave→master ARRS dispatch (both call createCompany). The caller's
+        // just-created bank account is NOT yet counted: its creatorUUID is set only after a
+        // successful create, so the account-count gate correctly excludes the in-flight slot.
+        if (callerUUID != null) {
+            int companyCap = perPlayerCompanyCap();
+            if (companyCap >= 0 && listCompaniesFounderedBy(callerUUID).size() >= companyCap) {
+                return new CreateOutcome(CreateResult.PER_PLAYER_COMPANY_LIMIT, null);
+            }
+            int accountCap = perPlayerAccountCap();
+            if (accountCap >= 0 && bankManager != null
+                    && bankManager.countAccountsCreatedBy(callerUUID) >= accountCap) {
+                return new CreateOutcome(CreateResult.PER_PLAYER_ACCOUNT_LIMIT, null);
+            }
+        }
+
         Set<UUID> founders = new HashSet<>();
         if (callerUUID != null) founders.add(callerUUID);
 
@@ -186,6 +224,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         byId.put(id, company);
         byBankAccount.put(bankAccountNr, company);
         byNameLower.put(key, company);
+        markPersistDirty(); // Task #55
         if (bankManager != null && callerUUID != null) {
             IServerBankAccount account = bankManager.getBankAccount(bankAccountNr);
             if (account != null) {
@@ -227,6 +266,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         if (company == null) return false;
         byBankAccount.remove(company.getBankAccountNr());
         byNameLower.remove(company.getName().toLowerCase(Locale.ROOT));
+        markPersistDirty(); // Task #55
         info("Deleted company #" + companyId + " '" + company.getName() + "'");
         return true;
     }
@@ -266,6 +306,7 @@ public final class CompanyManager implements ServerSaveableChunked {
 
         company.removeFounder(from);
         if (to != null) company.addFounder(to);
+        markPersistDirty(); // Task #55
 
         IServerBankManager bankManager = getBankManager();
         if (bankManager != null) {
@@ -314,6 +355,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         long cur = company.getTotalSharesIssued();
         if (cur + 1 > company.getMaxSupply()) return false;
         company.setTotalSharesIssued(cur + 1);
+        markPersistDirty(); // Task #55
         broadcastSupply(companyId, cur + 1);
         return true;
     }
@@ -339,6 +381,7 @@ public final class CompanyManager implements ServerSaveableChunked {
             return true;
         }
         company.setTotalSharesIssued(cur - 1);
+        markPersistDirty(); // Task #55
         broadcastSupply(companyId, cur - 1);
         return true;
     }
@@ -354,6 +397,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         Company company = byId.get(companyId);
         if (company == null) return false;
         company.setShareVisuals(visuals == null ? ShareVisuals.EMPTY : visuals);
+        markPersistDirty(); // Task #55
         return true;
     }
 
@@ -361,6 +405,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         Company company = byId.get(companyId);
         if (company == null) return false;
         company.setDescription(newDescription);
+        markPersistDirty(); // Task #55
         return true;
     }
 
@@ -368,6 +413,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         Company company = byId.get(companyId);
         if (company == null) return false;
         company.setCompanyCurrency(currency);
+        markPersistDirty(); // Task #55
         return true;
     }
 
@@ -423,6 +469,7 @@ public final class CompanyManager implements ServerSaveableChunked {
                 nowTick + intervalTicks, false, System.currentTimeMillis(), createdBy,
                 targetAccountNr, targetPlayerName, targetAccountName, mode, currencyItem, 0L, 0);
         company.addSchedule(schedule);
+        markPersistDirty(); // Task #55
         return new ScheduleCreateOutcome(PayoutMutation.OK, schedule);
     }
 
@@ -435,6 +482,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         PayoutSchedule existing = company.findSchedule(scheduleId);
         if (existing == null) return PayoutMutation.SCHEDULE_MISSING;
         boolean ok = company.replaceSchedule(scheduleId, existing.withAmountAndInterval(newAmount, newIntervalTicks));
+        if (ok) markPersistDirty(); // Task #55
         return ok ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
     }
 
@@ -462,6 +510,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         boolean ok = company.replaceSchedule(scheduleId, existing.withEditableFields(
                 newAmount, newIntervalTicks, newNextRunTick, newTarget, newTargetAccountNr,
                 newTargetPlayerName, newTargetAccountName, newMode, newCurrencyItem));
+        if (ok) markPersistDirty(); // Task #55
         return ok ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
     }
 
@@ -477,6 +526,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         company.replaceSchedule(scheduleId, existing.withMissed(
                 existing.getMissedAmount() + Math.max(0L, missedAmountDelta),
                 existing.getMissedCount() + 1));
+        markPersistDirty(); // Task #55
     }
 
     /**
@@ -503,6 +553,7 @@ public final class CompanyManager implements ServerSaveableChunked {
             newCount = existing.getMissedCount();
         }
         boolean ok = company.replaceSchedule(scheduleId, existing.withMissed(remaining, newCount));
+        if (ok) markPersistDirty(); // Task #55
         return ok ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
     }
 
@@ -511,14 +562,28 @@ public final class CompanyManager implements ServerSaveableChunked {
         if (company == null) return PayoutMutation.COMPANY_MISSING;
         PayoutSchedule existing = company.findSchedule(scheduleId);
         if (existing == null) return PayoutMutation.SCHEDULE_MISSING;
-        boolean ok = company.replaceSchedule(scheduleId, existing.withPaused(paused));
+        // Task #57b — a user pause/unpause converts the schedule to user-managed: clear the
+        // currency-ban marker so a later re-allow never auto-resumes what the user chose.
+        PayoutSchedule updated = existing.withPausedByCurrencyBan(paused, false);
+        // Un-pausing must restart the countdown from now — otherwise the stale nextRunTick
+        // (computed before/during the pause, against however much in-game time has since
+        // passed) leaves the resumed schedule reporting a bogus remaining time.
+        if (existing.isPaused() && !paused) {
+            updated = updated.withNextRunTick(PayoutExecutor.getLastObservedTick() + existing.getIntervalTicks());
+        }
+        boolean ok = company.replaceSchedule(scheduleId, updated);
+        if (ok) markPersistDirty(); // Task #55
         return ok ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
     }
 
     public PayoutMutation deleteSchedule(int companyId, long scheduleId) {
         Company company = byId.get(companyId);
         if (company == null) return PayoutMutation.COMPANY_MISSING;
-        return company.removeSchedule(scheduleId) ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
+        if (company.removeSchedule(scheduleId)) {
+            markPersistDirty(); // Task #55
+            return PayoutMutation.OK;
+        }
+        return PayoutMutation.SCHEDULE_MISSING;
     }
 
     /**
@@ -532,6 +597,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         PayoutSchedule existing = company.findSchedule(scheduleId);
         if (existing == null) return;
         company.replaceSchedule(scheduleId, existing.withNextRunTick(newNextRunTick));
+        markPersistDirty(); // Task #55
     }
 
     public List<PayoutSchedule> listSchedulesFor(int companyId) {
@@ -552,10 +618,113 @@ public final class CompanyManager implements ServerSaveableChunked {
         if (company == null || removedUser == null) return 0;
         int removed = company.stripSchedulesForUser(removedUser);
         if (removed > 0) {
+            markPersistDirty(); // Task #55
             info("Cascade-stripped " + removed + " payout schedule(s) from company #"
                     + company.getCompanyId() + " for removed user " + removedUser);
         }
         return removed;
+    }
+
+    // ------------------------------------------------------------------
+    // Task #57b — currency-ban cleanup / re-allow resume.
+    // Master-only; called directly from ServerBankManager's disallow/allow path
+    // (no ARRS — PayoutExecutor and this manager are already master-only).
+    // ------------------------------------------------------------------
+
+    /** Summary of a currency-ban cascade, surfaced to the admin's chat by the command handler. */
+    public record CurrencyBanReport(java.util.List<String> affectedCompanies, int pausedSchedules) {
+        public static final CurrencyBanReport EMPTY = new CurrencyBanReport(java.util.List.of(), 0);
+    }
+
+    /** Last cascade report — read once by the disallow command handler for the capped chat summary. */
+    private CurrencyBanReport lastCurrencyBanReport = CurrencyBanReport.EMPTY;
+    public CurrencyBanReport getLastCurrencyBanReport() { return lastCurrencyBanReport; }
+
+    private static boolean scheduleCurrencyMatches(PayoutSchedule s, short bannedShort, boolean bannedIsMoney) {
+        return bannedIsMoney ? s.isMoneyCurrency() : s.getCurrencyItem() == bannedShort;
+    }
+
+    /**
+     * Cascade a currency item ban across all companies. For each company whose configured
+     * currency is the banned item, fall back to money — or, when money itself is the banned
+     * item, to {@link Company#CURRENCY_UNSET} (owner must reconfigure). Every non-user-paused
+     * schedule paying the banned currency is PAUSED and marked {@link PayoutSchedule#isPausedByCurrencyBan()}.
+     * Already-paused (user) schedules are left untouched. Full report is logged to the server
+     * console; the returned summary backs the capped admin-chat message.
+     */
+    public CurrencyBanReport cascadeCurrencyBan(short bannedShort, boolean bannedIsMoney) {
+        java.util.List<String> affected = new ArrayList<>();
+        int pausedCount = 0;
+        boolean changed = false;
+        for (Company c : byId.values()) {
+            boolean nameRecorded = false;
+            // 1) Company currency fallback.
+            short cur = c.getCompanyCurrency();
+            boolean currencyHit = bannedIsMoney
+                    ? (cur == PayoutSchedule.MONEY_CURRENCY || cur == bannedShort)
+                    : (cur == bannedShort && cur != Company.CURRENCY_UNSET);
+            if (currencyHit) {
+                short fallback = bannedIsMoney ? Company.CURRENCY_UNSET : PayoutSchedule.MONEY_CURRENCY;
+                c.setCompanyCurrency(fallback);
+                affected.add(c.getName());
+                nameRecorded = true;
+                changed = true;
+                info("[currencyBan] company #" + c.getCompanyId() + " (" + c.getName()
+                        + ") currency was banned item — fell back to "
+                        + (bannedIsMoney ? "UNSET (reconfigure required)" : "money"));
+            }
+            // 2) Pause matching schedules that are not already paused.
+            for (PayoutSchedule s : c.getPayoutSchedules()) {
+                if (s.isPaused()) continue; // never touch a user-paused schedule
+                if (!scheduleCurrencyMatches(s, bannedShort, bannedIsMoney)) continue;
+                c.replaceSchedule(s.getScheduleId(), s.withPausedByCurrencyBan(true, true));
+                pausedCount++;
+                changed = true;
+                // A schedule's own currency can be banned independently of the company-wide
+                // currency setting (e.g. company currency is money, schedule pays a specific
+                // item) — record the company name here too so the chat summary always lists
+                // every company it reports a paused schedule for.
+                if (!nameRecorded) {
+                    affected.add(c.getName());
+                    nameRecorded = true;
+                }
+                info("[currencyBan] company #" + c.getCompanyId() + " (" + c.getName()
+                        + ") schedule #" + s.getScheduleId() + " paused (currency banned)");
+            }
+        }
+        if (changed) markPersistDirty();
+        lastCurrencyBanReport = new CurrencyBanReport(affected, pausedCount);
+        info("[currencyBan] cascade complete — companies re-defaulted=" + affected.size()
+                + " schedules paused=" + pausedCount);
+        return lastCurrencyBanReport;
+    }
+
+    /**
+     * Re-allow resume: auto-resume ONLY schedules that were paused by a currency ban
+     * ({@link PayoutSchedule#isPausedByCurrencyBan()}) whose currency is the re-allowed item.
+     * Never un-pauses a user-paused schedule. Company currency is NOT restored (it already
+     * fell back to money / unset). Returns the number of schedules resumed.
+     */
+    public int resumeCurrencyBannedSchedules(short allowedShort, boolean allowedIsMoney) {
+        int resumed = 0;
+        long nextRunTick = PayoutExecutor.getLastObservedTick();
+        for (Company c : byId.values()) {
+            for (PayoutSchedule s : c.getPayoutSchedules()) {
+                if (!s.isPausedByCurrencyBan()) continue;
+                if (!scheduleCurrencyMatches(s, allowedShort, allowedIsMoney)) continue;
+                // Restart the countdown from now (same reasoning as the manual-unpause path in
+                // pauseSchedule()) — the schedule may have sat paused across a currency ban for
+                // any length of in-game time, so its old nextRunTick is stale.
+                PayoutSchedule updated = s.withPausedByCurrencyBan(false, false)
+                        .withNextRunTick(nextRunTick + s.getIntervalTicks());
+                c.replaceSchedule(s.getScheduleId(), updated);
+                resumed++;
+                info("[currencyBan] company #" + c.getCompanyId() + " (" + c.getName()
+                        + ") schedule #" + s.getScheduleId() + " resumed (currency re-allowed)");
+            }
+        }
+        if (resumed > 0) markPersistDirty();
+        return resumed;
     }
 
     /** Iteration hook for the future payout scheduler (Task #45). */
@@ -618,10 +787,13 @@ public final class CompanyManager implements ServerSaveableChunked {
 
     public void registerStamper(int companyId, BlockPos pos, String dim) {
         if (pos == null) return;
-        stamperBindings.computeIfAbsent(companyId, k -> new HashSet<>())
+        // Task #55: mark dirty only on a genuinely NEW binding — chunk-load re-registration
+        // of an already-persisted stamper is a no-op set.add and must not churn the save.
+        boolean added = stamperBindings.computeIfAbsent(companyId, k -> new HashSet<>())
                 .add(new StamperBinding(pos, dim));
         Company company = byId.get(companyId);
-        if (company != null) company.addBoundStamper(pos);
+        boolean companyChanged = company != null && company.addBoundStamper(pos);
+        if (added || companyChanged) markPersistDirty();
     }
 
     /** Convenience — removes any binding at {@code pos} regardless of dimension. */
@@ -629,20 +801,22 @@ public final class CompanyManager implements ServerSaveableChunked {
         if (pos == null) return;
         Set<StamperBinding> set = stamperBindings.get(companyId);
         if (set == null) return;
-        set.removeIf(b -> b.pos().equals(pos));
+        boolean removed = set.removeIf(b -> b.pos().equals(pos));
         if (set.isEmpty()) stamperBindings.remove(companyId);
         Company company = byId.get(companyId);
-        if (company != null) company.removeBoundStamper(pos);
+        boolean companyChanged = company != null && company.removeBoundStamper(pos);
+        if (removed || companyChanged) markPersistDirty(); // Task #55
     }
 
     public void unregisterStamper(int companyId, BlockPos pos, String dim) {
         if (pos == null) return;
         Set<StamperBinding> set = stamperBindings.get(companyId);
         if (set == null) return;
-        set.remove(new StamperBinding(pos, dim == null ? "" : dim));
+        boolean removed = set.remove(new StamperBinding(pos, dim == null ? "" : dim));
         if (set.isEmpty()) stamperBindings.remove(companyId);
         Company company = byId.get(companyId);
-        if (company != null) company.removeBoundStamper(pos);
+        boolean companyChanged = company != null && company.removeBoundStamper(pos);
+        if (removed || companyChanged) markPersistDirty(); // Task #55
     }
 
     public List<BlockPos> listStampers(int companyId) {
@@ -800,6 +974,18 @@ public final class CompanyManager implements ServerSaveableChunked {
         if (bankManagerDetached) return null;
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_BANK_MANAGER == null) return null;
         return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+    }
+
+    /** Task #58 — per-player company cap ({@code -1} = unlimited; unavailable settings = unlimited). */
+    public static int perPlayerCompanyCap() {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null) return -1;
+        return BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.MAX_COMPANIES_PER_PLAYER.get();
+    }
+
+    /** Task #58 — per-player bank-account cap ({@code -1} = unlimited; unavailable settings = unlimited). */
+    public static int perPlayerAccountCap() {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null) return -1;
+        return BACKEND_INSTANCES.SERVER_SETTINGS.PLAYER.MAX_BANK_ACCOUNTS_PER_PLAYER.get();
     }
 
     private static void info(String msg) {

@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public record BankManagerData(UserMapData userMapData, BankAccountsData bankAccountsData, List<ItemID> allowedItems,
-                              List<ItemID> blacklistedItems, List<ItemID> notRemovableItems)
+                              List<ItemID> blacklistedItems)
 {
     public record UserMapData(Map<UUID, UserData> userMap) {
         public static final StreamCodec<RegistryFriendlyByteBuf, UserMapData> STREAM_CODEC = StreamCodec.composite(
@@ -42,7 +42,6 @@ public record BankManagerData(UserMapData userMapData, BankAccountsData bankAcco
             BankAccountsData.STREAM_CODEC, p -> p.bankAccountsData,
             ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC), p -> p.allowedItems,
             ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC), p -> p.blacklistedItems,
-            ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC), p -> p.notRemovableItems,
             BankManagerData::new
     );
 

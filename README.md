@@ -405,7 +405,8 @@ All notable changes are documented in version-specific files under `changelog/`.
 
 ### Current
 
-- [2.1.1](changelog/v2.1.1.md) — In Development · Bugfix development
+- [2.1.2](changelog/v2.1.2.md) — In Development · Bugfix development
+- [2.1.1](changelog/v2.1.1.md) — Released 2026-08-20 · Bugfix development
 - [2.1.0](changelog/v2.1.0.md) — Released 2026-08-15 · Company system — found companies, hire workers, mint physical shares, pay dividends and recurring payouts, track it all on a live statistics dashboard
 
 ### Previous

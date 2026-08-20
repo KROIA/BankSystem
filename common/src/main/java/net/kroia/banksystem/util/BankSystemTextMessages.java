@@ -30,6 +30,7 @@ public class BankSystemTextMessages {
         public static final String PLAYER = "{player_name}";
         public static final String REASON = "{reason}";
         public static final String ACCOUNT = "{account_number}";
+        public static final String COUNT = "{count}";
     }
 
     private static final String prefix  = "message."+BankSystemMod.MOD_ID+".";
@@ -209,6 +210,23 @@ public class BankSystemTextMessages {
         return CANT_CREATE_BANK_ACCOUNT.getString();
     }
 
+    // Task #58 (v2.1.1) — per-player cap rejection messages.
+    private static final Component CAP_BANK_ACCOUNTS_REACHED = Component.translatable(prefix+"cap_bank_accounts_reached");
+    public static String getCapBankAccountsReachedMessage(int limit)
+    {
+        return replaceVariable(CAP_BANK_ACCOUNTS_REACHED.getString(), Variables.AMOUNT, String.valueOf(limit));
+    }
+    private static final Component CAP_COMPANIES_REACHED = Component.translatable(prefix+"cap_companies_reached");
+    public static String getCapCompaniesReachedMessage(int limit)
+    {
+        return replaceVariable(CAP_COMPANIES_REACHED.getString(), Variables.AMOUNT, String.valueOf(limit));
+    }
+    private static final Component CAP_COMPANY_BLOCKED_BY_ACCOUNT_LIMIT = Component.translatable(prefix+"cap_company_blocked_by_account_limit");
+    public static String getCapCompanyBlockedByAccountLimitMessage(int limit)
+    {
+        return replaceVariable(CAP_COMPANY_BLOCKED_BY_ACCOUNT_LIMIT.getString(), Variables.AMOUNT, String.valueOf(limit));
+    }
+
     private static final Component NO_PERMISSION_DEPOSIT = Component.translatable(prefix+"no_permission_deposit");
     private static final Component NO_PERMISSION_WITHDRAW = Component.translatable(prefix+"no_permission_withdraw");
     private static final Component NO_PERMISSION_MANAGE = Component.translatable(prefix+"no_permission_manage");
@@ -222,21 +240,6 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.ACCOUNT, accountName);
         return msg;
     }
-
-    private static final Component BANK_USER_NOTIFICATION_ENABLED = Component.translatable(prefix+"bank_user_notification_enabled");
-    public static String getBankUserNotificationEnabledMessage()
-    {
-        String msg = BANK_USER_NOTIFICATION_ENABLED.getString();
-        return msg;
-    }
-
-    private static final Component BANK_USER_NOTIFICATION_DISABLED = Component.translatable(prefix+"bank_user_notification_disabled");
-    public static String getBankUserNotificationDisabledMessage()
-    {
-        String msg = BANK_USER_NOTIFICATION_DISABLED.getString();
-        return msg;
-    }
-
 
     private static final Component BANK_NOT_FOUND = Component.translatable(prefix+"bank_not_found");
     public static String getBankNotFoundMessage(String user, String itemName)
@@ -360,6 +363,43 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
+    // Task #57: disallow-item chat feedback (cleared-holders summary + per-account rows + more).
+    private static final Component DISALLOW_CLEARED_SUMMARY = Component.translatable(prefix+"disallow_cleared_summary");
+    public static String getDisallowClearedSummaryMessage(String itemName, int count, String amount)
+    {
+        String msg = DISALLOW_CLEARED_SUMMARY.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.COUNT, Integer.toString(count));
+        msg = replaceVariable(msg, Variables.AMOUNT, amount);
+        return msg;
+    }
+    private static final Component DISALLOW_CLEARED_ROW = Component.translatable(prefix+"disallow_cleared_row");
+    public static String getDisallowClearedRowMessage(int accountNr, String ownerName, String balance, String locked)
+    {
+        String msg = DISALLOW_CLEARED_ROW.getString();
+        msg = replaceVariable(msg, Variables.ACCOUNT, Integer.toString(accountNr));
+        msg = replaceVariable(msg, Variables.USER, ownerName);
+        msg = replaceVariable(msg, Variables.BALANCE, balance);
+        msg = replaceVariable(msg, Variables.LOCKED_BALANCE, locked);
+        return msg;
+    }
+    private static final Component DISALLOW_CLEARED_MORE = Component.translatable(prefix+"disallow_cleared_more");
+    public static String getDisallowClearedMoreMessage(int count)
+    {
+        String msg = DISALLOW_CLEARED_MORE.getString();
+        msg = replaceVariable(msg, Variables.COUNT, Integer.toString(count));
+        return msg;
+    }
+    // Task #57b: currency-ban company/schedule cleanup summary (capped; console has full dump).
+    private static final Component CURRENCY_BAN_SUMMARY = Component.translatable(prefix+"currency_ban_summary");
+    public static String getCurrencyBanSummaryMessage(int companyCount, int scheduleCount, String companyNames)
+    {
+        String msg = CURRENCY_BAN_SUMMARY.getString();
+        msg = replaceVariable(msg, Variables.COUNT, Integer.toString(companyCount));
+        msg = replaceVariable(msg, Variables.AMOUNT, Integer.toString(scheduleCount));
+        msg = replaceVariable(msg, Variables.ITEM_NAME, companyNames);
+        return msg;
+    }
     private static final Component ITEM_NOW_ALLOWED = Component.translatable(prefix+"item_now_allowed");
     public static String getItemNowAllowedMessage(String itemName, String smallestAmount)
     {
@@ -480,14 +520,6 @@ public class BankSystemTextMessages {
     {
         String msg = BANK_SETTING_START_BALANCE_SET.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
-        return msg;
-    }
-
-    private static final Component BANK_SETTING_ITEM_TRANSFER_TICK_INTERVAL = Component.translatable(prefix+"bank_setting_item_transfer_tick_interval");
-    public static String getBankSettingItemTransferTickIntervalMessage(int interval)
-    {
-        String msg = BANK_SETTING_ITEM_TRANSFER_TICK_INTERVAL.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(interval));
         return msg;
     }
 

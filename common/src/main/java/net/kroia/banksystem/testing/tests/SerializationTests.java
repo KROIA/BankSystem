@@ -96,7 +96,7 @@ public class SerializationTests extends TestSuite {
         BankManagerData original = new BankManagerData(
                 new BankManagerData.UserMapData(new HashMap<>()),
                 new BankManagerData.BankAccountsData(new HashMap<>()),
-                new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+                new ArrayList<>(), new ArrayList<>());
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
         try {
             rawCodec.encode(buf, original);
@@ -113,8 +113,6 @@ public class SerializationTests extends TestSuite {
             if (!r.passed()) return r;
             r = assertEquals("blacklistedItems.size()", original.blacklistedItems().size(), d.blacklistedItems().size());
             if (!r.passed()) return r;
-            r = assertEquals("notRemovableItems.size()", original.notRemovableItems().size(), d.notRemovableItems().size());
-            if (!r.passed()) return r;
             return pass("BankManagerData codec round-trip preserved all fields");
         } finally {
             buf.release();
@@ -124,7 +122,7 @@ public class SerializationTests extends TestSuite {
     private TestResult testBankUserDataCodecRoundTrip() {
         @SuppressWarnings({"rawtypes", "unchecked"})
         StreamCodec rawCodec = (StreamCodec) BankUserData.STREAM_CODEC;
-        BankUserData original = new BankUserData(UUID.randomUUID(), "TestUser", true,
+        BankUserData original = new BankUserData(UUID.randomUUID(), "TestUser",
                 BankPermission.DEPOSIT.getValue() | BankPermission.WITHDRAW.getValue());
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
         try {
@@ -138,8 +136,6 @@ public class SerializationTests extends TestSuite {
             if (!r.passed()) return r;
             r = assertEquals("userName", original.userName, d.userName);
             if (!r.passed()) return r;
-            r = assertEquals("enableBankNotifications", original.enableBankNotifications, d.enableBankNotifications);
-            if (!r.passed()) return r;
             r = assertEquals("permissions", original.permissions, d.permissions);
             if (!r.passed()) return r;
             return pass("BankUserData codec round-trip preserved all fields");
@@ -151,7 +147,7 @@ public class SerializationTests extends TestSuite {
     private TestResult testUserDataCodecRoundTrip() {
         @SuppressWarnings({"rawtypes", "unchecked"})
         StreamCodec rawCodec = (StreamCodec) UserData.STREAM_CODEC;
-        UserData original = new UserData(UUID.randomUUID(), "TestUser", false, new net.minecraft.nbt.CompoundTag());
+        UserData original = new UserData(UUID.randomUUID(), "TestUser", new net.minecraft.nbt.CompoundTag());
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
         try {
             rawCodec.encode(buf, original);
@@ -163,8 +159,6 @@ public class SerializationTests extends TestSuite {
             r = assertEquals("userUUID", original.userUUID(), d.userUUID());
             if (!r.passed()) return r;
             r = assertEquals("userName", original.userName(), d.userName());
-            if (!r.passed()) return r;
-            r = assertEquals("enableBankNotifications", original.enableBankNotifications(), d.enableBankNotifications());
             if (!r.passed()) return r;
             return pass("UserData codec round-trip preserved all fields");
         } finally {

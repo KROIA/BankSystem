@@ -56,11 +56,19 @@ public final class PayoutSchedule {
     private final short currencyItem;
     private final long missedAmount;
     private final int missedCount;
+    /**
+     * Task #57b — {@code true} when this schedule was auto-paused because its currency item
+     * was blacklisted (server-internal marker, persisted). Distinguishes a currency-ban pause
+     * from a user-initiated pause so {@code allowItemID} auto-resumes ONLY ban-paused schedules
+     * and never un-pauses a user pause. Not carried on the client wire (client only sees paused).
+     */
+    private final boolean pausedByCurrencyBan;
 
     public PayoutSchedule(long scheduleId, UUID targetUUID, long amount, long intervalTicks,
                           long nextRunTick, boolean paused, long createdAt, UUID createdBy,
                           int targetAccountNr, String targetPlayerName, String targetAccountName,
-                          Mode mode, short currencyItem, long missedAmount, int missedCount) {
+                          Mode mode, short currencyItem, long missedAmount, int missedCount,
+                          boolean pausedByCurrencyBan) {
         this.scheduleId = scheduleId;
         this.targetUUID = targetUUID;
         this.amount = amount;
@@ -76,13 +84,24 @@ public final class PayoutSchedule {
         this.currencyItem = currencyItem;
         this.missedAmount = missedAmount;
         this.missedCount = missedCount;
+        this.pausedByCurrencyBan = pausedByCurrencyBan;
+    }
+
+    /** 15-arg constructor — no currency-ban marker (defaults false). */
+    public PayoutSchedule(long scheduleId, UUID targetUUID, long amount, long intervalTicks,
+                          long nextRunTick, boolean paused, long createdAt, UUID createdBy,
+                          int targetAccountNr, String targetPlayerName, String targetAccountName,
+                          Mode mode, short currencyItem, long missedAmount, int missedCount) {
+        this(scheduleId, targetUUID, amount, intervalTicks, nextRunTick, paused, createdAt,
+                createdBy, targetAccountNr, targetPlayerName, targetAccountName, mode, currencyItem,
+                missedAmount, missedCount, false);
     }
 
     /** Legacy-shape constructor — personal-account money payout, FIXED mode, no misses. */
     public PayoutSchedule(long scheduleId, UUID targetUUID, long amount, long intervalTicks,
                           long nextRunTick, boolean paused, long createdAt, UUID createdBy) {
         this(scheduleId, targetUUID, amount, intervalTicks, nextRunTick, paused, createdAt,
-                createdBy, NO_TARGET_ACCOUNT, "", "", Mode.FIXED_PAYOUT, MONEY_CURRENCY, 0L, 0);
+                createdBy, NO_TARGET_ACCOUNT, "", "", Mode.FIXED_PAYOUT, MONEY_CURRENCY, 0L, 0, false);
     }
 
     public long getScheduleId() { return scheduleId; }
@@ -113,6 +132,8 @@ public final class PayoutSchedule {
     }
     public long getMissedAmount() { return missedAmount; }
     public int getMissedCount() { return missedCount; }
+    /** Task #57b — server-internal: paused because the currency item was blacklisted. */
+    public boolean isPausedByCurrencyBan() { return pausedByCurrencyBan; }
 
     // ------------------------------------------------------------------
     // Copy-with helpers. PayoutSchedule stays immutable; Company keeps the
@@ -121,19 +142,30 @@ public final class PayoutSchedule {
     public PayoutSchedule withNextRunTick(long newNextRunTick) {
         return new PayoutSchedule(scheduleId, targetUUID, amount, intervalTicks,
                 newNextRunTick, paused, createdAt, createdBy, targetAccountNr,
-                targetPlayerName, targetAccountName, mode, currencyItem, missedAmount, missedCount);
+                targetPlayerName, targetAccountName, mode, currencyItem, missedAmount, missedCount,
+                pausedByCurrencyBan);
     }
 
     public PayoutSchedule withPaused(boolean newPaused) {
         return new PayoutSchedule(scheduleId, targetUUID, amount, intervalTicks,
                 nextRunTick, newPaused, createdAt, createdBy, targetAccountNr,
-                targetPlayerName, targetAccountName, mode, currencyItem, missedAmount, missedCount);
+                targetPlayerName, targetAccountName, mode, currencyItem, missedAmount, missedCount,
+                pausedByCurrencyBan);
+    }
+
+    /** Task #57b — set the currency-ban pause marker (also drives the paused flag). */
+    public PayoutSchedule withPausedByCurrencyBan(boolean newPaused, boolean newMarker) {
+        return new PayoutSchedule(scheduleId, targetUUID, amount, intervalTicks,
+                nextRunTick, newPaused, createdAt, createdBy, targetAccountNr,
+                targetPlayerName, targetAccountName, mode, currencyItem, missedAmount, missedCount,
+                newMarker);
     }
 
     public PayoutSchedule withAmountAndInterval(long newAmount, long newIntervalTicks) {
         return new PayoutSchedule(scheduleId, targetUUID, newAmount, newIntervalTicks,
                 nextRunTick, paused, createdAt, createdBy, targetAccountNr,
-                targetPlayerName, targetAccountName, mode, currencyItem, missedAmount, missedCount);
+                targetPlayerName, targetAccountName, mode, currencyItem, missedAmount, missedCount,
+                pausedByCurrencyBan);
     }
 
     /** Spec B.1/B.2/B.3 — full editable-fields replacement (target, mode, currency). */
@@ -144,7 +176,7 @@ public final class PayoutSchedule {
         return new PayoutSchedule(scheduleId, newTarget, newAmount, newIntervalTicks,
                 newNextRunTick, paused, createdAt, createdBy, newTargetAccountNr,
                 newTargetPlayerName, newTargetAccountName, newMode, newCurrencyItem,
-                missedAmount, missedCount);
+                missedAmount, missedCount, pausedByCurrencyBan);
     }
 
     /** Spec B.4 — set the missed-payout accumulator. */
@@ -152,7 +184,7 @@ public final class PayoutSchedule {
         return new PayoutSchedule(scheduleId, targetUUID, amount, intervalTicks,
                 nextRunTick, paused, createdAt, createdBy, targetAccountNr,
                 targetPlayerName, targetAccountName, mode, currencyItem,
-                Math.max(0L, newMissedAmount), Math.max(0, newMissedCount));
+                Math.max(0L, newMissedAmount), Math.max(0, newMissedCount), pausedByCurrencyBan);
     }
 
     public void save(CompoundTag tag) {
@@ -171,6 +203,7 @@ public final class PayoutSchedule {
         tag.putShort("currencyItem", currencyItem);
         tag.putLong("missedAmount", missedAmount);
         tag.putInt("missedCount", missedCount);
+        tag.putBoolean("pausedByCurrencyBan", pausedByCurrencyBan);
     }
 
     public static PayoutSchedule load(CompoundTag tag) {
@@ -195,7 +228,8 @@ public final class PayoutSchedule {
                 mode,
                 tag.getShort("currencyItem"),
                 tag.getLong("missedAmount"),
-                tag.getInt("missedCount")
+                tag.getInt("missedCount"),
+                tag.getBoolean("pausedByCurrencyBan") // missing → false (older NBT)
         );
     }
 }

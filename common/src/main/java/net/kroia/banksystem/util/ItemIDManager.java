@@ -101,6 +101,30 @@ public class ItemIDManager implements ServerSaveable {
     private static int nextShortCounter = 1;
 
     /**
+     * Task #55: persistence dirty flag for the {@code ItemIDs.nbt} save unit. Set true when
+     * the persisted registry state ({@code itemIDMap}, {@code itemIDAliasMap},
+     * {@code quarantinedAliases}, {@code nextShortCounter}) actually changes at runtime — a
+     * new short is minted, an alias/quarantine entry is added/removed, or the counter moves.
+     * Read by {@link net.kroia.banksystem.util.BankSystemDataHandler#save_itemIDs(boolean)}
+     * (timer path) and reset after a confirmed successful write.
+     * <p>
+     * The {@link #suppressDirty} guard suppresses marks while {@link #load(CompoundTag)} is
+     * running so a freshly loaded, unmutated world stays clean and the first timer save skips
+     * it — the load path already handles its own one-shot re-saves for repairs / format
+     * conversions (see {@code consumeLastLoadRequiresResave} / {@code consumeLastLoadRepairCount}).
+     */
+    private static boolean persistDirty = false;
+    /** Task #55: while true, {@link #markPersistDirty()} is a no-op (load in progress). */
+    private static boolean suppressDirty = false;
+
+    /** Task #55: mark the ItemIDs save unit dirty unless a load is currently suppressing. */
+    public static void markPersistDirty() { if (!suppressDirty) persistDirty = true; }
+    /** Task #55: @return whether the ItemIDs save unit has unsaved changes. */
+    public static boolean isPersistDirty() { return persistDirty; }
+    /** Task #55: clear the flag — called by the data handler after a successful write. */
+    public static void clearPersistDirty() { persistDirty = false; }
+
+    /**
      * <b>Registration latch</b> (Task #16 master-side, Task #22 widened to slaves):
      * {@code true} while fresh-short allocation is forbidden because the authoritative
      * ItemID assignment has not been established yet this session.
@@ -726,6 +750,7 @@ public class ItemIDManager implements ServerSaveable {
             return false;
         }
         itemIDAliasMap.put(source, target);
+        markPersistDirty(); // Task #55 (alias write funnels through here; suppressed during load)
         return true;
     }
 
@@ -998,8 +1023,10 @@ public class ItemIDManager implements ServerSaveable {
                 ids.add(id);
             }
         }
-        if(!newItemIDMap.isEmpty())
+        if(!newItemIDMap.isEmpty()) {
+            markPersistDirty(); // Task #55 (genuinely new shorts minted + counter advanced)
             onNewItemAdded(newItemIDMap);
+        }
         return ids;
     }
 
@@ -1639,6 +1666,13 @@ public class ItemIDManager implements ServerSaveable {
 
     @Override
     public boolean load(CompoundTag tag) {
+        // Task #55: suppress persistence-dirty marking for the whole load (including any
+        // throw path) so a freshly loaded, unmutated world stays clean and the first timer
+        // save skips ItemIDs.nbt. Load-time repairs/format conversions are persisted by the
+        // handler's own one-shot re-save, independent of this flag.
+        boolean prevSuppressDirty = suppressDirty;
+        suppressDirty = true;
+        try {
         // ---- Save-format gate (BankSystemSaveFormat) — runs BEFORE any static state is ----
         // ---- mutated, so a refused file leaves the manager exactly as it was.          ----
         // A missing version key means the file predates versioning: implicit legacy format 1.
@@ -1863,6 +1897,9 @@ public class ItemIDManager implements ServerSaveable {
         // registrations) can mint fresh shorts again (Task #16).
         markRegistryReady();
         return true;
+        } finally {
+            suppressDirty = prevSuppressDirty; // Task #55
+        }
     }
 
     /**
@@ -2315,6 +2352,12 @@ public class ItemIDManager implements ServerSaveable {
             pendingMergeConsolidation.putAll(newAliases);
             consolidatePendingMerges();
         }
+        // Task #55: a renormalize pass mutates persisted registry state in place — template
+        // re-normalization (Pass 1), alias-chain flattening (Pass 3) and any merges. At
+        // runtime this only runs when the effective component set actually changed
+        // (applyVolatileComponentSettings gates on it), so mark the ItemIDs save unit dirty.
+        // Suppressed automatically when reached from within load() (see suppressDirty).
+        markPersistDirty();
     }
 
     /**
