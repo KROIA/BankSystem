@@ -68,9 +68,12 @@ public final class CompanyCommandLogic {
             send(player, "Failed to create bank account for company '" + name + "'.");
             return;
         }
+        // Company bank accounts need the same default money/currency slots as personal
+        // accounts (Task #57) — createBankAccount() alone leaves the account empty.
+        net.kroia.banksystem.banking.bankmanager.ServerBankManager.addDefaultBankSlots(account);
         User callerUser = bm.getUserByUUID(player.getUUID());
         if (callerUser == null) {
-            bm.addUser(new User(player.getUUID(), player.getName().getString(), true));
+            bm.addUser(new User(player.getUUID(), player.getName().getString()));
             callerUser = bm.getUserByUUID(player.getUUID());
         }
         if (callerUser != null) {

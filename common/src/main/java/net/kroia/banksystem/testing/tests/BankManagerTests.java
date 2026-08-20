@@ -3,16 +3,15 @@ package net.kroia.banksystem.testing.tests;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
-import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
@@ -92,10 +91,10 @@ public class BankManagerTests extends TestSuite {
 
         // Ensure test users are registered
         if (!manager.userExists(TEST_USER_A)) {
-            manager.addUser(new User(TEST_USER_A, TEST_USER_A_NAME, false));
+            manager.addUser(new User(TEST_USER_A, TEST_USER_A_NAME));
         }
         if (!manager.userExists(TEST_USER_B)) {
-            manager.addUser(new User(TEST_USER_B, TEST_USER_B_NAME, false));
+            manager.addUser(new User(TEST_USER_B, TEST_USER_B_NAME));
         }
     }
 
@@ -263,7 +262,7 @@ public class BankManagerTests extends TestSuite {
         String tempName = "TempConcurrentUser";
 
         if (!manager.userExists(tempUUID)) {
-            manager.addUser(new User(tempUUID, tempName, false));
+            manager.addUser(new User(tempUUID, tempName));
         }
 
         // Create a personal bank account so removeUser has accounts to iterate

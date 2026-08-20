@@ -77,10 +77,10 @@ public class MultiServerSecurityTests extends TestSuite {
         if (manager == null) return;
 
         if (!manager.userExists(TEST_OWNER)) {
-            manager.addUser(new User(TEST_OWNER, TEST_OWNER_NAME, false));
+            manager.addUser(new User(TEST_OWNER, TEST_OWNER_NAME));
         }
         if (!manager.userExists(TEST_OUTSIDER)) {
-            manager.addUser(new User(TEST_OUTSIDER, TEST_OUTSIDER_NAME, false));
+            manager.addUser(new User(TEST_OUTSIDER, TEST_OUTSIDER_NAME));
         }
 
         IServerBankAccount account = manager.createBankAccount("MSSecTestAccount");
@@ -519,7 +519,7 @@ public class MultiServerSecurityTests extends TestSuite {
         // A genuine admin whose UUID the untrusted slave forges as the request sender.
         boolean adminCreated = false;
         if (!manager.userExists(TEST_ADMIN)) {
-            manager.addUser(new User(TEST_ADMIN, TEST_ADMIN_NAME, true));
+            manager.addUser(new User(TEST_ADMIN, TEST_ADMIN_NAME));
             adminCreated = true;
         }
         IServerBankAccount account = manager.getBankAccount(testAccountNr);

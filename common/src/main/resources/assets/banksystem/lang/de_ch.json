@@ -283,7 +283,7 @@
   "message.banksystem.disallow_cleared_summary": "{item_name} verbotte: {count} Konto/Kontene gleert, total {amount} entfernt (kei Rückerstattig)",
   "message.banksystem.disallow_cleared_row": "  #{account_number} ({user_name}): {balance} frei + {locked_balance} gsperrt",
   "message.banksystem.disallow_cleared_more": "  ...und {count} wyteri (lueg i d Server-Konsole)",
-  "message.banksystem.currency_ban_summary": "Firmewährigs-Bereinigung: {count} Firma/Firme zrugggsetzt (Währig uf Gäld oder ungsetzt), {amount} Uszahligsplan/-plän pausiert: {item_name}",
+  "message.banksystem.currency_ban_summary": "Firmewährigs-Bereinigung: {count} Firma/Firme zrugggsetzt (Währig uf Gäld oder ungsetzt), {amount} Uszahligsplan/-plän pausiert. Betroffeni Firme: {item_name}",
   "message.banksystem.item_now_allowed": "{item_name} cha ab ez i dä Bank gelagert werden.\nDie chlinst möglich Mängi wo glageret werde cha isch {amount}",
   "message.banksystem.item_now_allowed_failed": "{item_name} cha für s lagere i de Bank nöd zueglo werde",
   "message.banksystem.item_already_allowed": "{item_name} cha scho i dä Bank glageret werde, du Globi",

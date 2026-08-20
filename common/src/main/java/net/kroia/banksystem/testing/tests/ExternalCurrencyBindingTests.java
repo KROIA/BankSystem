@@ -5,6 +5,7 @@ import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
+import net.kroia.banksystem.api.currency.ExternalAccount;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
@@ -105,10 +106,10 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         StubCurrencyProvider.reset();
 
         if (!manager.userExists(TEST_OWNER)) {
-            manager.addUser(new User(TEST_OWNER, TEST_OWNER_NAME, false));
+            manager.addUser(new User(TEST_OWNER, TEST_OWNER_NAME));
         }
         if (!manager.userExists(TEST_MEMBER)) {
-            manager.addUser(new User(TEST_MEMBER, TEST_MEMBER_NAME, false));
+            manager.addUser(new User(TEST_MEMBER, TEST_MEMBER_NAME));
         }
 
         // Register / allow the two test item slots. Using distinct non-money items keeps the

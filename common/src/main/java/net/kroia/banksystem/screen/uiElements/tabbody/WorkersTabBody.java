@@ -171,7 +171,7 @@ public class WorkersTabBody extends TabBody {
                 UserSelectionScreen sel = new UserSelectionScreen(screen, (userData) -> {
                     if (userWidgets.containsKey(userData.userUUID())) return;
                     BankUserData bud = new BankUserData(
-                            userData.userUUID(), userData.userName(), false,
+                            userData.userUUID(), userData.userName(),
                             BankPermission.DEPOSIT.getValue());
                     BankUserWidget widget = new BankUserWidget(bud, this::scheduleRemove, canManage, screen);
                     widget.setOnPermissionChanged(this::save);

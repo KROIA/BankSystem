@@ -564,7 +564,14 @@ public final class CompanyManager implements ServerSaveableChunked {
         if (existing == null) return PayoutMutation.SCHEDULE_MISSING;
         // Task #57b — a user pause/unpause converts the schedule to user-managed: clear the
         // currency-ban marker so a later re-allow never auto-resumes what the user chose.
-        boolean ok = company.replaceSchedule(scheduleId, existing.withPausedByCurrencyBan(paused, false));
+        PayoutSchedule updated = existing.withPausedByCurrencyBan(paused, false);
+        // Un-pausing must restart the countdown from now — otherwise the stale nextRunTick
+        // (computed before/during the pause, against however much in-game time has since
+        // passed) leaves the resumed schedule reporting a bogus remaining time.
+        if (existing.isPaused() && !paused) {
+            updated = updated.withNextRunTick(PayoutExecutor.getLastObservedTick() + existing.getIntervalTicks());
+        }
+        boolean ok = company.replaceSchedule(scheduleId, updated);
         if (ok) markPersistDirty(); // Task #55
         return ok ? PayoutMutation.OK : PayoutMutation.SCHEDULE_MISSING;
     }
@@ -650,6 +657,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         int pausedCount = 0;
         boolean changed = false;
         for (Company c : byId.values()) {
+            boolean nameRecorded = false;
             // 1) Company currency fallback.
             short cur = c.getCompanyCurrency();
             boolean currencyHit = bannedIsMoney
@@ -659,6 +667,7 @@ public final class CompanyManager implements ServerSaveableChunked {
                 short fallback = bannedIsMoney ? Company.CURRENCY_UNSET : PayoutSchedule.MONEY_CURRENCY;
                 c.setCompanyCurrency(fallback);
                 affected.add(c.getName());
+                nameRecorded = true;
                 changed = true;
                 info("[currencyBan] company #" + c.getCompanyId() + " (" + c.getName()
                         + ") currency was banned item — fell back to "
@@ -671,6 +680,14 @@ public final class CompanyManager implements ServerSaveableChunked {
                 c.replaceSchedule(s.getScheduleId(), s.withPausedByCurrencyBan(true, true));
                 pausedCount++;
                 changed = true;
+                // A schedule's own currency can be banned independently of the company-wide
+                // currency setting (e.g. company currency is money, schedule pays a specific
+                // item) — record the company name here too so the chat summary always lists
+                // every company it reports a paused schedule for.
+                if (!nameRecorded) {
+                    affected.add(c.getName());
+                    nameRecorded = true;
+                }
                 info("[currencyBan] company #" + c.getCompanyId() + " (" + c.getName()
                         + ") schedule #" + s.getScheduleId() + " paused (currency banned)");
             }
@@ -690,11 +707,17 @@ public final class CompanyManager implements ServerSaveableChunked {
      */
     public int resumeCurrencyBannedSchedules(short allowedShort, boolean allowedIsMoney) {
         int resumed = 0;
+        long nextRunTick = PayoutExecutor.getLastObservedTick();
         for (Company c : byId.values()) {
             for (PayoutSchedule s : c.getPayoutSchedules()) {
                 if (!s.isPausedByCurrencyBan()) continue;
                 if (!scheduleCurrencyMatches(s, allowedShort, allowedIsMoney)) continue;
-                c.replaceSchedule(s.getScheduleId(), s.withPausedByCurrencyBan(false, false));
+                // Restart the countdown from now (same reasoning as the manual-unpause path in
+                // pauseSchedule()) — the schedule may have sat paused across a currency ban for
+                // any length of in-game time, so its old nextRunTick is stale.
+                PayoutSchedule updated = s.withPausedByCurrencyBan(false, false)
+                        .withNextRunTick(nextRunTick + s.getIntervalTicks());
+                c.replaceSchedule(s.getScheduleId(), updated);
                 resumed++;
                 info("[currencyBan] company #" + c.getCompanyId() + " (" + c.getName()
                         + ") schedule #" + s.getScheduleId() + " resumed (currency re-allowed)");

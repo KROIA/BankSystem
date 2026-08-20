@@ -283,7 +283,7 @@
   "message.banksystem.disallow_cleared_summary": "已禁止 {item_name}：清空了 {count} 个账户，共移除 {amount}（不退款）",
   "message.banksystem.disallow_cleared_row": "  #{account_number} ({user_name})：可用 {balance} + 锁定 {locked_balance}",
   "message.banksystem.disallow_cleared_more": "  ...还有 {count} 个（详见服务器控制台）",
-  "message.banksystem.currency_ban_summary": "公司货币清理：{count} 家公司已重置（货币回退为金钱或未设置），已暂停 {amount} 个派息计划：{item_name}",
+  "message.banksystem.currency_ban_summary": "公司货币清理：{count} 家公司已重置（货币回退为金钱或未设置），已暂停 {amount} 个派息计划。受影响的公司：{item_name}",
   "message.banksystem.item_now_allowed": "{item_name} 现已允许存入银行。\n可存储的最小单位为 {amount}。",
   "message.banksystem.item_now_allowed_failed": "未能将 {item_name} 设为可存银行物品",
   "message.banksystem.item_already_allowed": "{item_name} 已允许存入银行，你怕不是傻了吧",

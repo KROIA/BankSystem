@@ -1,6 +1,5 @@
 package net.kroia.banksystem.banking.company;
 
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
@@ -12,7 +11,6 @@ import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingReques
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionOutputData;
-import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
@@ -21,12 +19,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -1293,10 +1286,13 @@ public final class AsyncCompanyManager {
             return OutputData.of(FunctionType.CREATE_COMPANY,
                     new CreateOutput(CODE_BANK_ACCOUNT_ERROR, 0, 0, in.name, in.maxSupply));
         }
+        // Company bank accounts need the same default money/currency slots as personal
+        // accounts (Task #57) — createBankAccount() alone leaves the account empty.
+        net.kroia.banksystem.banking.bankmanager.ServerBankManager.addDefaultBankSlots(account);
         User caller = bm.getUserByUUID(in.callerUUID);
         if (caller == null) {
             String cname = in.callerName == null || in.callerName.isEmpty() ? in.callerUUID.toString() : in.callerName;
-            bm.addUser(new User(in.callerUUID, cname, true));
+            bm.addUser(new User(in.callerUUID, cname));
             caller = bm.getUserByUUID(in.callerUUID);
         }
         if (caller != null) {

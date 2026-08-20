@@ -4,9 +4,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.architectury.event.events.common.TickEvent;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.api.ItemPriceProvider;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bank.IServerBank;
@@ -15,7 +16,6 @@ import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
-import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager.DisallowedHolder;
 import net.kroia.banksystem.api.currency.ExternalAccount;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
@@ -25,12 +25,11 @@ import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.binding.BindingRow;
-import net.kroia.banksystem.api.ItemPriceProvider;
-import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.banking.clientdata.UserData;
+import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRequest;
 import net.kroia.banksystem.util.ItemID;
@@ -459,7 +458,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public void addUser(@NotNull ServerPlayer player) {
-        addUser(new User(player.getUUID(), player.getName().getString(), true));
+        addUser(new User(player.getUUID(), player.getName().getString()));
     }
 
     @Override
@@ -469,7 +468,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public void addUser(@NotNull UUID playerUUID, @NotNull String playerName) {
-        addUser(new User(playerUUID, playerName, true));
+        addUser(new User(playerUUID, playerName));
     }
 
     @Override
@@ -1306,6 +1305,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             if(account.getPersonalBankOwner() != null){
                 error("Cannot delete personal bank account with number: " + accountNumber + ".");
                 return false; // Cannot delete personal bank accounts
+            }
+            net.kroia.banksystem.banking.company.CompanyManager cm =
+                    net.kroia.banksystem.banking.company.CompanyManager.get();
+            if (cm != null && cm.getByBankAccount(accountNumber) != null) {
+                error("Cannot delete bank account " + accountNumber + ": it still belongs to a company.");
+                return false;
             }
             bankAccounts.remove(accountNumber);
             markPersistDirty(); // Task #55 (removed account is no longer iterated by update())

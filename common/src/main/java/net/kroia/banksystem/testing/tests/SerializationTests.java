@@ -122,7 +122,7 @@ public class SerializationTests extends TestSuite {
     private TestResult testBankUserDataCodecRoundTrip() {
         @SuppressWarnings({"rawtypes", "unchecked"})
         StreamCodec rawCodec = (StreamCodec) BankUserData.STREAM_CODEC;
-        BankUserData original = new BankUserData(UUID.randomUUID(), "TestUser", true,
+        BankUserData original = new BankUserData(UUID.randomUUID(), "TestUser",
                 BankPermission.DEPOSIT.getValue() | BankPermission.WITHDRAW.getValue());
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
         try {

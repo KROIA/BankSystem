@@ -52,7 +52,7 @@ public class CompanyFounderInvariantTests extends TestSuite {
         ServerBankAccount.setFounderChecker(savedChecker);
     }
 
-    private static User u(UUID uuid, String name) { return new User(uuid, name, false); }
+    private static User u(UUID uuid, String name) { return new User(uuid, name); }
 
     // ------------------------------------------------------------------
     // Removing MANAGE from a founder → REFUSED_FOUNDER

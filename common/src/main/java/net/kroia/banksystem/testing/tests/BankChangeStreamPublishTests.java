@@ -79,7 +79,7 @@ public class BankChangeStreamPublishTests extends TestSuite {
         StubCurrencyProvider.reset();
 
         if (!manager.userExists(TEST_OWNER)) {
-            manager.addUser(new User(TEST_OWNER, TEST_OWNER_NAME, false));
+            manager.addUser(new User(TEST_OWNER, TEST_OWNER_NAME));
         }
 
         // Distinct non-money item avoids collisions with auto-created money banks.

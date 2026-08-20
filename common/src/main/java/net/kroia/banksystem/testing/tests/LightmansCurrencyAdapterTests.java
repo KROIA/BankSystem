@@ -95,7 +95,7 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
         manager = serverManager;
 
         if (!manager.userExists(TEST_OWNER)) {
-            manager.addUser(new User(TEST_OWNER, TEST_OWNER_NAME, false));
+            manager.addUser(new User(TEST_OWNER, TEST_OWNER_NAME));
         }
 
         slotItem = ItemIDManager.registerItemStackServerSide_direct(Items.EMERALD.getDefaultInstance());
