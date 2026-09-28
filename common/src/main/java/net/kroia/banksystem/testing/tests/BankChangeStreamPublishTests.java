@@ -12,6 +12,7 @@ import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.testing.StubCurrencyProvider;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
@@ -49,6 +50,8 @@ public class BankChangeStreamPublishTests extends TestSuite {
     private static final String STUB_KEY = "issue67_stub";
 
     private ServerBankManager manager;
+    /** Snapshot of the live allow-list / blacklist, restored in teardown. */
+    private LiveStateGuard stateGuard;
     private int testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
     private ItemID slotItem;
 
@@ -75,6 +78,9 @@ public class BankChangeStreamPublishTests extends TestSuite {
         if (bankManager == null) return;
         if (!(bankManager.getSync() instanceof ServerBankManager serverManager)) return;
         manager = serverManager;
+
+        // Capture BEFORE the allowItemID below so teardown can hand the live filter back.
+        stateGuard = LiveStateGuard.capture(manager);
 
         StubCurrencyProvider.reset();
 
@@ -124,17 +130,24 @@ public class BankChangeStreamPublishTests extends TestSuite {
 
     @Override
     public void teardown() {
-        if (manager == null) return;
-        BankAccountBindings bindings = BankAccountBindings.get();
-        if (bindings != null && testAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
-            bindings.removeAllForAccount(testAccountNr);
+        try {
+            if (manager == null) return;
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null && testAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+                bindings.removeAllForAccount(testAccountNr);
+            }
+            if (testAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+                manager.deleteBankAccount(testAccountNr);
+                testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
+            }
+            StubCurrencyProvider.teardown();
+            manager.removeUser(TEST_OWNER);
+        } finally {
+            // ALWAYS last: the account/bank cleanup above must run against the registry the
+            // suite actually used, not an already-rolled-back one. Never throws.
+            LiveStateGuard.restore(stateGuard);
+            stateGuard = null;
         }
-        if (testAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
-            manager.deleteBankAccount(testAccountNr);
-            testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
-        }
-        StubCurrencyProvider.teardown();
-        manager.removeUser(TEST_OWNER);
     }
 
     // -----------------------------------------------------------------------

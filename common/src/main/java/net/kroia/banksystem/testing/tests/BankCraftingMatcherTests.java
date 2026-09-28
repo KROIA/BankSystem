@@ -6,6 +6,7 @@ import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.BankCraftingMatcher;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
@@ -132,9 +133,41 @@ public class BankCraftingMatcherTests extends TestSuite {
         return grid;
     }
 
+
+    /**
+     * Snapshot of the live ItemID registry, taken before the first template is minted and
+     * reinstalled in {@link #teardown()}. The templates below are plain vanilla items, but on
+     * a world where the player has never banked them the registration still mints a brand-new
+     * ItemID that would otherwise persist forever. Only entries added after the snapshot are
+     * dropped; nothing that existed before the suite ran is renumbered or removed.
+     */
+    private LiveStateGuard stateGuard;
+
+    @Override
+    public void setup() {
+        // Capture BEFORE the first id(...) / money registration below.
+        stateGuard = LiveStateGuard.capture();
+    }
+
+    @Override
+    public void teardown() {
+        LiveStateGuard.restore(stateGuard);
+        stateGuard = null;
+    }
+
+    /**
+     * Registers a test template through the suite's {@link LiveStateGuard}, so an ItemID
+     * minted only because this suite asked for it is discarded again in {@link #teardown()}.
+     */
+    private ItemID registerScratch(ItemStack stack) {
+        return stateGuard != null
+                ? stateGuard.register(stack)
+                : ItemIDManager.registerItemStackServerSide_direct(stack);
+    }
+
     /** Registers (or resolves) the ItemID for a plain vanilla item template. */
-    private static ItemID id(net.minecraft.world.item.Item item) {
-        return ItemIDManager.registerItemStackServerSide_direct(new ItemStack(item));
+    private ItemID id(net.minecraft.world.item.Item item) {
+        return registerScratch(new ItemStack(item));
     }
 
     /**
@@ -468,7 +501,7 @@ public class BankCraftingMatcherTests extends TestSuite {
     private TestResult testMoneyNeverSourcedFromBank() {
         Level level = level();
         if (level == null) return fail("No server level available");
-        ItemID money = ItemIDManager.registerItemStackServerSide_direct(
+        ItemID money = registerScratch(
                 BankSystemItems.MONEY.get().getDefaultInstance());
         if (!money.isValid()) return fail("could not register the money ItemID");
         TestResult r = assertTrue("precondition: registered ItemID is detected as money",

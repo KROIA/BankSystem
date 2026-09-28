@@ -13,6 +13,7 @@ import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -43,6 +44,9 @@ public class BankManagerTests extends TestSuite {
 
     /** Account numbers created during tests, to be cleaned up in teardown */
     private final List<Integer> createdAccountNumbers = new ArrayList<>();
+
+    /** Snapshot of the live allow-list / runtime blacklist, restored in teardown. */
+    private LiveStateGuard stateGuard;
 
     @Override
     public TestCategory getCategory() {
@@ -89,6 +93,9 @@ public class BankManagerTests extends TestSuite {
             return;
         }
 
+        // Capture BEFORE any mutation: the item-filter tests allow/disallow live items.
+        stateGuard = LiveStateGuard.capture(manager);
+
         // Ensure test users are registered
         if (!manager.userExists(TEST_USER_A)) {
             manager.addUser(new User(TEST_USER_A, TEST_USER_A_NAME));
@@ -100,19 +107,25 @@ public class BankManagerTests extends TestSuite {
 
     @Override
     public void teardown() {
-        if (manager == null) {
-            return;
-        }
+        try {
+            if (manager == null) {
+                return;
+            }
 
-        // Delete all test accounts we created
-        for (int accountNr : createdAccountNumbers) {
-            manager.deleteBankAccount(accountNr);
-        }
-        createdAccountNumbers.clear();
+            // Delete all test accounts we created
+            for (int accountNr : createdAccountNumbers) {
+                manager.deleteBankAccount(accountNr);
+            }
+            createdAccountNumbers.clear();
 
-        // Remove test users (also cleans up any personal accounts they own)
-        manager.removeUser(TEST_USER_A);
-        manager.removeUser(TEST_USER_B);
+            // Remove test users (also cleans up any personal accounts they own)
+            manager.removeUser(TEST_USER_A);
+            manager.removeUser(TEST_USER_B);
+        } finally {
+            // ALWAYS last: the account/user cleanup above needs the registry the suite used.
+            LiveStateGuard.restore(stateGuard);
+            stateGuard = null;
+        }
     }
 
     // ========================= Conversion Precision =========================

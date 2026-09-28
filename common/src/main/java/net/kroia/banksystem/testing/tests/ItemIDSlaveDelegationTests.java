@@ -2,6 +2,7 @@ package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.VolatileItemComponents;
@@ -55,6 +56,42 @@ import java.util.UUID;
  * </ul>
  */
 public class ItemIDSlaveDelegationTests extends TestSuite {
+
+    /**
+     * Snapshot of the live ItemID registry, taken before the first synthetic template is
+     * minted and reinstalled in {@link #teardown()}. Without it every run leaves one stray
+     * row per scratch template in the bank manage screen, forever — the ItemID table has no
+     * deregister. Only entries added after the snapshot are dropped; nothing that existed
+     * before the suite ran is renumbered or removed.
+     */
+    private LiveStateGuard stateGuard;
+
+    /**
+     * Registers a synthetic test template through the suite's {@link LiveStateGuard}, so the
+     * minted ItemID is discarded in {@link #teardown()} and residue left under the same
+     * (deterministic) marker by an aborted earlier run is scrubbed on the way in.
+     */
+    private ItemID registerScratch(ItemStack stack) {
+        return stateGuard != null
+                ? stateGuard.register(stack)
+                : ItemIDManager.registerItemStackServerSide_direct(stack);
+    }
+
+    @Override
+    public void setup() {
+        // Capture BEFORE the first synthetic registration below.
+        stateGuard = LiveStateGuard.captureSynthetic("banksystem_slave_delegation_test");
+    }
+
+    @Override
+    public void teardown() {
+        // Discard every synthetic template this suite minted. The per-test
+        // replaceState_forTesting pairs cover each test's own window; this covers the rest,
+        // including the IDs the master-side fallback path mints on a single-server world.
+        LiveStateGuard.restore(stateGuard);
+        stateGuard = null;
+    }
+
 
     @Override
     public TestCategory getCategory() {
@@ -224,7 +261,7 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
             return pass("skipped: no server-side RegistryAccess (client-only / early-init)");
 
         boolean savedLatch = ItemIDManager.isRegistrationLatchArmed_forTesting();
-        ItemStack unknown = paperWithCustomData("slave-delegate-fire-" + UUID.randomUUID());
+        ItemStack unknown = paperWithCustomData("slave-delegate-fire");
 
         try {
             // Latch must be released for the ARRS to fire (arming skips ARRS by design —
@@ -235,7 +272,7 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
 
             final ItemID[] resultRef = { ItemID.INVALID_ID };
             withIsSlaveServer(true, () -> {
-                resultRef[0] = ItemIDManager.registerItemStackServerSide_direct(unknown);
+                resultRef[0] = registerScratch(unknown);
             });
 
             TestResult r = assertFalse("slave register returns INVALID_ID on cache miss",
@@ -278,7 +315,7 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
         if (access == null)
             return pass("skipped: no server-side RegistryAccess (client-only / early-init)");
 
-        ItemStack unknown = paperWithCustomData("slave-dedup-" + UUID.randomUUID());
+        ItemStack unknown = paperWithCustomData("slave-dedup");
         try {
             ItemIDManager.markRegistryReady();
             ItemIDManager.clearSlaveNegativeCache_forTesting();
@@ -286,11 +323,11 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
 
             withIsSlaveServer(true, () -> {
                 // First lookup — one ARRS.
-                ItemIDManager.registerItemStackServerSide_direct(unknown);
+                registerScratch(unknown);
                 // Second lookup — MUST hit the cache; ARRS count stays at 1.
-                ItemIDManager.registerItemStackServerSide_direct(unknown);
+                registerScratch(unknown);
                 // Third lookup for good measure.
-                ItemIDManager.registerItemStackServerSide_direct(unknown);
+                registerScratch(unknown);
             });
 
             int arrsFired = ItemIDManager.getSlaveArrsRequestsFired_forTesting();
@@ -327,7 +364,7 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
         Map<ItemID, ItemID> savedQuarantine = ItemIDManager.getQuarantinedAliases_forTesting();
         boolean savedLatch = ItemIDManager.isRegistrationLatchArmed_forTesting();
 
-        ItemStack unknown = paperWithCustomData("slave-latch-" + UUID.randomUUID());
+        ItemStack unknown = paperWithCustomData("slave-latch");
 
         try {
             // Reset ARRS counter first.
@@ -341,7 +378,7 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
                 // Arm the latch via clear() (production release path); we do NOT release it.
                 ItemIDManager.clear();
 
-                resultRef[0] = ItemIDManager.registerItemStackServerSide_direct(unknown);
+                resultRef[0] = registerScratch(unknown);
                 arrsAfterRef[0] = ItemIDManager.getSlaveArrsRequestsFired_forTesting();
                 cachedRef[0] = ItemIDManager.isInSlaveNegativeCache_forTesting(unknown);
             });
@@ -445,7 +482,7 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
         // an already-registered short would sabotage the test — assert absence explicitly.
         final short fabricatedShort = (short) 9999;
         ItemID fabricatedId = new ItemID(fabricatedShort);
-        ItemStack raw = paperWithCustomData("populate-positive-" + UUID.randomUUID());
+        ItemStack raw = paperWithCustomData("populate-positive");
 
         try {
             ItemIDManager.markRegistryReady();
@@ -479,7 +516,7 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
             // hops back and calls populate) AND lets us assert the positive response
             // REMOVES the mark.
             withIsSlaveServer(true, () -> {
-                ItemIDManager.registerItemStackServerSide_direct(raw);
+                registerScratch(raw);
             });
             if (!ItemIDManager.isInSlaveNegativeCache_forTesting(raw))
                 return fail("test setup: register path did not seed the negative cache "
@@ -556,7 +593,7 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
         boolean savedLatch = ItemIDManager.isRegistrationLatchArmed_forTesting();
         final short fabricatedShort = (short) 9998;
         ItemID fabricatedId = new ItemID(fabricatedShort);
-        ItemStack raw = paperWithCustomData("populate-negative-" + UUID.randomUUID());
+        ItemStack raw = paperWithCustomData("populate-negative");
 
         try {
             ItemIDManager.markRegistryReady();
@@ -580,7 +617,7 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
 
             // Seed the negative cache via the register path (mirrors production order).
             withIsSlaveServer(true, () -> {
-                ItemIDManager.registerItemStackServerSide_direct(raw);
+                registerScratch(raw);
             });
             if (!ItemIDManager.isInSlaveNegativeCache_forTesting(raw))
                 return fail("test setup: register path did not seed the negative cache "
