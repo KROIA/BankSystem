@@ -4,6 +4,7 @@ import net.kroia.banksystem.minecraft.component.BankSystemDataComponents;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.VolatileItemComponents;
@@ -36,6 +37,42 @@ public class CompanyShareItemIDTests extends TestSuite {
         addTest("unstamped_share_differs_from_stamped", this::testUnstampedDiffersFromStamped);
     }
 
+
+    /**
+     * Snapshot of the live ItemID registry, taken before the first synthetic template is
+     * minted and reinstalled in {@link #teardown()}. Without it every run leaves one stray
+     * row per scratch template in the bank manage screen, forever — the ItemID table has no
+     * deregister. Only entries added after the snapshot are dropped; nothing that existed
+     * before the suite ran is renumbered or removed.
+     */
+    private LiveStateGuard stateGuard;
+
+    /**
+     * Registers a synthetic test template through the suite's {@link LiveStateGuard}, so the
+     * minted ItemID is discarded in {@link #teardown()} and residue left under the same
+     * (deterministic) marker by an aborted earlier run is scrubbed on the way in.
+     */
+    private ItemID registerScratch(ItemStack stack) {
+        return stateGuard != null
+                ? stateGuard.register(stack)
+                : ItemIDManager.registerItemStackServerSide_direct(stack);
+    }
+
+    @Override
+    public void setup() {
+        // Capture BEFORE the first stamped-share registration below.
+        stateGuard = LiveStateGuard.capture();
+    }
+
+    @Override
+    public void teardown() {
+        // Drop the synthetic stamped-share templates again; the company ids used below are
+        // fixed test values (1001/1002/2003/3004) that no real company owns, so leaving them
+        // registered would add a permanent bogus row to the bank manage screen per run.
+        LiveStateGuard.restore(stateGuard);
+        stateGuard = null;
+    }
+
     // ------------------------------------------------------------------
 
     /**
@@ -59,8 +96,8 @@ public class CompanyShareItemIDTests extends TestSuite {
             return fail("stamped_share item is not registered");
         ItemStack shareA = StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), 1001);
         ItemStack shareB = StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), 1002);
-        ItemID idA = ItemIDManager.registerItemStackServerSide_direct(shareA);
-        ItemID idB = ItemIDManager.registerItemStackServerSide_direct(shareB);
+        ItemID idA = registerScratch(shareA);
+        ItemID idB = registerScratch(shareB);
         if (!idA.isValid() || !idB.isValid())
             return fail("Failed to register stamped-share templates (ids: " + idA + ", " + idB + ")");
         return assertTrue("shares of different companies must have different ItemIDs " +
@@ -75,7 +112,7 @@ public class CompanyShareItemIDTests extends TestSuite {
         ItemStack shareB = StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), 2003);
         // Different counts shouldn't affect identity either — ItemID keys on item + components only.
         shareB.setCount(64);
-        ItemID idA = ItemIDManager.registerItemStackServerSide_direct(shareA);
+        ItemID idA = registerScratch(shareA);
         ItemID idB = ItemIDManager.getItemID(shareB);
         if (!idA.isValid())
             return fail("Failed to register stamped-share template (id: " + idA + ")");
@@ -88,8 +125,8 @@ public class CompanyShareItemIDTests extends TestSuite {
             return fail("stamped_share item is not registered");
         ItemStack unstamped = new ItemStack(BankSystemItems.STAMPED_SHARE.get());
         ItemStack stamped = StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), 3004);
-        ItemID idUnstamped = ItemIDManager.registerItemStackServerSide_direct(unstamped);
-        ItemID idStamped = ItemIDManager.registerItemStackServerSide_direct(stamped);
+        ItemID idUnstamped = registerScratch(unstamped);
+        ItemID idStamped = registerScratch(stamped);
         if (!idUnstamped.isValid() || !idStamped.isValid())
             return fail("Registration failed (unstamped=" + idUnstamped + ", stamped=" + idStamped + ")");
         return assertTrue("an unstamped stamped_share (no company_id component) must not collide " +

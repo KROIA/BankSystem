@@ -16,6 +16,7 @@ import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.binding.BindingRow;
 import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.testing.TestCategory;
@@ -58,6 +59,8 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
     private ServerBankManager manager;
     private int testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
     private ItemID slotItem;
+    /** Snapshot of the live allow-list / blacklist, restored in teardown. */
+    private LiveStateGuard stateGuard;
 
     @Override
     public TestCategory getCategory() {
@@ -94,6 +97,10 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
         if (!(bankManager.getSync() instanceof ServerBankManager serverManager)) return;
         manager = serverManager;
 
+        // Capture BEFORE the allowItemID calls (setup + the per-test gold slots) so teardown
+        // can hand the live filter back.
+        stateGuard = LiveStateGuard.capture(manager);
+
         if (!manager.userExists(TEST_OWNER)) {
             manager.addUser(new User(TEST_OWNER, TEST_OWNER_NAME));
         }
@@ -109,6 +116,26 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
         if (account != null) {
             testAccountNr = account.getAccountNumber();
             account.createBank(slotItem, 0);
+        }
+    }
+
+    @Override
+    public void teardown() {
+        try {
+            if (manager == null) return;
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null && testAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+                bindings.removeAllForAccount(testAccountNr);
+            }
+            if (testAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+                manager.deleteBankAccount(testAccountNr);
+                testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
+            }
+            manager.removeUser(TEST_OWNER);
+        } finally {
+            // ALWAYS last: the cleanup above needs the registry the suite actually used.
+            LiveStateGuard.restore(stateGuard);
+            stateGuard = null;
         }
     }
 

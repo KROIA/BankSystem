@@ -433,6 +433,39 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         return CompletableFuture.completedFuture(getBlacklistedItems());
     }
 
+    /**
+     * Snapshot of the two mutable item-filter sets (allowed + runtime blacklist).
+     * @param allowed          copy of the allowed-item set
+     * @param runtimeBlacklist copy of the runtime (admin-set) blacklist, WITHOUT the static entries
+     */
+    public record ItemFilterSnapshot(Set<ItemID> allowed, Set<ItemID> runtimeBlacklist) {}
+
+    /**
+     * Test support: capture the allowed set + runtime blacklist so a test suite can hand the
+     * live server back exactly the filter state it found. The public
+     * {@link #allowItemID(ItemID)} / {@link #disallowItemID(ItemID)} pair cannot express the
+     * "neither allowed nor blacklisted" state, so a snapshot/restore pair is the only way to
+     * revert a test's allow-list mutations without leaving a runtime-blacklist entry behind.
+     */
+    public ItemFilterSnapshot snapshotItemFilters() {
+        return new ItemFilterSnapshot(new HashSet<>(allowedItemIDs), new HashSet<>(blacklistedItemIDs));
+    }
+
+    /**
+     * Test support: restore a {@link #snapshotItemFilters()} result verbatim. Pure set
+     * replacement — no holder-bank clearing, no company-currency cascade (unlike
+     * {@link #disallowItemIDAndReport(ItemID)}).
+     */
+    public void restoreItemFilters(ItemFilterSnapshot snapshot) {
+        if (snapshot == null)
+            return;
+        allowedItemIDs.clear();
+        allowedItemIDs.addAll(snapshot.allowed());
+        blacklistedItemIDs.clear();
+        blacklistedItemIDs.addAll(snapshot.runtimeBlacklist());
+        markPersistDirty();
+    }
+
     @Override
     public ItemInfoData getItemInfoData(@NotNull ItemID itemID) {
         double totalSupply = 0;

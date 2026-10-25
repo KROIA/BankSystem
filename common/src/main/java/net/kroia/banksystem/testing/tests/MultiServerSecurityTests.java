@@ -12,6 +12,7 @@ import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
 import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
 import net.kroia.banksystem.networking.multi_server.WithdrawItemsFromBankRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -43,6 +44,8 @@ public class MultiServerSecurityTests extends TestSuite {
 
     private IServerBankManager manager;
     private int testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
+    /** Snapshot of the live allow-list / blacklist / trusted-slave state, restored in teardown. */
+    private LiveStateGuard stateGuard;
 
     @Override
     public TestCategory getCategory() {
@@ -76,6 +79,9 @@ public class MultiServerSecurityTests extends TestSuite {
         manager = bankManager.getSync();
         if (manager == null) return;
 
+        // Capture BEFORE any mutation: this suite allows items and flips slave trust.
+        stateGuard = LiveStateGuard.capture(manager);
+
         if (!manager.userExists(TEST_OWNER)) {
             manager.addUser(new User(TEST_OWNER, TEST_OWNER_NAME));
         }
@@ -94,13 +100,23 @@ public class MultiServerSecurityTests extends TestSuite {
 
     @Override
     public void teardown() {
-        if (manager == null) return;
-        if (testAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
-            manager.deleteBankAccount(testAccountNr);
-            testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
+        try {
+            if (manager == null) return;
+            if (testAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+                manager.deleteBankAccount(testAccountNr);
+                testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
+            }
+            manager.removeUser(TEST_OWNER);
+            manager.removeUser(TEST_OUTSIDER);
+            // The forged-admin test adds TEST_ADMIN; remove it unconditionally so a run that
+            // crashed mid-test cannot leave it behind (same treatment as the two users above).
+            manager.removeUser(TEST_ADMIN);
+        } finally {
+            // ALWAYS last: the account/user cleanup above needs the registry the suite used
+            // (it also restores the trusted-slave set this suite mutates).
+            LiveStateGuard.restore(stateGuard);
+            stateGuard = null;
         }
-        manager.removeUser(TEST_OWNER);
-        manager.removeUser(TEST_OUTSIDER);
     }
 
     // ============== Pure-logic invariants ==============
@@ -276,7 +292,6 @@ public class MultiServerSecurityTests extends TestSuite {
         // Seed the bank with a known balance, then attempt a negative deposit.
         var preBank = account.getOrCreateBank(dirt);
         if (preBank == null) {
-            if (!wasAllowed) manager.disallowItemID(dirt);
             return fail("Failed to create test bank for DIRT");
         }
         preBank.deposit(100L);
@@ -298,9 +313,6 @@ public class MultiServerSecurityTests extends TestSuite {
         // Cleanup
         preBank.withdraw(balanceAfter);
         account.removeBank(dirt);
-        if (!wasAllowed) {
-            manager.disallowItemID(dirt);
-        }
         return pass("Negative deposit was clamped — balance unchanged at " + balanceBefore);
     }
 
@@ -368,9 +380,6 @@ public class MultiServerSecurityTests extends TestSuite {
             if (account.hasBank(diamond)) {
                 account.removeBank(diamond);
             }
-            if (!wasAllowed) {
-                manager.disallowItemID(diamond);
-            }
         }
         return pass("Untrusted-slave deposit was rejected with full no-op OutputData");
     }
@@ -400,7 +409,6 @@ public class MultiServerSecurityTests extends TestSuite {
         // Seed a positive balance so a successful withdraw would be observable if the gate leaked
         var preBank = account.getOrCreateBank(diamond);
         if (preBank == null) {
-            if (!wasAllowed) manager.disallowItemID(diamond);
             return fail("Failed to create test bank for DIAMOND");
         }
         preBank.deposit(500L);
@@ -428,9 +436,6 @@ public class MultiServerSecurityTests extends TestSuite {
             // Cleanup seeded balance
             preBank.withdraw(preBank.getBalance());
             account.removeBank(diamond);
-            if (!wasAllowed) {
-                manager.disallowItemID(diamond);
-            }
         }
         return pass("Untrusted-slave withdraw was rejected with empty OutputData");
     }
@@ -491,9 +496,6 @@ public class MultiServerSecurityTests extends TestSuite {
             if (account.hasBank(diamond)) {
                 account.removeBank(diamond);
             }
-            if (!wasAllowed) {
-                manager.disallowItemID(diamond);
-            }
             if (!wasTrusted) {
                 manager.untrustSlaveServer(trustedSlaveID);
             }
@@ -532,7 +534,6 @@ public class MultiServerSecurityTests extends TestSuite {
         if (!wasAllowed) manager.allowItemID(diamond);
         var bank = account.getOrCreateBank(diamond);
         if (bank == null) {
-            if (!wasAllowed) manager.disallowItemID(diamond);
             if (adminCreated) manager.removeUser(TEST_ADMIN);
             return fail("Failed to create test bank for DIAMOND");
         }
@@ -559,7 +560,6 @@ public class MultiServerSecurityTests extends TestSuite {
         } finally {
             bank.withdraw(bank.getBalance());
             if (account.hasBank(diamond)) account.removeBank(diamond);
-            if (!wasAllowed) manager.disallowItemID(diamond);
             if (adminCreated) manager.removeUser(TEST_ADMIN);
         }
         return pass("Untrusted-slave forged-admin bank-account edit was blocked — balance untouched");

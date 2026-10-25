@@ -2,6 +2,7 @@ package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.BankSystemSaveFormat;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
@@ -54,6 +55,33 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
         return BankSystemTestCategories.ITEM_ID;
     }
 
+
+    /**
+     * Snapshot of the live ItemID registry, taken before the first synthetic template is
+     * minted and reinstalled in {@link #teardown()}. Without it every run leaves one stray
+     * row per scratch template in the bank manage screen, forever — the ItemID table has no
+     * deregister. Only entries added after the snapshot are dropped; nothing that existed
+     * before the suite ran is renumbered or removed.
+     */
+    private LiveStateGuard stateGuard;
+
+    /**
+     * Registers a synthetic test template through the suite's {@link LiveStateGuard}, so the
+     * minted ItemID is discarded in {@link #teardown()} and residue left under the same
+     * (deterministic) marker by an aborted earlier run is scrubbed on the way in.
+     */
+    private ItemID registerScratch(ItemStack stack) {
+        return stateGuard != null
+                ? stateGuard.register(stack)
+                : ItemIDManager.registerItemStackServerSide_direct(stack);
+    }
+
+    @Override
+    public void setup() {
+        // Capture BEFORE buildTwoEntryFixture() mints its first template.
+        stateGuard = LiveStateGuard.captureSynthetic("banksystem_format_repair_test");
+    }
+
     @Override
     public void teardown() {
         // Digest hygiene (Task #16): fixture load()s inside this suite run the startup
@@ -62,10 +90,18 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
         // restored the live state, re-save the metadata through the production path so a
         // server kill after a test run cannot leave a fixture digest behind (which would
         // fire a false tripwire ERROR naming fixture shorts on the next boot).
-        net.kroia.banksystem.BankSystemModBackend.Instances instances =
-                net.kroia.banksystem.BankSystemModBackend.getInstances_forTesting();
-        if (instances != null && instances.SERVER_DATA_HANDLER != null)
-            instances.SERVER_DATA_HANDLER.save_metadata();
+        try {
+            net.kroia.banksystem.BankSystemModBackend.Instances instances =
+                    net.kroia.banksystem.BankSystemModBackend.getInstances_forTesting();
+            if (instances != null && instances.SERVER_DATA_HANDLER != null)
+                instances.SERVER_DATA_HANDLER.save_metadata();
+        } finally {
+            // ALWAYS last: discard the fixture templates minted by buildTwoEntryFixture(). The
+            // per-test replaceState_forTesting pairs only cover each test's own fixture window;
+            // the registrations that seed those fixtures happen outside it.
+            LiveStateGuard.restore(stateGuard);
+            stateGuard = null;
+        }
     }
 
     @Override
@@ -123,11 +159,11 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
      * @return fixture map with exactly two entries at shorts 7 and 9, or {@code null} when
      *         registration failed
      */
-    private static Map<ItemID, ItemStack> buildTwoEntryFixture() {
-        ItemID tempA = ItemIDManager.registerItemStackServerSide_direct(
-                paperWithCustomData("fixture-A-" + UUID.randomUUID()));
-        ItemID tempB = ItemIDManager.registerItemStackServerSide_direct(
-                paperWithCustomData("fixture-B-" + UUID.randomUUID()));
+    private Map<ItemID, ItemStack> buildTwoEntryFixture() {
+        ItemID tempA = registerScratch(
+                paperWithCustomData("fixture-A"));
+        ItemID tempB = registerScratch(
+                paperWithCustomData("fixture-B"));
         if (!tempA.isValid() || !tempB.isValid())
             return null;
         Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();

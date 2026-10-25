@@ -10,6 +10,7 @@ import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.VolatileItemComponents;
@@ -99,18 +100,52 @@ public class ItemIDIdentityTests extends TestSuite {
                 this::testItemIDMapHasNoAmbiguousTemplates);
     }
 
+    /**
+     * Snapshot of the live ItemID registry + item filters, taken before the first synthetic
+     * template is minted. Restored in {@link #teardown()} so none of this suite's scratch
+     * "Paper" IDs survive into the bank manage screen.
+     */
+    private LiveStateGuard stateGuard;
+
     @Override
     public void setup() {
+        // Capture BEFORE any registerItemStackServerSide_direct / allowItemID below.
+        stateGuard = LiveStateGuard.capture(serverBankManager())
+                .withSyntheticMarker("banksystem_identity_test");
         savedConfigIds = VolatileItemComponents.getConfigComponentIdStrings();
     }
 
     @Override
     public void teardown() {
-        // Safety net only — every test restores the set itself before returning.
-        if (savedConfigIds != null && VolatileItemComponents.setConfigComponentIds(savedConfigIds)) {
-            ItemIDManager.renormalizeAndMerge();
+        try {
+            // Safety net only — every test restores the set itself before returning.
+            if (savedConfigIds != null && VolatileItemComponents.setConfigComponentIds(savedConfigIds)) {
+                ItemIDManager.renormalizeAndMerge();
+            }
+            savedConfigIds = null;
+        } finally {
+            // ALWAYS last, even if the cleanup above threw: hand back the filters and then
+            // the registry, discarding every synthetic ItemID (and alias) this suite minted.
+            LiveStateGuard.restore(stateGuard);
+            stateGuard = null;
         }
-        savedConfigIds = null;
+    }
+
+    /** @return the live server bank manager, or {@code null} on a slave / not-yet-loaded server. */
+    private static IServerBankManager serverBankManager() {
+        IBankManager api = BankSystemMod.getAPI().getServerBankManager();
+        return api != null ? api.getSync() : null;
+    }
+
+    /**
+     * Registers a synthetic test template through the suite's {@link LiveStateGuard}, so the
+     * minted ItemID is discarded in {@link #teardown()} and any residue left under the same
+     * (deterministic) marker by an aborted earlier run is scrubbed on the way in.
+     */
+    private ItemID registerScratch(ItemStack stack) {
+        return stateGuard != null
+                ? stateGuard.register(stack)
+                : ItemIDManager.registerItemStackServerSide_direct(stack);
     }
 
     // ========================================================================
@@ -187,7 +222,7 @@ public class ItemIDIdentityTests extends TestSuite {
     private TestResult testVolatileDifferenceSameItemID() {
         // Register the reference item OURSELVES (default ItemIDs may not exist on this world)
         // and do it BEFORE the set change, so the broadcast sync packet carries the real lists.
-        ItemID plainId = ItemIDManager.registerItemStackServerSide_direct(new ItemStack(Items.PAPER));
+        ItemID plainId = registerScratch(new ItemStack(Items.PAPER));
         if (!plainId.isValid())
             return fail("Could not register the plain-paper reference template");
         VolatileItemComponents.setConfigComponentIds(List.of("minecraft:custom_data"));
@@ -218,8 +253,8 @@ public class ItemIDIdentityTests extends TestSuite {
             return fail("Normalized books with different stored_enchantments compare equal");
 
         // End-to-end: registering both books must yield two different valid ItemIDs.
-        ItemID sharpnessId = ItemIDManager.registerItemStackServerSide_direct(sharpnessBook);
-        ItemID lootingId = ItemIDManager.registerItemStackServerSide_direct(lootingBook);
+        ItemID sharpnessId = registerScratch(sharpnessBook);
+        ItemID lootingId = registerScratch(lootingBook);
         TestResult r = assertTrue("sharpness book got a valid ItemID", sharpnessId.isValid());
         if (!r.passed()) return r;
         r = assertTrue("looting book got a valid ItemID", lootingId.isValid());
@@ -255,13 +290,13 @@ public class ItemIDIdentityTests extends TestSuite {
                     + "the collapse scenario cannot be constructed");
 
         // Two synthetic templates that differ only in repair_cost, which is NOT volatile yet.
-        String marker = UUID.randomUUID().toString();
+        String marker = "volatile-merge";
         ItemStack a = paperWithCustomData(marker);
         ItemStack b = a.copy();
         b.set(DataComponents.REPAIR_COST, 5);
 
-        ItemID idA = ItemIDManager.registerItemStackServerSide_direct(a);
-        ItemID idB = ItemIDManager.registerItemStackServerSide_direct(b);
+        ItemID idA = registerScratch(a);
+        ItemID idB = registerScratch(b);
         TestResult r = assertTrue("both synthetic templates registered", idA.isValid() && idB.isValid());
         if (!r.passed()) return r;
         r = assertFalse("different repair_cost yields different IDs before the merge", idA.equals(idB));
@@ -358,8 +393,8 @@ public class ItemIDIdentityTests extends TestSuite {
     /** Hardening: getStack()/getItemStack() must hand out defensive copies. */
     private TestResult testGetStackReturnsDefensiveCopy() {
         // Register our own template — no assumption about pre-existing default ItemIDs.
-        ItemID id = ItemIDManager.registerItemStackServerSide_direct(
-                paperWithCustomData("defensive-copy-" + UUID.randomUUID()));
+        ItemID id = registerScratch(
+                paperWithCustomData("defensive-copy"));
         if (!id.isValid())
             return fail("Could not register the test template");
 
@@ -387,8 +422,8 @@ public class ItemIDIdentityTests extends TestSuite {
      */
     private TestResult testLoadResolvesNameWhenRegistryReady() {
         // Register our own template — no assumption about pre-existing default ItemIDs.
-        ItemID paperId = ItemIDManager.registerItemStackServerSide_direct(
-                paperWithCustomData("load-resolves-" + UUID.randomUUID()));
+        ItemID paperId = registerScratch(
+                paperWithCustomData("load-resolves"));
         if (!paperId.isValid())
             return fail("Could not register the test template");
         CompoundTag tag = new CompoundTag();
@@ -416,8 +451,8 @@ public class ItemIDIdentityTests extends TestSuite {
      */
     private TestResult testPlaceholderNameSelfHeals() {
         // Register our own template — no assumption about pre-existing default ItemIDs.
-        ItemID paperId = ItemIDManager.registerItemStackServerSide_direct(
-                paperWithCustomData("self-heal-" + UUID.randomUUID()));
+        ItemID paperId = registerScratch(
+                paperWithCustomData("self-heal"));
         if (!paperId.isValid())
             return fail("Could not register the test template");
 
@@ -527,8 +562,8 @@ public class ItemIDIdentityTests extends TestSuite {
         if (manager == null)
             return pass("skipped: no ServerBankManager (slave server or not-yet-loaded)");
 
-        String marker = "fixB-single-" + UUID.randomUUID();
-        ItemID canonical = ItemIDManager.registerItemStackServerSide_direct(paperWithCustomData(marker));
+        String marker = "fixB-single";
+        ItemID canonical = registerScratch(paperWithCustomData(marker));
         if (!canonical.isValid())
             return fail("Could not register the canonical test template");
 
@@ -579,7 +614,11 @@ public class ItemIDIdentityTests extends TestSuite {
         } finally {
             if (accountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER)
                 manager.deleteBankAccount(accountNr);
-            manager.disallowItemID(canonical);
+            // NOTE: no disallowItemID(canonical) here. It is NOT the inverse of allowItemID:
+            // it delegates to disallowItemIDAndReport, which runtime-BLACKLISTS the ID and
+            // wipes that item's bank from every holder account with NO REFUND. A blacklisted
+            // scratch ID would also make the next run's allowItemID fail. The allow-list entry
+            // is reverted wholesale by the LiveStateGuard filter restore in teardown().
             ItemIDManager.removeAliasEntries_forTesting(List.of(aliasKey));
         }
     }
@@ -608,11 +647,11 @@ public class ItemIDIdentityTests extends TestSuite {
         // that is NOT volatile on this server, so they get separate shorts) — later we install
         // an alias entry that ties one to the other, simulating the corrupt post-Bug-A state
         // where two banks in an account resolve to the same canonical.
-        String marker = UUID.randomUUID().toString();
+        String marker = "fixB-sum";
         ItemStack templateA = paperWithCustomData(marker + "-A");
         ItemStack templateB = paperWithCustomData(marker + "-B");
-        ItemID idA = ItemIDManager.registerItemStackServerSide_direct(templateA);
-        ItemID idB = ItemIDManager.registerItemStackServerSide_direct(templateB);
+        ItemID idA = registerScratch(templateA);
+        ItemID idB = registerScratch(templateB);
         if (!idA.isValid() || !idB.isValid() || idA.equals(idB))
             return fail("Could not register two distinct canonical templates");
 
@@ -676,8 +715,9 @@ public class ItemIDIdentityTests extends TestSuite {
         } finally {
             if (accountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER)
                 manager.deleteBankAccount(accountNr);
-            manager.disallowItemID(idA);
-            manager.disallowItemID(idB);
+            // NOTE: no disallowItemID(idA/idB) here — see testGetAccountDataEmitsAliasResolvedKeys.
+            // disallowItemID blacklists rather than un-allows, and wipes holder banks unrefunded.
+            // The LiveStateGuard filter restore in teardown() reverts the allow-list entries.
             ItemIDManager.removeAliasEntries_forTesting(List.of(other));
         }
     }

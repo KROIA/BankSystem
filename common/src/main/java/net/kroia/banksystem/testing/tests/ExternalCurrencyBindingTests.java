@@ -15,6 +15,7 @@ import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.binding.BindingKey;
 import net.kroia.banksystem.banking.binding.BindingRow;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.testing.StubCurrencyProvider;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
@@ -65,6 +66,8 @@ public class ExternalCurrencyBindingTests extends TestSuite {
     private static final String STUB_KEY_B = "stub_account_b";
 
     private ServerBankManager manager;
+    /** Snapshot of the live allow-list / blacklist, restored in teardown. */
+    private LiveStateGuard stateGuard;
     private int testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
     private ItemID slotItemA;
     private ItemID slotItemB;
@@ -101,6 +104,9 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         if (bankManager == null) return;
         if (!(bankManager.getSync() instanceof ServerBankManager serverManager)) return;
         manager = serverManager;
+
+        // Capture BEFORE the allowItemID calls below so teardown can hand the live filter back.
+        stateGuard = LiveStateGuard.capture(manager);
 
         // Refresh the stub — clears accounts, resets available=true, and re-registers.
         StubCurrencyProvider.reset();
@@ -171,21 +177,27 @@ public class ExternalCurrencyBindingTests extends TestSuite {
 
     @Override
     public void teardown() {
-        if (manager == null) return;
-        // Drop any bindings still pointing at our accounts.
-        BankAccountBindings bindings = BankAccountBindings.get();
-        if (bindings != null && testAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
-            bindings.removeAllForAccount(testAccountNr);
+        try {
+            if (manager == null) return;
+            // Drop any bindings still pointing at our accounts.
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null && testAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+                bindings.removeAllForAccount(testAccountNr);
+            }
+            if (testAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+                manager.deleteBankAccount(testAccountNr);
+                testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
+            }
+            // Drop the stub from the live registry so it does NOT leak into the
+            // production binding UI once the test suite finishes.
+            StubCurrencyProvider.teardown();
+            manager.removeUser(TEST_OWNER);
+            manager.removeUser(TEST_MEMBER);
+        } finally {
+            // ALWAYS last: the cleanup above needs the registry the suite actually used.
+            LiveStateGuard.restore(stateGuard);
+            stateGuard = null;
         }
-        if (testAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
-            manager.deleteBankAccount(testAccountNr);
-            testAccountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
-        }
-        // Drop the stub from the live registry so it does NOT leak into the
-        // production binding UI once the test suite finishes.
-        StubCurrencyProvider.teardown();
-        manager.removeUser(TEST_OWNER);
-        manager.removeUser(TEST_MEMBER);
     }
 
     // -----------------------------------------------------------------------

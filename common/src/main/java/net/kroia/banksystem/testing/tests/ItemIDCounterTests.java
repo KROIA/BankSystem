@@ -1,6 +1,7 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.testing.TestCategory;
@@ -60,8 +61,36 @@ public class ItemIDCounterTests extends TestSuite {
         addTest("overflow_caller_handling", this::testOverflowCallerHandling);
     }
 
+
+    /**
+     * Snapshot of the live ItemID registry, taken before the first synthetic template is
+     * minted and reinstalled in {@link #teardown()}. Without it every run leaves one stray
+     * row per scratch template in the bank manage screen, forever — the ItemID table has no
+     * deregister. Only entries added after the snapshot are dropped; nothing that existed
+     * before the suite ran is renumbered or removed.
+     */
+    private LiveStateGuard stateGuard;
+
+    /**
+     * Registers a synthetic test template through the suite's {@link LiveStateGuard}, so the
+     * minted ItemID is discarded in {@link #teardown()}.
+     * <p>
+     * Every test here asserts on a <i>freshly minted</i> short (allocation advances the
+     * counter, a dropped short is never re-issued, an overflowed counter returns INVALID).
+     * That still works with a deterministic marker because the guard was captured with this
+     * suite's marker key, so {@code register} evicts residue from the <b>live</b> registry
+     * before minting rather than re-resolving it to its old, lower short.
+     */
+    private ItemID registerScratch(ItemStack stack) {
+        return stateGuard != null
+                ? stateGuard.register(stack)
+                : ItemIDManager.registerItemStackServerSide_direct(stack);
+    }
+
     @Override
     public void setup() {
+        // Capture BEFORE the first synthetic registration below.
+        stateGuard = LiveStateGuard.captureSynthetic("banksystem_counter_test");
         savedCounter = ItemIDManager.getNextShortCounter_forTesting();
     }
 
@@ -69,9 +98,16 @@ public class ItemIDCounterTests extends TestSuite {
     public void teardown() {
         // Safety net — every test restores the counter itself, but a crash mid-test must
         // never leak a poisoned counter into the live registry.
-        if (savedCounter > 0)
-            ItemIDManager.setNextShortCounter_forTesting(savedCounter);
-        savedCounter = -1;
+        try {
+            if (savedCounter > 0)
+                ItemIDManager.setNextShortCounter_forTesting(savedCounter);
+            savedCounter = -1;
+        } finally {
+            // Discard every synthetic template this suite minted. ALWAYS last: it also
+            // reinstates the snapshot's counter, so it must not be undone by the restore above.
+            LiveStateGuard.restore(stateGuard);
+            stateGuard = null;
+        }
     }
 
     // ========================================================================
@@ -162,8 +198,8 @@ public class ItemIDCounterTests extends TestSuite {
         int probe = Math.max(ItemIDManager.getNextShortCounter_forTesting(), 100);
         ItemIDManager.setNextShortCounter_forTesting(probe);
         try {
-            ItemStack stack = paperWithCustomData("new_alloc_uses_counter_" + UUID.randomUUID());
-            ItemID id = ItemIDManager.registerItemStackServerSide_direct(stack);
+            ItemStack stack = paperWithCustomData("new_alloc_uses_counter");
+            ItemID id = registerScratch(stack);
 
             TestResult r = assertTrue("registered ID is valid", id.isValid());
             if (!r.passed()) return r;
@@ -175,9 +211,10 @@ public class ItemIDCounterTests extends TestSuite {
             if (!r.passed()) return r;
             return pass("allocation uses (and advances) nextShortCounter");
         } finally {
-            // The synthetic template stays in the registry — same convention as the
-            // other suites in this category. Counter is not restored: production
-            // registration events always leave the counter monotonically increased.
+            // The synthetic template is dropped again by the LiveStateGuard restore in
+            // teardown(), which also puts the counter back. Deliberately NOT restored here:
+            // production registration events always leave the counter monotonically increased,
+            // and this test asserts exactly that.
         }
     }
 
@@ -199,8 +236,8 @@ public class ItemIDCounterTests extends TestSuite {
         // afterwards must be strictly larger.
         ItemIDManager.setNextShortCounter_forTesting(postDropCounter);
 
-        ItemStack fresh = paperWithCustomData("dropped_short_not_reused_" + UUID.randomUUID());
-        ItemID freshId = ItemIDManager.registerItemStackServerSide_direct(fresh);
+        ItemStack fresh = paperWithCustomData("dropped_short_not_reused");
+        ItemID freshId = registerScratch(fresh);
 
         TestResult r = assertTrue("fresh ID is valid", freshId.isValid());
         if (!r.passed()) return r;
@@ -223,8 +260,8 @@ public class ItemIDCounterTests extends TestSuite {
         Set<ItemID> aliasesBefore = ItemIDManager.getItemIDAliasMap().keySet();
         ItemIDManager.setNextShortCounter_forTesting(Short.MAX_VALUE + 1);
         try {
-            ItemStack stack = paperWithCustomData("overflow_returns_invalid_" + UUID.randomUUID());
-            ItemID id = ItemIDManager.registerItemStackServerSide_direct(stack);
+            ItemStack stack = paperWithCustomData("overflow_returns_invalid");
+            ItemID id = registerScratch(stack);
 
             TestResult r = assertEquals("allocator returned INVALID_ID on overflow",
                     ItemID.INVALID_ID, id);
@@ -253,7 +290,7 @@ public class ItemIDCounterTests extends TestSuite {
         int liveBefore = ItemIDManager.getItemIDMap().size();
         ItemIDManager.setNextShortCounter_forTesting(Short.MAX_VALUE + 1);
         try {
-            ItemStack stack = paperWithCustomData("overflow_caller_handling_" + UUID.randomUUID());
+            ItemStack stack = paperWithCustomData("overflow_caller_handling");
             ItemID id = ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
 
             TestResult r = assertNotNull("public entry point never returns null", id);

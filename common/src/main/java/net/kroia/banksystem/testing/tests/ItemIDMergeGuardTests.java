@@ -13,6 +13,7 @@ import net.kroia.banksystem.data.filter.EqualityFilter;
 import net.kroia.banksystem.data.table.BalanceHistoryManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.VolatileItemComponents;
@@ -109,27 +110,62 @@ public class ItemIDMergeGuardTests extends TestSuite {
         addTest("load_replaces_stale_key_objects", this::testLoadReplacesStaleKeyObjects);
     }
 
+    /**
+     * Snapshot of the live ItemID registry + item filters, taken before the first synthetic
+     * template is minted. Restored in {@link #teardown()} so none of this suite's scratch
+     * "Paper" IDs survive into the bank manage screen. The per-test
+     * {@code replaceState_forTesting} save/restore pairs below guard a test's own fixture
+     * window; this guards the suite-level registrations they sit outside of.
+     */
+    private LiveStateGuard stateGuard;
+
+    /** Per-run counter making each {@link #registerRepairCostPair()} marker unique but stable. */
+    private int repairCostPairCounter;
+
     @Override
     public void setup() {
+        // Capture BEFORE any registerItemStackServerSide_direct / allowItemID below.
+        stateGuard = LiveStateGuard.capture(BankSystemMod.getAPI().getServerBankManager() != null
+                        ? BankSystemMod.getAPI().getServerBankManager().getSync() : null)
+                .withSyntheticMarker("banksystem_merge_guard_test");
+        repairCostPairCounter = 0;
         savedConfigIds = VolatileItemComponents.getConfigComponentIdStrings();
+    }
+
+    /**
+     * Registers a synthetic test template through the suite's {@link LiveStateGuard}, so the
+     * minted ItemID is discarded in {@link #teardown()} and residue left under the same
+     * (deterministic) marker by an aborted earlier run is scrubbed on the way in.
+     */
+    private ItemID registerScratch(ItemStack stack) {
+        return stateGuard != null
+                ? stateGuard.register(stack)
+                : ItemIDManager.registerItemStackServerSide_direct(stack);
     }
 
     @Override
     public void teardown() {
-        // Safety net only — the only test that changes the config set restores it itself.
-        if (savedConfigIds != null && VolatileItemComponents.setConfigComponentIds(savedConfigIds)) {
-            ItemIDManager.renormalizeAndMerge();
+        try {
+            // Safety net only — the only test that changes the config set restores it itself.
+            if (savedConfigIds != null && VolatileItemComponents.setConfigComponentIds(savedConfigIds)) {
+                ItemIDManager.renormalizeAndMerge();
+            }
+            savedConfigIds = null;
+            // Digest hygiene (Task #16): fixture load()s inside this suite run the startup
+            // merge guard, whose save_metadata() persisted the FIXTURE registry's
+            // renumbering-tripwire digest into the real Meta_data.nbt. Now that every test has
+            // restored the live state, re-save the metadata through the production path so a
+            // server kill after a test run cannot leave a fixture digest behind (which would
+            // fire a false tripwire ERROR naming fixture shorts on the next boot).
+            BankSystemModBackend.Instances instances = BankSystemModBackend.getInstances_forTesting();
+            if (instances != null && instances.SERVER_DATA_HANDLER != null)
+                instances.SERVER_DATA_HANDLER.save_metadata();
+        } finally {
+            // ALWAYS last, even if the cleanup above threw: hand back the filters and then
+            // the registry, discarding every synthetic ItemID this suite minted.
+            LiveStateGuard.restore(stateGuard);
+            stateGuard = null;
         }
-        savedConfigIds = null;
-        // Digest hygiene (Task #16): fixture load()s inside this suite run the startup
-        // merge guard, whose save_metadata() persisted the FIXTURE registry's
-        // renumbering-tripwire digest into the real Meta_data.nbt. Now that every test has
-        // restored the live state, re-save the metadata through the production path so a
-        // server kill after a test run cannot leave a fixture digest behind (which would
-        // fire a false tripwire ERROR naming fixture shorts on the next boot).
-        BankSystemModBackend.Instances instances = BankSystemModBackend.getInstances_forTesting();
-        if (instances != null && instances.SERVER_DATA_HANDLER != null)
-            instances.SERVER_DATA_HANDLER.save_metadata();
     }
 
     // ========================================================================
@@ -146,7 +182,8 @@ public class ItemIDMergeGuardTests extends TestSuite {
     }
 
     /**
-     * Registers two synthetic paper templates (unique UUID marker) that differ ONLY in
+     * Registers two synthetic paper templates (marker unique per call, but stable across runs
+     * so {@link LiveStateGuard#purge} can heal residue from an aborted run) that differ ONLY in
      * {@code minecraft:repair_cost} — distinct IDs under the server's real set, colliding as
      * soon as repair_cost is treated as volatile. Registration happens under the REAL set, so
      * the broadcast sync packets carry the server's real component lists.
@@ -154,12 +191,12 @@ public class ItemIDMergeGuardTests extends TestSuite {
      * @return the two registered IDs, index 0 = plain, index 1 = with repair_cost
      */
     private ItemID[] registerRepairCostPair() {
-        String marker = UUID.randomUUID().toString();
+        String marker = "repair-cost-pair-" + (++repairCostPairCounter);
         ItemStack a = paperWithCustomData(marker);
         ItemStack b = a.copy();
         b.set(DataComponents.REPAIR_COST, 7);
-        ItemID idA = ItemIDManager.registerItemStackServerSide_direct(a);
-        ItemID idB = ItemIDManager.registerItemStackServerSide_direct(b);
+        ItemID idA = registerScratch(a);
+        ItemID idB = registerScratch(b);
         return new ItemID[]{idA, idB};
     }
 
@@ -440,9 +477,12 @@ public class ItemIDMergeGuardTests extends TestSuite {
             mergedEvent.removeListener(listener);
             if (accountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER)
                 manager.deleteBankAccount(accountNr);
-            // Remove the synthetic item from the allowed set again (also removes any
-            // leftover banks referencing it on other accounts — there are none).
-            manager.disallowItemID(canonical);
+            // NOTE: no disallowItemID(canonical) here. It is NOT the inverse of allowItemID:
+            // it delegates to disallowItemIDAndReport, which runtime-BLACKLISTS the ID and
+            // removes that item's bank from every holder account with NO REFUND. A blacklisted
+            // scratch ID would also make the next run's allowItemID fail outright. The two
+            // allow-list entries are reverted wholesale by the LiveStateGuard filter restore
+            // in teardown().
         }
     }
 
@@ -574,8 +614,8 @@ public class ItemIDMergeGuardTests extends TestSuite {
      */
     private TestResult testRepairRemovesInvariantViolation() {
         // Register a canonical paper so we have a real short in itemIDMap.
-        ItemID canonical = ItemIDManager.registerItemStackServerSide_direct(
-                paperWithCustomData("repair-invariant-" + UUID.randomUUID()));
+        ItemID canonical = registerScratch(
+                paperWithCustomData("repair-invariant"));
         if (!canonical.isValid()) return fail("Could not register canonical template");
         // Install a bogus alias whose SOURCE key is the same as the canonical's short — this
         // is the invariant violation shape (source present in BOTH itemIDMap and itemIDAliasMap).
@@ -723,12 +763,12 @@ public class ItemIDMergeGuardTests extends TestSuite {
         try {
             // ==== Build a fixture registry: 3 uniquely-tagged paper items ====
             // Register in the live map first so ItemIDManager mints real shorts + templates.
-            ItemID id1 = ItemIDManager.registerItemStackServerSide_direct(
-                    paperWithCustomData("v202-upgrade-1-" + UUID.randomUUID()));
-            ItemID id2 = ItemIDManager.registerItemStackServerSide_direct(
-                    paperWithCustomData("v202-upgrade-2-" + UUID.randomUUID()));
-            ItemID id3 = ItemIDManager.registerItemStackServerSide_direct(
-                    paperWithCustomData("v202-upgrade-3-" + UUID.randomUUID()));
+            ItemID id1 = registerScratch(
+                    paperWithCustomData("v202-upgrade-1"));
+            ItemID id2 = registerScratch(
+                    paperWithCustomData("v202-upgrade-2"));
+            ItemID id3 = registerScratch(
+                    paperWithCustomData("v202-upgrade-3"));
             if (!id1.isValid() || !id2.isValid() || !id3.isValid())
                 return fail("Could not register the three synthetic templates");
             Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
@@ -861,8 +901,8 @@ public class ItemIDMergeGuardTests extends TestSuite {
      */
     private TestResult testPutAliasSucceedsWhenSourceNotInMap() {
         // Register B in itemIDMap so it's a real canonical target.
-        ItemID b = ItemIDManager.registerItemStackServerSide_direct(
-                paperWithCustomData("putAlias-success-" + UUID.randomUUID()));
+        ItemID b = registerScratch(
+                paperWithCustomData("putAlias-success"));
         if (!b.isValid()) return fail("Could not register target template B");
         // Pick an unused short for A — must NOT be a key in itemIDMap.
         short base = pickUnusedShortBase(1);
@@ -897,8 +937,8 @@ public class ItemIDMergeGuardTests extends TestSuite {
     private TestResult testPutAliasRejectsWhenSourceInMap() {
         // Register A in itemIDMap — A is now a real canonical, so putAlias(A, ...) MUST
         // reject (source would be in both maps).
-        ItemID a = ItemIDManager.registerItemStackServerSide_direct(
-                paperWithCustomData("putAlias-reject-" + UUID.randomUUID()));
+        ItemID a = registerScratch(
+                paperWithCustomData("putAlias-reject"));
         if (!a.isValid()) return fail("Could not register source template A");
         // B is any other ItemID — doesn't need to be in the map for the rejection logic.
         short base = pickUnusedShortBase(1);
@@ -1033,8 +1073,8 @@ public class ItemIDMergeGuardTests extends TestSuite {
         try {
             // Register P once in the live map to obtain a correctly normalized template + name,
             // then re-key that template at the persisted short (7) in a curated fixture.
-            ItemStack pStack = paperWithCustomData("startup-reconcile-P-" + UUID.randomUUID());
-            ItemID tempId = ItemIDManager.registerItemStackServerSide_direct(pStack);
+            ItemStack pStack = paperWithCustomData("startup-reconcile-P");
+            ItemID tempId = registerScratch(pStack);
             if (!tempId.isValid())
                 return fail("Could not register the synthetic template P to obtain its normalized form");
             ItemStack pTemplate = ItemIDManager.getItemStackTemplate(tempId).copy();
@@ -1071,6 +1111,9 @@ public class ItemIDMergeGuardTests extends TestSuite {
 
             // --- Register-if-absent: default registration of an already-persisted item ---
             int counterBeforeReRegister = ItemIDManager.getNextShortCounter_forTesting();
+            // Inside the fixture window: register DIRECTLY. registerScratch()'s residue
+            // eviction would delete the fixture row for P (a marked paper template) and the
+            // re-registration would mint a fresh short instead of returning the persisted 7.
             ItemID reRegistered = ItemIDManager.registerItemStackServerSide_direct(pStack);
             r = assertEquals("register-if-absent returns the persisted short 7 for P",
                     persistedShort, reRegistered.getShort());
@@ -1083,7 +1126,9 @@ public class ItemIDMergeGuardTests extends TestSuite {
             if (!r.passed()) return r;
 
             // --- Brand-new item: mints the counter value and advances it ---
-            ItemStack brandNew = paperWithCustomData("startup-reconcile-NEW-" + UUID.randomUUID());
+            ItemStack brandNew = paperWithCustomData("startup-reconcile-NEW");
+            // Fixture window: direct. The short minted here belongs to the fixture counter
+            // space and may collide with a real live short in the guard's snapshot.
             ItemID newId = ItemIDManager.registerItemStackServerSide_direct(brandNew);
             r = assertTrue("brand-new item registered as a valid ID", newId.isValid());
             if (!r.passed()) return r;
@@ -1156,8 +1201,8 @@ public class ItemIDMergeGuardTests extends TestSuite {
         try {
             // Fixture registry serialized through save() — load()ing it later is the
             // production latch release for existing worlds.
-            ItemID tempId = ItemIDManager.registerItemStackServerSide_direct(
-                    paperWithCustomData("latch-fixture-" + UUID.randomUUID()));
+            ItemID tempId = registerScratch(
+                    paperWithCustomData("latch-fixture"));
             if (!tempId.isValid())
                 return fail("Could not register the fixture template (latch should be released on a live server)");
             Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
@@ -1175,7 +1220,9 @@ public class ItemIDMergeGuardTests extends TestSuite {
             if (!r.passed()) return r;
 
             // ==== Pre-load registration is rejected: INVALID result, no map mutation ====
-            ItemStack newStack = paperWithCustomData("latch-new-" + UUID.randomUUID());
+            ItemStack newStack = paperWithCustomData("latch-new");
+            // Fixture window (latch armed): direct, so the guard neither evicts fixture rows
+            // nor purges the fixture-space short from the live snapshot.
             ItemID rejected = ItemIDManager.registerItemStackServerSide_direct(newStack);
             r = assertFalse("pre-load registration returns an INVALID ItemID", rejected.isValid());
             if (!r.passed()) return r;
@@ -1195,7 +1242,7 @@ public class ItemIDMergeGuardTests extends TestSuite {
             if (!r.passed()) return r;
 
             // ==== The same registration now succeeds and mints from the loaded counter ====
-            ItemID accepted = ItemIDManager.registerItemStackServerSide_direct(newStack);
+            ItemID accepted = ItemIDManager.registerItemStackServerSide_direct(newStack); // fixture window
             r = assertTrue("post-load registration returns a valid ItemID", accepted.isValid());
             if (!r.passed()) return r;
             r = assertTrue("post-load registration landed in the map",
@@ -1259,14 +1306,14 @@ public class ItemIDMergeGuardTests extends TestSuite {
 
             // Two variants that are distinct under the real set and collapse once
             // repair_cost is treated as volatile (registerRepairCostPair shape).
-            String marker = UUID.randomUUID().toString();
+            String marker = "session-vs-persisted";
             ItemStack plain = paperWithCustomData(marker);
             ItemStack repairCostVariant = plain.copy();
             repairCostVariant.set(DataComponents.REPAIR_COST, 7);
 
             // Register the repair_cost variant live once to obtain its normalized template,
             // then persist it at S_file through the real save()/clear()/load() round-trip.
-            ItemID tempId = ItemIDManager.registerItemStackServerSide_direct(repairCostVariant);
+            ItemID tempId = registerScratch(repairCostVariant);
             if (!tempId.isValid())
                 return fail("Could not register the repair_cost variant to obtain its template");
             Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
@@ -1285,7 +1332,7 @@ public class ItemIDMergeGuardTests extends TestSuite {
             if (!r.passed()) return r;
 
             // Session-mint the plain variant — it gets the (lower) counter short.
-            ItemID sessionId = ItemIDManager.registerItemStackServerSide_direct(plain);
+            ItemID sessionId = ItemIDManager.registerItemStackServerSide_direct(plain); // fixture window
             r = assertTrue("session variant registered as a valid ID", sessionId.isValid());
             if (!r.passed()) return r;
             r = assertTrue("session short is LOWER than the persisted short (test precondition)",
@@ -1364,8 +1411,8 @@ public class ItemIDMergeGuardTests extends TestSuite {
         final short fixtureShort = 7;
         try {
             // File side: a uniquely-tagged paper variant persisted at short 7.
-            ItemStack paperStack = paperWithCustomData("stale-key-" + UUID.randomUUID());
-            ItemID tempId = ItemIDManager.registerItemStackServerSide_direct(paperStack);
+            ItemStack paperStack = paperWithCustomData("stale-key");
+            ItemID tempId = registerScratch(paperStack);
             if (!tempId.isValid())
                 return fail("Could not register the paper fixture template");
             String expectedName = tempId.getName();
