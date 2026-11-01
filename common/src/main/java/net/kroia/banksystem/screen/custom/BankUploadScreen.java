@@ -63,7 +63,7 @@ public class BankUploadScreen extends BankSystemGuiContainerScreen<BankUploadCon
                 return;
             }
             BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(parent, minecraft.player.getUUID(), parent::onConnectDisconnectButtonClicked, BankPermission.DEPOSIT.getValue());
-            minecraft.setScreen(selectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(selectionScreen);
         }
     }
 
