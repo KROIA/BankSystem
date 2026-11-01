@@ -318,7 +318,7 @@ public class ConverterView extends BankSystemGuiElement {
 
         if (moneyItems.isEmpty()) {
             // Nothing to deposit — surface a friendly no-op instead of a silent click.
-            player.displayClientMessage(Component.literal("No money items found in inventory."), false);
+            net.kroia.modutilities.PlayerCompat.sendMessage(player, Component.literal("No money items found in inventory."), false);
             return;
         }
         try {
@@ -339,7 +339,7 @@ public class ConverterView extends BankSystemGuiElement {
             Player player = Minecraft.getInstance().player;
             if (player != null && sum > cache) {
                 String text = BankSystemTextMessages.getATMNotEnoughBalance(sum);
-                player.displayClientMessage(Component.translatable(text), false);
+                net.kroia.modutilities.PlayerCompat.sendMessage(player, Component.translatable(text), false);
             }
             return;
         }
@@ -382,7 +382,7 @@ public class ConverterView extends BankSystemGuiElement {
             return;
         int accountNumber = selectedAccountNumberSupplier.getAsInt();
         if (accountNumber <= 0) {
-            player.displayClientMessage(Component.translatable(NO_ACCOUNT_SELECTED_KEY), false);
+            net.kroia.modutilities.PlayerCompat.sendMessage(player, Component.translatable(NO_ACCOUNT_SELECTED_KEY), false);
             return;
         }
         try {
