@@ -2262,7 +2262,8 @@ public class ItemIDManager implements ServerSaveable {
      */
     public static void renormalizeAndMerge(Collection<String> componentIds)
     {
-        Set<net.minecraft.resources.ResourceLocation> strippedIds = parseComponentIdStrings(componentIds);
+        Set<net.minecraft.resources.ResourceLocation> strippedIds = parseComponentIdStrings(componentIds); // mc<=1.21.10
+        //Set<net.minecraft.resources.Identifier> strippedIds = parseComponentIdStrings(componentIds); // mc>=1.21.11
         int mergedCount = 0;
         // Alias→canonical pairs created by THIS pass — consumed below to consolidate
         // per-ItemID state (bank balances, allowed items, ...) and notify dependent mods.
@@ -2857,8 +2858,10 @@ public class ItemIDManager implements ServerSaveable {
                                                                      Collection<String> currentComponentIds) {
         // Parse both sets into resource locations (unknown/absent mods are fine —
         // stripComponentsByIds skips unresolvable ids).
-        Set<net.minecraft.resources.ResourceLocation> previousIds = parseComponentIdStrings(previousComponentIds);
-        Set<net.minecraft.resources.ResourceLocation> currentIds = parseComponentIdStrings(currentComponentIds);
+        Set<net.minecraft.resources.ResourceLocation> previousIds = parseComponentIdStrings(previousComponentIds); // mc<=1.21.10
+        //Set<net.minecraft.resources.Identifier> previousIds = parseComponentIdStrings(previousComponentIds); // mc>=1.21.11
+        Set<net.minecraft.resources.ResourceLocation> currentIds = parseComponentIdStrings(currentComponentIds); // mc<=1.21.10
+        //Set<net.minecraft.resources.Identifier> currentIds = parseComponentIdStrings(currentComponentIds); // mc>=1.21.11
 
         List<MergeCollisionGroup> collisions = new ArrayList<>();
         synchronized (itemIDMap) {
@@ -2938,12 +2941,16 @@ public class ItemIDManager implements ServerSaveable {
     }
 
     /** Parses component id strings into resource locations, silently skipping unparsable entries. */
-    private static Set<net.minecraft.resources.ResourceLocation> parseComponentIdStrings(Collection<String> idStrings) {
-        Set<net.minecraft.resources.ResourceLocation> ids = new HashSet<>();
+    private static Set<net.minecraft.resources.ResourceLocation> parseComponentIdStrings(Collection<String> idStrings) { // mc<=1.21.10
+    //private static Set<net.minecraft.resources.Identifier> parseComponentIdStrings(Collection<String> idStrings) { // mc>=1.21.11
+        Set<net.minecraft.resources.ResourceLocation> ids = new HashSet<>(); // mc<=1.21.10
+        //Set<net.minecraft.resources.Identifier> ids = new HashSet<>(); // mc>=1.21.11
         if (idStrings != null) {
             for (String idStr : idStrings) {
-                net.minecraft.resources.ResourceLocation id =
-                        idStr == null ? null : net.minecraft.resources.ResourceLocation.tryParse(idStr.trim());
+                net.minecraft.resources.ResourceLocation id = // mc<=1.21.10
+                //net.minecraft.resources.Identifier id = // mc>=1.21.11
+                        idStr == null ? null : net.minecraft.resources.ResourceLocation.tryParse(idStr.trim()); // mc<=1.21.10
+                        //idStr == null ? null : net.minecraft.resources.Identifier.tryParse(idStr.trim()); // mc>=1.21.11
                 if (id != null)
                     ids.add(id);
             }
@@ -3022,7 +3029,8 @@ public class ItemIDManager implements ServerSaveable {
         // List the components on this template that the CURRENT set strips.
         List<String> stripped = new ArrayList<>();
         for (net.minecraft.core.component.TypedDataComponent<?> typed : template.getComponents()) {
-            net.minecraft.resources.ResourceLocation typeId =
+            net.minecraft.resources.ResourceLocation typeId = // mc<=1.21.10
+            //net.minecraft.resources.Identifier typeId = // mc>=1.21.11
                     net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(typed.type());
             if (typeId == null || !currentSet.contains(typeId.toString()))
                 continue;

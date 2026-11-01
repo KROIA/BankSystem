@@ -14,7 +14,8 @@ import net.kroia.banksystem.minecraft.item.custom.software.ATMSoftware;
 import net.kroia.banksystem.minecraft.item.custom.software.BankingSoftware;
 import net.kroia.banksystem.minecraft.item.custom.software.Software;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -109,7 +110,8 @@ public class BankSystemItems {
 
     public static <T extends Item> RegistrySupplier<T> registerItem(String name, Supplier<T> item)
     {
-        return ITEMS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), item);
+        return ITEMS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), item); // mc<=1.21.10
+        //return ITEMS.register(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), item); // mc>=1.21.11
     }
     public static <T extends Block> RegistrySupplier<Item> registerBlockItem(String name, RegistrySupplier<T> block)
     {
