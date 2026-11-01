@@ -117,7 +117,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             // the row without its own child element, so this cannot conflict
             // with the amount textbox or the +/- buttons (children consume
             // their clicks first).
-            if (button == 0 && itemStackHitBox.contains(getMousePos().x, getMousePos().y)) {
+            if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT && itemStackHitBox.contains(getMousePos().x, getMousePos().y)) {
                 parent.onBankItemProductClicked(itemID);
                 return true;
             }
@@ -308,7 +308,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         selectAccountButton = new BankAccountSelectionScreen.AccountButton();
         selectAccountButton.setOnFallingEdge(() -> {
             BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, playerUUID, this::onBankaccountSelected);
-            minecraft.setScreen(selectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(selectionScreen);
         });
 
         removeEmptyBankAccountsButton = new Button(REMOVE_EMPTY_BANKS_BUTTON_TEXT.getString());
@@ -329,7 +329,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         balanceHistoryButton.setOnFallingEdge(() -> {
             if (selectedBankAccountNr > 0) {
                 BalanceHistoryScreen historyScreen = new BalanceHistoryScreen(this, selectedBankAccountNr);
-                minecraft.setScreen(historyScreen);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(historyScreen);
             }
         });
 
@@ -858,7 +858,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         }
         List<CraftingRecipeSelectionScreen.Candidate> candidates = new ArrayList<>(satisfiable);
         candidates.addAll(unsatisfiable);
-        minecraft.setScreen(new CraftingRecipeSelectionScreen(this, product, candidates, this::applyProductRecipe));
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(new CraftingRecipeSelectionScreen(this, product, candidates, this::applyProductRecipe));
     }
 
     /** Applies a picked recipe: ghost layout in bank mode, physical fill otherwise. */

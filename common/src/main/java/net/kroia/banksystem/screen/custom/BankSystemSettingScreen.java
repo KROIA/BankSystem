@@ -83,10 +83,10 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
 
             creativeModeItemSelectionScreen = new CreativeModeItemSelectionScreen(this::onNewBankingItemSelected,()->
             {
-                minecraft.setScreen(this);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(this);
                 creativeModeItemSelectionScreen = null;
             });
-            Minecraft.getInstance().setScreen(creativeModeItemSelectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(creativeModeItemSelectionScreen);
         });
 
 
@@ -110,7 +110,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
                 }, () -> {}, TEXT.ASK_TITLE.getString() + " " + name  + "?", TEXT.ASK_MSG.getString());
                 popup.setSize(400,100);
                 popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
-                minecraft.setScreen(popup);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(popup);
             }
         });
         removeBankingItemButton.setBackgroundColor(0xFFe8711c);
@@ -126,7 +126,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         // the master's settings.json.
         if (isMasterServer()) {
             modSettingsButton = new Button(TEXT.MOD_SETTINGS_BUTTON.getString(), () ->
-                    Minecraft.getInstance().setScreen(new ModSettingsScreen(this)));
+                    net.kroia.modutilities.gui.client.ClientCompat.setScreen(new ModSettingsScreen(this)));
             modSettingsButton.setHoverTooltipSupplier(TEXT.MOD_SETTINGS_BUTTON_TOOLTIP::getString);
         } else {
             modSettingsButton = null;
@@ -148,7 +148,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
     public static void openScreen()
     {
         BankSystemSettingScreen screen = new BankSystemSettingScreen();
-        Minecraft.getInstance().setScreen(screen);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
         screenIsOpen = true;
     }
 
