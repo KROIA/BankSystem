@@ -1,5 +1,6 @@
 package net.kroia.banksystem.screen.custom;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.util.BankCraftingRecipes;
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
@@ -372,10 +373,10 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
                     if (!screenIsOpen) return;
                     int lastAccount = 0;
                     if (customData != null) {
-                        var prefs = customData.getCompound(CRAFT_PREFS_KEY);
-                        savedCraftUseBankItems = prefs.getBoolean(KEY_USE_BANK_ITEMS);
-                        savedCraftDepositOutput = prefs.getBoolean(KEY_DEPOSIT_OUTPUT);
-                        lastAccount = customData.getInt(KEY_LAST_ACCOUNT);
+                        var prefs = NbtCompat.getCompound(customData, CRAFT_PREFS_KEY);
+                        savedCraftUseBankItems = NbtCompat.getBoolean(prefs, KEY_USE_BANK_ITEMS);
+                        savedCraftDepositOutput = NbtCompat.getBoolean(prefs, KEY_DEPOSIT_OUTPUT);
+                        lastAccount = NbtCompat.getInt(customData, KEY_LAST_ACCOUNT);
                     }
                     craftPreferenceLoaded = true;
                     ghostsDirty = true;
@@ -619,7 +620,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         final boolean depositOutput = autoDepositCheckBox.isChecked();
         getBankManager().getUserCustomData().thenAccept(customData -> {
             var data = customData != null ? customData : new net.minecraft.nbt.CompoundTag();
-            var prefs = data.getCompound(CRAFT_PREFS_KEY);
+            var prefs = NbtCompat.getCompound(data, CRAFT_PREFS_KEY);
             prefs.putBoolean(KEY_USE_BANK_ITEMS, useBankItems);
             prefs.putBoolean(KEY_DEPOSIT_OUTPUT, depositOutput);
             data.put(CRAFT_PREFS_KEY, prefs);

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.company;
 
+import net.kroia.modutilities.NbtCompat;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -229,7 +230,7 @@ public final class Company {
         ListTag foundersTag = new ListTag();
         for (UUID founder : founders) {
             CompoundTag entry = new CompoundTag();
-            entry.putUUID("uuid", founder);
+            NbtCompat.putUUID(entry, "uuid", founder);
             foundersTag.add(entry);
         }
         tag.put("founders", foundersTag);
@@ -266,33 +267,33 @@ public final class Company {
         if (!tag.contains("companyId") || !tag.contains("name") || !tag.contains("bankAccountNr")) {
             return null;
         }
-        int companyId = tag.getInt("companyId");
-        String name = tag.getString("name");
-        int bankAccountNr = tag.getInt("bankAccountNr");
-        long maxSupply = tag.getLong("maxSupply");
-        long createdAt = tag.getLong("createdAt");
-        String description = tag.contains("description") ? tag.getString("description") : "";
-        long totalSharesIssued = tag.contains("totalSharesIssued") ? tag.getLong("totalSharesIssued") : 0L;
+        int companyId = NbtCompat.getInt(tag, "companyId");
+        String name = NbtCompat.getString(tag, "name");
+        int bankAccountNr = NbtCompat.getInt(tag, "bankAccountNr");
+        long maxSupply = NbtCompat.getLong(tag, "maxSupply");
+        long createdAt = NbtCompat.getLong(tag, "createdAt");
+        String description = tag.contains("description") ? NbtCompat.getString(tag, "description") : "";
+        long totalSharesIssued = tag.contains("totalSharesIssued") ? NbtCompat.getLong(tag, "totalSharesIssued") : 0L;
 
         Set<UUID> founders = new HashSet<>();
-        if (tag.contains("founders", Tag.TAG_LIST)) {
-            ListTag foundersTag = tag.getList("founders", Tag.TAG_COMPOUND);
+        if (NbtCompat.contains(tag, "founders", Tag.TAG_LIST)) {
+            ListTag foundersTag = NbtCompat.getList(tag, "founders", Tag.TAG_COMPOUND);
             for (int i = 0; i < foundersTag.size(); i++) {
-                CompoundTag entry = foundersTag.getCompound(i);
-                if (entry.hasUUID("uuid")) founders.add(entry.getUUID("uuid"));
+                CompoundTag entry = NbtCompat.getCompound(foundersTag, i);
+                if (NbtCompat.hasUUID(entry, "uuid")) founders.add(NbtCompat.getUUID(entry, "uuid"));
             }
         }
 
         ShareVisuals visuals = ShareVisuals.EMPTY;
-        if (tag.contains("shareVisuals", Tag.TAG_COMPOUND)) {
-            visuals = ShareVisuals.load(tag.getCompound("shareVisuals"));
+        if (NbtCompat.contains(tag, "shareVisuals", Tag.TAG_COMPOUND)) {
+            visuals = ShareVisuals.load(NbtCompat.getCompound(tag, "shareVisuals"));
         }
 
         List<PayoutSchedule> schedules = new ArrayList<>();
-        if (tag.contains("payoutSchedules", Tag.TAG_LIST)) {
-            ListTag schedulesTag = tag.getList("payoutSchedules", Tag.TAG_COMPOUND);
+        if (NbtCompat.contains(tag, "payoutSchedules", Tag.TAG_LIST)) {
+            ListTag schedulesTag = NbtCompat.getList(tag, "payoutSchedules", Tag.TAG_COMPOUND);
             for (int i = 0; i < schedulesTag.size(); i++) {
-                PayoutSchedule schedule = PayoutSchedule.load(schedulesTag.getCompound(i));
+                PayoutSchedule schedule = PayoutSchedule.load(NbtCompat.getCompound(schedulesTag, i));
                 if (schedule != null) schedules.add(schedule);
             }
         }
@@ -302,18 +303,18 @@ public final class Company {
         // Task #45 — tolerant load of nextScheduleId. Fall back to max(scheduleId)+1
         // when the tag is absent (older Company NBT).
         long nextSchedId = 1L;
-        if (tag.contains("nextScheduleId")) nextSchedId = tag.getLong("nextScheduleId");
+        if (tag.contains("nextScheduleId")) nextSchedId = NbtCompat.getLong(tag, "nextScheduleId");
         for (PayoutSchedule s : schedules) {
             if (s.getScheduleId() >= nextSchedId) nextSchedId = s.getScheduleId() + 1;
         }
         loaded.nextScheduleId = nextSchedId;
-        if (tag.contains("statisticsTimeframe")) loaded.statisticsTimeframe = tag.getInt("statisticsTimeframe");
-        if (tag.contains("companyCurrency")) loaded.companyCurrency = tag.getShort("companyCurrency");
-        if (tag.contains("boundStampers", Tag.TAG_LIST)) {
-            ListTag sl = tag.getList("boundStampers", Tag.TAG_COMPOUND);
+        if (tag.contains("statisticsTimeframe")) loaded.statisticsTimeframe = NbtCompat.getInt(tag, "statisticsTimeframe");
+        if (tag.contains("companyCurrency")) loaded.companyCurrency = NbtCompat.getShort(tag, "companyCurrency");
+        if (NbtCompat.contains(tag, "boundStampers", Tag.TAG_LIST)) {
+            ListTag sl = NbtCompat.getList(tag, "boundStampers", Tag.TAG_COMPOUND);
             for (int i = 0; i < sl.size(); i++) {
-                CompoundTag se = sl.getCompound(i);
-                loaded.boundStampers.add(new BlockPos(se.getInt("x"), se.getInt("y"), se.getInt("z")));
+                CompoundTag se = NbtCompat.getCompound(sl, i);
+                loaded.boundStampers.add(new BlockPos(NbtCompat.getInt(se, "x"), NbtCompat.getInt(se, "y"), NbtCompat.getInt(se, "z")));
             }
         }
         return loaded;
