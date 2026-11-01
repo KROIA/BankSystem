@@ -7,7 +7,8 @@ import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.api.currency.ProviderFeature;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -406,7 +407,8 @@ public final class LightmansCurrencyProvider implements ExternalCurrencyProvider
         if (!isAvailable() || stack.isEmpty()) return 0L;
         if (stack.isDamaged() || stack.isEnchanted()) return 0L;
 
-        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem()); // mc<=1.21.10
+        //Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem()); // mc>=1.21.11
         if (id == null || !id.toString().startsWith(COIN_ID_PREFIX)) return 0L;
 
         Item item = stack.getItem();

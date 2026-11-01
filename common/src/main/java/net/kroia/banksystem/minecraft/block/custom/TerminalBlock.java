@@ -1,7 +1,8 @@
 package net.kroia.banksystem.minecraft.block.custom;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.kroia.modutilities.RegistryCompat;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.item.custom.software.Software;
@@ -32,7 +33,8 @@ public class TerminalBlock extends Block {
         this(BankSystemMod.id(NAME));
     }
     /** Subclasses (also in other mods) pass the id they are registered under. */
-    public TerminalBlock(ResourceLocation id) {
+    public TerminalBlock(ResourceLocation id) { // mc<=1.21.10
+    //public TerminalBlock(Identifier id) { // mc>=1.21.11
         super(RegistryCompat.blockProperties(Properties.ofFullCopy(Blocks.IRON_BLOCK), id));
         this.registerDefaultState(this.defaultBlockState().setValue(FACING, Direction.NORTH)); // Default facing
     }
