@@ -2,18 +2,10 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "T": {
-      "item": "banksystem:bank_receiver_module"
-    },
-    "Y": {
-      "item": "banksystem:metal_case_block"
-    },
-    "C": {
-      "item": "minecraft:comparator"
-    },
-    "I": {
-      "item": "minecraft:iron_nugget"
-    }
+    "T": "banksystem:bank_receiver_module",
+    "Y": "banksystem:metal_case_block",
+    "C": "minecraft:comparator",
+    "I": "minecraft:iron_nugget"
   },
   "pattern": [
     "IYI",

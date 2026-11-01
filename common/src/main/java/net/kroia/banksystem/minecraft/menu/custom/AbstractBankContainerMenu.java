@@ -1,0 +1,135 @@
+package net.kroia.banksystem.minecraft.menu.custom;
+
+import com.mojang.logging.LogUtils;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerLevelAccess;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import org.slf4j.Logger;
+
+import java.util.Objects;
+
+public abstract class AbstractBankContainerMenu extends AbstractContainerMenu {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
+
+    protected final ContainerLevelAccess levelAccess;
+    protected final Block block;
+
+    protected static final int POS_X = 0;
+    protected static final int POS_Y = 0;
+
+    /**
+     * Additional Y offset applied to every slot created by this menu.
+     * <p>
+     * Subclasses that render extra UI above the standard container area (e.g. the
+     * Bank Terminal's 3x3 crafting grid) override this to shift the hotbar, player
+     * inventory and block inventory slots downwards so the slot coordinates match
+     * the taller screen element. Must return a compile-time constant — it is invoked
+     * from this class's constructor, before subclass fields are initialized.
+     */
+    protected int getSlotYOffset() {
+        return 0;
+    }
+
+
+
+    // Client Constructor
+    protected AbstractBankContainerMenu(Block block, MenuType<?> menuType, Container blockInventory, int containerId, Inventory playerInv, FriendlyByteBuf additionalData) {
+        this(block, menuType, blockInventory, containerId, playerInv, Objects.requireNonNull(playerInv.player.level().getBlockEntity(additionalData.readBlockPos())));
+    }
+
+    // Server Constructor
+    protected AbstractBankContainerMenu(Block block, MenuType<?> menuType, Container blockInventory, int containerId, Inventory playerInv, BlockEntity blockEntity) {
+        super(menuType, containerId);
+        //this.blockEntity = blockEntity;
+        this.block = block;
+        this.levelAccess = ContainerLevelAccess.create(blockEntity.getLevel(), blockEntity.getBlockPos());
+
+        createPlayerHotbar(playerInv);
+        createPlayerInventory(playerInv);
+        if(blockInventory != null) {
+            createBlockEntityInventory(blockInventory);
+        }
+    }
+
+
+
+
+    protected void createBlockEntityInventory(Container inventory) {
+        for (int row = 0; row < 3; row++) {
+            for (int column = 0; column < 9; column++) {
+                Slot slot = new Slot(inventory, column + (row * 9), 8 + (column * 18)+POS_X, 18 + (row * 18)+POS_Y+getSlotYOffset());
+                addSlot(slot);
+            }
+        }
+    }
+
+    protected void createPlayerInventory(Inventory playerInv) {
+        for (int row = 0; row < 3; row++) {
+            for (int column = 0; column < 9; column++) {
+                addSlot(new Slot(playerInv,
+                        9 + column + (row * 9),
+                        8 + (column * 18)+POS_X,
+                        84 + (row * 18)+POS_Y+getSlotYOffset()));
+            }
+        }
+    }
+
+    protected void createPlayerHotbar(Inventory playerInv) {
+        for (int column = 0; column < 9; column++) {
+            addSlot(new Slot(playerInv,
+                    column,
+                    8 + (column * 18)+POS_X,
+                    142+POS_Y+getSlotYOffset()));
+        }
+    }
+
+    @Override
+    public ItemStack quickMoveStack(Player pPlayer, int pIndex) {
+        Slot fromSlot = getSlot(pIndex);
+        ItemStack fromStack = fromSlot.getItem();
+
+        if(fromStack.getCount() <= 0)
+            fromSlot.set(ItemStack.EMPTY);
+
+        if(!fromSlot.hasItem())
+            return ItemStack.EMPTY;
+
+        ItemStack copyFromStack = fromStack.copy();
+
+        if(pIndex < 36) {
+            // We are inside of the player's inventory
+            if(!moveItemStackTo(fromStack, 36, 63, false))
+                return ItemStack.EMPTY;
+        } else if (pIndex < 63) {
+            // We are inside of the block entity inventory
+            if(!moveItemStackTo(fromStack, 0, 36, false))
+                return ItemStack.EMPTY;
+        } else {
+            LOGGER.warn("Invalid slot index: {}", pIndex);
+            return ItemStack.EMPTY;
+        }
+
+        fromSlot.setChanged();
+        fromSlot.onTake(pPlayer, fromStack);
+
+        return copyFromStack;
+    }
+
+    @Override
+    public boolean stillValid(Player pPlayer) {
+        return stillValid(this.levelAccess, pPlayer, block);
+    }
+
+    abstract public BlockPos getBlockPos();
+
+}

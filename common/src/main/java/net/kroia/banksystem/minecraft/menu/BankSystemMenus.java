@@ -1,0 +1,49 @@
+package net.kroia.banksystem.minecraft.menu;
+
+import com.google.common.base.Suppliers;
+import dev.architectury.registry.menu.MenuRegistry;
+import dev.architectury.registry.registries.Registrar;
+import dev.architectury.registry.registries.RegistrarManager;
+import dev.architectury.registry.registries.RegistrySupplier;
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.minecraft.menu.custom.BankDownloadContainerMenu;
+import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
+import net.kroia.banksystem.minecraft.menu.custom.BankUploadContainerMenu;
+import net.kroia.banksystem.minecraft.menu.custom.ShareStamperContainerMenu;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.inventory.MenuType;
+
+import java.util.function.Supplier;
+
+public class BankSystemMenus {
+
+    // 1.19.4
+    public static final Supplier<RegistrarManager> MANAGER = Suppliers.memoize(() -> RegistrarManager.get(BankSystemMod.MOD_ID));
+    public static final Registrar<MenuType<?>> MENUS = MANAGER.get().get(Registries.MENU);
+
+    // 1.19.3 or below
+    //public static final Supplier<Registries> REGISTRIES = Suppliers.memoize(() -> Registries.get(BankSystemMod.MOD_ID));
+    //public static final Registrar<MenuType<?>> MENUS = REGISTRIES.get().get(Registry.MENU_KEY);
+
+    private static boolean initialized = false;
+    public static void init(){
+        // Force the class to be loaded to initialize static fields
+        if(initialized) return;
+        initialized = true;
+
+
+    }
+
+    public static final RegistrySupplier<MenuType<BankTerminalContainerMenu>> BANK_TERMINAL_CONTAINER_MENU =
+            MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_terminal_container_menu"), () -> MenuRegistry.ofExtended(BankTerminalContainerMenu::new));
+    public static final RegistrySupplier<MenuType<BankUploadContainerMenu>> BANK_UPLOAD_CONTAINER_MENU =
+            MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_upload_container_menu"), () -> MenuRegistry.ofExtended(BankUploadContainerMenu::new));
+    public static final RegistrySupplier<MenuType<BankDownloadContainerMenu>> BANK_DOWNLOAD_CONTAINER_MENU =
+            MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_download_container_menu"), () -> MenuRegistry.ofExtended(BankDownloadContainerMenu::new));
+    // Task #47 (v2.1.0) — Share Stamper menu.
+    public static final RegistrySupplier<MenuType<ShareStamperContainerMenu>> SHARE_STAMPER_CONTAINER_MENU =
+            MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "share_stamper_container_menu"), () -> MenuRegistry.ofExtended(ShareStamperContainerMenu::new));
+
+
+}

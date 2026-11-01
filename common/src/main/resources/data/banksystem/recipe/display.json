@@ -2,9 +2,9 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "G": {"item": "minecraft:glass_pane"},
-    "C": {"item": "banksystem:circuit_board"},
-    "I": {"item": "minecraft:iron_ingot"}
+    "G": "minecraft:glass_pane",
+    "C": "banksystem:circuit_board",
+    "I": "minecraft:iron_ingot"
   },
   "pattern": [
     "GIG",

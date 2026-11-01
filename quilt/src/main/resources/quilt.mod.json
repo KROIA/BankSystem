@@ -16,6 +16,9 @@
     "entrypoints": {
       "init": [
         "net.kroia.quilt.BankSystemQuilt"
+      ],
+      "jei_mod_plugin": [
+        "net.kroia.banksystem.minecraft.compat.BankSystemJeiPlugin"
       ]
     },
     "depends": [

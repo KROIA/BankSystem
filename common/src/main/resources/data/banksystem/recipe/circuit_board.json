@@ -2,9 +2,9 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "C": {"item": "minecraft:copper_ingot"},
-    "P": {"item": "minecraft:paper"},
-    "Q": {"item": "minecraft:quartz"}
+    "C": "minecraft:copper_ingot",
+    "P": "minecraft:paper",
+    "Q": "minecraft:quartz"
   },
   "pattern": [
     " Q ",

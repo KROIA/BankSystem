@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "banksystem:block/share_stamper" },
+    "facing=east":  { "model": "banksystem:block/share_stamper", "y": 90 },
+    "facing=south": { "model": "banksystem:block/share_stamper", "y": 180 },
+    "facing=west":  { "model": "banksystem:block/share_stamper", "y": 270 }
+  }
+}

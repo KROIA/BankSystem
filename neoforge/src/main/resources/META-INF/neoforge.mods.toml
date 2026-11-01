@@ -33,6 +33,3 @@ type = "required"
 versionRange = "[14.0.4,)"
 ordering = "AFTER"
 side = "BOTH"
-
-[[mixins]]
-config = "banksystem.mixins.json"

@@ -1,0 +1,246 @@
+package net.kroia.banksystem.networking.multi_server;
+
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.data.table.record.TransactionLogRecord;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
+import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
+import net.kroia.banksystem.banking.binding.BindingRow;
+import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.util.BankSystemGenericRequest;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+
+public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositItemsInBankRequest.InputData, DepositItemsInBankRequest.OutputData> {
+
+
+
+    public record InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.INT, p->p.bankAccount,
+                ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC), p->p.executor,
+                ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap<ItemID, Long>::new), p -> p.items,
+                InputData::new
+        );
+    }
+    public record OutputData(Map<ItemID, Long> items)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, OutputData> STREAM_CODEC = StreamCodec.composite(
+                ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap<ItemID, Long>::new), p -> p.items,
+                OutputData::new
+        );
+    }
+
+    /**
+     * Deposits the requested amount of items onto the bank account
+     * If the executor is set, permission checks are made to check if the player has access to the bank account
+     * @param bankAccount target bank account
+     * @param executor the player who has created this request
+     * @param items list of items to deposit
+     * @return a future containing the items that have not been deposited
+     */
+    public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items)
+    {
+        DepositItemsInBankRequest.InputData inputData = new DepositItemsInBankRequest.InputData(bankAccount, executor, items);
+        CompletableFuture<Map<ItemID, Long>> future = new CompletableFuture<>();
+        BankSystemNetworking.DEPOSIT_ITEMS_IN_BANK_REQUEST.sendRequestToMaster(inputData).whenComplete((response, ex) -> {
+            if (ex != null || response == null) {
+                future.complete(new HashMap<>()); // Return empty map on error
+            } else {
+                future.complete(response.items);
+            }
+        });
+        return future;
+    }
+    /**
+     * Deposits the requested amount of items onto the bank account
+     * This does not check for bank account access permissions
+     * @param bankAccount target bank account
+     * @param items list of items to deposit
+     * @return a future containing the items that have not been deposited
+     */
+    public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, Map<ItemID, Long> items)
+    {
+        return sendToMaster(bankAccount, null, items);
+    }
+
+    @Override
+    public String getRequestTypeID() {
+        return DepositItemsInBankRequest.class.getName();
+    }
+    @Override
+    public boolean needsRoutingToMaster() { return false; }
+
+    public CompletableFuture<OutputData> handleOnMasterServer(DepositItemsInBankRequest.InputData input, String slaveID, @Nullable UUID playerSender) {
+        // Task #26 (security): untrusted-slave gate. WRITE-side requests that extend
+        // BankSystemGenericRequest bypass the central AsyncForwardingRequest gate, so the
+        // slave-trust check is enforced here. An untrusted slave could otherwise deposit
+        // freely by forging playerSender (see isBlockedForUntrustedSlave). No-op return:
+        // the full requested map comes back as "not deposited", master state untouched.
+        if (isBlockedForUntrustedSlave(slaveID)) {
+            return CompletableFuture.completedFuture(new OutputData(input.items));
+        }
+        if(playerSender != null)
+        {
+            warn("This request is not allowed to be sent from a client");
+            return CompletableFuture.completedFuture(new OutputData(input.items));
+        }
+
+        IServerBankAccount account = getServerBankManager().getBankAccount(input.bankAccount);
+        if(account == null)
+        {
+            error("The bank account: "+input.bankAccount+" does not exist");
+            return CompletableFuture.completedFuture(new OutputData(input.items));
+        }
+
+        // Check permission
+        if(input.executor != null)
+        {
+            if(!account.hasPermission(input.executor, BankPermission.DEPOSIT))
+            {
+                User user = getServerBankManager().getUserByUUID(input.executor);
+                String playerName;
+                if(user != null)
+                    playerName = user.getName();
+                else
+                    playerName = input.executor.toString();
+                warn("Player: "+playerName + " has not the right to deposit items into the bank account: "+input.bankAccount);
+                return CompletableFuture.completedFuture(new OutputData(input.items));
+            }
+        }
+
+        Map<ItemID, Long> notDepositedItems = new HashMap<>();
+        BankAccountBindings bindings = BankAccountBindings.get();
+        for(Map.Entry<ItemID, Long> entry : input.items.entrySet())
+        {
+            long toDeposit = Math.max(0, entry.getValue());
+            ItemID itemID = entry.getKey();
+
+            // Task #38: variant routing — redirect coin variants to the bound base-coin
+            // slot at the provider's per-item value. Falls through to per-item routing
+            // when the stack can't be reconstructed from ItemID (master registry miss).
+            if (bindings != null && toDeposit > 0) {
+                ItemStack template = ItemIDManager.getItemStackTemplate(itemID);
+                if (template.isEmpty()) {
+                    debug("Variant routing skipped: no ItemStack template for " + itemID
+                            + " (master registry miss); falling through to per-item routing");
+                } else {
+                    BindingRow row = bindings.findBindingAcceptingItem(input.bankAccount, template);
+                    if (row != null) {
+                        ExternalCurrencyProvider provider = BankSystemMod.getAPI()
+                                .getCurrencyProvider(row.ref().providerId());
+                        long baseUnits = provider == null ? 0L : provider.baseUnitsPerItem(template);
+                        if (baseUnits > 0L) {
+                            long amount;
+                            try {
+                                amount = Math.multiplyExact(toDeposit, baseUnits);
+                            } catch (ArithmeticException overflow) {
+                                notDepositedItems.put(itemID, toDeposit);
+                                continue;
+                            }
+                            IServerBank baseBank = account.getOrCreateBank(new ItemID(row.itemIdShort()));
+                            if (baseBank != null && baseBank.deposit(amount) == BankStatus.SUCCESS) {
+                                continue;
+                            }
+                            notDepositedItems.put(itemID, toDeposit);
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            IServerBank itemBank = account.getOrCreateBank(itemID);
+            if(itemBank != null)
+            {
+                if(itemBank.deposit(toDeposit) == BankStatus.SUCCESS)
+                {
+                    toDeposit = 0;
+                }
+            }
+            if(toDeposit != 0)
+            {
+                notDepositedItems.put(itemID, toDeposit);
+            }
+        }
+        // Task #44 (v2.1.0) — Transaction Ledger. One DEPOSIT row per ItemID whose net
+        // deposited amount was > 0. Best-effort: manager is null on slaves / pre-init,
+        // and a save failure must never fail the deposit. Runs async on the DB worker.
+        logDeposits(input, notDepositedItems);
+        return CompletableFuture.completedFuture(new OutputData(notDepositedItems));
+    }
+
+    private static void logDeposits(InputData input, Map<ItemID, Long> notDeposited) {
+        net.kroia.banksystem.data.table.TransactionLogManager mgr =
+                BankSystemModBackend.getTransactionLogManager();
+        if (mgr == null) return;
+        long now = System.currentTimeMillis();
+        for (Map.Entry<ItemID, Long> entry : input.items.entrySet()) {
+            long requested = Math.max(0, entry.getValue());
+            long remaining = notDeposited.getOrDefault(entry.getKey(), 0L);
+            long deposited = requested - remaining;
+            if (deposited <= 0) continue;
+            try {
+                // Task #48 (v2.1.0) — if this ItemID resolves to a stamped share, log a
+                // SHARE_TRADE row (with company id populated) instead of a plain DEPOSIT
+                // so the ledger records share flow distinctly. This is the placeholder
+                // hook until a StockMarket match-observer surface exists — see spec §4c.
+                Integer companyId = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                        .getCompanyIdForItemID(entry.getKey());
+                if (companyId != null) {
+                    mgr.save(TransactionLogRecord.shareTrade(
+                            input.bankAccount, input.executor,
+                            entry.getKey().getShort(), deposited, companyId, now));
+                } else {
+                    mgr.save(TransactionLogRecord.simple(
+                            input.bankAccount, input.executor,
+                            TransactionLogRecord.Kind.DEPOSIT,
+                            entry.getKey().getShort(), deposited, now));
+                }
+            } catch (RuntimeException ignored) {
+                // DB layer errors must not break the deposit path — the balance is already
+                // updated at this point and the log is a best-effort audit artefact.
+            }
+        }
+    }
+
+
+    @Override
+    public void encodeInput(RegistryFriendlyByteBuf buf, InputData input) {
+        InputData.STREAM_CODEC.encode(buf, input);
+    }
+
+    @Override
+    public void encodeOutput(RegistryFriendlyByteBuf buf, OutputData output) {
+        OutputData.STREAM_CODEC.encode(buf, output);
+    }
+
+    @Override
+    public InputData decodeInput(RegistryFriendlyByteBuf buf) {
+        return InputData.STREAM_CODEC.decode(buf);
+    }
+
+    @Override
+    public OutputData decodeOutput(RegistryFriendlyByteBuf buf) {
+        return OutputData.STREAM_CODEC.decode(buf);
+    }
+
+
+}

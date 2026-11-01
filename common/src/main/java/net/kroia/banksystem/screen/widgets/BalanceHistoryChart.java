@@ -1,0 +1,897 @@
+package net.kroia.banksystem.screen.widgets;
+
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.modutilities.ColorUtilities;
+import net.kroia.modutilities.gui.InputConstants;
+import net.kroia.modutilities.gui.elements.Button;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.modutilities.gui.geometry.Rectangle;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.network.chat.Component;
+
+import java.awt.Point;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+public class BalanceHistoryChart extends GuiElement {
+
+    private static final int KEY_SPACE = 32;
+
+    // ── Task #40: timescale toolbar ──
+    // 1h / 6h / 1d / 7d / 30d / All. -1L is the sentinel meaning "all history"
+    // and gets translated to Query.ALL_HISTORY_SENTINEL by the screen listener.
+    private static final long[] TIMESCALES_MS = {
+            1L * 60L * 60L * 1000L,        // 1h
+            6L * 60L * 60L * 1000L,        // 6h
+            24L * 60L * 60L * 1000L,       // 1d
+            7L * 24L * 60L * 60L * 1000L,  // 7d
+            30L * 24L * 60L * 60L * 1000L, // 30d
+            -1L                             // All
+    };
+    private static final String[] TIMESCALE_LABEL_KEYS = {
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.1h",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.6h",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.1d",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.7d",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.30d",
+            "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.all"
+    };
+    private static final int BUTTON_PADDING = 4;
+    private static final int BUTTON_SPACING = 3;
+    private static final int BUTTON_ROW_GAP = 3;
+
+    /**
+     * Listener notified when the user selects a timescale button.
+     * The window is in milliseconds; a value {@code < 0} means "all history".
+     */
+    @FunctionalInterface
+    public interface TimescaleChangeListener {
+        void onTimescaleSelected(long windowMs);
+    }
+
+    /**
+     * Listener notified whenever the X-axis viewport (viewX / viewWidth) changes.
+     * Used by the screen to detect pan/scroll and trigger rolling prefetch fetches
+     * before the user drags into empty (not-yet-loaded) chart territory.
+     */
+    @FunctionalInterface
+    public interface ViewChangeListener {
+        void onViewChanged(double viewX, double viewWidth);
+    }
+
+    public record DataPoint(long time, double value) {}
+
+    public static class LineSeries {
+        public final String name;
+        public int color;
+        public boolean visible = true;
+        public final List<DataPoint> points = new ArrayList<>();
+
+        public LineSeries(String name, int color) {
+            this.name = name;
+            this.color = color;
+        }
+
+        public LineSeries() {
+            this("", 0xFFFFFFFF);
+        }
+    }
+
+    private static final int COLOR_GRID = ColorUtilities.getRGB(32, 32, 32, 32);
+    private static final int COLOR_ZERO = ColorUtilities.getRGB(32, 32, 32, 64);
+    private static final int COLOR_FRAME = ColorUtilities.getRGB(80, 80, 80);
+    private static final SimpleDateFormat DAY_FORMAT = new SimpleDateFormat("dd.", Locale.getDefault());
+    private static final SimpleDateFormat MONTH_FORMAT = new SimpleDateFormat(" MMM ", Locale.getDefault());
+    private static final SimpleDateFormat YEAR_FORMAT = new SimpleDateFormat("yyyy", Locale.getDefault());
+    private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm", Locale.getDefault());
+
+    private final List<LineSeries> seriesList = new ArrayList<>();
+    private final Rectangle canvasRect = new Rectangle(1, 1, 0, 0);
+    private final Rectangle canvasScissorRect = new Rectangle(1, 1, 0, 0);
+
+    private double viewX = 0, viewY = 0, viewWidth = 1, viewHeight = 1;
+
+    private final Point lastDragMousePos = new Point();
+    private boolean dragging = false;
+    private int maxValueLabelWidth = 0;
+    private int maxTimeLabelHeight = 0;
+    private LineSeries highlightedSeries = null;
+    private LineSeries pinnedSeries = null;
+    private int pinnedSeriesIndex = -1;
+    private final Map<GuiElement, LineSeries> hoverBindings = new LinkedHashMap<>();
+    private final Map<String, Integer> pendingHoverBindingIds = new LinkedHashMap<>();
+    private boolean hoverBindingsResolved = false;
+
+    // ── Task #40: timescale toolbar state ──
+    private final List<Button> timescaleButtons = new ArrayList<>();
+    private final int defaultButtonBackgroundColor = ColorUtilities.setAlpha(DEFAULT_BACKGROUND_COLOR, 1.0f);
+    /** Default to "All" (last index) — preserves the pre-Task-#40 open behavior of showing everything. */
+    private int currentTimescaleIndex = TIMESCALES_MS.length - 1;
+    private int buttonRowHeight = 0;
+    private TimescaleChangeListener timescaleListener;
+    private ViewChangeListener viewChangeListener;
+
+    /**
+     * Rolling-fetch X-axis clamp bounds. When either is non-null, {@link #clampView()}
+     * uses these instead of clamping viewX to the loaded-data extents. This lets the
+     * screen relax the clamp so the user can drag past the currently loaded range
+     * (triggering a prefetch) while still preventing them from dragging past the
+     * true server minimum ({@link #leftClampAtMs}) or into the future
+     * ({@link #rightClampAtMs}). Both null == legacy clamp-to-loaded-data behavior.
+     */
+    private Long leftClampAtMs = null;
+    private Long rightClampAtMs = null;
+
+    /**
+     * Optional upper bound on {@code viewWidth} (in ms). When non-null, both
+     * {@link #mouseScrolledOverElement scroll-zoom} and the explicit-bounds branch
+     * of {@link #clampView()} cap {@code viewWidth} at this value. {@code null}
+     * (default) means uncapped — preserves legacy display-block behavior.
+     */
+    private Long maxViewWidthMs = null;
+
+    public BalanceHistoryChart() {
+        setTextFontScale(0.8f);
+        buildTimescaleButtons();
+        highlightTimescaleButton(currentTimescaleIndex);
+    }
+
+    private void buildTimescaleButtons() {
+        for (int i = 0; i < TIMESCALES_MS.length; i++) {
+            final int index = i;
+            String label = Component.translatable(TIMESCALE_LABEL_KEYS[i]).getString();
+            Button button = new Button(label, () -> selectTimescaleByIndex(index));
+            button.setTextFontScale(1.0f);
+            int textWidth = getTextWidth(label);
+            int textHeight = button.getTextHeight();
+            int w = textWidth + 2 * BUTTON_PADDING;
+            int h = textHeight + 2 * BUTTON_PADDING;
+            button.setWidth(w);
+            button.setHeight(h);
+            button.setBackgroundColor(ColorUtilities.setAlpha(button.getBackgroundColor(), 1.0f));
+            button.setPressedColor(ColorUtilities.setAlpha(button.getPressedColor(), 1.0f));
+            button.setHoverColor(ColorUtilities.setAlpha(button.getHoverColor(), 1.0f));
+            buttonRowHeight = Math.max(buttonRowHeight, h);
+            timescaleButtons.add(button);
+            addChild(button);
+        }
+    }
+
+    /**
+     * Sets the callback fired when the user picks a timescale button. A
+     * negative value passed to the listener means "all history".
+     */
+    public void setTimescaleChangeListener(TimescaleChangeListener listener) {
+        this.timescaleListener = listener;
+    }
+
+    /**
+     * Sets the callback fired whenever the X-axis viewport (viewX / viewWidth)
+     * changes as a result of user input (drag, scroll-zoom) or programmatic
+     * changes ({@link #setView}, {@link #scrollToLatestData},
+     * {@link #scrollToPresent}, {@link #autoCenterView},
+     * {@link #autoCenterViewWithinRange}).
+     */
+    public void setViewChangeListener(ViewChangeListener listener) {
+        this.viewChangeListener = listener;
+    }
+
+    /**
+     * Overrides {@link #clampView()}'s "clamp to loaded data extents" behavior.
+     * When either bound is non-null, the loaded-data range no longer clamps
+     * {@code viewX} — the caller (screen) can drag past currently loaded data.
+     * <p>
+     * Pass {@code null} for either bound to disable that side's explicit clamp.
+     * If both are {@code null}, the legacy behavior (clamp to first/last data
+     * point across all series) is restored — backwards-compatible for other
+     * callers of this chart.
+     *
+     * @param leftMs  earliest allowed {@code viewX} (null = no explicit left clamp)
+     * @param rightMs latest allowed {@code viewX + viewWidth} (null = no explicit right clamp)
+     */
+    public void setClampBounds(Long leftMs, Long rightMs) {
+        this.leftClampAtMs = leftMs;
+        this.rightClampAtMs = rightMs;
+        clampView();
+        markDirty();
+    }
+
+    /**
+     * Sets an upper bound on {@code viewWidth} (in ms) enforced by scroll-zoom
+     * and the explicit-bounds branch of {@link #clampView()}. Pass {@code null}
+     * to remove the cap. Setting the cap does not by itself change the current
+     * viewport or fire the view-change listener — the cap takes effect on the
+     * next scroll-zoom or drag (via {@code clampView}).
+     */
+    public void setMaxViewWidthMs(Long ms) {
+        this.maxViewWidthMs = ms;
+        markDirty();
+    }
+
+    private void fireViewChanged() {
+        if (viewChangeListener != null) viewChangeListener.onViewChanged(viewX, viewWidth);
+    }
+
+    /**
+     * Programmatically selects a timescale index without firing the listener.
+     * Only updates the button highlight — used by the screen to re-sync the
+     * highlight with saved viewport state on open.
+     */
+    public void setSelectedTimescaleIndex(int index) {
+        if (index < 0 || index >= TIMESCALES_MS.length) return;
+        currentTimescaleIndex = index;
+        highlightTimescaleButton(index);
+    }
+
+    public int getSelectedTimescaleIndex() { return currentTimescaleIndex; }
+
+    private void selectTimescaleByIndex(int index) {
+        if (index < 0 || index >= TIMESCALES_MS.length) return;
+        currentTimescaleIndex = index;
+        highlightTimescaleButton(index);
+        if (timescaleListener != null) {
+            timescaleListener.onTimescaleSelected(TIMESCALES_MS[index]);
+        }
+    }
+
+    private void highlightTimescaleButton(int selectedIndex) {
+        for (int i = 0; i < timescaleButtons.size(); i++) {
+            Button b = timescaleButtons.get(i);
+            int color = (i == selectedIndex) ? b.getPressedColor() : defaultButtonBackgroundColor;
+            b.setBackgroundColor(color);
+        }
+    }
+
+    // ── Serialization for display block sync ──
+
+    @Override
+    public SyncCategory getSyncCategory() {
+        return SyncCategory.INPUT;
+    }
+
+    @Override
+    public CompoundTag serializeState() {
+        CompoundTag tag = super.serializeState();
+        tag.putDouble("viewX", viewX);
+        tag.putDouble("viewY", viewY);
+        tag.putDouble("viewW", viewWidth);
+        tag.putDouble("viewH", viewHeight);
+        tag.putInt("pinnedIdx", pinnedSeriesIndex);
+
+        ListTag seriesTag = new ListTag();
+        for (LineSeries s : seriesList) {
+            CompoundTag st = new CompoundTag();
+            st.putString("name", s.name);
+            st.putInt("color", s.color);
+            st.putBoolean("visible", s.visible);
+            int count = s.points.size();
+            long[] times = new long[count];
+            long[] values = new long[count];
+            for (int i = 0; i < count; i++) {
+                DataPoint p = s.points.get(i);
+                times[i] = p.time();
+                values[i] = Double.doubleToRawLongBits(p.value());
+            }
+            st.putLongArray("times", times);
+            st.putLongArray("values", values);
+            seriesTag.add(st);
+        }
+        tag.put("series", seriesTag);
+
+        ListTag hoverTag = new ListTag();
+        for (var entry : hoverBindings.entrySet()) {
+            String elId = entry.getKey().getId();
+            int idx = seriesList.indexOf(entry.getValue());
+            if (elId != null && idx >= 0) {
+                CompoundTag ht = new CompoundTag();
+                ht.putString("id", elId);
+                ht.putInt("idx", idx);
+                hoverTag.add(ht);
+            }
+        }
+        if (!hoverTag.isEmpty()) {
+            tag.put("hoverBindings", hoverTag);
+        }
+
+        return tag;
+    }
+
+    @Override
+    public void deserializeState(CompoundTag tag) {
+        super.deserializeState(tag);
+        if (tag.contains("viewX")) {
+            viewX = tag.getDouble("viewX");
+            viewY = tag.getDouble("viewY");
+            viewWidth = tag.getDouble("viewW");
+            viewHeight = tag.getDouble("viewH");
+        }
+        pinnedSeriesIndex = tag.getInt("pinnedIdx");
+
+        if (tag.contains("series")) {
+            seriesList.clear();
+            ListTag seriesTag = tag.getList("series", 10);
+            for (int i = 0; i < seriesTag.size(); i++) {
+                CompoundTag st = seriesTag.getCompound(i);
+                LineSeries s = new LineSeries(st.getString("name"), st.getInt("color"));
+                s.visible = st.getBoolean("visible");
+                long[] times = st.getLongArray("times");
+                long[] values = st.getLongArray("values");
+                int count = Math.min(times.length, values.length);
+                for (int j = 0; j < count; j++) {
+                    s.points.add(new DataPoint(times[j], Double.longBitsToDouble(values[j])));
+                }
+                seriesList.add(s);
+            }
+            pinnedSeries = (pinnedSeriesIndex >= 0 && pinnedSeriesIndex < seriesList.size())
+                    ? seriesList.get(pinnedSeriesIndex) : null;
+        }
+        pendingHoverBindingIds.clear();
+        hoverBindingsResolved = false;
+        if (tag.contains("hoverBindings")) {
+            ListTag hoverTag = tag.getList("hoverBindings", 10);
+            for (int i = 0; i < hoverTag.size(); i++) {
+                CompoundTag ht = hoverTag.getCompound(i);
+                pendingHoverBindingIds.put(ht.getString("id"), ht.getInt("idx"));
+            }
+        }
+        markDirty();
+    }
+
+    @Override
+    public List<GuiElement> getSerializableChildren() {
+        return List.of();
+    }
+
+    // ── Data management ──
+
+    public void addSeries(LineSeries series) {
+        seriesList.add(series);
+    }
+
+    public void clearSeries() {
+        seriesList.clear();
+        pinnedSeries = null;
+        pinnedSeriesIndex = -1;
+    }
+
+    public List<LineSeries> getSeries() {
+        return seriesList;
+    }
+
+    public void setHighlightedSeries(LineSeries series) {
+        this.highlightedSeries = series;
+    }
+
+    public void bindHoverElement(GuiElement element, LineSeries series) {
+        hoverBindings.put(element, series);
+    }
+
+    public void clearHoverBindings() {
+        hoverBindings.clear();
+        pendingHoverBindingIds.clear();
+        hoverBindingsResolved = false;
+    }
+
+    private void resolvePendingHoverBindings() {
+        hoverBindingsResolved = true;
+        if (getRoot() == null || seriesList.isEmpty()) return;
+        for (GuiElement el : getRoot().getElements()) {
+            String elId = el.getId();
+            if (elId != null && pendingHoverBindingIds.containsKey(elId)) {
+                int idx = pendingHoverBindingIds.get(elId);
+                if (idx >= 0 && idx < seriesList.size()) {
+                    hoverBindings.put(el, seriesList.get(idx));
+                }
+            }
+        }
+        pendingHoverBindingIds.clear();
+    }
+
+    public void setPinnedSeries(LineSeries series) {
+        this.pinnedSeries = series;
+        this.pinnedSeriesIndex = seriesList.indexOf(series);
+    }
+
+    public double getViewX() { return viewX; }
+    public double getViewY() { return viewY; }
+    public double getViewWidth() { return viewWidth; }
+    public double getViewHeight() { return viewHeight; }
+
+    public void setView(double x, double y, double width, double height) {
+        this.viewX = x;
+        this.viewY = y;
+        this.viewWidth = width;
+        this.viewHeight = height;
+        clampView();
+        markDirty();
+        fireViewChanged();
+    }
+
+    public boolean isAtPresent() {
+        long maxTime = Long.MIN_VALUE;
+        for (LineSeries s : seriesList) {
+            if (s.points.isEmpty()) continue;
+            maxTime = Math.max(maxTime, s.points.get(s.points.size() - 1).time());
+        }
+        if (maxTime == Long.MIN_VALUE) return true;
+        return (viewX + viewWidth) >= maxTime - 1000;
+    }
+
+    public void scrollToLatestData() {
+        long maxTime = Long.MIN_VALUE;
+        for (LineSeries s : seriesList) {
+            if (s.points.isEmpty()) continue;
+            maxTime = Math.max(maxTime, s.points.get(s.points.size() - 1).time());
+        }
+        if (maxTime == Long.MIN_VALUE) return;
+        viewX = maxTime - viewWidth;
+        clampView();
+        markDirty();
+        fireViewChanged();
+    }
+
+    public void scrollToPresent() {
+        long now = System.currentTimeMillis();
+        if (viewWidth <= 0) viewWidth = 3_600_000;
+        viewX = now - viewWidth;
+        markDirty();
+        fireViewChanged();
+    }
+
+    public void autoCenterView() {
+        long minTime = Long.MAX_VALUE;
+        long maxTime = Long.MIN_VALUE;
+        double minVal = Double.MAX_VALUE;
+        double maxVal = -Double.MAX_VALUE;
+        boolean hasData = false;
+
+        for (LineSeries s : seriesList) {
+            if (!s.visible || s.points.isEmpty()) continue;
+            for (DataPoint p : s.points) {
+                minTime = Math.min(minTime, p.time());
+                maxTime = Math.max(maxTime, p.time());
+                minVal = Math.min(minVal, p.value());
+                maxVal = Math.max(maxVal, p.value());
+                hasData = true;
+            }
+        }
+        if (!hasData) return;
+
+        long timeRange = maxTime - minTime;
+        if (timeRange <= 0) timeRange = 60_000;
+        double valRange = maxVal - minVal;
+        if (valRange <= 0) valRange = 100;
+
+        viewWidth = timeRange;
+        viewX = minTime;
+        viewHeight = valRange * 1.2;
+        viewY = Math.max(-viewHeight * 0.05, minVal - valRange * 0.1);
+        fireViewChanged();
+    }
+
+    /**
+     * Task #40: centers the viewport on a caller-supplied X (time) range while
+     * fitting Y to the data that falls inside that range. Used by the timescale
+     * toolbar so a "7d" button truly shows a 7-day-wide window regardless of
+     * how much data actually exists in that window — empty regions render as
+     * blank chart area on either side of the drawn line. Falls back to
+     * {@link #autoCenterView} when no data lies in the requested range so the
+     * chart is never left blank when data exists elsewhere.
+     */
+    public void autoCenterViewWithinRange(long fromMs, long toMs) {
+        if (toMs <= fromMs) { autoCenterView(); return; }
+        double minVal = Double.MAX_VALUE;
+        double maxVal = -Double.MAX_VALUE;
+        boolean hasData = false;
+        for (LineSeries s : seriesList) {
+            if (!s.visible || s.points.isEmpty()) continue;
+            for (DataPoint p : s.points) {
+                if (p.time() < fromMs || p.time() > toMs) continue;
+                minVal = Math.min(minVal, p.value());
+                maxVal = Math.max(maxVal, p.value());
+                hasData = true;
+            }
+        }
+        if (!hasData) { autoCenterView(); return; }
+        double valRange = maxVal - minVal;
+        if (valRange <= 0) valRange = 100;
+        viewX = fromMs;
+        viewWidth = toMs - fromMs;
+        viewHeight = valRange * 1.2;
+        viewY = Math.max(-viewHeight * 0.05, minVal - valRange * 0.1);
+        markDirty();
+        fireViewChanged();
+    }
+
+    // ── Rendering ──
+
+    @Override
+    protected void renderBackground() {
+        super.renderBackground();
+        if (seriesList.isEmpty()) return;
+
+        if (!hoverBindingsResolved && !pendingHoverBindingIds.isEmpty()) {
+            resolvePendingHoverBindings();
+        }
+
+        highlightedSeries = null;
+        for (var entry : hoverBindings.entrySet()) {
+            if (entry.getKey().isMouseOver()) {
+                highlightedSeries = entry.getValue();
+                break;
+            }
+        }
+
+        updateCanvasRect();
+
+        enableScissor(canvasScissorRect);
+        int zeroY = toCanvasSpaceY(0);
+        if (zeroY >= canvasRect.y && zeroY <= canvasRect.y + canvasRect.height) {
+            drawRect(canvasRect.x, zeroY, canvasRect.width, 1, COLOR_ZERO);
+        }
+
+        renderHorizontalGrid();
+        disableScissor();
+        renderVerticalGrid();
+
+        enableScissor(canvasScissorRect);
+        renderLines();
+        disableScissor();
+
+        drawFrame(canvasRect, COLOR_FRAME, 1);
+    }
+
+    @Override
+    protected void render() {}
+
+    @Override
+    protected void layoutChanged() {
+        // Task #40: lay out the timescale toolbar top-left, horizontally.
+        int x = BUTTON_PADDING;
+        int y = BUTTON_PADDING;
+        for (Button b : timescaleButtons) {
+            b.setPosition(x, y);
+            x += b.getWidth() + BUTTON_SPACING;
+        }
+    }
+
+    private int getButtonRowReservedHeight() {
+        if (timescaleButtons.isEmpty()) return 0;
+        return BUTTON_PADDING + buttonRowHeight + BUTTON_ROW_GAP;
+    }
+
+    private void updateCanvasRect() {
+        int topReserved = getButtonRowReservedHeight();
+        canvasRect.x = 1;
+        canvasRect.y = 1 + topReserved;
+        canvasRect.width = Math.max(2, getWidth() - maxValueLabelWidth - 10);
+        canvasRect.height = Math.max(2, getHeight() - maxTimeLabelHeight - 5 - topReserved);
+        canvasScissorRect.x = canvasRect.x + 1;
+        canvasScissorRect.y = canvasRect.y + 1;
+        canvasScissorRect.width = Math.max(1, canvasRect.width - 1);
+        canvasScissorRect.height = Math.max(1, canvasRect.height - 1);
+    }
+
+    private void renderHorizontalGrid() {
+        int targetLines = 8;
+        if (viewHeight <= 0) return;
+        double rawStep = viewHeight / targetLines;
+
+        double magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+        double normalized = rawStep / magnitude;
+        double niceStep;
+        if (normalized < 1.5) niceStep = magnitude;
+        else if (normalized < 3.5) niceStep = 2 * magnitude;
+        else if (normalized < 7.5) niceStep = 5 * magnitude;
+        else niceStep = 10 * magnitude;
+
+        double firstLine = Math.floor(viewY / niceStep) * niceStep;
+        double topValue = viewY + viewHeight;
+        int localMaxWidth = 0;
+
+        scissorPause();
+        for (double val = firstLine; val <= topValue; val += niceStep) {
+            int yPos = toCanvasSpaceY(val);
+            if (yPos < canvasRect.y || yPos > canvasRect.y + canvasRect.height) continue;
+            String label = formatValue(val);
+            int textWidth = getTextWidth(label);
+            localMaxWidth = Math.max(localMaxWidth, textWidth);
+            drawText(label, canvasRect.x + canvasRect.width + 5, yPos - getTextHeight() / 2);
+            drawRect(canvasRect.x, yPos, canvasRect.width, 1, COLOR_GRID);
+        }
+        scissorResume();
+        maxValueLabelWidth = localMaxWidth + 10;
+    }
+
+    private void renderVerticalGrid() {
+        int targetLines = 8;
+        if (viewWidth <= 0) return;
+        double rawStep = viewWidth / targetLines;
+
+        double magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+        double normalized = rawStep / magnitude;
+        double niceStep;
+        if (normalized < 1.5) niceStep = magnitude;
+        else if (normalized < 3.5) niceStep = 2 * magnitude;
+        else if (normalized < 7.5) niceStep = 5 * magnitude;
+        else niceStep = 10 * magnitude;
+
+        double firstLine = Math.floor(viewX / niceStep) * niceStep;
+        double rightTime = viewX + viewWidth;
+        int canvasBottom = canvasRect.y + canvasRect.height;
+        int localMaxHeight = 0;
+
+        Date lastDate = new Date(0);
+        for (double t = firstLine; t <= rightTime; t += niceStep) {
+            int xPos = toCanvasSpaceX((long) t);
+            if (xPos < canvasRect.x || xPos > canvasRect.x + canvasRect.width) continue;
+
+            drawRect(xPos, canvasRect.y, 1, canvasRect.height, COLOR_GRID);
+
+            Date current = new Date((long) t);
+            String[] labels = timestampToLabels(current, lastDate);
+            lastDate = current;
+
+            int textHeight = getTextHeight();
+            for (int j = 0; j < labels.length; j++) {
+                int yPos = canvasBottom + 2 + (j * textHeight);
+                int tw = getTextWidth(labels[j]);
+                drawText(labels[j], xPos - tw / 2, yPos);
+                localMaxHeight = Math.max(localMaxHeight, (j + 1) * textHeight + 5);
+            }
+        }
+        maxTimeLabelHeight = localMaxHeight;
+    }
+
+    private void renderLines() {
+        for (LineSeries series : seriesList) {
+            if (!series.visible || series.points.size() < 1) continue;
+            if (series == highlightedSeries || series == pinnedSeries) continue;
+            float thickness = 1.5f;
+            int color = (highlightedSeries != null) ? ColorUtilities.setAlpha(series.color, 0.4f) : series.color;
+            renderSeries(series, thickness, color);
+        }
+        if (highlightedSeries != null && highlightedSeries.visible && highlightedSeries.points.size() >= 1) {
+            int brightColor = ColorUtilities.setBrightness(highlightedSeries.color, 1.4f);
+            renderSeries(highlightedSeries, 3.0f, brightColor);
+        }
+        if (pinnedSeries != null && pinnedSeries.visible && pinnedSeries.points.size() >= 1) {
+            renderSeries(pinnedSeries, 2.0f, pinnedSeries.color);
+        }
+    }
+
+    private void renderSeries(LineSeries series, float thickness, int color) {
+        List<int[]> pts = buildOptimizedPoints(series);
+        // Extend the last real data point horizontally to "now" so accounts
+        // whose balance hasn't changed recently still render as a flat line
+        // out to the present rather than leaving a visual gap. Render-only:
+        // series.points is never mutated.
+        if (!series.points.isEmpty()) {
+            DataPoint last = series.points.get(series.points.size() - 1);
+            long now = System.currentTimeMillis();
+            if (last.time() < now) {
+                int nowX = toCanvasSpaceX(now);
+                int lastY = toCanvasSpaceY(last.value());
+                int[] tail = pts.get(pts.size() - 1);
+                if (nowX != tail[0]) {
+                    pts.add(new int[]{nowX, lastY});
+                }
+            }
+        }
+        if (pts.size() < 2) return;
+
+        boolean opaque = (color >>> 24) == 0xFF;
+        int jointSize = Math.max(1, (int) thickness);
+        int halfJoint = jointSize / 2;
+
+        for (int i = 1; i < pts.size(); i++) {
+            int[] prev = pts.get(i - 1);
+            int[] curr = pts.get(i);
+            drawLine(prev[0], prev[1], curr[0], curr[1], thickness, color);
+
+            if (opaque && i >= 2) {
+                int[] pp = pts.get(i - 2);
+                int dy1 = prev[1] - pp[1];
+                int dy2 = curr[1] - prev[1];
+                if ((dy1 > 0) != (dy2 > 0) && dy1 != 0 && dy2 != 0) {
+                    drawRect(prev[0] - halfJoint, prev[1] - halfJoint, jointSize, jointSize, color);
+                }
+            }
+        }
+    }
+
+    private List<int[]> buildOptimizedPoints(LineSeries series) {
+        List<int[]> pts = new ArrayList<>();
+        for (int i = 0; i < series.points.size(); i++) {
+            DataPoint p = series.points.get(i);
+            int x = toCanvasSpaceX(p.time());
+            int y = toCanvasSpaceY(p.value());
+            int size = pts.size();
+            if (size >= 2 && pts.get(size - 1)[1] == y && pts.get(size - 2)[1] == y) {
+                pts.get(size - 1)[0] = x;
+            } else {
+                pts.add(new int[]{x, y});
+            }
+        }
+        return pts;
+    }
+
+    // ── Input handling ──
+
+    @Override
+    protected boolean mouseScrolledOverElement(double delta) {
+        double zoomFactor = (delta > 0) ? 0.9 : 1.1;
+        double mouseWorldX = fromCanvasSpaceX(getMouseX());
+        double mouseWorldY = fromCanvasSpaceY(getMouseY());
+        boolean consumed = false;
+
+        if (!isKeyPressed(InputConstants.KEY_LEFT_CONTROL)) {
+            double oldWidth = viewWidth;
+            viewWidth = Math.max(1000, viewWidth * zoomFactor);
+            if (maxViewWidthMs != null && viewWidth > maxViewWidthMs) viewWidth = maxViewWidthMs;
+            double mouseNormX = (mouseWorldX - viewX) / oldWidth;
+            viewX = mouseWorldX - mouseNormX * viewWidth;
+            consumed = true;
+        }
+
+        if (!isKeyPressed(InputConstants.KEY_LEFT_SHIFT)) {
+            double oldHeight = viewHeight;
+            viewHeight = Math.max(0.1, viewHeight * zoomFactor);
+            double mouseNormY = (mouseWorldY - viewY) / oldHeight;
+            viewY = mouseWorldY - mouseNormY * viewHeight;
+            consumed = true;
+        }
+
+        clampView();
+        if (consumed) {
+            markDirty();
+            fireViewChanged();
+        }
+        return consumed;
+    }
+
+    @Override
+    protected boolean mouseClickedOverElement(int button) {
+        lastDragMousePos.x = getMouseX();
+        lastDragMousePos.y = getMouseY();
+        dragging = true;
+        return true;
+    }
+
+    @Override
+    protected void mouseReleased(int button) {
+        dragging = false;
+    }
+
+    @Override
+    protected boolean mouseDragged(int button, double deltaX, double deltaY) {
+        if (!dragging) return false;
+        int mouseX = getMouseX();
+        int mouseY = getMouseY();
+
+        if (button == InputConstants.MOUSE_BUTTON_LEFT && (mouseX != lastDragMousePos.x || mouseY != lastDragMousePos.y)) {
+            int dx = lastDragMousePos.x - mouseX;
+            int dy = lastDragMousePos.y - mouseY;
+            lastDragMousePos.x = mouseX;
+            lastDragMousePos.y = mouseY;
+
+            double worldDeltaX = dx * viewWidth / canvasRect.width;
+            double worldDeltaY = dy * viewHeight / canvasRect.height;
+
+            viewX += worldDeltaX;
+            viewY -= worldDeltaY;
+            clampView();
+            markDirty();
+            fireViewChanged();
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    protected boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == KEY_SPACE) {
+            if (isKeyPressed(InputConstants.KEY_LEFT_CONTROL)) {
+                long now = System.currentTimeMillis();
+                autoCenterViewWithinRange(now - (long) viewWidth, now);
+            } else {
+                autoCenterView();
+            }
+            markDirty();
+            return true;
+        }
+        return false;
+    }
+
+    // ── View clamping ──
+
+    private void clampView() {
+        if (leftClampAtMs != null || rightClampAtMs != null) {
+            // Explicit-bounds mode (rolling-fetch): the loaded-data extents no longer
+            // clamp viewX, so the caller can drag past currently loaded data to trigger
+            // prefetches. Only the caller-supplied bounds constrain viewX. viewWidth is
+            // NOT clamped to dataRange here — a "30d" window with only 1d of data still
+            // shows a 30d-wide viewport.
+            // Cap viewWidth at the configured maximum (if any) BEFORE the horizontal
+            // clamp math so a shrunk viewWidth feeds the viewX / rightClamp checks.
+            if (maxViewWidthMs != null && viewWidth > maxViewWidthMs) viewWidth = maxViewWidthMs;
+            if (leftClampAtMs != null && viewX < leftClampAtMs) viewX = leftClampAtMs;
+            if (rightClampAtMs != null && viewX + viewWidth > rightClampAtMs) {
+                viewX = rightClampAtMs - viewWidth;
+            }
+            // Re-apply the left clamp: if the two bounds together can't fit viewWidth,
+            // let the left clamp win (right edge may extend past rightClampAtMs).
+            if (leftClampAtMs != null && viewX < leftClampAtMs) viewX = leftClampAtMs;
+        } else {
+            // Legacy clamp-to-loaded-data behavior — preserved for callers that don't
+            // opt into explicit bounds (e.g., BankSystemDisplayBlockEntity).
+            long minTime = Long.MAX_VALUE;
+            long maxTime = Long.MIN_VALUE;
+            for (LineSeries s : seriesList) {
+                if (s.points.isEmpty()) continue;
+                minTime = Math.min(minTime, s.points.get(0).time());
+                maxTime = Math.max(maxTime, s.points.get(s.points.size() - 1).time());
+            }
+            if (minTime != Long.MAX_VALUE) {
+                double dataRange = maxTime - minTime;
+                if (dataRange <= 0) dataRange = 60_000;
+
+                if (viewWidth > dataRange) viewWidth = dataRange;
+                if (viewX < minTime) viewX = minTime;
+                if (viewX + viewWidth > maxTime) viewX = maxTime - viewWidth;
+            }
+        }
+
+        double minY = -viewHeight * 0.05;
+        if (viewY < minY) viewY = minY;
+    }
+
+    // ── Coordinate conversion ──
+
+    private int toCanvasSpaceX(long time) {
+        if (viewWidth == 0) return canvasRect.x;
+        return canvasRect.x + (int) (((double)(time - (long)viewX) / viewWidth) * canvasRect.width);
+    }
+
+    private int toCanvasSpaceY(double value) {
+        if (viewHeight == 0) return canvasRect.y + canvasRect.height;
+        return (canvasRect.y + canvasRect.height) - (int) (((value - viewY) / viewHeight) * canvasRect.height);
+    }
+
+    private double fromCanvasSpaceX(int screenX) {
+        return viewX + (double)(screenX - canvasRect.x) / canvasRect.width * viewWidth;
+    }
+
+    private double fromCanvasSpaceY(int screenY) {
+        return viewY + (double)(canvasRect.y + canvasRect.height - screenY) / canvasRect.height * viewHeight;
+    }
+
+    // ── Formatting ──
+
+    private String formatValue(double value) {
+        if (value >= 1_000_000_000) return String.format(Locale.ROOT, "%.1fB", value / 1_000_000_000);
+        else if (value >= 1_000_000) return String.format(Locale.ROOT, "%.1fM", value / 1_000_000);
+        else if (value >= 1_000) return String.format(Locale.ROOT, "%.1fk", value / 1_000);
+        else return String.format(Locale.ROOT, "%.2f", value);
+    }
+
+    private String[] timestampToLabels(Date current, Date last) {
+        String timeStr = TIME_FORMAT.format(current);
+        String currentDay = DAY_FORMAT.format(current);
+        String currentMonth = MONTH_FORMAT.format(current);
+        String currentYear = YEAR_FORMAT.format(current);
+
+        String lastDay = DAY_FORMAT.format(last);
+        String lastMonth = MONTH_FORMAT.format(last);
+        String lastYear = YEAR_FORMAT.format(last);
+
+        StringBuilder dateStr = new StringBuilder();
+        if (!lastYear.equals(currentYear)) dateStr.append(currentYear).append("\n");
+        if (!lastMonth.equals(currentMonth)) dateStr.append(currentMonth).append("\n");
+        if (!lastDay.equals(currentDay)) dateStr.append(currentDay).append("\n");
+
+        if (dateStr.isEmpty()) return new String[]{timeStr};
+        return (dateStr + timeStr).split("\n");
+    }
+}

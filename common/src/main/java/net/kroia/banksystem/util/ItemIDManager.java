@@ -1,0 +1,3302 @@
+package net.kroia.banksystem.util;
+
+import com.ibm.icu.impl.Pair;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.networking.general.RegisterItemIDPacket;
+import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
+import net.kroia.modutilities.ItemUtilities;
+import net.kroia.modutilities.UtilitiesPlatform;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
+import net.kroia.modutilities.persistence.ServerSaveable;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+public class ItemIDManager implements ServerSaveable {
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
+
+    private static final ConcurrentHashMap<ItemID, ItemStack> itemIDMap = new ConcurrentHashMap<>();
+
+    // INVARIANT: source shorts MUST NOT be present in itemIDMap — write-side enforced
+    // via putAlias(...); violations logged with stack trace and rejected.
+    /**
+     * Alias table: maps obsolete ItemIDs to their canonical replacement.
+     * Entries are created by {@link #renormalizeAndMerge()} when several stored IDs collapse
+     * to the same normalized identity (e.g. after volatile components such as {@code tfc:food}
+     * are stripped from the templates of an existing world). Saved references (bank balances,
+     * markets, ...) that still use an aliased ID keep resolving transparently through
+     * {@link #getItemStack(ItemID)} / {@link #getItemStackTemplate(ItemID)}.
+     * Alias chains are always flattened: every value in this map is a canonical ID
+     * that is present in {@link #itemIDMap}.
+     * <p>
+     * <b>Write invariant (Task #14):</b> for every entry {@code source -> target}, the
+     * {@code source} short MUST NOT also be present in {@link #itemIDMap}. Every production
+     * write path funnels through {@link #putAlias(ItemID, ItemID)} which enforces this
+     * invariant, logs an ERROR with the calling stack trace on violation, and rejects the
+     * insertion. Removals are safe (see {@link #repairCorruptAliasEntries()}) and go
+     * through direct {@code remove(...)} calls — the invariant only constrains inserts.
+     */
+    private static final ConcurrentHashMap<ItemID, ItemID> itemIDAliasMap = new ConcurrentHashMap<>();
+
+    /**
+     * Alias→canonical pairs created by {@link #renormalizeAndMerge(Collection)} that have not
+     * yet been consolidated into per-ItemID state (bank balances/locked balances, the
+     * allowed-item set, account icons) and announced to dependent mods.
+     * Filled by the merge pass; drained by {@link #consolidatePendingMerges()} — immediately
+     * for runtime merges, or right after {@code load_bank()} when the merge happened during
+     * world load (bank data is not available yet at that point).
+     */
+    private static final ConcurrentHashMap<ItemID, ItemID> pendingMergeConsolidation = new ConcurrentHashMap<>();
+
+    private static ConcurrentHashMap<ItemID, ItemStack> singlePlayerServerBackupOnPlayerLeave = null;
+    private static ConcurrentHashMap<ItemID, ItemID> singlePlayerServerAliasBackupOnPlayerLeave = null;
+    /**
+     * Backup companion of {@link #singlePlayerServerBackupOnPlayerLeave} for the monotonic
+     * short counter. Kept in sync with the map backups so that
+     * {@link #save(CompoundTag)} — which falls back to the backups when the live map is
+     * empty (singleplayer server-leave path) — can still persist the correct counter value.
+     * {@code -1} marks "no backup taken yet"; anything &gt; 0 is a valid captured counter.
+     */
+    private static int singlePlayerServerBackupCounterOnPlayerLeave = -1;
+    private static Map<ItemStack, CompletableFuture<ItemID>> pendingItemIDs = new ConcurrentHashMap<>();
+    private static List<Pair<List<ItemStack>, CompletableFuture<List<ItemID>>>> pendingItemIDGroups = new CopyOnWriteArrayList<>();
+
+    /**
+     * Monotonic short allocation counter used by
+     * {@link #registerItemStackServerSide_direct(List)} to hand out fresh ItemID shorts.
+     * <p>
+     * <b>Persisted</b> under NBT key {@code "nextShortCounter"} in {@link #save(CompoundTag)},
+     * restored in {@link #load(CompoundTag)}. Starts at {@code 1} on a brand-new world
+     * (short {@code 0} is reserved for {@link ItemID#INVALID_ID}); on load of a legacy world
+     * without the key, seeded to {@code max(shortsInItemIDMap ∪ shortsInItemIDAliasMap) + 1}
+     * so no already-used short is ever re-issued.
+     * <p>
+     * <b>Never decrements.</b> Even when an entry is silently dropped at load (unresolvable
+     * ItemStack — mod removed / NBT corrupt) its short remains "burned": the counter has
+     * already moved past it and will never re-issue it. This is the whole point of the
+     * counter — a dropped short cannot silently rebind to a new item and poison downstream
+     * ItemID-keyed state (bank balances, StockMarket markets, plugin caches, ...).
+     * <p>
+     * Declared as {@code int}, not {@code short}, so overflow past {@link Short#MAX_VALUE}
+     * is explicit and observable rather than silently wrapping into negative shorts. The
+     * allocator returns {@link ItemID#INVALID_ID} once the counter exceeds the short range.
+     */
+    private static int nextShortCounter = 1;
+
+    /**
+     * Task #55: persistence dirty flag for the {@code ItemIDs.nbt} save unit. Set true when
+     * the persisted registry state ({@code itemIDMap}, {@code itemIDAliasMap},
+     * {@code quarantinedAliases}, {@code nextShortCounter}) actually changes at runtime — a
+     * new short is minted, an alias/quarantine entry is added/removed, or the counter moves.
+     * Read by {@link net.kroia.banksystem.util.BankSystemDataHandler#save_itemIDs(boolean)}
+     * (timer path) and reset after a confirmed successful write.
+     * <p>
+     * The {@link #suppressDirty} guard suppresses marks while {@link #load(CompoundTag)} is
+     * running so a freshly loaded, unmutated world stays clean and the first timer save skips
+     * it — the load path already handles its own one-shot re-saves for repairs / format
+     * conversions (see {@code consumeLastLoadRequiresResave} / {@code consumeLastLoadRepairCount}).
+     */
+    private static boolean persistDirty = false;
+    /** Task #55: while true, {@link #markPersistDirty()} is a no-op (load in progress). */
+    private static boolean suppressDirty = false;
+
+    /** Task #55: mark the ItemIDs save unit dirty unless a load is currently suppressing. */
+    public static void markPersistDirty() { if (!suppressDirty) persistDirty = true; }
+    /** Task #55: @return whether the ItemIDs save unit has unsaved changes. */
+    public static boolean isPersistDirty() { return persistDirty; }
+    /** Task #55: clear the flag — called by the data handler after a successful write. */
+    public static void clearPersistDirty() { persistDirty = false; }
+
+    /**
+     * <b>Registration latch</b> (Task #16 master-side, Task #22 widened to slaves):
+     * {@code true} while fresh-short allocation is forbidden because the authoritative
+     * ItemID assignment has not been established yet this session.
+     * <p>
+     * Armed by {@link #clear()} (world start clears the registry) and released when the
+     * authoritative assignment is available:
+     * <ul>
+     *   <li><b>Master</b> — {@link #load(CompoundTag)} returns successfully (existing world)
+     *       or {@link #markRegistryReady()} is called on the fresh-world path
+     *       ({@code BankSystemDataHandler.load_itemIDs()}).</li>
+     *   <li><b>Slave</b> (Task #22) — {@link #finalizeSlaveSync()} is called by
+     *       {@code SyncItemIDsPacket.handleOnSlave} after the master's authoritative items +
+     *       aliases have been applied. Slaves used to register their defaults pre-sync in
+     *       {@code BankSystemModBackend.onServerStart}, which minted local shorts for
+     *       new-in-mod-update items that collided with the master's alias plan (observed on
+     *       neoforge 2026-07-17 for {@code bank_terminal_block}, {@code atm_block},
+     *       {@code display_demo_back_panel_block}) — hence the widening.</li>
+     * </ul>
+     * While armed, {@link #registerItemStackServerSide_direct(List)} REFUSES to mint fresh
+     * shorts on both master and slave: pre-authoritative registrations are exactly the bug
+     * class that corrupts persisted item identity (constructor warm-up minting bedrock=1 ...
+     * money200=19 before {@code ItemIDs.nbt} was read — see Task #16). Each refusal logs an
+     * ERROR naming the item and returns {@link ItemID#INVALID_ID}, mirroring the empty-stack
+     * refusal. Lookups of already-registered stacks are always allowed — only the mint path
+     * is gated.
+     * <p>
+     * Initialized {@code false} (released): before the first {@code clear()} of a session
+     * nothing meaningful is registered, and client-only paths never call the allocator.
+     */
+    private static boolean registrationLatchArmed = false;
+
+    /**
+     * Count of registrations rejected by the latch in the current arming cycle. The FIRST
+     * rejection logs the full ERROR with a stack trace (the actionable evidence); later
+     * rejections log a terse DEBUG line and bump this counter — a bulk caller like
+     * {@code createDefaultItemIDs()} hitting an armed latch (~1300 registry items) must not
+     * flood the log with 1300 stack traces. Reset by {@link #clear()}.
+     */
+    private static int registrationLatchRejections = 0;
+
+    /**
+     * The set of shorts inserted from disk by the most recent {@link #load(CompoundTag)}
+     * (Task #16 "persisted shorts win"). Cleared by {@link #clear()} and re-initialized at
+     * the start of every load (after the format gate, so a refused newer-format file leaves
+     * it untouched).
+     * <p>
+     * Consumed by the canonical selection of {@link #renormalizeAndMerge(Collection)} and
+     * {@link #detectCollapseCollisions(Collection, Collection)}: when a merge group mixes
+     * persisted and non-persisted (session-minted) members, a persisted member is ALWAYS
+     * chosen as canonical — the on-disk assignment in {@code ItemIDs.nbt} is the immutable
+     * source of truth and load-time healing must never renumber it. Among members of the
+     * same provenance the lowest short wins (the pre-existing tie-break rule).
+     * Additionally guards {@link #consolidatePendingMerges()}'s balance-history purge:
+     * rows of a persisted short are never deleted in favor of a non-persisted canonical.
+     */
+    private static final Set<ItemID> persistedShorts = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Session-scoped dedup guard for the Task #25 "unresolvable sync entry" INFO log.
+     * When a slave (or remote client) receives a {@link SyncItemIDsPacket} whose NBT
+     * for a given short cannot be parsed against the local registry (mod not installed
+     * on this side), {@link #receiveSyncPacket(SyncItemIDsPacket, boolean)} logs one
+     * line naming the short and drops the entry. Repeat syncs on the same session
+     * would otherwise flood the log with the same line for every re-broadcast.
+     * <p>
+     * Thread-safety: mutated exclusively from {@link #receiveSyncPacket}, which runs
+     * on the network side's main thread (server thread on slave; render/main thread
+     * on client — Architectury auto-dispatches S2C handlers there). A plain
+     * {@link HashSet} would suffice; we use the concurrent variant for parity with
+     * the surrounding fields' declaration style. Cleared by {@link #clear()} so
+     * a rejoin against a possibly-different master gets a fresh log budget.
+     */
+    private static final Set<ItemID> unresolvableItemsLoggedOnce = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Wrapper around an {@link ItemStack} that lets it act as a HashMap/HashSet key with
+     * BankSystem's <b>normalized-identity</b> semantics: two keys are equal iff their stacks
+     * compare equal under {@link ItemStack#isSameItemSameComponents(ItemStack, ItemStack)}, and
+     * the hash matches {@link ItemStack#hashItemAndComponents(ItemStack)}.
+     * <p>
+     * Used by the slave-side <b>negative cache</b>
+     * ({@link #slaveNegativeOrPendingCache}) so a normalized stack seen twice hashes to the
+     * same bucket even if the two {@code ItemStack} instances are different Java objects. The
+     * caller <b>must</b> pass a normalized copy (see
+     * {@link VolatileItemComponents#normalize(ItemStack)}); wrapping raw stacks would let
+     * volatile-component variants hash to different buckets and defeat dedup.
+     */
+    private static final class NormalizedStackKey {
+        private final ItemStack stack;
+        private final int hash;
+
+        NormalizedStackKey(ItemStack normalizedStack) {
+            this.stack = normalizedStack;
+            this.hash = ItemStack.hashItemAndComponents(normalizedStack);
+        }
+
+        ItemStack stack() { return stack; }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (!(obj instanceof NormalizedStackKey other)) return false;
+            if (hash != other.hash) return false;
+            return ItemStack.isSameItemSameComponents(stack, other.stack);
+        }
+
+        @Override
+        public int hashCode() { return hash; }
+    }
+
+    /**
+     * <b>Slave-side negative-cache / in-flight set (Task #23).</b>
+     * <p>
+     * On a slave (see {@link BankSystemModBackend.Instances#isSlaveServer}), the SOLE ItemID
+     * minter is the master. Local {@link #registerItemStackServerSide_direct(List)} calls no
+     * longer mint fresh shorts; on a positive-cache miss the slave fires a
+     * {@code RegisterItemStacksBatchRequest} to master, returns {@link ItemID#INVALID_ID} for
+     * the calling frame, and populates either the positive {@link #itemIDMap} (master returned
+     * a valid short) or this set (master returned {@code INVALID_ID}) when the response arrives.
+     * <p>
+     * This set also serves as an <b>in-flight guard</b>: a stack whose ARRS request has been
+     * sent but not yet answered stays in the set, so a burst of lookups for the same unknown
+     * item fires exactly ONE ARRS request (Design Q3, Acceptance Criterion C). On a positive
+     * response the entry is REMOVED (positive lookup in {@link #itemIDMap} now hits); on an
+     * INVALID_ID response the entry STAYS (permanent rejection for this session).
+     * <p>
+     * <b>Keys are normalized stacks</b> — every insert goes through
+     * {@link VolatileItemComponents#normalize(ItemStack)} first, mirroring how {@code itemIDMap}
+     * stores its templates. Two component-variants that master would treat as the same identity
+     * therefore share a single cache slot (Design Q1).
+     * <p>
+     * <b>Lifetime:</b> session-scoped. Cleared by
+     * <ul>
+     *   <li>{@link #clear()} — world stop; the reconnecting/next world may have a different
+     *       master with a different registry.</li>
+     *   <li>{@link #clearSlaveNegativeCacheOnDisconnect()} — slave lost its master connection;
+     *       preserves the positive {@code itemIDMap} (master re-sends full sync on reconnect)
+     *       but drops the negative cache so a formerly-INVALID item can be re-requested if a
+     *       reconnecting master added it (mod update on master while slave was offline).</li>
+     * </ul>
+     * The value is unused (map used as a set) — {@link ConcurrentHashMap} was chosen over
+     * {@link Collections#newSetFromMap(java.util.Map)} to keep the type signature explicit.
+     */
+    private static final ConcurrentHashMap<NormalizedStackKey, Boolean> slaveNegativeOrPendingCache = new ConcurrentHashMap<>();
+
+    /**
+     * INFO log dedup: a stack whose {@code INVALID_ID} response has ALREADY been INFO-logged
+     * this session — subsequent negative-cache-hit lookups stay silent. Distinct from the
+     * negative cache itself so a "master rejected" log fires only ONCE per stack (not once
+     * per ARRS response for that stack, and not once per lookup hitting the negative cache).
+     * Reset on {@link #clear()} and on {@link #clearSlaveNegativeCacheOnDisconnect()} —
+     * reconnect might resolve items master previously rejected, and we want to see a fresh
+     * INFO if the stack ends up rejected again.
+     */
+    private static final ConcurrentHashMap<NormalizedStackKey, Boolean> slaveRejectedLoggedOnce = new ConcurrentHashMap<>();
+
+    /**
+     * Counter of {@code RegisterItemStacksBatchRequest} calls fired by the slave-side
+     * delegation path this session. Advanced ONCE per {@link #sendToMasterAndPopulateCache}
+     * invocation (so a batch of N stacks counts as one ARRS call). Read by the in-game test
+     * suite via {@link #getSlaveArrsRequestsFired_forTesting()}; reset by {@link #clear()}
+     * and by {@link #resetSlaveArrsCounter_forTesting()}.
+     */
+    private static volatile int slaveArrsRequestsFired = 0;
+
+    public static void clear()
+    {
+        singlePlayerServerBackupOnPlayerLeave = new ConcurrentHashMap<>(itemIDMap);
+        singlePlayerServerAliasBackupOnPlayerLeave = new ConcurrentHashMap<>(itemIDAliasMap);
+        singlePlayerServerBackupCounterOnPlayerLeave = nextShortCounter;
+        // Quarantined corruption evidence follows the same backup discipline: preserved for
+        // the leaving world's fallback save, cleared so a fresh world created next in the
+        // same JVM (which never runs load()) cannot inherit another world's evidence.
+        singlePlayerServerQuarantineBackupOnPlayerLeave = new ConcurrentHashMap<>(quarantinedAliases);
+        quarantinedAliases.clear();
+        itemIDMap.clear();
+        itemIDAliasMap.clear();
+        // Reset the counter to its blank-world default. The subsequent load() either
+        // restores the persisted value or seeds from the map maxima (migration).
+        nextShortCounter = 1;
+        // Never carry unconsolidated merge pairs into the next session/world.
+        pendingMergeConsolidation.clear();
+        // Provenance tracking: the next load() re-records which shorts came from disk.
+        persistedShorts.clear();
+        // Task #25 dedup guard: a rejoin against a possibly-different master gets a
+        // fresh log budget; without this, the second session on the same JVM would
+        // silently skip "still unresolvable" INFO lines.
+        unresolvableItemsLoggedOnce.clear();
+        // Arm the registration latch: from this point until the authoritative ItemID
+        // assignment is available (master: load_itemIDs() success or markRegistryReady() on
+        // a fresh world; slave: finalizeSlaveSync() after SyncItemIDsPacket), fresh-short
+        // allocation is refused on both master and slave — see the field Javadoc (Task #16,
+        // widened by Task #22).
+        registrationLatchArmed = true;
+        registrationLatchRejections = 0;
+        // Task #23: reset slave-side delegation state — the negative/in-flight cache, the
+        // "logged once" dedup, and the ARRS counter. On master this is a no-op-shaped clear
+        // (these fields are only written to on the slave path), but resetting unconditionally
+        // keeps the two branches in step and matches every other clear-on-world-stop field.
+        slaveNegativeOrPendingCache.clear();
+        slaveRejectedLoggedOnce.clear();
+        slaveArrsRequestsFired = 0;
+    }
+
+    /**
+     * Releases the registration latch (see {@link #registrationLatchArmed}).
+     * <p>
+     * Called at each side's "authoritative assignment is now available" transition:
+     * <ul>
+     *   <li>Master — the end of a successful {@link #load(CompoundTag)} (existing world),
+     *       or {@code BankSystemDataHandler.load_itemIDs()} when no {@code ItemIDs.nbt}
+     *       exists (fresh world — nothing to load, defaults may begin).</li>
+     *   <li>Slave (Task #22) — through {@link #finalizeSlaveSync()} after
+     *       {@code SyncItemIDsPacket} arrives from the master.</li>
+     * </ul>
+     * Idempotent. Test fixtures that call {@link #clear()} + {@link #load(CompoundTag)}
+     * directly are released by the load itself; fixtures simulating a fresh world call this
+     * method — the exact same release production uses, no test-only backdoor.
+     */
+    public static void markRegistryReady() {
+        registrationLatchArmed = false;
+    }
+
+    /**
+     * @return {@code true} when fresh-short allocation is currently permitted (the
+     *         registration latch is released — the authoritative assignment is available).
+     *         Production callers use this to SKIP bulk registration passes that would
+     *         otherwise only produce per-item refusals while the latch is armed — the
+     *         unreadable-{@code ItemIDs.nbt} case, where
+     *         {@code BankSystemDataHandler.loadAll()} skips {@code createDefaultItemIDs()}
+     *         for the failing pass (the recovery retry re-runs it with the latch released).
+     */
+    public static boolean isRegistrationReady() {
+        return !registrationLatchArmed;
+    }
+
+    /** Read-only view of the registration latch. In-game test suite only. */
+    public static boolean isRegistrationLatchArmed_forTesting() {
+        return registrationLatchArmed;
+    }
+
+    /**
+     * Slave-side counterpart of the master's "load phase complete" transition
+     * (Task #22, refined by Task #23): releases the registration latch after the master's
+     * authoritative items + aliases have been applied to this slave via
+     * {@link #receiveSyncPacket(SyncItemIDsPacket)}, then refreshes the {@link MoneyItem}
+     * short cache so it binds to the master's authoritative money short.
+     * <p>
+     * <b>Task #23 change:</b> this method NO LONGER calls
+     * {@code ITEM_ID_MANAGER.createDefaultItemIDs()}. Slaves must never mint local shorts —
+     * every non-{@link ItemID#INVALID_ID} short on a slave is guaranteed to come from master,
+     * either via the sync packet processed just before this call or via a
+     * {@code RegisterItemStacksBatchRequest} round-trip fired lazily from
+     * {@link #registerItemStackServerSide_direct(List)} on the first lookup of an unknown stack.
+     * Under Task #22 the same call used to run defaults via <i>register-if-absent</i>,
+     * which still left slave-only items (mod master doesn't have) minting local shorts and
+     * reopened the exact ID-collision class the task set out to close.
+     * <p>
+     * Called exclusively from {@code SyncItemIDsPacket.handleOnSlave}. Idempotent by design:
+     * subsequent sync packets (incremental "new item added" broadcasts from master) find the
+     * latch already released and return immediately.
+     * <p>
+     * <b>Not for master or client callers:</b> this method is a no-op on master (the master
+     * releases via {@link #load(CompoundTag)} / {@link #markRegistryReady()}) and on the
+     * client side (clients never mint shorts locally — sync arrives via a different code
+     * path with no registration latch to release).
+     */
+    public static void finalizeSlaveSync() {
+        if (BACKEND_INSTANCES == null || !BACKEND_INSTANCES.isSlaveServer)
+            return;
+        if (!registrationLatchArmed)
+            return; // idempotent: subsequent syncs on the same session skip
+        markRegistryReady();
+        // Task #23: no more createDefaultItemIDs() on the slave — master is the SOLE ItemID
+        // minter. MoneyItem.resetItemID() must still run so the cached money short rebinds to
+        // whatever the master's SyncItemIDsPacket carried (the money short may have moved
+        // between sessions on the master side).
+        MoneyItem.resetItemID();
+        if (BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Slave registration latch released after "
+                    + "SyncItemIDsPacket. Master is the sole ItemID minter (Task #23) — any "
+                    + "runtime registration on this slave now delegates to the master via "
+                    + "RegisterItemStacksBatchRequest. Resolved money short = "
+                    + MoneyItem.getItemID().getShort());
+        }
+    }
+
+    /**
+     * Drops the slave-side negative/in-flight cache and the "logged once" dedup on master
+     * disconnect (Task #23 reconnect handling). Preserves the positive {@link #itemIDMap} —
+     * the master re-sends a full {@link SyncItemIDsPacket} on reconnect, so keeping the
+     * existing map is safe (register-if-absent semantics apply on the sync path) AND avoids
+     * a flurry of re-registration ARRS calls the moment the reconnect happens.
+     * <p>
+     * The negative cache, in contrast, MUST clear: a formerly-{@code INVALID_ID} stack might
+     * now be known to a mod-updated master, and we want to give it exactly one retry per
+     * reconnect. Callers: {@code onSlaveConnectionLost} / {@code onSlaveDisconnected} in
+     * {@code BankSystemModBackend}. Idempotent — safe on master too (both fields stay empty).
+     */
+    public static void clearSlaveNegativeCacheOnDisconnect() {
+        if (slaveNegativeOrPendingCache.isEmpty() && slaveRejectedLoggedOnce.isEmpty())
+            return;
+        int rejectedCount = slaveNegativeOrPendingCache.size();
+        slaveNegativeOrPendingCache.clear();
+        slaveRejectedLoggedOnce.clear();
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null && rejectedCount > 0) {
+            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Slave disconnected from master — "
+                    + "cleared " + rejectedCount + " negative-cached ItemID(s). A reconnecting "
+                    + "master (possibly mod-updated) will be asked to resolve them again.");
+        }
+    }
+
+    /**
+     * Hard cap on {@link #resolveAlias(ItemID)} chain-walk iterations (Task #13 Fix C).
+     * <p>
+     * A properly maintained alias table is flattened by {@link #renormalizeAndMerge(Collection)}
+     * (every value already points at a canonical ID present in {@code itemIDMap}), so the walk
+     * exits after ONE hop in the common case. The bound only ever fires under a corrupt state
+     * — a chain longer than the short registry itself could ever produce (Short.MAX_VALUE is
+     * 32767, but 64 is far more than any realistic accidental chain, cheap to bound with, and
+     * matches the guard style used in {@link #renormalizeAndMerge(Collection)} pass 3).
+     */
+    private static final int MAX_ALIAS_CHAIN_HOPS = 64;
+
+    /**
+     * Repair counter recorded by the most recent {@link #load(CompoundTag)} — read by
+     * {@code BankSystemDataHandler.load_itemIDs()} to decide whether to persist the repaired
+     * state via {@code save_itemIDs()} (Task #13 Fix D one-shot durability). Cleared to
+     * {@code 0} at the start of every {@link #load(CompoundTag)} invocation.
+     */
+    private static int lastLoadRepairCount = 0;
+
+    /**
+     * Save-format version of the {@code ItemIDs.nbt} tag consumed by the most recent
+     * {@link #load(CompoundTag)} — {@link BankSystemSaveFormat#ITEM_IDS_FORMAT_LEGACY} when
+     * the tag carried no version key at all. Test-visible via
+     * {@link #getLoadedFormatVersion_forTesting()}.
+     */
+    private static int lastLoadedFormatVersion = BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT;
+
+    /**
+     * One-shot signal set by {@link #load(CompoundTag)} when the loaded file should be
+     * re-saved immediately in the current format: legacy (version-less) files, files whose
+     * {@code nextShortCounter} had to be migration-seeded, and files a confirmed world
+     * repair was applied to. Consumed by
+     * {@code BankSystemDataHandler.load_itemIDs()} via {@link #consumeLastLoadRequiresResave()}
+     * — the same one-shot durability trigger as {@link #lastLoadRepairCount}.
+     */
+    private static boolean lastLoadRequiresResave = false;
+
+    /**
+     * One-shot signal set by {@link #applyCorruptionRepairGuard} when a CONFIRMED world
+     * repair (cent-shift corruption, {@code CONFIRM_ITEMID_REPAIR}) was applied during the
+     * most recent {@link #load(CompoundTag)}. Consumed by
+     * {@code BankSystemDataHandler.load_itemIDs()} via {@link #consumeRepairWasApplied()} to
+     * copy the pre-repair {@code ItemIDs.nbt} aside before the repaired state is persisted
+     * (and to persist the consumed {@code CONFIRM_ITEMID_REPAIR} reset — deferred to that
+     * point so an abort later in the same load cannot burn the confirmation).
+     */
+    private static boolean repairWasApplied = false;
+
+    /**
+     * <b>Quarantined corruption evidence</b>: raw alias pairs from {@code ItemIDs.nbt} that
+     * are cent-shift fingerprints (see {@link ItemIDWorldRepair.AliasFingerprint}) but can
+     * NOT be inserted into {@link #itemIDAliasMap} because their source short is also a live
+     * map key — the {@link #putAlias(ItemID, ItemID)} invariant correctly rejects them at
+     * load time. Without quarantine, the one-shot post-load re-save would strip these pairs
+     * from the file on the very first startup and permanently destroy the only evidence that
+     * the corruption happened.
+     * <p>
+     * Populated by {@link #applyCorruptionRepairGuard} whenever detection fires but no
+     * repair is applied; persisted by {@link #save(CompoundTag)} under
+     * {@link BankSystemSaveFormat#KEY_QUARANTINED_ALIASES}; restored (and merged into the
+     * detection input) by {@link #load(CompoundTag)}; cleared when a confirmed repair is
+     * applied.
+     * <p>
+     * <b>Cross-world isolation:</b> cleared by {@link #clear()} with a leave-backup
+     * ({@link #singlePlayerServerQuarantineBackupOnPlayerLeave}), exactly mirroring the
+     * map/counter backup discipline. Without the clear, a singleplayer session that leaves
+     * a corrupted world A and then creates a FRESH world B in the same JVM would leak A's
+     * evidence into B's very first {@code ItemIDs.nbt} (a fresh world has no file, so
+     * {@code load()} — the other reset point — never runs), branding a healthy new world
+     * with a permanent false corruption signature. The backup keeps world A's evidence
+     * available for A's own leave-then-save fallback (see {@link #save(CompoundTag)}).
+     */
+    private static final ConcurrentHashMap<ItemID, ItemID> quarantinedAliases = new ConcurrentHashMap<>();
+
+    /**
+     * Leave-backup companion of {@link #quarantinedAliases}, mirroring
+     * {@link #singlePlayerServerBackupOnPlayerLeave}: captured by {@link #clear()} so the
+     * singleplayer save that fires AFTER the server-leave clear (empty live map → backup
+     * fallback in {@link #save(CompoundTag)}) still persists the leaving world's corruption
+     * evidence, while a subsequently created fresh world (whose live map is non-empty by
+     * save time) starts with a clean, empty quarantine. Nulled at the end of every
+     * successful {@link #load(CompoundTag)}, like the other leave-backups.
+     */
+    private static ConcurrentHashMap<ItemID, ItemID> singlePlayerServerQuarantineBackupOnPlayerLeave = null;
+
+    /**
+     * Walks the alias table from the given ItemID to its canonical terminal (an ID that is
+     * <b>not</b> a key in {@code itemIDAliasMap}). IDs that were never merged resolve to
+     * themselves in zero hops.
+     * <p>
+     * <b>Chain-walking (Task #13 Fix C):</b> A merged ID may itself have been merged into a
+     * further canonical ID before {@link #renormalizeAndMerge(Collection)} flattened the
+     * table, or a corrupt state (see {@link #repairCorruptAliasEntries()}) may leave
+     * intermediate hops in {@code itemIDAliasMap}. This method follows every hop until the
+     * current short is no longer a key in the alias table — the alias table is the
+     * authoritative signal for "is this ID an alias?"; we do <b>not</b> gate on
+     * {@code itemIDMap} presence (intermediate hops may or may not be in the map depending
+     * on repair state).
+     * <p>
+     * <b>Cycle protection:</b> both a visited-set and a hard iteration bound
+     * ({@link #MAX_ALIAS_CHAIN_HOPS}) guard against an accidentally-cyclic table. On cycle
+     * detection or hop-bound exhaustion the method logs at ERROR with the chain traversed so
+     * far and returns the <b>original input</b> unchanged (safest fallback — refusing to
+     * pick a partially-resolved intermediate ID that could silently misroute reads/writes).
+     * The repair pass in {@link #repairCorruptAliasEntries()} breaks such cycles at
+     * load-time so this fallback is only ever a runtime safety net.
+     *
+     * @param itemID the (possibly aliased) ItemID to resolve; must not be {@code null}
+     * @return the canonical (terminal) ItemID, or the original input if the chain contains
+     *         a cycle or exceeds {@link #MAX_ALIAS_CHAIN_HOPS} hops
+     */
+    public static @NotNull ItemID resolveAlias(@NotNull ItemID itemID) {
+        // Fast path: not an alias at all — return immediately, allocate nothing.
+        if (!itemIDAliasMap.containsKey(itemID))
+            return itemID;
+
+        Set<ItemID> visited = new HashSet<>();
+        visited.add(itemID);
+        ItemID current = itemID;
+        for (int hop = 0; hop < MAX_ALIAS_CHAIN_HOPS; hop++) {
+            ItemID next = itemIDAliasMap.get(current);
+            if (next == null)
+                return current; // terminal reached
+            if (!visited.add(next)) {
+                // Cycle: log the traversed chain, fall back to the original input.
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                    BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] Alias-chain cycle detected while resolving "
+                            + itemID + " (chain: " + visited + " -> " + next
+                            + "). Returning input unchanged; run repairCorruptAliasEntries() to break the cycle.");
+                }
+                return itemID;
+            }
+            current = next;
+        }
+        // Bound exhausted without finding a terminal — treat as pathological, fall back.
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] Alias-chain resolution exceeded "
+                    + MAX_ALIAS_CHAIN_HOPS + " hops for " + itemID + " (chain: " + visited
+                    + "). Returning input unchanged; run repairCorruptAliasEntries().");
+        }
+        return itemID;
+    }
+
+    /**
+     * Returns a <b>defensive copy</b> of the template stack registered for the given ItemID.
+     * Aliased IDs (see {@link #renormalizeAndMerge()}) transparently resolve to their
+     * canonical entry. Callers may freely mutate the returned stack.
+     *
+     * @param itemID the ItemID to look up
+     * @return a copy of the registered template, or {@link ItemStack#EMPTY} if unknown
+     */
+    public static @NotNull ItemStack getItemStack(@NotNull ItemID itemID) {
+        ItemStack item = getItemStackTemplate(itemID);
+        if(item.isEmpty())
+        {
+            return ItemStack.EMPTY;
+        }
+        return item.copy();
+    }
+
+    /**
+     * Returns the <b>live template stack</b> registered for the given ItemID, without copying.
+     * Aliased IDs transparently resolve to their canonical entry.
+     * <p>
+     * <b>Read-only!</b> The returned stack is the registry's internal template — callers must
+     * never mutate it (no {@code setCount}, no component changes). Intended only for hot paths
+     * (e.g. per-frame rendering) where the defensive copy of {@link #getItemStack(ItemID)}
+     * would cause needless allocations.
+     *
+     * @param itemID the ItemID to look up
+     * @return the live template stack, or {@link ItemStack#EMPTY} if unknown
+     */
+    public static @NotNull ItemStack getItemStackTemplate(@NotNull ItemID itemID) {
+        ItemStack item = itemIDMap.get(itemID);
+        if(item == null)
+        {
+            // The ID may have been merged into a canonical ID during migration.
+            ItemID canonical = itemIDAliasMap.get(itemID);
+            if(canonical != null)
+                item = itemIDMap.get(canonical);
+        }
+        if(item == null)
+        {
+            return ItemStack.EMPTY;
+        }
+        return item;
+    }
+
+    public static ConcurrentHashMap<ItemID, ItemStack> getItemIDMap()
+    {
+        return new ConcurrentHashMap<>(itemIDMap);
+    }
+
+    /**
+     * Task #24: true iff this ItemID resolves to a real item template on <b>this side</b>
+     * (whichever JVM calls it — master, slave, or client), using the local
+     * {@link #itemIDMap}.
+     * <p>
+     * On the master (sole minter) every valid short resolves, so this is always {@code true}
+     * for non-{@link ItemID#INVALID_ID} ids. On a slave/client that lacks the mod for an item
+     * the master registered, the template is {@link ItemStack#EMPTY} (the resource key can't be
+     * parsed here) and this returns {@code false}. Callers use it to hide bank rows / balance
+     * series / command output for items that would otherwise render as {@code minecraft:air} or
+     * a wrong item on a mixed-mod master/slave setup. Filtering is display-only — the
+     * master-owned balance is untouched and stays visible on servers that can resolve the item.
+     *
+     * @param itemID the ItemID to test (null / {@link ItemID#INVALID_ID} → {@code false})
+     * @return {@code true} if the id resolves to a non-empty template locally
+     */
+    public static boolean isResolvableOnThisServer(ItemID itemID)
+    {
+        if (itemID == null || !itemID.isValid())
+            return false;
+        return !getItemStackTemplate(itemID).isEmpty();
+    }
+
+    /**
+     * @return a copy of the alias table (merged ID → canonical ID).
+     *         Used to sync aliases to clients and slave servers so that references
+     *         keyed by a merged ID keep resolving on every side.
+     */
+    public static Map<ItemID, ItemID> getItemIDAliasMap()
+    {
+        return new HashMap<>(itemIDAliasMap);
+    }
+
+    /**
+     * Adopts alias entries received from the master/server sync.
+     * Existing local aliases are kept and updated; entries are never removed here
+     * (a full re-sync happens on every player join / slave connect).
+     * <p>
+     * Every entry is inserted via {@link #putAlias(ItemID, ItemID)} so the write-side
+     * invariant is checked even for aliases arriving from a remote source. If the master
+     * ever produces a corrupt alias (source also present in {@link #itemIDMap}), the
+     * rejection is logged with a stack trace and the slave/client stays consistent — a
+     * corrupt state does not silently propagate across the network.
+     *
+     * @param aliases alias entries (merged ID → canonical ID) from a sync packet
+     */
+    public static void applyAliases(Map<ItemID, ItemID> aliases)
+    {
+        if(aliases == null || aliases.isEmpty())
+            return;
+        for(Map.Entry<ItemID, ItemID> entry : aliases.entrySet())
+        {
+            putAlias(entry.getKey(), entry.getValue());
+        }
+    }
+
+    /**
+     * Invariant-checked insertion into {@link #itemIDAliasMap} — the single sanctioned
+     * write path for the alias table (Task #14).
+     * <p>
+     * <b>Invariant:</b> for every alias {@code source -> target}, the {@code source} short
+     * MUST NOT also be present in {@link #itemIDMap}. Historically an ID present in BOTH
+     * maps at once broke {@link #resolveAlias(ItemID)}'s one-hop pre-Fix-C behavior and
+     * cascaded into misrouted bank reads (2,809 such entries surfaced in a user's test
+     * world, 2026-07-08). {@link #repairCorruptAliasEntries()} heals such states at load
+     * time; this helper prevents new ones from being created in the first place.
+     * <p>
+     * <b>On violation:</b> an ERROR is logged with the source/target shorts, the source's
+     * cached registry name (or {@code <unknown>} if the name has not resolved yet), the
+     * current sizes of both maps, and a snapshot of the calling stack trace. The
+     * insertion is <b>rejected</b> — {@code itemIDAliasMap} is left unchanged. A missing
+     * alias is always safer than a corrupt one; the caller receives {@code false} so it
+     * can adjust behavior if desired, but the default "ignore the return value" behavior
+     * is safe (a subsequent access to the source ID will resolve to itself instead of
+     * misrouting to an unrelated canonical).
+     * <p>
+     * <b>Not used by</b> {@link #repairCorruptAliasEntries()} — that pass only ever
+     * REMOVES entries (via direct {@code .remove(...)} calls), so the write-side
+     * invariant is trivially preserved. The repair pass and this helper form the two
+     * ends of the invariant's enforcement: the helper prevents new corrupt entries, the
+     * repair pass heals pre-existing ones surfaced from persisted world data.
+     * <p>
+     * <b>Test-only bypass:</b> {@link #putAliasRaw_forTesting(ItemID, ItemID)} inserts
+     * without the guard so tests can install intentional invariant violations for the
+     * repair-pass tests. Never call it from production code.
+     *
+     * @param source the alias's source ItemID (must not already be a key in
+     *               {@link #itemIDMap}); not {@code null}
+     * @param target the alias's target (canonical) ItemID; not {@code null}
+     * @return {@code true} if the alias was inserted; {@code false} if the invariant
+     *         was violated and the insertion was rejected (an ERROR log was emitted with
+     *         the calling stack trace)
+     */
+    public static boolean putAlias(@NotNull ItemID source, @NotNull ItemID target) {
+        if (itemIDMap.containsKey(source)) {
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                String sourceName = safeItemIDName(source);
+                String targetName = safeItemIDName(target);
+                // Snapshot the calling stack trace — the whole point of this guard is
+                // that a future occurrence produces an actionable trace so the trigger
+                // can be located. Pass the Throwable to LOGGER.error(String, Throwable)
+                // so slf4j formats the frames the same way as a real exception.
+                Throwable trace = new Throwable(
+                        "[ItemIDManager] putAlias invariant-violation stack trace (not thrown)");
+                BACKEND_INSTANCES.LOGGER.error(
+                        "[ItemIDManager] Rejected alias insertion — invariant violation: "
+                                + "source short is already present in itemIDMap. "
+                                + "source=#" + source.getShort() + " (" + sourceName + "), "
+                                + "target=#" + target.getShort() + " (" + targetName + "), "
+                                + "itemIDMap.size=" + itemIDMap.size() + ", "
+                                + "itemIDAliasMap.size=" + itemIDAliasMap.size()
+                                + ". No entry was added — the source ID will resolve to "
+                                + "itself. Task #13's repairCorruptAliasEntries() is the "
+                                + "sanctioned remover of pre-existing corrupt entries.",
+                        trace);
+            }
+            return false;
+        }
+        itemIDAliasMap.put(source, target);
+        markPersistDirty(); // Task #55 (alias write funnels through here; suppressed during load)
+        return true;
+    }
+
+    /**
+     * Test-only escape hatch: inserts into {@link #itemIDAliasMap} <b>without</b> the
+     * {@link #putAlias(ItemID, ItemID)} invariant guard. Enables tests that must install
+     * an intentional invariant-violating alias entry (e.g. the repair-pass regression
+     * tests seed the exact corrupt state they then verify the repair pass heals).
+     * <p>
+     * Never call in production — this is the deliberate bypass of the Task #14 write-side
+     * guard. All production write paths must go through {@link #putAlias(ItemID, ItemID)}.
+     *
+     * @param source the alias's source ItemID
+     * @param target the alias's target (canonical) ItemID
+     */
+    public static void putAliasRaw_forTesting(@NotNull ItemID source, @NotNull ItemID target) {
+        itemIDAliasMap.put(source, target);
+    }
+
+    /**
+     * Resolves an ItemID to a human-readable name for log messages, falling back to
+     * {@code <unknown>} when the cached name is empty or is only the numeric-short
+     * placeholder (an ID whose registry name has not resolved yet — see
+     * {@link ItemID#getName()}). Never throws.
+     */
+    private static String safeItemIDName(ItemID id) {
+        if (id == null) return "<null>";
+        try {
+            String name = id.getName();
+            if (name == null || name.isEmpty() || name.equals(String.valueOf(id.getShort())))
+                return "<unknown>";
+            return name;
+        } catch (Throwable t) {
+            return "<unknown>";
+        }
+    }
+
+    public static CompletableFuture<ItemID> registerItemStackServerSide(@NotNull ItemStack itemStack)
+    {
+        // Work on a normalized copy (volatile components stripped) — identity is always
+        // established on normalized stacks and the caller's stack is never mutated.
+        ItemStack cpy = VolatileItemComponents.normalize(itemStack);
+        cpy.setCount(1);
+        CompletableFuture<ItemID>  future = new CompletableFuture<>();
+        ItemID itemID = getItemID(cpy);
+        if(itemID.isValid())
+        {
+            future.complete(itemID);
+            return future;
+        }
+
+        if(MultiServerUtils.canInteractWithBankSystem())
+        {
+            future.complete(registerItemStackServerSide_direct(cpy));
+        }
+        else
+        {
+            RegisterItemIDPacket.sendRegisterItemIDPacketToMaster(cpy);
+            pendingItemIDs.put(cpy, future);
+        }
+        return future;
+    }
+    /*public static CompletableFuture<List<ItemID>> registerItemStackServerSide(List<ItemStack> itemStacks) {
+        List<ItemStack> cpyStacks = new ArrayList<>();
+        CompletableFuture<List<ItemID>> groupFuture = new CompletableFuture<>();
+        List<ItemID> foundItemIDs = new ArrayList<>();
+        for (ItemStack itemStack : itemStacks)
+        {
+            ItemID itemID = getItemID(itemStack);
+            if(!itemID.isValid()) {
+                ItemStack cpy = itemStack.copy();
+                cpy.setCount(1);
+                cpyStacks.add(cpy);
+                CompletableFuture<ItemID> future = new CompletableFuture<>();
+                pendingItemIDs.put(cpy, future);
+            }
+            else
+            {
+                foundItemIDs.add(itemID);
+            }
+        }
+        if(cpyStacks.isEmpty())
+        {
+            groupFuture.complete(foundItemIDs);
+        }
+        else {
+            if(MultiServerManager.isRunning() && MultiServerManager.isMaster()) {
+                pendingItemIDGroups.add(Pair.of(cpyStacks, groupFuture));
+                RegisterItemIDPacket.sendRegisterItemIDPacketToMaster(cpyStacks);
+            }
+            else
+            {
+                for(ItemStack stack : cpyStacks)
+                {
+                    foundItemIDs.add(registerItemStackServerSide_direct(stack));
+                }
+            }
+        }
+        return groupFuture;
+    }*/
+
+
+    public static CompletableFuture<ItemID> registerItemStackClientSide(@NotNull ItemStack itemStack)
+    {
+        ItemID itemID = ItemIDManager.getItemID(itemStack);
+        if(itemID.isValid())
+            return CompletableFuture.completedFuture(itemID);
+        // Register/await on a normalized copy so the pending-match in receiveSyncPacket
+        // compares normalized stacks on both sides.
+        ItemStack cpy = VolatileItemComponents.normalize(itemStack);
+        cpy.setCount(1);
+        CompletableFuture<ItemID>  future = new CompletableFuture<>();
+        RegisterItemIDPacket.sendRegisterItemIDPacketToServer(cpy);
+        pendingItemIDs.put(cpy, future);
+        return future;
+    }
+    public static CompletableFuture<List<ItemID>> registerItemStackClientSide(List<ItemStack> itemStacks) {
+        List<ItemStack> cpyStacks = new ArrayList<>();
+        CompletableFuture<List<ItemID>> groupFuture = new CompletableFuture<>();
+        List<ItemID> foundItemIDs = new ArrayList<>();
+        for (ItemStack itemStack : itemStacks)
+        {
+            ItemID itemID = getItemID(itemStack);
+            if(!itemID.isValid()) {
+                // Normalized copy: see registerItemStackClientSide(ItemStack).
+                ItemStack cpy = VolatileItemComponents.normalize(itemStack);
+                cpy.setCount(1);
+                cpyStacks.add(cpy);
+                CompletableFuture<ItemID> future = new CompletableFuture<>();
+                pendingItemIDs.put(cpy, future);
+            }
+            else
+            {
+                foundItemIDs.add(itemID);
+            }
+        }
+        if(cpyStacks.isEmpty())
+        {
+            groupFuture.complete(foundItemIDs);
+        }
+        else {
+            pendingItemIDGroups.add(Pair.of(cpyStacks, groupFuture));
+            RegisterItemIDPacket.sendRegisterItemIDPacketToServer(cpyStacks);
+        }
+        return groupFuture;
+    }
+
+
+    public static @NotNull ItemID registerItemStackServerSide_direct(@NotNull ItemStack itemStack)
+    {
+        List<ItemStack> itemStacks  = new ArrayList<>();
+        itemStacks.add(itemStack);
+        List<ItemID> ids = registerItemStackServerSide_direct(itemStacks);
+        if(ids.isEmpty())
+            return ItemID.INVALID_ID;
+        return ids.getFirst();
+    }
+
+    public static List<ItemID> registerItemStackServerSide_direct(List<ItemStack> itemStacks)
+    {
+        // Task #23: on the slave, minting is delegated to the master via an ARRS round-trip.
+        // The slave-branch is a pure lookup-or-delegate — no fresh shorts are ever allocated
+        // locally, guaranteeing zero cross-server ID divergence (Acceptance Criterion A).
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer) {
+            return registerItemStackServerSide_direct_slave(itemStacks);
+        }
+        List<ItemID> ids = new ArrayList<>();
+        Map<ItemID, ItemStack> newItemIDMap = new ConcurrentHashMap<>();
+        synchronized (itemIDMap) {
+            for (ItemStack stack : itemStacks) {
+                // Search the entire list to check if the same item stack already is registered
+                ItemID id = getItemID(stack);
+                if (id != null && id.isValid()) {
+                    ids.add(id);
+                    continue;
+                }
+
+                if (stack.isEmpty()) {
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
+
+                // Registration latch (Task #16 master, Task #22 slave): while the
+                // authoritative ItemID assignment has not been established yet this session
+                // (clear() ran; master: load_itemIDs() has not completed; slave:
+                // SyncItemIDsPacket has not arrived), minting a fresh short would poison the
+                // just-cleared registry with a pre-authoritative assignment that later
+                // collides with the persisted / master-sent shorts. Refuse the mint, mirror
+                // the empty-stack refusal (INVALID_ID, no map mutation), and log an ERROR
+                // pointing at the caller. Lookups above are unaffected.
+                if (registrationLatchArmed && BACKEND_INSTANCES != null) {
+                    registrationLatchRejections++;
+                    if (BACKEND_INSTANCES.LOGGER != null) {
+                        String itemName = ItemUtilities.getItemIDStr(stack.getItem());
+                        if (registrationLatchRejections == 1) {
+                            // Full evidence only for the FIRST rejection of this arming
+                            // cycle — a bulk caller must not flood the log (see field doc).
+                            Throwable trace = new Throwable(
+                                    "[ItemIDManager] pre-authoritative registration stack trace (not thrown)");
+                            String sideLabel = BACKEND_INSTANCES.isSlaveServer ? "slave-side" : "master-side";
+                            String releaseHint = BACKEND_INSTANCES.isSlaveServer
+                                    ? "Two possible causes: (a) the caller runs BEFORE "
+                                        + "SyncItemIDsPacket has been received — defer registration until "
+                                        + "after the slave sync arrives; (b) the master is unreachable so "
+                                        + "no sync ever arrived — the latch then stays armed on purpose "
+                                        + "and the slave is not operational for ItemID-dependent flows. "
+                                    : "Two possible causes: (a) the caller runs BEFORE "
+                                        + "loadDataFromFiles() — move it after the load; (b) ItemIDs.nbt "
+                                        + "exists but FAILED to load — the latch then stays armed on "
+                                        + "purpose and the load-failure recovery (backup + retry) "
+                                        + "restores registration afterwards. ";
+                            BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] REJECTED " + sideLabel + " ItemID "
+                                    + "registration of '" + itemName
+                                    + "' — the authoritative ItemID registry has not been established this "
+                                    + "session (registration latch armed). Minting a fresh short now could "
+                                    + "collide with the authoritative assignment and corrupt item identity "
+                                    + "(Task #16 master, Task #22 slave). "
+                                    + releaseHint
+                                    + "Returning INVALID_ID. "
+                                    + "Further rejections of this arming cycle are logged at DEBUG "
+                                    + "only.", trace);
+                        } else {
+                            BACKEND_INSTANCES.LOGGER.debug("[ItemIDManager] Registration latch rejected '"
+                                    + itemName + "' (rejection #" + registrationLatchRejections
+                                    + " of this arming cycle).");
+                        }
+                    }
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
+
+                // Monotonic allocation: hand out the next unused short from the counter.
+                // The counter has already moved past every short that was ever allocated
+                // (including dropped-at-load shorts — see #load()), so a fresh short is
+                // guaranteed never to collide with old saved data.
+                //
+                // Overflow: the counter is an int so exceeding Short.MAX_VALUE is explicit
+                // rather than a silent wraparound into negative shorts. When the ItemID
+                // space is exhausted we return INVALID_ID and refuse to touch the registry;
+                // callers are expected to check id.isValid() (see criterion 5 in Task #11).
+                if (nextShortCounter > Short.MAX_VALUE) {
+                    logSpaceExhausted(stack);
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
+                short newID = (short) nextShortCounter++;
+                // Belt-and-suspenders: on a migrated legacy world the seed could theoretically
+                // collide with an unrelated legacy alias short — skip past any occupied ID
+                // and check the overflow bound again each time.
+                while (itemIDMap.containsKey(new ItemID(newID)) || itemIDAliasMap.containsKey(new ItemID(newID))) {
+                    if (nextShortCounter > Short.MAX_VALUE) {
+                        logSpaceExhausted(stack);
+                        ids.add(ItemID.INVALID_ID);
+                        newID = 0; // signal outer branch to skip the put
+                        break;
+                    }
+                    newID = (short) nextShortCounter++;
+                }
+                if (newID == 0)
+                    continue; // overflow inside the belt-and-suspenders loop
+
+                // Store a normalized template (volatile components stripped, count 1) so the
+                // registry never contains time-varying component data.
+                ItemStack cpy = VolatileItemComponents.normalize(stack);
+                String name = ItemUtilities.getItemIDStr(cpy.getItem());
+                id = new ItemID(newID, name);
+                cpy.setCount(1);
+                newItemIDMap.put(id, cpy);
+                itemIDMap.put(id, cpy);
+                ids.add(id);
+            }
+        }
+        if(!newItemIDMap.isEmpty()) {
+            markPersistDirty(); // Task #55 (genuinely new shorts minted + counter advanced)
+            onNewItemAdded(newItemIDMap);
+        }
+        return ids;
+    }
+
+    /**
+     * Slave-side branch of {@link #registerItemStackServerSide_direct(List)} (Task #23):
+     * <b>lookup-or-delegate</b> — never mints a local short.
+     * <p>
+     * <b>Per-stack decision ladder</b> (each stack in the input list is independently
+     * classified into one of these outcomes, so a mixed batch of known / rejected / unknown
+     * stacks all sees the right behavior in a single call):
+     * <ol>
+     *   <li><b>Empty stack</b> → {@link ItemID#INVALID_ID}. No cache touch. Mirrors the
+     *       master-branch empty-check.</li>
+     *   <li><b>Positive-cache hit</b> (already in {@link #itemIDMap}) → return the resolved
+     *       short. No ARRS. This is by far the hottest path — steady-state slave operation
+     *       only ever needs lookups against the master-synced map.</li>
+     *   <li><b>Latch armed</b> ({@link #registrationLatchArmed} = true, i.e.
+     *       {@code SyncItemIDsPacket} has not yet arrived) → {@link ItemID#INVALID_ID}, no
+     *       ARRS fired. The master connection is not guaranteed established yet at this
+     *       point (the sync packet is our "master is ready" signal); firing an ARRS from
+     *       this window can only fail. ERROR-logged for the first rejection per arming
+     *       cycle, DEBUG for subsequent ones — mirrors the master-side latch-refusal in
+     *       {@link #registerItemStackServerSide_direct(List)}.</li>
+     *   <li><b>Negative-cache / in-flight hit</b>
+     *       ({@link #slaveNegativeOrPendingCache} already contains the normalized stack) →
+     *       {@link ItemID#INVALID_ID}, no ARRS. The set acts as both a permanent negative
+     *       cache (master returned INVALID_ID earlier this session) and an in-flight guard
+     *       (ARRS already sent, awaiting response). Acceptance Criterion C.</li>
+     *   <li><b>Cache miss, latch released, negative-cache miss</b> — add every miss slot to
+     *       {@link #slaveNegativeOrPendingCache} (dedupe / in-flight mark), fire ONE ARRS
+     *       for the whole batch of misses via
+     *       {@link #sendToMasterAndPopulateCache(List, List)}, return
+     *       {@link ItemID#INVALID_ID} for the calling frame (Acceptance Criterion D:
+     *       fire-and-forget shape). The ARRS response asynchronously populates the positive
+     *       cache (map insert on the server thread) or leaves the entry in the negative
+     *       cache — the next lookup then resolves without another round-trip.</li>
+     * </ol>
+     * <p>
+     * <b>No local mint. No allocator touch. No monotonic counter change.</b> The counter
+     * ({@link #nextShortCounter}) is master-only concept on a slave; the slave only stores
+     * shorts master has minted for it, via {@link #receiveSyncPacket} (bulk sync) or via
+     * the async ARRS-response populator.
+     */
+    private static List<ItemID> registerItemStackServerSide_direct_slave(List<ItemStack> itemStacks) {
+        List<ItemID> ids = new ArrayList<>(itemStacks.size());
+        // Normalized copies for the ARRS payload. Kept aligned by index with the "miss keys"
+        // list below so the ARRS-response populator can map each returned short back to the
+        // right cache key. Not aligned with `ids` — this method returns INVALID_ID for every
+        // miss on the calling frame (Acceptance Criterion D: fire-and-forget shape); the
+        // second lookup on the caller's side reads the freshly populated positive cache.
+        List<ItemStack> missNormalizedStacks = new ArrayList<>();
+        List<NormalizedStackKey> missKeys = new ArrayList<>();
+
+        synchronized (itemIDMap) {
+            for (ItemStack stack : itemStacks) {
+                // Rule 1: empty stack → INVALID_ID.
+                if (stack == null || stack.isEmpty()) {
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
+
+                // Rule 2: positive-cache hit. getItemID() runs against the map and follows
+                // aliases — a stack whose short master sent via SyncItemIDsPacket resolves
+                // here without any network activity.
+                ItemID cached = getItemID(stack);
+                if (cached != null && cached.isValid()) {
+                    ids.add(cached);
+                    continue;
+                }
+
+                // Rule 3: latch armed → ERROR (first) / DEBUG (subsequent) + INVALID_ID, no
+                // ARRS. Mirrors the empty-stack refusal semantics and the master-side latch
+                // ERROR wording — see the field Javadoc of registrationLatchArmed for the
+                // arming/release contract on slaves.
+                if (registrationLatchArmed && BACKEND_INSTANCES != null) {
+                    registrationLatchRejections++;
+                    if (BACKEND_INSTANCES.LOGGER != null) {
+                        String itemName = ItemUtilities.getItemIDStr(stack.getItem());
+                        if (registrationLatchRejections == 1) {
+                            Throwable trace = new Throwable(
+                                    "[ItemIDManager] pre-sync slave registration stack trace (not thrown)");
+                            BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] REJECTED slave-side "
+                                    + "ItemID registration of '" + itemName + "' — the master's "
+                                    + "SyncItemIDsPacket has not arrived yet this session "
+                                    + "(registration latch armed). Firing a RegisterItemStacksBatchRequest "
+                                    + "from this window would race the master-ready signal. "
+                                    + "Deferring: returning INVALID_ID, NO ARRS sent. "
+                                    + "Further rejections of this arming cycle are logged at DEBUG only.",
+                                    trace);
+                        } else {
+                            BACKEND_INSTANCES.LOGGER.debug("[ItemIDManager] Slave registration latch rejected '"
+                                    + itemName + "' (rejection #" + registrationLatchRejections
+                                    + " of this arming cycle).");
+                        }
+                    }
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
+
+                // Normalize once for cache-key computation AND for the ARRS payload — matches
+                // the master's identity semantics (see VolatileItemComponents.normalize).
+                ItemStack normalized = VolatileItemComponents.normalize(stack);
+                normalized.setCount(1);
+                NormalizedStackKey key = new NormalizedStackKey(normalized);
+
+                // Rule 4: negative-cache / in-flight hit → INVALID_ID, no ARRS. Master already
+                // said INVALID (permanent rejection this session) OR an ARRS is in flight and
+                // has not returned yet (dedupe: we don't fire another ARRS for the same stack).
+                if (slaveNegativeOrPendingCache.containsKey(key)) {
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
+
+                // Rule 5: real miss → record for the batched ARRS below.
+                slaveNegativeOrPendingCache.put(key, Boolean.TRUE);
+                missNormalizedStacks.add(normalized);
+                missKeys.add(key);
+                ids.add(ItemID.INVALID_ID);
+            }
+        }
+
+        if (!missNormalizedStacks.isEmpty())
+            sendToMasterAndPopulateCache(missNormalizedStacks, missKeys);
+
+        return ids;
+    }
+
+    /**
+     * Batched slave→master ARRS dispatch + response populator (Task #23). Called once per
+     * {@link #registerItemStackServerSide_direct_slave} invocation whose classification pass
+     * produced at least one miss slot.
+     * <p>
+     * <b>Threading discipline — this is the important part:</b>
+     * <ul>
+     *   <li>The ARRS response {@code whenComplete} runs on a <b>netty thread</b> (the ARRS
+     *       system's inbound handler), NOT on the server tick thread. Mutating
+     *       {@link #itemIDMap} or {@link #slaveNegativeOrPendingCache} directly from that
+     *       thread would race the tick thread's reads (getItemID / getItemStackTemplate) that
+     *       run concurrently on every server tick.</li>
+     *   <li>Every mutation and every log emission is therefore hopped onto the server thread
+     *       via {@link net.minecraft.server.MinecraftServer#execute(Runnable)}. This matches
+     *       the {@code SyncItemIDsPacket.handleOnSlave} discipline (whose Architectury
+     *       {@code ForwardPacketContext} does the same marshalling on that packet path).</li>
+     *   <li>If the server reference is null at response time (world stopped between fire and
+     *       response), the mutation is skipped — the negative-cache entry is drained on
+     *       {@link #clear()} anyway, so leaving it in the "in-flight" state is safe.</li>
+     * </ul>
+     *
+     * @param normalizedStacks the miss-slot normalized stacks (index-aligned with {@code keys})
+     * @param keys             the {@link NormalizedStackKey} entries added to
+     *                         {@link #slaveNegativeOrPendingCache} for each miss slot — the
+     *                         populator uses these to remove entries on a positive response
+     *                         (positive-cache lookup wins from then on) and keep them for a
+     *                         negative response
+     */
+    private static void sendToMasterAndPopulateCache(List<ItemStack> normalizedStacks,
+                                                     List<NormalizedStackKey> keys) {
+        slaveArrsRequestsFired++;
+        net.kroia.banksystem.networking.multi_server.RegisterItemStacksBatchRequest
+                .sendToMaster(normalizedStacks)
+                .whenComplete((response, ex) -> {
+                    // Marshal onto the server thread before touching any static state — see
+                    // the Javadoc's "Threading discipline" block for why this is not optional.
+                    Runnable populator = () -> populateSlaveCacheFromResponse(normalizedStacks, keys, response, ex);
+                    net.minecraft.server.MinecraftServer server = UtilitiesPlatform.getServer();
+                    if (server != null) {
+                        server.execute(populator);
+                    } else {
+                        // No server (test harness / world stop race) — nothing to mutate
+                        // safely. clear() has already drained the negative cache anyway.
+                        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                            BACKEND_INSTANCES.LOGGER.debug("[ItemIDManager] Slave ARRS response arrived "
+                                    + "without a live server — skipping cache populate.");
+                    }
+                });
+    }
+
+    /**
+     * Server-thread body of the ARRS-response populator (Task #23). Called from
+     * {@link #sendToMasterAndPopulateCache}'s {@code server.execute(...)} hop — never call
+     * directly from a netty thread. See that method's Javadoc for the threading contract.
+     */
+    private static void populateSlaveCacheFromResponse(List<ItemStack> normalizedStacks,
+                                                       List<NormalizedStackKey> keys,
+                                                       @Nullable List<ItemID> response,
+                                                       @Nullable Throwable ex) {
+        Map<ItemID, ItemStack> newItemIDMap = new ConcurrentHashMap<>();
+        boolean transportFailure = ex != null || response == null;
+        synchronized (itemIDMap) {
+            for (int i = 0; i < normalizedStacks.size(); i++) {
+                NormalizedStackKey key = keys.get(i);
+                ItemStack normalized = normalizedStacks.get(i);
+                ItemID responseId = transportFailure || i >= response.size()
+                        ? ItemID.INVALID_ID
+                        : response.get(i);
+
+                boolean masterAccepted = responseId != null
+                        && responseId.getShort() != ItemID.INVALID_ID.getShort();
+                if (masterAccepted) {
+                    // Positive response: master minted / already had a short. Remove the
+                    // in-flight marker so subsequent lookups hit the positive map. Insert the
+                    // template under the master-authoritative short via putIfAbsent — if the
+                    // sync packet arrived first with a different short mapping (shouldn't
+                    // happen but defensive), keep it. Otherwise install so the second lookup
+                    // succeeds (Acceptance Criterion D).
+                    slaveNegativeOrPendingCache.remove(key);
+                    // Aliased shorts should never come back from master (its own registry has
+                    // resolved them internally); but guard anyway — never install an alias
+                    // short as a live map entry (would violate the itemIDAliasMap invariant).
+                    if (!itemIDAliasMap.containsKey(responseId)) {
+                        ItemStack templateCopy = normalized.copy();
+                        templateCopy.setCount(1);
+                        ItemStack prev = itemIDMap.putIfAbsent(responseId, templateCopy);
+                        if (prev == null) {
+                            // Update the name cache on the master-supplied short. Not strictly
+                            // required — resolveAlias / getItemStackTemplate work by short
+                            // regardless of name_cache — but keeps log lines readable.
+                            responseId.tryUpdateNameCache();
+                            newItemIDMap.put(responseId, templateCopy);
+                        }
+                    }
+                } else {
+                    // Negative response (or transport failure): keep the entry in the
+                    // negative cache; the next lookup returns INVALID_ID immediately without
+                    // firing another ARRS. Optionally INFO-log the first rejection per stack
+                    // per session so mixed-mod setups leave a trail.
+                    if (!transportFailure && slaveRejectedLoggedOnce.putIfAbsent(key, Boolean.TRUE) == null) {
+                        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                            String itemName = ItemUtilities.getItemIDStr(normalized.getItem());
+                            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Master rejected registration "
+                                    + "of '" + itemName + "' — item is unknown to the master's "
+                                    + "registry (mod not installed on master?). BankSystem operations "
+                                    + "on this item will be unavailable on this slave.");
+                        }
+                    }
+                }
+            }
+        }
+        // Fire the same broadcast as the master-branch when new items landed — clients
+        // connected to this slave still need to know about the newly-populated shorts.
+        if (!newItemIDMap.isEmpty())
+            onNewItemAdded(newItemIDMap);
+    }
+
+    /**
+     * @return the count of {@code RegisterItemStacksBatchRequest} calls fired by the
+     *         slave-side delegation path since the current session's {@link #clear()}. Every
+     *         batch call counts as one, regardless of the number of miss slots inside it.
+     *         In-game test suite only.
+     */
+    public static int getSlaveArrsRequestsFired_forTesting() {
+        return slaveArrsRequestsFired;
+    }
+
+    /** Resets the ARRS-fired counter to 0. In-game test suite only. */
+    public static void resetSlaveArrsCounter_forTesting() {
+        slaveArrsRequestsFired = 0;
+    }
+
+    /**
+     * @return {@code true} iff the given stack is currently in the slave-side negative /
+     *         in-flight cache (see {@link #slaveNegativeOrPendingCache}). Uses the same
+     *         normalization the delegation path uses. In-game test suite only.
+     */
+    public static boolean isInSlaveNegativeCache_forTesting(ItemStack stack) {
+        if (stack == null || stack.isEmpty())
+            return false;
+        ItemStack normalized = VolatileItemComponents.normalize(stack);
+        normalized.setCount(1);
+        return slaveNegativeOrPendingCache.containsKey(new NormalizedStackKey(normalized));
+    }
+
+    /**
+     * Clears the slave-side negative / in-flight cache and the "logged once" dedup. In-game
+     * test suite only — teardown hook for tests that mutate this state.
+     */
+    public static void clearSlaveNegativeCache_forTesting() {
+        slaveNegativeOrPendingCache.clear();
+        slaveRejectedLoggedOnce.clear();
+    }
+
+    /**
+     * Looks up the ItemID registered for the given stack.
+     * <p>
+     * Identity is established on a <b>normalized copy</b> of the stack (volatile and
+     * deposit-gated components stripped, count forced to 1) — the passed stack is <b>never
+     * mutated</b>. Stored templates are normalized as well, so two stacks that differ only in
+     * such components (e.g. a food-decay timestamp) resolve to the same ItemID, while
+     * meaningful components (enchantments, potion contents, ...) still distinguish IDs.
+     * Whether a gated stack's <i>state</i> is acceptable for deposit is a separate question,
+     * answered by {@link VolatileItemComponents#isDepositEquivalent} at the credit boundaries.
+     *
+     * @param itemStack the stack to look up (not mutated)
+     * @return the registered (canonical) ItemID, or {@link ItemID#INVALID_ID} if unknown
+     */
+    public static @NotNull ItemID getItemID(@NotNull ItemStack itemStack)
+    {
+        // Normalize into a working copy: never mutate the caller's stack
+        // (the previous implementation temporarily changed its count).
+        ItemStack query = VolatileItemComponents.normalize(itemStack);
+        query.setCount(1);
+        // Fast path: exact component comparison (works for items without registry-backed holders)
+        for(Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet())
+        {
+            if(ItemStack.isSameItemSameComponents(query, entry.getValue()))
+            {
+                return entry.getKey();
+            }
+        }
+        // Fallback: compare by serialized NBT using the server's registry.
+        // Tag.equals() compares string/int values, not Holder identity, so this
+        // correctly matches enchanted books, potions, etc. across registry instances.
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if (access != null) {
+            try {
+                Tag searchTag = query.save(access);
+                for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet()) {
+                    try {
+                        Tag existingTag = entry.getValue().save(access);
+                        if (searchTag.equals(existingTag)) {
+                            return entry.getKey();
+                        }
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {}
+        }
+        return ItemID.INVALID_ID;
+    }
+
+    /*private static @NotNull ItemID generateIdFromItemStack(@NotNull ItemStack itemStack)
+    {
+        if(itemStack.isEmpty())
+        {
+            UUID emptyUUID = UUID.nameUUIDFromBytes(("EMPTY").getBytes());
+            return new ItemID(emptyUUID);
+        }
+        int oldAmount = itemStack.getCount();
+        itemStack.setCount(1);
+        Tag itemDataTag = ItemStack.CODEC.encodeStart(NbtOps.INSTANCE, itemStack).getOrThrow();
+        String tagStr = itemDataTag.getAsString();
+        UUID uuid = UUID.nameUUIDFromBytes(tagStr.getBytes());
+        itemStack.setCount(oldAmount);
+        return new ItemID(uuid);
+    }*/
+
+
+
+
+    private static void onNewItemAdded(Map<ItemID, ItemStack> newItems)
+    {
+        // Broadcast update to players
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(newItems);
+        if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
+        {
+            packet.broadcastToSlaves();
+        }
+        packet.broadcastToClients();
+    }
+    public static void onPlayerJoined(@NotNull ServerPlayer player)
+    {
+        Map<ItemID, ItemStack> items = new HashMap<>(itemIDMap);
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
+        packet.sendToClient(player);
+    }
+    public static void receiveSyncPacket(SyncItemIDsPacket packet)
+    {
+        receiveSyncPacket(packet, true);
+    }
+
+    /**
+     * Handles an incoming ItemID sync packet.
+     *
+     * @param packet             the sync packet
+     * @param adoptComponentLists whether to adopt the sender's config-sourced volatile /
+     *                            deposit-gated component lists. {@code true} for remote
+     *                            clients and slave servers (the sender's lists are
+     *                            authoritative there). {@code false} on a singleplayer /
+     *                            integrated-server client: both sides share the static
+     *                            {@link VolatileItemComponents} state, so the packet's lists
+     *                            are a possibly STALE snapshot of this side's own state —
+     *                            adopting them would asynchronously roll back the applied
+     *                            set and trigger spurious renormalize/merge passes
+     *                            (observed corrupting a live registry).
+     */
+    public static void receiveSyncPacket(SyncItemIDsPacket packet, boolean adoptComponentLists)
+    {
+        // First sync after joining: snapshot the (vanilla-synced) datapack tags so later
+        // runtime tag rebinds on this side cannot diverge from the master's applied set.
+        // Later syncs on the same connection intentionally keep the existing snapshot.
+        // NOTE: no merge guard here — clients and slave servers follow the master's
+        // decision unconditionally (the master already ran the startup guard).
+        VolatileItemComponents.captureTagSnapshotIfAbsent();
+        if(adoptComponentLists)
+        {
+            // Adopt the sender's config-sourced volatile + deposit-gated component lists first,
+            // so this side normalizes (and deposit-gates) exactly like the master/server that
+            // produced the packet. Non-short-circuiting |: both lists must always be applied.
+            // (The datapack-tag part of both sets is distributed by vanilla tag sync.)
+            boolean componentSetsChanged = VolatileItemComponents.setConfigComponentIds(packet.getVolatileComponentIds());
+            componentSetsChanged |= VolatileItemComponents.setGatedConfigComponentIds(packet.getDepositGatedComponentIds());
+            if(componentSetsChanged)
+            {
+                renormalizeAndMerge();
+            }
+        }
+        // Adopt the sender's alias table so bank balances / markets keyed by a merged ID
+        // resolve on this side as well.
+        applyAliases(packet.getAliases());
+        // Task #25: the wire format is now Map<ItemID, CompoundTag> — inflate each entry
+        // via ItemStack.parseOptional against THIS side's RegistryAccess. Encoding by
+        // resource key means entries whose host mod is missing on this side surface
+        // gracefully as Optional.empty() (or an EMPTY stack); we log INFO once per
+        // short per session and skip the entry, instead of the pre-fix behavior where
+        // the numeric-ID codec silently bound the short to whatever item happened to
+        // sit at that slot on this side's runtime registry table.
+        RegistryAccess syncRegistryAccess = UtilitiesPlatform.getRegistryAccess();
+        Map<ItemID, CompoundTag> items = packet.getItems();
+        for(Map.Entry<ItemID, CompoundTag> entry : items.entrySet())
+        {
+            ItemID id = entry.getKey();
+            CompoundTag stackTag = entry.getValue();
+            ItemStack itemStack;
+            if(syncRegistryAccess == null)
+            {
+                // Defensive: without RegistryAccess we cannot inflate any tag. Skip the
+                // entry entirely rather than fall back to numeric-ID decoding — the whole
+                // point of the codec swap is to refuse silent divergence.
+                if(BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null && unresolvableItemsLoggedOnce.add(id))
+                {
+                    BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] SyncItemIDsPacket dropped entry short="
+                            + id.getShort() + " (no RegistryAccess available yet on this side).");
+                }
+                continue;
+            }
+            Optional<ItemStack> parsed = ItemStack.parse(syncRegistryAccess, stackTag);
+            if(parsed.isEmpty() || parsed.get().isEmpty())
+            {
+                if(BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null && unresolvableItemsLoggedOnce.add(id))
+                {
+                    // Try to surface the failing resource key so admins can tell WHICH
+                    // mod is missing — the tag's "id" entry carries it in NBT form.
+                    String resourceKey = (stackTag != null && stackTag.contains("id")) ? stackTag.getString("id") : "<unknown>";
+                    BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] SyncItemIDsPacket dropped entry short="
+                            + id.getShort() + " id=" + resourceKey
+                            + " (item unresolvable on this server — mod not installed here?)");
+                }
+                continue;
+            }
+            itemStack = parsed.get();
+
+            // Re-normalize after network decode: stack construction during decode can
+            // re-attach volatile components (e.g. TFC stamps a fresh creation date onto
+            // any food stack built from the network stream).
+            ItemStack cpy = VolatileItemComponents.normalize(itemStack);
+            cpy.setCount(1);
+            String name = ItemUtilities.getItemIDStr(cpy.getItem());
+            entry.getKey().setNameCache_internal(name);
+
+            CompletableFuture<ItemID> pendingItemID = null;
+            ItemStack matchedKey = null;
+            for (Map.Entry<ItemStack, CompletableFuture<ItemID>> pendingEntry : pendingItemIDs.entrySet()) {
+                // Pending keys are stored normalized; compare against the normalized copy.
+                if (ItemStack.isSameItemSameComponents(cpy, pendingEntry.getKey())) {
+                    pendingItemID = pendingEntry.getValue();
+                    matchedKey = pendingEntry.getKey();
+                    break;
+                }
+            }
+            if (pendingItemID != null) {
+                pendingItemID.complete(id);
+                pendingItemIDs.remove(matchedKey);
+            }
+
+
+            // putIfAbsent: in singleplayer the server and client share the same static map.
+            // The server registers ItemStacks with correct server-registry Holders;
+            // the client sync must not overwrite them with client-decoded copies that
+            // have cross-registry Holder references (causes save failures).
+            // Alias guard: never resurrect an ID that was merged away. Sync packets can sit
+            // in the network queue while a renormalize pass merges the ID into a canonical
+            // one — re-inserting it here would leave the ID both aliased AND registered
+            // (an inconsistent registry that would even be saved to disk in singleplayer).
+            if (!itemIDAliasMap.containsKey(id))
+                itemIDMap.putIfAbsent(id, cpy);
+            id.tryUpdateNameCache();
+        }
+        MoneyItem.resetItemID();
+        List<Pair<List<ItemStack>, CompletableFuture<List<ItemID>>>> cpyList = new ArrayList<>(pendingItemIDGroups);
+        for(Pair<List<ItemStack>, CompletableFuture<List<ItemID>>> pair : cpyList)
+        {
+            List<ItemID> completeList = new ArrayList<>();
+            List<ItemStack> stacks = pair.first;
+            boolean isComplete = true;
+            for(ItemStack itemStack : stacks)
+            {
+                ItemID id = getItemID(itemStack);
+                if(id == null)
+                {
+                    isComplete = false;
+                    break;
+                }
+                completeList.add(id);
+            }
+            if(isComplete)
+            {
+                pendingItemIDGroups.remove(pair);
+                pair.second.complete(completeList);
+            }
+        }
+    }
+    public static void receiveRegisterItemIDPacket(RegisterItemIDPacket packet)
+    {
+        // Task #25: wire format is now List<CompoundTag> — inflate each entry via
+        // ItemStack.parseOptional against THIS side's RegistryAccess. Entries whose host
+        // mod is missing on the receiver drop out here (parse returns EMPTY) rather than
+        // registering a wrong item under a numeric-ID collision.
+        // No explicit normalization needed on the surviving stacks: network decode may
+        // re-attach volatile components (mod constructor hooks), but
+        // registerItemStackServerSide_direct normalizes both the identity lookup and the
+        // stored template.
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        List<CompoundTag> tags = packet.getItems();
+        if(access == null || tags.isEmpty())
+            return;
+        List<ItemStack> stacks = new ArrayList<>(tags.size());
+        for(CompoundTag stackTag : tags)
+        {
+            Optional<ItemStack> parsed = ItemStack.parse(access, stackTag);
+            if(parsed.isEmpty() || parsed.get().isEmpty())
+            {
+                if(BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                {
+                    String resourceKey = (stackTag != null && stackTag.contains("id")) ? stackTag.getString("id") : "<unknown>";
+                    BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] RegisterItemIDPacket dropped entry id="
+                            + resourceKey + " (item unresolvable on this server — mod not installed here?)");
+                }
+                continue;
+            }
+            stacks.add(parsed.get());
+        }
+        if(!stacks.isEmpty())
+            registerItemStackServerSide_direct(stacks);
+    }
+
+    @Override
+    public boolean save(CompoundTag tag) {
+        // Stamp the save-format version FIRST — every ItemIDs.nbt written by this build is
+        // format 2. Older files carry no such key (implicit legacy format 1); newer builds
+        // refuse to load files whose version exceeds their own (see BankSystemSaveFormat's
+        // forward-compatibility contract). The backup-fallback path below (empty live map →
+        // singleplayer server-leave backups) needs no special handling: the stamp describes
+        // the FILE layout this method writes, regardless of which in-memory map fed it.
+        tag.putInt(BankSystemSaveFormat.KEY_FORMAT_VERSION, BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT);
+        ConcurrentHashMap<ItemID, ItemStack> usedMap = itemIDMap;
+        Map<ItemID, ItemID> usedAliasMap = itemIDAliasMap;
+        Map<ItemID, ItemID> usedQuarantine = quarantinedAliases;
+        int usedCounter = nextShortCounter;
+        if(usedMap.isEmpty())
+        {
+            if(singlePlayerServerBackupOnPlayerLeave != null)
+                usedMap = singlePlayerServerBackupOnPlayerLeave;
+            if(singlePlayerServerAliasBackupOnPlayerLeave != null)
+                usedAliasMap = singlePlayerServerAliasBackupOnPlayerLeave;
+            // Same fallback for the quarantined corruption evidence: an empty live map means
+            // this save belongs to the world that was just left — persist ITS evidence, not
+            // the (cleared) live store.
+            if(singlePlayerServerQuarantineBackupOnPlayerLeave != null)
+                usedQuarantine = singlePlayerServerQuarantineBackupOnPlayerLeave;
+            // Persist the counter captured alongside the maps on the last clear() so a
+            // singleplayer save that fires after the server-leave clear keeps the counter's
+            // monotonic guarantee across the restart.
+            if(singlePlayerServerBackupCounterOnPlayerLeave > 0)
+                usedCounter = singlePlayerServerBackupCounterOnPlayerLeave;
+        }
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if(access == null)
+            return false;
+        ListTag listTag = new ListTag();
+        for(Map.Entry<ItemID, ItemStack> entry : usedMap.entrySet())
+        {
+            ItemStack itemStack = entry.getValue();
+            ItemID itemID = entry.getKey();
+            CompoundTag pairTag = new CompoundTag();
+            CompoundTag idTag = new CompoundTag();
+            itemID.save(idTag);
+            pairTag.put("itemID", idTag);
+            CompoundTag itemStackTag = new CompoundTag();
+            try {
+                Tag stackTag = itemStack.save(access, itemStackTag);
+                pairTag.put("itemStack", stackTag);
+            } catch (Exception e) {
+                // Skip items whose ItemStack can't be serialized in the current registry context
+                // (e.g. enchanted books registered from a different registry context).
+                // Never skip silently — a dropped entry means a dangling ItemID after reload.
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Failed to save ItemStack for " + itemID + ": " + e.getMessage());
+                continue;
+            }
+
+            listTag.add(pairTag);
+        }
+        tag.put("itemIDs", listTag);
+
+        // Persist the alias table so saved references to merged IDs keep resolving
+        // across restarts (see renormalizeAndMerge()).
+        ListTag aliasListTag = new ListTag();
+        for(Map.Entry<ItemID, ItemID> entry : usedAliasMap.entrySet())
+        {
+            CompoundTag aliasTag = new CompoundTag();
+            aliasTag.putShort("from", entry.getKey().getShort());
+            aliasTag.putShort("to", entry.getValue().getShort());
+            aliasListTag.add(aliasTag);
+        }
+        tag.put("itemIDAliases", aliasListTag);
+
+        // Persist quarantined corruption evidence (same entry shape as itemIDAliases, own
+        // key). These pairs are NOT part of the runtime alias table — they exist only so the
+        // cent-shift world-repair guard can still detect the corruption on future startups
+        // after a re-save stripped the rejected fingerprint aliases from itemIDAliases.
+        if (!usedQuarantine.isEmpty()) {
+            ListTag quarantinedListTag = new ListTag();
+            for (Map.Entry<ItemID, ItemID> entry : usedQuarantine.entrySet()) {
+                CompoundTag aliasTag = new CompoundTag();
+                aliasTag.putShort("from", entry.getKey().getShort());
+                aliasTag.putShort("to", entry.getValue().getShort());
+                quarantinedListTag.add(aliasTag);
+            }
+            tag.put(BankSystemSaveFormat.KEY_QUARANTINED_ALIASES, quarantinedListTag);
+        }
+
+        // Persist the monotonic short allocation counter. Ensures a dropped-at-load short is
+        // never re-issued (Task #11 / ISSUES.md #56). Stored as an int so an admin can spot
+        // the value approaching Short.MAX_VALUE (32767) in the world data.
+        tag.putInt("nextShortCounter", usedCounter);
+        return true;
+    }
+
+    @Override
+    public boolean load(CompoundTag tag) {
+        // Task #55: suppress persistence-dirty marking for the whole load (including any
+        // throw path) so a freshly loaded, unmutated world stays clean and the first timer
+        // save skips ItemIDs.nbt. Load-time repairs/format conversions are persisted by the
+        // handler's own one-shot re-save, independent of this flag.
+        boolean prevSuppressDirty = suppressDirty;
+        suppressDirty = true;
+        try {
+        // ---- Save-format gate (BankSystemSaveFormat) — runs BEFORE any static state is ----
+        // ---- mutated, so a refused file leaves the manager exactly as it was.          ----
+        // A missing version key means the file predates versioning: implicit legacy format 1.
+        int fileFormatVersion = tag.contains(BankSystemSaveFormat.KEY_FORMAT_VERSION)
+                ? tag.getInt(BankSystemSaveFormat.KEY_FORMAT_VERSION)
+                : BankSystemSaveFormat.ITEM_IDS_FORMAT_LEGACY;
+        if (fileFormatVersion > BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT) {
+            // The file was written by a NEWER BankSystem build — its layout cannot be
+            // interpreted safely. Refuse before touching anything; the data handler marks
+            // the session save-prohibited while this passes through, so the newer file on
+            // disk stays byte-identical.
+            throw new ItemIDsNewerFormatException(
+                    "ItemIDs.nbt has save-format version " + fileFormatVersion
+                            + ", but this BankSystem build (v" + net.kroia.banksystem.BankSystemMod.VERSION
+                            + ") only supports versions up to " + BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT
+                            + ". This world was saved by a newer BankSystem — update the mod. "
+                            + "Nothing was loaded or saved; the world data on disk is untouched.");
+        }
+        lastLoadedFormatVersion = fileFormatVersion;
+        // Reset the per-load one-shot signals, then flag legacy files for the one-shot
+        // conversion re-save (the next save stamps the current format version).
+        repairWasApplied = false;
+        lastLoadRequiresResave = fileFormatVersion < BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT;
+        // Provenance tracking (Task #16): re-record which shorts come from THIS file. Reset
+        // here — after the format gate, so a refused newer-format file mutates nothing —
+        // and filled by the insert loop below.
+        persistedShorts.clear();
+
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if(access == null)
+            return false;
+
+        ListTag listTag =  tag.getList("itemIDs", Tag.TAG_COMPOUND);
+        for(Tag tagElement : listTag)
+        {
+            CompoundTag compoundTag = (CompoundTag)tagElement;
+            if(compoundTag==null || !compoundTag.contains("itemID") || !compoundTag.contains("itemStack"))
+                continue;
+
+            CompoundTag itemStackTag = compoundTag.getCompound("itemStack");
+            CompoundTag itemIDTag = compoundTag.getCompound("itemID");
+
+            ItemID id = new ItemID(ItemID.INVALID_ID);
+            if(!id.load(itemIDTag))
+                continue;
+
+            Optional<ItemStack> itemStackOptional = ItemStack.parse(access, itemStackTag);
+            if(itemStackOptional.isEmpty()) {
+                // Silent-drop hazard (Task #11 / ISSUES.md #56): the ItemStack no longer
+                // resolves — its host mod may have been removed, or the stored NBT is
+                // corrupt. The entry is dropped, but the short remains RESERVED — the
+                // persisted monotonic nextShortCounter has already advanced past it, so
+                // this short can never be re-issued to a different item. Logging at WARN
+                // gives admins a hint when downstream ItemID-keyed data (bank balances,
+                // StockMarket markets, plugin caches) references an ID that no longer
+                // exists in the registry.
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                    // ItemID.getName() falls back to the numeric short (as string) when the
+                    // real registry name cannot be resolved — at the load-time drop site
+                    // the registry is only partially populated, so a numeric fallback is
+                    // usual. Distinguish real names from the placeholder and report the
+                    // placeholder as "<unknown>" per Task #11 criterion 6.
+                    String cachedName = id.getName();
+                    if (cachedName == null || cachedName.isEmpty() || cachedName.equals(String.valueOf(id.getShort())))
+                        cachedName = "<unknown>";
+                    BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Dropped ItemID entry (short="
+                            + id.getShort() + ", cached-name=" + cachedName + ") — stored ItemStack "
+                            + "no longer resolves (mod possibly removed or NBT corrupt). "
+                            + "Short remains reserved (will not be reassigned).");
+                }
+                continue;
+            }
+
+            // Store the template RAW (un-normalized) for now: the startup merge guard below
+            // needs the saved component data to tell healing merges apart from collapse
+            // merges and to report the differing components. The guard's renormalizeAndMerge
+            // pass normalizes every template in place before load() returns (this also
+            // migrates worlds saved before volatile-component normalization existed).
+            ItemStack itemStack = itemStackOptional.get();
+            itemStack.setCount(1);
+
+            // Stale-key hardening (Task #16 Fix C): ConcurrentHashMap.put() replaces the
+            // VALUE but RETAINS a pre-existing KEY object. A key minted before this load
+            // (e.g. by a pre-load registration) has its name_cache permanently stamped at
+            // mint time — getItemID() hands out the map's key object, so a correct template
+            // match would carry a wrong cached name (observed: Diorite deposit rejected as
+            // "money200"). remove() first so the key stored in the map is ALWAYS the one
+            // constructed from the file, whose name resolves lazily from the file template.
+            itemIDMap.remove(id);
+            itemIDMap.put(id, itemStack);
+            // Provenance: this short's assignment comes from disk — it must never lose a
+            // merge against a session-minted duplicate (see persistedShorts Javadoc).
+            persistedShorts.add(id);
+            id.tryUpdateNameCache();
+        }
+
+        // Capture the RAW persisted alias pairs BEFORE the guarded insertion below filters
+        // them. The cent-shift world-repair guard must see the file's alias evidence
+        // unfiltered: every fingerprint alias that could pass its validation firewall has a
+        // source short that is ALSO a live map key (the fresh mapping occupies the old money
+        // shorts), so putAlias() correctly rejects exactly those entries — snapshotting the
+        // live alias table AFTER the insertion loop would therefore never contain them and
+        // detection could never fire.
+        LinkedHashMap<ItemID, ItemID> rawPersistedAliases = new LinkedHashMap<>();
+        ListTag aliasListTag = tag.getList("itemIDAliases", Tag.TAG_COMPOUND);
+        for(Tag tagElement : aliasListTag)
+        {
+            CompoundTag aliasTag = (CompoundTag)tagElement;
+            if(aliasTag == null || !aliasTag.contains("from") || !aliasTag.contains("to"))
+                continue;
+            rawPersistedAliases.put(new ItemID(aliasTag.getShort("from")), new ItemID(aliasTag.getShort("to")));
+        }
+
+        // Restore evidence quarantined by an earlier session (fingerprint aliases stripped
+        // from itemIDAliases by a previous one-shot re-save — see the field Javadoc). These
+        // pairs never enter itemIDAliasMap; they only feed detection and the next save().
+        quarantinedAliases.clear();
+        ListTag quarantinedListTag = tag.getList(BankSystemSaveFormat.KEY_QUARANTINED_ALIASES, Tag.TAG_COMPOUND);
+        for(Tag tagElement : quarantinedListTag)
+        {
+            CompoundTag aliasTag = (CompoundTag)tagElement;
+            if(aliasTag == null || !aliasTag.contains("from") || !aliasTag.contains("to"))
+                continue;
+            quarantinedAliases.put(new ItemID(aliasTag.getShort("from")), new ItemID(aliasTag.getShort("to")));
+        }
+
+        // Restore previously persisted aliases (merged IDs from an earlier migration).
+        // Every entry goes through putAlias() (Task #14) — the load path is the first place
+        // a persisted invariant violation can surface (the user's test world had 2,809 such
+        // entries). Corrupt entries are logged with a stack trace + rejected at load time,
+        // so the in-memory alias map is guaranteed consistent before renormalizeAndMerge()
+        // and repairCorruptAliasEntries() run below.
+        int loadTimeGuardRejections = 0;
+        for(Map.Entry<ItemID, ItemID> rawAlias : rawPersistedAliases.entrySet())
+        {
+            // Stale-key hardening (Task #16 Fix C, alias-table side): like itemIDMap, the
+            // alias table retains a pre-existing key object on put(). Drop any stale key
+            // first so the stored key is the one constructed from the file (name resolves
+            // lazily through the alias). In production the table is empty here (clear()
+            // ran); this mirrors the itemIDMap discipline for defense in depth.
+            itemIDAliasMap.remove(rawAlias.getKey());
+            if(!putAlias(rawAlias.getKey(), rawAlias.getValue()))
+                loadTimeGuardRejections++;
+        }
+
+        // Restore the monotonic short allocation counter (Task #11). Two branches:
+        //   - Key present  → adopt the persisted value verbatim. Every subsequent save
+        //                     persists it again, so this is the steady-state path.
+        //   - Key absent   → legacy migration. Seed to max(shortsInItemIDMap ∪
+        //                     shortsInItemIDAliasMap) + 1 so allocation cannot re-issue any
+        //                     short that is currently referenced. One-shot: the next save
+        //                     writes the key and this branch is never taken again on the
+        //                     same world.
+        if (tag.contains("nextShortCounter"))
+        {
+            nextShortCounter = tag.getInt("nextShortCounter");
+            if (nextShortCounter < 1)
+                nextShortCounter = 1;
+        }
+        else
+        {
+            nextShortCounter = computeMigrationSeed(itemIDMap.keySet(), itemIDAliasMap.keySet());
+            // Migration-seeded counter → persist it immediately via the one-shot re-save so
+            // the seed survives a crash before the first periodic save.
+            lastLoadRequiresResave = true;
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Legacy world: seeded monotonic "
+                        + "nextShortCounter to " + nextShortCounter + " (max used short + 1). "
+                        + "Subsequent saves persist the counter under NBT key 'nextShortCounter'.");
+        }
+
+        // Cent-shift corruption guard (v2.0.4): runs AFTER the alias table and counter are
+        // restored (it needs both as evidence) but BEFORE the startup merge guard's
+        // renormalize pass (which would normalize templates and could disturb the raw
+        // fingerprint state). The evidence input is the RAW persisted alias pairs plus any
+        // previously quarantined evidence — NOT the filtered live alias table (see the
+        // rawPersistedAliases capture above). Zero cost on healthy worlds (detection exits
+        // on the first missing signal). May throw ItemIDRepairRequiredException to abort
+        // startup — nothing has been mutated at that point.
+        LinkedHashMap<ItemID, ItemID> rawEvidenceAliases = new LinkedHashMap<>(quarantinedAliases);
+        rawEvidenceAliases.putAll(rawPersistedAliases);
+        applyCorruptionRepairGuard(rawEvidenceAliases);
+
+        // Merge entries that collapse to the same normalized identity, guarded against
+        // silent collapses caused by a CHANGED volatile/deposit-gated component set.
+        // May throw ItemIDMergeAbortedException to abort server startup (nothing has been
+        // mutated on disk at that point).
+        applyStartupMergeGuard();
+
+        // Task #13 Fix D: heal the alias table after every other load-time pass. Repairs
+        // pre-existing corrupt states (source present in BOTH itemIDMap and itemIDAliasMap,
+        // orphan aliases whose chain terminates outside the registry, cycles). The count is
+        // stashed for BankSystemDataHandler.load_itemIDs() to trigger a one-shot save when
+        // any repair happened, so the cleaned-up state is durable on the very next tick.
+        int repairPassCount = repairCorruptAliasEntries();
+
+        // Task #14 audit trail: pair the write-side load-time rejection count with the
+        // repair-pass count. When the load-time guard rejected N invariant-violating entries
+        // from the persisted alias table, they never entered itemIDAliasMap in the first
+        // place — repairCorruptAliasEntries() then finds them "already gone" and reports 0.
+        // Admins see BOTH counts side by side so it's clear that the corruption WAS detected
+        // (via the per-entry ERROR logs from putAlias) even though the repair-pass count is
+        // zero. Both counts feed the same durability trigger (BankSystemDataHandler reads
+        // lastLoadRepairCount to decide whether to persist the cleaned-up state
+        // immediately) — a load-time rejection means the on-disk file still contains the
+        // corrupt entry, so we need to save even when the repair pass had nothing to do.
+        if (loadTimeGuardRejections > 0 && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Load-time guard rejected "
+                    + loadTimeGuardRejections + " corrupt alias entries during this world load. "
+                    + "See preceding ERROR log(s) for per-entry stack traces. "
+                    + "Alias-table repair on the resulting state: " + repairPassCount
+                    + " total repaired.");
+        }
+        lastLoadRepairCount = repairPassCount + loadTimeGuardRejections;
+
+        singlePlayerServerBackupOnPlayerLeave = null;
+        singlePlayerServerAliasBackupOnPlayerLeave = null;
+        singlePlayerServerBackupCounterOnPlayerLeave = -1;
+        singlePlayerServerQuarantineBackupOnPlayerLeave = null;
+        // Load phase complete: release the master-side registration latch so post-load
+        // default/registry registration (createDefaultItemIDs, setupDefaultItems, runtime
+        // registrations) can mint fresh shorts again (Task #16).
+        markRegistryReady();
+        return true;
+        } finally {
+            suppressDirty = prevSuppressDirty; // Task #55
+        }
+    }
+
+    /**
+     * Reads and clears the repair count recorded by the most recent {@link #load(CompoundTag)}.
+     * Intended for {@code BankSystemDataHandler.load_itemIDs()} to decide whether the
+     * post-load {@code save_itemIDs()} is needed (only when {@code &gt; 0}).
+     *
+     * @return the number of alias entries repaired by the last load, or {@code 0} if none
+     */
+    public static int consumeLastLoadRepairCount() {
+        int v = lastLoadRepairCount;
+        lastLoadRepairCount = 0;
+        return v;
+    }
+
+    /**
+     * Read-only peek at the repair count recorded by the most recent {@link #load(CompoundTag)}.
+     * Consumes nothing — for tests that want to inspect the count without clearing it.
+     */
+    public static int getLastLoadRepairCount_forTesting() {
+        return lastLoadRepairCount;
+    }
+
+    /**
+     * Reads and clears the one-shot "re-save the loaded file in the current format" signal
+     * recorded by the most recent {@link #load(CompoundTag)} (legacy version-less file,
+     * migration-seeded counter, or an applied world repair). Intended for
+     * {@code BankSystemDataHandler.load_itemIDs()} — together with
+     * {@link #consumeLastLoadRepairCount()} it decides whether the post-load one-shot
+     * {@code save_itemIDs()} fires.
+     *
+     * @return {@code true} exactly once after a load that requires the conversion re-save
+     */
+    public static boolean consumeLastLoadRequiresResave() {
+        boolean v = lastLoadRequiresResave;
+        lastLoadRequiresResave = false;
+        return v;
+    }
+
+    /**
+     * Reads and clears the one-shot "a confirmed world repair was applied" signal recorded
+     * by {@link #applyCorruptionRepairGuard()}. Intended for
+     * {@code BankSystemDataHandler.load_itemIDs()}, which copies the pre-repair
+     * {@code ItemIDs.nbt} aside ({@code ItemIDs.nbt.pre-repair-<timestamp>}) before the
+     * repaired state overwrites it.
+     *
+     * @return {@code true} exactly once after a load during which a repair was applied
+     */
+    public static boolean consumeRepairWasApplied() {
+        boolean v = repairWasApplied;
+        repairWasApplied = false;
+        return v;
+    }
+
+    /**
+     * Read-only view of the save-format version consumed by the most recent
+     * {@link #load(CompoundTag)} ({@link BankSystemSaveFormat#ITEM_IDS_FORMAT_LEGACY} for
+     * version-less legacy files). In-game test suite only.
+     */
+    public static int getLoadedFormatVersion_forTesting() {
+        return lastLoadedFormatVersion;
+    }
+
+    /**
+     * Heals corrupt entries in {@code itemIDAliasMap} (Task #13 Fix D).
+     * <p>
+     * Runs at the end of {@link #load(CompoundTag)}, after every other pass (Task #8 guard,
+     * Task #10 consolidation, Task #11 counter migration). Idempotent — a second call on the
+     * same world is a no-op because run 1 already dropped everything that would be dropped.
+     * <p>
+     * <b>Detection criteria</b> (per {@code source -> target} entry, snapshotted before the
+     * loop starts so map mutation inside the loop is safe):
+     * <ul>
+     *   <li><b>invariant violation</b> — {@code source} is <b>also</b> present in
+     *       {@code itemIDMap}. Historically this state (both maps hold the same short)
+     *       broke {@link #resolveAlias(ItemID)}'s one-hop pre-Fix-C behavior and produced
+     *       misleading downstream reads. The alias entry is removed; the map entry is
+     *       preserved (the ID becomes a distinct canonical ID going forward).</li>
+     *   <li><b>orphan</b> — the alias chain from {@code source} terminates at a short that
+     *       is <b>not</b> in {@code itemIDMap} (target item never existed, or was purged).
+     *       The alias entry is removed — resolving through it would return a dangling ID.</li>
+     *   <li><b>cycle</b> — the chain from {@code source} enters a loop (detected via visited
+     *       set / bounded iterations). The <i>current source entry</i> is removed to break
+     *       the cycle; other members of the cycle are handled on their own snapshot passes.
+     *       Logged at ERROR because cycles indicate a serious past corruption event.</li>
+     * </ul>
+     * <b>Not touched:</b> alias entries whose chain reaches a canonical ID present in
+     * {@code itemIDMap} in {@code &lt;=} {@link #MAX_ALIAS_CHAIN_HOPS} hops with no cycle
+     * — those are healthy.
+     * <p>
+     * <b>Balance data is NEVER touched</b> — this pass only mutates the alias table.
+     * Rekeying live bank balances is out of scope (would risk further data loss under a
+     * misdiagnosed corrupt state).
+     *
+     * @return the total count of removed alias entries (sum of invariant violations,
+     *         orphans, and cycle breaks). {@code 0} on a clean alias table.
+     */
+    public static int repairCorruptAliasEntries() {
+        int invariantViolations = 0;
+        int orphans = 0;
+        int cycles = 0;
+
+        // Snapshot BEFORE mutating — map mutation during the outer iteration would either
+        // throw (fail-fast iterator) or skip entries silently under ConcurrentHashMap's
+        // weakly-consistent iterator. The snapshot is small (aliasMap is typically empty or
+        // a few dozen entries) so the copy cost is negligible.
+        List<Map.Entry<ItemID, ItemID>> snapshot;
+        synchronized (itemIDMap) {
+            snapshot = new ArrayList<>(itemIDAliasMap.entrySet());
+        }
+
+        for (Map.Entry<ItemID, ItemID> entry : snapshot) {
+            ItemID source = entry.getKey();
+            ItemID target = entry.getValue();
+
+            // The entry may already have been removed by an earlier iteration (e.g. we
+            // removed the tail of a cycle in a previous step) — skip such stale entries.
+            if (!itemIDAliasMap.containsKey(source))
+                continue;
+
+            // Rule 1: source is in BOTH maps → invariant violation. Remove the alias entry;
+            // the map entry stays as the canonical (the ID behaves as a distinct canonical
+            // ID from this point forward; balances at the ID remain in place).
+            if (itemIDMap.containsKey(source)) {
+                itemIDAliasMap.remove(source);
+                invariantViolations++;
+                logRepairDebug("invariant-violation", source, target, null);
+                continue;
+            }
+
+            // Rule 2 + 3: walk the chain from `target`, collecting hops in a visited set.
+            // Terminate on either a hop bound (cycle guard) or a hop that is not in the
+            // alias map (terminal reached).
+            Set<ItemID> visited = new HashSet<>();
+            visited.add(source);
+            ItemID current = target;
+            boolean cycleDetected = false;
+            for (int hop = 0; hop < MAX_ALIAS_CHAIN_HOPS; hop++) {
+                if (!visited.add(current)) {
+                    cycleDetected = true;
+                    break;
+                }
+                ItemID next = itemIDAliasMap.get(current);
+                if (next == null)
+                    break; // terminal reached — `current` is the chain's tail
+                current = next;
+            }
+            // If we exit the loop without breaking on a terminal, we exhausted the hop
+            // bound — treat as a cycle for reporting purposes.
+            if (!cycleDetected && itemIDAliasMap.containsKey(current))
+                cycleDetected = true;
+
+            if (cycleDetected) {
+                itemIDAliasMap.remove(source);
+                cycles++;
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                    BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] Alias-table repair: cycle detected at "
+                            + source + " -> " + target + " (visited: " + visited
+                            + "). Removed this entry to break the cycle.");
+                }
+                continue;
+            }
+
+            // At this point `current` is a terminal that is NOT in the alias map. If it is
+            // also not in the item map, the whole chain is orphaned and unresolvable — drop
+            // the source entry so callers stop resolving to a dangling ID.
+            if (!itemIDMap.containsKey(current)) {
+                itemIDAliasMap.remove(source);
+                orphans++;
+                logRepairDebug("orphan", source, target, current);
+            }
+        }
+
+        int total = invariantViolations + orphans + cycles;
+        if (total > 0 && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Alias-table repair: " + total
+                    + " total repaired (" + invariantViolations + " invariant violations, "
+                    + orphans + " orphans, " + cycles + " cycles). Details in DEBUG.");
+        }
+        return total;
+    }
+
+    /**
+     * DEBUG-level per-repair log line used by {@link #repairCorruptAliasEntries()}.
+     * Skips silently when no logger is available (tests without a backend).
+     *
+     * @param kind    short repair category tag: {@code invariant-violation}, {@code orphan}, {@code cycle}
+     * @param source  the alias source that was removed
+     * @param target  the alias's immediate target (as recorded before repair)
+     * @param terminal the terminal short the chain resolved to (orphan case only, {@code null} otherwise)
+     */
+    private static void logRepairDebug(String kind, ItemID source, ItemID target, ItemID terminal) {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.LOGGER == null)
+            return;
+        StringBuilder sb = new StringBuilder("[ItemIDManager] Alias-table repair (").append(kind)
+                .append("): removed ").append(source).append(" -> ").append(target);
+        if (terminal != null)
+            sb.append(" (terminal ").append(terminal).append(" not in itemIDMap)");
+        // Try to resolve a human-readable name for the source if the map entry survives.
+        ItemStack template = itemIDMap.get(source);
+        if (template != null && !template.isEmpty())
+            sb.append(" [source template: ").append(ItemUtilities.getItemIDStr(template.getItem())).append(']');
+        BACKEND_INSTANCES.LOGGER.debug(sb.toString());
+    }
+
+    /**
+     * Replaces the ItemIDManager's static state with the provided snapshots. Test-only —
+     * used by the upgrade-safety test in {@code ItemIDMergeGuardTests} to install a
+     * fixture registry before invoking {@link #load(CompoundTag)} on a v2.0.2-shaped tag.
+     * <p>
+     * Never call in production — bypasses every sync/broadcast path.
+     *
+     * @param newItemMap   snapshot to install as {@code itemIDMap} (may be empty)
+     * @param newAliasMap  snapshot to install as {@code itemIDAliasMap} (may be empty)
+     * @param counter      counter value to install as {@code nextShortCounter}
+     */
+    public static void replaceState_forTesting(Map<ItemID, ItemStack> newItemMap,
+                                                Map<ItemID, ItemID> newAliasMap,
+                                                int counter) {
+        synchronized (itemIDMap) {
+            itemIDMap.clear();
+            if (newItemMap != null)
+                itemIDMap.putAll(newItemMap);
+            itemIDAliasMap.clear();
+            if (newAliasMap != null) {
+                // Route alias entries through putAlias so the write-side guard is
+                // exercised for test snapshots too (Task #14). Snapshots taken from a
+                // live production registry are guaranteed consistent (the guard enforced
+                // it at write time), so every entry is accepted; a test that intentionally
+                // installs a corrupt alias must use putAliasRaw_forTesting instead.
+                for (Map.Entry<ItemID, ItemID> entry : newAliasMap.entrySet())
+                    putAlias(entry.getKey(), entry.getValue());
+            }
+            nextShortCounter = Math.max(counter, 1);
+        }
+    }
+
+    /**
+     * Removes the given alias-map entries. Test-only cleanup hook used by tests that seed
+     * synthetic alias entries (including intentional cycles) and need to drop them before
+     * teardown so they don't leak into the live production alias table.
+     *
+     * @param keys alias-map keys to remove (missing keys are ignored)
+     */
+    public static void removeAliasEntries_forTesting(Collection<ItemID> keys) {
+        if (keys == null)
+            return;
+        for (ItemID key : keys)
+            itemIDAliasMap.remove(key);
+    }
+
+    /**
+     * Selects the canonical member of a merge group (Task #16 "persisted shorts win"):
+     * <ol>
+     *   <li><b>Provenance first:</b> members whose short was inserted from disk by the most
+     *       recent {@link #load(CompoundTag)} (see {@link #persistedShorts}) beat
+     *       session-minted members. The persisted assignment in {@code ItemIDs.nbt} is the
+     *       immutable source of truth — a healing merge must never renumber it in favor of
+     *       an ID minted this session (the pre-load constructor warm-up aliased persisted
+     *       bedrock@71 to session bedrock@1 and purged short 71's balance history).</li>
+     *   <li><b>Lowest short as tie-break:</b> among members of the same provenance the
+     *       lowest short value wins — the pre-existing rule, unchanged for the common case
+     *       (all-session or all-persisted groups).</li>
+     * </ol>
+     *
+     * @param group the merge group (at least one member)
+     * @return the member that survives the merge as canonical
+     */
+    private static ItemID selectCanonical(List<ItemID> group) {
+        ItemID canonical = group.getFirst();
+        boolean canonicalPersisted = persistedShorts.contains(canonical);
+        for (ItemID id : group) {
+            boolean idPersisted = persistedShorts.contains(id);
+            if (idPersisted != canonicalPersisted) {
+                if (idPersisted) {
+                    canonical = id;
+                    canonicalPersisted = true;
+                }
+                continue;
+            }
+            if (id.getShort() < canonical.getShort())
+                canonical = id;
+        }
+        return canonical;
+    }
+
+    /**
+     * Read-only copy of the shorts recorded as persisted (inserted from disk) by the most
+     * recent {@link #load(CompoundTag)}. In-game test suite only.
+     */
+    public static Set<ItemID> getPersistedShorts_forTesting() {
+        return new HashSet<>(persistedShorts);
+    }
+
+    /**
+     * Replaces the persisted-shorts record with the given snapshot. In-game test suite only
+     * — the restore counterpart of {@link #getPersistedShorts_forTesting()} for bit-exact
+     * teardown (fixture loads overwrite the live record).
+     *
+     * @param snapshot the shorts to install ({@code null} = clear)
+     */
+    public static void restorePersistedShorts_forTesting(Set<ItemID> snapshot) {
+        persistedShorts.clear();
+        if (snapshot != null)
+            persistedShorts.addAll(snapshot);
+    }
+
+    /**
+     * Re-normalizes every registered template against the <b>current</b> volatile and
+     * deposit-gated component sets and merges IDs whose templates collapse to the same
+     * normalized identity.
+     * <p>
+     * For each group of colliding IDs the canonical ID is chosen by
+     * {@link #selectCanonical(List)} — persisted shorts (from the current session's
+     * {@code ItemIDs.nbt} load) always beat session-minted ones, lowest short value as the
+     * tie-break within the same provenance; all other IDs are removed from the registry and
+     * recorded in the alias table (old ID → canonical ID). Lookups through {@link #getItemStack(ItemID)} /
+     * {@link #getItemStackTemplate(ItemID)} transparently resolve aliases, so previously saved
+     * references (bank balances, StockMarket markets, orders, ...) remain valid.
+     * <p>
+     * Called after loading a world (migration of pre-fix data) and whenever the config-sourced
+     * volatile component list changes (settings load on the server, sync packet on
+     * clients/slaves). Safe to call repeatedly — a fully normalized registry is a no-op.
+     * <p>
+     * The effective component set is snapshotted <b>once</b> at entry. {@code normalize()}
+     * reads live volatile fields, so a concurrent set change (e.g. a sync packet handled on
+     * the client/render thread while this pass runs on the server thread — both sides share
+     * the static state in singleplayer) could otherwise tear the pass: half the registry
+     * normalized under the old set, half under the new one. A concurrent change is instead
+     * applied wholly by its own follow-up renormalize call.
+     */
+    public static void renormalizeAndMerge()
+    {
+        renormalizeAndMerge(VolatileItemComponents.getEffectiveComponentIds());
+    }
+
+    /**
+     * Variant of {@link #renormalizeAndMerge()} that normalizes and merges under an
+     * <b>explicit</b> component set instead of the globally applied effective set.
+     * <p>
+     * The no-arg overload delegates here with the applied effective set (snapshotted once,
+     * see above). The explicit form additionally allows the in-game test suite to apply a
+     * grown set atomically without mutating the globally shared
+     * {@link VolatileItemComponents} configuration (which in singleplayer is shared between
+     * client and server and must not be flipped around mid-session).
+     * <b>Caution:</b> normalizing the registry under a set that is not the applied effective
+     * set desyncs template identity from query-side normalization — production code should
+     * always use the no-arg overload.
+     *
+     * @param componentIds component type ids to strip while normalizing
+     *                     (unparsable entries are skipped)
+     */
+    public static void renormalizeAndMerge(Collection<String> componentIds)
+    {
+        Set<net.minecraft.resources.ResourceLocation> strippedIds = parseComponentIdStrings(componentIds);
+        int mergedCount = 0;
+        // Alias→canonical pairs created by THIS pass — consumed below to consolidate
+        // per-ItemID state (bank balances, allowed items, ...) and notify dependent mods.
+        Map<ItemID, ItemID> newAliases = new HashMap<>();
+        synchronized (itemIDMap) {
+            // Pass 1: re-normalize all templates in place (cheap no-op when already normalized).
+            // stripComponentsByIds == normalize() when strippedIds is the applied effective set,
+            // but reads no shared mutable state — the whole pass sees ONE consistent set.
+            for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet()) {
+                ItemStack normalized = VolatileItemComponents.stripComponentsByIds(entry.getValue(), strippedIds);
+                normalized.setCount(1);
+                entry.setValue(normalized);
+            }
+
+            // Pass 2: bucket by item+components hash, then group buckets by real component
+            // equality and merge every group down to its canonical ID (persisted-first,
+            // lowest short as tie-break — see selectCanonical).
+            Map<Integer, List<ItemID>> buckets = new HashMap<>();
+            for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet()) {
+                int hash = ItemStack.hashItemAndComponents(entry.getValue());
+                buckets.computeIfAbsent(hash, k -> new ArrayList<>()).add(entry.getKey());
+            }
+            for (List<ItemID> bucket : buckets.values()) {
+                if (bucket.size() < 2)
+                    continue;
+                // Split the hash bucket into groups of genuinely identical templates.
+                List<List<ItemID>> groups = new ArrayList<>();
+                for (ItemID id : bucket) {
+                    ItemStack stack = itemIDMap.get(id);
+                    List<ItemID> match = null;
+                    for (List<ItemID> group : groups) {
+                        if (ItemStack.isSameItemSameComponents(stack, itemIDMap.get(group.getFirst()))) {
+                            match = group;
+                            break;
+                        }
+                    }
+                    if (match == null) {
+                        match = new ArrayList<>();
+                        groups.add(match);
+                    }
+                    match.add(id);
+                }
+                for (List<ItemID> group : groups) {
+                    if (group.size() < 2)
+                        continue;
+                    // Canonical selection: persisted shorts win, then lowest short —
+                    // see selectCanonical() (Task #16).
+                    ItemID canonical = selectCanonical(group);
+                    for (ItemID id : group) {
+                        if (id.equals(canonical))
+                            continue;
+                        // Remove from the item map FIRST so the write-side invariant
+                        // (source-not-in-itemIDMap) holds when putAlias runs. If putAlias
+                        // ever refuses the insert here it means the invariant was already
+                        // broken by an earlier code path — the ERROR log carries the stack
+                        // trace so the leak can be traced (Task #14).
+                        itemIDMap.remove(id);
+                        putAlias(id, canonical);
+                        newAliases.put(id, canonical);
+                        mergedCount++;
+                    }
+                }
+            }
+
+            // Pass 3: flatten alias chains — every alias must point at an ID that is
+            // actually present in the registry (its canonical may itself have been merged).
+            for (Map.Entry<ItemID, ItemID> entry : itemIDAliasMap.entrySet()) {
+                ItemID target = entry.getValue();
+                int guard = 0;
+                while (!itemIDMap.containsKey(target) && itemIDAliasMap.containsKey(target) && guard++ < 1000) {
+                    target = itemIDAliasMap.get(target);
+                }
+                entry.setValue(target);
+            }
+
+            // The newly created pairs must reflect the flattened chains as well, so that
+            // consumers (bank consolidation, dependent mods) always see a canonical ID
+            // that is actually present in the registry.
+            for (Map.Entry<ItemID, ItemID> entry : newAliases.entrySet()) {
+                ItemID flattened = itemIDAliasMap.get(entry.getKey());
+                if (flattened != null)
+                    entry.setValue(flattened);
+            }
+        }
+        if (mergedCount > 0 && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Merged " + mergedCount +
+                    " duplicate ItemID(s) that collapsed to the same identity after removing volatile item components. " +
+                    "Old IDs remain valid as aliases of their canonical ID.");
+        }
+        if (!newAliases.isEmpty()) {
+            // Queue consolidation of per-ItemID state and the dependent-mod notification.
+            // Runs immediately when bank data is already loaded (runtime merges); during
+            // world load the pairs stay queued until BankSystemDataHandler.loadAll() has
+            // finished load_bank() and drains them.
+            pendingMergeConsolidation.putAll(newAliases);
+            consolidatePendingMerges();
+        }
+        // Task #55: a renormalize pass mutates persisted registry state in place — template
+        // re-normalization (Pass 1), alias-chain flattening (Pass 3) and any merges. At
+        // runtime this only runs when the effective component set actually changed
+        // (applyVolatileComponentSettings gates on it), so mark the ItemIDs save unit dirty.
+        // Suppressed automatically when reached from within load() (see suppressDirty).
+        markPersistDirty();
+    }
+
+    /**
+     * Drains the alias→canonical pairs recorded by {@link #renormalizeAndMerge(Collection)}
+     * and consolidates all per-ItemID state under the canonical IDs:
+     * <ul>
+     *   <li>bank balances and locked balances of every bank account (merged into the
+     *       canonical bank, see
+     *       {@link net.kroia.banksystem.banking.bankmanager.ServerBankManager#consolidateMergedItemIDs}),</li>
+     *   <li>the allowed-item set (aliased entries replaced by their canonical ID),</li>
+     *   <li>account icons referencing an aliased ID.</li>
+     * </ul>
+     * Afterwards the {@code ITEM_IDS_MERGED} event
+     * ({@link net.kroia.banksystem.api.IBankSystemEvents#getItemIDsMergedEvent()}) is fired
+     * with the drained (unmodifiable) map so dependent mods (e.g. StockMarket) can
+     * consolidate their own ItemID-keyed state. The event fires on the calling (server)
+     * thread, master side only, and always AFTER BankSystem's own consolidation completed.
+     * <p>
+     * Master server only: clients and slave servers hold no authoritative per-ItemID bank
+     * state — their pending pairs are discarded (they follow the master's registry and
+     * resolve aliases through the accessors). When the bank data has not been loaded yet
+     * (merge during world load), the pairs stay pending and
+     * {@code BankSystemDataHandler.loadAll()} calls this again right after the bank data is
+     * loaded. Safe to call at any time; a no-op when nothing is pending.
+     */
+    public static void consolidatePendingMerges() {
+        if (pendingMergeConsolidation.isEmpty() || BACKEND_INSTANCES == null)
+            return;
+        if (BACKEND_INSTANCES.isSlaveServer || BACKEND_INSTANCES.SERVER_BANK_MANAGER == null) {
+            // Not the master side (slave server or pure client) — no server bank state here.
+            pendingMergeConsolidation.clear();
+            return;
+        }
+        if (!BankSystemDataHandler.isBankDataLoaded())
+            return; // world load in progress — loadAll() drains the queue after load_bank()
+
+        Map<ItemID, ItemID> aliases = new HashMap<>(pendingMergeConsolidation);
+        pendingMergeConsolidation.clear();
+        Object syncManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if (syncManager instanceof net.kroia.banksystem.banking.bankmanager.ServerBankManager bankManager)
+            bankManager.consolidateMergedItemIDs(aliases);
+        // Purge balance-history rows keyed to the merged-away alias shorts. These rows would
+        // otherwise persist under IDs that no longer resolve to a live identity, and the
+        // BalanceHistoryScreen would still render a chart for each dropped alias (user report
+        // 2026-07-08, Task #12). Canonical rows are intentionally left untouched — the
+        // canonical ID's history continues fresh from the merge point.
+        // Master-only path: BALANCE_HISTORY_MANAGER is only constructed on the master server
+        // (see BankSystemModBackend#onServerStart), so a null check is enough — no extra
+        // isSlaveServer guard needed (already handled above).
+        if (BACKEND_INSTANCES.BALANCE_HISTORY_MANAGER != null && !aliases.isEmpty()) {
+            List<Short> aliasShorts = new ArrayList<>(aliases.size());
+            for (Map.Entry<ItemID, ItemID> aliasEntry : aliases.entrySet()) {
+                ItemID aliasId = aliasEntry.getKey();
+                // Defensive guard (Task #16): NEVER purge the history of a persisted short
+                // that lost canonicality to a NON-persisted (session-minted) one. Under the
+                // persisted-first canonical rule in selectCanonical() this is unreachable —
+                // a persisted member can only lose to another persisted member — so if it
+                // ever trips, a merge bypassed the provenance rule and the WARN (with both
+                // shorts) is the debugging breadcrumb. The rows are kept: deleting real
+                // world history in favor of a session-minted identity is exactly the data
+                // loss this task eliminates (bedrock@71's history purged for bedrock@1).
+                if (persistedShorts.contains(aliasId) && !persistedShorts.contains(aliasEntry.getValue())) {
+                    if (BACKEND_INSTANCES.LOGGER != null)
+                        BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Skipping balance-history "
+                                + "purge of persisted short #" + aliasId.getShort() + ": it was "
+                                + "merged into NON-persisted canonical #" + aliasEntry.getValue().getShort()
+                                + " — this should be unreachable under the persisted-first canonical "
+                                + "rule (selectCanonical). Rows are preserved; investigate the merge "
+                                + "that produced this alias.");
+                    continue;
+                }
+                aliasShorts.add(aliasId.getShort());
+            }
+            // Fire-and-forget: the delete runs async on the DB executor, matching the pattern
+            // used by takeBalanceSnapshot() (BankSystemModBackend). The listener dispatch below
+            // does not depend on the deletion completing.
+            if (!aliasShorts.isEmpty())
+                BACKEND_INSTANCES.BALANCE_HISTORY_MANAGER.deleteAllRowsForItemIDs(aliasShorts);
+        }
+        // Notify dependent mods AFTER BankSystem's own state is consistent again.
+        if (BACKEND_INSTANCES.SERVER_EVENTS != null)
+            BACKEND_INSTANCES.SERVER_EVENTS.ITEM_IDS_MERGED.notifyListeners(Collections.unmodifiableMap(aliases));
+    }
+
+    // ========================================================================================
+    // Startup world-repair guard (CONFIRM_ITEMID_REPAIR) — cent-shift corruption
+    // ========================================================================================
+
+    /**
+     * Startup guard against the <b>cent-shift world corruption</b> (see
+     * {@link ItemIDWorldRepair} for the full background): detects worlds whose
+     * {@code ItemIDs.nbt} was overwritten by a pre-v2.0.3 buggy build with a fresh
+     * cent-shifted default mapping, and — after one-shot admin confirmation — restores the
+     * old short→item mapping so all world data resolves correctly again.
+     * <p>
+     * Called from {@link #load(CompoundTag)} <b>after</b> the alias table and the monotonic
+     * counter are restored (both are evidence inputs) and <b>before</b>
+     * {@link #applyStartupMergeGuard()} (whose renormalize pass would rewrite the raw
+     * templates the detection fingerprints). Master server only by construction — slaves
+     * never load ItemIDs from disk, clients never call {@code load()}.
+     * <p>
+     * Decision ladder:
+     * <ol>
+     *   <li><b>No evidence</b> ({@link ItemIDWorldRepair#detect} empty) → return. This is
+     *       the zero-cost healthy path: fresh worlds and correctly upgraded worlds have no
+     *       money fingerprint aliases, so detection exits immediately.</li>
+     *   <li><b>Evidence but the plan fails cross-validation</b> → CONTINUE running
+     *       (warn-and-continue; saving stays allowed). The fingerprint evidence is
+     *       quarantined so later saves cannot strip it, and the full report is logged at
+     *       ERROR only the first time this evidence state is seen (an acknowledgment hash
+     *       is persisted in {@code Meta_data.nbt}; later startups log one WARN line). The
+     *       report explains that a symptom-free world is likely a false alarm.</li>
+     *   <li><b>Valid plan, {@code CONFIRM_ITEMID_REPAIR} false</b> → quarantine the
+     *       evidence, then throw {@link ItemIDRepairRequiredException} carrying the full
+     *       report. Nothing has been mutated on disk; the data handler marks the session
+     *       save-prohibited in transit.</li>
+     *   <li><b>Valid plan, flag true</b> → log the report, swap
+     *       {@code itemIDMap}/{@code itemIDAliasMap}/{@code nextShortCounter} to the plan
+     *       state under the map lock, clear the quarantine + acknowledgment, rebind the
+     *       cached money ItemID, flag the one-shot re-save + pre-repair backup, consume the
+     *       flag in memory (the settings persist is deferred to
+     *       {@code BankSystemDataHandler.load_itemIDs()} after the whole load succeeded, so
+     *       a later abort in the same load cannot burn the confirmation), and record the
+     *       audit entry for {@code Meta_data.nbt}.</li>
+     * </ol>
+     * A repair is <b>not</b> a merge: the {@code ITEM_IDS_MERGED} event is deliberately NOT
+     * fired and {@link #pendingMergeConsolidation} is bypassed entirely — the repaired
+     * shorts resolve to the items the world data always meant, so no dependent-mod
+     * consolidation (e.g. StockMarket market merges) must run.
+     *
+     * @param rawAliases the RAW alias evidence: the persisted alias pairs exactly as read
+     *                   from the NBT tag (BEFORE the {@link #putAlias} invariant filtered
+     *                   them) merged with previously quarantined evidence. Never the live
+     *                   {@link #itemIDAliasMap} — the fingerprints that matter are exactly
+     *                   the entries the invariant rejects (their source shorts are occupied
+     *                   by the fresh mapping), so the live table can never contain them.
+     * @throws ItemIDRepairRequiredException when a valid repair plan exists and the admin
+     *                                       has not confirmed it yet
+     */
+    private static void applyCorruptionRepairGuard(Map<ItemID, ItemID> rawAliases) {
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if (access == null)
+            return;
+        BankSystemDataHandler dataHandler = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.SERVER_DATA_HANDLER : null;
+        String lastSavedBy = dataHandler != null ? dataHandler.getLastSavedByModVersion() : null;
+
+        // Snapshot the item map + counter under the map lock — ItemIDWorldRepair is pure and
+        // must operate on stable snapshots, never on the live maps. The alias evidence is
+        // the caller-provided raw view (see the parameter Javadoc), already a private copy.
+        Map<ItemID, ItemStack> mapSnapshot;
+        int counterSnapshot;
+        synchronized (itemIDMap) {
+            mapSnapshot = new HashMap<>(itemIDMap);
+            counterSnapshot = nextShortCounter;
+        }
+
+        Optional<ItemIDWorldRepair.CorruptionEvidence> evidence =
+                ItemIDWorldRepair.detect(mapSnapshot, rawAliases, access, lastSavedBy);
+        if (evidence.isEmpty())
+            return; // healthy world — nothing to do, nothing was touched
+
+        ItemIDWorldRepair.RepairPlan plan =
+                ItemIDWorldRepair.buildRepairPlan(mapSnapshot, rawAliases, counterSnapshot, access);
+        String report = ItemIDWorldRepair.buildRepairReport(evidence.get(), plan, mapSnapshot);
+
+        if (!plan.validationFailures().isEmpty()) {
+            // Warn-and-continue: the evidence is inconsistent with the simulated candidate
+            // mappings, so no automatic repair may be offered. Startup proceeds and saving
+            // stays allowed — therefore the fingerprint evidence must be quarantined NOW,
+            // or the next save would strip it from the file forever.
+            quarantineFingerprintEvidence(evidence.get());
+            // Log discipline: the full report goes out at ERROR only the FIRST time this
+            // exact evidence state is seen; the acknowledgment (an evidence hash persisted
+            // in Meta_data.nbt) reduces later startups to a single WARN line — a possibly
+            // false-positive signature must not dump a scary full report forever.
+            String evidenceHash = ItemIDWorldRepair.evidenceFingerprint(evidence.get());
+            String acknowledged = dataHandler != null ? dataHandler.getAcknowledgedRepairEvidenceHash() : null;
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                if (evidenceHash.equals(acknowledged)) {
+                    BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Cent-shift corruption signature still "
+                            + "present (evidence hash " + evidenceHash + ") but it failed cross-validation — "
+                            + "continuing WITHOUT repair. The full report was logged at ERROR when this "
+                            + "evidence was first seen. If this world has never shown wrong-item symptoms "
+                            + "(items resolving to wrong items, blacklisted-money deposit errors), this is "
+                            + "likely a false alarm and no action is needed.");
+                } else {
+                    BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] Cent-shift corruption signature detected "
+                            + "but the repair plan failed cross-validation — continuing WITHOUT repair "
+                            + "(evidence hash " + evidenceHash + "; later startups log a single WARN instead "
+                            + "of this full report)." + report);
+                }
+            }
+            if (dataHandler != null && !evidenceHash.equals(acknowledged))
+                dataHandler.setAcknowledgedRepairEvidenceHash(evidenceHash);
+                // Persisted by the save_metadata() call at the end of applyStartupMergeGuard().
+            return;
+        }
+
+        boolean confirmed = BACKEND_INSTANCES != null
+                && BACKEND_INSTANCES.SERVER_SETTINGS != null
+                && Boolean.TRUE.equals(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_REPAIR.get());
+        if (!confirmed) {
+            // Quarantine the evidence before aborting. Saving is prohibited for this session
+            // (nothing will be written), but the in-memory quarantine keeps the guard
+            // self-consistent for any diagnostic save()-to-tag a test or tool performs, and
+            // guarantees no code path can reach a save while detected evidence would drop.
+            quarantineFingerprintEvidence(evidence.get());
+            // Abort startup with the full report. Nothing has been mutated in memory or on
+            // disk; BankSystemDataHandler.load_itemIDs() marks the session save-prohibited
+            // while this exception passes through, keeping the "nothing saved" guarantee.
+            throw new ItemIDRepairRequiredException(report
+                    + "\nServer startup was aborted by the BankSystem ItemID world-repair guard "
+                    + "(CONFIRM_ITEMID_REPAIR is false).");
+        }
+
+        if (BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] CONFIRM_ITEMID_REPAIR is true — applying the confirmed world repair."
+                    + report);
+
+        // Swap in the plan state under the same synchronization discipline as every other
+        // registry mutation (renormalizeAndMerge, replaceState_forTesting).
+        synchronized (itemIDMap) {
+            itemIDMap.clear();
+            itemIDMap.putAll(plan.repairedMap());
+            for (ItemID drop : plan.aliasesToDrop())
+                itemIDAliasMap.remove(drop);
+            nextShortCounter = plan.newNextShortCounter();
+        }
+        // The evidence is consumed: the repaired world is healthy, so the quarantine (and a
+        // possibly recorded warn-path acknowledgment) must not survive the repair.
+        quarantinedAliases.clear();
+        if (dataHandler != null)
+            dataHandler.setAcknowledgedRepairEvidenceHash(null);
+        // Rebind the cached money ItemID to the repaired mapping (the base-money short moved).
+        MoneyItem.resetItemID();
+
+        // One-shot durability + pre-repair backup triggers for load_itemIDs().
+        lastLoadRequiresResave = true;
+        repairWasApplied = true;
+
+        // One-shot confirmation: consume the flag in memory NOW, but deliberately DEFER the
+        // settings persist to BankSystemDataHandler.load_itemIDs() (after the whole load
+        // succeeded). applyStartupMergeGuard() runs after this guard and can still abort the
+        // same load — persisting the reset here would burn the admin's confirmation while
+        // the repaired state itself is never saved (savingProhibited blocks it).
+        BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_REPAIR.set(false);
+        if (dataHandler != null) {
+            // Audit trail: recorded now, persisted to Meta_data.nbt by the save_metadata()
+            // call at the end of applyStartupMergeGuard() (which runs right after this guard).
+            dataHandler.recordRepairApplied(System.currentTimeMillis(),
+                    net.kroia.banksystem.BankSystemMod.VERSION, plan.changedShorts().size());
+        }
+        if (BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] World repair applied: "
+                    + plan.changedShorts().size() + " shorts changed meaning, "
+                    + plan.appended().size() + " entries re-appended, "
+                    + plan.aliasesToDrop().size() + " alias entries dropped, nextShortCounter="
+                    + plan.newNextShortCounter() + ". The repaired state is persisted by the "
+                    + "one-shot post-load save; the previous ItemIDs.nbt is copied aside first.");
+    }
+
+    /**
+     * Stashes the money fingerprint aliases of the given evidence into
+     * {@link #quarantinedAliases} — but only those that are NOT present in the live alias
+     * table (entries the {@link #putAlias} invariant rejected at load; entries that DID make
+     * it into the table are persisted through the normal {@code itemIDAliases} list and need
+     * no quarantine). Idempotent; called on every no-repair outcome of
+     * {@link #applyCorruptionRepairGuard}.
+     */
+    private static void quarantineFingerprintEvidence(ItemIDWorldRepair.CorruptionEvidence evidence) {
+        for (ItemIDWorldRepair.AliasFingerprint fp : evidence.fingerprints()) {
+            ItemID source = new ItemID(fp.from());
+            if (!itemIDAliasMap.containsKey(source))
+                quarantinedAliases.putIfAbsent(source, new ItemID(fp.to()));
+        }
+    }
+
+    /**
+     * Read-only copy of the quarantined corruption-evidence pairs. In-game test suite only.
+     */
+    public static Map<ItemID, ItemID> getQuarantinedAliases_forTesting() {
+        return new HashMap<>(quarantinedAliases);
+    }
+
+    /**
+     * Clears the quarantined corruption evidence. In-game test suite only — tests that
+     * synthesize corrupted states MUST call this in teardown so the evidence cannot leak
+     * into the live world's next save (a leaked quarantine on a healthy fresh post-cent
+     * world would make the guard abort the next real startup).
+     */
+    public static void clearQuarantinedAliases_forTesting() {
+        quarantinedAliases.clear();
+    }
+
+    /**
+     * Replaces the quarantined corruption-evidence pairs with the given snapshot. In-game
+     * test suite only — the restore counterpart of
+     * {@link #getQuarantinedAliases_forTesting()} for bit-exact teardown.
+     *
+     * @param snapshot the quarantine entries to install (may be empty; {@code null} = clear)
+     */
+    public static void restoreQuarantinedAliases_forTesting(Map<ItemID, ItemID> snapshot) {
+        quarantinedAliases.clear();
+        if (snapshot != null)
+            quarantinedAliases.putAll(snapshot);
+    }
+
+    // ========================================================================================
+    // Renumbering tripwire — short→item-name digest (Task #16 Fix D)
+    // ========================================================================================
+
+    /** NBT key of one digest entry's short inside the digest list (see {@link #buildShortNameDigest()}). */
+    private static final String DIGEST_KEY_SHORT = "s";
+    /** NBT key of one digest entry's item registry name inside the digest list. */
+    private static final String DIGEST_KEY_NAME = "n";
+
+    /**
+     * Builds the compact <b>short→item-name digest</b> of the current registry: one entry
+     * per {@code itemIDMap} mapping, carrying the short ({@value #DIGEST_KEY_SHORT}) and
+     * the template's item registry name ({@value #DIGEST_KEY_NAME}).
+     * <p>
+     * Persisted into {@code Meta_data.nbt} by {@code BankSystemDataHandler.save_metadata()}
+     * on <b>every</b> successful save, so the digest always describes the mapping of the
+     * last session — legitimate renames (admin-confirmed collapse merges, applied world
+     * repairs) update it on the very next save and therefore warn at most once. On load the
+     * digest is diffed against the live map ({@link #diffShortNameDigest(ListTag)}); any
+     * persisted short that now resolves to a DIFFERENT item is a <b>renumbering tripwire</b>
+     * hit — the generic, future-proof detector for the whole "shorts silently changed
+     * meaning" bug class (report-only, no auto-action).
+     * <p>
+     * Mirrors {@link #save(CompoundTag)}'s singleplayer leave-backup fallback: when the live
+     * map is empty (server-leave clear already ran) the digest is built from the backup so
+     * the leaving world's metadata stays consistent with its {@code ItemIDs.nbt}.
+     * <p>
+     * <b>Granularity note:</b> the digest records the item registry name only, not the full
+     * component identity — two component-variants of the same item swapping shorts is not
+     * detected. Deliberate: names keep the digest small and human-readable in the report,
+     * and every historically observed renumbering changed the item itself.
+     *
+     * @return the digest as a list of {@code {s: short, n: string}} compounds
+     */
+    public static ListTag buildShortNameDigest() {
+        Map<ItemID, ItemStack> usedMap = itemIDMap;
+        if (usedMap.isEmpty() && singlePlayerServerBackupOnPlayerLeave != null)
+            usedMap = singlePlayerServerBackupOnPlayerLeave;
+        ListTag digest = new ListTag();
+        for (Map.Entry<ItemID, ItemStack> entry : usedMap.entrySet()) {
+            ItemStack template = entry.getValue();
+            if (template == null || template.isEmpty())
+                continue;
+            CompoundTag entryTag = new CompoundTag();
+            entryTag.putShort(DIGEST_KEY_SHORT, entry.getKey().getShort());
+            entryTag.putString(DIGEST_KEY_NAME, ItemUtilities.getItemIDStr(template.getItem()));
+            digest.add(entryTag);
+        }
+        return digest;
+    }
+
+    /**
+     * Diffs a previously persisted short→item-name digest (see
+     * {@link #buildShortNameDigest()}) against the <b>live</b> registry. Pure read — mutates
+     * nothing.
+     * <p>
+     * Resolution goes through {@link #getItemStackTemplate(ItemID)}, i.e. aliases are
+     * followed: a short that was legitimately merged this load resolves to its canonical
+     * template. A <i>healing</i> merge (identical identity) therefore yields the same item
+     * name and stays silent; only a short that now means a genuinely DIFFERENT item is
+     * reported. Shorts that no longer resolve at all (dropped entries — mod removed / NBT
+     * corrupt) are skipped: the load()-time drop WARN already covers them, and "gone" is not
+     * "rebound to a different item".
+     *
+     * @param digest the digest read from {@code Meta_data.nbt}; {@code null}/empty = no
+     *               record yet (older save) — returns an empty list
+     * @return one human-readable line per mismatching short (empty when healthy)
+     */
+    public static List<String> diffShortNameDigest(ListTag digest) {
+        List<String> mismatches = new ArrayList<>();
+        if (digest == null || digest.isEmpty())
+            return mismatches;
+        for (Tag element : digest) {
+            if (!(element instanceof CompoundTag entryTag)
+                    || !entryTag.contains(DIGEST_KEY_SHORT) || !entryTag.contains(DIGEST_KEY_NAME))
+                continue;
+            short shortValue = entryTag.getShort(DIGEST_KEY_SHORT);
+            String previousName = entryTag.getString(DIGEST_KEY_NAME);
+            ItemStack liveTemplate = getItemStackTemplate(new ItemID(shortValue));
+            if (liveTemplate.isEmpty())
+                continue; // dropped entry — covered by the load()-time drop WARN
+            String liveName = ItemUtilities.getItemIDStr(liveTemplate.getItem());
+            if (!previousName.equals(liveName)) {
+                mismatches.add("#" + Short.toUnsignedInt(shortValue) + ": was " + previousName
+                        + " last session, now resolves to " + liveName);
+            }
+        }
+        return mismatches;
+    }
+
+    /**
+     * Runs {@link #diffShortNameDigest(ListTag)} and ERROR-logs the tripwire report when any
+     * persisted short changed meaning since the last session. <b>Report-only</b> — no
+     * auto-action, no abort; silent when the digest matches or no digest exists yet.
+     * Called by {@code BankSystemDataHandler.loadAll()} on the master after the whole load
+     * (including merge consolidation) completed.
+     *
+     * @param digest the digest read from {@code Meta_data.nbt} at load time (may be {@code null})
+     */
+    public static void reportShortNameDigestMismatches(ListTag digest) {
+        List<String> mismatches = diffShortNameDigest(digest);
+        if (mismatches.isEmpty())
+            return;
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.LOGGER == null)
+            return;
+        StringBuilder sb = new StringBuilder();
+        sb.append("[ItemIDManager] RENUMBERING TRIPWIRE: ").append(mismatches.size())
+                .append(" persisted ItemID short(s) resolve to a DIFFERENT item than last session. ")
+                .append("If no admin-confirmed merge or world repair ran this startup, world data ")
+                .append("keyed by these shorts (bank balances, placed blocks, StockMarket, balance ")
+                .append("history) now points at the wrong items — investigate before continuing. ")
+                .append("This is a report only; nothing was changed automatically.");
+        for (String line : mismatches)
+            sb.append("\n  ").append(line);
+        BACKEND_INSTANCES.LOGGER.error(sb.toString());
+    }
+
+    // ========================================================================================
+    // Startup merge guard (CONFIRM_ITEMID_MERGE)
+    // ========================================================================================
+
+    /**
+     * One group of ItemIDs that would be merged by {@link #renormalizeAndMerge()} <b>and</b>
+     * whose members are genuinely distinct under the previously applied component set
+     * (a <i>collapse</i> merge, as opposed to a harmless <i>healing</i> merge of duplicates).
+     * Produced by {@link #detectCollapseCollisions(Collection)} — a pure dry run, nothing
+     * is mutated.
+     *
+     * @param canonicalId      the ID that would survive the merge (persisted-first, then
+     *                         lowest short — see {@code selectCanonical})
+     * @param mergedIds        the IDs that would be removed and become aliases of the canonical ID
+     * @param currentTemplates the registry templates (defensive copies) of every group member,
+     *                         keyed by ID — used to report the components that distinguish them
+     */
+    public record MergeCollisionGroup(ItemID canonicalId,
+                                      List<ItemID> mergedIds,
+                                      Map<ItemID, ItemStack> currentTemplates) {
+    }
+
+    /**
+     * <b>Dry run</b> of {@link #renormalizeAndMerge()}'s grouping pass: computes which
+     * registered ItemIDs would collapse to the same normalized identity under the
+     * <b>current</b> effective component set, then keeps only the groups that represent a
+     * dangerous <i>collapse</i> (as opposed to a harmless <i>healing</i> merge).
+     * Neither {@code itemIDMap} nor {@code itemIDAliasMap} is mutated.
+     * <p>
+     * <b>Healing vs. collapse:</b> a group is a <i>healing</i> merge when all of its members
+     * are already identical after stripping only the <b>previously applied</b> component set
+     * ({@code previousComponentIds}) — i.e. they are duplicates that should always have been
+     * one ID (e.g. spurious IDs minted by decaying food before the volatile-component fix, or
+     * registry-order duplicates). Those merge automatically, exactly like before this guard
+     * existed. A group is a <i>collapse</i> when at least two members remain distinct under
+     * the previous set and only become equal under the current set — meaning the admin's
+     * component-list change is what fuses genuinely different items (e.g. two markets/bank
+     * entries becoming the same item). Only collapse groups are returned.
+     *
+     * @param previousComponentIds the effective component set that was applied when the world
+     *                             was last normalized (id strings; unparsable entries are skipped)
+     * @return every collapse group the current set would create; empty if applying the current
+     *         set is safe (only healing merges, or no merges at all)
+     */
+    public static List<MergeCollisionGroup> detectCollapseCollisions(Collection<String> previousComponentIds) {
+        return detectCollapseCollisions(previousComponentIds, VolatileItemComponents.getEffectiveComponentIds());
+    }
+
+    /**
+     * Variant of {@link #detectCollapseCollisions(Collection)} with an <b>explicit</b>
+     * "current" component set instead of the globally applied effective set.
+     * <p>
+     * The startup merge guard uses the single-argument overload (current = the applied
+     * effective set). This overload exists so callers (in particular the in-game test suite)
+     * can evaluate a hypothetical set change as a pure function — without mutating the
+     * globally shared {@link VolatileItemComponents} configuration, which on a singleplayer
+     * server is shared between the client and server side and must not be flipped around
+     * while play continues.
+     *
+     * @param previousComponentIds the set the registry was last normalized with
+     * @param currentComponentIds  the (hypothetical or applied) new set to evaluate
+     * @return every collapse group the given current set would create
+     */
+    public static List<MergeCollisionGroup> detectCollapseCollisions(Collection<String> previousComponentIds,
+                                                                     Collection<String> currentComponentIds) {
+        // Parse both sets into resource locations (unknown/absent mods are fine —
+        // stripComponentsByIds skips unresolvable ids).
+        Set<net.minecraft.resources.ResourceLocation> previousIds = parseComponentIdStrings(previousComponentIds);
+        Set<net.minecraft.resources.ResourceLocation> currentIds = parseComponentIdStrings(currentComponentIds);
+
+        List<MergeCollisionGroup> collisions = new ArrayList<>();
+        synchronized (itemIDMap) {
+            // Normalize COPIES under the given current set — the live templates stay untouched.
+            // (stripComponentsByIds == normalize() when currentIds is the applied effective set.)
+            Map<ItemID, ItemStack> normalized = new HashMap<>();
+            for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet()) {
+                ItemStack n = VolatileItemComponents.stripComponentsByIds(entry.getValue(), currentIds);
+                n.setCount(1);
+                normalized.put(entry.getKey(), n);
+            }
+
+            // Same bucketing/grouping as renormalizeAndMerge() pass 2, on the copies.
+            Map<Integer, List<ItemID>> buckets = new HashMap<>();
+            for (Map.Entry<ItemID, ItemStack> entry : normalized.entrySet()) {
+                int hash = ItemStack.hashItemAndComponents(entry.getValue());
+                buckets.computeIfAbsent(hash, k -> new ArrayList<>()).add(entry.getKey());
+            }
+            for (List<ItemID> bucket : buckets.values()) {
+                if (bucket.size() < 2)
+                    continue;
+                List<List<ItemID>> groups = new ArrayList<>();
+                for (ItemID id : bucket) {
+                    ItemStack stack = normalized.get(id);
+                    List<ItemID> match = null;
+                    for (List<ItemID> group : groups) {
+                        if (ItemStack.isSameItemSameComponents(stack, normalized.get(group.getFirst()))) {
+                            match = group;
+                            break;
+                        }
+                    }
+                    if (match == null) {
+                        match = new ArrayList<>();
+                        groups.add(match);
+                    }
+                    match.add(id);
+                }
+                for (List<ItemID> group : groups) {
+                    if (group.size() < 2)
+                        continue;
+
+                    // Classify: how many distinct identities does this group have under the
+                    // PREVIOUS set? 1 → healing (duplicates, merge silently). >1 → collapse.
+                    List<ItemStack> distinctUnderPreviousSet = new ArrayList<>();
+                    for (ItemID id : group) {
+                        ItemStack old = VolatileItemComponents.stripComponentsByIds(itemIDMap.get(id), previousIds);
+                        old.setCount(1);
+                        boolean found = false;
+                        for (ItemStack existing : distinctUnderPreviousSet) {
+                            if (ItemStack.isSameItemSameComponents(old, existing)) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found)
+                            distinctUnderPreviousSet.add(old);
+                    }
+                    if (distinctUnderPreviousSet.size() < 2)
+                        continue; // healing merge — stays automatic
+
+                    // Collapse group: same canonical rule as renormalizeAndMerge —
+                    // persisted shorts win, then lowest short (Task #16).
+                    ItemID canonical = selectCanonical(group);
+                    List<ItemID> mergedIds = new ArrayList<>();
+                    Map<ItemID, ItemStack> templates = new HashMap<>();
+                    for (ItemID id : group) {
+                        templates.put(id, itemIDMap.get(id).copy());
+                        if (!id.equals(canonical))
+                            mergedIds.add(id);
+                    }
+                    mergedIds.sort(Comparator.comparingInt(ItemID::getShort));
+                    collisions.add(new MergeCollisionGroup(canonical, mergedIds, templates));
+                }
+            }
+        }
+        return collisions;
+    }
+
+    /** Parses component id strings into resource locations, silently skipping unparsable entries. */
+    private static Set<net.minecraft.resources.ResourceLocation> parseComponentIdStrings(Collection<String> idStrings) {
+        Set<net.minecraft.resources.ResourceLocation> ids = new HashSet<>();
+        if (idStrings != null) {
+            for (String idStr : idStrings) {
+                net.minecraft.resources.ResourceLocation id =
+                        idStr == null ? null : net.minecraft.resources.ResourceLocation.tryParse(idStr.trim());
+                if (id != null)
+                    ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * Builds the human-readable merge report shown to the admin — either as the message of
+     * the startup-aborting {@link ItemIDMergeAbortedException} (flag off) or as an INFO log
+     * before the confirmed merge is applied (flag on).
+     *
+     * @param collisions  collapse groups from {@link #detectCollapseCollisions(Collection)}
+     * @param previousSet the effective component set persisted at the last normalization
+     * @param currentSet  the effective component set of this startup
+     * @return multi-line report listing every merge group, the affected items, the
+     *         components that distinguish them today, and the admin's two options
+     */
+    public static String buildMergeReport(List<MergeCollisionGroup> collisions,
+                                          List<String> previousSet,
+                                          List<String> currentSet) {
+        Set<String> previous = previousSet == null ? Set.of() : new HashSet<>(previousSet);
+        Set<String> current = currentSet == null ? Set.of() : new HashSet<>(currentSet);
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n==================== BankSystem ItemID merge guard ====================\n");
+        sb.append("The effective volatile/deposit-gated component set changed since this world\n");
+        sb.append("was last normalized (config lists ADDITIONAL_VOLATILE_COMPONENTS /\n");
+        sb.append("ADDITIONAL_DEPOSIT_GATED_COMPONENTS in settings.json, or the datapack tags\n");
+        sb.append("banksystem:volatile_item_components / banksystem:deposit_gated_components).\n");
+        sb.append("  Previously applied set: ").append(previousSet).append('\n');
+        sb.append("  Current set:            ").append(currentSet).append('\n');
+        sb.append("Applying the current set would IRREVERSIBLY merge the following genuinely\n");
+        sb.append("distinct items (bank balances and market listings keyed by a merged ID\n");
+        sb.append("would all resolve to the canonical item afterwards):\n");
+        int groupNr = 0;
+        for (MergeCollisionGroup group : collisions) {
+            groupNr++;
+            sb.append("\nMerge group ").append(groupNr).append(" — canonical: ")
+                    .append(describeMember(group.canonicalId(), group.currentTemplates().get(group.canonicalId()), previous, current))
+                    .append('\n');
+            for (ItemID merged : group.mergedIds()) {
+                sb.append("  would become an alias: ")
+                        .append(describeMember(merged, group.currentTemplates().get(merged), previous, current))
+                        .append('\n');
+            }
+        }
+        sb.append("\nYour options:\n");
+        sb.append("  1) Keep the items distinct: revert the component-list change (settings.json\n");
+        sb.append("     config lists and/or datapack tags) and restart the server.\n");
+        sb.append("  2) Approve this merge once: set \"CONFIRM_ITEMID_MERGE\": true in the\n");
+        sb.append("     \"ServerBank\" section of <world>/data/BankSystem/settings.json and restart.\n");
+        sb.append("     The flag resets itself to false after the merge is applied.\n");
+        sb.append("Nothing has been changed or saved: BankSystem suppresses all of its data\n");
+        sb.append("saves for the remainder of this aborted session, so the world data on disk\n");
+        sb.append("stays exactly as it was. Back up your world before confirming.\n");
+        sb.append("========================================================================");
+        return sb.toString();
+    }
+
+    /**
+     * One report line for a merge-group member: ID, item registry name and the components
+     * that are stripped by the current set (the data that distinguishes the member today).
+     * Components that were NOT stripped by the previous set — i.e. the ones whose stripping
+     * is new and causes the collapse — are marked with {@code (NEW)}.
+     * <p>
+     * The current set is passed in (instead of re-reading the applied effective set) so the
+     * report always describes exactly the set the collision detection was run against.
+     */
+    private static String describeMember(ItemID id, ItemStack template, Set<String> previousSet, Set<String> currentSet) {
+        StringBuilder sb = new StringBuilder();
+        sb.append('#').append(id.getShort()).append(" (");
+        sb.append(template == null || template.isEmpty() ? "?" : ItemUtilities.getItemIDStr(template.getItem()));
+        sb.append(')');
+        if (template == null || template.isEmpty())
+            return sb.toString();
+        // List the components on this template that the CURRENT set strips.
+        List<String> stripped = new ArrayList<>();
+        for (net.minecraft.core.component.TypedDataComponent<?> typed : template.getComponents()) {
+            net.minecraft.resources.ResourceLocation typeId =
+                    net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(typed.type());
+            if (typeId == null || !currentSet.contains(typeId.toString()))
+                continue;
+            String value = String.valueOf(typed.value());
+            if (value.length() > 120)
+                value = value.substring(0, 117) + "...";
+            stripped.add(typeId + (previousSet.contains(typeId.toString()) ? "" : " (NEW)") + " = " + value);
+        }
+        if (!stripped.isEmpty())
+            sb.append(" stripped components: ").append(stripped);
+        return sb.toString();
+    }
+
+    /**
+     * Startup merge guard, run at the end of {@link #load(CompoundTag)} on the master server
+     * (slave servers never load ItemIDs from disk; clients never call load()).
+     * <p>
+     * Distinguishes two situations:
+     * <ul>
+     *   <li><b>Healing</b> (stored set equal to the current set, or no stored set yet →
+     *       first load after the mod update / migration): merges are duplicates collapsing
+     *       under an unchanged set — the intended self-repair. Merge silently, exactly like
+     *       before this guard existed.</li>
+     *   <li><b>Potential collapse</b> (stored set differs): dry-run the merge grouping.
+     *       Groups whose members are distinct under the OLD set would be fused by the
+     *       admin's component-list change — that is irreversible, so it requires an explicit
+     *       one-shot confirmation via the {@code CONFIRM_ITEMID_MERGE} setting; without it,
+     *       server startup is aborted with a full report
+     *       ({@link ItemIDMergeAbortedException}).</li>
+     * </ul>
+     * After a successful merge the applied effective set is persisted (via the data handler)
+     * so the next startup compares against it, and a consumed {@code CONFIRM_ITEMID_MERGE}
+     * flag is reset to {@code false} and saved (one-shot confirmation, never a standing
+     * bypass).
+     *
+     * @throws ItemIDMergeAbortedException if the set changed, distinct items would merge,
+     *                                     and the admin has not confirmed
+     */
+    private static void applyStartupMergeGuard() {
+        BankSystemDataHandler dataHandler = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.SERVER_DATA_HANDLER : null;
+        List<String> currentSet = VolatileItemComponents.getEffectiveComponentIds();
+        List<String> storedSet = dataHandler != null ? dataHandler.getStoredEffectiveComponentSet() : null;
+
+        if (storedSet == null || storedSet.equals(currentSet)) {
+            // Unchanged set (or no record yet → migration): every merge is a healing merge.
+            renormalizeAndMerge();
+        } else {
+            List<MergeCollisionGroup> collisions = detectCollapseCollisions(storedSet);
+            if (collisions.isEmpty()) {
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] The effective volatile/deposit-gated component set changed ("
+                            + storedSet + " -> " + currentSet + "), but no distinct ItemIDs collapse — applying the new set.");
+                renormalizeAndMerge();
+            } else {
+                String report = buildMergeReport(collisions, storedSet, currentSet);
+                boolean confirmed = BACKEND_INSTANCES != null
+                        && BACKEND_INSTANCES.SERVER_SETTINGS != null
+                        && Boolean.TRUE.equals(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_MERGE.get());
+                if (!confirmed) {
+                    // Abort startup. Nothing has been mutated on disk; the exception message
+                    // carries the full report into the log / crash report on both loaders.
+                    // BankSystemDataHandler.load_itemIDs() catches this exception in transit
+                    // to mark the whole session save-prohibited (the ItemID registry is only
+                    // half-initialized here and the bank manager is still empty), so neither
+                    // the vanilla crash-save nor the shutdown save can overwrite world data —
+                    // that is what makes the report's "nothing saved" guarantee true.
+                    throw new ItemIDMergeAbortedException(report
+                            + "\nServer startup was aborted by the BankSystem ItemID merge guard (CONFIRM_ITEMID_MERGE is false).");
+                }
+                if (BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] CONFIRM_ITEMID_MERGE is true — applying the confirmed merge."
+                            + report);
+                renormalizeAndMerge();
+                // One-shot confirmation: consume the flag and persist the reset immediately,
+                // so a later (unrelated) set change can never slip through unconfirmed.
+                BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_MERGE.set(false);
+                if (dataHandler != null)
+                    dataHandler.save_globalSettings();
+            }
+        }
+
+        // Record the set that is now in effect so the next startup can detect changes.
+        if (dataHandler != null) {
+            dataHandler.setAppliedEffectiveComponentSet(currentSet);
+            dataHandler.save_metadata();
+        }
+    }
+
+
+    /**
+     * Computes the migration seed for {@link #nextShortCounter} on a legacy world (a world
+     * saved before the counter existed): {@code max(shortsInItemIDMap ∪ shortsInItemIDAliasMap) + 1}.
+     * <p>
+     * Returned as an {@code int} (not {@code short}) so a fully-saturated legacy world (max
+     * short == {@link Short#MAX_VALUE}) seeds to {@code Short.MAX_VALUE + 1 = 32768}, at which
+     * point {@link #registerItemStackServerSide_direct(List)} returns {@link ItemID#INVALID_ID}
+     * on the next registration attempt — the exhaustion is reported cleanly instead of
+     * silently wrapping.
+     * <p>
+     * Callable from tests via {@link #computeMigrationSeed_forTesting} which delegates here.
+     *
+     * @param mapShorts   ItemIDs currently in {@code itemIDMap}
+     * @param aliasShorts ItemIDs currently referenced by {@code itemIDAliasMap}
+     *                    (the {@code from} side — canonical shorts are already in {@code mapShorts})
+     * @return one past the largest short present in either collection, or {@code 1} if both are empty
+     */
+    static int computeMigrationSeed(Collection<ItemID> mapShorts, Collection<ItemID> aliasShorts) {
+        int maxShort = 0;
+        if (mapShorts != null)
+            for (ItemID id : mapShorts)
+                if ((id.getShort() & 0xFFFF) > maxShort)
+                    maxShort = id.getShort() & 0xFFFF;
+        if (aliasShorts != null)
+            for (ItemID id : aliasShorts)
+                if ((id.getShort() & 0xFFFF) > maxShort)
+                    maxShort = id.getShort() & 0xFFFF;
+        return maxShort + 1;
+    }
+
+    /**
+     * Public delegate to {@link #computeMigrationSeed(Collection, Collection)} for the
+     * in-game test suite (Task #11 test 1). Not intended for production use.
+     */
+    public static int computeMigrationSeed_forTesting(Collection<ItemID> mapShorts, Collection<ItemID> aliasShorts) {
+        return computeMigrationSeed(mapShorts, aliasShorts);
+    }
+
+    /**
+     * Emits the ERROR log required by Task #11 criterion 5 when the allocator refuses to
+     * hand out a new short because {@link #nextShortCounter} has passed
+     * {@link Short#MAX_VALUE}. Kept as a helper so the counter allocator stays compact and
+     * both overflow branches (the initial check and the belt-and-suspenders loop) use the
+     * same wording.
+     *
+     * @param stack the stack whose registration is being aborted — its registry name is
+     *              included in the log line so admins can trace the failing operation.
+     */
+    private static void logSpaceExhausted(ItemStack stack) {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.LOGGER == null)
+            return;
+        String name = stack != null && !stack.isEmpty() ? ItemUtilities.getItemIDStr(stack.getItem()) : "<empty>";
+        BACKEND_INSTANCES.LOGGER.error("[ItemIDManager] BankSystem ItemID space exhausted — "
+                + "cannot register new item " + name + ". The monotonic short counter has "
+                + "passed Short.MAX_VALUE (" + Short.MAX_VALUE + "); no fresh shorts remain. "
+                + "This affects registration only — existing ItemIDs and their bank balances "
+                + "are unaffected. Contact the mod maintainer.");
+    }
+
+    /** Read-only accessor to {@link #nextShortCounter} for the in-game test suite. */
+    public static int getNextShortCounter_forTesting() {
+        return nextShortCounter;
+    }
+
+    /**
+     * Explicit setter for {@link #nextShortCounter}, exclusively for the in-game test suite
+     * (Task #11 tests 5 and 6 need to force the counter to overflow). Never call in
+     * production code — the counter is otherwise only mutated by the allocator itself and
+     * by {@link #load(CompoundTag)}.
+     */
+    public static void setNextShortCounter_forTesting(int value) {
+        nextShortCounter = value;
+    }
+
+    /**
+     * Registers the default money items and every registry item as ItemIDs, in a
+     * <b>register-if-absent</b> fashion.
+     * <p>
+     * <b>Used during world load</b> ({@code BankSystemDataHandler.loadAll()}), invoked
+     * <i>after</i> the persisted ItemID map has been restored by {@code load_itemIDs()}.
+     * Because {@link #registerItemStackServerSide_direct(ItemStack)} first looks up an
+     * existing ItemID via {@link #getItemID(ItemStack)} and only mints a fresh short on a
+     * miss, every money/registry item that already has a persisted short KEEPS that short;
+     * only genuinely new items receive freshly minted, appended shorts. This is the
+     * root-cause fix for the money-ItemID bugs: running this pass BEFORE the persisted map
+     * loaded (the old behaviour) minted fresh low shorts that then collided/merged with the
+     * persisted shorts and corrupted item identity (e.g. money 7 becoming an alias of 6).
+     * <p>
+     * Obtains the registry via {@link UtilitiesPlatform#getRegistryAccessServerSide()} —
+     * the same accessor {@link #save(CompoundTag)} and {@link #load(CompoundTag)} use — and
+     * <b>returns early when it is {@code null}</b> (mirrors the save/load null-registry
+     * guards; never NPEs if the server-side registry is not yet available).
+     */
+    public void createDefaultItemIDs()
+    {
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if(access == null)
+            return;
+
+        ArrayList<ItemStack> moneyItems = BankSystemItems.getMoneyItems();
+        for(ItemStack itemStack : moneyItems)
+        {
+            registerItemStackServerSide_direct(itemStack);
+        }
+        MoneyItem.resetItemID();
+
+        access.lookupOrThrow(Registries.ITEM).listElements().forEach(listElement -> {
+            registerItemStackServerSide_direct(listElement.value().getDefaultInstance());
+        });
+    }
+
+    /**
+     * Legacy overload retained for the slave-server call site in
+     * {@code BankSystemModBackend.onServerStart(...)}. The {@code server} parameter is no
+     * longer needed to obtain the registry (the no-arg {@link #createDefaultItemIDs()}
+     * resolves it via {@link UtilitiesPlatform#getRegistryAccessServerSide()}); this thin
+     * delegate simply preserves the existing call signature.
+     *
+     * @param server the running server (unused; kept for call-site compatibility)
+     */
+    public void createDefaultItemIDs(MinecraftServer server)
+    {
+        createDefaultItemIDs();
+    }
+
+    /*@Override
+    public boolean save(Map<String, ListTag> listTags) {
+        ListTag listTag = new ListTag();
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if(access == null)
+            return false;
+
+        ConcurrentHashMap<ItemID, ItemStack> usedMap = itemIDMap;
+        if(usedMap.isEmpty())
+        {
+            if(singlePlayerServerBackupOnPlayerLeave != null)
+                usedMap = singlePlayerServerBackupOnPlayerLeave;
+        }
+        for(Map.Entry<ItemID, ItemStack> entry : usedMap.entrySet())
+        {
+            ItemStack itemStack = entry.getValue();
+            ItemID itemID = entry.getKey();
+            CompoundTag tag = new CompoundTag();
+            CompoundTag idTag = new CompoundTag();
+            itemID.save(idTag);
+            tag.put("itemID", idTag);
+            CompoundTag itemStackTag = new CompoundTag();
+            Tag stackTag = itemStack.save(access, itemStackTag);
+            tag.put("itemStack", stackTag);
+
+            listTag.add(tag);
+        }
+        listTags.put("items", listTag);
+
+        return true;
+    }
+
+    @Override
+    public boolean load(Map<String, ListTag> listTags) {
+        if(!listTags.containsKey("items"))
+            return false;
+
+        ListTag listTag = listTags.get("items");
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if(access == null)
+            return false;
+
+        //itemIDMap.clear();
+        for(Tag tag : listTag)
+        {
+            CompoundTag compoundTag = (CompoundTag)tag;
+            if(compoundTag==null || !compoundTag.contains("itemID") || !compoundTag.contains("itemStack"))
+                continue;
+
+            CompoundTag itemStackTag = compoundTag.getCompound("itemStack");
+            CompoundTag itemIDTag = compoundTag.getCompound("itemID");
+
+            ItemID id = new ItemID(ItemID.INVALID_ID);
+            if(!id.load(itemIDTag))
+                continue;
+
+            Optional<ItemStack> itemStackOptional = ItemStack.parse(access, itemStackTag);
+            if(itemStackOptional.isEmpty())
+                continue;
+
+            ItemStack itemStack = itemStackOptional.get();
+            String name = ItemUtilities.getItemIDStr(itemStack.getItem());
+            id.setNameCache_internal(name);
+            itemIDMap.put(id, itemStack);
+        }
+        singlePlayerServerBackupOnPlayerLeave = null;
+        return true;
+    }*/
+
+
+}

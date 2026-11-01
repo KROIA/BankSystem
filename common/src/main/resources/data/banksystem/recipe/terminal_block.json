@@ -2,21 +2,11 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "#": {
-      "item": "banksystem:circuit_board"
-    },
-    "X": {
-      "item": "banksystem:display"
-    },
-    "Y": {
-      "item": "banksystem:metal_case_block"
-    },
-    "R": {
-      "item": "minecraft:redstone"
-    },
-    "I": {
-      "item": "minecraft:iron_nugget"
-    }
+    "#": "banksystem:circuit_board",
+    "X": "banksystem:display",
+    "Y": "banksystem:metal_case_block",
+    "R": "minecraft:redstone",
+    "I": "minecraft:iron_nugget"
   },
   "pattern": [
     "IYI",

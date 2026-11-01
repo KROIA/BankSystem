@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "bonus_rolls": 0.0,
+      "conditions": [ { "condition": "minecraft:survives_explosion" } ],
+      "entries": [ { "type": "minecraft:item", "name": "banksystem:share_stamper" } ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "banksystem:blocks/share_stamper"
+}

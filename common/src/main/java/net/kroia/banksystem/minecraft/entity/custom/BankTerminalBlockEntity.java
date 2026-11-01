@@ -1,0 +1,1341 @@
+package net.kroia.banksystem.minecraft.entity.custom;
+
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.BankSystemModSettings;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IAsyncBank;
+import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
+import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.bank.ServerBank;
+import net.kroia.banksystem.banking.bankmanager.BankManager;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
+import net.kroia.banksystem.banking.binding.BindingRow;
+import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
+import net.kroia.banksystem.networking.entity.UpdateBankTerminalBlockEntityPacket;
+import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ContainerItemInsertion;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.banksystem.util.VolatileItemComponents;
+import net.kroia.modutilities.ItemUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
+import net.kroia.modutilities.persistence.ServerSaveable;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Container;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+
+public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvider {
+    /*
+    private static class TransferTask implements ServerSaveable
+    {
+        // negative values: send to market
+        // positive values: send to inventory
+        private final BankTerminalBlockEntity blockEntity;
+        private HashMap<ItemID, Long> transferItems;
+        private UUID playerID;
+        public TransferTask(BankTerminalBlockEntity blockEntity, UUID playerID, HashMap<ItemID, Long>transferItems)
+        {
+            this.blockEntity = blockEntity;
+            this.playerID = playerID;
+            this.transferItems = transferItems;
+        }
+        private TransferTask(BankTerminalBlockEntity blockEntity)
+        {
+            this.blockEntity = blockEntity;
+            this.transferItems = new HashMap<>();
+            this.playerID = new UUID(0, 0);
+        }
+        public UUID getPlayerID() {
+            return playerID;
+        }
+        private HashMap<ItemID, Long> getItemID() {
+            return transferItems;
+        }
+
+        private long getAmount(ItemID itemID) {
+            return transferItems.getOrDefault(itemID, 0L);
+        }
+        private void setAmount(ItemID itemID, long amount) {
+            if(amount == 0 && transferItems.containsKey(itemID))
+                transferItems.remove(itemID);
+            else
+                transferItems.put(itemID, amount);
+            blockEntity.setChanged();
+        }
+
+        public boolean createTask(ItemID itemID, long amount)
+        {
+            if(amount == 0)
+                return false;
+            IBankUserOld bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerID);
+            if(bank == null) {
+                // Create bank account for this item if it can be used for banking
+                ArrayList<ItemID> keys = new ArrayList<>();
+                String userName = ServerPlayerUtilities.getOnlinePlayer(playerID).getName().getString();
+                keys.add(itemID);
+                bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.createUser(playerID, userName, keys, true,0 );
+            }
+
+            ItemID bankITemID = itemID;
+            if(MoneyItem.isMoney(itemID))
+            {
+                bankITemID = MoneyBank.ITEM_ID;
+            }
+            ISyncServerBank bankAccount = bank.getBank(bankITemID);
+            if(bankAccount == null) {
+                // Create item bank account
+                bankAccount = bank.createItemBank(bankITemID, 0, true);
+                if(bankAccount == null)
+                    return false;
+            }
+
+            setAmount(itemID, getAmount(itemID) + amount);
+            return true;
+        }
+
+        public void cancelTask(ItemID itemID)
+        {
+            setAmount(itemID, 0);
+        }
+        public void cancelTasks()
+        {
+            transferItems.clear();
+        }
+        public int taskCount()
+        {
+            return transferItems.size();
+        }
+
+        public boolean processTaskStep(long amountToProcess, boolean processWholeItemStack)
+        {
+            if(amountToProcess<=0)
+            {
+                cancelTasks();
+                return false;
+            }
+            IBankUserOld bank = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(playerID);
+            if(bank == null) {
+                cancelTasks();
+                return false;
+            }
+            ArrayList<ItemID> keys = new ArrayList<>(transferItems.keySet());
+            for(ItemID itemID : keys)
+            {
+                long amount = transferItems.get(itemID);
+                if(processWholeItemStack)
+                    amountToProcess = Math.abs(amount);
+                if(amount == 0)
+                    continue;
+                ItemID bankITemID = itemID;
+                boolean isMoney = MoneyItem.isMoney(itemID);
+                if(isMoney)
+                    bankITemID = MoneyBank.ITEM_ID;
+
+                ISyncServerBank bankAccount = bank.getBank(bankITemID);
+                if(bankAccount == null) {
+                    cancelTask(itemID);
+                    continue;
+                }
+                TerminalInventory inventory = blockEntity.playerDataTable.get(playerID).inventory;
+
+                if(amount < 0)
+                {
+                    // send to bank
+                    amount = Math.min(-amount, amountToProcess);
+                    if(amount <= 0) {
+                        cancelTask(itemID);
+                        continue;
+                    }
+                    long availableAmount = Math.min(amount, inventory.getItemCount(itemID));
+                    if(availableAmount > 0)
+                    {
+                        // TODO Task #34.1: Support Numismatics coin items as physical deposit input.
+                        // Recognize Coin items, convert to spurs, add to bound account if the slot
+                        // is Numismatics-bound. Routing: check if BankAccount is bound via
+                        // BankAccountBindings.get() → if providerId=="numismatics", route to that
+                        // bound account's deposit; else normal BankSystem deposit below.
+                        long depositAmount = availableAmount;
+                        if(isMoney) {
+                            MoneyItem moneyItem = (MoneyItem) itemID.getStack().getItem();
+                            depositAmount *= moneyItem.worth();
+                        }
+                        else
+                        {
+                            depositAmount = bankAccount.convertToRawAmount(depositAmount);
+                        }
+                        if(bankAccount.deposit(depositAmount) == BankStatus.SUCCESS) {
+                            inventory.removeItem(itemID, availableAmount);
+                            setAmount(itemID, getAmount(itemID) + availableAmount);
+                        }
+                        else
+                            cancelTask(itemID);
+                        return true;
+                    }else {
+                        cancelTask(itemID);
+                        continue;
+                    }
+                }
+                else
+                {
+                    // send to inventory
+                    if(isMoney)
+                    {
+                        amount = Math.min(amount, amountToProcess);
+                        amount *= ((MoneyItem)BankSystemItems.MONEY.get()).worth();
+                        amount = Math.min(amount, bankAccount.getBalance());
+                        int moneyFractionScaleFactor = bankAccount.getItemFractionScaleFactor();
+                        if(amount < moneyFractionScaleFactor)
+                            amount = 0; // don't transfer less than 100 cents
+                        if(amount % moneyFractionScaleFactor != 0)
+                            amount = (amount / moneyFractionScaleFactor) * moneyFractionScaleFactor; // round to whole dollars
+                        if(amount <= 0) {
+                            cancelTask(itemID);
+                            continue;
+                        }
+
+                        long addedAmount = inventory.addItem(itemID, (long)bankAccount.convertToRealAmount(amount));
+                        if(addedAmount > 0)
+                        {
+                            if(bankAccount.withdraw(bankAccount.convertToRawAmount(addedAmount)) != BankStatus.SUCCESS)
+                            {
+                                // error
+                                error("Failed to withdraw " + ServerBank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
+                                inventory.removeItem(itemID, addedAmount);
+                                cancelTask(itemID);
+                                continue;
+                            }
+                            setAmount(itemID, getAmount(itemID) - addedAmount);
+                            return true;
+                        }
+                        else
+                            cancelTask(itemID); // inventory full
+                    }
+                    else
+                    {
+                        amount = Math.min(amount, amountToProcess);
+                        amount = Math.min(amount, (long)bankAccount.convertToRealAmount(bankAccount.getBalance()));
+                        if(amount <= 0) {
+                            cancelTask(itemID);
+                            continue;
+                        }
+                        long addedAmount = inventory.addItem(itemID, amount);
+                        if(addedAmount > 0)
+                        {
+                            if(bankAccount.withdraw(bankAccount.convertToRawAmount(addedAmount)) != BankStatus.SUCCESS)
+                            {
+                                // error
+                                error("Failed to withdraw " + ServerBank.getNormalizedAmount(addedAmount,bankAccount.getItemFractionScaleFactor()) + " " + itemID + " from bank account of user " + playerID);
+                                inventory.removeItem(itemID, addedAmount);
+                                cancelTask(itemID);
+                                continue;
+                            }
+                            setAmount(itemID, getAmount(itemID) - addedAmount);
+                            return true;
+                        }
+                        else
+                            cancelTask(itemID); // inventory full
+                    }
+                }
+            }
+            return false;
+        }
+
+        public static TransferTask createFromTag(BankTerminalBlockEntity blockEntity,CompoundTag tag)
+        {
+            TransferTask task = new TransferTask(blockEntity);
+            if(task.load(tag))
+                return task;
+            return null;
+        }
+
+        @Override
+        public boolean save(CompoundTag tag) {
+            tag.putUUID("PlayerID", playerID);
+            ListTag transferItemsTag = new ListTag();
+            for(ItemID itemID : transferItems.keySet())
+            {
+                CompoundTag itemTag = new CompoundTag();
+                long amount = transferItems.get(itemID);
+                if(amount == 0)
+                    continue;
+                CompoundTag itemIDTag = new CompoundTag();
+                itemID.save(itemIDTag);
+                itemTag.put("ItemID", itemIDTag);
+                itemTag.putLong("Amount", amount);
+                transferItemsTag.add(itemTag);
+            }
+            tag.put("TransferItems", transferItemsTag);
+            return true;
+        }
+
+        @Override
+        public boolean load(CompoundTag tag) {
+            if(tag == null)
+                return false;
+            if(!tag.contains("PlayerID") || !tag.contains("TransferItems"))
+                return false;
+            playerID = tag.getUUID("PlayerID");
+            ListTag transferItemsTag = tag.getList("TransferItems", 10);
+            for(int i = 0; i < transferItemsTag.size(); i++)
+            {
+                CompoundTag itemTag = transferItemsTag.getCompound(i);
+                String itemIDStr = itemTag.getString("ItemID");
+                ItemID itemID;
+                if(!itemIDStr.isEmpty())
+                {
+                    itemID = new ItemID(itemIDStr);
+                }
+                else
+                {
+                    CompoundTag itemIDTag = itemTag.getCompound("ItemID");
+                    itemID = new ItemID(ItemStack.of(itemIDTag));
+                    return false;
+                }
+                long amount = itemTag.getLong("Amount");
+                transferItems.put(itemID, amount);
+            }
+            return true;
+        }
+    }
+    */
+    public static class TerminalInventory implements ServerSaveable, Container {
+        private final BankTerminalBlockEntity blockEntity;
+        private final ArrayList<ItemStack> inventory;
+        private HolderLookup.Provider pRegistries = null;
+        public TerminalInventory(BankTerminalBlockEntity blockEntity, int size) {
+            this.blockEntity = blockEntity;
+            inventory = new ArrayList<>(size);
+            for(int i = 0; i < size; i++)
+            {
+                inventory.add(ItemStack.EMPTY);
+            }
+        }
+
+        public void setRegistryProvider(HolderLookup.Provider pRegistries) {
+            this.pRegistries = pRegistries;
+        }
+
+        public void setStackInSlot(int slot, ItemStack stack)
+        {
+            if(slot < 0 || slot >= inventory.size())
+                return;
+            inventory.set(slot, stack);
+            setChanged();
+        }
+
+        public long getFreeSpace(String itemID, int amount)
+        {
+            long freeSpace = 0;
+            for (int i = 0; i < this.getContainerSize(); i++) {
+                ItemStack stack = this.getItem(i);
+
+                // If the slot is empty, it has space
+                if (stack.isEmpty()) {
+                    freeSpace += amount > 0 ? amount : 64;
+                    continue;
+                }
+                if(stack.isDamaged() || stack.isEnchanted())
+                    continue;
+
+                String stackItemID = ItemUtilities.getItemIDStr(stack.getItem());
+
+                // Compare the ResourceLocation to the provided string
+                if (stackItemID != null && stackItemID.equals(itemID)) {
+                    // Check if the stack can fit the amount
+                    freeSpace += stack.getMaxStackSize() - stack.getCount();
+                }
+            }
+
+            return freeSpace;
+        }
+
+        // Only counts items that are not damaged or enchanted
+        public CompletableFuture<HashMap<ItemID, Long>> getItemCount()
+        {
+            return getItemCount((List<ItemStack>) null);
+        }
+
+        /**
+         * Counts the depositable items in this inventory, grouped by ItemID.
+         * Only counts items that are not damaged or enchanted and that pass the
+         * deposit gate (see {@link VolatileItemComponents#isDepositEquivalent}).
+         *
+         * @param rejectedDeposits when non-null, receives the stacks that were refused
+         *                         by the deposit gate so the caller can inform the player
+         *                         (rejections must never be silent)
+         */
+        public CompletableFuture<HashMap<ItemID, Long>> getItemCount(@Nullable List<ItemStack> rejectedDeposits)
+        {
+            return getItemCount(rejectedDeposits, null);
+        }
+
+        /**
+         * Counts the depositable items in this inventory, grouped by ItemID.
+         * Only counts items that are not damaged or enchanted and that pass the
+         * deposit gate (see {@link VolatileItemComponents#isDepositEquivalent}).
+         *
+         * @param rejectedDeposits     when non-null, receives the stacks that were refused
+         *                             by the deposit gate so the caller can inform the player
+         *                             (rejections must never be silent)
+         * @param unresolvableDeposits when non-null, receives stacks whose ItemID is unknown
+         *                             to the master's registry ({@link ItemID#INVALID_ID}) —
+         *                             e.g. a mod installed only on this slave. The caller tells
+         *                             the depositing player the item cannot be banked here. This
+         *                             is emitted from the deposit action (per attempt, per player)
+         *                             rather than the ID-registration path, which is deduplicated
+         *                             by the slave's negative cache and so cannot reliably notify.
+         */
+        public CompletableFuture<HashMap<ItemID, Long>> getItemCount(@Nullable List<ItemStack> rejectedDeposits, @Nullable List<ItemStack> unresolvableDeposits)
+        {
+            CompletableFuture<HashMap<ItemID, Long>> futureResult = new CompletableFuture<>();
+
+            List<ItemStack> stacks = new ArrayList<>();
+            for (int i = 0; i < this.getContainerSize(); i++) {
+                ItemStack stack = this.getItem(i);
+
+                // If the slot is empty, it has space
+                if (stack.isEmpty() || stack.isDamaged() || stack.isEnchanted()) {
+                    continue;
+                }
+                stacks.add(stack);
+            }
+            HashMap<ItemID, Long> items = new HashMap<>();
+            for (ItemStack stack : stacks) {
+                ItemID itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
+                if(itemID == null || !itemID.isValid())
+                {
+                    // Unresolvable on this server: the master's registry doesn't know this item
+                    // (mod missing on master), so it resolves to INVALID_ID and can never be
+                    // banked. Surface it to the caller so the depositing player is told — every
+                    // attempt. Do NOT rely on the ID-registration ARRS message: that fires at
+                    // most once per item per session (negative-cache dedup) and not at all once
+                    // a background lookup has already cached the item.
+                    warn("ItemStack: "+stack+" is not registered for ItemID. Skipping this item");
+                    if (unresolvableDeposits != null)
+                        unresolvableDeposits.add(stack);
+                    continue;
+                }
+
+                // Deposit gate: this count is what "send items to bank" turns into credit.
+                // ItemID identity ignores state-gated components (e.g. tfc:food), so without
+                // this per-stack check a spoiled item would be credited as — and later
+                // withdrawn as — a fresh one (state laundering). Rejected stacks stay in the
+                // terminal inventory; the caller reports them to the player.
+                if (!VolatileItemComponents.isDepositEquivalent(stack, itemID)) {
+                    if (rejectedDeposits != null)
+                        rejectedDeposits.add(stack);
+                    continue;
+                }
+
+                if(!items.containsKey(itemID))
+                    items.put(itemID, (long)stack.getCount());
+                else
+                    items.put(itemID, items.get(itemID) + stack.getCount());
+            }
+            futureResult.complete(items);
+
+            return futureResult;
+        }
+        // Only counts items that are not damaged or enchanted
+        public CompletableFuture<Long> getItemCount(ItemID itemID)
+        {
+            CompletableFuture<Long> futureResult = new CompletableFuture<>();
+            List<ItemStack> stacks = new ArrayList<>();
+            for (int i = 0; i < this.getContainerSize(); i++) {
+                ItemStack stack = this.getItem(i);
+
+                // If the slot is empty, it has space
+                if (stack.isEmpty() || stack.isDamaged() || stack.isEnchanted()) {
+                    continue;
+                }
+                stacks.add(stack);
+            }
+            long count = 0;
+            for (ItemStack stack : stacks) {
+                ItemID _itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
+                if(_itemID == null || !_itemID.isValid())
+                {
+                    warn("ItemStack: "+stack+" is not registered for ItemID. Skipping this item");
+                    continue;
+                }
+
+                if (_itemID.equals(itemID)) {
+                    count += stack.getCount();
+                }
+            }
+            futureResult.complete(count);
+            return futureResult;
+        }
+        // Only counts items that are not damaged or enchanted
+        public long getItemCount_direct(ItemID itemID)
+        {
+            long count = 0;
+            for (int i = 0; i < this.getContainerSize(); i++) {
+                ItemStack stack = this.getItem(i);
+
+                // If the slot is empty, it has space
+                if (stack.isEmpty() || stack.isDamaged() || stack.isEnchanted()) {
+                    continue;
+                }
+
+                // Get the item's ResourceLocation
+                ItemID _itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
+
+                // Compare the ResourceLocation to the provided string
+                if (_itemID.equals(itemID)) {
+                    // Check if the stack can fit the amount)
+                    count += stack.getCount();
+                }
+            }
+            return count;
+        }
+
+        /**
+         * Materializes {@code amount} withdrawn items of the given ItemID into this
+         * inventory and returns how many were actually placed (the caller keeps the
+         * remainder in the bank).
+         * <p>
+         * Placement must NOT merge by ItemID equality: identity deliberately ignores
+         * volatile/deposit-gated components (see {@link VolatileItemComponents}), so an
+         * ItemID-equal stack in a slot can still be component-distinct (e.g. spoiled food)
+         * — merging onto it would silently rewrite the withdrawn items' state.
+         * {@link ContainerItemInsertion} merges only into component-equal stacks (the
+         * game's own {@code ItemStack.isSameItemSameComponents}, which mods like TFC hook)
+         * and uses empty slots otherwise. Damaged/enchanted stacks are inherently excluded
+         * from merging: damage and enchantments are data components, so they never compare
+         * equal to an undamaged/unenchanted withdrawal stack.
+         */
+        public long addItem(ItemID itemID, long amount)
+        {
+            return ContainerItemInsertion.insertWithdrawnItems(this, itemID, amount);
+        }
+
+        // Only removes items that are not damaged or enchanted
+        public long removeItem(ItemID itemID, long amount)
+        {
+            long orgAmount = amount;
+            for (int i = 0; i < this.getContainerSize(); i++) {
+                if(amount <= 0)
+                    return orgAmount-amount;
+                ItemStack stack = this.getItem(i);
+
+                // If the slot is empty, it has space
+                if (stack.isEmpty() || stack.isDamaged() || stack.isEnchanted()) {
+                    continue;
+                }
+
+                // Get the item's ResourceLocation
+                ItemID _itemID = ItemID.of(stack);
+
+                // Compare the ResourceLocation to the provided string
+                if (_itemID.equals(itemID)) {
+                    // Deposit gate (mirror of getItemCount): identity ignores gated
+                    // components, so a gate-rejected stack (e.g. spoiled food) resolves to
+                    // the same ItemID as an accepted fresh one. Without this check the
+                    // rejected stack could be consumed as payment for the fresh stack's
+                    // credit — laundering it after all. Rejected stacks are never removed.
+                    if (!VolatileItemComponents.isDepositEquivalent(stack, _itemID))
+                        continue;
+                    // Check if the stack can fit the amount
+                    int stackSize = (int)Math.min(amount, stack.getCount());
+                    stack.shrink(stackSize);
+                    amount -= stackSize;
+                    if(stack.isEmpty())
+                        this.setStackInSlot(i, ItemStack.EMPTY);
+                }
+            }
+            setChanged();
+            return orgAmount - amount;
+        }
+
+        @Override
+        public boolean save(CompoundTag tag) {
+            if (pRegistries == null) return false;
+            ListTag inventoryTag = new ListTag();
+            for(int i = 0; i < inventory.size(); i++)
+            {
+                CompoundTag itemTag = new CompoundTag();
+                ItemStack stack = inventory.get(i);
+                if(stack.isEmpty())
+                    continue;
+                itemTag.putInt("Slot", i);
+                Tag stackTag = stack.save(pRegistries);
+                itemTag.put("ItemStack", stackTag);
+                inventoryTag.add(itemTag);
+            }
+            tag.put("Slots", inventoryTag);
+            return true;
+        }
+
+        @Override
+        public boolean load(CompoundTag tag) {
+            if(tag == null)
+                return false;
+            if(!tag.contains("Slots"))
+                return false;
+            ListTag inventoryTag = tag.getList("Slots", CompoundTag.TAG_COMPOUND);
+            for(int i = 0; i < inventoryTag.size(); i++)
+            {
+                CompoundTag itemTag = inventoryTag.getCompound(i);
+                if(!itemTag.contains("Slot") || !itemTag.contains("ItemStack"))
+                    return false;
+                int slot = itemTag.getInt("Slot");
+                CompoundTag stackTag = itemTag.getCompound("ItemStack");
+                ItemStack stack = ItemStack.parse(pRegistries,
+                                stackTag)
+                        .orElse(ItemStack.EMPTY);
+                if(stack.isEmpty())
+                    return false;
+                inventory.set(slot, stack);
+            }
+            return true;
+        }
+
+        @Override
+        public int getContainerSize() {
+            return inventory.size();
+        }
+
+        @Override
+        public boolean isEmpty() {
+            for(ItemStack stack : inventory)
+            {
+                if(!stack.isEmpty())
+                    return false;
+            }
+            return true;
+        }
+
+        @Override
+        public @NotNull ItemStack getItem(int slot) {
+            if(slot < 0 || slot >= inventory.size())
+                return ItemStack.EMPTY;
+            return inventory.get(slot);
+        }
+
+        @Override
+        public @NotNull ItemStack removeItem(int slot, int amount) {
+            if(slot < 0 || slot >= inventory.size())
+                return ItemStack.EMPTY;
+            ItemStack stack = inventory.get(slot);
+            if(stack.isEmpty())
+                return ItemStack.EMPTY;
+            ItemStack copy = stack.copy();
+            if(stack.getCount() <= amount)
+            {
+                inventory.set(slot, ItemStack.EMPTY);
+                setChanged();
+                return copy;
+            }
+            ItemStack newStack = stack.split(amount);
+            if(stack.isEmpty())
+                inventory.set(slot, ItemStack.EMPTY);
+            setChanged();
+            return newStack;
+        }
+
+        @Override
+        public @NotNull ItemStack removeItemNoUpdate(int slot) {
+            if(slot < 0 || slot >= inventory.size())
+                return ItemStack.EMPTY;
+            ItemStack stack = inventory.get(slot);
+            if(stack.isEmpty())
+                return ItemStack.EMPTY;
+            inventory.set(slot, ItemStack.EMPTY);
+            return stack;
+        }
+
+        @Override
+        public void setItem(int slot, ItemStack stack) {
+            if(slot < 0 || slot >= inventory.size())
+                return;
+            inventory.set(slot, stack);
+            setChanged();
+        }
+
+        @Override
+        public void setChanged() {
+            blockEntity.setChanged();
+        }
+
+        @Override
+        public boolean stillValid(Player player) {
+            return false;
+        }
+
+        @Override
+        public void clearContent() {
+            for(int i = 0; i < inventory.size(); i++)
+            {
+                inventory.set(i, ItemStack.EMPTY);
+            }
+            setChanged();
+        }
+    }
+    private static class PlayerData implements ServerSaveable
+    {
+        private UUID playerID;
+        private TerminalInventory inventory;
+        private int selectedBankAccount = 0;
+
+        private HolderLookup.Provider pRegistries = null;
+        //private TransferTask transferTask;
+
+        private final BankTerminalBlockEntity blockEntity;
+        public PlayerData(UUID playerID, BankTerminalBlockEntity blockEntity)
+        {
+            this.blockEntity = blockEntity;
+            this.playerID = playerID;
+            this.inventory = new TerminalInventory(blockEntity, 27);
+            //this.transferTask = new TransferTask(blockEntity, playerID, new HashMap<>());
+        }
+        private PlayerData(BankTerminalBlockEntity blockEntity)
+        {
+            this.blockEntity = blockEntity;
+            playerID = new UUID(0, 0);
+            inventory = new TerminalInventory(blockEntity, 27);
+            //transferTask = new TransferTask(blockEntity);
+        }
+        public UUID getPlayerID() {
+            return playerID;
+        }
+        public TerminalInventory getInventory() {
+            return inventory;
+        }
+       /* public TransferTask getTransferTask() {
+            return transferTask;
+        }*/
+
+        public static PlayerData createFromTag(BankTerminalBlockEntity blockEntity, CompoundTag tag, HolderLookup.Provider pRegistries)
+        {
+            PlayerData playerData = new PlayerData(blockEntity);
+            playerData.pRegistries = pRegistries;
+            if(playerData.load(tag))
+                return playerData;
+            return null;
+        }
+
+        @Override
+        public boolean save(CompoundTag tag) {
+            tag.putUUID("PlayerID", playerID);
+            CompoundTag inventoryTag = new CompoundTag();
+            inventory.setRegistryProvider(pRegistries);
+            if(!inventory.save(inventoryTag))
+                return false;
+            tag.put("Inventory",inventoryTag);
+            //CompoundTag transferTaskTag = new CompoundTag();
+            //tag.put("TransferTask", transferTaskTag);
+            tag.putInt("SelectedBankAccount", selectedBankAccount);
+            // NOTE: the crafting checkbox flags (formerly "CraftUseBankItems" /
+            // "CraftDepositOutput") moved to the per-player User.customData store
+            // (they are global player preferences, not per-block state). Old
+            // worlds may still carry those keys here — they are simply no longer
+            // read and disappear on the next save of this block entity.
+            return true;
+        }
+
+        @Override
+        public boolean load(CompoundTag tag) {
+            if(tag == null)
+                return false;
+            if(tag.contains("PlayerID"))
+                playerID = tag.getUUID("PlayerID");
+
+            if(tag.contains("Inventory")) {
+                CompoundTag inventoryTag = tag.getCompound("Inventory");
+                inventory.setRegistryProvider(pRegistries);
+                inventory.load(inventoryTag);
+            }
+            //CompoundTag transferTaskTag = tag.getCompound("TransferTask");
+            if(tag.contains("SelectedBankAccount"))
+                selectedBankAccount = tag.getInt("SelectedBankAccount");
+
+           // transferTask = TransferTask.createFromTag(blockEntity,transferTaskTag);
+            //return transferTask != null;
+            return true;
+        }
+    }
+
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+    private static final Component TITLE =
+            Component.translatable("container." + BankSystemMod.MOD_ID + ".bank_terminal_block_entity");
+
+    private final HashMap<UUID, PlayerData> playerDataTable = new HashMap<>();
+
+
+    private int lastTickCounter = 0;
+    private int tickCounter = 0;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        BankTerminalBlockEntity.BACKEND_INSTANCES = backend;
+    }
+
+    public BankTerminalBlockEntity(BlockPos pos, BlockState state) {
+        super(BankSystemEntities.BANK_TERMINAL_BLOCK_ENTITY.get(), pos, state);
+    }
+
+
+    @Override
+    public void loadAdditional(CompoundTag nbt, HolderLookup.Provider pRegistries) {
+        super.loadAdditional(nbt, pRegistries);
+        CompoundTag data = nbt.getCompound(BankSystemMod.MOD_ID);
+
+        ListTag playerDataTag = data.getList("PlayerData", ListTag.TAG_COMPOUND);
+        for(int i = 0; i < playerDataTag.size(); i++)
+        {
+            CompoundTag playerDataCompound = playerDataTag.getCompound(i);
+            PlayerData playerData = PlayerData.createFromTag(this, playerDataCompound, pRegistries);
+            if(playerData != null)
+            {
+                playerDataTable.put(playerData.getPlayerID(), playerData);
+            }
+        }
+    }
+
+    @Override
+    protected void saveAdditional(CompoundTag nbt, HolderLookup.Provider pRegistries) {
+        super.saveAdditional(nbt, pRegistries);
+        CompoundTag data = new CompoundTag();
+        //tutorialmodData.put("Inventory", this.inventory.serializeNBT());
+        //data.putInt("TransferTickAmount", transferTickAmount);
+        ListTag playerInventoriesTag = new ListTag();
+        for(UUID playerID : playerDataTable.keySet())
+        {
+            CompoundTag dataTag = new CompoundTag();
+            PlayerData playerData = playerDataTable.get(playerID);
+            playerData.pRegistries = pRegistries;
+            if(playerData.save(dataTag))
+            {
+                playerInventoriesTag.add(dataTag);
+            }
+        }
+        data.put("PlayerData", playerInventoriesTag);
+        nbt.put(BankSystemMod.MOD_ID, data);
+    }
+
+
+    public TerminalInventory getInventory(UUID playerID) {
+        PlayerData playerData = getPlayerData(playerID);
+        return playerData.getInventory();
+    }
+
+    public HashMap<UUID, TerminalInventory> getPlayerInventories() {
+        HashMap<UUID, TerminalInventory> playerInventories = new HashMap<>();
+        for(UUID playerID : this.playerDataTable.keySet())
+        {
+            playerInventories.put(playerID, this.playerDataTable.get(playerID).getInventory());
+        }
+        return playerInventories;
+    }
+    public int getSelectedBankAccount(UUID playerID) {
+        PlayerData playerData = getPlayerData(playerID);
+        return playerData.selectedBankAccount;
+    }
+
+    @Override
+    public @NotNull Component getDisplayName() {
+        return TITLE;
+    }
+
+    @Override
+    public AbstractContainerMenu createMenu(int pContainerId, Inventory pPlayerInventory, Player pPlayer) {
+        return new BankTerminalContainerMenu(pContainerId, pPlayerInventory, this);
+    }
+
+    public MenuProvider getMenuProvider() {
+        return this;
+    }
+
+    private PlayerData getPlayerData(UUID playerID) {
+        if(!playerDataTable.containsKey(playerID)) {
+            playerDataTable.put(playerID, new PlayerData(playerID, this));
+            this.setChanged();
+        }
+        return playerDataTable.get(playerID);
+    }
+
+    public void handlePacket(UpdateBankTerminalBlockEntityPacket packet, ServerPlayer player) {
+        //String userNameStr  = player.getName().getString();
+        //IBankUserOld user = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getUser(player.getUUID());
+        /*if (user == null) {
+            error("BankUserOld is null for user: " + userNameStr);
+            return;
+        }*/
+
+        //PlayerData playerData = getPlayerData(player.getUUID());
+
+        //int sendToMarketSign = 1;
+        if(packet.isSendItemsToBank())
+        {
+            sendItemsToBank(player.getUUID(), packet.getSelectedBankAccount());
+            //items = inventory.getItemCount();
+            //sendToMarketSign = -1;
+        }
+        else
+        {
+            HashMap<ItemID, Long> items = packet.getItemTransferFromMarket();
+            if(items == null || items.isEmpty()) {
+                return;
+            }
+            sendToBlock(player.getUUID(), packet.getSelectedBankAccount(), items);
+
+            // Send to inventory
+            //items = packet.getItemTransferFromMarket();
+        }
+        /*for(ItemID itemID : items.keySet()) {
+            long amount = items.get(itemID);
+            playerData.transferTask.createTask(itemID, (int)amount*sendToMarketSign);
+        }
+
+        // mark the block entity for saving
+        setChanged();*/
+    }
+
+    public void tick(Level level, BlockPos pos, BlockState state) {
+        /*tickCounter++;
+        int itemTransferTickInterval = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.ITEM_TRANSFER_TICK_INTERVAL.get();
+        if(tickCounter - lastTickCounter >= itemTransferTickInterval) {
+            lastTickCounter = tickCounter;
+            for(UUID playerID : playerDataTable.keySet())
+            {
+                PlayerData playerData = playerDataTable.get(playerID);
+                TransferTask task = playerData.getTransferTask();
+                if(task.taskCount() > 0)
+                {
+                    boolean transferTheWholeItemStack = itemTransferTickInterval == 0;
+                    task.processTaskStep(1, transferTheWholeItemStack);
+                }
+            }
+        }*/
+    }
+
+    public static <T extends BlockEntity> void tick(Level level, BlockPos blockPos, BlockState blockState, T t) {
+        if(level.isClientSide)
+            return;
+        if (t instanceof BankTerminalBlockEntity blockEntity) {
+            blockEntity.tick(level, blockPos, blockState);
+        }
+    }
+
+
+    private void sendItemsToBank(UUID playerID, int accountNr)
+    {
+        IAsyncBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
+        if(accountNr <= 0)
+            return;
+
+        PlayerData playerData = getPlayerData(playerID);
+        TerminalInventory inventory = playerData.getInventory();
+        // Credit boundary: physical stacks in the terminal become bank credit here.
+        // The deposit gate inside getItemCount filters out stacks whose state-gated
+        // components (e.g. spoiled tfc:food) don't match a fresh withdrawal, blocking
+        // the deposit-rotten/withdraw-fresh laundering exploit.
+        List<ItemStack> rejectedDeposits = new ArrayList<>();
+        List<ItemStack> unresolvableDeposits = new ArrayList<>();
+        CompletableFuture<HashMap<ItemID, Long>> itemsFuture = inventory.getItemCount(rejectedDeposits, unresolvableDeposits);
+
+        itemsFuture.thenAccept((items)->
+        {
+            // Gate rejections must never be silent: tell the player which items stay in
+            // the terminal because their condition prevents banking them.
+            if (!rejectedDeposits.isEmpty()) {
+                Set<String> rejectedNames = new LinkedHashSet<>();
+                for (ItemStack rejected : rejectedDeposits)
+                    rejectedNames.add(rejected.getHoverName().getString());
+                for (String itemName : rejectedNames)
+                    ServerPlayerUtilities.printToClientConsole(playerID,
+                            BankSystemTextMessages.getDepositRejectedItemConditionMessage(itemName));
+            }
+            // Master-unknown items must never be silent either: tell the player, per attempt,
+            // which items can't be banked because the master's registry doesn't know them
+            // (e.g. a mod installed only on this slave). Fires here — on the deposit action —
+            // so it is reliable and per-item, unlike the deduped ID-registration ARRS path.
+            if (!unresolvableDeposits.isEmpty()) {
+                Set<String> unresolvableNames = new LinkedHashSet<>();
+                for (ItemStack unresolvable : unresolvableDeposits)
+                    unresolvableNames.add(unresolvable.getHoverName().getString());
+                for (String itemName : unresolvableNames)
+                    ServerPlayerUtilities.printToClientConsole(playerID,
+                            BankSystemTextMessages.getDepositItemUnknownOnMasterMessage(itemName));
+            }
+            CompletableFuture<IAsyncBankAccount> bankAccountFuture = bankManager.getBankAccountAsync(accountNr);
+            bankAccountFuture.thenAccept(bankAccount -> {
+                if (bankAccount == null) {
+                    CompletableFuture<User> userFuture = bankManager.getUserByUUIDAsync(playerID);
+                    userFuture.thenAccept(user -> {
+                        String userName = user != null ? user.getName() : "Unknown User";
+                        ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getBankAccountNotFoundMessage(userName));
+                    });
+                    return;
+                }
+                CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(playerID, BankPermission.DEPOSIT.getValue());
+                hasPermissionFuture.thenAccept(hasPermission -> {
+                    if (!hasPermission) {
+                        CompletableFuture<String> accountNameFuture = bankAccount.getAccountNameAsync();
+                        accountNameFuture.thenAccept(accountName -> {
+                            ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(accountName, BankPermission.DEPOSIT));
+                        });
+                        return;
+                    }
+                    playerData.selectedBankAccount = bankAccount.getAccountNumberAsync();
+
+                    for (ItemID itemID : items.keySet()) {
+                        long amount = items.get(itemID);
+                        if (amount <= 0)
+                            continue;
+
+                        CompletableFuture<@Nullable IAsyncBank> bankFuture;
+                        boolean isMoney = MoneyItem.isMoney(itemID);
+                        // Task #38: variant routing — LC coin_iron / Numismatics bevel /
+                        // etc. land in the account's base-coin binding slot at their
+                        // converted per-item value, bypassing per-variant bank creation.
+                        BindingRow variantBinding = null;
+                        long variantBaseUnits = 0L;
+                        if (!isMoney) {
+                            BankAccountBindings bindings = BankAccountBindings.get();
+                            if (bindings != null) {
+                                ItemStack template = ItemIDManager.getItemStackTemplate(itemID);
+                                if (!template.isEmpty()) {
+                                    variantBinding = bindings.findBindingAcceptingItem(accountNr, template);
+                                    if (variantBinding != null) {
+                                        net.kroia.banksystem.api.currency.ExternalCurrencyProvider provider =
+                                                BankSystemMod.getAPI().getCurrencyProvider(variantBinding.ref().providerId());
+                                        variantBaseUnits = provider == null ? 0L : provider.baseUnitsPerItem(template);
+                                        if (variantBaseUnits <= 0L) variantBinding = null;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (variantBinding != null) {
+                            ItemID baseSlotId = new ItemID(variantBinding.itemIdShort());
+                            long amountToDeposit;
+                            try {
+                                amountToDeposit = Math.multiplyExact(amount, variantBaseUnits);
+                            } catch (ArithmeticException overflow) {
+                                ServerPlayerUtilities.printToClientConsole(playerID,
+                                        BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
+                                continue;
+                            }
+                            long finalAmountToDeposit = amountToDeposit;
+                            long finalAmount = amount;
+                            bankAccount.getOrCreateBankAsync(baseSlotId).thenAccept(baseBank -> {
+                                if (baseBank == null) {
+                                    ServerPlayerUtilities.printToClientConsole(playerID,
+                                            BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
+                                    return;
+                                }
+                                baseBank.depositAsync(finalAmountToDeposit).thenAccept(status -> {
+                                    if (status == BankStatus.SUCCESS) {
+                                        runOnMainThread(() -> {
+                                            inventory.removeItem(itemID, finalAmount);
+                                            setChanged();
+                                        });
+                                    }
+                                });
+                            });
+                            continue;
+                        }
+
+                        if (isMoney) {
+                            // Denomination-agnostic money targeting: credit the account's
+                            // ALREADY-EXISTING money bank when it has one, regardless of which
+                            // money denomination short is currently cached in MoneyItem.
+                            //
+                            // WHY: cash must never be split across two different money shorts.
+                            // If the cached money short is momentarily wrong (e.g. resolved
+                            // against the default map before saved world data loaded), blindly
+                            // using MoneyItem.getItemID() could create/target a second money
+                            // bank under a different short — or a blacklisted denomination that
+                            // fails isItemIDAllowed and rejects the deposit. Instead we look for
+                            // the account's existing money bank (any ItemID satisfying the
+                            // denomination-agnostic MoneyItem.isMoney predicate) and deposit
+                            // into that one.
+                            //
+                            // Fallback: a brand-new account has no money bank yet, so we create
+                            // one under MoneyItem.getItemID(). After the startup resetItemID()
+                            // refresh (BankSystemModBackend.onServerStart) that resolves to the
+                            // correct allowed base-money short, so creation succeeds.
+                            bankFuture = bankAccount.getAllBanksAsync().thenCompose(banks -> {
+                                for (ItemID bankItemID : banks.keySet()) {
+                                    if (MoneyItem.isMoney(bankItemID)) {
+                                        return bankAccount.getOrCreateBankAsync(bankItemID);
+                                    }
+                                }
+                                return bankAccount.getOrCreateBankAsync(MoneyItem.getItemID());
+                            });
+                        } else {
+                            bankFuture = bankAccount.getOrCreateBankAsync(itemID);
+                        }
+                        bankFuture.thenAccept(bank -> {
+                            if (bank == null) {
+                                ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
+                                return;
+                            }
+                            long amountToDeposit = amount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                            if (isMoney) {
+                                amountToDeposit = amount * ((MoneyItem) Objects.requireNonNull(itemID.getStack()).getItem()).worth();
+                            }
+                            final long finalAmountForLog = amountToDeposit;
+                            final short finalItemIdForLog = isMoney ? MoneyItem.getItemID().getShort() : itemID.getShort();
+                            CompletableFuture<BankStatus> depositResult = bank.depositAsync(amountToDeposit);
+                            depositResult.thenAccept(deposit -> {
+                                if (deposit == BankStatus.SUCCESS) {
+                                    logDeposit(accountNr, playerID, finalItemIdForLog, finalAmountForLog);
+                                    // WHY main thread: removeItem() mutates the terminal's
+                                    // TerminalInventory, which is shared with the open menu. Vanilla
+                                    // only emits slot-sync packets from broadcastChanges(), run on the
+                                    // MAIN server thread once per tick. This callback fires from an
+                                    // async bank-op completion that, on a dedicated server, runs OFF
+                                    // the main thread, so broadcastChanges() never observes the change
+                                    // and the client GUI never updates. Hop the mutation (+ setChanged
+                                    // for persistence) onto the main thread so the next tick syncs it.
+                                    runOnMainThread(() -> {
+                                        inventory.removeItem(itemID, amount);
+                                        setChanged();
+                                    });
+                                }
+                            });
+                        });
+                    }
+                    // mark the block entity for saving
+                    setChanged();
+                });
+            });
+        });
+    }
+
+    private static void logDeposit(int accountNr, UUID actor, short itemIdShort, long amount) {
+        net.kroia.banksystem.data.table.TransactionLogManager mgr =
+                BankSystemModBackend.getTransactionLogManager();
+        if (mgr == null || amount <= 0) return;
+        try {
+            mgr.save(net.kroia.banksystem.data.table.record.TransactionLogRecord.simple(
+                    accountNr, actor,
+                    net.kroia.banksystem.data.table.record.TransactionLogRecord.Kind.DEPOSIT,
+                    itemIdShort, amount, System.currentTimeMillis()));
+        } catch (RuntimeException ignored) { }
+    }
+
+    private void sendToBlock(UUID playerID, int accountNr, HashMap<ItemID, Long> items)
+    {
+        IAsyncBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
+
+        PlayerData playerData = getPlayerData(playerID);
+        TerminalInventory inventory = playerData.getInventory();
+
+        if(accountNr <= 0)
+            return;
+        CompletableFuture<IAsyncBankAccount> bankAccountFuture = bankManager.getBankAccountAsync(accountNr);
+        bankAccountFuture.thenAccept(bankAccount -> {
+            if (bankAccount == null) {
+                CompletableFuture<User> userFuture = bankManager.getUserByUUIDAsync(playerID);
+                userFuture.thenAccept(user -> {
+                    String userName = user != null ? user.getName() : "Unknown User";
+                    ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getBankAccountNotFoundMessage(userName));
+                });
+                return;
+            }
+            CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(playerID, BankPermission.WITHDRAW.getValue());
+            hasPermissionFuture.thenAccept(hasPermission -> {
+                if (!hasPermission) {
+                    CompletableFuture<String>  accountNameFuture = bankAccount.getAccountNameAsync();
+                    accountNameFuture.thenAccept(accountName -> {
+                        ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(accountName, BankPermission.WITHDRAW));
+                    });
+                    return;
+                }
+                playerData.selectedBankAccount = bankAccount.getAccountNumberAsync();
+
+                for (ItemID itemID : items.keySet()) {
+                    long amount = items.get(itemID);
+                    if (amount <= 0)
+                        continue;
+
+                    CompletableFuture<@Nullable IAsyncBank> bankFuture = bankAccount.getOrCreateBankAsync(itemID);
+                    bankFuture.thenAccept(bank -> {
+                        if (bank == null) {
+                            ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
+                            return;
+                        }
+
+                        // Task #38b: per-slot ratio. Unbound = 100, bound LC gold = 81.
+                        final long ratio = BankAccountBindings.getRawUnitsPerItem(accountNr, itemID);
+                        final long withdrawAmountFinal = amount * ratio;
+
+                        // Use lock-withdraw pattern to prevent TOCTOU race
+                        CompletableFuture<BankStatus> lockStatusFuture = bank.lockAmountAsync(withdrawAmountFinal);
+                        lockStatusFuture.thenAccept(lockStatus -> {
+                            if (lockStatus != BankStatus.SUCCESS) {
+                                // Could not lock the full amount; try locking what's available
+                                CompletableFuture<Long> balanceFuture = bank.getBalanceAsync();
+                                balanceFuture.thenAccept(balance -> {
+                                    long reducedAmount = Math.min(withdrawAmountFinal, balance);
+                                    if (reducedAmount <= 0)
+                                        return;
+                                    CompletableFuture<BankStatus> retryLockFuture = bank.lockAmountAsync(reducedAmount);
+                                    retryLockFuture.thenAccept(retryLockStatus -> {
+                                        if (retryLockStatus != BankStatus.SUCCESS)
+                                            return;
+                                        // WHY main thread: the "insert -> decide -> debit/unlock" region
+                                        // touches the menu-shared TerminalInventory via addItem(). Only
+                                        // main-thread mutations are seen by the menu's per-tick
+                                        // broadcastChanges() and synced to a dedicated client; this async
+                                        // bank-op callback otherwise runs off-thread on a dedicated server.
+                                        // The whole decision must stay together because the addItem()
+                                        // return value (addedAmount) determines whether we debit or unlock,
+                                        // so we cannot split addItem from the branch it drives. Bank ops
+                                        // invoked here are safe: on a master they complete inline (still
+                                        // main thread); on a slave they forward and their callbacks may run
+                                        // off-thread, so container writes inside them are re-marshaled.
+                                        runOnMainThread(() -> {
+                                            long itemsToDeposit = reducedAmount / ratio;
+                                            long addedAmount = inventory.addItem(itemID, itemsToDeposit);
+                                            if (addedAmount > 0) {
+                                                long rawToWithdraw = addedAmount * ratio;
+                                                CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
+                                                withdrawResult.thenAccept(withdraw -> {
+                                                    if (withdraw != BankStatus.SUCCESS) {
+                                                        error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
+                                                                " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
+                                                        // Roll back the inserted stack on the main thread so the
+                                                        // client sees the reversal (slave callbacks run off-thread).
+                                                        runOnMainThread(() -> inventory.removeItem(itemID, addedAmount));
+                                                        bank.unlockAmountAsync(reducedAmount);
+                                                    } else {
+                                                        // Unlock any remainder that was not withdrawn
+                                                        long remainder = reducedAmount - rawToWithdraw;
+                                                        if (remainder > 0)
+                                                            bank.unlockAmountAsync(remainder);
+                                                        runOnMainThread(() -> setChanged());
+                                                    }
+                                                });
+                                            } else {
+                                                bank.unlockAmountAsync(reducedAmount);
+                                            }
+                                        });
+                                    });
+                                });
+                                return;
+                            }
+                            // Lock succeeded for the full amount.
+                            // WHY main thread: same rationale as the reduced-lock branch above -
+                            // addItem() mutates the menu-shared TerminalInventory and its return value
+                            // drives the debit/unlock decision, so the whole region runs on the main
+                            // server thread so broadcastChanges() can sync the new slots to the client.
+                            runOnMainThread(() -> {
+                                long itemsToDeposit = withdrawAmountFinal / ratio;
+                                long addedAmount = inventory.addItem(itemID, itemsToDeposit);
+                                if (addedAmount > 0) {
+                                    long rawToWithdraw = addedAmount * ratio;
+                                    CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
+                                    withdrawResult.thenAccept(withdraw -> {
+                                        if (withdraw != BankStatus.SUCCESS) {
+                                            error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
+                                                    " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
+                                            // Roll back the inserted stack on the main thread so the
+                                            // client sees the reversal (slave callbacks run off-thread).
+                                            runOnMainThread(() -> inventory.removeItem(itemID, addedAmount));
+                                            bank.unlockAmountAsync(withdrawAmountFinal);
+                                        } else {
+                                            // Unlock any remainder that was not withdrawn
+                                            long remainder = withdrawAmountFinal - rawToWithdraw;
+                                            if (remainder > 0)
+                                                bank.unlockAmountAsync(remainder);
+                                            runOnMainThread(() -> setChanged());
+                                        }
+                                    });
+                                } else {
+                                    bank.unlockAmountAsync(withdrawAmountFinal);
+                                }
+                            });
+                        });
+                    });
+                }
+                // mark the block entity for saving
+                setChanged();
+            });
+        });
+    }
+
+    /**
+     * Runs the given action on the MAIN server thread.
+     * <p>
+     * WHY this exists: the terminal's {@link TerminalInventory} is shared with the
+     * currently open {@code AbstractContainerMenu}. Vanilla only emits slot-sync
+     * packets ({@code ClientboundContainerSetSlotPacket}/{@code SetContentPacket})
+     * from {@code AbstractContainerMenu#broadcastChanges()}, which the server invokes
+     * on the MAIN thread once per tick. The bank operations in this class complete via
+     * async {@code CompletableFuture} callbacks that, on a dedicated server, run OFF
+     * the main thread. If we mutate the inventory from such an off-thread callback,
+     * {@code broadcastChanges()} never observes the slot change and no packet is sent -
+     * the item silently fails to appear in the client GUI (it is still persisted
+     * server-side, so it shows up on reopen). Marshaling every container mutation onto
+     * the main thread lets the next {@code broadcastChanges()} tick pick it up and sync.
+     *
+     * @param action the container-touching / {@code setChanged} action to marshal onto
+     *               the main server thread
+     */
+    private void runOnMainThread(Runnable action)
+    {
+        Level lvl = getLevel();
+        if (lvl != null && lvl.getServer() != null)
+        {
+            // Queue onto the server's main-thread task queue. Even when already called
+            // from the main thread this simply runs on the current/next tick drain,
+            // which is before/at broadcastChanges() - exactly what we need.
+            lvl.getServer().execute(action);
+        }
+        else
+        {
+            // Fallback: no server available (should not happen server-side). Run inline
+            // rather than dropping the action, to avoid leaking locks or losing state.
+            action.run();
+        }
+    }
+
+
+
+    private static void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[BankTerminalBlockEntity] " + msg);
+    }
+    private static void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[BankTerminalBlockEntity] " + msg);
+    }
+    private static void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[BankTerminalBlockEntity] " + msg, e);
+    }
+    private static void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[BankTerminalBlockEntity] " + msg);
+    }
+    private static void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[BankTerminalBlockEntity] " + msg);
+    }
+}

@@ -1,0 +1,82 @@
+package net.kroia.banksystem.networking.entity;
+
+
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
+import net.kroia.banksystem.util.BankSystemGenericRequest;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.server.level.ServerPlayer;
+
+import java.util.concurrent.CompletableFuture;
+
+public class BankTerminalBlockDataRequest extends BankSystemGenericRequest<BlockPos, BankTerminalBlockDataRequest.Output> {
+
+    /**
+     * @param selectedBankAccount the player's persisted account selection at this
+     *                            terminal. (The crafting checkbox flags are NOT
+     *                            carried here — they are per-player preferences
+     *                            in User.customData, fetched by the screen via
+     *                            {@code getUserCustomData()}.)
+     */
+    public record Output(int selectedBankAccount)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, Output> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.INT, Output::selectedBankAccount,
+                Output::new
+        );
+    }
+
+    @Override
+    public String getRequestTypeID() {
+        return BankTerminalBlockDataRequest.class.getSimpleName();
+    }
+
+    @Override
+    public boolean needsRoutingToMaster() { return false; }
+
+    @Override
+    public CompletableFuture<Output> handleOnServer(BlockPos input, ServerPlayer sender) {
+        CompletableFuture<Output> future = new CompletableFuture<>();
+
+        if (sender.distanceToSqr(input.getX() + 0.5, input.getY() + 0.5, input.getZ() + 0.5) > BankSystemMod.MAX_INTERACT_DISTANCE_SQR) {
+            future.complete(new Output(0));
+            return future;
+        }
+
+        BlockEntity be = sender.level().getBlockEntity(input);
+        if(!(be instanceof BankTerminalBlockEntity blockEntity)) {
+            future.complete(new Output(0));
+            return future;
+        }
+
+        Output output = new Output(blockEntity.getSelectedBankAccount(sender.getUUID()));
+        future.complete(output);
+        return future;
+    }
+
+    @Override
+    public void encodeInput(RegistryFriendlyByteBuf buf, BlockPos input) {
+        BlockPos.STREAM_CODEC.encode(buf, input);
+    }
+
+    @Override
+    public void encodeOutput(RegistryFriendlyByteBuf buf, Output output) {
+        Output.STREAM_CODEC.encode(buf, output);
+    }
+
+    @Override
+    public BlockPos decodeInput(RegistryFriendlyByteBuf buf) {
+        return BlockPos.STREAM_CODEC.decode(buf);
+    }
+
+    @Override
+    public Output decodeOutput(RegistryFriendlyByteBuf buf) {
+        return Output.STREAM_CODEC.decode(buf);
+    }
+
+
+}

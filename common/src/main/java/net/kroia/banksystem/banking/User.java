@@ -1,0 +1,129 @@
+package net.kroia.banksystem.banking;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.banking.clientdata.UserData;
+import net.kroia.modutilities.JsonUtilities;
+import net.kroia.modutilities.persistence.ServerSaveable;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.UUID;
+
+public class User implements ServerSaveable {
+
+    private static BankSystemModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(BankSystemModBackend.Instances backend) {
+        User.BACKEND_INSTANCES = backend;
+    }
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, User> STREAM_CODEC = StreamCodec.composite(
+            UUIDUtil.STREAM_CODEC, p -> p.userUUID,
+            ByteBufCodecs.STRING_UTF8, p -> p.userName,
+            ByteBufCodecs.BOOL, p -> p.isBanksystemAdmin,
+            ByteBufCodecs.TRUSTED_COMPOUND_TAG, p -> p.customData,
+            User::new
+    );
+
+    private UUID userUUID;
+    private String userName;
+    private boolean isBanksystemAdmin = false;
+    private CompoundTag customData = new CompoundTag();
+
+    private User()
+    {
+
+    }
+    private User(UUID userUUID, String userName, boolean isBankModAdmin, CompoundTag customData)
+    {
+        this.userUUID = userUUID;
+        this.userName = userName;
+        this.isBanksystemAdmin = isBankModAdmin;
+        this.customData = customData != null ? customData : new CompoundTag();
+    }
+    public User(UUID userUUID, String userName) {
+        this.userUUID = userUUID;
+        this.userName = userName;
+    }
+    public static User createWithChangedName(User oldUser, String newName)
+    {
+        return new User(oldUser.userUUID, newName, oldUser.isBanksystemAdmin, oldUser.customData.copy());
+    }
+    public static @Nullable User createFromTag(CompoundTag tag)
+    {
+        User user = new User();
+        if(!user.load(tag)) {
+            return null; // Invalid data
+        }
+        return user;
+    }
+
+    public UserData getUserData() {
+        return new UserData(userUUID, userName, customData.copy());
+    }
+
+    public UUID getUUID() {
+        return userUUID;
+    }
+    public String getName() {
+        return userName;
+    }
+    public boolean isBanksystemAdmin() {
+        return isBanksystemAdmin;
+    }
+    public void setBanksystemAdmin(boolean isBankModAdmin) {
+        this.isBanksystemAdmin = isBankModAdmin;
+    }
+    public CompoundTag getCustomData() {
+        return customData;
+    }
+    public void setCustomData(CompoundTag customData) {
+        this.customData = customData != null ? customData : new CompoundTag();
+    }
+
+    @Override
+    public boolean save(CompoundTag tag) {
+        tag.putUUID("userUUID", userUUID);
+        tag.putString("userName", userName);
+        tag.putBoolean("isBanksystemAdmin", isBanksystemAdmin);
+        tag.put("customData", customData);
+        return true;
+    }
+
+    @Override
+    public boolean load(CompoundTag tag) {
+        if(!tag.contains("userUUID") || !tag.contains("userName")) {
+            return false; // Invalid data
+        }
+        this.userUUID = tag.getUUID("userUUID");
+        this.userName = tag.getString("userName");
+        if(tag.contains("isBanksystemAdmin"))
+            this.isBanksystemAdmin = tag.getBoolean("isBanksystemAdmin");
+        else
+            this.isBanksystemAdmin = false;
+        if(tag.contains("customData"))
+            this.customData = tag.getCompound("customData");
+        else
+            this.customData = new CompoundTag();
+        return true;
+    }
+
+    public JsonElement toJson()
+    {
+        JsonObject jsonObject = new JsonObject();
+        jsonObject.addProperty("userUUID", userUUID.toString());
+        jsonObject.addProperty("userName", userName);
+        jsonObject.addProperty("isBanksystemAdmin", isBanksystemAdmin);
+        return jsonObject;
+    }
+    @Override
+    public String toString()
+    {
+        return JsonUtilities.toPrettyString(toJson());
+    }
+}

@@ -11,9 +11,9 @@ repositories {
     flatDir {
         dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/common/build/libs"
     }
+    maven { url 'https://jitpack.io' }
 
     //mavenLocal()
-    //maven { url 'https://jitpack.io' }
 
 }
 dependencies {
@@ -26,14 +26,22 @@ dependencies {
     modImplementation "dev.architectury:architectury:$rootProject.architectury_api_version"
 
 
-    modCompileOnly("net.kroia:modutilities-common:$rootProject.modutilities_version")
+    modCompileOnly("com.github.KROIA.MC_ModUtilities:modutilities-common:$rootProject.modutilities_version")
     //modApi("net.kroia:modutilities-common:1.0.0")
 
     //implementation("net.kroia:modutilities-common:1.0.0")
 
-    //compileOnly("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
+    compileOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-common-api:${jei_version}")
 
+    // Create: Numismatics integration (Task #34, v2.0.5)
+    // compileOnly — no runtime dependency; adapter only activates when Numismatics is present.
+    // Numismatics classes are accessed via reflection, so we don't need the actual dependency
+    // at compile time. The adapter is class-guarded and only loads when Platform.isModLoaded("numismatics").
+    // compileOnly("maven.modrinth:numismatics:${numismatics_version}")
 
+    implementation('org.xerial:sqlite-jdbc:3.46.0.0'){
+        exclude group: "org.slf4j"
+    }
 }
 /*
 sourceSets {

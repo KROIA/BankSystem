@@ -2,9 +2,7 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "S": {
-      "item": "banksystem:money5"
-    }
+    "S": "banksystem:money5"
   },
   "pattern": [
     "SS"

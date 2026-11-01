@@ -1,0 +1,6 @@
+{
+  "values": [
+    { "id": "tfc:food", "required": false },
+    { "id": "tfc:heat", "required": false }
+  ]
+}

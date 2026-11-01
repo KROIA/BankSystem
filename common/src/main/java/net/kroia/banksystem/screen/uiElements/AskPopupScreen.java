@@ -1,14 +1,15 @@
 package net.kroia.banksystem.screen.uiElements;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiScreen;
+import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.Label;
 import net.minecraft.network.chat.Component;
 
-public class AskPopupScreen extends GuiScreen {
+public class AskPopupScreen extends BankSystemGuiScreen {
 
     public static final Component TITLE = Component.translatable("gui."+BankSystemMod.MOD_ID+".ask_popup.title");
     public static final Component YES = Component.translatable("gui."+BankSystemMod.MOD_ID+".ask_popup.yes");
@@ -31,12 +32,12 @@ public class AskPopupScreen extends GuiScreen {
         frame = new Frame();
         yesButton = new Button(YES.getString());
         yesButton.setOnFallingEdge(() -> {
-            this.minecraft.setScreen(parent);
+            switchScreen(parent);
             onYes.run();
         });
         noButton = new Button(NO.getString());
         noButton.setOnFallingEdge(() -> {
-            this.minecraft.setScreen(parent);
+            switchScreen(parent);
             onNo.run();
         });
 
@@ -52,6 +53,19 @@ public class AskPopupScreen extends GuiScreen {
         frame.addChild(msgLabel);
     }
 
+    /**
+     * Spec A.1 (v2.1.0) — standard destructive-action confirm popup: wide frame
+     * (460x140 so multi-sentence messages fit) + the shared orange warning color set.
+     * Callers put a {@code \n} after each sentence in {@code message}.
+     */
+    public static AskPopupScreen warningPopup(GuiScreen parent, Runnable onYes, Runnable onNo,
+                                              String title, String message) {
+        AskPopupScreen popup = new AskPopupScreen(parent, onYes, onNo, title, message);
+        popup.setSize(460, 140);
+        popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
+        return popup;
+    }
+
     public void setSize(int width, int height)
     {
         frameWidth = width;
@@ -63,10 +77,10 @@ public class AskPopupScreen extends GuiScreen {
     {
         frame.setBackgroundColor(background);
         frame.setOutlineColor(outline);
-        this.yesButton.setIdleColor(yesButton);
+        this.yesButton.setBackgroundColor(yesButton);
         this.yesButton.setHoverColor((yesButton*3/4) | 0xFF000000);
         this.yesButton.setPressedColor((yesButton/2) | 0xFF000000);
-        this.noButton.setIdleColor(noButton);
+        this.noButton.setBackgroundColor(noButton);
         this.noButton.setHoverColor((noButton*3/4) | 0xFF000000);
         this.noButton.setPressedColor((noButton/2) | 0xFF000000);
     }

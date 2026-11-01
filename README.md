@@ -1,43 +1,54 @@
 # Bank System Mod
 
 ## About
-BankSystem is a Minecraft mod that brings money in to the game. Players can have a bankacount that can not only hold money but items too.
-Admins can define which items can be stored in the bank in order to prevent players from using the bank as infinite storage.
+BankSystem is a Minecraft mod that adds a full banking system to the game. Players get a bank account that can hold money and items. Create shared accounts with permissions, automate item transfers with redstone, and monitor balances on in-world displays. Connect multiple servers to share bank accounts across your network.
 
-
-<tr>
-<td>
 <div align="center">
-    <img src="documentation/images/overview.png" > 
+    <img src="documentation/images/overview.png"> 
 </div>
-</td>
+
+You want to support me?<br>
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/alexkrieg)
 
 ---
 
-
 ## Chapters 
 * [Features](#features)
+* [Installation](#installation)
 * [Downloads](#downloads)
+* [Usage](#usage)
 * [Blocks](#blocks)
 * [Items](#items)
-* [How to use](#how-to-use)
-    * [For server player / single player](#for-server-player--single-player)
-    * [For admins / single player](#for-admins--single-player)
 * [Commands](#commands)
+* [Crafting Recipes](#crafting-recipes)
+* [Documentation](#documentation)
+* [Changelog](#changelog)
 
 
 ---
 ## Features
-- Adds a banking system to the game for money and items.
-- Adds new [blocks](#blocks) to interact with the bank account.
+- Bank accounts for money and items with deposit, withdrawal, and transfer support
+- Built-in crafting grid in the Bank Terminal that can pull missing ingredients from the bank and deposit crafted items back automatically
+- Shared bank accounts with per-player permissions (deposit, withdraw, manage)
+- ATM block for withdrawing specific bank note denominations
+- Bank Upload / Download blocks for redstone-powered automation with hoppers and pipes
+- Bank Display blocks that show live balance overviews or history charts
+- Money system with coins and bills that can be placed as decorative blocks
+- **Companies** — found a company with its own bank account and workers, mint physical shares with the Share Stamper, design the share card, and pay dividends or recurring wages on a timer
+- Multi-server support to share bank accounts across connected servers
+- **Currency mod bindings** — link a bank slot to an external currency mod's account ([Numismatics](https://modrinth.com/mod/numismatics), [Lightman's Currency](https://modrinth.com/mod/lightmans-currency)) so BankSystem, StockMarket, and the currency mod share one balance
+- Mod API for developers to integrate with the banking system
 
-## Dependencies
-- [Architectury](https://www.curseforge.com/minecraft/mc-mods/architectury-api)
-- [Quilted Fabric API](https://www.curseforge.com/minecraft/mc-mods/qsl) (Only needed for Quilt)
-- [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities) (Only needed for Quilt)
-- [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api) (Only needed for Fabric)
+---
+## Installation
 
-  
+1. Install [Architectury API](https://www.curseforge.com/minecraft/mc-mods/architectury-api) and the mod loader API for your platform:
+   - **Fabric**: [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api)
+   - **Quilt**: [Quilted Fabric API](https://www.curseforge.com/minecraft/mc-mods/qsl) + [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities)
+   - **NeoForge / Forge**: No additional API needed
+2. Download the BankSystem jar for your Minecraft version and mod loader from [CurseForge](https://www.curseforge.com/minecraft/mc-mods/banksystem) or the [Downloads](#downloads) table below.
+3. Place the jar in your `mods/` folder and launch the game.
+
 ---
 ## Downloads
 <!--
@@ -52,7 +63,7 @@ Admins can define which items can be stored in the bank in order to prevent play
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/banksystem)
 | Minecraft | Fabric | Forge | Quilt | Neoforge |
 |-----------|--------|-------|-------|----------|
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.21.1] |                                                                            |                                                                            | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-neoforge-1.21.1] |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.21.1] [![Version](https://img.shields.io/badge/v2.1.0--alpha-orange)][2.1.0-fabric-1.21.1] |                                                                            |                                                                            | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-neoforge-1.21.1] [![Version](https://img.shields.io/badge/v2.1.0--alpha-orange)][2.1.0-neoforge-1.21.1] |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21-green)      | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.21]   |                                                                            |                                                                            | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-neoforge-1.21]   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.20.6] |                                                                            |                                                                            | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-neoforge-1.20.6] |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.20.4] | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-forge-1.20.4] | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-quilt-1.20.4] |                                                                               |
@@ -63,10 +74,10 @@ Admins can define which items can be stored in the bank in order to prevent play
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-green)    | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-fabric-1.19.2] | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-forge-1.19.2] | [![Version](https://img.shields.io/badge/v1.4.1-green)][1.4.1-quilt-1.19.2] |                                                                               |
 
 
+<!--	Links to curseforge:	-->
+[2.1.0-neoforge-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/files/8656700
+[2.1.0-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/files/8656697
 
-
-
-<!--	Links to Curse1.4.1-forge:	-->
 [1.4.1-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6200604
 [1.4.1-fabric-1.21]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6200596
 [1.4.1-fabric-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6200590
@@ -95,403 +106,328 @@ Admins can define which items can be stored in the bank in order to prevent play
 [1.4.1-neoforge-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/banksystem/download/6200595
 
 
+---
+## Usage
 
+### Bank Terminal Block
 
+<div align="center">
+    <img src="documentation/images/BankTerminalBlock.gif"> 
+</div>
 
+The Bank Terminal Block is used to deposit/withdraw items to/from the bank account.
+A **Filter** box above the bank item list helps you find items quickly.
 
+The terminal also features a built-in 3×3 crafting grid that supports all standard crafting recipes.
+Enable **Use Bank Items** to pull missing ingredients straight from the selected bank account,
+and **Auto-deposit output** to send crafted items directly back into the bank.
+With JEI installed, recipes can be filled into the grid with one click.
+See [Block Usage](documentation/user-guide/Usage.md#bank-terminal-block) for details.
 
+> [!NOTE]  
+> The block contains an inventory which is unique for every player. 
+> Like an ender chest, but when the block gets destroyed, 
+> items not stored in the bank account will be dropped.
 
+---
+### ATM Block
 
+<div align="center">
+    <img src="documentation/images/ATMBlock.gif"> 
+</div>
 
+The ATM Block lets you withdraw money as specific bank notes.
+
+---
+### Automation Blocks
+
+The **Bank Upload Block** and **Bank Download Block** connect to your bank account and allow automated item transfers via redstone signals. They can be connected to pipes and hoppers.
+
+<div align="center">
+    <img src="documentation/images/bank_upDownload_block.png"> 
+</div>
+
+For detailed usage of all blocks, bank accounts, and administration, see the [Documentation](#documentation) section.
+
+---
+### Money Stockpile
+
+<div align="center">
+    <img src="documentation/images/money_block.png"> 
+</div>
+
+Money items can be placed in the world as decorative blocks. Each denomination has its own block model. The blocks can also be used for physical storage of money outside the banking system.
+
+---
+### Bank Displays
+
+The **Bank Display** block shows live bank account data on its screen. Right-click to open the configuration screen, where you select a bank account and one of two display modes:
+
+<div align="center">
+    <img src="documentation/images/DisplayConfigScreen.png"> 
+</div>
+
+<div align="center">
+    <img src="documentation/images/BankDisplays.png"> 
+</div>
+
+| Display Mode | Description |
+|--------------|-------------|
+| **Balance History** | A line chart tracking balance changes over time for all items in the account. Each item is color-coded with a legend on the right. Updates every 60 seconds. |
+| **Balance Overview** | A compact grid showing the current balances of the highest-value items in the account. Displays item icons with their amounts. Updates every second. |
+
+---
+### Currency Mod Bindings
+
+BankSystem can link an item slot on a bank account to an external currency mod's account. Once bound, every deposit, withdrawal, or StockMarket trade routed through BankSystem moves the same balance on the other mod's side — no manual migration needed.
+
+<div align="center">
+    <img src="documentation/images/CurrencyBindingsScreen.png">
+</div>
+
+Supported currency mods out of the box:
+
+| Currency mod | Fabric | NeoForge | Quilt |
+|---|:---:|:---:|:---:|
+| [Numismatics](https://modrinth.com/mod/numismatics) | ✅ | ✅ | ✅ |
+| [Lightman's Currency](https://modrinth.com/mod/lightmans-currency) | ❌ | ✅ | ❌ |
+
+Open a bank account's management screen and press **Bindings** to pick a slot, choose a provider, and select which of your external accounts to link. Personal BankSystem accounts bind to personal external accounts; shared BankSystem accounts bind to co-owned external accounts (Numismatics Blaze Bankers, Lightman's teams). Every coin denomination in the chain deposits into the same bound slot.
+
+See the [Currency Bindings guide](documentation/user-guide/CurrencyBindings.md) for the full walkthrough, per-provider notes, and troubleshooting. Currency-mod authors who want their mod to appear in the picker can consult the [Currency Integration developer guide](documentation/developer-guide/CurrencyIntegration.md).
+
+---
+### Mod Settings Screen
+
+Server admins can edit the mod's `settings.json` in-game, without touching the file:
+
+1. Run `/banksystem manage` (admin only) to open the banking settings window.
+2. Click **Mod Settings**.
+
+The screen lists every setting of the mod, grouped by category (Utilities, Player, Bank, TAB Placeholders), with a matching editor per setting type (checkboxes, number fields, text fields). **Apply** validates and saves the values on the server (out-of-range values are clamped and the corrected values are shown), **Reload** re-fetches the current server state and **Defaults** resets the fields to the built-in defaults (nothing is saved until Apply is pressed).
+
+Notes:
+
+- **Master-only:** the button is only shown when you are connected to the master server (or a regular single server). Only the master's `settings.json` can be edited; the server additionally rejects requests from non-admins regardless of the UI.
+- **Permission:** requires BankSystem admin status (the same permission as the other `/banksystem` admin commands).
+- **Restart markers:** settings that are only read once at server startup show an orange "⟳ Restart required" marker — the change is saved immediately but only takes effect after a server restart. This includes the volatile/deposit-gated component lists and the one-shot `CONFIRM_ITEMID_MERGE` / `CONFIRM_ITEMID_REPAIR` flags, which can be armed from this screen to approve a pending ItemID merge or world repair on the next restart.
 
 ---
 ## Blocks
-<table>
-<tr>
-<td>
-<b>Metal Case Block</b><br>
-Casing for the Terminal block.<br>
-8 Iron ingots
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/metalCaseBlock.png" width="300"> 
-</div>
-</td>
-</tr>
 
-
-<tr>
-<td>
-<b>Terminal Block</b><br>
-Unprogrammed terminal.<br>
-Can be programmed using a software item.<br>
-4 Iron nuggets<br>
-1 Metal Case Block<br>
-1 Display<br>
-1 Circuit Board<br>
-2 Redstone
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/terminalBlock.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Bank Terminal Block</b><br>
-Used to get access to the bank account.<br>
-Interaction using right click.<br>
-Right click on a <b>Terminal Block</b> using a <b>Banking Software</b> to create this block.
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bankingTerminalBlock.png" width="100"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Bank Upload Block</b><br>
-Used to send items to a specified bank account.<br>
-Change its settings by right clicking on it<br>
-Once the block is connected to a bankaccount, other players can't access it any more.<br>
-Can be connected to Pipes and hoppers.<br>
-Needs to be powered by redstone to send items to the bank.<br>
-6 Iron nuggets<br>
-1 Metal Case Block<br>
-1 Comparator<br>
-1 Bank Transmitter Module<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bank_upload_block.png" width="300"> 
-</div>
-</td>
-</tr>
-
-<tr>
-<td>
-<b>Bank Download Block</b><br>
-Used to receive items from a specified bank account.<br>
-Change its settings by right clicking on it<br>
-Once the block is connected to a bankaccount, other players can't access it any more.<br>
-Can be connected to Pipes and hoppers.<br>
-Needs to be powered by redstone to receive items to the bank.<br>
-6 Iron nuggets<br>
-1 Metal Case Block<br>
-1 Comparator<br>
-1 Bank Receiver Module<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bank_download_block.png" width="300"> 
-</div>
-</td>
-</tr>
-</table>
+| Block | Description |
+|-------|-------------|
+| **Metal Case Block** | Casing for the Terminal block. |
+| **Terminal Block** | Unprogrammed terminal. Can be programmed using a software item. |
+| **Bank Terminal Block** | Used to access the bank account. Right click on a **Terminal Block** using a **Banking Software** to create this block. |
+| **ATM Block** | Used to withdraw money. Right click on a **Terminal Block** using an **ATM Software** to create this block. |
+| **Bank Upload Block** | Sends items to a bank account. Can be connected to pipes and hoppers. Needs redstone power. |
+| **Bank Download Block** | Receives items from a bank account. Can be connected to pipes and hoppers. Needs redstone power. |
+| **Bank Display** | Displays bank account information on its screen. Can show a balance overview or balance history chart. Right-click to configure. |
+| **Share Stamper** | Mints a company's physical shares. Right-click it once to bind it to a company, then it converts Blank Shares into Stamped Shares — or back again in Redeem mode. Auto-input / auto-output make it hopper- and pipe-friendly. |
 
 ---
 ## Items
-<table>
-<tr>
-<td>
-<b>Circuit Board</b><br>
-Electronics for other Items.<br>
-1 Nether Quartz<br>
-3 Copper Ingots<br>
-3 Paper<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/circuitBoard.png" width="300"> 
-</div>
-</td>
-</tr>
 
+| Item | Description |
+|------|-------------|
+| **Circuit Board** | Electronics component for other items. |
+| **Display** | Display for the Terminal Block. |
+| **Empty Software** | Base software, used to create specific software variants. |
+| **Banking Software** | Programs a Terminal Block into a Bank Terminal Block. |
+| **ATM Software** | Programs a Terminal Block into an ATM Block. |
+| **Bank Transmitter Module** | Component for the Bank Upload Block. |
+| **Bank Receiver Module** | Component for the Bank Download Block. |
+| **Blank Share** | Unstamped share certificate. Feed it to a Share Stamper to turn it into a share of that stamper's company. |
+| **Stamped Share** | A physical share of a company. Carries the company's name, card design and live issued/max supply in its tooltip, can be deposited like any other item, and right-clicking it opens that company's management screen. |
 
-<tr>
-<td>
-<b>Display</b><br>
-Display for the <b>Terminal Block</b><br>
-6 Glass Planes<br>
-2 Iron Ingots<br>
-1 Ciruit Board
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/display.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Empty Software</b><br>
-Used to create a specific software<br>
-4 Iron nuggets<br>
-2 Ink Sacs<br>
-3 Paper
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/emptySoftware.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Banking Software</b><br>
-Used to programm the <b>Terminal Block</b> to be a <b>Bank Terminal Block</b><br>
-1 Empty Software<br>
-1 Gold Ingot<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bankingSoftware.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Bank Transmitter Module</b><br>
-Used to craft the <b>Bank Upload Block</b>.<br>
-1 Iron ingot<br>
-1 circuit Board<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bank_transmitter_module.png" width="300"> 
-</div>
-</td>
-</tr>
-
-<tr>
-<td>
-<b>Bank Receiver Module</b><br>
-Used to craft the <b>Bank Download Block</b>.<br>
-1 Iron ingot<br>
-1 circuit Board<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bank_receiver_module.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>1 Dollar</b><br>
-A 1 Dollar coin can only be crafted, using other type of money items such as the 5 Dollar bank note.<br>
-This puts control over inflation in the hands of the server administrator.<br>
-The admin is responsible to bring money in to circulation.<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/1Dollar.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-
-<td>
-<div align="center">
-    <img src="documentation/images/Money.png" width="500"> 
-</div>
-</td>
-</tr>
-
-</table>
-
----
-## How to use
-### For server player / single player
-<div align="center">
-    <img src="documentation/images/bankingView.png" > 
-</div>
-<br>
-
-Now open the **Bank Terminal Block** using right click.<br>
-This opens a menu which lets you send and receive items/money to your bank account.<br>
-Each player has its own bank terminal inventory, other player can not access your items, contained in this block.<br>
-If the block gets destroyed, all items which are not transfered to the bank will drop.<br>
-It drops all items from all players which let some items in it.<br>
-
-## Send items to the bank
-Put your items you want to send to the bank inside the bank terminal inventory and click the **Send items to bank** button.<br>
-It takes some time for all items to arrive on your bank acoount.<br>
-
-## Receive items from the bank
-Put the amount you want to withdraw in to the textfield next to the item.<br>
-Press the **Receive items from bank** button to start the transaction.<br>
-It also takes some time for the items to arrive in the bank terminal block.<br>
-
----
-### For Admins / Single Player
-#### Managing items for banking
-By default only some items can be stored in a bank. To change which items can be used for banking, a Admin can type the following command:
-```
-/bank settingsGUI
-```
-<div align="center">
-    <img src="documentation/images/settingsGUI.png" > 
-</div>
-<br>
-
-In this window you can add/remove items which can be used for banking.<br>
-On the left side is a list of all items that can be stored inside a bank.<br>
-Click on a item to get more informations about that item.<br>
-On the right side is a overview over the item you have currently selected using the list on the left side.<br>
-It shows the total suply, this is the sum of all players bank accounts for that item.<br>
-You can also see the sum of [locked amount](#locked-amount) over all players.<br>
-Using the **Manage** button on each players display, the [bank account window](#managing-items-for-banking) for that player will be opened.<br>
-
-#### Managing players bank account
-Manage players bank account using the GUI. To open the gui, type the following command:
-```
-/bank <player_name> bankManagementGUI
-```
-Other ways to open this window:
-* clicking on the **Manage** button in the [items management window](#managing-items-for-banking).
-* Right click on a player with the **Banking Software**.
+### Money
 
 <div align="center">
-    <img src="documentation/images/bankManagementGUI.png" > 
+    <img src="documentation/images/moneyCollection.png"> 
 </div>
-<br>
 
-The window shows all items which are currently stored on the players bank account.<br>
-<details close> 
-    <summary> 
-      <b>Add new item</b>
-    </summary>
-    Click on the <b>Create new bank</b> button and select the item you want to add to the players account.<br>
-    The item bank will be created instantly, no need to press the save button.<br>
-</details>
-<details close> 
-    <summary> 
-      <b>Remove a item</b>
-    </summary>
-    If you want to delete a item from the users bank, click on <b>Close account</b>. A deleted account is marked red<br>
-    Click the <b>Save changes</b> button to apply your changes.<br>
-</details>
-<details close> 
-    <summary> 
-      <b>Change balance</b>
-    </summary>
-    Change the balance of a specific item using the text field.<br>
-    Click the <b>Save changes</b> button to apply your changes.<br>
-</details>
-<details close> 
-    <summary> 
-      <b>Release locked amount</b>
-    </summary>
-    Check the check box if you want to release the locked amount for a specific item. This may affect other mods which have locked the money/item in the first place.<br>
-    Click the <b>Save changes</b> button to apply your changes.<br>
-</details>
+Money includes cent coins (1¢, 5¢, 10¢, 20¢, 50¢), a &dollar;1 coin, everyday notes (&dollar;5–&dollar;1000) and a high-value tier for large economies (&dollar;5K, &dollar;10K, &dollar;20K, &dollar;50K, &dollar;100K, &dollar;500K, &dollar;1M) — 21 denominations in all. Each has its own colour and artwork, as shown above. All denominations can be converted between each other using the crafting table. Money can also be placed in the world as decorative blocks.
+The server administrator controls how money enters circulation.
+See [Money Conversions](#money-conversions) for crafting recipes.
 
 ---
 
 ## Commands
-| Command | Description | Admin only |
-|---------|-------------|------------|
-| /money                           											| Show balance                                  |  |
-| /money add [amount]              											| Add money to self                             | :heavy_check_mark: |
-| /money add [user] [amount]       											| Add money to another player                   | :heavy_check_mark: |
-| /money set [amount]              											| Set money to self                             | :heavy_check_mark: |
-| /money set [user] [amount]       											| Set money to another player                   | :heavy_check_mark: |
-| /money remove [amount]           											| Remove money from self                        | :heavy_check_mark: |
-| /money remove [user] [amount]    											| Remove money from another player              | :heavy_check_mark: |
-| /money send [user] [amount]      											| Send money to another player                  |  |
-| /money circulation               											| Show money circulation of all players + bot   |  |
-| /bank                                                						| Show bank balance (money and items)      		|  |
-| /bank enableNotifications                                                 | Enables bank notifications on transactions    |  |
-| /bank disableNotifications                                                | Disables bank notifications on transactions   |  | 
-| /bank [username] bankManagementGUI                                		| Open the bank [management window](#managing-players-bank-account) for the specific player	| :heavy_check_mark: |
-| /bank [username] show                                						| Show bank balance of another player      		| :heavy_check_mark: |
-| /bank [username] create [itemID] [amount]            						| Create a bank for another player         		| :heavy_check_mark: |
-| /bank [username] setBalance [itemID] [amount]        						| Set balance of a bank for another player 		| :heavy_check_mark: |
-| /bank [username] delete [itemID]                     						| Delete a bank for another player         		| :heavy_check_mark: |
-| /bank allowItem [itemID]                     						        | Adds the item to the list of bankable items   | :heavy_check_mark: |
-| /bank settingsGUI                     						            | Opens the [items management window](#managing-items-for-banking)   | :heavy_check_mark: |
-| /bank setStartingBalance                                                  | Set the starting money balance for new players when they join the server as a new player | :heavy_check_mark: |
-| /bank setItemTransferTickInterval                                         | Set the amount of ticks it uses for a item to be transfered in the bank terminal block. If set to 0, it will be instant.  | :heavy_check_mark: |
-| /bank save                                                                | Saves all bank data | :heavy_check_mark: |
-| /bank load                                                                | Loads all bank data | :heavy_check_mark: |
 
----- 
+Key commands for players and admins:
 
-### Interaction for automation systems
+| Command | Description |
+|---------|-------------|
+| `/money` | Show your money balance |
+| `/money send <user> <amount>` | Send money to another player |
+| `/bank` | Show your full bank balance (money and items) |
+| `/bank manage` | Open the bank account management GUI |
+| `/bank create <accountname>` | Create a new bank account |
+| `/banksystem manage` | Open the banking settings (admin only) |
+| `/company create <name> <maxSupply>` | Found a company and its bank account |
+| `/company info <name>` | Print a company's details to chat |
+| `/company manage <name>` | Open the Company Management screen |
+| `/banksystem symbols list\|add\|remove\|reload` | Manage the share symbol library (admin only) |
 
-<div align="center">
-    <img src="documentation/images/bank_upDownload_block.png" width=600> 
-</div>
+For the full command reference, see [Commands](documentation/user-guide/Commands.md).
 
-#### Bank Upload Block
+---
 
+## Documentation
+
+Detailed guides are available in the [documentation](documentation/README.md) folder:
+
+**For Mod Users:**
+- [Block Usage](documentation/user-guide/Usage.md) — How to use the Bank Terminal (including its crafting grid), ATM, automation blocks, bank displays, and money stockpiles
+- [Bank Accounts](documentation/user-guide/BankAccounts.md) — Shared accounts, creating accounts, permissions
+- [Companies](documentation/user-guide/Companies.md) — Found a company, hire workers, mint shares with the Share Stamper, pay dividends and recurring payouts
+- [Currency Bindings](documentation/user-guide/CurrencyBindings.md) — Link a bank slot to a Numismatics or Lightman's Currency account
+- [Administration](documentation/user-guide/Administration.md) — Managing banking items, player accounts, locked amounts
+- [Configuration](documentation/user-guide/Configuration.md) — Per-world `settings.json` reference; volatile & deposit-gated item components
+- [Multi-Server Setup](documentation/user-guide/MultiserverSetup.md) — Master-slave architecture for cross-server banking
+- [Commands](documentation/user-guide/Commands.md) — Full command reference
+
+**For Mod Developers:**
+- [API Reference](documentation/developer-guide/API.md) — Public API overview and usage examples
+- [Currency Integration](documentation/developer-guide/CurrencyIntegration.md) — SPI for authors of currency mods who want to expose their mod to BankSystem
+- [Events & Signals](documentation/developer-guide/EventsAndSignals.md) — Every event/signal for dependent mods: user/account changes, ItemID merges, multi-server lifecycle
+- [Item Price Provider API](documentation/developer-guide/ItemPriceProviderAPI.md) — Contribute item prices for total-wealth tracking
+- [Async Forwarding Architecture](documentation/developer-guide/AsyncForwardingArchitecture.md) — Internal RPC system documentation
+
+---
+
+## Crafting Recipes
+
+### Components
 <table>
 <tr>
-<td width = 500 valign="top">
-To use the Bank Upload Block, it has to be connected to your bank account.<br>
-Open the block and press on the <b>Connect to Bank</b> button.<br>
-- <b>Drop items if not bankable:</b><br>
-   This setting specifies if the block drops iteps that can not be stored in the bank or not.<br>
-<br>
-Once the block is connected to your bank account, items can be placed in it.<br>
-To send the items to the bank account, the block must be powered by a redstone signal.<br>
-</td>
-<td width = 400>
-<div align="center">
-    <img src="documentation/images/bank_upload_block_gui.png" width=400> 
-</div>
-</td>
+<td><b>Empty Software</b></td>
+<td><b>Circuit Board</b></td>
+<td><b>Display</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_software.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_circuit_board.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_display.png" width="350"></td>
 </tr>
 </table>
 
-#### Bank Download Block
-
+### Software
 <table>
 <tr>
-<td width = 500 valign="top">
-To use the Bank Download Block, it has to be connected to your bank account.<br>
-Open the block and press on the <b>Connect to Bank</b> button.<br>
-- <b>Select item:</b><br>
-   Click that button to select, which item you want to receive from your bank account.<br>
-   <br>
-- <b>Amount:</b><br>
-   Define how many items the block should try to hold in its inventory.<br>
-   If items get removed from the inventory, the block try's to download new items until the specified amount is reached.<br>
-<br>
-Press the <b>Apply</b> button to save the changes.<br>
-Once the block is configured, a redstone signal triggers the block to work<br>
-</td>
-<td width = 400>
-<div align="center">
-    <img src="documentation/images/bank_download_block_gui.png" width=400> 
-</div>
-</td>
+<td><b>Banking Software</b></td>
+<td><b>ATM Software</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_banking_software.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_atm_software.png" width="350"></td>
 </tr>
 </table>
 
---- 
+### Modules
+<table>
+<tr>
+<td><b>Bank Transmitter Module</b></td>
+<td><b>Bank Receiver Module</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_bank_transmitter_module.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_bank_receiver_module.png" width="350"></td>
+</tr>
+</table>
 
-#### Locked amount
-Other mods which access a players bank account may want to reserve some amount for later use. <br>
-The [Stock Market Mod](https://github.com/KROIA/StockMarket) for example uses this feature to reserve the amount (money/items) you want to trade. If a trade is not executed immediately the player must wait until the transaction is processed.<br>
-To prevent double spending for the time that trade is not executed, the amount gets reserved.<br> 
-If you release the locked amount without knowing what mod reserved the amount, may cause problems.<br>
+### Blocks
+<table>
+<tr>
+<td><b>Metal Case Block</b></td>
+<td><b>Terminal Block</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_metal_case_block.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_terminal_block.png" width="350"></td>
+</tr>
+<tr>
+<td><b>BankSystem Display Block</b></td>
+<td><b>Bank Upload Block</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_banksystem_display_block.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_bank_upload_block.png" width="350"></td>
+</tr>
+<tr>
+<td><b>Bank Download Block</b></td>
+<td></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_bank_download_block.png" width="350"></td>
+<td></td>
+</tr>
+</table>
 
+### Company
+<table>
+<tr>
+<td><b>Share Stamper</b></td>
+<td><b>Blank Share</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_share_stamper.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_bank_share.png" width="350"></td>
+</tr>
+</table>
+
+### Money Conversions
+
+Every denomination converts into its neighbours in an ordinary crafting grid, in both
+directions, all the way from 1¢ up to &dollar;1,000,000. Two recipes stand for the whole chain:
+
+<table>
+<tr>
+<td><b>Combine — 5 × &dollar;1 into &dollar;5</b></td>
+<td><b>Split — &dollar;5 back into 5 × &dollar;1</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipes/recipe_money5_1.png" width="350"></td>
+<td><img src="documentation/images/recipes/recipe_money_1.png" width="350"></td>
+</tr>
+</table>
+
+Every other denomination follows the same idea. There are over a hundred conversion
+recipes in total, so they are not all reproduced here — look an item up in the in-game
+recipe book, or in JEI if you have it installed, to see every way to craft it.
+
+---
+
+## Changelog
+
+All notable changes are documented in version-specific files under `changelog/`.
+
+### Current
+
+- [2.2.0](changelog/v2.2.0.md) — In Development · Multi-version port
+- [2.1.2](changelog/v2.1.2.md) — Released 2026-10-25 · In-game test suite no longer mutates live world state; item allow-list self-heals
+- [2.1.1](changelog/v2.1.1.md) — Released 2026-08-20 · Bugfix development
+- [2.1.0](changelog/v2.1.0.md) — Released 2026-08-15 · Company system — found companies, hire workers, mint physical shares, pay dividends and recurring payouts, track it all on a live statistics dashboard
+
+### Previous
+
+- [2.0.7](changelog/v2.0.7.md) — Released 2026-07-29 · Balance history overhaul (timescale toolbar, tiered retention, chart polish), ATM Money Converter tab, 5k–1M banknote tier, backup subcommands
+- [2.0.6](changelog/v2.0.6.md) — Released 2026-07-27 · Ecosystem polish — Bank Terminal live updates, pipe/hopper integration, JEI dev-runtime fix, allow-all-items setting
+- [2.0.5](changelog/v2.0.5.md) — Released 2026-07-25 · External currency bindings (Numismatics + Lightman's Currency)
+- [2.0.4](changelog/v2.0.4.md) — Released 2026-07-21
+- [2.0.3](changelog/v2.0.3.md) — Released 2026-07-14
+- [2.0.2](changelog/v2.0.2.md) — Released 2026-06-07
+- [2.0.1](changelog/v2.0.1.md) — Released 2026-05-21
+- [1.5.0_ALPHA_3](changelog/v1.5.0_ALPHA_3.md) — Security & stability: 50 fixes across permissions, async, concurrency, block entities
+- [1.5.0_ALPHA_2](changelog/v1.5.0_ALPHA_2.md) — Trusted slave servers, package reorganization, UI improvements
+- 1.5.0_ALPHA_1 — Initial alpha
+
+### Stable
+
+- [1.4.1](changelog/v1.4.1.md) — Stable (CurseForge)
+- 1.4.0
+- 1.3.0
+- 1.2.0
+- 1.1.0
+- 1.0.0 — Initial release
