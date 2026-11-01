@@ -153,7 +153,7 @@ public class ShareStamperBlock extends Block implements EntityBlock {
     public void setPlacedBy(Level level, BlockPos pos, BlockState state,
                             @Nullable LivingEntity placer, ItemStack stack) {
         super.setPlacedBy(level, pos, state, placer, stack);
-        if (level.isClientSide) return;
+        if (level.isClientSide()) return;
         Integer bound = stack.get(BankSystemDataComponents.STAMPER_BINDING.get());
         if (bound == null || bound <= 0) return;
         BlockEntity be = level.getBlockEntity(pos);

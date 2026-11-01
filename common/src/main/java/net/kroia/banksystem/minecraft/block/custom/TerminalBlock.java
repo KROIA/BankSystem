@@ -50,7 +50,7 @@ public class TerminalBlock extends Block {
         if(item instanceof Software) {
             softwareItem = (Software)item;
         }
-        if (!pLevel.isClientSide && softwareItem != null)
+        if (!pLevel.isClientSide() && softwareItem != null)
         {
             TerminalBlock programmedBlock = softwareItem.getProgrammedBlock();
             if(programmedBlock == null)
