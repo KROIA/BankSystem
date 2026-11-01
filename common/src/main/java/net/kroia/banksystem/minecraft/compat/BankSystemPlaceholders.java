@@ -56,13 +56,18 @@ public final class BankSystemPlaceholders {
     private static long lastPlayerRefresh = 0;
     private static long lastServerRefresh = 0;
     private static boolean tickRegistered = false;
+    /** Placeholders are registered once per JVM; functions only read the static snapshots. */
+    private static boolean placeholdersRegistered = false;
 
     private static final TickEvent.Server TICK = BankSystemPlaceholders::tick;
 
     private BankSystemPlaceholders() {
     }
 
-    /** Called at server start (master and slave). Registration is idempotent in the registry. */
+    /**
+     * Called at server start (master and slave). Placeholders register once per JVM, so refresh
+     * rates and TOP_COUNT are taken from the first server start (TOP_COUNT is restart-required).
+     */
     public static void start(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
         BankSystemModSettings.Placeholder settings = backend.SERVER_SETTINGS.PLACEHOLDER;
@@ -71,40 +76,43 @@ public final class BankSystemPlaceholders {
         int topCount = Math.max(0, settings.TOP_COUNT.get());
         MoneyFormat.setPattern(settings.MONEY_FORMAT.get());
 
-        player("balance", playerMs, p -> p == null ? "" : money(p.balance()));
-        player("balance_raw", playerMs, p -> p == null ? "" : raw(p.balance()));
-        player("locked", playerMs, p -> p == null ? "" : money(p.locked()));
-        player("locked_raw", playerMs, p -> p == null ? "" : raw(p.locked()));
-        player("total", playerMs, p -> p == null ? "" : money(p.balance() + p.locked()));
-        player("total_raw", playerMs, p -> p == null ? "" : raw(p.balance() + p.locked()));
-        player("account_number", playerMs, p -> p == null ? "" : p.accountNumber());
-        PlaceholderRegistry.registerPlayer(NS, "rank", serverMs, sp -> {
-            Integer rank = server.rank().get(sp.getUUID());
-            return rank == null ? "" : String.valueOf(rank);
-        });
+        if (!placeholdersRegistered) {
+            placeholdersRegistered = true;
+            player("balance", playerMs, p -> p == null ? "" : money(p.balance()));
+            player("balance_raw", playerMs, p -> p == null ? "" : raw(p.balance()));
+            player("locked", playerMs, p -> p == null ? "" : money(p.locked()));
+            player("locked_raw", playerMs, p -> p == null ? "" : raw(p.locked()));
+            player("total", playerMs, p -> p == null ? "" : money(p.balance() + p.locked()));
+            player("total_raw", playerMs, p -> p == null ? "" : raw(p.balance() + p.locked()));
+            player("account_number", playerMs, p -> p == null ? "" : p.accountNumber());
+            PlaceholderRegistry.registerPlayer(NS, "rank", serverMs, sp -> {
+                Integer rank = server.rank().get(sp.getUUID());
+                return rank == null ? "" : String.valueOf(rank);
+            });
 
-        server("circulation", serverMs, () -> money(server.circulation()));
-        server("circulation_raw", serverMs, () -> raw(server.circulation()));
-        server("circulation_locked", serverMs, () -> money(server.circulationLocked()));
-        server("circulation_locked_raw", serverMs, () -> raw(server.circulationLocked()));
-        server("account_count", serverMs, () -> String.valueOf(server.accountCount()));
-        server("player_count", serverMs, () -> String.valueOf(server.playerCount()));
-        server("average_balance", serverMs, () -> money(server.averageTotal()));
-        server("average_balance_raw", serverMs, () -> raw(server.averageTotal()));
-        for (int i = 1; i <= topCount; i++) {
-            final int index = i - 1;
-            server("top_" + i + "_name", serverMs, () -> {
-                List<TopEntry> top = server.top();
-                return index < top.size() ? top.get(index).name() : "";
-            });
-            server("top_" + i + "_balance", serverMs, () -> {
-                List<TopEntry> top = server.top();
-                return money(index < top.size() ? top.get(index).total() : 0);
-            });
-            server("top_" + i + "_balance_raw", serverMs, () -> {
-                List<TopEntry> top = server.top();
-                return raw(index < top.size() ? top.get(index).total() : 0);
-            });
+            server("circulation", serverMs, () -> money(server.circulation()));
+            server("circulation_raw", serverMs, () -> raw(server.circulation()));
+            server("circulation_locked", serverMs, () -> money(server.circulationLocked()));
+            server("circulation_locked_raw", serverMs, () -> raw(server.circulationLocked()));
+            server("account_count", serverMs, () -> String.valueOf(server.accountCount()));
+            server("player_count", serverMs, () -> String.valueOf(server.playerCount()));
+            server("average_balance", serverMs, () -> money(server.averageTotal()));
+            server("average_balance_raw", serverMs, () -> raw(server.averageTotal()));
+            for (int i = 1; i <= topCount; i++) {
+                final int index = i - 1;
+                server("top_" + i + "_name", serverMs, () -> {
+                    List<TopEntry> top = server.top();
+                    return index < top.size() ? top.get(index).name() : "";
+                });
+                server("top_" + i + "_balance", serverMs, () -> {
+                    List<TopEntry> top = server.top();
+                    return money(index < top.size() ? top.get(index).total() : 0);
+                });
+                server("top_" + i + "_balance_raw", serverMs, () -> {
+                    List<TopEntry> top = server.top();
+                    return raw(index < top.size() ? top.get(index).total() : 0);
+                });
+            }
         }
 
         if (!tickRegistered) {
