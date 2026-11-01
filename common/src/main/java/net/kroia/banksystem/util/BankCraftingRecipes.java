@@ -191,6 +191,7 @@ public final class BankCraftingRecipes {
         CraftingRecipe recipe = holder.value();
         if (!(recipe instanceof ShapedRecipe) && !(recipe instanceof ShapelessRecipe))
             return ItemStack.EMPTY;
-        return recipe.assemble(CraftingInput.EMPTY, registries);
+        //return recipe.assemble(CraftingInput.EMPTY, registries); // mc<=1.21.11
+        return recipe.assemble(CraftingInput.EMPTY); // mc>=26.1
     }
 }

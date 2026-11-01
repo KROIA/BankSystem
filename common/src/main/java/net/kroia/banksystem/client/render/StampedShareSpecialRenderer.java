@@ -35,17 +35,20 @@ public final class StampedShareSpecialRenderer implements SpecialModelRenderer<I
         BACKEND_INSTANCES = backend;
     }
 
-    public record Unbaked() implements SpecialModelRenderer.Unbaked {
+    //public record Unbaked() implements SpecialModelRenderer.Unbaked { // mc<=1.21.11
+    public record Unbaked() implements SpecialModelRenderer.Unbaked<ItemStack> { // mc>=26.1
         public static final MapCodec<Unbaked> MAP_CODEC = MapCodec.unit(new Unbaked());
 
         @Override
         //public SpecialModelRenderer<?> bake(EntityModelSet modelSet) { // mc<=1.21.8
-        public SpecialModelRenderer<?> bake(SpecialModelRenderer.BakingContext context) { // mc>=1.21.9
+        //public SpecialModelRenderer<?> bake(SpecialModelRenderer.BakingContext context) { // mc>=1.21.9 mc<=1.21.11
+        public SpecialModelRenderer<ItemStack> bake(SpecialModelRenderer.BakingContext context) { // mc>=26.1
             return new StampedShareSpecialRenderer();
         }
 
         @Override
-        public MapCodec<? extends SpecialModelRenderer.Unbaked> type() {
+        //public MapCodec<? extends SpecialModelRenderer.Unbaked> type() { // mc<=1.21.11
+        public MapCodec<? extends SpecialModelRenderer.Unbaked<ItemStack>> type() { // mc>=26.1
             return MAP_CODEC;
         }
     }
@@ -58,7 +61,8 @@ public final class StampedShareSpecialRenderer implements SpecialModelRenderer<I
     //} // mc<=1.21.8
 
     @Override // mc>=1.21.9
-    public void submit(@Nullable ItemStack stack, ItemDisplayContext context, PoseStack poseStack, // mc>=1.21.9
+    //public void submit(@Nullable ItemStack stack, ItemDisplayContext context, PoseStack poseStack, // mc>=1.21.9 mc<=1.21.11
+    public void submit(@Nullable ItemStack stack, PoseStack poseStack, // mc>=26.1
                        net.minecraft.client.renderer.SubmitNodeCollector collector, int light, int overlay, boolean hasFoil, int outlineColor) { // mc>=1.21.9
         if (stack != null) // mc>=1.21.9
             StampedShareRenderer.render(stack, (type, geometry) -> collector.submitCustomGeometry(poseStack, type, geometry::accept), light, overlay); // mc>=1.21.9

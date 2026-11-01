@@ -130,7 +130,8 @@ public final class BankCraftingMatcher {
         if (!physicalInput.isEmpty()) {
             RecipeHolder<CraftingRecipe> physical = findPhysical(level, physicalInput);
             if (physical != null) {
-                ItemStack result = physical.value().assemble(physicalInput, level.registryAccess());
+                //ItemStack result = physical.value().assemble(physicalInput, level.registryAccess()); // mc<=1.21.11
+                ItemStack result = physical.value().assemble(physicalInput); // mc>=26.1
                 if (!result.isEmpty()) {
                     ItemStack[] virtualGrid = new ItemStack[GRID_SIZE];
                     for (int i = 0; i < GRID_SIZE; i++)
@@ -477,7 +478,8 @@ public final class BankCraftingMatcher {
         CraftingInput virtualInput = CraftingInput.of(GRID_WIDTH, GRID_HEIGHT, List.of(virtualGrid));
         if (!holder.value().matches(virtualInput, level))
             return null;
-        ItemStack result = holder.value().assemble(virtualInput, level.registryAccess());
+        //ItemStack result = holder.value().assemble(virtualInput, level.registryAccess()); // mc<=1.21.11
+        ItemStack result = holder.value().assemble(virtualInput); // mc>=26.1
         if (result.isEmpty())
             return null;
         return new Match(holder, result, virtualGrid, bankPerSlot, bankCounts);

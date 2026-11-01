@@ -6,7 +6,8 @@ import net.kroia.modutilities.gui.client.GuiContainerScreen;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+//import net.minecraft.client.gui.GuiGraphics; // mc<=1.21.11
+import net.minecraft.client.gui.GuiGraphicsExtractor; // mc>=26.1
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
@@ -65,7 +66,8 @@ public abstract class BankSystemGuiContainerScreen<T extends AbstractContainerMe
             new EditBox(Minecraft.getInstance().font, 0, 0, 0, 0, Component.empty());
 
     @Override
-    public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) {
+    //public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) { // mc<=1.21.11
+    public void render(GuiGraphicsExtractor pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) { // mc>=26.1
         // Mirror the ModUtilities text-input focus before other mods' key hooks
         // query it. Focus only changes through mouse clicks / key events, so a
         // per-frame sync is always current by the time the next key arrives.

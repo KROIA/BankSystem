@@ -188,7 +188,8 @@ public final class StampedShareRenderer {
             //ResourceLocation dynRl = ClientSymbolRegistry.getDynamicRL(id); // mc<=1.21.10
             Identifier dynRl = ClientSymbolRegistry.getDynamicRL(id); // mc>=1.21.11
             //sink.draw(RenderType.entityCutoutNoCull(dynRl), (pose, vc) -> { // mc<=1.21.10
-            sink.draw(RenderTypes.entityCutoutNoCull(dynRl), (pose, vc) -> { // mc>=1.21.11
+            //sink.draw(RenderTypes.entityCutoutNoCull(dynRl), (pose, vc) -> { // mc>=1.21.11 mc<=1.21.11
+            sink.draw(RenderTypes.entityCutout(dynRl), (pose, vc) -> { // mc>=26.1
                 emitRaw(vc, pose, new Quad(
                         new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
                         new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), tint, light, overlay);

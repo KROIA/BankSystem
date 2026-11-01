@@ -5,7 +5,8 @@ import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+//import net.minecraft.client.gui.GuiGraphics; // mc<=1.21.11
+import net.minecraft.client.gui.GuiGraphicsExtractor; // mc>=26.1
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
@@ -117,7 +118,8 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
             new EditBox(Minecraft.getInstance().font, 0, 0, 0, 0, Component.empty());
 
     @Override
-    public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) {
+    //public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) { // mc<=1.21.11
+    public void render(GuiGraphicsExtractor pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) { // mc>=26.1
         modTextInputFocusProxy.setFocused(getGui().getFocusedElement() instanceof TextBox);
         applyTooltipAutoFlip(getGui(), pMouseX, this.width);
         super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);

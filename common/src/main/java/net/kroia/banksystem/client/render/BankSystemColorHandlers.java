@@ -11,7 +11,8 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+//import net.minecraft.client.gui.GuiGraphics; // mc<=1.21.11
+import net.minecraft.client.gui.GuiGraphicsExtractor; // mc>=26.1
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -31,7 +32,8 @@ public final class BankSystemColorHandlers {
     /** Concrete renderer instance handed out via the public API. Client-side only. */
     public static final IShareIconRenderer SHARE_ICON_RENDERER = new IShareIconRenderer() {
         @Override
-        public void renderInto(GuiGraphics gfx, int x, int y, int w, int h, ItemID itemId) {
+        //public void renderInto(GuiGraphics gfx, int x, int y, int w, int h, ItemID itemId) { // mc<=1.21.11
+        public void renderInto(GuiGraphicsExtractor gfx, int x, int y, int w, int h, ItemID itemId) { // mc>=26.1
             if (gfx == null || itemId == null || !itemId.isValid()) return;
             ItemStack template = ItemIDManager.getItemStack(itemId);
             if (template.isEmpty()) return;
@@ -64,8 +66,10 @@ public final class BankSystemColorHandlers {
             pose.pushMatrix(); // mc>=1.21.6 (GUI pose is a Matrix3x2fStack)
             pose.translate(x, y); // mc>=1.21.6
             pose.scale(sx, sy); // mc>=1.21.6
-            gfx.renderItem(template, 0, 0);
-            gfx.renderItemDecorations(Minecraft.getInstance().font, template, 0, 0);
+            //gfx.renderItem(template, 0, 0); // mc<=1.21.11
+            gfx.item(template, 0, 0); // mc>=26.1
+            //gfx.renderItemDecorations(Minecraft.getInstance().font, template, 0, 0); // mc<=1.21.11
+            gfx.itemDecorations(Minecraft.getInstance().font, template, 0, 0); // mc>=26.1
             //pose.popPose(); // mc<=1.21.5
             pose.popMatrix(); // mc>=1.21.6
         }
@@ -111,7 +115,8 @@ public final class BankSystemColorHandlers {
      * 1-pixel darker border frames the badge so it reads as a chip even on similar
      * backgrounds.
      */
-    private static void paintMonogramBadge(GuiGraphics gfx, int x, int y, int w, int h,
+    //private static void paintMonogramBadge(GuiGraphics gfx, int x, int y, int w, int h, // mc<=1.21.11
+    private static void paintMonogramBadge(GuiGraphicsExtractor gfx, int x, int y, int w, int h, // mc>=26.1
                                            int tintARGB, String initials) {
         int r = (tintARGB >> 16) & 0xFF;
         int g = (tintARGB >>  8) & 0xFF;
@@ -145,7 +150,8 @@ public final class BankSystemColorHandlers {
         pose.translate(cx, cy); // mc>=1.21.6
         pose.scale(scale, scale); // mc>=1.21.6
         pose.translate(-textW / 2.0f, -textH / 2.0f); // mc>=1.21.6
-        gfx.drawString(font, initials, 0, 0, textColor, false);
+        //gfx.drawString(font, initials, 0, 0, textColor, false); // mc<=1.21.11
+        gfx.text(font, initials, 0, 0, textColor, false); // mc>=26.1
         //pose.popPose(); // mc<=1.21.5
         pose.popMatrix(); // mc>=1.21.6
     }
