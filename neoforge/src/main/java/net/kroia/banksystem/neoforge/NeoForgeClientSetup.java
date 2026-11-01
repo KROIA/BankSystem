@@ -18,7 +18,8 @@ import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
  * screen imports do not put {@code Screen} into the constant pool of a class that
  * NeoForge loads on dedicated servers (which have no client classes).
  */
-@EventBusSubscriber(modid = BankSystemMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+@EventBusSubscriber(modid = BankSystemMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT) // mc<=1.21.5
+//@EventBusSubscriber(modid = BankSystemMod.MOD_ID, value = Dist.CLIENT) // mc>=1.21.6
 public class NeoForgeClientSetup {
 
     @SubscribeEvent
