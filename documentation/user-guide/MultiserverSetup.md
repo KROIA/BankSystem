@@ -26,7 +26,9 @@ No bank data is stored on a slave server.
 ---
 ## Setting Up a Master
 
-Edit the configuration file at: `<ServerFolder>/config/MultiServerConfig.json`
+Edit the configuration file at: `<ServerFolder>/config/modutilities/MultiServerConfig.json`
+
+> An existing `config/MultiServerConfig.json` from an older version is moved to this location automatically on first start.
 
 ```json
 {
@@ -51,7 +53,9 @@ Edit the configuration file at: `<ServerFolder>/config/MultiServerConfig.json`
 ---
 ## Setting Up a Slave
 
-Edit the configuration file at: `<ServerFolder>/config/MultiServerConfig.json`
+Edit the configuration file at: `<ServerFolder>/config/modutilities/MultiServerConfig.json`
+
+> An existing `config/MultiServerConfig.json` from an older version is moved to this location automatically on first start.
 
 ```json
 {

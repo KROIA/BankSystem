@@ -17,7 +17,6 @@ import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.banking.company.CompanyManager;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
-import net.kroia.modutilities.testing.TestCommandRegistration;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
@@ -553,10 +552,6 @@ public class BankSystemCommandsRegistration {
 
         // Task #54 (v2.1.0) — /banksystem symbols admin commands (master-gated, op-only).
         registerSymbolCommands(dispatcher);
-
-        boolean isSlave = BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer;
-        if (BankSystemMod.ENABLE_DEV_FEATURES)
-            TestCommandRegistration.register(dispatcher, "banksystem", "BankSystem", "banksystem", isSlave);
     }
 
     /**
