@@ -266,7 +266,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * Resolves a recipe id to a 3x3-craftable {@link RecipeType#CRAFTING} recipe
      * holder, or null (with a log warning) when the id is unknown or ineligible.
      */
-    private @Nullable RecipeHolder<CraftingRecipe> resolveCraftingRecipe(net.minecraft.resources.ResourceLocation recipeId) {
+    private @Nullable RecipeHolder<CraftingRecipe> resolveCraftingRecipe(net.minecraft.resources.ResourceLocation recipeId) { // mc<=1.21.10
+    //private @Nullable RecipeHolder<CraftingRecipe> resolveCraftingRecipe(net.minecraft.resources.Identifier recipeId) { // mc>=1.21.11
         RecipeHolder<CraftingRecipe> holder = BankCraftingRecipes.byId(player.level(), recipeId);
         if (holder == null || !BankCraftingRecipes.fits3x3(holder.value())) {
             warn("Rejected recipe " + recipeId + " for player " + player.getUUID()
@@ -293,7 +294,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * menu's snapshot may predate deposits made since the last refresh — the
      * immediate recompute gives instant feedback and the refresh converges it.
      */
-    public void applyGhostRecipe(net.minecraft.resources.ResourceLocation recipeId) {
+    public void applyGhostRecipe(net.minecraft.resources.ResourceLocation recipeId) { // mc<=1.21.10
+    //public void applyGhostRecipe(net.minecraft.resources.Identifier recipeId) { // mc>=1.21.11
         if (player.level().isClientSide())
             return;
         RecipeHolder<CraftingRecipe> craftingHolder = resolveCraftingRecipe(recipeId);
@@ -325,7 +327,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * In bank mode the request routes to {@link #applyGhostRecipe} instead —
      * with "Use Bank Items" active, explicit selections are ghost layouts.
      */
-    public void applyPhysicalRecipeFill(net.minecraft.resources.ResourceLocation recipeId) {
+    public void applyPhysicalRecipeFill(net.minecraft.resources.ResourceLocation recipeId) { // mc<=1.21.10
+    //public void applyPhysicalRecipeFill(net.minecraft.resources.Identifier recipeId) { // mc>=1.21.11
         if (player.level().isClientSide() || craftInProgress)
             return;
         if (useBankItems) {

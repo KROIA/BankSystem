@@ -18,8 +18,10 @@ import net.kroia.banksystem.minecraft.entity.renderer.MoneyStockpileEntityRender
 import net.kroia.modutilities.RegistryCompat;
 import net.kroia.modutilities.gui.display.client.AbstractDisplayBlockEntityRenderer;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.renderer.RenderType; // mc<=1.21.10
+//import net.minecraft.client.renderer.rendertype.RenderType; import net.minecraft.client.renderer.rendertype.RenderTypes; // mc>=1.21.11
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
 import java.util.function.Supplier;
@@ -80,7 +82,8 @@ public class BankSystemEntities {
     public static <T extends BlockEntityType<?>> RegistrySupplier<T> registerBlockEntity(String name, Supplier<T> item)
     {
         //BankSystemMod.LOGGER.info("Registering block entity: " + name);
-        return BLOCK_ENTITIES.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), item);
+        return BLOCK_ENTITIES.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), item); // mc<=1.21.10
+        //return BLOCK_ENTITIES.register(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), item); // mc>=1.21.11
     }
 
 }
