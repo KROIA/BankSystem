@@ -26,7 +26,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ClickType; // mc<=1.21.11
+//import net.minecraft.world.inventory.ContainerInput; // mc>=26.1
 import net.minecraft.world.inventory.ResultContainer;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.TransientCraftingContainer;
@@ -572,13 +573,15 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
     // ------------------------------------------------------------------
 
     @Override
-    public void clicked(int slotId, int button, ClickType clickType, Player clickPlayer) {
+    public void clicked(int slotId, int button, ClickType clickType, Player clickPlayer) { // mc<=1.21.11
+    //public void clicked(int slotId, int button, ContainerInput clickType, Player clickPlayer) { // mc>=26.1
         // Explicit ghost-layout clear: clicking an EMPTY grid slot with an EMPTY
         // cursor while a ghost recipe is set removes the whole layout. Runs
         // symmetrically on both sides (all inputs — slot content, carried stack,
         // ghost state — are mirrored), so no extra packet is needed.
         if (ghostRecipe != null
-                && clickType == ClickType.PICKUP
+                && clickType == ClickType.PICKUP // mc<=1.21.11
+                //&& clickType == ContainerInput.PICKUP // mc>=26.1
                 && slotId >= CRAFT_GRID_SLOT_START && slotId < CRAFT_GRID_SLOT_START + CRAFT_GRID_SLOT_COUNT
                 && getCarried().isEmpty()
                 && !getSlot(slotId).hasItem()) {
@@ -590,9 +593,11 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
             // client does nothing (result/grid state comes back via menu sync);
             // the server runs the asynchronous atomic craft flow.
             if (!clickPlayer.level().isClientSide()) {
-                if (clickType == ClickType.PICKUP)
+                if (clickType == ClickType.PICKUP) // mc<=1.21.11
+                //if (clickType == ContainerInput.PICKUP) // mc>=26.1
                     handleCustomCraft(false);
-                else if (clickType == ClickType.QUICK_MOVE)
+                else if (clickType == ClickType.QUICK_MOVE) // mc<=1.21.11
+                //else if (clickType == ContainerInput.QUICK_MOVE) // mc>=26.1
                     handleCustomCraft(true);
                 // Other click types (PICKUP_ALL/THROW/SWAP/CLONE/QUICK_CRAFT) are
                 // ignored in this mode — PICKUP_ALL in particular would turn a

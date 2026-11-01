@@ -94,7 +94,7 @@ public class BankSystemDisplayBlock extends AbstractDisplayBlock {
             if (ctrl.getGui() == null) return InteractionResult.PASS;
             if (!level.isClientSide()) {
                 if (!ctrl.tryAcquireEditor(player.getUUID())) {
-                    player.displayClientMessage(
+                    net.kroia.modutilities.PlayerCompat.sendMessage(player,
                             Component.literal("Display is being edited by another player."), true);
                     return InteractionResult.FAIL;
                 }
