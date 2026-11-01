@@ -12,6 +12,7 @@ Guides for players and server administrators on how to use the BankSystem mod.
 | [Companies](user-guide/Companies.md) | Found a company, manage workers, issue shares with the Share Stamper, pay dividends and recurring payouts |
 | [Administration](user-guide/Administration.md) | Server admin guide: managing banking items, player accounts, locked amounts |
 | [Configuration](user-guide/Configuration.md) | Per-world `settings.json` reference; volatile & deposit-gated item components |
+| [Placeholders](user-guide/Placeholders.md) | Show balances, money in circulation and a richest-players list via TAB or Placeholder API |
 | [Multi-Server Setup](user-guide/MultiserverSetup.md) | Master-slave architecture setup for cross-server banking |
 | [Commands](user-guide/Commands.md) | Full command reference |
 

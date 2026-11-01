@@ -22,7 +22,7 @@ import net.kroia.banksystem.data.table.BalanceHistoryManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.command.BankSystemCommands;
-import net.kroia.banksystem.minecraft.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.banksystem.minecraft.compat.BankSystemPlaceholders;
 import net.kroia.banksystem.minecraft.compat.OldBankDataLoader;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
@@ -322,7 +322,6 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the server side
     public static void onServerStart(MinecraftServer server) {
 
-        NEZNAMY_TAB_Placeholders.setBackend(INSTANCES);
         OldBankDataLoader.setBackend(INSTANCES);
 
 
@@ -488,11 +487,13 @@ public class BankSystemModBackend implements BankSystemAPI {
             takeBalanceSnapshot();
         }
 
+        BankSystemPlaceholders.start(INSTANCES); // TAB / Placeholder API via ModUtilities
         INSTANCES.SERVER_EVENTS.BANKSYSTEM_SETUP_COMPLETED.notifyListeners();
     }
 
     // Called from the server side
     public static void onServerStop(MinecraftServer server) {
+        BankSystemPlaceholders.stop();
         MultiServerManager.cleanup();
 
         if (!INSTANCES.isSlaveServer) {

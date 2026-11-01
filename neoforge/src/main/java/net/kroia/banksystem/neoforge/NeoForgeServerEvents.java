@@ -4,7 +4,6 @@ import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.platform.Platform;
 import dev.architectury.utils.Env;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.minecraft.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.modutilities.ModUtilitiesMod;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -17,12 +16,6 @@ public class NeoForgeServerEvents {
     public static void init()
     {
         LifecycleEvent.SERVER_STARTED.register((server)->{
-            // Check if NEZNAMY/TAB is present and register placeholders
-            //BankSystemModBackend.onServerStart(server);
-            if (Platform.getEnvironment() == Env.SERVER && Platform.isModLoaded("tab")) {
-                NEZNAMY_TAB_Placeholders.register();
-            }
-
             ModUtilitiesMod.LOGGER.info("[NeoForgeSetup] SERVER_STARTING");
             BankSystemModBackend.onServerStart(server);
 
