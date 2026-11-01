@@ -7,7 +7,8 @@ import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 
@@ -18,7 +19,8 @@ import org.jetbrains.annotations.NotNull;
 public class S2CShareSymbolDataPacket extends BankSystemNetworkPacket {
 
     public static final Type<S2CShareSymbolDataPacket> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2c_share_symbol_data"));
+            //ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2c_share_symbol_data")); // mc<=1.21.10
+            Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2c_share_symbol_data")); // mc>=1.21.11
 
     public static final StreamCodec<RegistryFriendlyByteBuf, S2CShareSymbolDataPacket> STREAM_CODEC =
             StreamCodec.of(

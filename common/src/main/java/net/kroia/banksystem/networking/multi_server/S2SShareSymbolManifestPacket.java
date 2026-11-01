@@ -8,7 +8,8 @@ import net.kroia.modutilities.networking.multi_server.ForwardPacketContext;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.NotNull;
 
@@ -23,7 +24,8 @@ import java.util.List;
 public class S2SShareSymbolManifestPacket extends BankSystemNetworkPacket {
 
     public static final Type<S2SShareSymbolManifestPacket> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2s_share_symbol_manifest"));
+            //ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2s_share_symbol_manifest")); // mc<=1.21.10
+            Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2s_share_symbol_manifest")); // mc>=1.21.11
 
     public static final StreamCodec<RegistryFriendlyByteBuf, S2SShareSymbolManifestPacket> STREAM_CODEC =
             StreamCodec.of(

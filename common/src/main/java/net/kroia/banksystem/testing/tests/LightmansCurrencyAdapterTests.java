@@ -23,7 +23,8 @@ import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
@@ -214,10 +215,13 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
             Class<?> moneyAPIClass = Class.forName("io.github.lightman314.lightmanscurrency.api.money.MoneyAPI");
             Object moneyAPI = moneyAPIClass.getMethod("getApi").invoke(null);
             if (moneyAPI == null) return null;
-            net.minecraft.resources.ResourceLocation coinTypeId =
-                    net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin");
+            //net.minecraft.resources.ResourceLocation coinTypeId = // mc<=1.21.10
+            net.minecraft.resources.Identifier coinTypeId = // mc>=1.21.11
+                    //net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin"); // mc<=1.21.10
+                    net.minecraft.resources.Identifier.fromNamespaceAndPath("lightmanscurrency", "coin"); // mc>=1.21.11
             Object currencyType = moneyAPIClass
-                    .getMethod("GetRegisteredCurrencyType", net.minecraft.resources.ResourceLocation.class)
+                    //.getMethod("GetRegisteredCurrencyType", net.minecraft.resources.ResourceLocation.class) // mc<=1.21.10
+                    .getMethod("GetRegisteredCurrencyType", net.minecraft.resources.Identifier.class) // mc>=1.21.11
                     .invoke(moneyAPI, coinTypeId);
             if (currencyType == null) return null;
             net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
@@ -985,7 +989,8 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
             }
 
             Item ironCoin = BuiltInRegistries.ITEM.getOptional(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_iron")).orElse(null);
+                    //ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_iron")).orElse(null); // mc<=1.21.10
+                    Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_iron")).orElse(null); // mc>=1.21.11
             if (ironCoin == null || ironCoin == Items.AIR) {
                 return pass("lightmanscurrency:coin_iron not in item registry — skipped");
             }
@@ -1069,7 +1074,8 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
             }
 
             Item ironCoin = BuiltInRegistries.ITEM.getOptional(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_iron")).orElse(null);
+                    //ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_iron")).orElse(null); // mc<=1.21.10
+                    Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_iron")).orElse(null); // mc>=1.21.11
             if (ironCoin == null || ironCoin == Items.AIR) {
                 return pass("lightmanscurrency:coin_iron not in item registry — skipped");
             }
@@ -1133,7 +1139,8 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
                 return pass("Lightman's Currency provider not available — skipped");
             }
             Item goldCoin = BuiltInRegistries.ITEM.getOptional(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null);
+                    //ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc<=1.21.10
+                    Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc>=1.21.11
             if (goldCoin == null || goldCoin == Items.AIR) {
                 return pass("lightmanscurrency:coin_gold not in item registry — skipped");
             }
@@ -1227,7 +1234,8 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
                 return pass("Lightman's Currency provider not available — skipped");
             }
             Item goldCoin = BuiltInRegistries.ITEM.getOptional(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null);
+                    //ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc<=1.21.10
+                    Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc>=1.21.11
             if (goldCoin == null || goldCoin == Items.AIR) {
                 return pass("lightmanscurrency:coin_gold not in item registry — skipped");
             }
@@ -1257,7 +1265,8 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
             long cumulativeExpected = 0L;
             for (String variantName : variantNames) {
                 Item variantItem = BuiltInRegistries.ITEM.getOptional(
-                        ResourceLocation.fromNamespaceAndPath("lightmanscurrency", variantName)).orElse(null);
+                        //ResourceLocation.fromNamespaceAndPath("lightmanscurrency", variantName)).orElse(null); // mc<=1.21.10
+                        Identifier.fromNamespaceAndPath("lightmanscurrency", variantName)).orElse(null); // mc>=1.21.11
                 if (variantItem == null || variantItem == Items.AIR) {
                     continue;
                 }
@@ -1318,9 +1327,11 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
                 return pass("Lightman's Currency provider not available — skipped");
             }
             Item emeraldCoin = BuiltInRegistries.ITEM.getOptional(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_emerald")).orElse(null);
+                    //ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_emerald")).orElse(null); // mc<=1.21.10
+                    Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_emerald")).orElse(null); // mc>=1.21.11
             Item goldCoin = BuiltInRegistries.ITEM.getOptional(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null);
+                    //ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc<=1.21.10
+                    Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc>=1.21.11
             if (emeraldCoin == null || emeraldCoin == Items.AIR
                     || goldCoin == null || goldCoin == Items.AIR) {
                 return pass("coin_emerald or coin_gold not in item registry — skipped");
@@ -1412,7 +1423,8 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
                 return pass("Lightman's Currency provider not available — skipped");
             }
             Item goldCoin = BuiltInRegistries.ITEM.getOptional(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null);
+                    //ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc<=1.21.10
+                    Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc>=1.21.11
             if (goldCoin == null || goldCoin == Items.AIR) {
                 return pass("lightmanscurrency:coin_gold not in item registry — skipped");
             }

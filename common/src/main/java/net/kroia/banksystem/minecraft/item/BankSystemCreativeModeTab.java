@@ -7,7 +7,8 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.ItemStack;
 
@@ -42,6 +43,7 @@ public class BankSystemCreativeModeTab {
 
     public static <T extends CreativeModeTab> RegistrySupplier<T> registerTab(String name, Supplier<T> tab)
     {
-        return TABS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), tab);
+        //return TABS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), tab); // mc<=1.21.10
+        return TABS.register(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), tab); // mc>=1.21.11
     }
 }

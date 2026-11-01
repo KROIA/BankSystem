@@ -18,7 +18,8 @@ import net.kroia.modutilities.networking.multi_server.ForwardPacketContext;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -30,7 +31,8 @@ import java.util.Map;
 
 public class SyncItemIDsPacket extends BankSystemNetworkPacket
 {
-    public static final Type<SyncItemIDsPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "sync_item_ids_packet"));
+    //public static final Type<SyncItemIDsPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "sync_item_ids_packet")); // mc<=1.21.10
+    public static final Type<SyncItemIDsPacket> TYPE = new Type<>(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "sync_item_ids_packet")); // mc>=1.21.11
     @Override
     public @NotNull Type<? extends CustomPacketPayload> type() {
         return TYPE;

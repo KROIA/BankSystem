@@ -200,7 +200,8 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
 
     /** Dimension key as a stable string; empty when level is unattached. */
     private String dimensionKey() {
-        return level == null ? "" : level.dimension().location().toString();
+        //return level == null ? "" : level.dimension().location().toString(); // mc<=1.21.10
+        return level == null ? "" : level.dimension().identifier().toString(); // mc>=1.21.11
     }
 
     // -------- viewer lock (Task #47, v2.1.0) --------

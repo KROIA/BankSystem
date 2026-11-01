@@ -1,7 +1,8 @@
 package net.kroia.banksystem.client.company;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.minecraft.resources.ResourceLocation;
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 
 import java.util.*;
 
@@ -18,10 +19,12 @@ import java.util.*;
  */
 public final class SharePresetRegistry {
 
-    private static final ResourceLocation PLACEHOLDER = ResourceLocation.fromNamespaceAndPath(
+    //private static final ResourceLocation PLACEHOLDER = ResourceLocation.fromNamespaceAndPath( // mc<=1.21.10
+    private static final Identifier PLACEHOLDER = Identifier.fromNamespaceAndPath( // mc>=1.21.11
             BankSystemMod.MOD_ID, "textures/item/share_symbol/_placeholder.png");
 
-    private static final Map<String, ResourceLocation> PRESETS = new LinkedHashMap<>();
+    //private static final Map<String, ResourceLocation> PRESETS = new LinkedHashMap<>(); // mc<=1.21.10
+    private static final Map<String, Identifier> PRESETS = new LinkedHashMap<>(); // mc>=1.21.11
     private static final List<String> ORDERED;
 
     static {
@@ -34,7 +37,8 @@ public final class SharePresetRegistry {
                 "sun", "moon", "bolt", "anchor", "hammer", "axe", "minecart"
         };
         for (String id : ids) {
-            PRESETS.put(id, ResourceLocation.fromNamespaceAndPath(
+            //PRESETS.put(id, ResourceLocation.fromNamespaceAndPath( // mc<=1.21.10
+            PRESETS.put(id, Identifier.fromNamespaceAndPath( // mc>=1.21.11
                     BankSystemMod.MOD_ID, "textures/item/share_symbol/" + id + ".png"));
         }
         ORDERED = List.copyOf(PRESETS.keySet());
@@ -83,8 +87,10 @@ public final class SharePresetRegistry {
      * badge painter). Bundled: file RL (auto-loaded by TextureManager). Dynamic:
      * DynamicTexture RL registered by {@link ClientSymbolRegistry}.
      */
-    public static ResourceLocation getTexture(String id) {
-        ResourceLocation bundled = PRESETS.get(id);
+    //public static ResourceLocation getTexture(String id) { // mc<=1.21.10
+    public static Identifier getTexture(String id) { // mc>=1.21.11
+        //ResourceLocation bundled = PRESETS.get(id); // mc<=1.21.10
+        Identifier bundled = PRESETS.get(id); // mc>=1.21.11
         if (bundled != null) return bundled;
         if (ClientSymbolRegistry.isValidSymbolId(id)) {
             return ClientSymbolRegistry.getDynamicRL(id);
@@ -92,7 +98,8 @@ public final class SharePresetRegistry {
         return PLACEHOLDER;
     }
 
-    public static ResourceLocation placeholder() { return PLACEHOLDER; }
+    //public static ResourceLocation placeholder() { return PLACEHOLDER; } // mc<=1.21.10
+    public static Identifier placeholder() { return PLACEHOLDER; } // mc>=1.21.11
 
     public static int size() {
         int dynamic = (int) ClientSymbolRegistry.getStates().stream()

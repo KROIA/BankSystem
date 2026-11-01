@@ -6,7 +6,8 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -78,7 +79,8 @@ public final class VolatileItemComponents {
      */
     public static final TagKey<DataComponentType<?>> VOLATILE_COMPONENTS_TAG = TagKey.create(
             Registries.DATA_COMPONENT_TYPE,
-            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "volatile_item_components"));
+            //ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "volatile_item_components")); // mc<=1.21.10
+            Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "volatile_item_components")); // mc>=1.21.11
 
     /**
      * Datapack tag over the data-component-type registry listing deposit-gated component types
@@ -89,7 +91,8 @@ public final class VolatileItemComponents {
      */
     public static final TagKey<DataComponentType<?>> DEPOSIT_GATED_COMPONENTS_TAG = TagKey.create(
             Registries.DATA_COMPONENT_TYPE,
-            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "deposit_gated_components"));
+            //ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "deposit_gated_components")); // mc<=1.21.10
+            Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "deposit_gated_components")); // mc>=1.21.11
 
     /**
      * Additional volatile component ids sourced from the server config
@@ -98,14 +101,16 @@ public final class VolatileItemComponents {
      * {@link net.kroia.banksystem.networking.general.SyncItemIDsPacket} so that all sides
      * normalize identically. Replaced atomically (the referenced set is never mutated).
      */
-    private static volatile Set<ResourceLocation> configComponentIds = Set.of();
+    //private static volatile Set<ResourceLocation> configComponentIds = Set.of(); // mc<=1.21.10
+    private static volatile Set<Identifier> configComponentIds = Set.of(); // mc>=1.21.11
 
     /**
      * Additional deposit-gated component ids sourced from the server config
      * ({@code ADDITIONAL_DEPOSIT_GATED_COMPONENTS}). Filled and synced exactly like
      * {@link #configComponentIds}. Replaced atomically (the referenced set is never mutated).
      */
-    private static volatile Set<ResourceLocation> gatedConfigComponentIds = Set.of();
+    //private static volatile Set<ResourceLocation> gatedConfigComponentIds = Set.of(); // mc<=1.21.10
+    private static volatile Set<Identifier> gatedConfigComponentIds = Set.of(); // mc>=1.21.11
 
     /**
      * Snapshot of the ids contained in {@link #VOLATILE_COMPONENTS_TAG} at the moment the
@@ -121,10 +126,12 @@ public final class VolatileItemComponents {
      * next restart. {@link #onServerResourcesReloaded()} logs an error when it detects
      * such a rejected change.
      */
-    private static volatile Set<ResourceLocation> tagVolatileSnapshot = null;
+    //private static volatile Set<ResourceLocation> tagVolatileSnapshot = null; // mc<=1.21.10
+    private static volatile Set<Identifier> tagVolatileSnapshot = null; // mc>=1.21.11
 
     /** Snapshot of {@link #DEPOSIT_GATED_COMPONENTS_TAG}; same semantics as {@link #tagVolatileSnapshot}. */
-    private static volatile Set<ResourceLocation> tagGatedSnapshot = null;
+    //private static volatile Set<ResourceLocation> tagGatedSnapshot = null; // mc<=1.21.10
+    private static volatile Set<Identifier> tagGatedSnapshot = null; // mc>=1.21.11
 
     /**
      * Tick countdown started by {@link #onServerResourcesReloaded()}. Tag rebinding happens
@@ -134,7 +141,8 @@ public final class VolatileItemComponents {
     private static int pendingTagCheckTicks = 0;
 
     /** Last live tag set we already warned about, to avoid log spam on repeated reloads. */
-    private static Set<ResourceLocation> lastRejectedTagUnion = null;
+    //private static Set<ResourceLocation> lastRejectedTagUnion = null; // mc<=1.21.10
+    private static Set<Identifier> lastRejectedTagUnion = null; // mc>=1.21.11
 
     private VolatileItemComponents() {}
 
@@ -148,7 +156,8 @@ public final class VolatileItemComponents {
      *         already-registered templates via {@link ItemIDManager#renormalizeAndMerge()}).
      */
     public static boolean setConfigComponentIds(@Nullable Collection<String> componentIds) {
-        Set<ResourceLocation> newSet = parseComponentIds(componentIds, "volatile");
+        //Set<ResourceLocation> newSet = parseComponentIds(componentIds, "volatile"); // mc<=1.21.10
+        Set<Identifier> newSet = parseComponentIds(componentIds, "volatile"); // mc>=1.21.11
         if (newSet.equals(configComponentIds))
             return false;
         configComponentIds = Set.copyOf(newSet);
@@ -166,7 +175,8 @@ public final class VolatileItemComponents {
      * @return {@code true} if the effective set changed.
      */
     public static boolean setGatedConfigComponentIds(@Nullable Collection<String> componentIds) {
-        Set<ResourceLocation> newSet = parseComponentIds(componentIds, "deposit-gated");
+        //Set<ResourceLocation> newSet = parseComponentIds(componentIds, "deposit-gated"); // mc<=1.21.10
+        Set<Identifier> newSet = parseComponentIds(componentIds, "deposit-gated"); // mc>=1.21.11
         if (newSet.equals(gatedConfigComponentIds))
             return false;
         gatedConfigComponentIds = Set.copyOf(newSet);
@@ -174,13 +184,16 @@ public final class VolatileItemComponents {
     }
 
     /** Parses id strings into resource locations, skipping invalid entries with a warning. */
-    private static Set<ResourceLocation> parseComponentIds(@Nullable Collection<String> componentIds, String setName) {
-        Set<ResourceLocation> newSet = new LinkedHashSet<>();
+    //private static Set<ResourceLocation> parseComponentIds(@Nullable Collection<String> componentIds, String setName) { // mc<=1.21.10
+    private static Set<Identifier> parseComponentIds(@Nullable Collection<String> componentIds, String setName) { // mc>=1.21.11
+        //Set<ResourceLocation> newSet = new LinkedHashSet<>(); // mc<=1.21.10
+        Set<Identifier> newSet = new LinkedHashSet<>(); // mc>=1.21.11
         if (componentIds != null) {
             for (String idStr : componentIds) {
                 if (idStr == null || idStr.isBlank())
                     continue;
-                ResourceLocation id = ResourceLocation.tryParse(idStr.trim());
+                //ResourceLocation id = ResourceLocation.tryParse(idStr.trim()); // mc<=1.21.10
+                Identifier id = Identifier.tryParse(idStr.trim()); // mc>=1.21.11
                 if (id == null) {
                     warn("Ignoring invalid " + setName + " component id in config: '" + idStr + "'");
                     continue;
@@ -196,10 +209,13 @@ public final class VolatileItemComponents {
     // ------------------------------------------------------------------------------------
 
     /** Reads the ids currently bound to the given data-component-type tag from the live registry. */
-    private static @NotNull Set<ResourceLocation> readTagIds(@NotNull TagKey<DataComponentType<?>> tag) {
-        Set<ResourceLocation> ids = new LinkedHashSet<>();
+    //private static @NotNull Set<ResourceLocation> readTagIds(@NotNull TagKey<DataComponentType<?>> tag) { // mc<=1.21.10
+    private static @NotNull Set<Identifier> readTagIds(@NotNull TagKey<DataComponentType<?>> tag) { // mc>=1.21.11
+        //Set<ResourceLocation> ids = new LinkedHashSet<>(); // mc<=1.21.10
+        Set<Identifier> ids = new LinkedHashSet<>(); // mc>=1.21.11
         for (Holder<DataComponentType<?>> holder : BuiltInRegistries.DATA_COMPONENT_TYPE.getTagOrEmpty(tag)) {
-            ResourceLocation id = holder.unwrapKey().map(k -> k.location()).orElse(null);
+            //ResourceLocation id = holder.unwrapKey().map(k -> k.location()).orElse(null); // mc<=1.21.10
+            Identifier id = holder.unwrapKey().map(k -> k.identifier()).orElse(null); // mc>=1.21.11
             if (id == null)
                 id = BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(holder.value());
             if (id != null)
@@ -248,14 +264,18 @@ public final class VolatileItemComponents {
     }
 
     /** @return the applied volatile tag ids: the snapshot if captured, otherwise the live tag. */
-    private static @NotNull Set<ResourceLocation> effectiveVolatileTagIds() {
-        Set<ResourceLocation> snapshot = tagVolatileSnapshot;
+    //private static @NotNull Set<ResourceLocation> effectiveVolatileTagIds() { // mc<=1.21.10
+    private static @NotNull Set<Identifier> effectiveVolatileTagIds() { // mc>=1.21.11
+        //Set<ResourceLocation> snapshot = tagVolatileSnapshot; // mc<=1.21.10
+        Set<Identifier> snapshot = tagVolatileSnapshot; // mc>=1.21.11
         return snapshot != null ? snapshot : readTagIds(VOLATILE_COMPONENTS_TAG);
     }
 
     /** @return the applied deposit-gated tag ids: the snapshot if captured, otherwise the live tag. */
-    private static @NotNull Set<ResourceLocation> effectiveGatedTagIds() {
-        Set<ResourceLocation> snapshot = tagGatedSnapshot;
+    //private static @NotNull Set<ResourceLocation> effectiveGatedTagIds() { // mc<=1.21.10
+    private static @NotNull Set<Identifier> effectiveGatedTagIds() { // mc>=1.21.11
+        //Set<ResourceLocation> snapshot = tagGatedSnapshot; // mc<=1.21.10
+        Set<Identifier> snapshot = tagGatedSnapshot; // mc>=1.21.11
         return snapshot != null ? snapshot : readTagIds(DEPOSIT_GATED_COMPONENTS_TAG);
     }
 
@@ -274,13 +294,17 @@ public final class VolatileItemComponents {
      */
     public static @NotNull List<String> getEffectiveComponentIds() {
         TreeSet<String> ids = new TreeSet<>();
-        for (ResourceLocation id : effectiveVolatileTagIds())
+        //for (ResourceLocation id : effectiveVolatileTagIds()) // mc<=1.21.10
+        for (Identifier id : effectiveVolatileTagIds()) // mc>=1.21.11
             ids.add(id.toString());
-        for (ResourceLocation id : effectiveGatedTagIds())
+        //for (ResourceLocation id : effectiveGatedTagIds()) // mc<=1.21.10
+        for (Identifier id : effectiveGatedTagIds()) // mc>=1.21.11
             ids.add(id.toString());
-        for (ResourceLocation id : configComponentIds)
+        //for (ResourceLocation id : configComponentIds) // mc<=1.21.10
+        for (Identifier id : configComponentIds) // mc>=1.21.11
             ids.add(id.toString());
-        for (ResourceLocation id : gatedConfigComponentIds)
+        //for (ResourceLocation id : gatedConfigComponentIds) // mc<=1.21.10
+        for (Identifier id : gatedConfigComponentIds) // mc>=1.21.11
             ids.add(id.toString());
         return new ArrayList<>(ids);
     }
@@ -317,15 +341,20 @@ public final class VolatileItemComponents {
      * rejecting the change IS the point (see {@link #tagVolatileSnapshot}).
      */
     private static void checkForRuntimeTagChange() {
-        Set<ResourceLocation> snapshotVolatile = tagVolatileSnapshot;
-        Set<ResourceLocation> snapshotGated = tagGatedSnapshot;
+        //Set<ResourceLocation> snapshotVolatile = tagVolatileSnapshot; // mc<=1.21.10
+        Set<Identifier> snapshotVolatile = tagVolatileSnapshot; // mc>=1.21.11
+        //Set<ResourceLocation> snapshotGated = tagGatedSnapshot; // mc<=1.21.10
+        Set<Identifier> snapshotGated = tagGatedSnapshot; // mc>=1.21.11
         if (snapshotVolatile == null || snapshotGated == null)
             return;
-        Set<ResourceLocation> liveVolatile = readTagIds(VOLATILE_COMPONENTS_TAG);
-        Set<ResourceLocation> liveGated = readTagIds(DEPOSIT_GATED_COMPONENTS_TAG);
+        //Set<ResourceLocation> liveVolatile = readTagIds(VOLATILE_COMPONENTS_TAG); // mc<=1.21.10
+        Set<Identifier> liveVolatile = readTagIds(VOLATILE_COMPONENTS_TAG); // mc>=1.21.11
+        //Set<ResourceLocation> liveGated = readTagIds(DEPOSIT_GATED_COMPONENTS_TAG); // mc<=1.21.10
+        Set<Identifier> liveGated = readTagIds(DEPOSIT_GATED_COMPONENTS_TAG); // mc>=1.21.11
         if (liveVolatile.equals(snapshotVolatile) && liveGated.equals(snapshotGated))
             return;
-        Set<ResourceLocation> liveUnion = new LinkedHashSet<>(liveVolatile);
+        //Set<ResourceLocation> liveUnion = new LinkedHashSet<>(liveVolatile); // mc<=1.21.10
+        Set<Identifier> liveUnion = new LinkedHashSet<>(liveVolatile); // mc>=1.21.11
         liveUnion.addAll(liveGated);
         if (liveUnion.equals(lastRejectedTagUnion))
             return; // already warned about exactly this change
@@ -355,9 +384,11 @@ public final class VolatileItemComponents {
         return toStringList(gatedConfigComponentIds);
     }
 
-    private static @NotNull List<String> toStringList(Set<ResourceLocation> ids) {
+    //private static @NotNull List<String> toStringList(Set<ResourceLocation> ids) { // mc<=1.21.10
+    private static @NotNull List<String> toStringList(Set<Identifier> ids) { // mc>=1.21.11
         List<String> list = new ArrayList<>();
-        for (ResourceLocation id : ids)
+        //for (ResourceLocation id : ids) // mc<=1.21.10
+        for (Identifier id : ids) // mc>=1.21.11
             list.add(id.toString());
         return list;
     }
@@ -414,7 +445,8 @@ public final class VolatileItemComponents {
      * @param ids   the component type ids to remove
      * @return a stripped copy; {@link ItemStack#EMPTY} for empty inputs
      */
-    public static @NotNull ItemStack stripComponentsByIds(@NotNull ItemStack stack, @NotNull Set<ResourceLocation> ids) {
+    //public static @NotNull ItemStack stripComponentsByIds(@NotNull ItemStack stack, @NotNull Set<ResourceLocation> ids) { // mc<=1.21.10
+    public static @NotNull ItemStack stripComponentsByIds(@NotNull ItemStack stack, @NotNull Set<Identifier> ids) { // mc>=1.21.11
         if (stack.isEmpty())
             return ItemStack.EMPTY;
         // Note: copy() may re-attach volatile components via third-party constructor hooks
@@ -424,8 +456,10 @@ public final class VolatileItemComponents {
         return copy;
     }
 
-    private static void removeByIds(ItemStack stack, Set<ResourceLocation> ids) {
-        for (ResourceLocation id : ids) {
+    //private static void removeByIds(ItemStack stack, Set<ResourceLocation> ids) { // mc<=1.21.10
+    private static void removeByIds(ItemStack stack, Set<Identifier> ids) { // mc>=1.21.11
+        //for (ResourceLocation id : ids) { // mc<=1.21.10
+        for (Identifier id : ids) { // mc>=1.21.11
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getOptional(id).orElse(null);
             if (type != null)
                 resetComponentToPrototype(stack, type);
@@ -544,12 +578,14 @@ public final class VolatileItemComponents {
      */
     private static @NotNull List<DataComponentType<?>> effectiveGatedTypes() {
         List<DataComponentType<?>> types = new ArrayList<>();
-        for (ResourceLocation id : effectiveGatedTagIds()) {
+        //for (ResourceLocation id : effectiveGatedTagIds()) { // mc<=1.21.10
+        for (Identifier id : effectiveGatedTagIds()) { // mc>=1.21.11
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getOptional(id).orElse(null);
             if (type != null && !types.contains(type))
                 types.add(type);
         }
-        for (ResourceLocation id : gatedConfigComponentIds) {
+        //for (ResourceLocation id : gatedConfigComponentIds) { // mc<=1.21.10
+        for (Identifier id : gatedConfigComponentIds) { // mc>=1.21.11
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getOptional(id).orElse(null);
             if (type != null && !types.contains(type))
                 types.add(type);
@@ -568,12 +604,14 @@ public final class VolatileItemComponents {
         ItemStack copy = stack.copy();
         // Reset instead of remove — see resetComponentToPrototype() for why plain remove()
         // would poison the patch of prototype-backed component types.
-        for (ResourceLocation id : effectiveVolatileTagIds()) {
+        //for (ResourceLocation id : effectiveVolatileTagIds()) { // mc<=1.21.10
+        for (Identifier id : effectiveVolatileTagIds()) { // mc>=1.21.11
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getOptional(id).orElse(null);
             if (type != null && !gatedTypes.contains(type))
                 resetComponentToPrototype(copy, type);
         }
-        for (ResourceLocation id : configComponentIds) {
+        //for (ResourceLocation id : configComponentIds) { // mc<=1.21.10
+        for (Identifier id : configComponentIds) { // mc>=1.21.11
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getOptional(id).orElse(null);
             if (type != null && !gatedTypes.contains(type))
                 resetComponentToPrototype(copy, type);

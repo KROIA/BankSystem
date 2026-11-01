@@ -55,7 +55,7 @@ public class BankingSoftware extends Software {
         if (target instanceof Player && player instanceof ServerPlayer serverPlayer) {
             if (!level.isClientSide()) {
 
-                if(serverPlayer.hasPermissions(2) && serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
+                if(net.kroia.modutilities.PermissionCompat.hasPermission(serverPlayer, 2) && serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
                     UUID targetUUID = target.getUUID();
                     CompletableFuture<IAsyncBankAccount> bankAccountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(targetUUID);
                     bankAccountFuture.thenAcceptAsync((bankAccount) -> {

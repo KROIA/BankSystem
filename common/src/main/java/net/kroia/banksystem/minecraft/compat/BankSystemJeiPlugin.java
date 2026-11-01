@@ -19,7 +19,8 @@ import net.kroia.banksystem.screen.custom.BankDownloadScreen;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
 import net.kroia.banksystem.screen.custom.ShareStamperScreen;
 import net.minecraft.client.renderer.Rect2i;
-import net.minecraft.resources.ResourceLocation;
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.crafting.CraftingRecipe;
@@ -97,10 +98,12 @@ public class BankSystemJeiPlugin implements IModPlugin {
     {
         //JEIIntegration.registerPlugin(new BankSystemJeiPlugin());
     }
-    private static final ResourceLocation PLUGIN_UID = ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "jei_plugin");
+    //private static final ResourceLocation PLUGIN_UID = ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "jei_plugin"); // mc<=1.21.10
+    private static final Identifier PLUGIN_UID = Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "jei_plugin"); // mc>=1.21.11
 
     @Override
-    public ResourceLocation getPluginUid() {
+    //public ResourceLocation getPluginUid() { // mc<=1.21.10
+    public Identifier getPluginUid() { // mc>=1.21.11
         return PLUGIN_UID;
     }
 

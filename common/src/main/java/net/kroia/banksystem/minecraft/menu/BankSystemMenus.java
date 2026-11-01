@@ -11,7 +11,8 @@ import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.minecraft.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.minecraft.menu.custom.ShareStamperContainerMenu;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.inventory.MenuType;
 
 import java.util.function.Supplier;
@@ -36,14 +37,18 @@ public class BankSystemMenus {
     }
 
     public static final RegistrySupplier<MenuType<BankTerminalContainerMenu>> BANK_TERMINAL_CONTAINER_MENU =
-            MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_terminal_container_menu"), () -> MenuRegistry.ofExtended(BankTerminalContainerMenu::new));
+            //MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_terminal_container_menu"), () -> MenuRegistry.ofExtended(BankTerminalContainerMenu::new)); // mc<=1.21.10
+            MENUS.register(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_terminal_container_menu"), () -> MenuRegistry.ofExtended(BankTerminalContainerMenu::new)); // mc>=1.21.11
     public static final RegistrySupplier<MenuType<BankUploadContainerMenu>> BANK_UPLOAD_CONTAINER_MENU =
-            MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_upload_container_menu"), () -> MenuRegistry.ofExtended(BankUploadContainerMenu::new));
+            //MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_upload_container_menu"), () -> MenuRegistry.ofExtended(BankUploadContainerMenu::new)); // mc<=1.21.10
+            MENUS.register(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_upload_container_menu"), () -> MenuRegistry.ofExtended(BankUploadContainerMenu::new)); // mc>=1.21.11
     public static final RegistrySupplier<MenuType<BankDownloadContainerMenu>> BANK_DOWNLOAD_CONTAINER_MENU =
-            MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_download_container_menu"), () -> MenuRegistry.ofExtended(BankDownloadContainerMenu::new));
+            //MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_download_container_menu"), () -> MenuRegistry.ofExtended(BankDownloadContainerMenu::new)); // mc<=1.21.10
+            MENUS.register(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "bank_download_container_menu"), () -> MenuRegistry.ofExtended(BankDownloadContainerMenu::new)); // mc>=1.21.11
     // Task #47 (v2.1.0) — Share Stamper menu.
     public static final RegistrySupplier<MenuType<ShareStamperContainerMenu>> SHARE_STAMPER_CONTAINER_MENU =
-            MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "share_stamper_container_menu"), () -> MenuRegistry.ofExtended(ShareStamperContainerMenu::new));
+            //MENUS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "share_stamper_container_menu"), () -> MenuRegistry.ofExtended(ShareStamperContainerMenu::new)); // mc<=1.21.10
+            MENUS.register(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "share_stamper_container_menu"), () -> MenuRegistry.ofExtended(ShareStamperContainerMenu::new)); // mc>=1.21.11
 
 
 }
