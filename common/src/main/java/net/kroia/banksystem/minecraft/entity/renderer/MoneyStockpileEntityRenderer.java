@@ -109,14 +109,16 @@ public class MoneyStockpileEntityRenderer implements BlockEntityRenderer<MoneySt
 
     private static void applyFacing(PoseStack poseStack, Direction facing) {
         poseStack.translate(0.5, 0, 0.5);
-        poseStack.mulPose(new Quaternionf().rotationY(getFacingAngle(facing)));
+        poseStack.mulPose(new Quaternionf().rotationY(getFacingAngle(facing))); // mc<=26.2
+        //poseStack.rotate(new Quaternionf().rotationY(getFacingAngle(facing))); // mc>=26.3
         poseStack.translate(-0.5, 0, -0.5);
     }
 
     private static void applyItemTransform(PoseStack poseStack, float x, float y, float z) {
         poseStack.translate(x, y, z);
         poseStack.scale(scale, scale, scale);
-        poseStack.mulPose(rotation);
+        poseStack.mulPose(rotation); // mc<=26.2
+        //poseStack.rotate(rotation); // mc>=26.3
     }
 
     /** Lays out every item of the stockpile as towers of up to 64 on a 6x6 grid. */
