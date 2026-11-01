@@ -117,7 +117,8 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
     }
 
     @Override
-    protected void spawnDestroyParticles(Level level, Player player, BlockPos pos, BlockState state) {
+    protected void spawnDestroyParticles(Level level, Player player, BlockPos pos, BlockState state) { // mc<=26.2
+    //public void spawnDestroyByEntityParticles(Level level, net.minecraft.world.entity.Entity player, BlockPos pos, BlockState state) { // mc>=26.3
 
     }
     private VoxelShape getShape(BlockGetter level, BlockPos pos)
