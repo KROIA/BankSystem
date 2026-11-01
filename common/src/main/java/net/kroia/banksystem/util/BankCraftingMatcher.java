@@ -128,15 +128,14 @@ public final class BankCraftingMatcher {
         // Stage 1: physical-only match (covers ALL crafting recipe classes).
         CraftingInput physicalInput = CraftingInput.of(GRID_WIDTH, GRID_HEIGHT, grid);
         if (!physicalInput.isEmpty()) {
-            Optional<RecipeHolder<CraftingRecipe>> physical =
-                    level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING, physicalInput, level);
-            if (physical.isPresent()) {
-                ItemStack result = physical.get().value().assemble(physicalInput, level.registryAccess());
+            RecipeHolder<CraftingRecipe> physical = findPhysical(level, physicalInput);
+            if (physical != null) {
+                ItemStack result = physical.value().assemble(physicalInput, level.registryAccess());
                 if (!result.isEmpty()) {
                     ItemStack[] virtualGrid = new ItemStack[GRID_SIZE];
                     for (int i = 0; i < GRID_SIZE; i++)
                         virtualGrid[i] = grid.get(i).copy();
-                    return new Match(physical.get(), result, virtualGrid, new ItemID[GRID_SIZE], Map.of());
+                    return new Match(physical, result, virtualGrid, new ItemID[GRID_SIZE], Map.of());
                 }
             }
         }
@@ -159,10 +158,19 @@ public final class BankCraftingMatcher {
         if (physicalInput.isEmpty())
             return null;
 
-        for (RecipeHolder<CraftingRecipe> holder : level.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING)) {
+        for (RecipeHolder<CraftingRecipe> holder : BankCraftingRecipes.all(level)) {
             Match match = tryRecipe(level, holder, grid, candidates);
             if (match != null)
                 return match;
+        }
+        return null;
+    }
+
+    /** First recipe whose {@code matches} accepts the physical grid (same order on client and server). */
+    private static @Nullable RecipeHolder<CraftingRecipe> findPhysical(Level level, CraftingInput input) {
+        for (RecipeHolder<CraftingRecipe> holder : BankCraftingRecipes.all(level)) {
+            if (holder.value().matches(input, level))
+                return holder;
         }
         return null;
     }
@@ -175,7 +183,7 @@ public final class BankCraftingMatcher {
     private static @Nullable Match tryRecipe(Level level, RecipeHolder<CraftingRecipe> holder,
                                              List<ItemStack> grid, List<Map.Entry<ItemID, BankData>> candidates) {
         CraftingRecipe recipe = holder.value();
-        if (!recipe.canCraftInDimensions(GRID_WIDTH, GRID_HEIGHT))
+        if (!BankCraftingRecipes.fits3x3(recipe))
             return null;
         if (recipe instanceof ShapedRecipe shaped)
             return tryShaped(level, holder, shaped, grid, candidates);
@@ -198,20 +206,20 @@ public final class BankCraftingMatcher {
             int height = shaped.getHeight();
             if (width > GRID_WIDTH || height > GRID_HEIGHT)
                 return layout;
-            List<Ingredient> ingredients = shaped.getIngredients();
+            List<Ingredient> ingredients = BankCraftingRecipes.ingredients(shaped);
             for (int row = 0; row < height; row++) {
                 for (int col = 0; col < width; col++) {
                     Ingredient ingredient = ingredients.get(row * width + col);
-                    if (ingredient != null && !ingredient.isEmpty())
+                    if (!BankCraftingRecipes.isEmpty(ingredient))
                         layout[row * GRID_WIDTH + col] = ingredient;
                 }
             }
         } else if (recipe instanceof ShapelessRecipe shapeless) {
             int slot = 0;
-            for (Ingredient ingredient : shapeless.getIngredients()) {
+            for (Ingredient ingredient : BankCraftingRecipes.ingredients(shapeless)) {
                 if (slot >= GRID_SIZE)
                     break;
-                if (ingredient != null && !ingredient.isEmpty())
+                if (!BankCraftingRecipes.isEmpty(ingredient))
                     layout[slot++] = ingredient;
             }
         }
@@ -251,13 +259,13 @@ public final class BankCraftingMatcher {
         List<RecipeHolder<CraftingRecipe>> out = new ArrayList<>();
         if (product.isEmpty())
             return out;
-        for (RecipeHolder<CraftingRecipe> holder : level.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING)) {
+        for (RecipeHolder<CraftingRecipe> holder : BankCraftingRecipes.all(level)) {
             CraftingRecipe recipe = holder.value();
             if (!(recipe instanceof ShapedRecipe) && !(recipe instanceof ShapelessRecipe))
                 continue;
-            if (!recipe.canCraftInDimensions(GRID_WIDTH, GRID_HEIGHT))
+            if (!BankCraftingRecipes.fits3x3(recipe))
                 continue;
-            ItemStack result = recipe.getResultItem(level.registryAccess());
+            ItemStack result = BankCraftingRecipes.resultOf(holder, level.registryAccess());
             if (!result.isEmpty() && ItemStack.isSameItemSameComponents(result, product))
                 out.add(holder);
         }
@@ -276,11 +284,11 @@ public final class BankCraftingMatcher {
         CraftingRecipe recipe = holder.value();
         if (!(recipe instanceof ShapedRecipe) && !(recipe instanceof ShapelessRecipe))
             return false;
-        if (!recipe.canCraftInDimensions(GRID_WIDTH, GRID_HEIGHT))
+        if (!BankCraftingRecipes.fits3x3(recipe))
             return false;
         List<Ingredient> needed = new ArrayList<>();
-        for (Ingredient ingredient : recipe.getIngredients()) {
-            if (ingredient != null && !ingredient.isEmpty())
+        for (Ingredient ingredient : BankCraftingRecipes.ingredients(recipe)) {
+            if (!BankCraftingRecipes.isEmpty(ingredient))
                 needed.add(ingredient);
         }
         if (needed.isEmpty() || needed.size() > GRID_SIZE)
@@ -309,10 +317,7 @@ public final class BankCraftingMatcher {
 
     /** First display stack of an ingredient, or null when it has none (empty cell). */
     private static @Nullable ItemStack representative(@Nullable Ingredient ingredient) {
-        if (ingredient == null || ingredient.isEmpty())
-            return null;
-        ItemStack[] items = ingredient.getItems();
-        return items.length > 0 ? items[0] : null;
+        return BankCraftingRecipes.representative(ingredient);
     }
 
     /**
@@ -341,7 +346,7 @@ public final class BankCraftingMatcher {
         int height = recipe.getHeight();
         if (width > GRID_WIDTH || height > GRID_HEIGHT)
             return null;
-        List<Ingredient> ingredients = recipe.getIngredients(); // row-major, size width*height
+        List<Ingredient> ingredients = BankCraftingRecipes.ingredients(recipe); // row-major, size width*height, null = empty
 
         for (int mirror = 0; mirror <= 1; mirror++) {
             for (int offsetY = 0; offsetY <= GRID_HEIGHT - height; offsetY++) {
@@ -366,7 +371,7 @@ public final class BankCraftingMatcher {
 
     private static @Nullable Match tryShapeless(Level level, RecipeHolder<CraftingRecipe> holder, ShapelessRecipe recipe,
                                                 List<ItemStack> grid, List<Map.Entry<ItemID, BankData>> candidates) {
-        List<Ingredient> ingredients = recipe.getIngredients();
+        List<Ingredient> ingredients = BankCraftingRecipes.ingredients(recipe);
         if (ingredients.isEmpty() || ingredients.size() > GRID_SIZE)
             return null;
 
@@ -442,7 +447,7 @@ public final class BankCraftingMatcher {
         for (int i = 0; i < GRID_SIZE; i++) {
             ItemStack physical = grid.get(i);
             Ingredient ingredient = expected[i];
-            boolean ingredientEmpty = ingredient == null || ingredient.isEmpty();
+            boolean ingredientEmpty = BankCraftingRecipes.isEmpty(ingredient);
             if (ingredientEmpty) {
                 if (!physical.isEmpty())
                     return null; // grid item outside the recipe pattern

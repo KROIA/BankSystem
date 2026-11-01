@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.block.custom;
 
+import net.kroia.banksystem.util.BankCraftingRecipes;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
@@ -50,6 +51,7 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
 
         // open screen
         if (player instanceof ServerPlayer sPlayer) {
+            BankCraftingRecipes.syncTo(sPlayer); // client needs the recipes before the screen opens
             MenuProvider menuProvider = blockEntity.getMenuProvider();
             // Open the menu
             openExtendedMenu(sPlayer, menuProvider, (menu) -> {

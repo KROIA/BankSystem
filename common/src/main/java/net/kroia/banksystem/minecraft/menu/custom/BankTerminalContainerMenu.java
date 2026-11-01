@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.menu.custom;
 
+import net.kroia.banksystem.util.BankCraftingRecipes;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IAsyncBank;
@@ -258,7 +259,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         if (!player.level().isClientSide)
             return;
         this.ghostRecipe = recipe;
-        SetBankTerminalGhostRecipePacket.sendPacketToServer(getBlockPos(), recipe.id());
+        SetBankTerminalGhostRecipePacket.sendPacketToServer(getBlockPos(), BankCraftingRecipes.id(recipe));
     }
 
     /**
@@ -266,16 +267,13 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * holder, or null (with a log warning) when the id is unknown or ineligible.
      */
     private @Nullable RecipeHolder<CraftingRecipe> resolveCraftingRecipe(net.minecraft.resources.ResourceLocation recipeId) {
-        var holder = player.level().getRecipeManager().byKey(recipeId).orElse(null);
-        if (holder == null || !(holder.value() instanceof CraftingRecipe craftingRecipe)
-                || !craftingRecipe.canCraftInDimensions(BankCraftingMatcher.GRID_WIDTH, BankCraftingMatcher.GRID_HEIGHT)) {
+        RecipeHolder<CraftingRecipe> holder = BankCraftingRecipes.byId(player.level(), recipeId);
+        if (holder == null || !BankCraftingRecipes.fits3x3(holder.value())) {
             warn("Rejected recipe " + recipeId + " for player " + player.getUUID()
                     + " (not a 3x3-craftable crafting recipe)");
             return null;
         }
-        @SuppressWarnings("unchecked")
-        RecipeHolder<CraftingRecipe> craftingHolder = (RecipeHolder<CraftingRecipe>) holder;
-        return craftingHolder;
+        return holder;
     }
 
     /**
@@ -971,8 +969,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         CraftingInput virtualInput = positioned.input();
         int left = positioned.left();
         int top = positioned.top();
-        NonNullList<ItemStack> remainders = player.level().getRecipeManager()
-                .getRemainingItemsFor(RecipeType.CRAFTING, virtualInput, player.level());
+        NonNullList<ItemStack> remainders = match.recipe().value().getRemainingItems(virtualInput);
 
         suppressRecipeUpdate = true;
         try {

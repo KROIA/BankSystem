@@ -1,5 +1,6 @@
 package net.kroia.banksystem.screen.custom;
 
+import net.kroia.banksystem.util.BankCraftingRecipes;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.BankCraftingMatcher;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
@@ -142,7 +143,7 @@ public class CraftingRecipeSelectionScreen extends BankSystemGuiScreen {
         for (Candidate candidate : candidates) {
             if (clientLevel == null)
                 break;
-            ItemStack result = candidate.recipe().value().getResultItem(clientLevel.registryAccess());
+            ItemStack result = BankCraftingRecipes.resultOf(candidate.recipe(), clientLevel.registryAccess());
             RecipeButton row = new RecipeButton(candidate, result);
             row.setOnRisingEdge(() -> {
                 onSelected.accept(candidate.recipe());

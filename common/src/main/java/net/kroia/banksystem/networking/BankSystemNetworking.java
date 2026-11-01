@@ -96,6 +96,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
         // Task #46 (v2.1.0) — Company share visuals + supply sync (S2C).
         registerS2C(S2CCompanyVisualUpdatePacket.TYPE, S2CCompanyVisualUpdatePacket.STREAM_CODEC);
         registerS2C(S2CCompanyVisualBulkPacket.TYPE, S2CCompanyVisualBulkPacket.STREAM_CODEC);
+        registerS2C(net.kroia.banksystem.networking.entity.S2CCraftingRecipesPacket.TYPE, net.kroia.banksystem.networking.entity.S2CCraftingRecipesPacket.STREAM_CODEC);
         registerS2C(S2CCompanyVisualSupplyUpdatePacket.TYPE, S2CCompanyVisualSupplyUpdatePacket.STREAM_CODEC);
         // Task #51 (v2.1.0, spec §1.4) — Company.description propagation (S2C).
         registerS2C(net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket.TYPE,

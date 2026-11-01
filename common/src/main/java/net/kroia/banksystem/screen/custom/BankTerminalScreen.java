@@ -1,5 +1,6 @@
 package net.kroia.banksystem.screen.custom;
 
+import net.kroia.banksystem.util.BankCraftingRecipes;
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
@@ -864,7 +865,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         if (useBankItemsCheckBox.isChecked())
             menu.requestGhostRecipe(recipe); // existing ghost path (server-validated)
         else
-            FillBankTerminalCraftingGridPacket.sendPacketToServer(menu.getBlockPos(), recipe.id());
+            FillBankTerminalCraftingGridPacket.sendPacketToServer(menu.getBlockPos(), BankCraftingRecipes.id(recipe));
         ghostsDirty = true;
     }
 

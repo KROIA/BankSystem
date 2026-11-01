@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.compat;
 
+import net.kroia.banksystem.util.BankCraftingRecipes;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.constants.RecipeTypes;
@@ -199,7 +200,7 @@ public class BankSystemJeiPlugin implements IModPlugin {
                                                              boolean maxTransfer, boolean doTransfer) {
             CraftingRecipe craftingRecipe = recipe.value();
             boolean bankCompletable = (craftingRecipe instanceof ShapedRecipe || craftingRecipe instanceof ShapelessRecipe)
-                    && craftingRecipe.canCraftInDimensions(3, 3);
+                    && BankCraftingRecipes.fits3x3(craftingRecipe);
             if (container.isUseBankItems() && bankCompletable) {
                 // Ghost mode: no items are moved, so there is nothing to
                 // pre-validate — the button is always available and the server
