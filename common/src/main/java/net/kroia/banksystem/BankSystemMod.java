@@ -14,8 +14,20 @@ public final class BankSystemMod {
     }
     public static final String VERSION = "2.2.0";
 
-    // Set to false for release builds to hide dev-only commands (exportrecipes, etc.)
-    public static final boolean ENABLE_DEV_FEATURES = true;
+    // Dev-only code (unit tests, test commands) is switched by enable_dev_features in gradle.properties:
+    // Gradle compiles the testing package only when it is true, and this flag follows from its presence.
+    // It also gates the exportrecipes command and async debug logging.
+    public static final String DEV_BOOTSTRAP = "net.kroia.banksystem.testing.DevBootstrap";
+    public static final boolean ENABLE_DEV_FEATURES = devClassesPresent();
+
+    private static boolean devClassesPresent() {
+        try {
+            Class.forName(DEV_BOOTSTRAP, false, BankSystemMod.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
 
     /**
      * Maximum squared distance (in blocks²) between a player and a block-entity position
