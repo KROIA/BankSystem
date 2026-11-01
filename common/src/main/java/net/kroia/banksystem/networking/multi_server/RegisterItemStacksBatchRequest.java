@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.multi_server;
 
+import net.kroia.banksystem.util.ItemStackNbt;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
@@ -107,9 +108,9 @@ public class RegisterItemStacksBatchRequest extends BankSystemGenericRequest<Reg
                 continue;
             }
             try {
-                CompoundTag itemStackTag = new CompoundTag();
-                stack.save(access, itemStackTag);
-                encoded.add(itemStackTag);
+                // The codec merges into a COPY of the prefix tag (NbtOps.mergeToMap), so the
+                // returned tag must be used; the old code sent the empty prefix instead.
+                encoded.add((CompoundTag) ItemStackNbt.save(stack, access, new CompoundTag()));
             } catch (Throwable t) {
                 // Serialization failure on the slave side (e.g. cross-registry Holder issue)
                 // — put an empty tag so the master's parse fails cleanly for this slot only.
@@ -198,7 +199,7 @@ public class RegisterItemStacksBatchRequest extends BankSystemGenericRequest<Reg
             }
             Optional<ItemStack> parsed;
             try {
-                parsed = ItemStack.parse(access, tag);
+                parsed = ItemStackNbt.parse(access, tag);
             } catch (Throwable t) {
                 // Defensive: ItemStack.parse should return Optional.empty() on failure, but a
                 // malformed NBT could still surface as an exception. Treat as a normal per-slot

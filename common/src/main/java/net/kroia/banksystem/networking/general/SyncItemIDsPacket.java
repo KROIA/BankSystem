@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.general;
 
+import net.kroia.banksystem.util.ItemStackNbt;
 import net.kroia.modutilities.NbtCompat;
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
@@ -145,7 +146,7 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
                 continue;
             try
             {
-                Tag stackTag = stack.save(access, new CompoundTag());
+                Tag stackTag = ItemStackNbt.save(stack, access, new CompoundTag());
                 if(stackTag instanceof CompoundTag compoundTag)
                     tags.put(entry.getKey(), compoundTag);
             }
