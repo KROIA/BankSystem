@@ -7,8 +7,10 @@ public final class BankSystemMod {
     public static final String MOD_ID = "banksystem";
 
     /** Registry id in the banksystem namespace. */
-    public static net.minecraft.resources.ResourceLocation id(String path) {
-        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
+    public static net.minecraft.resources.ResourceLocation id(String path) { // mc<=1.21.10
+    //public static net.minecraft.resources.Identifier id(String path) { // mc>=1.21.11
+        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(MOD_ID, path); // mc<=1.21.10
+        //return net.minecraft.resources.Identifier.fromNamespaceAndPath(MOD_ID, path); // mc>=1.21.11
     }
     public static final String VERSION = "2.2.0";
 

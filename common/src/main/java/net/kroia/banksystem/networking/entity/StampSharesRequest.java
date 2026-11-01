@@ -9,7 +9,8 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.NotNull;
@@ -26,7 +27,8 @@ public class StampSharesRequest extends BankSystemNetworkPacket {
     public enum Op { UNUSED_LEGACY_0, SET_MODE, UNUSED_LEGACY_1, BIND_COMPANY, SET_PROCESSING, SET_AUTO_IO }
 
     public static final Type<StampSharesRequest> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "stamp_shares_request"));
+            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "stamp_shares_request")); // mc<=1.21.10
+            //Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "stamp_shares_request")); // mc>=1.21.11
 
     public static final StreamCodec<RegistryFriendlyByteBuf, StampSharesRequest> STREAM_CODEC = StreamCodec.composite(
             BlockPos.STREAM_CODEC, p -> p.pos,

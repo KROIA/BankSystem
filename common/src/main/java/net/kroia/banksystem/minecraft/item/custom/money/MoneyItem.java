@@ -1,6 +1,7 @@
 package net.kroia.banksystem.minecraft.item.custom.money;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.kroia.modutilities.RegistryCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
@@ -53,7 +54,8 @@ public class MoneyItem extends Item{
         this(BankSystemMod.id(NAME));
     }
     /** Subclasses pass the id they are registered under. */
-    protected MoneyItem(ResourceLocation id) {
+    protected MoneyItem(ResourceLocation id) { // mc<=1.21.10
+    //protected MoneyItem(Identifier id) { // mc>=1.21.11
         //super(new Properties().tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB)); // 1.19.2 and below
         super(RegistryCompat.itemProperties(new Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB), id));
     }
