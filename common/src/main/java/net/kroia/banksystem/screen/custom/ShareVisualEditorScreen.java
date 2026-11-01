@@ -86,7 +86,7 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
 
     public static void openScreen(GuiScreen parent, int companyId, UUID caller, boolean canManage) {
         ShareVisuals current = ShareVisualCache.getVisualsOrPlaceholder(companyId);
-        Minecraft.getInstance().setScreen(new ShareVisualEditorScreen(parent, companyId, current, caller, canManage));
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(new ShareVisualEditorScreen(parent, companyId, current, caller, canManage));
     }
 
     private void setupUi(ShareVisuals initial) {
@@ -204,7 +204,7 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
     private void closeToParent() {
         ShareVisualPreview.clear();
         if (parent != null && this.minecraft != null) {
-            this.minecraft.setScreen(parent);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(parent);
         } else {
             super.onClose();
         }

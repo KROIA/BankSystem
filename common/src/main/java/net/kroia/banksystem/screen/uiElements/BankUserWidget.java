@@ -95,7 +95,7 @@ public class BankUserWidget extends BankSystemGuiElement {
         public void onClose() {
             super.onClose();
             if (parentScreen != null) {
-                minecraft.setScreen(parentScreen);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(parentScreen);
             }
         }
 
@@ -236,7 +236,7 @@ public class BankUserWidget extends BankSystemGuiElement {
                 if (onPermissionChanged != null)
                     onPermissionChanged.run();
             }, parentScreen);
-            Minecraft.getInstance().setScreen(permissionEditScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(permissionEditScreen);
         }
     }
     private void onRemoveButtonClicked() {
