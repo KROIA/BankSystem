@@ -288,6 +288,9 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
         return resultStack;
     }
 
+    //@Override // mc>=1.21.5
+    //public void preRemoveSideEffects(BlockPos pos, BlockState state) { dropItems(); } // mc>=1.21.5
+
     public void dropItems()
     {
         if (level == null || level.isClientSide()) {

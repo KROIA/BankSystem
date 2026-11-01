@@ -164,7 +164,8 @@ public final class ClientSymbolRegistry {
                     com.mojang.blaze3d.platform.NativeImage.read(
                             new ByteArrayInputStream(bytes));
             net.minecraft.client.renderer.texture.DynamicTexture tex =
-                    new net.minecraft.client.renderer.texture.DynamicTexture(img);
+                    new net.minecraft.client.renderer.texture.DynamicTexture(img); // mc<=1.21.4
+                    //new net.minecraft.client.renderer.texture.DynamicTexture(() -> "banksystem_share_symbol", img); // mc>=1.21.5
             mc.getTextureManager().register(getDynamicRL(id), tex);
             dynamicTextureIds.add(id);
         } catch (Exception e) {

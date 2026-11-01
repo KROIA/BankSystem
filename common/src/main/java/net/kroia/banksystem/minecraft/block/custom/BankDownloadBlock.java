@@ -92,17 +92,12 @@ public class BankDownloadBlock extends Block implements EntityBlock {
     }
 
 
-    @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
-        // Drop items only if the block is replaced by a different block
-        if (!state.is(newState.getBlock())) {
-            BlockEntity blockEntity = level.getBlockEntity(pos);
-            if (blockEntity instanceof BankDownloadBlockEntity storageBlockEntity) {
-                storageBlockEntity.dropContents();
-            }
-            super.onRemove(state, level, pos, newState, isMoving); // Ensure the block gets properly removed
-        }
-    }
+    // Drops are done by the block entity (preRemoveSideEffects from 1.21.5).
+    @Override // mc<=1.21.4
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) { // mc<=1.21.4
+        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof BankDownloadBlockEntity be) be.dropContents(); // mc<=1.21.4
+        super.onRemove(state, level, pos, newState, isMoving); // mc<=1.21.4
+    } // mc<=1.21.4
 
 
     @Override
