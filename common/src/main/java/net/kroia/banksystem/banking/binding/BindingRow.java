@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.binding;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.NotNull;
@@ -149,13 +150,13 @@ public final class BindingRow {
         if (tag == null) return null;
         if (!tag.contains(NBT_ACCOUNT_ID) || !tag.contains(NBT_ITEM_SHORT) || !tag.contains(NBT_REF))
             return null;
-        int accountId = tag.getInt(NBT_ACCOUNT_ID);
-        short itemShort = tag.getShort(NBT_ITEM_SHORT);
-        ExternalAccountRef ref = ExternalAccountRef.fromNbt(tag.getCompound(NBT_REF));
+        int accountId = NbtCompat.getInt(tag, NBT_ACCOUNT_ID);
+        short itemShort = NbtCompat.getShort(tag, NBT_ITEM_SHORT);
+        ExternalAccountRef ref = ExternalAccountRef.fromNbt(NbtCompat.getCompound(tag, NBT_REF));
         if (ref == null) return null;
-        long locked = tag.contains(NBT_LOCKED_BALANCE) ? tag.getLong(NBT_LOCKED_BALANCE) : 0L;
-        long dust = tag.contains(NBT_DUST_BALANCE) ? tag.getLong(NBT_DUST_BALANCE) : 0L;
-        long boundAt = tag.contains(NBT_BOUND_AT) ? tag.getLong(NBT_BOUND_AT) : 0L;
+        long locked = tag.contains(NBT_LOCKED_BALANCE) ? NbtCompat.getLong(tag, NBT_LOCKED_BALANCE) : 0L;
+        long dust = tag.contains(NBT_DUST_BALANCE) ? NbtCompat.getLong(tag, NBT_DUST_BALANCE) : 0L;
+        long boundAt = tag.contains(NBT_BOUND_AT) ? NbtCompat.getLong(tag, NBT_BOUND_AT) : 0L;
         return new BindingRow(accountId, itemShort, ref, locked, dust, boundAt);
     }
 

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
@@ -103,9 +104,9 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
             }
             itemID = new ItemID(ItemID.INVALID_ID);
             itemID.load(tag); // Assuming ItemID has a load method
-            amount = tag.getInt("amount");
-            gridSpacesPerItemType = tag.getInt("gridSpacesPerItemType");
-            usesGridSpaces = tag.getInt("usesGridSpaces");
+            amount = NbtCompat.getInt(tag, "amount");
+            gridSpacesPerItemType = NbtCompat.getInt(tag, "gridSpacesPerItemType");
+            usesGridSpaces = NbtCompat.getInt(tag, "usesGridSpaces");
             return true;
         }
     }
@@ -330,17 +331,17 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
     @Override
     public void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) {
         super.loadAdditional(tag, provider);
-        sum = tag.getInt("sum");
+        sum = NbtCompat.getInt(tag, "sum");
         if (tag.contains("facing")) {
-            Direction dir = Direction.byName(tag.getString("facing"));
+            Direction dir = Direction.byName(NbtCompat.getString(tag, "facing"));
             if (dir != null && dir.getAxis().isHorizontal()) {
                 facing = dir;
             }
         }
         items.clear();
-        ListTag itemsTag = tag.getList("items", 10); // 10 is the type ID for CompoundTag
+        ListTag itemsTag = NbtCompat.getList(tag, "items", 10); // 10 is the type ID for CompoundTag
         for (int i = 0; i < itemsTag.size(); i++) {
-            CompoundTag itemTag = itemsTag.getCompound(i);
+            CompoundTag itemTag = NbtCompat.getCompound(itemsTag, i);
             ItemData itemData = new ItemData();
             if (itemData.load(itemTag)) {
                 items.put(itemData.getItemID(), itemData); // Load ItemData from tag

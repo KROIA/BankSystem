@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
@@ -596,14 +597,14 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 return false;
             if(!tag.contains("Slots"))
                 return false;
-            ListTag inventoryTag = tag.getList("Slots", CompoundTag.TAG_COMPOUND);
+            ListTag inventoryTag = NbtCompat.getList(tag, "Slots", CompoundTag.TAG_COMPOUND);
             for(int i = 0; i < inventoryTag.size(); i++)
             {
-                CompoundTag itemTag = inventoryTag.getCompound(i);
+                CompoundTag itemTag = NbtCompat.getCompound(inventoryTag, i);
                 if(!itemTag.contains("Slot") || !itemTag.contains("ItemStack"))
                     return false;
-                int slot = itemTag.getInt("Slot");
-                CompoundTag stackTag = itemTag.getCompound("ItemStack");
+                int slot = NbtCompat.getInt(itemTag, "Slot");
+                CompoundTag stackTag = NbtCompat.getCompound(itemTag, "ItemStack");
                 ItemStack stack = ItemStack.parse(pRegistries,
                                 stackTag)
                         .orElse(ItemStack.EMPTY);
@@ -740,7 +741,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
         @Override
         public boolean save(CompoundTag tag) {
-            tag.putUUID("PlayerID", playerID);
+            NbtCompat.putUUID(tag, "PlayerID", playerID);
             CompoundTag inventoryTag = new CompoundTag();
             inventory.setRegistryProvider(pRegistries);
             if(!inventory.save(inventoryTag))
@@ -762,16 +763,16 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             if(tag == null)
                 return false;
             if(tag.contains("PlayerID"))
-                playerID = tag.getUUID("PlayerID");
+                playerID = NbtCompat.getUUID(tag, "PlayerID");
 
             if(tag.contains("Inventory")) {
-                CompoundTag inventoryTag = tag.getCompound("Inventory");
+                CompoundTag inventoryTag = NbtCompat.getCompound(tag, "Inventory");
                 inventory.setRegistryProvider(pRegistries);
                 inventory.load(inventoryTag);
             }
             //CompoundTag transferTaskTag = tag.getCompound("TransferTask");
             if(tag.contains("SelectedBankAccount"))
-                selectedBankAccount = tag.getInt("SelectedBankAccount");
+                selectedBankAccount = NbtCompat.getInt(tag, "SelectedBankAccount");
 
            // transferTask = TransferTask.createFromTag(blockEntity,transferTaskTag);
             //return transferTask != null;
@@ -800,12 +801,12 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     @Override
     public void loadAdditional(CompoundTag nbt, HolderLookup.Provider pRegistries) {
         super.loadAdditional(nbt, pRegistries);
-        CompoundTag data = nbt.getCompound(BankSystemMod.MOD_ID);
+        CompoundTag data = NbtCompat.getCompound(nbt, BankSystemMod.MOD_ID);
 
-        ListTag playerDataTag = data.getList("PlayerData", ListTag.TAG_COMPOUND);
+        ListTag playerDataTag = NbtCompat.getList(data, "PlayerData", ListTag.TAG_COMPOUND);
         for(int i = 0; i < playerDataTag.size(); i++)
         {
-            CompoundTag playerDataCompound = playerDataTag.getCompound(i);
+            CompoundTag playerDataCompound = NbtCompat.getCompound(playerDataTag, i);
             PlayerData playerData = PlayerData.createFromTag(this, playerDataCompound, pRegistries);
             if(playerData != null)
             {

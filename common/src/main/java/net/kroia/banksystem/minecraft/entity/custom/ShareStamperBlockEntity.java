@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
@@ -328,25 +329,25 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         NonNullList<ItemStack> tmp = NonNullList.withSize(items.size(), ItemStack.EMPTY);
         net.minecraft.world.ContainerHelper.loadAllItems(tag, tmp, p);
         for (int i = 0; i < tmp.size(); i++) items.set(i, tmp.get(i));
-        boundCompanyId = tag.contains("BoundCompanyId") ? tag.getInt("BoundCompanyId") : -1;
-        linkedByUUID = tag.hasUUID("LinkedByUUID") ? tag.getUUID("LinkedByUUID") : null;
-        linkedAt = tag.getLong("LinkedAt");
-        stampProgress = tag.getInt("StampProgress");
-        mode = tag.getInt("Mode") == 1 ? Mode.REDEEM : Mode.STAMP;
+        boundCompanyId = tag.contains("BoundCompanyId") ? NbtCompat.getInt(tag, "BoundCompanyId") : -1;
+        linkedByUUID = NbtCompat.hasUUID(tag, "LinkedByUUID") ? NbtCompat.getUUID(tag, "LinkedByUUID") : null;
+        linkedAt = NbtCompat.getLong(tag, "LinkedAt");
+        stampProgress = NbtCompat.getInt(tag, "StampProgress");
+        mode = NbtCompat.getInt(tag, "Mode") == 1 ? Mode.REDEEM : Mode.STAMP;
         // Task v2.1.0 — NBT migration: legacy single `AllowHopperRedeem` flag maps to
         // both new autoInput / autoOutput toggles. Legacy `QueuedStamps` field discarded
         // (no back-compat needed beyond load — see COMPLETED_TASKS.md).
         if (tag.contains("AutoInput") || tag.contains("AutoOutput")) {
-            autoInput = tag.getBoolean("AutoInput");
-            autoOutput = tag.getBoolean("AutoOutput");
-        } else if (tag.getBoolean("AllowHopperRedeem")) {
+            autoInput = NbtCompat.getBoolean(tag, "AutoInput");
+            autoOutput = NbtCompat.getBoolean(tag, "AutoOutput");
+        } else if (NbtCompat.getBoolean(tag, "AllowHopperRedeem")) {
             autoInput = true;
             autoOutput = true;
         } else {
             autoInput = false;
             autoOutput = false;
         }
-        processing = tag.getBoolean("Processing");
+        processing = NbtCompat.getBoolean(tag, "Processing");
         // v2.1.0 Bug4 root cause — vanilla BE lifecycle invokes setLevel() BEFORE
         // loadAdditional() during chunk load, so the setLevel() reverse-index register
         // fired with boundCompanyId still at -1 (its default) and persisted bindings
@@ -363,7 +364,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         super.saveAdditional(tag, p);
         net.minecraft.world.ContainerHelper.saveAllItems(tag, items, p);
         tag.putInt("BoundCompanyId", boundCompanyId);
-        if (linkedByUUID != null) tag.putUUID("LinkedByUUID", linkedByUUID);
+        if (linkedByUUID != null) NbtCompat.putUUID(tag, "LinkedByUUID", linkedByUUID);
         tag.putLong("LinkedAt", linkedAt);
         tag.putInt("StampProgress", stampProgress);
         tag.putInt("Mode", mode.ordinal());

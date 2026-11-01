@@ -1,5 +1,6 @@
 package net.kroia.banksystem.screen.widgets;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.InputConstants;
@@ -301,22 +302,22 @@ public class BalanceHistoryChart extends GuiElement {
     public void deserializeState(CompoundTag tag) {
         super.deserializeState(tag);
         if (tag.contains("viewX")) {
-            viewX = tag.getDouble("viewX");
-            viewY = tag.getDouble("viewY");
-            viewWidth = tag.getDouble("viewW");
-            viewHeight = tag.getDouble("viewH");
+            viewX = NbtCompat.getDouble(tag, "viewX");
+            viewY = NbtCompat.getDouble(tag, "viewY");
+            viewWidth = NbtCompat.getDouble(tag, "viewW");
+            viewHeight = NbtCompat.getDouble(tag, "viewH");
         }
-        pinnedSeriesIndex = tag.getInt("pinnedIdx");
+        pinnedSeriesIndex = NbtCompat.getInt(tag, "pinnedIdx");
 
         if (tag.contains("series")) {
             seriesList.clear();
-            ListTag seriesTag = tag.getList("series", 10);
+            ListTag seriesTag = NbtCompat.getList(tag, "series", 10);
             for (int i = 0; i < seriesTag.size(); i++) {
-                CompoundTag st = seriesTag.getCompound(i);
-                LineSeries s = new LineSeries(st.getString("name"), st.getInt("color"));
-                s.visible = st.getBoolean("visible");
-                long[] times = st.getLongArray("times");
-                long[] values = st.getLongArray("values");
+                CompoundTag st = NbtCompat.getCompound(seriesTag, i);
+                LineSeries s = new LineSeries(NbtCompat.getString(st, "name"), NbtCompat.getInt(st, "color"));
+                s.visible = NbtCompat.getBoolean(st, "visible");
+                long[] times = st.get("times") instanceof net.minecraft.nbt.LongArrayTag t ? t.getAsLongArray() : new long[0];
+                long[] values = st.get("values") instanceof net.minecraft.nbt.LongArrayTag v ? v.getAsLongArray() : new long[0];
                 int count = Math.min(times.length, values.length);
                 for (int j = 0; j < count; j++) {
                     s.points.add(new DataPoint(times[j], Double.longBitsToDouble(values[j])));
@@ -329,10 +330,10 @@ public class BalanceHistoryChart extends GuiElement {
         pendingHoverBindingIds.clear();
         hoverBindingsResolved = false;
         if (tag.contains("hoverBindings")) {
-            ListTag hoverTag = tag.getList("hoverBindings", 10);
+            ListTag hoverTag = NbtCompat.getList(tag, "hoverBindings", 10);
             for (int i = 0; i < hoverTag.size(); i++) {
-                CompoundTag ht = hoverTag.getCompound(i);
-                pendingHoverBindingIds.put(ht.getString("id"), ht.getInt("idx"));
+                CompoundTag ht = NbtCompat.getCompound(hoverTag, i);
+                pendingHoverBindingIds.put(NbtCompat.getString(ht, "id"), NbtCompat.getInt(ht, "idx"));
             }
         }
         markDirty();

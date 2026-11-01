@@ -1,6 +1,7 @@
 package net.kroia.banksystem.util;
 
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
@@ -728,7 +729,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
                 return false;
             }
 
-            CompoundTag bankData = data.getCompound("banking");
+            CompoundTag bankData = NbtCompat.getCompound(data, "banking");
 
             OldBankDataLoader oldBankDataLoader = new OldBankDataLoader(bankManager);
             if (oldBankDataLoader.load(bankData)) {
@@ -978,7 +979,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         // saved by a NEWER BankSystem — abort startup exactly like a newer ItemIDs.nbt
         // (save-prohibited so the newer file on disk stays byte-identical).
         int formatVersion = data.contains(BankSystemSaveFormat.KEY_FORMAT_VERSION)
-                ? data.getInt(BankSystemSaveFormat.KEY_FORMAT_VERSION)
+                ? NbtCompat.getInt(data, BankSystemSaveFormat.KEY_FORMAT_VERSION)
                 : 1;
         if (formatVersion > BankSystemSaveFormat.META_DATA_FORMAT_CURRENT)
         {
@@ -996,9 +997,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         // WARN when the saved version is above the running one (likely mod downgrade —
         // the format gate above still guarantees the files are readable, but newer-build
         // behavior differences may surface).
-        if (data.contains("version", Tag.TAG_STRING))
+        if (NbtCompat.contains(data, "version", Tag.TAG_STRING))
         {
-            lastSavedByModVersion = data.getString("version");
+            lastSavedByModVersion = NbtCompat.getString(data, "version");
             info("World last saved by BankSystem " + lastSavedByModVersion + ".");
             if (isVersionNewerThan(lastSavedByModVersion, BankSystemMod.VERSION))
                 warn("This world was last saved by BankSystem " + lastSavedByModVersion
@@ -1008,10 +1009,10 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         }
         // Worlds saved before the merge guard existed have no stored set: null signals the
         // guard to treat this load as a migration (silent healing merge + store the set).
-        if(data.contains(APPLIED_COMPONENT_SET_KEY, Tag.TAG_LIST))
+        if(NbtCompat.contains(data, APPLIED_COMPONENT_SET_KEY, Tag.TAG_LIST))
         {
             List<String> set = new ArrayList<>();
-            ListTag setTag = data.getList(APPLIED_COMPONENT_SET_KEY, Tag.TAG_STRING);
+            ListTag setTag = NbtCompat.getList(data, APPLIED_COMPONENT_SET_KEY, Tag.TAG_STRING);
             for(Tag element : setTag)
                 set.add(element.getAsString());
             storedEffectiveComponentSet = set;
@@ -1021,17 +1022,17 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         }
         // World-repair audit record: adopt what we read so every subsequent save_metadata()
         // re-persists it (the record must never be dropped by an unrelated save).
-        if (data.contains(REPAIR_APPLIED_KEY, Tag.TAG_COMPOUND))
+        if (NbtCompat.contains(data, REPAIR_APPLIED_KEY, Tag.TAG_COMPOUND))
         {
-            CompoundTag repairTag = data.getCompound(REPAIR_APPLIED_KEY);
-            repairAppliedTimestamp = repairTag.getLong("timestamp");
-            repairAppliedModVersion = repairTag.getString("modVersion");
-            repairAppliedChangedShortCount = repairTag.getInt("changedShortCount");
+            CompoundTag repairTag = NbtCompat.getCompound(data, REPAIR_APPLIED_KEY);
+            repairAppliedTimestamp = NbtCompat.getLong(repairTag, "timestamp");
+            repairAppliedModVersion = NbtCompat.getString(repairTag, "modVersion");
+            repairAppliedChangedShortCount = NbtCompat.getInt(repairTag, "changedShortCount");
         }
         // Warn-path acknowledgment (reset first: a world without the key must not inherit a
         // previously loaded world's acknowledgment in the same session).
-        acknowledgedRepairEvidenceHash = data.contains(REPAIR_EVIDENCE_ACK_KEY, Tag.TAG_STRING)
-                ? data.getString(REPAIR_EVIDENCE_ACK_KEY)
+        acknowledgedRepairEvidenceHash = NbtCompat.contains(data, REPAIR_EVIDENCE_ACK_KEY, Tag.TAG_STRING)
+                ? NbtCompat.getString(data, REPAIR_EVIDENCE_ACK_KEY)
                 : null;
         // Renumbering-tripwire digest of the LAST session. Only OVERWRITTEN when the file
         // carries the key; a key-less file RETAINS the previously read digest (see the
@@ -1040,8 +1041,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         // saveAll() drops the digest from disk before the second loadAll() pass). Consumed
         // by loadAll() after the whole load completed; null = no record yet (older save) →
         // the tripwire stays silent.
-        if (data.contains(BankSystemSaveFormat.KEY_ITEM_ID_DIGEST, Tag.TAG_LIST))
-            storedItemIDDigest = data.getList(BankSystemSaveFormat.KEY_ITEM_ID_DIGEST, Tag.TAG_COMPOUND);
+        if (NbtCompat.contains(data, BankSystemSaveFormat.KEY_ITEM_ID_DIGEST, Tag.TAG_LIST))
+            storedItemIDDigest = NbtCompat.getList(data, BankSystemSaveFormat.KEY_ITEM_ID_DIGEST, Tag.TAG_COMPOUND);
         return true;
     }
 

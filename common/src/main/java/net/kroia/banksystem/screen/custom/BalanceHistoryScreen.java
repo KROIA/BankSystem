@@ -1,5 +1,6 @@
 package net.kroia.banksystem.screen.custom;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
@@ -508,14 +509,14 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             // Rolling fetch: leave viewport exactly where the user's drag put it. Y
             // is also left untouched (per spec — user can hit SPACE to auto-center Y).
         } else if (pendingViewport != null) {
-            double y = pendingViewport.getDouble("y");
-            double w = pendingViewport.getDouble("w");
-            double h = pendingViewport.getDouble("h");
-            if (pendingViewport.getBoolean("atPresent")) {
+            double y = NbtCompat.getDouble(pendingViewport, "y");
+            double w = NbtCompat.getDouble(pendingViewport, "w");
+            double h = NbtCompat.getDouble(pendingViewport, "h");
+            if (NbtCompat.getBoolean(pendingViewport, "atPresent")) {
                 chart.setView(0, y, w, h);
                 chart.scrollToLatestData();
             } else {
-                chart.setView(pendingViewport.getDouble("x"), y, w, h);
+                chart.setView(NbtCompat.getDouble(pendingViewport, "x"), y, w, h);
             }
             pendingViewport = null;
             // Saved-viewport restore: bootstrap rolling-fetch mode from the restored
@@ -600,9 +601,9 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private void readDisabledItems(CompoundTag customData) {
         disabledItems.clear();
         if (customData == null || !customData.contains(CUSTOM_DATA_KEY)) return;
-        CompoundTag historyTag = customData.getCompound(CUSTOM_DATA_KEY);
+        CompoundTag historyTag = NbtCompat.getCompound(customData, CUSTOM_DATA_KEY);
         if (!historyTag.contains(DISABLED_ITEMS_KEY)) return;
-        ListTag list = historyTag.getList(DISABLED_ITEMS_KEY, Tag.TAG_SHORT);
+        ListTag list = NbtCompat.getList(historyTag, DISABLED_ITEMS_KEY, Tag.TAG_SHORT);
         for (Tag tag : list) {
             if (tag instanceof ShortTag shortTag) {
                 disabledItems.add(shortTag.getAsShort());
@@ -613,9 +614,9 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private void readViewport(CompoundTag customData) {
         pendingViewport = null;
         if (customData == null || !customData.contains(CUSTOM_DATA_KEY)) return;
-        CompoundTag historyTag = customData.getCompound(CUSTOM_DATA_KEY);
+        CompoundTag historyTag = NbtCompat.getCompound(customData, CUSTOM_DATA_KEY);
         if (historyTag.contains(VIEWPORT_KEY)) {
-            pendingViewport = historyTag.getCompound(VIEWPORT_KEY);
+            pendingViewport = NbtCompat.getCompound(historyTag, VIEWPORT_KEY);
         }
     }
 

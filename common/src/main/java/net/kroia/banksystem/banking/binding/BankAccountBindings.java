@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.binding;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
@@ -392,7 +393,7 @@ public class BankAccountBindings {
         unavailableWarnedKeys.clear();
         dirty = false;
         if (tag == null) return false;
-        int version = tag.contains(NBT_VERSION) ? tag.getInt(NBT_VERSION) : 1;
+        int version = tag.contains(NBT_VERSION) ? NbtCompat.getInt(tag, NBT_VERSION) : 1;
         if (version > SCHEMA_VERSION) {
             warn("BankAccountBindings.nbt has schema version " + version
                     + ", but this build only supports up to " + SCHEMA_VERSION
@@ -400,14 +401,14 @@ public class BankAccountBindings {
                     + "and a fresh (empty) one written in its place.");
             return false;
         }
-        if (!tag.contains(NBT_ROWS, Tag.TAG_LIST)) {
+        if (!NbtCompat.contains(tag, NBT_ROWS, Tag.TAG_LIST)) {
             // Empty but well-formed file — treat as a clean-slate load.
             return true;
         }
-        ListTag rows = tag.getList(NBT_ROWS, Tag.TAG_COMPOUND);
+        ListTag rows = NbtCompat.getList(tag, NBT_ROWS, Tag.TAG_COMPOUND);
         int skipped = 0;
         for (int i = 0; i < rows.size(); i++) {
-            BindingRow row = BindingRow.fromNbt(rows.getCompound(i));
+            BindingRow row = BindingRow.fromNbt(NbtCompat.getCompound(rows, i));
             if (row == null) {
                 skipped++;
                 continue;

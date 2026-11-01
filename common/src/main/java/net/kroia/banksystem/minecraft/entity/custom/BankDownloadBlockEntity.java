@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
@@ -170,15 +171,15 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                     !tag.contains(TAGS.CONDITION) ||
                     !tag.contains(TAGS.CONDITION_VALUE))
                 return null;
-            ItemID itemID = ItemID.createFromTag(tag.getCompound(TAGS.ITEM_ID));
-            int targetAmount = tag.getInt(TAGS.TARGET_AMOUNT);
+            ItemID itemID = ItemID.createFromTag(NbtCompat.getCompound(tag, TAGS.ITEM_ID));
+            int targetAmount = NbtCompat.getInt(tag, TAGS.TARGET_AMOUNT);
             WithdrawCondition condition;
             try {
-                condition = WithdrawCondition.valueOf(tag.getString(TAGS.CONDITION));
+                condition = WithdrawCondition.valueOf(NbtCompat.getString(tag, TAGS.CONDITION));
             } catch (IllegalArgumentException e) {
                 return null;
             }
-            long conditionValue = tag.getLong(TAGS.CONDITION_VALUE);
+            long conditionValue = NbtCompat.getLong(tag, TAGS.CONDITION_VALUE);
             return new WithdrawOrder(itemID, targetAmount, condition, conditionValue);
         }
     }
@@ -226,10 +227,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         if(tag.contains("PlayerOwner") && tag.contains("TargetAmount"))
         {
             // Compatibility, convert to new Block data
-            UUID playerOwner = tag.getUUID("PlayerOwner");
-            int targetAmount = tag.getInt("TargetAmount");
-            inventory.fromTag(tag.getList("Items", Tag.TAG_COMPOUND), provider);
-            blockIsPowered = tag.getBoolean("RecievingEnabled");
+            UUID playerOwner = NbtCompat.getUUID(tag, "PlayerOwner");
+            int targetAmount = NbtCompat.getInt(tag, "TargetAmount");
+            inventory.fromTag(NbtCompat.getList(tag, "Items", Tag.TAG_COMPOUND), provider);
+            blockIsPowered = NbtCompat.getBoolean(tag, "RecievingEnabled");
 
             CompletableFuture<IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(playerOwner);
             account.thenAccept(bankAccount -> {
@@ -237,7 +238,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                     return;
                 bankAccountNumber = bankAccount.getAccountNumberAsync();
                 if(tag.contains("ItemID")) {
-                    ItemID itemID = ItemID.createFromTag(tag.getCompound("ItemID"));
+                    ItemID itemID = ItemID.createFromTag(NbtCompat.getCompound(tag, "ItemID"));
                     if(itemID != null) {
                         WithdrawOrder order = new WithdrawOrder(itemID, targetAmount, WithdrawCondition.NONE, 0);
                         withdrawOrders.add(order);
@@ -248,20 +249,20 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         }
 
         if(tag.contains(TAGS.INVENTORY_ITEMS))
-            inventory.fromTag(tag.getList(TAGS.INVENTORY_ITEMS, Tag.TAG_COMPOUND), provider);
+            inventory.fromTag(NbtCompat.getList(tag, TAGS.INVENTORY_ITEMS, Tag.TAG_COMPOUND), provider);
 
         if(tag.contains(TAGS.BLOCK_IS_POWERED))
-            blockIsPowered = tag.getBoolean(TAGS.BLOCK_IS_POWERED);
+            blockIsPowered = NbtCompat.getBoolean(tag, TAGS.BLOCK_IS_POWERED);
 
         if(tag.contains(TAGS.BANK_ACCOUNT_NUMBER))
-            bankAccountNumber = tag.getInt(TAGS.BANK_ACCOUNT_NUMBER);
+            bankAccountNumber = NbtCompat.getInt(tag, TAGS.BANK_ACCOUNT_NUMBER);
         else
             bankAccountNumber = 0; // Reset account number if not present
 
         if(tag.contains(TAGS.WITHDRAW_ORDERS)) {
-            ListTag ordersList = tag.getList(TAGS.WITHDRAW_ORDERS, Tag.TAG_COMPOUND);
+            ListTag ordersList = NbtCompat.getList(tag, TAGS.WITHDRAW_ORDERS, Tag.TAG_COMPOUND);
             for (int i = 0; i < ordersList.size(); i++) {
-                CompoundTag orderTag = ordersList.getCompound(i);
+                CompoundTag orderTag = NbtCompat.getCompound(ordersList, i);
                 WithdrawOrder order = WithdrawOrder.fromTag(orderTag);
                 if(order != null) {
                     withdrawOrders.add(order);
