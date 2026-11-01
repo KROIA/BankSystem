@@ -93,7 +93,7 @@ public final class BankCraftingRecipes {
      * before opening a Bank Terminal menu.
      */
     public static void syncTo(ServerPlayer player) {
-        MinecraftServer server = player.getServer();
+        MinecraftServer server = player.level().getServer();
         if (server == null)
             return;
         RecipeManager manager = server.getRecipeManager();

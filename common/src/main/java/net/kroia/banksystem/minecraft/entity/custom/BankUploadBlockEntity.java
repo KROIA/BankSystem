@@ -103,7 +103,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
     public static <T extends BlockEntity> void tick(Level level, BlockPos blockPos, BlockState blockState, T t) {
         if(t instanceof BankUploadBlockEntity blockEntity)
         {
-            if (!level.isClientSide) { // Ensure this only runs on the server
+            if (!level.isClientSide()) { // Ensure this only runs on the server
                 blockEntity.tickCounter++;
 
                 int targetTickCount = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get();

@@ -61,14 +61,14 @@ public class Software extends Item {
             }
         }
 
-        if (player != null && !level.isClientSide) {
+        if (player != null && !level.isClientSide()) {
             onRightClickedServerSide((ServerPlayer) player);
-        } else if (player != null && level.isClientSide) {
+        } else if (player != null && level.isClientSide()) {
             onRightClickedClientSide();
         }
 
         // Prevent block interaction from firing after entity interaction
-        return level.isClientSide ? InteractionResult.SUCCESS : InteractionResult.CONSUME;
+        return level.isClientSide() ? InteractionResult.SUCCESS : InteractionResult.CONSUME;
     }
     /*@Override
     public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
