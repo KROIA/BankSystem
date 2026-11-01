@@ -50,9 +50,9 @@ public final class StampedShareSpecialRenderer implements SpecialModelRenderer<I
 
     //@Override // mc<=1.21.8
     //public void render(@Nullable ItemStack stack, ItemDisplayContext context, PoseStack poseStack, // mc<=1.21.8
-    //                   MultiBufferSource buffers, int light, int overlay, boolean hasFoil) { // mc<=1.21.8
-    //    if (stack != null) // mc<=1.21.8
-    //        StampedShareRenderer.render(stack, context, poseStack, buffers, light, overlay); // mc<=1.21.8
+                       //MultiBufferSource buffers, int light, int overlay, boolean hasFoil) { // mc<=1.21.8
+        //if (stack != null) // mc<=1.21.8
+            //StampedShareRenderer.render(stack, context, poseStack, buffers, light, overlay); // mc<=1.21.8
     //} // mc<=1.21.8
 
     @Override // mc>=1.21.9
