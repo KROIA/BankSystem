@@ -65,7 +65,8 @@ public class ItemColorUtil {
             //for (var dir : net.minecraft.core.Direction.values()) { if (!quads.isEmpty()) break; quads = model.getQuads(null, dir, random); } // mc<=1.21.3
             //return quads.isEmpty() ? null : quads.get(0).getSprite(); // mc<=1.21.3
             var state = new net.minecraft.client.renderer.item.ItemStackRenderState(); // mc>=1.21.4
-            mc.getItemModelResolver().updateForTopItem(state, stack, net.minecraft.world.item.ItemDisplayContext.GUI, false, null, null, 0); // mc>=1.21.4
+            mc.getItemModelResolver().updateForTopItem(state, stack, net.minecraft.world.item.ItemDisplayContext.GUI, false, null, null, 0); // mc>=1.21.4 mc<=1.21.4
+            //mc.getItemModelResolver().updateForTopItem(state, stack, net.minecraft.world.item.ItemDisplayContext.GUI, null, null, 0); // mc>=1.21.5
             return state.isEmpty() ? null : state.pickParticleIcon(random); // mc>=1.21.4
         }
 
