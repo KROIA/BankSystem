@@ -67,7 +67,8 @@ public class ItemColorUtil {
             var state = new net.minecraft.client.renderer.item.ItemStackRenderState(); // mc>=1.21.4
             mc.getItemModelResolver().updateForTopItem(state, stack, net.minecraft.world.item.ItemDisplayContext.GUI, false, null, null, 0); // mc>=1.21.4 mc<=1.21.4
             //mc.getItemModelResolver().updateForTopItem(state, stack, net.minecraft.world.item.ItemDisplayContext.GUI, null, null, 0); // mc>=1.21.5
-            return state.isEmpty() ? null : state.pickParticleIcon(random); // mc>=1.21.4
+            return state.isEmpty() ? null : state.pickParticleIcon(random); // mc>=1.21.4 mc<=1.21.11
+            //return state.isEmpty() ? null : state.pickParticleMaterial(random).sprite(); // mc>=26.1
         }
 
         @SuppressWarnings("JavaReflectionMemberAccess")
