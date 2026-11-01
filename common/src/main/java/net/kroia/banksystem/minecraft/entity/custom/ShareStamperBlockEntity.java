@@ -167,6 +167,8 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     // -------- mutation from packet handler / command --------
     public void bind(int companyId, UUID linkedBy) {
         int prev = this.boundCompanyId;
+        if (prev >= 0 && prev != companyId)
+            ejectContents(); // shares of the previous company must not stay in the block
         this.boundCompanyId = companyId;
         this.linkedByUUID = linkedBy;
         this.linkedAt = System.currentTimeMillis();
@@ -182,6 +184,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
     public void unbind() {
         int prev = this.boundCompanyId;
+        ejectContents(); // input and output (stamped shares) leave the block with the binding
         this.boundCompanyId = -1;
         this.linkedByUUID = null;
         this.linkedAt = 0L;
@@ -472,6 +475,24 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     public void dropContents() {
         if (level == null) return;
         Containers.dropContents(level, worldPosition, items);
+    }
+
+    /**
+     * Drops every slot on top of the (still standing) block and empties the inventory.
+     * Server only; used when the binding is cleared or changed.
+     */
+    private void ejectContents() {
+        if (level == null || level.isClientSide) return;
+        boolean any = false;
+        for (int i = 0; i < items.size(); i++) {
+            ItemStack stack = items.get(i);
+            if (stack.isEmpty()) continue;
+            Containers.dropItemStack(level, worldPosition.getX() + 0.5, worldPosition.getY() + 1.0,
+                    worldPosition.getZ() + 0.5, stack.copy());
+            items.set(i, ItemStack.EMPTY);
+            any = true;
+        }
+        if (any) setChanged();
     }
 
     @Override
