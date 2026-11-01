@@ -109,7 +109,7 @@ public class MoneyItem extends Item{
         BlockPos pos = context.getClickedPos().relative(context.getClickedFace());
         Player player = context.getPlayer();
 
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof MoneyStockpileBlockEntity stockpile) {
                 ItemStack itemStack = context.getItemInHand();
@@ -153,6 +153,6 @@ public class MoneyItem extends Item{
                 return InteractionResult.SUCCESS;
             }
         }
-        return level.isClientSide ? InteractionResult.SUCCESS : InteractionResult.CONSUME;
+        return level.isClientSide() ? InteractionResult.SUCCESS : InteractionResult.CONSUME;
     }
 }
