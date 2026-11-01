@@ -66,6 +66,9 @@ public class StampSharesRequest extends BankSystemNetworkPacket {
         if (op == Op.BIND_COMPANY) {
             // MANAGE gate against the target companyId (carried in `count`).
             int targetCompanyId = count;
+            // Same rule as SetStamperBindingRequest: a bound stamper must be unbound first
+            // (MANAGE on its current company), never silently rebound to another company.
+            if (stamper.getBoundCompanyId() >= 0 && stamper.getBoundCompanyId() != targetCompanyId) return;
             if (!stamperCanBindTo(stamper, player, targetCompanyId)) return;
             stamper.bind(targetCompanyId, player.getUUID());
             return;
