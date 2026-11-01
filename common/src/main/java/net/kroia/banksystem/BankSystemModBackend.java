@@ -319,6 +319,16 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     }
 
+    // Listener instances: a method reference at another call site is a different object, so
+    // register/unregister must use the same instance or handlers stack across world loads.
+    private static final TickEvent.Server ON_SERVER_TICK = BankSystemModBackend::onServerTick;
+    private static final TickEvent.Server ON_SLAVE_LATCH_TICK = BankSystemModBackend::onSlaveLatchTimeoutTick;
+    private static final LifecycleEvent.ServerLevelState ON_LEVEL_SAVE = (ServerLevel level) -> {
+        if (level.dimension() == Level.OVERWORLD && INSTANCES.SERVER_DATA_HANDLER != null) {
+            INSTANCES.SERVER_DATA_HANDLER.saveAll();
+        }
+    };
+
     // Called from the server side
     public static void onServerStart(MinecraftServer server) {
 
@@ -365,7 +375,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             // fresh 30-second window before warning.
             slaveLatchWatchTicks = 0;
             slaveLatchTimeoutWarned = false;
-            TickEvent.SERVER_POST.register(BankSystemModBackend::onSlaveLatchTimeoutTick);
+            TickEvent.SERVER_POST.register(ON_SLAVE_LATCH_TICK);
             // Task #54 (v2.1.0) — share symbol store (slave: mirror mode, populated by S2S sync).
             INSTANCES.SHARE_SYMBOL_STORE = new net.kroia.banksystem.banking.company.ShareSymbolStore(INSTANCES.LOGGER);
             INSTANCES.SHARE_SYMBOL_STORE.open(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT), true);
@@ -432,14 +442,10 @@ public class BankSystemModBackend implements BankSystemAPI {
                         + "BALANCE_HISTORY_RETENTION_SWEEP_MINUTES.");
             }
 
-            TickEvent.SERVER_POST.register(BankSystemModBackend::onServerTick);
+            TickEvent.SERVER_POST.register(ON_SERVER_TICK);
 
             // Save the data when the game saves the world
-            LifecycleEvent.SERVER_LEVEL_SAVE.register((ServerLevel level) -> {
-                if (level.dimension() == Level.OVERWORLD && INSTANCES.SERVER_DATA_HANDLER != null) {
-                    INSTANCES.SERVER_DATA_HANDLER.saveAll();
-                }
-            });
+            LifecycleEvent.SERVER_LEVEL_SAVE.register(ON_LEVEL_SAVE);
         }
 
         // Bring up multi-server infrastructure LAST (Task #21): MultiServerManager.start()
@@ -497,7 +503,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         MultiServerManager.cleanup();
 
         if (!INSTANCES.isSlaveServer) {
-            TickEvent.SERVER_POST.unregister(BankSystemModBackend::onServerTick);
+            TickEvent.SERVER_POST.unregister(ON_SERVER_TICK);
+            LifecycleEvent.SERVER_LEVEL_SAVE.unregister(ON_LEVEL_SAVE);
             saveDataToFiles(server);
 
             if (INSTANCES.DATABASE_MANAGER != null) {
@@ -510,9 +517,12 @@ public class BankSystemModBackend implements BankSystemAPI {
             // Mirror the master-side unregister above: the slave-latch watchdog is registered
             // on every slave onServerStart, so it must be unregistered on every stop to avoid
             // stacking a fresh handler on each session (see onSlaveLatchTimeoutTick Javadoc).
-            TickEvent.SERVER_POST.unregister(BankSystemModBackend::onSlaveLatchTimeoutTick);
+            TickEvent.SERVER_POST.unregister(ON_SLAVE_LATCH_TICK);
         }
 
+        if (INSTANCES.SERVER_BANK_MANAGER != null
+                && INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof net.kroia.banksystem.banking.bankmanager.ServerBankManager serverBankManager)
+            serverBankManager.shutdown();
         INSTANCES.SERVER_BANK_MANAGER = null;
         INSTANCES.SERVER_DATA_HANDLER = null;
         INSTANCES.SERVER_SETTINGS = null;

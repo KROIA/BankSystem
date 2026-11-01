@@ -223,8 +223,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      * latch additionally rejects any master-side registration that would run before
      * {@code load_itemIDs()} completes (defense in depth).
      */
+    /** Same instance for register/unregister (a new method reference would not match). */
+    private final TickEvent.Server tickListener = this::update;
+
     public ServerBankManager() {
-        TickEvent.SERVER_POST.register(this::update);
+        TickEvent.SERVER_POST.register(tickListener);
+    }
+
+    /** Stops the per-tick update; called on server stop so a stale manager never keeps ticking. */
+    public void shutdown() {
+        TickEvent.SERVER_POST.unregister(tickListener);
     }
 
     public void update(MinecraftServer server)
