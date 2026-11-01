@@ -2,7 +2,7 @@ package net.kroia.banksystem.minecraft.entity;
 
 import com.google.common.base.Suppliers;
 import dev.architectury.registry.client.rendering.BlockEntityRendererRegistry;
-import dev.architectury.registry.client.rendering.RenderTypeRegistry;
+import dev.architectury.registry.client.rendering.RenderTypeRegistry; // mc<=1.21.11
 import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
@@ -75,7 +75,8 @@ public class BankSystemEntities {
         BlockEntityRendererRegistry.register((BlockEntityType<MoneyStockpileBlockEntity>) MONEY_STOCKPILE_BLOCK_ENTITY.get(), MoneyStockpileEntityRenderer::new);
         BlockEntityRendererRegistry.register((BlockEntityType<BankSystemDisplayBlockEntity>) BANKSYSTEM_DISPLAY_BLOCK_ENTITY.get(), AbstractDisplayBlockEntityRenderer::new);
         //RenderTypeRegistry.register(RenderType.cutout(), BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get()); // mc<=1.21.5
-        RenderTypeRegistry.register(net.minecraft.client.renderer.chunk.ChunkSectionLayer.CUTOUT, BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get()); // mc>=1.21.6
+        RenderTypeRegistry.register(net.minecraft.client.renderer.chunk.ChunkSectionLayer.CUTOUT, BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get()); // mc>=1.21.6 mc<=1.21.11
+        // mc>=26.1: chunk layer is derived from texture transparency; Architectury 20 has no RenderTypeRegistry
     }
 
 

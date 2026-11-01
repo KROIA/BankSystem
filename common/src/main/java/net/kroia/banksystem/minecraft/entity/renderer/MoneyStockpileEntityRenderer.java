@@ -93,7 +93,8 @@ public class MoneyStockpileEntityRenderer implements BlockEntityRenderer<MoneySt
     @Override // mc>=1.21.9
     public void submit(StockpileRenderState state, PoseStack poseStack, // mc>=1.21.9
                        net.minecraft.client.renderer.SubmitNodeCollector collector, // mc>=1.21.9
-                       net.minecraft.client.renderer.state.CameraRenderState camera) { // mc>=1.21.9
+                       net.minecraft.client.renderer.state.CameraRenderState camera) { // mc>=1.21.9 mc<=1.21.11
+                       //net.minecraft.client.renderer.state.level.CameraRenderState camera) { // mc>=26.1
         poseStack.pushPose(); // mc>=1.21.9
         applyFacing(poseStack, state.facing); // mc>=1.21.9
         for (int i = 0; i < state.items.size(); i++) { // mc>=1.21.9

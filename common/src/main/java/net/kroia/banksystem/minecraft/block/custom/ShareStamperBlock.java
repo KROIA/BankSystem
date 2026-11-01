@@ -95,7 +95,7 @@ public class ShareStamperBlock extends Block implements EntityBlock {
         }
         if (!stamper.hasManagePermission(player.getUUID())) {
             String companyName = stamper.getBoundCompanyName();
-            player.displayClientMessage(Component.translatable(
+            net.kroia.modutilities.PlayerCompat.sendMessage(player, Component.translatable(
                     "gui.banksystem.share_stamper.no_permission", companyName), false);
             return InteractionResult.FAIL;
         }
