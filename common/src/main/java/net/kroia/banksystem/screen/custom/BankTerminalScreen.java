@@ -778,7 +778,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private static String buildSearchableName(String displayName, ItemStack stack) {
         StringBuilder sb = new StringBuilder(displayName.toLowerCase());
         if (stack != null && !stack.isEmpty()) {
-            stack.getTags().forEach(tagKey -> {
+            stack.getItem().builtInRegistryHolder().tags().forEach(tagKey -> {
                 String path = tagKey.location().getPath();
                 sb.append(' ').append(path.replace('_', ' ').replace('/', ' '));
             });
