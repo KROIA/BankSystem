@@ -136,7 +136,8 @@ public final class StampedShareRenderer {
         TextureAtlasSprite card = atlas.apply(companyId != null ? STAMPED_CARD : BLANK_CARD);
         int cardTint = visuals != null ? opaque(visuals.getBaseTint()) : 0xFFFFFFFF;
         List<Quad> geometry = CARD_GEOMETRY.computeIfAbsent(card, StampedShareRenderer::buildCardGeometry);
-        sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> {
+        sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> { // mc<=26.1
+        //sink.draw(Sheets.cutoutBlockItemSheet(), (pose, vc) -> { // mc>=26.2
             for (Quad q : geometry) {
                 emit(vc, pose, q, card, cardTint, light, overlay);
             }
@@ -175,7 +176,8 @@ public final class StampedShareRenderer {
             TextureAtlasSprite sprite = atlas.apply(ResourceLocation.fromNamespaceAndPath( // mc<=1.21.10
             //TextureAtlasSprite sprite = atlas.apply(Identifier.fromNamespaceAndPath( // mc>=1.21.11
                     BankSystemMod.MOD_ID, "item/share_symbol/" + id));
-            sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> {
+            sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> { // mc<=26.1
+            //sink.draw(Sheets.cutoutBlockItemSheet(), (pose, vc) -> { // mc>=26.2
                 emit(vc, pose, new Quad(
                         new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
                         new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), sprite, tint, light, overlay);
