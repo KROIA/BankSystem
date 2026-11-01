@@ -167,7 +167,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     public static void openScreen(GuiScreen parent, int accountNumber, boolean isAdminMode) {
         screenIsOpen = true;
         BankAccountBindingsScreen screen = new BankAccountBindingsScreen(parent, accountNumber, isAdminMode);
-        Minecraft.getInstance().setScreen(screen);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
         screen.refreshAll();
     }
 
@@ -286,7 +286,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     public void onClose() {
         screenIsOpen = false;
         if (parent != null && this.minecraft != null) {
-            this.minecraft.setScreen(parent);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(parent);
         } else {
             super.onClose();
         }
@@ -316,7 +316,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
         if (availableProviders.size() == 1) {
             openAccountPicker(row, availableProviders.get(0));
         } else {
-            Minecraft.getInstance().setScreen(new ProviderPickerScreen(this, provider -> openAccountPicker(row, provider)));
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(new ProviderPickerScreen(this, provider -> openAccountPicker(row, provider)));
         }
     }
 
@@ -337,7 +337,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
         boolean accountIsShared = accountData != null && accountData.personalBankOwnerData == null;
         AccountPickerScreen picker = new AccountPickerScreen(this, provider, accountIsShared,
                 ref -> confirmBind(row, provider, ref));
-        Minecraft.getInstance().setScreen(picker);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(picker);
         picker.load();
     }
 
@@ -363,7 +363,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
                 title, body);
         popup.setSize(420, 130);
         popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFF70e815, 0xFFf22718);
-        Minecraft.getInstance().setScreen(popup);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(popup);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -373,7 +373,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     private void beginUnbindFlow(BindingRow row, ExternalAccountRef ref) {
         if (!canManage) return;
         UnbindChoiceDialog dialog = new UnbindChoiceDialog(this, row, ref);
-        Minecraft.getInstance().setScreen(dialog);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(dialog);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -441,7 +441,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
         InfoPopupScreen popup = new InfoPopupScreen(this, title, message);
         popup.setSize(420, 110);
         popup.setColors(0xFF806040, 0xFF503020, 0xFF70e815);
-        Minecraft.getInstance().setScreen(popup);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(popup);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -550,7 +550,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
         @Override
         public void onClose() {
             if (this.minecraft != null) {
-                this.minecraft.setScreen(parent);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(parent);
             }
         }
     }
@@ -722,7 +722,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
         @Override
         public void onClose() {
             if (this.minecraft != null) {
-                this.minecraft.setScreen(parent);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(parent);
             }
         }
     }
@@ -827,7 +827,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
         @Override
         public void onClose() {
             if (this.minecraft != null) {
-                this.minecraft.setScreen(parent);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(parent);
             }
         }
     }

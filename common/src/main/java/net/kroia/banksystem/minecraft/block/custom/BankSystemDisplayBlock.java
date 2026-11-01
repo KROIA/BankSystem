@@ -121,7 +121,7 @@ public class BankSystemDisplayBlock extends AbstractDisplayBlock {
         }
 
         static void openConfigScreen(BlockPos pos, BankSystemDisplayBlockEntity.DisplayType type, int account) {
-            net.minecraft.client.Minecraft.getInstance().setScreen(
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(
                     new net.kroia.banksystem.screen.custom.DisplayConfigScreen(pos, type, account));
         }
     }

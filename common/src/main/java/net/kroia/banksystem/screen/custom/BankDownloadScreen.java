@@ -459,7 +459,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
                 return;
             }
             BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(parent, parent.minecraft.player.getUUID(), parent::onConnectDisconnectButtonClicked, BankPermission.DEPOSIT.getValue());
-            parent.minecraft.setScreen(selectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(selectionScreen);
         }
 
     }
