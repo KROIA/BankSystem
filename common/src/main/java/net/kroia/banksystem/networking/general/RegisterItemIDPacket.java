@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.general;
 
+import net.kroia.banksystem.util.ItemStackNbt;
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
@@ -105,7 +106,7 @@ public class RegisterItemIDPacket extends BankSystemNetworkPacket
                 continue;
             try
             {
-                Tag stackTag = stack.save(access, new CompoundTag());
+                Tag stackTag = ItemStackNbt.save(stack, access, new CompoundTag());
                 if(stackTag instanceof CompoundTag compoundTag)
                     tags.add(compoundTag);
             }

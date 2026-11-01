@@ -1,5 +1,6 @@
 package net.kroia.banksystem.util;
 
+import net.kroia.banksystem.util.ItemStackNbt;
 import net.kroia.modutilities.NbtCompat;
 import com.ibm.icu.impl.Pair;
 import net.kroia.banksystem.BankSystemModBackend;
@@ -1343,10 +1344,10 @@ public class ItemIDManager implements ServerSaveable {
         RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
         if (access != null) {
             try {
-                Tag searchTag = query.save(access);
+                Tag searchTag = ItemStackNbt.save(query, access);
                 for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet()) {
                     try {
-                        Tag existingTag = entry.getValue().save(access);
+                        Tag existingTag = ItemStackNbt.save(entry.getValue(), access);
                         if (searchTag.equals(existingTag)) {
                             return entry.getKey();
                         }
@@ -1468,7 +1469,7 @@ public class ItemIDManager implements ServerSaveable {
                 }
                 continue;
             }
-            Optional<ItemStack> parsed = ItemStack.parse(syncRegistryAccess, stackTag);
+            Optional<ItemStack> parsed = ItemStackNbt.parse(syncRegistryAccess, stackTag);
             if(parsed.isEmpty() || parsed.get().isEmpty())
             {
                 if(BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null && unresolvableItemsLoggedOnce.add(id))
@@ -1561,7 +1562,7 @@ public class ItemIDManager implements ServerSaveable {
         List<ItemStack> stacks = new ArrayList<>(tags.size());
         for(CompoundTag stackTag : tags)
         {
-            Optional<ItemStack> parsed = ItemStack.parse(access, stackTag);
+            Optional<ItemStack> parsed = ItemStackNbt.parse(access, stackTag);
             if(parsed.isEmpty() || parsed.get().isEmpty())
             {
                 if(BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
@@ -1622,7 +1623,7 @@ public class ItemIDManager implements ServerSaveable {
             pairTag.put("itemID", idTag);
             CompoundTag itemStackTag = new CompoundTag();
             try {
-                Tag stackTag = itemStack.save(access, itemStackTag);
+                Tag stackTag = ItemStackNbt.save(itemStack, access, itemStackTag);
                 pairTag.put("itemStack", stackTag);
             } catch (Exception e) {
                 // Skip items whose ItemStack can't be serialized in the current registry context
@@ -1726,7 +1727,7 @@ public class ItemIDManager implements ServerSaveable {
             if(!id.load(itemIDTag))
                 continue;
 
-            Optional<ItemStack> itemStackOptional = ItemStack.parse(access, itemStackTag);
+            Optional<ItemStack> itemStackOptional = ItemStackNbt.parse(access, itemStackTag);
             if(itemStackOptional.isEmpty()) {
                 // Silent-drop hazard (Task #11 / ISSUES.md #56): the ItemStack no longer
                 // resolves — its host mod may have been removed, or the stored NBT is
