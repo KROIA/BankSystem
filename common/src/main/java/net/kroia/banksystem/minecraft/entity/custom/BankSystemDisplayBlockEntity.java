@@ -659,7 +659,8 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
                 stack = ItemStack.OPTIONAL_CODEC.parse(registries.createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE), entry.get("stack"))
                         .result().orElse(ItemStack.EMPTY);
             } else if (entry.contains("item")) { // data saved before full stacks were written
-                net.minecraft.resources.ResourceLocation id = net.minecraft.resources.ResourceLocation.tryParse(NbtCompat.getString(entry, "item"));
+                net.minecraft.resources.ResourceLocation id = net.minecraft.resources.ResourceLocation.tryParse(NbtCompat.getString(entry, "item")); // mc<=1.21.10
+                //net.minecraft.resources.Identifier id = net.minecraft.resources.Identifier.tryParse(NbtCompat.getString(entry, "item")); // mc>=1.21.11
                 if (id != null)
                     stack = new ItemStack(BuiltInRegistries.ITEM.getOptional(id).orElse(net.minecraft.world.item.Items.AIR));
             }
