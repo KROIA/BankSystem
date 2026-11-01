@@ -3,7 +3,7 @@
 This guide describes the per-world configuration file `settings.json`, every setting it contains, and — in depth — the **volatile** and **deposit-gated item component** lists that control how items with time-varying data (e.g. TerraFirmaCraft food) are handled by the bank.
 
 > [!NOTE]
-> This file is **not** the multi-server connection config. Master/slave networking is configured in `<ServerFolder>/config/MultiServerConfig.json` — see [Multi-Server Setup](MultiserverSetup.md).
+> This file is **not** the multi-server connection config. Master/slave networking is configured in `<ServerFolder>/config/modutilities/MultiServerConfig.json` — see [Multi-Server Setup](MultiserverSetup.md). An existing `config/MultiServerConfig.json` from an older version is moved there automatically on first start.
 
 ---
 ## File Location & Lifecycle
