@@ -234,7 +234,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * never trusted by the server.
      */
     public void setClientCraftingSettings(boolean useBankItems, boolean depositOutputToBank) {
-        if (!player.level().isClientSide)
+        if (!player.level().isClientSide())
             return;
         this.useBankItems = useBankItems;
         this.depositOutputToBank = depositOutputToBank;
@@ -256,7 +256,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * apply it. Never trusted server-side — see {@link #applyGhostRecipe}.
      */
     public void requestGhostRecipe(RecipeHolder<CraftingRecipe> recipe) {
-        if (!player.level().isClientSide)
+        if (!player.level().isClientSide())
             return;
         this.ghostRecipe = recipe;
         SetBankTerminalGhostRecipePacket.sendPacketToServer(getBlockPos(), BankCraftingRecipes.id(recipe));
@@ -294,7 +294,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * immediate recompute gives instant feedback and the refresh converges it.
      */
     public void applyGhostRecipe(net.minecraft.resources.ResourceLocation recipeId) {
-        if (player.level().isClientSide)
+        if (player.level().isClientSide())
             return;
         RecipeHolder<CraftingRecipe> craftingHolder = resolveCraftingRecipe(recipeId);
         if (craftingHolder == null)
@@ -326,7 +326,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * with "Use Bank Items" active, explicit selections are ghost layouts.
      */
     public void applyPhysicalRecipeFill(net.minecraft.resources.ResourceLocation recipeId) {
-        if (player.level().isClientSide || craftInProgress)
+        if (player.level().isClientSide() || craftInProgress)
             return;
         if (useBankItems) {
             applyGhostRecipe(recipeId);
@@ -413,7 +413,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         if (ghostRecipe == null)
             return;
         ghostRecipe = null;
-        if (!player.level().isClientSide)
+        if (!player.level().isClientSide())
             updateCraftingResult();
     }
 
@@ -431,7 +431,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * never wipe the global preference).
      */
     public void applyCraftingSettings(boolean requestedUseBankItems, boolean requestedDepositOutput, int accountNumber) {
-        if (player.level().isClientSide)
+        if (player.level().isClientSide())
             return;
         final int requestId = ++settingsRequestId;
         if ((!requestedUseBankItems && !requestedDepositOutput) || accountNumber <= 0) {
@@ -522,7 +522,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
     @Override
     public void broadcastChanges() {
         super.broadcastChanges();
-        if (player.level().isClientSide || !useBankItems || craftingAccount == null || craftInProgress)
+        if (player.level().isClientSide() || !useBankItems || craftingAccount == null || craftInProgress)
             return;
         if (++snapshotRefreshTickCounter >= SNAPSHOT_REFRESH_INTERVAL_TICKS) {
             snapshotRefreshTickCounter = 0;
@@ -546,7 +546,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * slot via the vanilla menu sync).
      */
     private void updateCraftingResult() {
-        if (player.level().isClientSide || suppressRecipeUpdate)
+        if (player.level().isClientSide() || suppressRecipeUpdate)
             return;
         BankCraftingMatcher.Match match = BankCraftingMatcher.findMatch(
                 player.level(),
@@ -586,7 +586,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
             // Custom bank-craft path: never let vanilla pickup logic run. The
             // client does nothing (result/grid state comes back via menu sync);
             // the server runs the asynchronous atomic craft flow.
-            if (!clickPlayer.level().isClientSide) {
+            if (!clickPlayer.level().isClientSide()) {
                 if (clickType == ClickType.PICKUP)
                     handleCustomCraft(false);
                 else if (clickType == ClickType.QUICK_MOVE)
@@ -667,7 +667,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
     public void removed(Player pPlayer) {
         super.removed(pPlayer);
         this.resultSlots.clearContent();
-        if (!pPlayer.level().isClientSide) {
+        if (!pPlayer.level().isClientSide()) {
             // Vanilla crafting-table behavior: hand the grid contents back to the
             // player (never deposit them into the bank).
             // This also covers a craft still in its async lock phase when the menu
@@ -701,7 +701,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * exception can never leak acquired locks or leave {@link #craftInProgress} set.
      */
     private void handleCustomCraft(boolean craftAll) {
-        if (player.level().isClientSide || craftInProgress)
+        if (player.level().isClientSide() || craftInProgress)
             return;
         // STRUCTURAL STALENESS GUARD (dupe fix): never act on a cached match.
         // The match is recomputed synchronously HERE, on the server thread, from
@@ -1147,8 +1147,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * to the client (same pattern as {@link BankTerminalBlockEntity}).
      */
     private void runOnMainThread(Runnable action) {
-        if (player instanceof ServerPlayer serverPlayer && serverPlayer.getServer() != null)
-            serverPlayer.getServer().execute(action);
+        if (player instanceof ServerPlayer serverPlayer && serverPlayer.level().getServer() != null)
+            serverPlayer.level().getServer().execute(action);
         else
             action.run();
     }

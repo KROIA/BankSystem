@@ -179,7 +179,7 @@ public class StampedShareItem extends Item {
         //if (companyId == null) return InteractionResultHolder.pass(stack); // mc<=1.21.1
         if (companyId == null) return InteractionResult.PASS; // mc>=1.21.2
 
-        if (level.isClientSide) {
+        if (level.isClientSide()) {
             // Send a C2S request so the server can resolve rights and push them back via
             // S2COpenCompanyManagementPacket. This avoids ARRS calls from the client that
             // may fail before the channel is fully established on dedicated servers.

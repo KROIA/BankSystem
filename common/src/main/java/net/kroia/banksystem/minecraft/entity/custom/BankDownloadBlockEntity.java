@@ -480,7 +480,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     public static <T extends BlockEntity> void tick(Level level, BlockPos blockPos, BlockState blockState, T t) {
         if(t instanceof BankDownloadBlockEntity blockEntity)
         {
-            if (!level.isClientSide) { // Ensure this only runs on the server
+            if (!level.isClientSide()) { // Ensure this only runs on the server
                 if(blockEntity.bankAccountNumber <= 0)
                     return;
                 blockEntity.tickCounter++;
