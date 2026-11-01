@@ -232,6 +232,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.BANK_ACCOUNT_BINDINGS = new BankAccountBindings();
         BankAccountBindings.setBackend(INSTANCES);
         VolatileItemComponents.setBackend(INSTANCES);
+        //net.kroia.banksystem.client.render.StampedShareSpecialRenderer.setBackend(INSTANCES); // mc>=1.21.4
         MultiServerUtils.setBackend(INSTANCES);
         BankSystemDataHandler.setBackend(INSTANCES);
         BankTerminalBlockEntity.setBackend(INSTANCES);
@@ -282,7 +283,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         // tag rebind happens a few scheduler tasks later, so the comparison is deferred to
         // the tick hook below (see VolatileItemComponents#onServerResourcesReloaded()).
         ReloadListenerRegistry.register(PackType.SERVER_DATA,
-                (ResourceManagerReloadListener) resourceManager -> VolatileItemComponents.onServerResourcesReloaded());
+                (ResourceManagerReloadListener) resourceManager -> VolatileItemComponents.onServerResourcesReloaded(),
+                BankSystemMod.id("volatile_components_reload"));
         TickEvent.SERVER_POST.register(server -> VolatileItemComponents.serverTick());
 
         if (TestRegistry.ENABLE_TESTS && BankSystemMod.ENABLE_DEV_FEATURES) {
