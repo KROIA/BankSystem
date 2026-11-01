@@ -67,7 +67,7 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
         if (held.isEmpty() && stockpile.getCount() > 0) {
             ItemStack extracted = stockpile.removeItems();
             if (!player.addItem(extracted)) {
-                player.drop(extracted, false);
+                net.kroia.modutilities.PlayerCompat.drop(player, extracted);
             }
             return ItemInteractionResult.CONSUME; // mc<=1.21.1
             //return InteractionResult.CONSUME; // mc>=1.21.2
