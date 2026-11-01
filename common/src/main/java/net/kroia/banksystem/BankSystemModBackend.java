@@ -41,8 +41,6 @@ import net.kroia.banksystem.networking.general.PlayerJoinSyncPacket;
 import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
 import net.kroia.banksystem.networking.multi_server.BanksystemMetadataRequest;
 import net.kroia.modutilities.gui.GuiElementRegistry;
-import net.kroia.modutilities.testing.TestRegistry;
-import net.kroia.banksystem.testing.BankSystemTestRegistration;
 import net.kroia.banksystem.util.*;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.multi_server.MultiServerConfig;
@@ -287,13 +285,27 @@ public class BankSystemModBackend implements BankSystemAPI {
                 BankSystemMod.id("volatile_components_reload"));
         TickEvent.SERVER_POST.register(server -> VolatileItemComponents.serverTick());
 
-        if (TestRegistry.ENABLE_TESTS && BankSystemMod.ENABLE_DEV_FEATURES) {
-            BankSystemTestRegistration.register();
+        if (BankSystemMod.ENABLE_DEV_FEATURES) {
+            initDevFeatures();
         }
 
         // Register external currency providers (Task #34+, v2.0.5)
         registerExternalCurrencyProviders();
 
+    }
+
+    /**
+     * Starts the dev-only code (unit tests, test commands). It is compiled only when
+     * gradle.properties has {@code enable_dev_features=true}, so it is reached reflectively:
+     * release code must compile without it.
+     */
+    private static void initDevFeatures() {
+        try {
+            Class.forName(BankSystemMod.DEV_BOOTSTRAP).getMethod("init").invoke(null);
+        } catch (ReflectiveOperationException e) {
+            INSTANCES.LOGGER.error("Dev features are enabled but " + BankSystemMod.DEV_BOOTSTRAP
+                    + " is missing or failed; check enable_dev_features in gradle.properties", e);
+        }
     }
 
     // Called from the client side
