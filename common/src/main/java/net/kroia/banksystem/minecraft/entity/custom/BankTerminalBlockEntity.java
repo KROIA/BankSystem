@@ -957,7 +957,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     }
 
     public static <T extends BlockEntity> void tick(Level level, BlockPos blockPos, BlockState blockState, T t) {
-        if(level.isClientSide)
+        if(level.isClientSide())
             return;
         if (t instanceof BankTerminalBlockEntity blockEntity) {
             blockEntity.tick(level, blockPos, blockState);

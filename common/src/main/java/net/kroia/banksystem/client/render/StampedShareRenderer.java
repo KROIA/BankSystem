@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 /**
@@ -89,6 +90,14 @@ public final class StampedShareRenderer {
     private StampedShareRenderer() {}
 
     /**
+     * Draw target. Geometry is handed over as a callback so it can be drawn immediately
+     * (MultiBufferSource) or deferred (1.21.9+ SubmitNodeCollector#submitCustomGeometry).
+     */
+    public interface Sink {
+        void draw(RenderType type, BiConsumer<PoseStack.Pose, VertexConsumer> geometry);
+    }
+
+    /**
      * Platform entry point (Fabric {@code DynamicItemRenderer} / NeoForge
      * {@code BlockEntityWithoutLevelRenderer#renderByItem}). The pose already carries
      * the display-context transform from the item model JSON plus the vanilla
@@ -96,10 +105,13 @@ public final class StampedShareRenderer {
      */
     public static void render(ItemStack stack, ItemDisplayContext ctx, PoseStack poseStack,
                               MultiBufferSource buffers, int light, int overlay) {
+        render(stack, (type, geometry) -> geometry.accept(poseStack.last(), buffers.getBuffer(type)), light, overlay);
+    }
+
+    public static void render(ItemStack stack, Sink sink, int light, int overlay) {
         Function<ResourceLocation, TextureAtlasSprite> atlas =
-                Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS);
-        VertexConsumer vc = buffers.getBuffer(Sheets.cutoutBlockSheet());
-        PoseStack.Pose pose = poseStack.last();
+                //Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS); // mc<=1.21.8
+                Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(net.minecraft.data.AtlasIds.BLOCKS)::getSprite; // mc>=1.21.9
 
         Integer companyId = StampedShareItem.getCompanyId(stack);
         ShareVisuals visuals = null;
@@ -117,14 +129,16 @@ public final class StampedShareRenderer {
         TextureAtlasSprite card = atlas.apply(companyId != null ? STAMPED_CARD : BLANK_CARD);
         int cardTint = visuals != null ? opaque(visuals.getBaseTint()) : 0xFFFFFFFF;
         List<Quad> geometry = CARD_GEOMETRY.computeIfAbsent(card, StampedShareRenderer::buildCardGeometry);
-        for (Quad q : geometry) {
-            emit(vc, pose, q, card, cardTint, light, overlay);
-        }
+        sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> {
+            for (Quad q : geometry) {
+                emit(vc, pose, q, card, cardTint, light, overlay);
+            }
+        });
 
         if (visuals != null) {
-            drawSymbol(buffers, vc, pose, atlas, visuals.getBgLayer(), BG_X, BG_Y, BG_SIZE,
+            drawSymbol(sink, atlas, visuals.getBgLayer(), BG_X, BG_Y, BG_SIZE,
                     DECAL_EPS, light, overlay);
-            drawSymbol(buffers, vc, pose, atlas, visuals.getFgLayer(), FG_X, FG_Y, FG_SIZE,
+            drawSymbol(sink, atlas, visuals.getFgLayer(), FG_X, FG_Y, FG_SIZE,
                     2 * DECAL_EPS, light, overlay);
         }
     }
@@ -136,8 +150,7 @@ public final class StampedShareRenderer {
      * registered under {@code banksystem:dynamic/share_symbol/<id>} via
      * {@link net.minecraft.client.renderer.RenderType#entityCutoutNoCull}.
      */
-    private static void drawSymbol(MultiBufferSource buffers, VertexConsumer atlasVc,
-                                   PoseStack.Pose pose,
+    private static void drawSymbol(Sink sink,
                                    Function<ResourceLocation, TextureAtlasSprite> atlas,
                                    ShareVisuals.ShareLayer layer,
                                    float x0, float y0, float size, float eps,
@@ -153,22 +166,25 @@ public final class StampedShareRenderer {
             // Bundled symbol: render via blocks atlas sprite.
             TextureAtlasSprite sprite = atlas.apply(ResourceLocation.fromNamespaceAndPath(
                     BankSystemMod.MOD_ID, "item/share_symbol/" + id));
-            emit(atlasVc, pose, new Quad(
-                    new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
-                    new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), sprite, tint, light, overlay);
-            emit(atlasVc, pose, new Quad(
-                    new float[]{x0, y0, zb, x0, y1, zb, x1, y1, zb, x1, y0, zb},
-                    new float[]{0, 1, 0, 0, 1, 0, 1, 1}, 0, 0, -1), sprite, tint, light, overlay);
+            sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> {
+                emit(vc, pose, new Quad(
+                        new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
+                        new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), sprite, tint, light, overlay);
+                emit(vc, pose, new Quad(
+                        new float[]{x0, y0, zb, x0, y1, zb, x1, y1, zb, x1, y0, zb},
+                        new float[]{0, 1, 0, 0, 1, 0, 1, 1}, 0, 0, -1), sprite, tint, light, overlay);
+            });
         } else if (ClientSymbolRegistry.hasDynamicTexture(id)) {
             // Dynamic synced symbol: render via DynamicTexture registered with TextureManager.
             ResourceLocation dynRl = ClientSymbolRegistry.getDynamicRL(id);
-            VertexConsumer dynVc = buffers.getBuffer(RenderType.entityCutoutNoCull(dynRl));
-            emitRaw(dynVc, pose, new Quad(
-                    new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
-                    new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), tint, light, overlay);
-            emitRaw(dynVc, pose, new Quad(
-                    new float[]{x0, y0, zb, x0, y1, zb, x1, y1, zb, x1, y0, zb},
-                    new float[]{0, 1, 0, 0, 1, 0, 1, 1}, 0, 0, -1), tint, light, overlay);
+            sink.draw(RenderType.entityCutoutNoCull(dynRl), (pose, vc) -> {
+                emitRaw(vc, pose, new Quad(
+                        new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
+                        new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), tint, light, overlay);
+                emitRaw(vc, pose, new Quad(
+                        new float[]{x0, y0, zb, x0, y1, zb, x1, y1, zb, x1, y0, zb},
+                        new float[]{0, 1, 0, 0, 1, 0, 1, 1}, 0, 0, -1), tint, light, overlay);
+            });
         }
         // else: symbol is in ClientSymbolRegistry but DynamicTexture not yet registered
         //       (bytes arrived, but registration is scheduled for next render tick).

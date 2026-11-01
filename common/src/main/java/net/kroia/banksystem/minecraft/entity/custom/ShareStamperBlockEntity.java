@@ -224,7 +224,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
 
     // -------- tick --------
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos, BlockState state, T t) {
-        if (level.isClientSide) return;
+        if (level.isClientSide()) return;
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer) return;
         if (!(t instanceof ShareStamperBlockEntity be)) return;
         be.serverTick();
@@ -358,7 +358,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         // fired with boundCompanyId still at -1 (its default) and persisted bindings
         // were never re-added to CompanyManager's reverse index. Register here at the
         // end of load, once boundCompanyId is the persisted value. Master-only.
-        if (level != null && !level.isClientSide && boundCompanyId >= 0) {
+        if (level != null && !level.isClientSide() && boundCompanyId >= 0) {
             CompanyManager cm = CompanyManager.get();
             if (cm != null) cm.registerStamper(boundCompanyId, worldPosition, dimensionKey());
         }
@@ -411,23 +411,25 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         // A bound stamper is only usable with MANAGE on its company (founder / MANAGE / banksystem admin).
         // The server re-checks this every tick and before every slot click, so revoked rights close the
         // menu and a modified client cannot keep interacting. Unbound stampers keep the old behaviour.
-        return boundCompanyId < 0 || level.isClientSide || hasManagePermission(p.getUUID());
+        return boundCompanyId < 0 || level.isClientSide() || hasManagePermission(p.getUUID());
     }
     @Override public void clearContent() { items.clear(); }
 
     // Task #47 (v2.1.0) — release viewer lock when the container menu closes and when
     // the BE unloads. AbstractContainerMenu#removed calls Container#stopOpen(Player).
     @Override
-    public void stopOpen(Player p) {
+    //public void stopOpen(Player p) { // mc<=1.21.8
+    public void stopOpen(net.minecraft.world.entity.ContainerUser p) { // mc>=1.21.9
         super.stopOpen(p);
-        releaseViewer(p.getUUID());
+        //releaseViewer(p.getUUID()); // mc<=1.21.8
+        releaseViewer(p.getLivingEntity().getUUID()); // mc>=1.21.9
     }
 
     @Override
     public void setRemoved() {
         currentViewer = null;
         // Task #51 (v2.1.0) — drop reverse index entry on BE unload/removal (master-only meaningful).
-        if (level != null && !level.isClientSide && boundCompanyId >= 0) {
+        if (level != null && !level.isClientSide() && boundCompanyId >= 0) {
             CompanyManager cm = CompanyManager.get();
             if (cm != null) cm.unregisterStamper(boundCompanyId, worldPosition, dimensionKey());
         }
@@ -440,7 +442,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         // Task #51 (v2.1.0) — after NBT load + level attach, register this BE in the
         // Company reverse index. Master-only; on client and slave CompanyManager.get()
         // is null so this is a no-op there.
-        if (!lvl.isClientSide && boundCompanyId >= 0) {
+        if (!lvl.isClientSide() && boundCompanyId >= 0) {
             CompanyManager cm = CompanyManager.get();
             if (cm != null) cm.registerStamper(boundCompanyId, worldPosition, dimensionKey());
         }
@@ -499,7 +501,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
      * Server only; used when the binding is cleared or changed.
      */
     private void ejectContents() {
-        if (level == null || level.isClientSide) return;
+        if (level == null || level.isClientSide()) return;
         boolean any = false;
         for (int i = 0; i < items.size(); i++) {
             ItemStack stack = items.get(i);

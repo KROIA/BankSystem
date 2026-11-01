@@ -1,6 +1,7 @@
 package net.kroia.banksystem.util;
 
-import dev.architectury.registry.menu.MenuRegistry;
+//import dev.architectury.registry.menu.MenuRegistry; // mc<=1.21.8
+import dev.architectury.registry.client.gui.MenuScreenRegistry; // mc>=1.21.9
 import net.kroia.banksystem.minecraft.menu.BankSystemMenus;
 import net.kroia.banksystem.screen.custom.ATMScreen;
 import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
@@ -23,7 +24,7 @@ public class BankSystemClientHooks {
 
     /** Delegates {@code Screen.hasShiftDown()} to avoid a direct Screen import in common item classes. */
     public static boolean isShiftDown() {
-        return net.minecraft.client.gui.screens.Screen.hasShiftDown();
+        return net.kroia.modutilities.gui.client.InputCompat.hasShiftDown();
     }
 
     public static void openStamperBindScreen(net.minecraft.core.BlockPos pos,
@@ -47,10 +48,14 @@ public class BankSystemClientHooks {
     }
 
     public static void setupMenuScreens() {
-        MenuRegistry.registerScreenFactory(BankSystemMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
-        MenuRegistry.registerScreenFactory(BankSystemMenus.BANK_UPLOAD_CONTAINER_MENU.get(), BankUploadScreen::new);
-        MenuRegistry.registerScreenFactory(BankSystemMenus.BANK_DOWNLOAD_CONTAINER_MENU.get(), BankDownloadScreen::new);
-        MenuRegistry.registerScreenFactory(BankSystemMenus.SHARE_STAMPER_CONTAINER_MENU.get(), ShareStamperScreen::new);
+        //MenuRegistry.registerScreenFactory(BankSystemMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new); // mc<=1.21.8
+        //MenuRegistry.registerScreenFactory(BankSystemMenus.BANK_UPLOAD_CONTAINER_MENU.get(), BankUploadScreen::new); // mc<=1.21.8
+        //MenuRegistry.registerScreenFactory(BankSystemMenus.BANK_DOWNLOAD_CONTAINER_MENU.get(), BankDownloadScreen::new); // mc<=1.21.8
+        //MenuRegistry.registerScreenFactory(BankSystemMenus.SHARE_STAMPER_CONTAINER_MENU.get(), ShareStamperScreen::new); // mc<=1.21.8
+        MenuScreenRegistry.registerScreenFactory(BankSystemMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new); // mc>=1.21.9
+        MenuScreenRegistry.registerScreenFactory(BankSystemMenus.BANK_UPLOAD_CONTAINER_MENU.get(), BankUploadScreen::new); // mc>=1.21.9
+        MenuScreenRegistry.registerScreenFactory(BankSystemMenus.BANK_DOWNLOAD_CONTAINER_MENU.get(), BankDownloadScreen::new); // mc>=1.21.9
+        MenuScreenRegistry.registerScreenFactory(BankSystemMenus.SHARE_STAMPER_CONTAINER_MENU.get(), ShareStamperScreen::new); // mc>=1.21.9
     }
 
     public static void openBankSystemSettingScreen()
