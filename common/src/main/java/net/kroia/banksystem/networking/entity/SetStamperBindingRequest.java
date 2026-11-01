@@ -56,7 +56,7 @@ public class SetStamperBindingRequest extends BankSystemNetworkPacket {
         if (cm == null) return;
 
         // Unbind path — companyId == 0 means clear binding. MANAGE-gated on the
-        // currently-bound company. Contents are NOT cleared; block stays in world.
+        // currently-bound company. unbind() drops every slot on top of the block; the block stays.
         if (companyId == 0) {
             int cur = stamper.getBoundCompanyId();
             if (cur < 0) return; // nothing to do
