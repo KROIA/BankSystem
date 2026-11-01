@@ -26,7 +26,8 @@ import net.neoforged.neoforge.client.event.RegisterSpecialModelRendererEvent; //
  * constructed). From 1.21.4 the special item model renderer type {@code banksystem:stamped_share}
  * is registered instead.
  */
-@EventBusSubscriber(modid = BankSystemMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+@EventBusSubscriber(modid = BankSystemMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT) // mc<=1.21.5
+//@EventBusSubscriber(modid = BankSystemMod.MOD_ID, value = Dist.CLIENT) // mc>=1.21.6
 public final class NeoForgeShareExtensionsBootstrap {
     private NeoForgeShareExtensionsBootstrap() {}
 

@@ -54,6 +54,9 @@ public final class StampedShareSpecialRenderer implements SpecialModelRenderer<I
             StampedShareRenderer.render(stack, context, poseStack, buffers, light, overlay);
     }
 
+    //@Override // mc>=1.21.6
+    //public void getExtents(java.util.Set<org.joml.Vector3f> extents) { for (float x : new float[]{0f, 1f}) for (float y : new float[]{0f, 1f}) for (float z : new float[]{7.5f / 16f, 8.5f / 16f}) extents.add(new org.joml.Vector3f(x, y, z)); } // mc>=1.21.6 (card box)
+
     @Override
     public ItemStack extractArgument(ItemStack stack) {
         return stack;
