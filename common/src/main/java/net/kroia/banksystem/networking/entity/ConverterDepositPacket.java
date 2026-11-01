@@ -110,14 +110,14 @@ public class ConverterDepositPacket extends BankSystemNetworkPacket {
                 refund.setCount((int) Math.min(removedCount, refund.getMaxStackSize()));
                 long left = removedCount - refund.getCount();
                 if (!sender.getInventory().add(refund)) {
-                    sender.drop(refund, false);
+                    net.kroia.modutilities.PlayerCompat.drop(sender, refund);
                 }
                 while (left > 0) {
                     ItemStack more = template.copy();
                     int c = (int) Math.min(left, more.getMaxStackSize());
                     more.setCount(c);
                     if (!sender.getInventory().add(more)) {
-                        sender.drop(more, false);
+                        net.kroia.modutilities.PlayerCompat.drop(sender, more);
                     }
                     left -= c;
                 }

@@ -640,7 +640,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
             if (slotStack.getCount() == original.getCount())
                 return ItemStack.EMPTY;
             slot.onTake(pPlayer, slotStack);
-            pPlayer.drop(slotStack, false);
+            net.kroia.modutilities.PlayerCompat.drop(pPlayer, slotStack);
             return original;
         }
         if (pIndex >= CRAFT_GRID_SLOT_START && pIndex < CRAFT_GRID_SLOT_START + CRAFT_GRID_SLOT_COUNT) {
