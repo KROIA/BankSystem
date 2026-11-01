@@ -230,7 +230,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.BANK_ACCOUNT_BINDINGS = new BankAccountBindings();
         BankAccountBindings.setBackend(INSTANCES);
         VolatileItemComponents.setBackend(INSTANCES);
-        net.kroia.banksystem.client.render.StampedShareSpecialRenderer.setBackend(INSTANCES); // mc>=1.21.4
+        // Client-only class: touching it on a dedicated server crashes class loading.
+        if (dev.architectury.platform.Platform.getEnvironment() == dev.architectury.utils.Env.CLIENT) net.kroia.banksystem.client.render.StampedShareSpecialRenderer.setBackend(INSTANCES); // mc>=1.21.4
         MultiServerUtils.setBackend(INSTANCES);
         BankSystemDataHandler.setBackend(INSTANCES);
         BankTerminalBlockEntity.setBackend(INSTANCES);
