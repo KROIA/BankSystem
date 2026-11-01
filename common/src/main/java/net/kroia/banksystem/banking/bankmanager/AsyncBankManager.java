@@ -314,7 +314,7 @@ public class AsyncBankManager implements IAsyncBankManager {
                 case FunctionType.SetBanksystemAdminModeAsync -> {
                     ParamGroup_UUID_bool param = input.decodeParams();
                     ServerPlayer serverPlayer = ServerPlayerUtilities.getOnlinePlayer(playerSender);
-                    if(serverPlayer != null && serverPlayer.hasPermissions(2)) {
+                    if(serverPlayer != null && net.kroia.modutilities.PermissionCompat.hasPermission(serverPlayer, 2)) {
                         yield OutputData.of(input.function, bankManager.setBanksystemAdminMode(param.uuid, param.bool));
                     }
                     yield OutputData.of(input.function, false);

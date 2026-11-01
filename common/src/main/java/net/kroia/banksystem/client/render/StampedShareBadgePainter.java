@@ -8,8 +8,10 @@ import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.renderer.RenderType; // mc<=1.21.10
+//import net.minecraft.client.renderer.rendertype.RenderType; import net.minecraft.client.renderer.rendertype.RenderTypes; // mc>=1.21.11
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
@@ -25,8 +27,10 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
 
     public static final StampedShareBadgePainter INSTANCE = new StampedShareBadgePainter();
 
-    private static final ResourceLocation BASE_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath("banksystem", "textures/item/stamped_share.png");
+    private static final ResourceLocation BASE_TEXTURE = // mc<=1.21.10
+    //private static final Identifier BASE_TEXTURE = // mc>=1.21.11
+            ResourceLocation.fromNamespaceAndPath("banksystem", "textures/item/stamped_share.png"); // mc<=1.21.10
+            //Identifier.fromNamespaceAndPath("banksystem", "textures/item/stamped_share.png"); // mc>=1.21.11
 
     private StampedShareBadgePainter() {}
 
@@ -86,7 +90,8 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
             int fgTint = visuals.getFgLayer().tint();
             if ((fgTint & 0xFF000000) == 0) fgTint |= 0xFF000000;
             if (preset != null && !preset.isBlank()) {
-                ResourceLocation texture = SharePresetRegistry.getTexture(preset);
+                ResourceLocation texture = SharePresetRegistry.getTexture(preset); // mc<=1.21.10
+                //Identifier texture = SharePresetRegistry.getTexture(preset); // mc>=1.21.11
                 drawTexturedQuad(pose, buffers, texture, fgTint, packedLight);
             } else {
                 String initials = BankSystemColorHandlers.resolveMonogramInitials(companyId, visuals);
@@ -105,8 +110,10 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
     }
 
     private static void drawTexturedQuad(PoseStack pose, MultiBufferSource buffers,
-                                          ResourceLocation texture, int argb, int packedLight) {
-        var consumer = buffers.getBuffer(RenderType.text(texture));
+                                          ResourceLocation texture, int argb, int packedLight) { // mc<=1.21.10
+                                          //Identifier texture, int argb, int packedLight) { // mc>=1.21.11
+        var consumer = buffers.getBuffer(RenderType.text(texture)); // mc<=1.21.10
+        //var consumer = buffers.getBuffer(RenderTypes.text(texture)); // mc>=1.21.11
         Matrix4f m = pose.last().pose();
         int a = (argb >>> 24);
         int r = ((argb >> 16) & 0xFF);
@@ -126,7 +133,8 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
     }
 
     private static void drawFilledQuad(PoseStack pose, MultiBufferSource buffers, int argb, int packedLight) {
-        var consumer = buffers.getBuffer(RenderType.text(BASE_TEXTURE));
+        var consumer = buffers.getBuffer(RenderType.text(BASE_TEXTURE)); // mc<=1.21.10
+        //var consumer = buffers.getBuffer(RenderTypes.text(BASE_TEXTURE)); // mc>=1.21.11
         Matrix4f m = pose.last().pose();
         int a = (argb >>> 24);
         int r = ((argb >> 16) & 0xFF);
@@ -146,7 +154,8 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
     }
 
     private static void drawCardEdges(PoseStack pose, MultiBufferSource buffers, int argb, int packedLight) {
-        var consumer = buffers.getBuffer(RenderType.text(BASE_TEXTURE));
+        var consumer = buffers.getBuffer(RenderType.text(BASE_TEXTURE)); // mc<=1.21.10
+        //var consumer = buffers.getBuffer(RenderTypes.text(BASE_TEXTURE)); // mc>=1.21.11
         Matrix4f m = pose.last().pose();
         int a = (argb >>> 24);
         int r = (int)(((argb >> 16) & 0xFF)   * 0.65f);

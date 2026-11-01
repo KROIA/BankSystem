@@ -7,7 +7,8 @@ import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -27,7 +28,8 @@ import net.minecraft.server.level.ServerPlayer;
 public class S2CCompanyDescriptionUpdatePacket extends BankSystemNetworkPacket {
 
     public static final Type<S2CCompanyDescriptionUpdatePacket> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2c_company_description_update"));
+            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2c_company_description_update")); // mc<=1.21.10
+            //Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "s2c_company_description_update")); // mc>=1.21.11
 
     public static final StreamCodec<RegistryFriendlyByteBuf, S2CCompanyDescriptionUpdatePacket> STREAM_CODEC =
             StreamCodec.of(
