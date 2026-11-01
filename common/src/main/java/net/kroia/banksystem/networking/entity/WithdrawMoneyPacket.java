@@ -110,7 +110,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
 
             if (!moneyBank.hasSufficientFunds(totalValue)) {
-                ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getName(), sender.getName().getString()));
+                ServerPlayerUtilities.printToClientConsole(sender, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getMoneyItemName(), sender.getName().getString()));
                 continue;
             }
 
@@ -205,7 +205,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 User user = bankManager.getUserByUUID(player);
                 if(user == null) continue;
                 String userName = user.getName();
-                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getName(), userName));
+                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getMoneyItemName(), userName));
                 continue;
             }
 

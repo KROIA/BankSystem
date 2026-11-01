@@ -147,7 +147,8 @@ public class WorkersTabBody extends TabBody {
      * while the list is being rendered.
      */
     private void scheduleRemove(BankUserWidget widget) {
-        Minecraft.getInstance().tell(() -> {
+        Minecraft.getInstance().tell(() -> { // mc<=1.21.1
+        //Minecraft.getInstance().schedule(() -> { // mc>=1.21.2
             userList.removeChild(widget);
             userWidgets.remove(widget.getUserData().userUUID);
             var info = screen.info();

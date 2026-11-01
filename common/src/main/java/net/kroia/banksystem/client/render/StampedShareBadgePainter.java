@@ -10,7 +10,6 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.FastColor;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
@@ -109,10 +108,10 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
                                           ResourceLocation texture, int argb, int packedLight) {
         var consumer = buffers.getBuffer(RenderType.text(texture));
         Matrix4f m = pose.last().pose();
-        int a = FastColor.ARGB32.alpha(argb);
-        int r = FastColor.ARGB32.red(argb);
-        int g = FastColor.ARGB32.green(argb);
-        int b = FastColor.ARGB32.blue(argb);
+        int a = (argb >>> 24);
+        int r = ((argb >> 16) & 0xFF);
+        int g = ((argb >> 8) & 0xFF);
+        int b = (argb & 0xFF);
         int lu = packedLight & 0xFFFF, lv = (packedLight >> 16) & 0xFFFF;
         // front face
         consumer.addVertex(m,  0f,  0f, 0.01f).setColor(r, g, b, a).setUv(0f, 0f).setUv2(lu, lv);
@@ -129,10 +128,10 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
     private static void drawFilledQuad(PoseStack pose, MultiBufferSource buffers, int argb, int packedLight) {
         var consumer = buffers.getBuffer(RenderType.text(BASE_TEXTURE));
         Matrix4f m = pose.last().pose();
-        int a = FastColor.ARGB32.alpha(argb);
-        int r = FastColor.ARGB32.red(argb);
-        int g = FastColor.ARGB32.green(argb);
-        int b = FastColor.ARGB32.blue(argb);
+        int a = (argb >>> 24);
+        int r = ((argb >> 16) & 0xFF);
+        int g = ((argb >> 8) & 0xFF);
+        int b = (argb & 0xFF);
         int lu = packedLight & 0xFFFF, lv = (packedLight >> 16) & 0xFFFF;
         // front face
         consumer.addVertex(m,  0f,  0f, 0f).setColor(r, g, b, a).setUv(0f, 0f).setUv2(lu, lv);
@@ -149,10 +148,10 @@ public final class StampedShareBadgePainter implements IShareItemBadgePainter {
     private static void drawCardEdges(PoseStack pose, MultiBufferSource buffers, int argb, int packedLight) {
         var consumer = buffers.getBuffer(RenderType.text(BASE_TEXTURE));
         Matrix4f m = pose.last().pose();
-        int a = FastColor.ARGB32.alpha(argb);
-        int r = (int)(FastColor.ARGB32.red(argb)   * 0.65f);
-        int g = (int)(FastColor.ARGB32.green(argb) * 0.65f);
-        int b = (int)(FastColor.ARGB32.blue(argb)  * 0.65f);
+        int a = (argb >>> 24);
+        int r = (int)(((argb >> 16) & 0xFF)   * 0.65f);
+        int g = (int)(((argb >> 8) & 0xFF) * 0.65f);
+        int b = (int)((argb & 0xFF)  * 0.65f);
         int lu = packedLight & 0xFFFF, lv = (packedLight >> 16) & 0xFFFF;
         float f = 0.01f;   // front z — matches fg face so edges seal flush
         float t = -0.0625f; // back z

@@ -86,7 +86,8 @@ public class ItemColorUtil {
                 int count = 0;
                 for (int x = 0; x < width; x++) {
                     for (int y = 0; y < height; y++) {
-                        int pixel = nativeImage.getPixelRGBA(x, y);
+                        int pixel = nativeImage.getPixelRGBA(x, y); // mc<=1.21.1
+                        //int pixel = net.minecraft.util.ARGB.toABGR(nativeImage.getPixel(x, y)); // mc>=1.21.2
                         int a = (pixel >> 24) & 0xFF;
                         if (a < 128) continue;
                         rSum += pixel & 0xFF;

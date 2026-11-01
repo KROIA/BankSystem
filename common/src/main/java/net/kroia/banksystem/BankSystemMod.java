@@ -5,6 +5,11 @@ import net.kroia.banksystem.api.BankSystemAPI;
 public final class BankSystemMod {
 
     public static final String MOD_ID = "banksystem";
+
+    /** Registry id in the banksystem namespace. */
+    public static net.minecraft.resources.ResourceLocation id(String path) {
+        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
+    }
     public static final String VERSION = "2.2.0";
 
     // Set to false for release builds to hide dev-only commands (exportrecipes, etc.)

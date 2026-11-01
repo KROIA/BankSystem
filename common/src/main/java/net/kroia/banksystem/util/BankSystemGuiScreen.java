@@ -44,7 +44,8 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
      * current event pass completes.
      */
     public static void switchScreen(Screen newScreen) {
-        Minecraft.getInstance().tell(() -> Minecraft.getInstance().setScreen(newScreen));
+        Minecraft.getInstance().tell(() -> Minecraft.getInstance().setScreen(newScreen)); // mc<=1.21.1
+        //Minecraft.getInstance().schedule(() -> Minecraft.getInstance().setScreen(newScreen)); // mc>=1.21.2
     }
 
     /**

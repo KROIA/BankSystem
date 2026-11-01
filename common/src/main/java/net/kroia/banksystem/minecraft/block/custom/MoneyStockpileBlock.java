@@ -1,11 +1,14 @@
 package net.kroia.banksystem.minecraft.block.custom;
 
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.banksystem.minecraft.entity.custom.MoneyStockpileBlockEntity;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.ItemInteractionResult;
+import net.minecraft.world.ItemInteractionResult; // mc<=1.21.1
+//import net.minecraft.world.InteractionResult; // mc>=1.21.2
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
@@ -27,24 +30,27 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
 
     // Copy properties from wool
     public MoneyStockpileBlock() {
-        super(Properties.ofFullCopy(net.minecraft.world.level.block.Blocks.WHITE_WOOL));
+        super(RegistryCompat.blockProperties(Properties.ofFullCopy(net.minecraft.world.level.block.Blocks.WHITE_WOOL), BankSystemMod.id(NAME)));
     }
 
 
 
     @Override
-    protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
+    protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, // mc<=1.21.1
+    //protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, // mc>=1.21.2
                                               Player player, InteractionHand hand, BlockHitResult hit)
     /*@Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos,
                                  Player player, InteractionHand hand, BlockHitResult hit)*/
     {
         if (level.isClientSide)
-            return ItemInteractionResult.SUCCESS;
+            return ItemInteractionResult.SUCCESS; // mc<=1.21.1
+            //return InteractionResult.SUCCESS; // mc>=1.21.2
 
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof MoneyStockpileBlockEntity stockpile))
-            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION; // mc<=1.21.1
+            //return InteractionResult.TRY_WITH_EMPTY_HAND; // mc>=1.21.2
 
         ItemStack held = player.getItemInHand(hand);
 
@@ -53,7 +59,8 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
         if (!held.isEmpty() && MoneyItem.isMoney(held)) {
             int added = stockpile.addItems(held);
             held.shrink(added);
-            return ItemInteractionResult.CONSUME;
+            return ItemInteractionResult.CONSUME; // mc<=1.21.1
+            //return InteractionResult.CONSUME; // mc>=1.21.2
         }
 
         // Remove one item
@@ -62,10 +69,12 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
             if (!player.addItem(extracted)) {
                 player.drop(extracted, false);
             }
-            return ItemInteractionResult.CONSUME;
+            return ItemInteractionResult.CONSUME; // mc<=1.21.1
+            //return InteractionResult.CONSUME; // mc>=1.21.2
         }
 
-        return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+        return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION; // mc<=1.21.1
+        //return InteractionResult.TRY_WITH_EMPTY_HAND; // mc>=1.21.2
     }
 
 

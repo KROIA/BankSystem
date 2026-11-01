@@ -440,7 +440,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         {
             if(minecraft != null && minecraft.player != null)
             {
-                minecraft.player.sendSystemMessage(MUST_KEEP_MANAGER);
+                minecraft.player.displayClientMessage(MUST_KEEP_MANAGER, false);
             }
             return;
         }

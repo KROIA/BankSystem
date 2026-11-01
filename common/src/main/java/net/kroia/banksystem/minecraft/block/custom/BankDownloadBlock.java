@@ -1,5 +1,7 @@
 package net.kroia.banksystem.minecraft.block.custom;
 
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.networking.entity.SyncBankDownloadDataPacket;
@@ -23,7 +25,6 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.NotNull;
@@ -69,9 +70,9 @@ public class BankDownloadBlock extends Block implements EntityBlock {
     public static final String NAME = "bank_download_block";
     public static final EnumProperty<ConnectionState> CONNECTION_STATE = EnumProperty.create("connection_state", ConnectionState.class);
     public static final EnumProperty<ReceivingState> RECEIVING_STATE = EnumProperty.create("receiving_state", ReceivingState.class);
-    public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
+    public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
     public BankDownloadBlock() {
-        super(Properties.ofFullCopy(net.minecraft.world.level.block.Blocks.CHEST).isRedstoneConductor((state, level, pos) -> false));
+        super(RegistryCompat.blockProperties(Properties.ofFullCopy(net.minecraft.world.level.block.Blocks.CHEST).isRedstoneConductor((state, level, pos) -> false), BankSystemMod.id(NAME)));
         this.registerDefaultState(this.stateDefinition.any().setValue(CONNECTION_STATE, ConnectionState.NOT_CONNECTED));
         this.registerDefaultState(this.stateDefinition.any().setValue(RECEIVING_STATE, ReceivingState.NOT_RECEIVING));
         this.registerDefaultState(this.defaultBlockState().setValue(FACING, Direction.NORTH)); // Default facing
@@ -105,11 +106,13 @@ public class BankDownloadBlock extends Block implements EntityBlock {
 
 
     @Override
-    public void neighborChanged(BlockState state, Level level, BlockPos pos, Block block, BlockPos fromPos, boolean isMoving) {
+    public void neighborChanged(BlockState state, Level level, BlockPos pos, Block block, BlockPos fromPos, boolean isMoving) { // mc<=1.21.1
+    //public void neighborChanged(BlockState state, Level level, BlockPos pos, Block block, @org.jetbrains.annotations.Nullable net.minecraft.world.level.redstone.Orientation orientation, boolean isMoving) { // mc>=1.21.2
         if (level.isClientSide)
             return;
         level.scheduleTick(pos, this, 4);
-        super.neighborChanged(state, level, pos, block, fromPos, isMoving); // Call super to handle other changes
+        super.neighborChanged(state, level, pos, block, fromPos, isMoving); // Call super to handle other changes // mc<=1.21.1
+        //super.neighborChanged(state, level, pos, block, orientation, isMoving); // Call super to handle other changes // mc>=1.21.2
     }
 
     @Override

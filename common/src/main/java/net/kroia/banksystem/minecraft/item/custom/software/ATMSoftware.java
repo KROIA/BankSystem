@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.item.custom.software;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.block.custom.TerminalBlock;
 import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
@@ -9,7 +10,7 @@ import net.minecraft.world.level.GameType;
 public class ATMSoftware extends Software{
     public static final String NAME = "atm_software";
     public ATMSoftware() {
-        super();
+        super(BankSystemMod.id(NAME));
     }
 
     @Override

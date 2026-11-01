@@ -1,5 +1,7 @@
 package net.kroia.banksystem.minecraft.item.custom.share;
 
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.banksystem.minecraft.item.BankSystemCreativeModeTab;
 import net.minecraft.world.item.Item;
 
@@ -13,6 +15,6 @@ public class BlankShareItem extends Item {
     public static final String NAME = "blank_share";
 
     public BlankShareItem() {
-        super(new Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB));
+        super(RegistryCompat.itemProperties(new Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB), BankSystemMod.id(NAME)));
     }
 }

@@ -426,7 +426,7 @@ public final class VolatileItemComponents {
 
     private static void removeByIds(ItemStack stack, Set<ResourceLocation> ids) {
         for (ResourceLocation id : ids) {
-            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
+            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getOptional(id).orElse(null);
             if (type != null)
                 resetComponentToPrototype(stack, type);
         }
@@ -545,12 +545,12 @@ public final class VolatileItemComponents {
     private static @NotNull List<DataComponentType<?>> effectiveGatedTypes() {
         List<DataComponentType<?>> types = new ArrayList<>();
         for (ResourceLocation id : effectiveGatedTagIds()) {
-            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
+            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getOptional(id).orElse(null);
             if (type != null && !types.contains(type))
                 types.add(type);
         }
         for (ResourceLocation id : gatedConfigComponentIds) {
-            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
+            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getOptional(id).orElse(null);
             if (type != null && !types.contains(type))
                 types.add(type);
         }
@@ -569,12 +569,12 @@ public final class VolatileItemComponents {
         // Reset instead of remove — see resetComponentToPrototype() for why plain remove()
         // would poison the patch of prototype-backed component types.
         for (ResourceLocation id : effectiveVolatileTagIds()) {
-            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
+            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getOptional(id).orElse(null);
             if (type != null && !gatedTypes.contains(type))
                 resetComponentToPrototype(copy, type);
         }
         for (ResourceLocation id : configComponentIds) {
-            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
+            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getOptional(id).orElse(null);
             if (type != null && !gatedTypes.contains(type))
                 resetComponentToPrototype(copy, type);
         }

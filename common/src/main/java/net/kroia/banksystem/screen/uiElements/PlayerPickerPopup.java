@@ -68,7 +68,8 @@ public class PlayerPickerPopup extends BankSystemGuiScreen {
         frame.addChild(cancel);
 
         getBankManager().getBankManagerDataAsync()
-                .thenAccept(data -> Minecraft.getInstance().tell(() -> populate(data)));
+                .thenAccept(data -> Minecraft.getInstance().tell(() -> populate(data))); // mc<=1.21.1
+                //.thenAccept(data -> Minecraft.getInstance().schedule(() -> populate(data))); // mc>=1.21.2
     }
 
     /**

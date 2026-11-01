@@ -1,5 +1,7 @@
 package net.kroia.banksystem.minecraft.block.custom;
 
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.modutilities.RegistryCompat;
 import com.mojang.serialization.MapCodec;
 import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
 import net.kroia.modutilities.gui.display.AbstractDisplayBlock;
@@ -39,7 +41,7 @@ public class BankSystemDisplayBlock extends AbstractDisplayBlock {
     }
 
     public BankSystemDisplayBlock() {
-        super(BlockBehaviour.Properties.of().strength(2.0f).noOcclusion());
+        super(RegistryCompat.blockProperties(BlockBehaviour.Properties.of().strength(2.0f).noOcclusion(), BankSystemMod.id(NAME)));
     }
 
     @Override

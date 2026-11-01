@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.item.custom.software;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.block.custom.TerminalBlock;
@@ -23,7 +24,7 @@ public class BankingSoftware extends Software {
     public static final String NAME = "banking_software";
     //private long cooldownTimer;
     public BankingSoftware() {
-        super();
+        super(BankSystemMod.id(NAME));
     }
 
     @Override

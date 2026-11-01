@@ -1,5 +1,7 @@
 package net.kroia.banksystem.minecraft.item.custom.money;
 
+import net.minecraft.resources.ResourceLocation;
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
@@ -43,13 +45,17 @@ public class MoneyItem extends Item{
     public static String getCurrencyName() {
         return CURRENCY_NAME.getString();
     }
-    public static String getName() {
+    public static String getMoneyItemName() {
         return ITEM_NAME.getString();
     }
 
     public MoneyItem() {
+        this(BankSystemMod.id(NAME));
+    }
+    /** Subclasses pass the id they are registered under. */
+    protected MoneyItem(ResourceLocation id) {
         //super(new Properties().tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB)); // 1.19.2 and below
-        super(new Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB));
+        super(RegistryCompat.itemProperties(new Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB), id));
     }
 
     @Override
@@ -147,6 +153,6 @@ public class MoneyItem extends Item{
                 return InteractionResult.SUCCESS;
             }
         }
-        return InteractionResult.sidedSuccess(level.isClientSide);
+        return level.isClientSide ? InteractionResult.SUCCESS : InteractionResult.CONSUME;
     }
 }

@@ -266,7 +266,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
                 return false;
             }
             String playerName = user.getName();
-            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(playerName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(playerName, MoneyItem.getMoneyItemName()));
             return false;
         }
         long balance = bank.getBalance();
@@ -302,7 +302,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         ISyncServerBank bank = bankManager.getOrCreatePersonalBank(userName, MoneyItem.getItemID());
         if(bank == null)
         {
-            ClientConsoleMessagePacket.sendMessageFromMaster(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getName()));
+            ClientConsoleMessagePacket.sendMessageFromMaster(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getMoneyItemName()));
             return false;
         }
 
@@ -311,7 +311,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             sendMessage(executor,
                     BankSystemTextMessages.getCantAddMessage(
                             bank.getFormattedAmount(amount),
-                            MoneyItem.getName(),
+                            MoneyItem.getMoneyItemName(),
                             userName,
                             status.toString()));
             return false;
@@ -348,7 +348,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         ISyncServerBank bank = bankManager.getOrCreatePersonalBank(userName, MoneyItem.getItemID());
         if(bank == null)
         {
-            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getMoneyItemName()));
             return false;
         }
         bank.setRealBalance(amount);
@@ -358,7 +358,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return true;
         }
         UUID bankOwner = owner.getUUID();
-        String message = BankSystemTextMessages.getSetBalanceMessage(bank.getFormattedAmount(amount), MoneyItem.getName(), userName);
+        String message = BankSystemTextMessages.getSetBalanceMessage(bank.getFormattedAmount(amount), MoneyItem.getMoneyItemName(), userName);
         sendMessage(executor, message);
         if(!executor.equals(bankOwner))
             sendMessage(bankOwner, message);
@@ -393,14 +393,14 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         ISyncServerBank bank = bankManager.getOrCreatePersonalBank(userName, MoneyItem.getItemID());
         if(bank == null)
         {
-            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getMoneyItemName()));
             return false;
         }
         if(bank.getRealBalance() >= amount) {
             bank.withdrawReal(amount);
         }
         else {
-            sendMessage(executor, BankSystemTextMessages.getNotEnoughInAccountMessage(userName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getNotEnoughInAccountMessage(userName, MoneyItem.getMoneyItemName()));
             return false;
         }
         return true;
@@ -421,27 +421,27 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         ISyncServerBank fromBank = bankManager.getOrCreatePersonalBank(fromUserName, MoneyItem.getItemID());
         if(fromBank == null)
         {
-            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(fromUserName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(fromUserName, MoneyItem.getMoneyItemName()));
             return false;
         }
         ISyncServerBank toBank = bankManager.getOrCreatePersonalBank(toUserName, MoneyItem.getItemID());
         if(toBank == null)
         {
-            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(toUserName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(toUserName, MoneyItem.getMoneyItemName()));
             return false;
         }
 
         if(fromBank == toBank)
         {
-            sendMessage(executor, BankSystemTextMessages.getTransferToSameAccountMessage(MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getTransferToSameAccountMessage(MoneyItem.getMoneyItemName()));
             return false;
         }
         BankStatus status = fromBank.transfer(fromBank.convertToRawAmount(amount), toBank);
         if(status != BankStatus.SUCCESS) {
             if (fromBank.getRealBalance() < amount)
-                sendMessage(executor, BankSystemTextMessages.getNotEnoughMoneyForTransfer(fromUserName, toUserName, fromBank.getFormattedAmount(amount), MoneyItem.getName()));
+                sendMessage(executor, BankSystemTextMessages.getNotEnoughMoneyForTransfer(fromUserName, toUserName, fromBank.getFormattedAmount(amount), MoneyItem.getMoneyItemName()));
             else
-                sendMessage(executor, BankSystemTextMessages.getTransferFailedMessage(fromUserName, toUserName, fromBank.getFormattedAmount(amount), MoneyItem.getName(), status.toString()));
+                sendMessage(executor, BankSystemTextMessages.getTransferFailedMessage(fromUserName, toUserName, fromBank.getFormattedAmount(amount), MoneyItem.getMoneyItemName(), status.toString()));
             return false;
         }
         return true;
@@ -457,7 +457,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     @Override
     public boolean money_circulation(@NotNull UUID executor) {
         double circulation = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getRealMoneyCirculation();
-        sendMessage(executor, BankSystemTextMessages.getCirculationMessage(ServerBank.getFormattedAmountStatic(circulation), MoneyItem.getName()));
+        sendMessage(executor, BankSystemTextMessages.getCirculationMessage(ServerBank.getFormattedAmountStatic(circulation), MoneyItem.getMoneyItemName()));
         return true;
     }
     @Override
@@ -620,7 +620,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
 
         IServerBankAccount account = bankManager.getOrCreatePersonalBankAccount(userName);
         if (account == null) {
-            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getMoneyItemName()));
             return false;
         }
         sendMessage(executor, account.toJsonString());

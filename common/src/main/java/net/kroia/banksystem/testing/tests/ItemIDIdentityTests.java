@@ -167,8 +167,8 @@ public class ItemIDIdentityTests extends TestSuite {
         if (server == null)
             return ItemStack.EMPTY;
         Holder<Enchantment> holder = server.registryAccess()
-                .registryOrThrow(Registries.ENCHANTMENT)
-                .getHolderOrThrow(key);
+                .lookupOrThrow(Registries.ENCHANTMENT)
+                .getOrThrow(key);
         ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
         ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
         mutable.set(holder, 1);

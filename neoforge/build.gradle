@@ -62,7 +62,9 @@ dependencies {
     // by BankSystemJeiPlugin during frame merging, or runClient crashes with
     // "TypeNotPresentException: Type mezz/jei/... not present". JEI is still
     // a soft dependency of the shipped mod — this line only affects dev.
-    modRuntimeOnly("mezz.jei:jei-${rootProject.minecraft_version}-neoforge:${rootProject.jei_version}")
+    modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge:${rootProject.jei_version}") // mc<=1.21.1
+    // No JEI build exists for 1.21.2/1.21.3: only the 1.21.1 API jar at dev runtime.
+    //modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge-api:${rootProject.jei_version}") // mc>=1.21.2
 
     implementation('org.xerial:sqlite-jdbc:3.46.0.0'){
         exclude group: "org.slf4j"

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.item.custom.share;
 
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.company.ShareVisuals;
 import net.kroia.banksystem.client.cache.CompanyInfoCache;
@@ -12,7 +13,8 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.InteractionResultHolder; // mc<=1.21.1
+//import net.minecraft.world.InteractionResult; // mc>=1.21.2
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -45,7 +47,7 @@ public class StampedShareItem extends Item {
             "tooltip." + BankSystemMod.MOD_ID + ".stamped_share.supply";
 
     public StampedShareItem() {
-        super(new Properties());
+        super(RegistryCompat.itemProperties(new Properties(), BankSystemMod.id(NAME)));
     }
 
     /** Convenience accessor: reads the {@code company_id} component, or {@code null} if unstamped. */
@@ -169,19 +171,23 @@ public class StampedShareItem extends Item {
      * so no bogus interaction packet reaches the block/entity layer.
      */
     @Override
-    public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+    public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) { // mc<=1.21.1
+    //public @NotNull InteractionResult use(Level level, Player player, InteractionHand hand) { // mc>=1.21.2
         ItemStack stack = player.getItemInHand(hand);
         Integer companyId = getCompanyId(stack);
-        if (companyId == null) return InteractionResultHolder.pass(stack);
+        if (companyId == null) return InteractionResultHolder.pass(stack); // mc<=1.21.1
+        //if (companyId == null) return InteractionResult.PASS; // mc>=1.21.2
 
         if (level.isClientSide) {
             // Send a C2S request so the server can resolve rights and push them back via
             // S2COpenCompanyManagementPacket. This avoids ARRS calls from the client that
             // may fail before the channel is fully established on dedicated servers.
             net.kroia.banksystem.networking.general.C2SRequestCompanyManagementScreen.send(companyId);
-            return InteractionResultHolder.success(stack);
+            return InteractionResultHolder.success(stack); // mc<=1.21.1
+            //return InteractionResult.SUCCESS; // mc>=1.21.2
         }
-        return InteractionResultHolder.pass(stack);
+        return InteractionResultHolder.pass(stack); // mc<=1.21.1
+        //return InteractionResult.PASS; // mc>=1.21.2
     }
 
     private static String formatLong(long value) {

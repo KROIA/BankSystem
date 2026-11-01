@@ -15,6 +15,7 @@ import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity
 import net.kroia.banksystem.minecraft.entity.custom.MoneyStockpileBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity;
 import net.kroia.banksystem.minecraft.entity.renderer.MoneyStockpileEntityRenderer;
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.modutilities.gui.display.client.AbstractDisplayBlockEntityRenderer;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.client.renderer.RenderType;
@@ -41,28 +42,28 @@ public class BankSystemEntities {
 
     public static final RegistrySupplier<BlockEntityType<?>> BANK_TERMINAL_BLOCK_ENTITY =
             registerBlockEntity("bank_terminal_block_entity",
-                    () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder.of(BankTerminalBlockEntity::new, BankSystemBlocks.BANK_TERMINAL_BLOCK.get()).build(null));
+                    () -> RegistryCompat.createBlockEntityType(BankTerminalBlockEntity::new, BankSystemBlocks.BANK_TERMINAL_BLOCK.get()));
 
     public static final RegistrySupplier<BlockEntityType<?>> BANK_UPLOAD_BLOCK_ENTITY =
             registerBlockEntity("bank_upload_block_entity",
-                    () -> BlockEntityType.Builder.of(BankUploadBlockEntity::new, BankSystemBlocks.BANK_UPLOAD_BLOCK.get()).build(null));
+                    () -> RegistryCompat.createBlockEntityType(BankUploadBlockEntity::new, BankSystemBlocks.BANK_UPLOAD_BLOCK.get()));
 
     public static final RegistrySupplier<BlockEntityType<?>> BANK_DOWNLOAD_BLOCK_ENTITY =
             registerBlockEntity("bank_download_block_entity",
-                    () -> BlockEntityType.Builder.of(BankDownloadBlockEntity::new, BankSystemBlocks.BANK_DOWNLOAD_BLOCK.get()).build(null));
+                    () -> RegistryCompat.createBlockEntityType(BankDownloadBlockEntity::new, BankSystemBlocks.BANK_DOWNLOAD_BLOCK.get()));
 
 
     public static final RegistrySupplier<BlockEntityType<?>> MONEY_STOCKPILE_BLOCK_ENTITY =
             registerBlockEntity("money_stockpile_block_entity",
-                    () -> BlockEntityType.Builder.of(MoneyStockpileBlockEntity::new, BankSystemBlocks.MONEY_STOCKPILE_BLOCK.get()).build(null));
+                    () -> RegistryCompat.createBlockEntityType(MoneyStockpileBlockEntity::new, BankSystemBlocks.MONEY_STOCKPILE_BLOCK.get()));
 
     public static final RegistrySupplier<BlockEntityType<?>> SHARE_STAMPER_BLOCK_ENTITY =
             registerBlockEntity("share_stamper_entity",
-                    () -> BlockEntityType.Builder.of(ShareStamperBlockEntity::new, BankSystemBlocks.SHARE_STAMPER_BLOCK.get()).build(null));
+                    () -> RegistryCompat.createBlockEntityType(ShareStamperBlockEntity::new, BankSystemBlocks.SHARE_STAMPER_BLOCK.get()));
 
     public static final RegistrySupplier<BlockEntityType<?>> BANKSYSTEM_DISPLAY_BLOCK_ENTITY =
             registerBlockEntity("banksystem_display_block_entity",
-                    () -> BlockEntityType.Builder.of(BankSystemDisplayBlockEntity::new, BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get()).build(null));
+                    () -> RegistryCompat.createBlockEntityType(BankSystemDisplayBlockEntity::new, BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get()));
 
 
 

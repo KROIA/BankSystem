@@ -306,7 +306,8 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         // races GUI init and CMEs during layout iteration.
         if (original != null) {
             AsyncCompanyManager.getHistoryAsync(original.getScheduleId(), 20).thenAccept(out ->
-                    Minecraft.getInstance().tell(() -> {
+                    Minecraft.getInstance().tell(() -> { // mc<=1.21.1
+                    //Minecraft.getInstance().schedule(() -> { // mc>=1.21.2
                         if (out == null) return;
                         totalPaidLabel.setText(Component.translatable(TOTAL_PAID_KEY,
                                 MoneyFormat.format(out.totalPaid())).getString());
@@ -508,7 +509,8 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
                             accountNr, mode, currencyItem)
                     // Bug D fix (v2.1.0) — hop to render thread before firing onDirty
                     // (refresh) and swapping screens. Off-thread refresh races GUI init.
-                    .thenAccept(out -> Minecraft.getInstance().tell(() -> {
+                    .thenAccept(out -> Minecraft.getInstance().tell(() -> { // mc<=1.21.1
+                    //.thenAccept(out -> Minecraft.getInstance().schedule(() -> { // mc>=1.21.2
                         if (out != null && out.resultCode() == AsyncCompanyManager.CODE_OK
                                 && paused && out.scheduleId() != 0L) {
                             AsyncCompanyManager.pausePayoutAsync(companyId, out.scheduleId(), true, caller);
@@ -520,7 +522,8 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
             final boolean finalPaused = paused;
             AsyncCompanyManager.updatePayoutAsync(companyId, original.getScheduleId(), amount, intervalTicks,
                     caller, target, accountNr, mode, currencyItem)
-                    .thenAccept(out -> Minecraft.getInstance().tell(() -> {
+                    .thenAccept(out -> Minecraft.getInstance().tell(() -> { // mc<=1.21.1
+                    //.thenAccept(out -> Minecraft.getInstance().schedule(() -> { // mc>=1.21.2
                         if (finalPaused != original.isPaused()) {
                             AsyncCompanyManager.pausePayoutAsync(companyId, original.getScheduleId(), finalPaused, caller);
                         }
@@ -534,7 +537,8 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         if (!canManage || original == null) return;
         // Bug D fix (v2.1.0) — hop to render thread before onDirty/refresh + screen swap.
         AsyncCompanyManager.deletePayoutAsync(companyId, original.getScheduleId(), caller).thenAccept(o ->
-                Minecraft.getInstance().tell(() -> {
+                Minecraft.getInstance().tell(() -> { // mc<=1.21.1
+                //Minecraft.getInstance().schedule(() -> { // mc>=1.21.2
                     if (onDirty != null) onDirty.run();
                     closeToParent();
                 }));

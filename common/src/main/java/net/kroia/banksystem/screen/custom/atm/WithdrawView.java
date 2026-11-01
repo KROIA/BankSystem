@@ -177,7 +177,7 @@ public class WithdrawView extends BankSystemGuiElement {
             Player player = Minecraft.getInstance().player;
             if (player != null && sum > currentBalance) {
                 String text = BankSystemTextMessages.getATMNotEnoughBalance(sum);
-                player.sendSystemMessage(Component.translatable(text));
+                player.displayClientMessage(Component.translatable(text), false);
             }
             return;
         }

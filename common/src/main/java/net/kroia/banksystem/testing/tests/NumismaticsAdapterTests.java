@@ -500,8 +500,8 @@ public class NumismaticsAdapterTests extends TestSuite {
                 return pass("Numismatics provider not available — skipped");
             }
 
-            Item bevelItem = BuiltInRegistries.ITEM.get(
-                    ResourceLocation.fromNamespaceAndPath("numismatics", "bevel"));
+            Item bevelItem = BuiltInRegistries.ITEM.getOptional(
+                    ResourceLocation.fromNamespaceAndPath("numismatics", "bevel")).orElse(null);
             if (bevelItem == null || bevelItem == Items.AIR) {
                 return pass("numismatics:bevel not in item registry — skipped");
             }
@@ -583,8 +583,8 @@ public class NumismaticsAdapterTests extends TestSuite {
                 return pass("Numismatics provider not available — skipped");
             }
 
-            Item bevelItem = BuiltInRegistries.ITEM.get(
-                    ResourceLocation.fromNamespaceAndPath("numismatics", "bevel"));
+            Item bevelItem = BuiltInRegistries.ITEM.getOptional(
+                    ResourceLocation.fromNamespaceAndPath("numismatics", "bevel")).orElse(null);
             if (bevelItem == null || bevelItem == Items.AIR) {
                 return pass("numismatics:bevel not in item registry — skipped");
             }

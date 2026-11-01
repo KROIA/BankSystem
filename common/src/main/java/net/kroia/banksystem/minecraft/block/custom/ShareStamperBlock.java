@@ -2,6 +2,8 @@ package net.kroia.banksystem.minecraft.block.custom;
 
 // TODO_ART Task #47 (v2.1.0) — placeholder model reuses iron_block texture; dedicated art pending.
 
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.banksystem.minecraft.component.BankSystemDataComponents;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity;
@@ -25,7 +27,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
@@ -40,13 +42,13 @@ import static dev.architectury.registry.menu.MenuRegistry.openExtendedMenu;
 public class ShareStamperBlock extends Block implements EntityBlock {
 
     public static final String NAME = "share_stamper";
-    public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
+    public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
 
     public ShareStamperBlock() {
-        super(Properties.ofFullCopy(Blocks.IRON_BLOCK)
+        super(RegistryCompat.blockProperties(Properties.ofFullCopy(Blocks.IRON_BLOCK)
                 .requiresCorrectToolForDrops()
                 .strength(3.5f, 6.0f)
-                .isRedstoneConductor((s, l, p) -> false));
+                .isRedstoneConductor((s, l, p) -> false), BankSystemMod.id(NAME)));
         this.registerDefaultState(this.defaultBlockState().setValue(FACING, Direction.NORTH));
     }
 
@@ -95,8 +97,8 @@ public class ShareStamperBlock extends Block implements EntityBlock {
         }
         if (!stamper.hasManagePermission(player.getUUID())) {
             String companyName = stamper.getBoundCompanyName();
-            player.sendSystemMessage(Component.translatable(
-                    "gui.banksystem.share_stamper.no_permission", companyName));
+            player.displayClientMessage(Component.translatable(
+                    "gui.banksystem.share_stamper.no_permission", companyName), false);
             return InteractionResult.FAIL;
         }
         if (player instanceof ServerPlayer sPlayer) {

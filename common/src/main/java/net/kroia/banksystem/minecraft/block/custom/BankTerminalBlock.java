@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.block.custom;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -29,7 +30,7 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
 
     public BankTerminalBlock()
     {
-        super();
+        super(BankSystemMod.id(NAME));
     }
 
     @Nullable

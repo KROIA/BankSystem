@@ -1,12 +1,13 @@
 package net.kroia.banksystem.minecraft.item.custom.money;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
 
 public class MoneyItem50 extends MoneyItem {
     public static final String NAME = "money50";
 
     public MoneyItem50() {
-        super();
+        super(BankSystemMod.id(NAME));
     }
 
     @Override

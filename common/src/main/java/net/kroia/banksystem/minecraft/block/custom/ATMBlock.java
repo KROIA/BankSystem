@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.block.custom;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
@@ -12,6 +13,10 @@ import net.minecraft.world.phys.BlockHitResult;
 public class ATMBlock  extends TerminalBlock {
 
     public static final String NAME = "atm_block";
+
+    public ATMBlock() {
+        super(BankSystemMod.id(NAME));
+    }
 
 
     @Override
