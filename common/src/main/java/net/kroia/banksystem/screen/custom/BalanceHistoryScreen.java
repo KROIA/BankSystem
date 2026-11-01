@@ -606,7 +606,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         ListTag list = NbtCompat.getList(historyTag, DISABLED_ITEMS_KEY, Tag.TAG_SHORT);
         for (Tag tag : list) {
             if (tag instanceof ShortTag shortTag) {
-                disabledItems.add(shortTag.getAsShort());
+                disabledItems.add(NbtCompat.asShort(shortTag));
             }
         }
     }
