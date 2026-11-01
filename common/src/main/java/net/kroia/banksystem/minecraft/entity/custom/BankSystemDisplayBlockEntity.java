@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
@@ -295,10 +296,10 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     @Override
     protected void loadCustomData(CompoundTag tag, HolderLookup.Provider registries) {
         if (tag.contains("displayType")) {
-            displayType = DisplayType.fromId(tag.getString("displayType"));
+            displayType = DisplayType.fromId(NbtCompat.getString(tag, "displayType"));
         }
         if (tag.contains("accountNumber")) {
-            accountNumber = tag.getInt("accountNumber");
+            accountNumber = NbtCompat.getInt(tag, "accountNumber");
         }
         loadOverviewData(tag);
         loadHistoryData(tag);
@@ -356,12 +357,12 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         if (pendingOverviewSlotData != null) {
             int count = Math.min(pendingOverviewSlotData.size(), Math.min(overviewIcons.size(), overviewLabels.size()));
             for (int i = 0; i < count; i++) {
-                CompoundTag entry = pendingOverviewSlotData.getCompound(i);
+                CompoundTag entry = NbtCompat.getCompound(pendingOverviewSlotData, i);
                 if (entry.contains("text")) {
-                    overviewLabels.get(i).setText(entry.getString("text"));
+                    overviewLabels.get(i).setText(NbtCompat.getString(entry, "text"));
                 }
                 if (i < overviewCompLabels.size()) {
-                    overviewCompLabels.get(i).setText(entry.contains("compText") ? entry.getString("compText") : "");
+                    overviewCompLabels.get(i).setText(entry.contains("compText") ? NbtCompat.getString(entry, "compText") : "");
                 }
             }
             pendingOverviewSlotData = null;
@@ -379,12 +380,12 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         if (pendingLegendData != null) {
             int count = Math.min(pendingLegendData.size(), Math.min(legendFrames.size(), legendIcons.size()));
             for (int i = 0; i < count; i++) {
-                CompoundTag entry = pendingLegendData.getCompound(i);
+                CompoundTag entry = NbtCompat.getCompound(pendingLegendData, i);
                 Frame f = legendFrames.get(i);
-                f.setOutlineColor(entry.getInt("color"));
-                f.setBackgroundColor(entry.getInt("bgColor"));
-                f.setEnableOutline(entry.getBoolean("visible"));
-                f.setEnableBackground(entry.getBoolean("visible"));
+                f.setOutlineColor(NbtCompat.getInt(entry, "color"));
+                f.setBackgroundColor(NbtCompat.getInt(entry, "bgColor"));
+                f.setEnableOutline(NbtCompat.getBoolean(entry, "visible"));
+                f.setEnableBackground(NbtCompat.getBoolean(entry, "visible"));
             }
             for (int i = count; i < legendFrames.size(); i++) {
                 legendFrames.get(i).setEnableOutline(false);
@@ -651,10 +652,10 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
     private void loadOverviewData(CompoundTag tag) {
         if (tag.contains("slotCount")) {
-            slotCount = tag.getInt("slotCount");
+            slotCount = NbtCompat.getInt(tag, "slotCount");
         }
-        pendingOverviewAccountText = tag.contains("ovAccountText") ? tag.getString("ovAccountText") : null;
-        pendingOverviewSlotData = tag.contains("ovSlots") ? tag.getList("ovSlots", 10) : null;
+        pendingOverviewAccountText = tag.contains("ovAccountText") ? NbtCompat.getString(tag, "ovAccountText") : null;
+        pendingOverviewSlotData = tag.contains("ovSlots") ? NbtCompat.getList(tag, "ovSlots", 10) : null;
     }
 
     static String formatCompact(long rawAmount) {
@@ -947,19 +948,19 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     }
 
     private void loadHistoryData(CompoundTag tag) {
-        pendingChartState = tag.contains("chartState") ? tag.getCompound("chartState") : null;
-        pendingStatusText = tag.contains("statusText") ? tag.getString("statusText") : null;
-        pendingLegendData = tag.contains("legend") ? tag.getList("legend", 10) : null;
+        pendingChartState = tag.contains("chartState") ? NbtCompat.getCompound(tag, "chartState") : null;
+        pendingStatusText = tag.contains("statusText") ? NbtCompat.getString(tag, "statusText") : null;
+        pendingLegendData = tag.contains("legend") ? NbtCompat.getList(tag, "legend", 10) : null;
         if (pendingLegendData != null) {
             int n = pendingLegendData.size();
             legendOutlineColors = new int[n];
             legendBgColors = new int[n];
             legendVisible = new boolean[n];
             for (int i = 0; i < n; i++) {
-                CompoundTag entry = pendingLegendData.getCompound(i);
-                legendOutlineColors[i] = entry.getInt("color");
-                legendBgColors[i] = entry.getInt("bgColor");
-                legendVisible[i] = entry.getBoolean("visible");
+                CompoundTag entry = NbtCompat.getCompound(pendingLegendData, i);
+                legendOutlineColors[i] = NbtCompat.getInt(entry, "color");
+                legendBgColors[i] = NbtCompat.getInt(entry, "bgColor");
+                legendVisible[i] = NbtCompat.getBoolean(entry, "visible");
             }
         }
     }

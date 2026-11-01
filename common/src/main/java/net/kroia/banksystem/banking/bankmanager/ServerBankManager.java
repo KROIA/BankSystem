@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.bankmanager;
 
+import net.kroia.modutilities.NbtCompat;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -2069,9 +2070,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public boolean load(Map<String, ListTag> listTags) {
-        CompoundTag metaData = listTags.getOrDefault("meta", new ListTag()).getCompound(0);
-        int version = metaData.getInt("version");
-        nextAccountNumber = metaData.getInt("nextAccountNumber");
+        CompoundTag metaData = NbtCompat.getCompound(listTags.getOrDefault("meta", new ListTag()), 0);
+        int version = NbtCompat.getInt(metaData, "version");
+        nextAccountNumber = NbtCompat.getInt(metaData, "nextAccountNumber");
 
 
         // Load item cent scale factors
@@ -2079,12 +2080,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             ListTag allowedItems = listTags.get("allowedItems");
             allowedItemIDs.clear();
             for (int i = 0; i < allowedItems.size(); i++) {
-                CompoundTag idTag = allowedItems.getCompound(i);
+                CompoundTag idTag = NbtCompat.getCompound(allowedItems, i);
                 if(!idTag.contains("itemID")) {
                     continue; // Skip invalid entries
                 }
 
-                ItemID itemID = ItemID.createFromTag(idTag.getCompound("itemID"));
+                ItemID itemID = ItemID.createFromTag(NbtCompat.getCompound(idTag, "itemID"));
                 // Defensive (Task #16 review): drop persisted INVALID shorts (0) — written
                 // by builds without the save/setup filters. Restoring one would permanently
                 // poison the allowed set (every save re-persists it).
@@ -2125,10 +2126,10 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         if(listTags.containsKey("blacklistedItems")) {
             ListTag blacklistedItems = listTags.get("blacklistedItems");
             for (int i = 0; i < blacklistedItems.size(); i++) {
-                CompoundTag idTag = blacklistedItems.getCompound(i);
+                CompoundTag idTag = NbtCompat.getCompound(blacklistedItems, i);
                 if(!idTag.contains("itemID"))
                     continue;
-                ItemID itemID = ItemID.createFromTag(idTag.getCompound("itemID"));
+                ItemID itemID = ItemID.createFromTag(NbtCompat.getCompound(idTag, "itemID"));
                 if (itemID.getShort() == ItemID.INVALID_ID.getShort())
                     continue;
                 ItemID canonical = ItemIDManager.resolveAlias(itemID);
@@ -2144,7 +2145,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             ListTag userList = listTags.get("users");
             userMap.clear();
             for (int i = 0; i < userList.size(); i++) {
-                CompoundTag userTag = userList.getCompound(i);
+                CompoundTag userTag = NbtCompat.getCompound(userList, i);
                 User user = User.createFromTag(userTag);
                 if(user != null) {
                     userMap.put(user.getUUID(), user);
@@ -2159,7 +2160,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             ListTag accountsList = listTags.get("bankAccounts");
             bankAccounts.clear();
             for (int i = 0; i < accountsList.size(); i++) {
-                CompoundTag accountTag = accountsList.getCompound(i);
+                CompoundTag accountTag = NbtCompat.getCompound(accountsList, i);
                 ServerBankAccount account = ServerBankAccount.createFromTag(accountTag);
                 if(account != null) {
                     bankAccounts.put(account.getAccountNumber(), account);

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.general;
 
+import net.kroia.modutilities.NbtCompat;
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
@@ -261,7 +262,7 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
             // full CompoundTag dump for debug logs. Falls back to the raw tag when the
             // key is absent (defensive; a well-formed save() output always includes it).
             CompoundTag tag = entry.getValue();
-            String label = (tag != null && tag.contains("id")) ? tag.getString("id") : String.valueOf(tag);
+            String label = (tag != null && tag.contains("id")) ? NbtCompat.getString(tag, "id") : String.valueOf(tag);
             s.append(entry.getKey()).append(" -> Stack=").append(label).append("\n");
         }
         return "SyncItemIDsPacket\n"+s.toString();

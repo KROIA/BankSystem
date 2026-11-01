@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.company;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
@@ -886,8 +887,8 @@ public final class CompanyManager implements ServerSaveableChunked {
         if (listTags.containsKey("meta")) {
             ListTag metaList = listTags.get("meta");
             if (!metaList.isEmpty()) {
-                CompoundTag meta = metaList.getCompound(0);
-                if (meta.contains("nextCompanyId")) nextCompanyId = meta.getInt("nextCompanyId");
+                CompoundTag meta = NbtCompat.getCompound(metaList, 0);
+                if (meta.contains("nextCompanyId")) nextCompanyId = NbtCompat.getInt(meta, "nextCompanyId");
             }
         }
 
@@ -897,8 +898,8 @@ public final class CompanyManager implements ServerSaveableChunked {
             // First pass: parse + drop duplicates keeping older createdAt.
             List<Company> parsed = new ArrayList<>();
             for (int i = 0; i < companiesList.size(); i++) {
-                if (companiesList.getCompound(i) == null) continue;
-                Company company = Company.load(companiesList.getCompound(i));
+                if (NbtCompat.getCompound(companiesList, i) == null) continue;
+                Company company = Company.load(NbtCompat.getCompound(companiesList, i));
                 if (company == null) {
                     warn("Skipped an unreadable Company entry at index " + i);
                     continue;
@@ -949,12 +950,12 @@ public final class CompanyManager implements ServerSaveableChunked {
         if (listTags.containsKey("stamper_bindings")) {
             ListTag bindingsList = listTags.get("stamper_bindings");
             for (int i = 0; i < bindingsList.size(); i++) {
-                CompoundTag entry = bindingsList.getCompound(i);
+                CompoundTag entry = NbtCompat.getCompound(bindingsList, i);
                 if (entry == null) continue;
-                int cid = entry.getInt("cid");
+                int cid = NbtCompat.getInt(entry, "cid");
                 if (!byId.containsKey(cid)) continue; // orphaned binding — drop
-                BlockPos pos = new BlockPos(entry.getInt("x"), entry.getInt("y"), entry.getInt("z"));
-                String dim = entry.contains("dim") ? entry.getString("dim") : "";
+                BlockPos pos = new BlockPos(NbtCompat.getInt(entry, "x"), NbtCompat.getInt(entry, "y"), NbtCompat.getInt(entry, "z"));
+                String dim = entry.contains("dim") ? NbtCompat.getString(entry, "dim") : "";
                 stamperBindings.computeIfAbsent(cid, k -> new HashSet<>())
                         .add(new StamperBinding(pos, dim));
                 // Migration: populate Company.boundStampers from legacy stamper_bindings
