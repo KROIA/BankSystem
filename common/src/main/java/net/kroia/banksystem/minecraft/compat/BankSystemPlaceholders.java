@@ -4,6 +4,7 @@ import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
+import net.kroia.banksystem.api.MoneyFormat;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
@@ -12,8 +13,6 @@ import net.kroia.modutilities.placeholder.PlaceholderRegistry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -54,7 +53,6 @@ public final class BankSystemPlaceholders {
     private static final Set<UUID> PLAYERS_IN_FLIGHT = ConcurrentHashMap.newKeySet();
     private static volatile ServerSnapshot server = ServerSnapshot.EMPTY;
     private static volatile boolean serverInFlight = false;
-    private static volatile String moneyFormat = "$%s";
     private static long lastPlayerRefresh = 0;
     private static long lastServerRefresh = 0;
     private static boolean tickRegistered = false;
@@ -71,7 +69,7 @@ public final class BankSystemPlaceholders {
         int playerMs = Math.max(1, settings.PLAYER_REFRESH_MS.get());
         int serverMs = Math.max(1, settings.SERVER_REFRESH_MS.get());
         int topCount = Math.max(0, settings.TOP_COUNT.get());
-        moneyFormat = settings.MONEY_FORMAT.get();
+        MoneyFormat.setPattern(settings.MONEY_FORMAT.get());
 
         player("balance", playerMs, p -> p == null ? "" : money(p.balance()));
         player("balance_raw", playerMs, p -> p == null ? "" : raw(p.balance()));
@@ -136,7 +134,7 @@ public final class BankSystemPlaceholders {
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_BANK_MANAGER == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
             return;
         BankSystemModSettings.Placeholder settings = BACKEND_INSTANCES.SERVER_SETTINGS.PLACEHOLDER;
-        moneyFormat = settings.MONEY_FORMAT.get();
+        MoneyFormat.setPattern(settings.MONEY_FORMAT.get());
         long now = System.currentTimeMillis();
         IAsyncBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
 
@@ -241,32 +239,12 @@ public final class BankSystemPlaceholders {
         return realAmount == null ? 0 : Math.round(realAmount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
     }
 
-    /** Raw money units as a plain decimal, e.g. 123456 -> "1234.56". */
-    public static String raw(long rawAmount) {
-        return BigDecimal.valueOf(rawAmount)
-                .divide(BigDecimal.valueOf(BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR), 2, RoundingMode.DOWN)
-                .toPlainString();
+    private static String raw(long rawAmount) {
+        return MoneyFormat.formatMoneyRaw(rawAmount);
     }
 
     private static String money(long rawAmount) {
-        return money(rawAmount, moneyFormat);
-    }
-
-    /** Raw money units with ' thousands separators inside {@code format} ("%s" = number), e.g. "$1'234.56". */
-    public static String money(long rawAmount, String format) {
-        String plain = raw(Math.abs(rawAmount));
-        int dot = plain.indexOf('.');
-        String integer = dot < 0 ? plain : plain.substring(0, dot);
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < integer.length(); i++) {
-            if (i > 0 && (integer.length() - i) % 3 == 0)
-                sb.append('\'');
-            sb.append(integer.charAt(i));
-        }
-        if (dot >= 0)
-            sb.append(plain.substring(dot));
-        String number = (rawAmount < 0 ? "-" : "") + sb;
-        return format == null || !format.contains("%s") ? number : format.replace("%s", number);
+        return MoneyFormat.formatMoney(rawAmount);
     }
 
     private static void player(String name, int refreshMs, Function<PlayerSnapshot, String> value) {
