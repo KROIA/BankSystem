@@ -1,7 +1,8 @@
 package net.kroia.banksystem.api.company;
 
 import net.kroia.banksystem.util.ItemID;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphics; // mc<=1.21.11
+//import net.minecraft.client.gui.GuiGraphicsExtractor; // mc>=26.1
 
 /**
  * Task #50 R4 (v2.1.0) — optional renderer that paints a company's tinted preset icon
@@ -26,5 +27,6 @@ public interface IShareIconRenderer {
      * @param itemId the stamped-share {@link ItemID}. Implementations should render
      *               nothing (silently) when the ItemID does not point at a live share.
      */
-    void renderInto(GuiGraphics gfx, int x, int y, int w, int h, ItemID itemId);
+    void renderInto(GuiGraphics gfx, int x, int y, int w, int h, ItemID itemId); // mc<=1.21.11
+    //void renderInto(GuiGraphicsExtractor gfx, int x, int y, int w, int h, ItemID itemId); // mc>=26.1
 }
