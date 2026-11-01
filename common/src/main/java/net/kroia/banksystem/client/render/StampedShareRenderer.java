@@ -9,7 +9,7 @@ import net.kroia.banksystem.client.company.ClientSymbolRegistry;
 import net.kroia.banksystem.client.company.SharePresetRegistry;
 import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.MultiBufferSource; // mc<=26.1
 import net.minecraft.client.renderer.RenderType; // mc<=1.21.10
 //import net.minecraft.client.renderer.rendertype.RenderType; import net.minecraft.client.renderer.rendertype.RenderTypes; // mc>=1.21.11
 import net.minecraft.client.renderer.Sheets;
@@ -109,10 +109,10 @@ public final class StampedShareRenderer {
      * the display-context transform from the item model JSON plus the vanilla
      * {@code translate(-0.5)} — geometry below lives in [0..1] model space.
      */
-    public static void render(ItemStack stack, ItemDisplayContext ctx, PoseStack poseStack,
-                              MultiBufferSource buffers, int light, int overlay) {
-        render(stack, (type, geometry) -> geometry.accept(poseStack.last(), buffers.getBuffer(type)), light, overlay);
-    }
+    public static void render(ItemStack stack, ItemDisplayContext ctx, PoseStack poseStack, // mc<=26.1
+                              MultiBufferSource buffers, int light, int overlay) { // mc<=26.1
+        render(stack, (type, geometry) -> geometry.accept(poseStack.last(), buffers.getBuffer(type)), light, overlay); // mc<=26.1
+    } // mc<=26.1
 
     public static void render(ItemStack stack, Sink sink, int light, int overlay) {
         Function<ResourceLocation, TextureAtlasSprite> atlas = // mc<=1.21.10
@@ -136,7 +136,8 @@ public final class StampedShareRenderer {
         TextureAtlasSprite card = atlas.apply(companyId != null ? STAMPED_CARD : BLANK_CARD);
         int cardTint = visuals != null ? opaque(visuals.getBaseTint()) : 0xFFFFFFFF;
         List<Quad> geometry = CARD_GEOMETRY.computeIfAbsent(card, StampedShareRenderer::buildCardGeometry);
-        sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> {
+        sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> { // mc<=26.1
+        //sink.draw(Sheets.cutoutBlockItemSheet(), (pose, vc) -> { // mc>=26.2
             for (Quad q : geometry) {
                 emit(vc, pose, q, card, cardTint, light, overlay);
             }
@@ -175,7 +176,8 @@ public final class StampedShareRenderer {
             TextureAtlasSprite sprite = atlas.apply(ResourceLocation.fromNamespaceAndPath( // mc<=1.21.10
             //TextureAtlasSprite sprite = atlas.apply(Identifier.fromNamespaceAndPath( // mc>=1.21.11
                     BankSystemMod.MOD_ID, "item/share_symbol/" + id));
-            sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> {
+            sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> { // mc<=26.1
+            //sink.draw(Sheets.cutoutBlockItemSheet(), (pose, vc) -> { // mc>=26.2
                 emit(vc, pose, new Quad(
                         new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
                         new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), sprite, tint, light, overlay);
