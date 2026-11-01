@@ -43,7 +43,7 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
     public InteractionResult use(BlockState state, Level level, BlockPos pos,
                                  Player player, InteractionHand hand, BlockHitResult hit)*/
     {
-        if (level.isClientSide)
+        if (level.isClientSide())
             return ItemInteractionResult.SUCCESS; // mc<=1.21.1
             //return InteractionResult.SUCCESS; // mc>=1.21.2
 

@@ -103,7 +103,7 @@ public class BankDownloadBlock extends Block implements EntityBlock {
     @Override
     public void neighborChanged(BlockState state, Level level, BlockPos pos, Block block, BlockPos fromPos, boolean isMoving) { // mc<=1.21.1
     //public void neighborChanged(BlockState state, Level level, BlockPos pos, Block block, @org.jetbrains.annotations.Nullable net.minecraft.world.level.redstone.Orientation orientation, boolean isMoving) { // mc>=1.21.2
-        if (level.isClientSide)
+        if (level.isClientSide())
             return;
         level.scheduleTick(pos, this, 4);
         super.neighborChanged(state, level, pos, block, fromPos, isMoving); // Call super to handle other changes // mc<=1.21.1
