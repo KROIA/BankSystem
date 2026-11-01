@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.banksystem.util.ItemStackNbt;
 import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
@@ -583,7 +584,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 if(stack.isEmpty())
                     continue;
                 itemTag.putInt("Slot", i);
-                Tag stackTag = stack.save(pRegistries);
+                Tag stackTag = ItemStackNbt.save(stack, pRegistries);
                 itemTag.put("ItemStack", stackTag);
                 inventoryTag.add(itemTag);
             }
@@ -605,7 +606,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                     return false;
                 int slot = NbtCompat.getInt(itemTag, "Slot");
                 CompoundTag stackTag = NbtCompat.getCompound(itemTag, "ItemStack");
-                ItemStack stack = ItemStack.parse(pRegistries,
+                ItemStack stack = ItemStackNbt.parse(pRegistries,
                                 stackTag)
                         .orElse(ItemStack.EMPTY);
                 if(stack.isEmpty())
@@ -798,9 +799,13 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     }
 
 
-    @Override
-    public void loadAdditional(CompoundTag nbt, HolderLookup.Provider pRegistries) {
-        super.loadAdditional(nbt, pRegistries);
+    @Override // mc<=1.21.5
+    public void loadAdditional(CompoundTag nbt, HolderLookup.Provider pRegistries) { super.loadAdditional(nbt, pRegistries); loadState(nbt, pRegistries); } // mc<=1.21.5
+    //@Override // mc>=1.21.6
+    //public void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { super.loadAdditional(input); loadState(net.kroia.modutilities.NbtCompat.readAll(input), input.lookup()); } // mc>=1.21.6
+
+    /** Version-neutral load of this block entity's data (called from loadAdditional). */
+    private void loadState(CompoundTag nbt, HolderLookup.Provider pRegistries) {
         CompoundTag data = NbtCompat.getCompound(nbt, BankSystemMod.MOD_ID);
 
         ListTag playerDataTag = NbtCompat.getList(data, "PlayerData", ListTag.TAG_COMPOUND);
@@ -815,9 +820,13 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         }
     }
 
-    @Override
-    protected void saveAdditional(CompoundTag nbt, HolderLookup.Provider pRegistries) {
-        super.saveAdditional(nbt, pRegistries);
+    @Override // mc<=1.21.5
+    protected void saveAdditional(CompoundTag nbt, HolderLookup.Provider pRegistries) { super.saveAdditional(nbt, pRegistries); saveState(nbt, pRegistries); } // mc<=1.21.5
+    //@Override // mc>=1.21.6
+    //protected void saveAdditional(net.minecraft.world.level.storage.ValueOutput output) { super.saveAdditional(output); CompoundTag nbt = new CompoundTag(); saveState(nbt, level != null ? level.registryAccess() : net.kroia.modutilities.UtilitiesPlatform.getRegistryAccess()); net.kroia.modutilities.NbtCompat.writeAll(output, nbt); } // mc>=1.21.6
+
+    /** Version-neutral save of this block entity's data (called from saveAdditional). */
+    private void saveState(CompoundTag nbt, HolderLookup.Provider pRegistries) {
         CompoundTag data = new CompoundTag();
         //tutorialmodData.put("Inventory", this.inventory.serializeNBT());
         //data.putInt("TransferTickAmount", transferTickAmount);
