@@ -108,7 +108,7 @@ public class ConverterDropAllPacket extends BankSystemNetworkPacket {
                 stack.setCount(drop);
                 // drop(stack, false) spawns an item entity at the player's position.
                 // Works whether or not the player is still in PlayerList (disconnect race).
-                player.drop(stack, false);
+                net.kroia.modutilities.PlayerCompat.drop(player, stack);
                 count -= drop;
             }
         }
