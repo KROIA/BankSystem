@@ -37,7 +37,8 @@ public final class StampedShareSpecialRenderer implements SpecialModelRenderer<I
         public static final MapCodec<Unbaked> MAP_CODEC = MapCodec.unit(new Unbaked());
 
         @Override
-        public SpecialModelRenderer<?> bake(EntityModelSet modelSet) {
+        public SpecialModelRenderer<?> bake(EntityModelSet modelSet) { // mc<=1.21.8
+        //public SpecialModelRenderer<?> bake(SpecialModelRenderer.BakingContext context) { // mc>=1.21.9
             return new StampedShareSpecialRenderer();
         }
 
@@ -47,12 +48,19 @@ public final class StampedShareSpecialRenderer implements SpecialModelRenderer<I
         }
     }
 
-    @Override
-    public void render(@Nullable ItemStack stack, ItemDisplayContext context, PoseStack poseStack,
-                       MultiBufferSource buffers, int light, int overlay, boolean hasFoil) {
-        if (stack != null)
-            StampedShareRenderer.render(stack, context, poseStack, buffers, light, overlay);
-    }
+    @Override // mc<=1.21.8
+    public void render(@Nullable ItemStack stack, ItemDisplayContext context, PoseStack poseStack, // mc<=1.21.8
+                       MultiBufferSource buffers, int light, int overlay, boolean hasFoil) { // mc<=1.21.8
+        if (stack != null) // mc<=1.21.8
+            StampedShareRenderer.render(stack, context, poseStack, buffers, light, overlay); // mc<=1.21.8
+    } // mc<=1.21.8
+
+    //@Override // mc>=1.21.9
+    //public void submit(@Nullable ItemStack stack, ItemDisplayContext context, PoseStack poseStack, // mc>=1.21.9
+                       //net.minecraft.client.renderer.SubmitNodeCollector collector, int light, int overlay, boolean hasFoil, int outlineColor) { // mc>=1.21.9
+        //if (stack != null) // mc>=1.21.9
+            //StampedShareRenderer.render(stack, (type, geometry) -> collector.submitCustomGeometry(poseStack, type, geometry::accept), light, overlay); // mc>=1.21.9
+    //} // mc>=1.21.9
 
     @Override // mc>=1.21.6
     public void getExtents(java.util.Set<org.joml.Vector3f> extents) { for (float x : new float[]{0f, 1f}) for (float y : new float[]{0f, 1f}) for (float z : new float[]{7.5f / 16f, 8.5f / 16f}) extents.add(new org.joml.Vector3f(x, y, z)); } // mc>=1.21.6 (card box)
