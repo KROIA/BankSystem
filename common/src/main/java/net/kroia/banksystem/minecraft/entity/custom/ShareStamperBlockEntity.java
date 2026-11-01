@@ -398,7 +398,11 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
     @Override public boolean stillValid(Player p) {
         if (level == null || level.getBlockEntity(worldPosition) != this) return false;
-        return p.distanceToSqr(worldPosition.getX()+0.5, worldPosition.getY()+0.5, worldPosition.getZ()+0.5) <= 64.0;
+        if (p.distanceToSqr(worldPosition.getX()+0.5, worldPosition.getY()+0.5, worldPosition.getZ()+0.5) > 64.0) return false;
+        // A bound stamper is only usable with MANAGE on its company (founder / MANAGE / banksystem admin).
+        // The server re-checks this every tick and before every slot click, so revoked rights close the
+        // menu and a modified client cannot keep interacting. Unbound stampers keep the old behaviour.
+        return boundCompanyId < 0 || level.isClientSide || hasManagePermission(p.getUUID());
     }
     @Override public void clearContent() { items.clear(); }
 
