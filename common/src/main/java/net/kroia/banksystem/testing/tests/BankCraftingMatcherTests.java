@@ -198,7 +198,8 @@ public class BankCraftingMatcherTests extends TestSuite {
     /** Resolves a vanilla crafting-recipe holder by path (e.g. "bucket"), or null. */
     @SuppressWarnings("unchecked")
     private static RecipeHolder<CraftingRecipe> craftingRecipe(Level level, String path) {
-        return BankCraftingRecipes.byId(level, net.minecraft.resources.ResourceLocation.withDefaultNamespace(path));
+        return BankCraftingRecipes.byId(level, net.minecraft.resources.ResourceLocation.withDefaultNamespace(path)); // mc<=1.21.10
+        //return BankCraftingRecipes.byId(level, net.minecraft.resources.Identifier.withDefaultNamespace(path)); // mc>=1.21.11
     }
 
     // ========================================================================
