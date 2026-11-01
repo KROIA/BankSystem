@@ -1014,7 +1014,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             List<String> set = new ArrayList<>();
             ListTag setTag = NbtCompat.getList(data, APPLIED_COMPONENT_SET_KEY, Tag.TAG_STRING);
             for(Tag element : setTag)
-                set.add(element.getAsString());
+                set.add(NbtCompat.asString(element));
             storedEffectiveComponentSet = set;
             // Keep re-saving what we read until the guard applies a newer set (slave servers
             // never run the guard but must not drop the master-era record from the file).

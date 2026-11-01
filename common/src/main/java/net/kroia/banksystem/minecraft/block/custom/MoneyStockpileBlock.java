@@ -84,17 +84,12 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
         return new MoneyStockpileBlockEntity(pos, state);
     }
 
-    @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
-        if (!state.is(newState.getBlock()) && !level.isClientSide()) {
-            // Drop all items from the terminal inventories that have not been transfered to the bank
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof MoneyStockpileBlockEntity blockEntity) {
-                blockEntity.dropItems();
-            }
-        }
-        super.onRemove(state, level, pos, newState, isMoving);
-    }
+    // Drops are done by the block entity (preRemoveSideEffects from 1.21.5).
+    //@Override // mc<=1.21.4
+    //public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) { // mc<=1.21.4
+        //if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof MoneyStockpileBlockEntity be) be.dropItems(); // mc<=1.21.4
+        //super.onRemove(state, level, pos, newState, isMoving); // mc<=1.21.4
+    //} // mc<=1.21.4
     /*
     // removed since mc >= 1.20.4
     @Override

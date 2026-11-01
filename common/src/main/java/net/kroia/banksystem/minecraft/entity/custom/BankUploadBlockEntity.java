@@ -229,6 +229,9 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         }*/
     }
 
+    @Override // mc>=1.21.5
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) { dropContents(); } // mc>=1.21.5
+
     public void dropContents() {
         Containers.dropContents(this.getLevel(), this.getBlockPos(), this.inventory);
     }

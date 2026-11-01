@@ -477,6 +477,9 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         return tag;
     }
 
+    @Override // mc>=1.21.5
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) { dropContents(); } // mc>=1.21.5
+
     public void dropContents() {
         if (level == null) return;
         Containers.dropContents(level, worldPosition, items);

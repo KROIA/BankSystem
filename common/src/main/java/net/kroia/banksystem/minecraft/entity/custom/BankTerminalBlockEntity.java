@@ -842,6 +842,21 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         return playerData.getInventory();
     }
 
+    /** Drops every player's not-yet-deposited terminal inventory into the world (server only). */
+    public void dropPlayerInventories() {
+        if (level == null || level.isClientSide()) return;
+        for (TerminalInventory inventory : getPlayerInventories().values()) {
+            for (int index = 0; index < inventory.getContainerSize(); index++) {
+                ItemStack stack = inventory.getItem(index);
+                if (stack.isEmpty()) continue;
+                level.addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(level,
+                        worldPosition.getX() + 0.5D, worldPosition.getY() + 0.5D, worldPosition.getZ() + 0.5D, stack));
+            }
+        }
+    }
+    @Override // mc>=1.21.5
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) { dropPlayerInventories(); } // mc>=1.21.5
+
     public HashMap<UUID, TerminalInventory> getPlayerInventories() {
         HashMap<UUID, TerminalInventory> playerInventories = new HashMap<>();
         for(UUID playerID : this.playerDataTable.keySet())

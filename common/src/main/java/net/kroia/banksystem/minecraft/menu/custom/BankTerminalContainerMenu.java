@@ -619,7 +619,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                 return ItemStack.EMPTY;
             ItemStack slotStack = slot.getItem();
             ItemStack original = slotStack.copy();
-            slotStack.getItem().onCraftedBy(slotStack, pPlayer.level(), pPlayer);
+            //slotStack.getItem().onCraftedBy(slotStack, pPlayer.level(), pPlayer); // mc<=1.21.4
+            slotStack.getItem().onCraftedBy(slotStack, pPlayer); // mc>=1.21.5
             if (!moveItemStackTo(slotStack, PLAYER_SLOT_START, PLAYER_SLOT_END, true))
                 return ItemStack.EMPTY;
             if (slot instanceof BankTerminalResultSlot resultSlot)
@@ -1045,7 +1046,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         // Deliver the output.
         ItemStack output = match.result().copy();
         output.setCount(match.result().getCount() * craftCount);
-        output.getItem().onCraftedBy(output, player.level(), player);
+        //output.getItem().onCraftedBy(output, player.level(), player); // mc<=1.21.4
+        output.getItem().onCraftedBy(output, player); // mc>=1.21.5
         if (depositOutputToBank)
             depositCraftedOutput(output);
         else

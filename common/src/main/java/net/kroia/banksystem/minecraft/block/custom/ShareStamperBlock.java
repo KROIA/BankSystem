@@ -69,14 +69,12 @@ public class ShareStamperBlock extends Block implements EntityBlock {
         return new ShareStamperBlockEntity(pos, state);
     }
 
-    @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
-        if (!state.is(newState.getBlock())) {
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof ShareStamperBlockEntity s) s.dropContents();
-            super.onRemove(state, level, pos, newState, isMoving);
-        }
-    }
+    // Drops are done by the block entity (preRemoveSideEffects from 1.21.5).
+    //@Override // mc<=1.21.4
+    //public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) { // mc<=1.21.4
+        //if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof ShareStamperBlockEntity be) be.dropContents(); // mc<=1.21.4
+        //super.onRemove(state, level, pos, newState, isMoving); // mc<=1.21.4
+    //} // mc<=1.21.4
 
     @Override
     protected final @NotNull InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,

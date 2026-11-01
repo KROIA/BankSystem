@@ -16,20 +16,20 @@ Adds a banking system to the game that allows players to store and withdraw mone
 [[dependencies.banksystem]]
 modId = "neoforge"
 type = "required"
-versionRange = "[21.4,)"
+versionRange = "[21.5,)"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.banksystem]]
 modId = "minecraft"
 type = "required"
-versionRange = "[1.21.4,)"
+versionRange = "[1.21.5,)"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.banksystem]]
 modId = "architectury"
 type = "required"
-versionRange = "[15.0.3,)"
+versionRange = "[16.1.4,)"
 ordering = "AFTER"
 side = "BOTH"

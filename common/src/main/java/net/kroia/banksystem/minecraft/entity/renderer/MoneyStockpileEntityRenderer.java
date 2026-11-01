@@ -44,8 +44,8 @@ public class MoneyStockpileEntityRenderer implements BlockEntityRenderer<MoneySt
     }
 
     @Override
-    public void render(MoneyStockpileBlockEntity be, float partialTicks, PoseStack poseStack,
-                       MultiBufferSource buffer, int light, int overlay) {
+    //public void render(MoneyStockpileBlockEntity be, float partialTicks, PoseStack poseStack, MultiBufferSource buffer, int light, int overlay) { // mc<=1.21.4
+    public void render(MoneyStockpileBlockEntity be, float partialTicks, PoseStack poseStack, MultiBufferSource buffer, int light, int overlay, net.minecraft.world.phys.Vec3 cameraPos) { // mc>=1.21.5
         this.blockEntity = be;
         this.partialTicks = partialTicks;
         this.poseStack = poseStack;

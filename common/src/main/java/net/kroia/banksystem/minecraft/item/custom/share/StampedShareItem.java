@@ -116,29 +116,32 @@ public class StampedShareItem extends Item {
                 .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(tint & 0xFFFFFF)));
     }
 
-    @Override
-    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
+    //@Override // mc<=1.21.4
+    //public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) { addTooltipLines(stack, tooltip::add); super.appendHoverText(stack, context, tooltip, flag); } // mc<=1.21.4
+    @Override // mc>=1.21.5
+    public void appendHoverText(ItemStack stack, TooltipContext context, net.minecraft.world.item.component.TooltipDisplay display, java.util.function.Consumer<Component> tooltip, TooltipFlag flag) { addTooltipLines(stack, tooltip); super.appendHoverText(stack, context, display, tooltip, flag); } // mc>=1.21.5
+
+    /** Tooltip lines of a stamped share (version-neutral; called from the appendHoverText override). */
+    private static void addTooltipLines(ItemStack stack, java.util.function.Consumer<Component> tooltip) {
         Integer companyId = getCompanyId(stack);
         if (companyId == null) {
-            tooltip.add(Component.translatable("item." + BankSystemMod.MOD_ID + ".stamped_share.no_company")
+            tooltip.accept(Component.translatable("item." + BankSystemMod.MOD_ID + ".stamped_share.no_company")
                     .withStyle(ChatFormatting.DARK_GRAY));
-            super.appendHoverText(stack, context, tooltip, flag);
             return;
         }
 
         // Trigger a cache lookup on miss; tooltip re-runs each frame and self-heals.
         boolean missing = !ShareVisualCache.has(companyId);
         if (missing) {
-            tooltip.add(Component.literal("company#" + companyId).withStyle(ChatFormatting.DARK_GRAY));
+            tooltip.accept(Component.literal("company#" + companyId).withStyle(ChatFormatting.DARK_GRAY));
             ShareVisualCache.tryLookup(companyId);
-            super.appendHoverText(stack, context, tooltip, flag);
             return;
         }
 
         ShareVisuals visuals = ShareVisualCache.getVisualsOrPlaceholder(companyId);
         long issued = ShareVisualCache.getIssued(companyId);
         long max = ShareVisualCache.getMax(companyId);
-        tooltip.add(Component.translatable(SUPPLY_KEY, formatLong(issued), formatLong(max))
+        tooltip.accept(Component.translatable(SUPPLY_KEY, formatLong(issued), formatLong(max))
                 .withStyle(ChatFormatting.DARK_GRAY));
 
         // Shift-hold → expanded info (description + preset id, other-mod convention).
@@ -146,23 +149,21 @@ public class StampedShareItem extends Item {
             String desc = visuals.getDescription();
             if (desc != null && !desc.isBlank()) {
                 for (String line : desc.split("\\r?\\n")) {
-                    tooltip.add(Component.literal(line).withStyle(ChatFormatting.GRAY));
+                    tooltip.accept(Component.literal(line).withStyle(ChatFormatting.GRAY));
                 }
             }
             if (visuals.getIconPresetId() != null && !visuals.getIconPresetId().isBlank()) {
-                tooltip.add(Component.literal("[" + visuals.getIconPresetId() + "]")
+                tooltip.accept(Component.literal("[" + visuals.getIconPresetId() + "]")
                         .withStyle(ChatFormatting.DARK_GRAY));
             }
         } else {
             String desc = visuals.getDescription();
             if (desc != null && !desc.isBlank()) {
-                tooltip.add(Component.translatable(
+                tooltip.accept(Component.translatable(
                                 "tooltip." + BankSystemMod.MOD_ID + ".stamped_share.hold_shift")
                         .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
             }
         }
-
-        super.appendHoverText(stack, context, tooltip, flag);
     }
 
     /**
