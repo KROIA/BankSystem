@@ -203,7 +203,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                 this.accountNumber = accountNumber;
                 setupGui(accountNumber);
             });
-            minecraft.setScreen(selectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(selectionScreen);
         });
 
 
@@ -290,7 +290,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                         allowedItemStacks,
                         this::onCreateNewBank);
                 itemSelectionScreen.sortItems();
-                this.minecraft.setScreen(itemSelectionScreen);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(itemSelectionScreen);
             });
         });
 
@@ -307,13 +307,13 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     {
         screenIsOpen = true;
         BankAccountManagementScreen screen = new BankAccountManagementScreen(parent, accountNumber, isAdminMode);
-        Minecraft.getInstance().setScreen(screen);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
     }
     public static void openScreen(int accountNumber, boolean isAdminMode)
     {
         screenIsOpen = true;
         BankAccountManagementScreen screen = new BankAccountManagementScreen(accountNumber, isAdminMode);
-        Minecraft.getInstance().setScreen(screen);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
     }
 
     @Override
@@ -389,7 +389,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     public void onClose() {
         screenIsOpen = false;
         if(parent != null && this.minecraft != null) {
-            this.minecraft.setScreen(parent);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(parent);
         }
         else
             super.onClose();
@@ -657,7 +657,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             }
 
             userSelectionScreen.setUsers(userDataList);
-            minecraft.setScreen(userSelectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(userSelectionScreen);
         });
     }
 
@@ -673,12 +673,12 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             {
                 accountIconChangedFlag = true;
                 accountIconButton.setItem(itemStack);
-                minecraft.setScreen(this);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(this);
             }, () ->
             {
-                minecraft.setScreen(this);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(this);
             });
-            Minecraft.getInstance().setScreen(creativeModeItemSelectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(creativeModeItemSelectionScreen);
         }
         else
         {
@@ -689,11 +689,11 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     (itemStack)->{
                         accountIconChangedFlag = true;
                         accountIconButton.setItem(itemStack);
-                        minecraft.setScreen(this);
+                        net.kroia.modutilities.gui.client.ClientCompat.setScreen(this);
                     }
             );
             itemSelectionScreen.sortItems();
-            Minecraft.getInstance().setScreen(itemSelectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(itemSelectionScreen);
         }
     }
     /**
@@ -735,7 +735,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         );
         askPopupScreen.setSize(460,140);
         askPopupScreen.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
-        minecraft.setScreen(askPopupScreen);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(askPopupScreen);
     }
 
     @Override

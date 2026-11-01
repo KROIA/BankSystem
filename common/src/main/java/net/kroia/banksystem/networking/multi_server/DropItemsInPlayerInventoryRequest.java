@@ -137,7 +137,7 @@ public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<
                         nextStackSize = (int)Math.min(amount, stack.getMaxStackSize());
                         ItemStack dropStack = stack.copy();
                         dropStack.setCount(nextStackSize);
-                        player.drop(dropStack, false);
+                        net.kroia.modutilities.PlayerCompat.drop(player, dropStack);
                         amount -= nextStackSize;
                     }
                 }

@@ -30,7 +30,7 @@ public class BankSystemClientHooks {
     public static void openStamperBindScreen(net.minecraft.core.BlockPos pos,
             java.util.List<net.kroia.banksystem.networking.entity.OpenStamperBindScreenPacket.Entry> entries) {
         Minecraft.getInstance().execute(() ->
-                Minecraft.getInstance().setScreen(
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(
                         new net.kroia.banksystem.screen.custom.StamperBindScreen(pos, entries)));
     }
 
