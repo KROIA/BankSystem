@@ -10,7 +10,6 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.fabric.client.FabricShareRendererBootstrap;
-import net.kroia.banksystem.minecraft.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 
 public final class BankSystemFabric implements ModInitializer {
@@ -34,10 +33,6 @@ public final class BankSystemFabric implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register((server)->
         {
             BankSystemModBackend.onServerStart(server);
-            // Check if NEZNAMY/TAB is present and register placeholders
-            if (Platform.isModLoaded("tab")) {
-                NEZNAMY_TAB_Placeholders.register();
-            }
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(BankSystemModBackend::onServerStop);
