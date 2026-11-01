@@ -347,7 +347,7 @@ public class ShareStamperScreen extends BankSystemGuiContainerScreen<ShareStampe
         );
         ask.setSize(400, 100);
         ask.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
-        Minecraft.getInstance().setScreen(ask);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(ask);
     }
 
     @Override
