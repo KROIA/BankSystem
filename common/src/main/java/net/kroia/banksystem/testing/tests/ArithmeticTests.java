@@ -3,7 +3,7 @@ package net.kroia.banksystem.testing.tests;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
-import net.kroia.banksystem.minecraft.compat.BankSystemPlaceholders;
+import net.kroia.banksystem.api.MoneyFormat;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -445,13 +445,13 @@ public class ArithmeticTests extends TestSuite {
     /** Placeholder money formatting: separators, 2 decimals, MONEY_FORMAT pattern, raw variant. */
     private TestResult testPlaceholderMoneyFormat() {
         String[][] cases = {
-                {BankSystemPlaceholders.money(123456, "$%s"), "$1'234.56"},
-                {BankSystemPlaceholders.money(100, "%s €"), "1.00 €"},
-                {BankSystemPlaceholders.money(123456789012L, "$%s"), "$1'234'567'890.12"},
-                {BankSystemPlaceholders.money(-5, "$%s"), "$-0.05"},
-                {BankSystemPlaceholders.money(0, "no pattern"), "0.00"},
-                {BankSystemPlaceholders.raw(123456), "1234.56"},
-                {BankSystemPlaceholders.raw(7), "0.07"},
+                {MoneyFormat.formatMoney(123456, "$%s"), "$1'234.56"},
+                {MoneyFormat.formatMoney(100, "%s €"), "1.00 €"},
+                {MoneyFormat.formatMoney(123456789012L, "$%s"), "$1'234'567'890.12"},
+                {MoneyFormat.formatMoney(-5, "$%s"), "$-0.05"},
+                {MoneyFormat.formatMoney(0, "no pattern"), "0.00"},
+                {MoneyFormat.formatMoneyRaw(123456), "1234.56"},
+                {MoneyFormat.formatMoneyRaw(7), "0.07"},
         };
         for (String[] c : cases) {
             TestResult r = assertEquals("placeholder format", c[1], c[0]);
