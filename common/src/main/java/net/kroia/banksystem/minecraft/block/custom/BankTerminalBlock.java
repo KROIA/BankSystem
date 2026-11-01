@@ -61,25 +61,12 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
         }
     }
 
-    @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
-        if (!state.is(newState.getBlock()) && !level.isClientSide()) {
-            // Drop all items from the terminal inventories that have not been transfered to the bank
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof BankTerminalBlockEntity blockEntity) {
-                HashMap<UUID, BankTerminalBlockEntity.TerminalInventory> inventories = blockEntity.getPlayerInventories();
-                for (BankTerminalBlockEntity.TerminalInventory inventory : inventories.values()) {
-                    for (int index = 0; index < inventory.getContainerSize(); index++) {
-                        ItemStack stack = inventory.getItem(index);
-                        var entity = new ItemEntity(level, pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, stack);
-                        level.addFreshEntity(entity);
-                    }
-                }
-            }
-        }
-
-        super.onRemove(state, level, pos, newState, isMoving);
-    }
+    // Drops are done by the block entity (preRemoveSideEffects from 1.21.5).
+    @Override // mc<=1.21.4
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) { // mc<=1.21.4
+        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof BankTerminalBlockEntity be) be.dropPlayerInventories(); // mc<=1.21.4
+        super.onRemove(state, level, pos, newState, isMoving); // mc<=1.21.4
+    } // mc<=1.21.4
 
 
 

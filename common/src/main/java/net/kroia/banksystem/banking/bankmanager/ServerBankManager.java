@@ -2174,7 +2174,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             ListTag trustedSlaves = listTags.get("trustedSlaves");
             trustedSlaveServers.clear();
             for (net.minecraft.nbt.Tag trustedSlave : trustedSlaves) {
-                String slaveID = trustedSlave.getAsString();
+                String slaveID = NbtCompat.asString(trustedSlave);
                 trustedSlaveServers.add(slaveID);
             }
         }
