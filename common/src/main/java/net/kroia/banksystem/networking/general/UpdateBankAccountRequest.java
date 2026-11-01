@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.general;
 
+import net.kroia.banksystem.util.ItemStackNbt;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
@@ -74,7 +75,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 (buf, stack) -> {
                     try
                     {
-                        Tag stackTag = stack.save(buf.registryAccess(), new CompoundTag());
+                        Tag stackTag = ItemStackNbt.save(stack, buf.registryAccess(), new CompoundTag());
                         if(stackTag instanceof CompoundTag compoundTag)
                             ByteBufCodecs.TRUSTED_COMPOUND_TAG.encode(buf, compoundTag);
                         else
@@ -92,7 +93,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                     CompoundTag stackTag = ByteBufCodecs.TRUSTED_COMPOUND_TAG.decode(buf);
                     if(stackTag.isEmpty())
                         return ItemStack.EMPTY;
-                    Optional<ItemStack> parsed = ItemStack.parse(buf.registryAccess(), stackTag);
+                    Optional<ItemStack> parsed = ItemStackNbt.parse(buf.registryAccess(), stackTag);
                     return parsed.orElse(ItemStack.EMPTY);
                 }
         );

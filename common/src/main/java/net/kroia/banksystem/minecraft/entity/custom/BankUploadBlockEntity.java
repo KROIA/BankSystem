@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.banksystem.util.ItemStackNbt;
 import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
@@ -119,10 +120,14 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         this.inventory.stopOpen(null);
     }
 
-    @Override
-    public void loadAdditional(@NotNull CompoundTag tag, HolderLookup.Provider pRegistries) {
-        super.loadAdditional(tag, pRegistries);
-        inventory.fromTag(NbtCompat.getList(tag, "Items", 10), pRegistries);
+    //@Override // mc<=1.21.5
+    //public void loadAdditional(CompoundTag tag, HolderLookup.Provider pRegistries) { super.loadAdditional(tag, pRegistries); loadState(tag, pRegistries); } // mc<=1.21.5
+    @Override // mc>=1.21.6
+    public void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { super.loadAdditional(input); loadState(net.kroia.modutilities.NbtCompat.readAll(input), input.lookup()); } // mc>=1.21.6
+
+    /** Version-neutral load of this block entity's data (called from loadAdditional). */
+    private void loadState(CompoundTag tag, HolderLookup.Provider pRegistries) {
+        ItemStackNbt.fromTag(inventory, NbtCompat.getList(tag, "Items", 10), pRegistries);
         sendingEnabled = NbtCompat.getBoolean(tag, "SendingEnabled");
         dropIfNotBankable = NbtCompat.getBoolean(tag, "DropIfNotBankable");
         if(tag.contains("BankAccountNumber"))
@@ -138,10 +143,14 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         }
     }
 
-    @Override
-    protected void saveAdditional(@NotNull CompoundTag tag, HolderLookup.Provider pRegistries) {
-        super.saveAdditional(tag, pRegistries);
-        tag.put("Items", inventory.createTag(pRegistries));
+    //@Override // mc<=1.21.5
+    //protected void saveAdditional(CompoundTag tag, HolderLookup.Provider pRegistries) { super.saveAdditional(tag, pRegistries); saveState(tag, pRegistries); } // mc<=1.21.5
+    @Override // mc>=1.21.6
+    protected void saveAdditional(net.minecraft.world.level.storage.ValueOutput output) { super.saveAdditional(output); CompoundTag tag = new CompoundTag(); saveState(tag, level != null ? level.registryAccess() : net.kroia.modutilities.UtilitiesPlatform.getRegistryAccess()); net.kroia.modutilities.NbtCompat.writeAll(output, tag); } // mc>=1.21.6
+
+    /** Version-neutral save of this block entity's data (called from saveAdditional). */
+    private void saveState(CompoundTag tag, HolderLookup.Provider pRegistries) {
+        tag.put("Items", ItemStackNbt.createTag(inventory, pRegistries));
         tag.putBoolean("SendingEnabled", sendingEnabled);
         tag.putBoolean("DropIfNotBankable", dropIfNotBankable);
         tag.putInt("BankAccountNumber", bankAccountNumber);

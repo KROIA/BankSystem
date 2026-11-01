@@ -308,13 +308,13 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         loadHistoryData(tag, registries);
     }
 
-    @Override
-    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        DisplayType oldType = this.displayType;
-        int oldAccount = this.accountNumber;
-        int oldSlotCount = this.slotCount;
-        super.loadAdditional(tag, registries);
+    //@Override // mc<=1.21.5
+    //protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) { DisplayType oldType = displayType; int oldAccount = accountNumber; int oldSlotCount = slotCount; super.loadAdditional(tag, registries); afterLoad(tag, registries, oldType, oldAccount, oldSlotCount); } // mc<=1.21.5
+    @Override // mc>=1.21.6
+    protected void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { DisplayType oldType = displayType; int oldAccount = accountNumber; int oldSlotCount = slotCount; super.loadAdditional(input); afterLoad(net.kroia.modutilities.NbtCompat.readAll(input), input.lookup(), oldType, oldAccount, oldSlotCount); } // mc>=1.21.6
 
+    /** Client controller refresh after the base class loaded the tag (version-neutral part of loadAdditional). */
+    private void afterLoad(CompoundTag tag, HolderLookup.Provider registries, DisplayType oldType, int oldAccount, int oldSlotCount) {
         if (level != null && level.isClientSide() && isController()) {
             // Re-load pending data: super.loadAdditional calls buildAndInitGui→wireCallbacks
             // →applyPendingState which consumes it, then gui.deserializeTree replaces all

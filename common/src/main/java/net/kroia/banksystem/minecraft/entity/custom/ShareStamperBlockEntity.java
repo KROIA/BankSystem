@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.banksystem.util.ItemStackNbt;
 import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
@@ -322,12 +323,16 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
 
     // -------- NBT --------
-    @Override
-    public void loadAdditional(@NotNull CompoundTag tag, HolderLookup.Provider p) {
-        super.loadAdditional(tag, p);
+    //@Override // mc<=1.21.5
+    //public void loadAdditional(CompoundTag tag, HolderLookup.Provider p) { super.loadAdditional(tag, p); loadState(tag, p); } // mc<=1.21.5
+    @Override // mc>=1.21.6
+    public void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { super.loadAdditional(input); loadState(net.kroia.modutilities.NbtCompat.readAll(input), input.lookup()); } // mc>=1.21.6
+
+    /** Version-neutral load of this block entity's data (called from loadAdditional). */
+    private void loadState(CompoundTag tag, HolderLookup.Provider p) {
         items.clear();
         NonNullList<ItemStack> tmp = NonNullList.withSize(items.size(), ItemStack.EMPTY);
-        net.minecraft.world.ContainerHelper.loadAllItems(tag, tmp, p);
+        ItemStackNbt.loadAllItems(tag, tmp, p);
         for (int i = 0; i < tmp.size(); i++) items.set(i, tmp.get(i));
         boundCompanyId = tag.contains("BoundCompanyId") ? NbtCompat.getInt(tag, "BoundCompanyId") : -1;
         linkedByUUID = NbtCompat.hasUUID(tag, "LinkedByUUID") ? NbtCompat.getUUID(tag, "LinkedByUUID") : null;
@@ -359,10 +364,14 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         }
     }
 
-    @Override
-    protected void saveAdditional(@NotNull CompoundTag tag, HolderLookup.Provider p) {
-        super.saveAdditional(tag, p);
-        net.minecraft.world.ContainerHelper.saveAllItems(tag, items, p);
+    //@Override // mc<=1.21.5
+    //protected void saveAdditional(CompoundTag tag, HolderLookup.Provider p) { super.saveAdditional(tag, p); saveState(tag, p); } // mc<=1.21.5
+    @Override // mc>=1.21.6
+    protected void saveAdditional(net.minecraft.world.level.storage.ValueOutput output) { super.saveAdditional(output); CompoundTag tag = new CompoundTag(); saveState(tag, level != null ? level.registryAccess() : net.kroia.modutilities.UtilitiesPlatform.getRegistryAccess()); net.kroia.modutilities.NbtCompat.writeAll(output, tag); } // mc>=1.21.6
+
+    /** Version-neutral save of this block entity's data (called from saveAdditional). */
+    private void saveState(CompoundTag tag, HolderLookup.Provider p) {
+        ItemStackNbt.saveAllItems(tag, items, p);
         tag.putInt("BoundCompanyId", boundCompanyId);
         if (linkedByUUID != null) NbtCompat.putUUID(tag, "LinkedByUUID", linkedByUUID);
         tag.putLong("LinkedAt", linkedAt);

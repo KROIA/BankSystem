@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.banksystem.util.ItemStackNbt;
 import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
@@ -218,9 +219,13 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         this.inventory.stopOpen(null);
     }
 
-    @Override
-    public void loadAdditional(@NotNull CompoundTag tag, HolderLookup.Provider provider) {
-        super.loadAdditional(tag, provider);
+    //@Override // mc<=1.21.5
+    //public void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) { super.loadAdditional(tag, provider); loadState(tag, provider); } // mc<=1.21.5
+    @Override // mc>=1.21.6
+    public void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { super.loadAdditional(input); loadState(net.kroia.modutilities.NbtCompat.readAll(input), input.lookup()); } // mc>=1.21.6
+
+    /** Version-neutral load of this block entity's data (called from loadAdditional). */
+    private void loadState(CompoundTag tag, HolderLookup.Provider provider) {
         bankAccountNumber = 0;
         withdrawOrders.clear();
 
@@ -229,7 +234,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             // Compatibility, convert to new Block data
             UUID playerOwner = NbtCompat.getUUID(tag, "PlayerOwner");
             int targetAmount = NbtCompat.getInt(tag, "TargetAmount");
-            inventory.fromTag(NbtCompat.getList(tag, "Items", Tag.TAG_COMPOUND), provider);
+            ItemStackNbt.fromTag(inventory, NbtCompat.getList(tag, "Items", Tag.TAG_COMPOUND), provider);
             blockIsPowered = NbtCompat.getBoolean(tag, "RecievingEnabled");
 
             CompletableFuture<IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(playerOwner);
@@ -249,7 +254,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         }
 
         if(tag.contains(TAGS.INVENTORY_ITEMS))
-            inventory.fromTag(NbtCompat.getList(tag, TAGS.INVENTORY_ITEMS, Tag.TAG_COMPOUND), provider);
+            ItemStackNbt.fromTag(inventory, NbtCompat.getList(tag, TAGS.INVENTORY_ITEMS, Tag.TAG_COMPOUND), provider);
 
         if(tag.contains(TAGS.BLOCK_IS_POWERED))
             blockIsPowered = NbtCompat.getBoolean(tag, TAGS.BLOCK_IS_POWERED);
@@ -271,10 +276,14 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         }
     }
 
-    @Override
-    protected void saveAdditional(@NotNull CompoundTag tag, HolderLookup.Provider provider) {
-        super.saveAdditional(tag, provider);
-        tag.put(TAGS.INVENTORY_ITEMS, inventory.createTag(provider));
+    //@Override // mc<=1.21.5
+    //protected void saveAdditional(CompoundTag tag, HolderLookup.Provider provider) { super.saveAdditional(tag, provider); saveState(tag, provider); } // mc<=1.21.5
+    @Override // mc>=1.21.6
+    protected void saveAdditional(net.minecraft.world.level.storage.ValueOutput output) { super.saveAdditional(output); CompoundTag tag = new CompoundTag(); saveState(tag, level != null ? level.registryAccess() : net.kroia.modutilities.UtilitiesPlatform.getRegistryAccess()); net.kroia.modutilities.NbtCompat.writeAll(output, tag); } // mc>=1.21.6
+
+    /** Version-neutral save of this block entity's data (called from saveAdditional). */
+    private void saveState(CompoundTag tag, HolderLookup.Provider provider) {
+        tag.put(TAGS.INVENTORY_ITEMS, ItemStackNbt.createTag(inventory, provider));
         tag.putBoolean(TAGS.BLOCK_IS_POWERED, blockIsPowered);
         tag.putInt(TAGS.BANK_ACCOUNT_NUMBER, bankAccountNumber);
         ListTag ordersList = new ListTag();

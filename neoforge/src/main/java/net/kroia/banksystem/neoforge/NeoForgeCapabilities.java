@@ -15,7 +15,8 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.items.wrapper.InvWrapper;
 
-@EventBusSubscriber(modid = BankSystemMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
+//@EventBusSubscriber(modid = BankSystemMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD) // mc<=1.21.5
+@EventBusSubscriber(modid = BankSystemMod.MOD_ID) // mc>=1.21.6
 public class NeoForgeCapabilities {
 
     @SubscribeEvent

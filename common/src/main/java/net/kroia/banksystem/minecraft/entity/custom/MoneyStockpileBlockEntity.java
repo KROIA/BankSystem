@@ -317,9 +317,13 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
         notifyChanges();
     }
 
-    @Override
-    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider provider) {
-        super.saveAdditional(tag, provider);
+    //@Override // mc<=1.21.5
+    //protected void saveAdditional(CompoundTag tag, HolderLookup.Provider provider) { super.saveAdditional(tag, provider); saveState(tag, provider); } // mc<=1.21.5
+    @Override // mc>=1.21.6
+    protected void saveAdditional(net.minecraft.world.level.storage.ValueOutput output) { super.saveAdditional(output); CompoundTag tag = new CompoundTag(); saveState(tag, level != null ? level.registryAccess() : net.kroia.modutilities.UtilitiesPlatform.getRegistryAccess()); net.kroia.modutilities.NbtCompat.writeAll(output, tag); } // mc>=1.21.6
+
+    /** Version-neutral save of this block entity's data (called from saveAdditional). */
+    private void saveState(CompoundTag tag, HolderLookup.Provider provider) {
         tag.putInt("sum", sum);
         tag.putString("facing", facing.getName());
         ListTag itemsTag = new ListTag();
@@ -331,9 +335,13 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
         tag.put("items", itemsTag);
     }
 
-    @Override
-    public void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) {
-        super.loadAdditional(tag, provider);
+    //@Override // mc<=1.21.5
+    //public void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) { super.loadAdditional(tag, provider); loadState(tag, provider); } // mc<=1.21.5
+    @Override // mc>=1.21.6
+    public void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { super.loadAdditional(input); loadState(net.kroia.modutilities.NbtCompat.readAll(input), input.lookup()); } // mc>=1.21.6
+
+    /** Version-neutral load of this block entity's data (called from loadAdditional). */
+    private void loadState(CompoundTag tag, HolderLookup.Provider provider) {
         sum = NbtCompat.getInt(tag, "sum");
         if (tag.contains("facing")) {
             Direction dir = Direction.byName(NbtCompat.getString(tag, "facing"));
@@ -360,7 +368,7 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
     @Override
     public @NotNull CompoundTag getUpdateTag(HolderLookup.Provider provider) {
         CompoundTag tag = new CompoundTag();
-        saveAdditional(tag, provider);
+        saveState(tag, provider);
         return tag;
     }
 
