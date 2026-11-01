@@ -72,7 +72,8 @@ public class BankSystemEntities {
         // Architectury API method to register BlockEntityRenderer in a platform-neutral way
         BlockEntityRendererRegistry.register((BlockEntityType<MoneyStockpileBlockEntity>) MONEY_STOCKPILE_BLOCK_ENTITY.get(), MoneyStockpileEntityRenderer::new);
         BlockEntityRendererRegistry.register((BlockEntityType<BankSystemDisplayBlockEntity>) BANKSYSTEM_DISPLAY_BLOCK_ENTITY.get(), AbstractDisplayBlockEntityRenderer::new);
-        RenderTypeRegistry.register(RenderType.cutout(), BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get());
+        RenderTypeRegistry.register(RenderType.cutout(), BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get()); // mc<=1.21.5
+        //RenderTypeRegistry.register(net.minecraft.client.renderer.chunk.ChunkSectionLayer.CUTOUT, BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get()); // mc>=1.21.6
     }
 
 

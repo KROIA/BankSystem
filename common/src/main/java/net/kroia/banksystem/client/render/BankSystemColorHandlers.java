@@ -55,15 +55,19 @@ public final class BankSystemColorHandlers {
             }
 
             // Preset path — render the tinted item stack (tint via ItemColor handler).
-            PoseStack pose = gfx.pose();
-            pose.pushPose();
-            pose.translate(x, y, 0.0f);
+            var pose = gfx.pose();
             float sx = w / 16.0f;
             float sy = h / 16.0f;
-            pose.scale(sx, sy, 1.0f);
+            pose.pushPose(); // mc<=1.21.5
+            pose.translate(x, y, 0.0f); // mc<=1.21.5
+            pose.scale(sx, sy, 1.0f); // mc<=1.21.5
+            //pose.pushMatrix(); // mc>=1.21.6 (GUI pose is a Matrix3x2fStack)
+            //pose.translate(x, y); // mc>=1.21.6
+            //pose.scale(sx, sy); // mc>=1.21.6
             gfx.renderItem(template, 0, 0);
             gfx.renderItemDecorations(Minecraft.getInstance().font, template, 0, 0);
-            pose.popPose();
+            pose.popPose(); // mc<=1.21.5
+            //pose.popMatrix(); // mc>=1.21.6
         }
     };
 
@@ -130,15 +134,20 @@ public final class BankSystemColorHandlers {
         float scale = Math.min((w - 4f) / Math.max(textW, 1), (h - 4f) / Math.max(textH, 1));
         if (scale <= 0.0f) return;
 
-        PoseStack pose = gfx.pose();
-        pose.pushPose();
+        var pose = gfx.pose();
         float cx = x + w / 2.0f;
         float cy = y + h / 2.0f;
-        pose.translate(cx, cy, 0.0f);
-        pose.scale(scale, scale, 1.0f);
-        pose.translate(-textW / 2.0f, -textH / 2.0f, 0.0f);
+        pose.pushPose(); // mc<=1.21.5
+        pose.translate(cx, cy, 0.0f); // mc<=1.21.5
+        pose.scale(scale, scale, 1.0f); // mc<=1.21.5
+        pose.translate(-textW / 2.0f, -textH / 2.0f, 0.0f); // mc<=1.21.5
+        //pose.pushMatrix(); // mc>=1.21.6
+        //pose.translate(cx, cy); // mc>=1.21.6
+        //pose.scale(scale, scale); // mc>=1.21.6
+        //pose.translate(-textW / 2.0f, -textH / 2.0f); // mc>=1.21.6
         gfx.drawString(font, initials, 0, 0, textColor, false);
-        pose.popPose();
+        pose.popPose(); // mc<=1.21.5
+        //pose.popMatrix(); // mc>=1.21.6
     }
 
     private static int darken(int argb, float factor) {

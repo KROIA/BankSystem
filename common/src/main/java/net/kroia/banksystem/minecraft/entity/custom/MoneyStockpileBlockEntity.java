@@ -368,7 +368,7 @@ public class MoneyStockpileBlockEntity extends BlockEntity {
     @Override
     public @NotNull CompoundTag getUpdateTag(HolderLookup.Provider provider) {
         CompoundTag tag = new CompoundTag();
-        saveAdditional(tag, provider);
+        saveState(tag, provider);
         return tag;
     }
 
