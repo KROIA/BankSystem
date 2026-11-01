@@ -32,22 +32,22 @@ public final class NeoForgeShareExtensionsBootstrap {
 
     //@SubscribeEvent // mc<=1.21.3
     //public static void onRegisterClientExtensions(RegisterClientExtensionsEvent event) { // mc<=1.21.3
-    //    event.registerItem(new IClientItemExtensions() { // mc<=1.21.3
-    //        private BlockEntityWithoutLevelRenderer renderer; // mc<=1.21.3
-    //        @Override // mc<=1.21.3
-    //        public BlockEntityWithoutLevelRenderer getCustomRenderer() { // mc<=1.21.3
-    //            if (renderer == null) { // mc<=1.21.3
-    //                Minecraft mc = Minecraft.getInstance(); // mc<=1.21.3
-    //                renderer = new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) { // mc<=1.21.3
-    //                    @Override // mc<=1.21.3
-    //                    public void renderByItem(ItemStack stack, ItemDisplayContext ctx, PoseStack pose, MultiBufferSource buffers, int light, int overlay) { // mc<=1.21.3
-    //                        StampedShareRenderer.render(stack, ctx, pose, buffers, light, overlay); // mc<=1.21.3
-    //                    } // mc<=1.21.3
-    //                }; // mc<=1.21.3
-    //            } // mc<=1.21.3
-    //            return renderer; // mc<=1.21.3
-    //        } // mc<=1.21.3
-    //    }, BankSystemItems.STAMPED_SHARE.get()); // mc<=1.21.3
+        //event.registerItem(new IClientItemExtensions() { // mc<=1.21.3
+            //private BlockEntityWithoutLevelRenderer renderer; // mc<=1.21.3
+            //@Override // mc<=1.21.3
+            //public BlockEntityWithoutLevelRenderer getCustomRenderer() { // mc<=1.21.3
+                //if (renderer == null) { // mc<=1.21.3
+                    //Minecraft mc = Minecraft.getInstance(); // mc<=1.21.3
+                    //renderer = new BlockEntityWithoutLevelRenderer(mc.getBlockEntityRenderDispatcher(), mc.getEntityModels()) { // mc<=1.21.3
+                        //@Override // mc<=1.21.3
+                        //public void renderByItem(ItemStack stack, ItemDisplayContext ctx, PoseStack pose, MultiBufferSource buffers, int light, int overlay) { // mc<=1.21.3
+                            //StampedShareRenderer.render(stack, ctx, pose, buffers, light, overlay); // mc<=1.21.3
+                        //} // mc<=1.21.3
+                    //}; // mc<=1.21.3
+                //} // mc<=1.21.3
+                //return renderer; // mc<=1.21.3
+            //} // mc<=1.21.3
+        //}, BankSystemItems.STAMPED_SHARE.get()); // mc<=1.21.3
     //} // mc<=1.21.3
 
     @SubscribeEvent // mc>=1.21.4
