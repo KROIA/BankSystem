@@ -8,7 +8,8 @@ import net.minecraft.client.model.geom.EntityModelSet;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.special.SpecialModelRenderer;
 import net.minecraft.client.renderer.special.SpecialModelRenderers;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.util.ExtraCodecs;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
@@ -25,7 +26,8 @@ import java.lang.reflect.Modifier;
  */
 public final class StampedShareSpecialRenderer implements SpecialModelRenderer<ItemStack> {
 
-    public static final ResourceLocation ID = BankSystemMod.id("stamped_share");
+    public static final ResourceLocation ID = BankSystemMod.id("stamped_share"); // mc<=1.21.10
+    //public static final Identifier ID = BankSystemMod.id("stamped_share"); // mc>=1.21.11
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
@@ -62,8 +64,10 @@ public final class StampedShareSpecialRenderer implements SpecialModelRenderer<I
             //StampedShareRenderer.render(stack, (type, geometry) -> collector.submitCustomGeometry(poseStack, type, geometry::accept), light, overlay); // mc>=1.21.9
     //} // mc>=1.21.9
 
-    @Override // mc>=1.21.6
-    public void getExtents(java.util.Set<org.joml.Vector3f> extents) { for (float x : new float[]{0f, 1f}) for (float y : new float[]{0f, 1f}) for (float z : new float[]{7.5f / 16f, 8.5f / 16f}) extents.add(new org.joml.Vector3f(x, y, z)); } // mc>=1.21.6 (card box)
+    @Override // mc>=1.21.6 mc<=1.21.10
+    public void getExtents(java.util.Set<org.joml.Vector3f> extents) { for (float x : new float[]{0f, 1f}) for (float y : new float[]{0f, 1f}) for (float z : new float[]{7.5f / 16f, 8.5f / 16f}) extents.add(new org.joml.Vector3f(x, y, z)); } // mc>=1.21.6 mc<=1.21.10 (card box)
+    //@Override // mc>=1.21.11
+    //public void getExtents(java.util.function.Consumer<org.joml.Vector3fc> extents) { for (float x : new float[]{0f, 1f}) for (float y : new float[]{0f, 1f}) for (float z : new float[]{7.5f / 16f, 8.5f / 16f}) extents.accept(new org.joml.Vector3f(x, y, z)); } // mc>=1.21.11 (card box)
 
     @Override
     public ItemStack extractArgument(ItemStack stack) {
@@ -82,7 +86,8 @@ public final class StampedShareSpecialRenderer implements SpecialModelRenderer<I
             for (Field field : SpecialModelRenderers.class.getDeclaredFields()) {
                 if (Modifier.isStatic(field.getModifiers()) && field.getType() == ExtraCodecs.LateBoundIdMapper.class) {
                     field.setAccessible(true);
-                    ((ExtraCodecs.LateBoundIdMapper<ResourceLocation, MapCodec<? extends SpecialModelRenderer.Unbaked>>) field.get(null))
+                    ((ExtraCodecs.LateBoundIdMapper<ResourceLocation, MapCodec<? extends SpecialModelRenderer.Unbaked>>) field.get(null)) // mc<=1.21.10
+                    //((ExtraCodecs.LateBoundIdMapper<Identifier, MapCodec<? extends SpecialModelRenderer.Unbaked>>) field.get(null)) // mc>=1.21.11
                             .put(ID, Unbaked.MAP_CODEC);
                     return;
                 }

@@ -10,12 +10,14 @@ import net.kroia.banksystem.client.company.SharePresetRegistry;
 import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.RenderType; // mc<=1.21.10
+//import net.minecraft.client.renderer.rendertype.RenderType; import net.minecraft.client.renderer.rendertype.RenderTypes; // mc>=1.21.11
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 
@@ -57,10 +59,14 @@ import java.util.function.Function;
  */
 public final class StampedShareRenderer {
 
-    private static final ResourceLocation BLANK_CARD =
-            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "item/blank_share");
-    private static final ResourceLocation STAMPED_CARD =
-            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "item/stamped_share");
+    private static final ResourceLocation BLANK_CARD = // mc<=1.21.10
+    //private static final Identifier BLANK_CARD = // mc>=1.21.11
+            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "item/blank_share"); // mc<=1.21.10
+            //Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "item/blank_share"); // mc>=1.21.11
+    private static final ResourceLocation STAMPED_CARD = // mc<=1.21.10
+    //private static final Identifier STAMPED_CARD = // mc>=1.21.11
+            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "item/stamped_share"); // mc<=1.21.10
+            //Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "item/stamped_share"); // mc>=1.21.11
 
     /** Card thickness — identical to vanilla item/generated flat items (1/16, centered). */
     private static final float Z_BACK = 7.5f / 16.0f;
@@ -109,7 +115,8 @@ public final class StampedShareRenderer {
     }
 
     public static void render(ItemStack stack, Sink sink, int light, int overlay) {
-        Function<ResourceLocation, TextureAtlasSprite> atlas =
+        Function<ResourceLocation, TextureAtlasSprite> atlas = // mc<=1.21.10
+        //Function<Identifier, TextureAtlasSprite> atlas = // mc>=1.21.11
                 Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS); // mc<=1.21.8
                 //Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(net.minecraft.data.AtlasIds.BLOCKS)::getSprite; // mc>=1.21.9
 
@@ -151,7 +158,8 @@ public final class StampedShareRenderer {
      * {@link net.minecraft.client.renderer.RenderType#entityCutoutNoCull}.
      */
     private static void drawSymbol(Sink sink,
-                                   Function<ResourceLocation, TextureAtlasSprite> atlas,
+                                   Function<ResourceLocation, TextureAtlasSprite> atlas, // mc<=1.21.10
+                                   //Function<Identifier, TextureAtlasSprite> atlas, // mc>=1.21.11
                                    ShareVisuals.ShareLayer layer,
                                    float x0, float y0, float size, float eps,
                                    int light, int overlay) {
@@ -164,7 +172,8 @@ public final class StampedShareRenderer {
 
         if (SharePresetRegistry.isBundledId(id)) {
             // Bundled symbol: render via blocks atlas sprite.
-            TextureAtlasSprite sprite = atlas.apply(ResourceLocation.fromNamespaceAndPath(
+            TextureAtlasSprite sprite = atlas.apply(ResourceLocation.fromNamespaceAndPath( // mc<=1.21.10
+            //TextureAtlasSprite sprite = atlas.apply(Identifier.fromNamespaceAndPath( // mc>=1.21.11
                     BankSystemMod.MOD_ID, "item/share_symbol/" + id));
             sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> {
                 emit(vc, pose, new Quad(
@@ -176,8 +185,10 @@ public final class StampedShareRenderer {
             });
         } else if (ClientSymbolRegistry.hasDynamicTexture(id)) {
             // Dynamic synced symbol: render via DynamicTexture registered with TextureManager.
-            ResourceLocation dynRl = ClientSymbolRegistry.getDynamicRL(id);
-            sink.draw(RenderType.entityCutoutNoCull(dynRl), (pose, vc) -> {
+            ResourceLocation dynRl = ClientSymbolRegistry.getDynamicRL(id); // mc<=1.21.10
+            //Identifier dynRl = ClientSymbolRegistry.getDynamicRL(id); // mc>=1.21.11
+            sink.draw(RenderType.entityCutoutNoCull(dynRl), (pose, vc) -> { // mc<=1.21.10
+            //sink.draw(RenderTypes.entityCutoutNoCull(dynRl), (pose, vc) -> { // mc>=1.21.11
                 emitRaw(vc, pose, new Quad(
                         new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
                         new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), tint, light, overlay);

@@ -22,7 +22,8 @@ import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -501,7 +502,8 @@ public class NumismaticsAdapterTests extends TestSuite {
             }
 
             Item bevelItem = BuiltInRegistries.ITEM.getOptional(
-                    ResourceLocation.fromNamespaceAndPath("numismatics", "bevel")).orElse(null);
+                    ResourceLocation.fromNamespaceAndPath("numismatics", "bevel")).orElse(null); // mc<=1.21.10
+                    //Identifier.fromNamespaceAndPath("numismatics", "bevel")).orElse(null); // mc>=1.21.11
             if (bevelItem == null || bevelItem == Items.AIR) {
                 return pass("numismatics:bevel not in item registry — skipped");
             }
@@ -584,7 +586,8 @@ public class NumismaticsAdapterTests extends TestSuite {
             }
 
             Item bevelItem = BuiltInRegistries.ITEM.getOptional(
-                    ResourceLocation.fromNamespaceAndPath("numismatics", "bevel")).orElse(null);
+                    ResourceLocation.fromNamespaceAndPath("numismatics", "bevel")).orElse(null); // mc<=1.21.10
+                    //Identifier.fromNamespaceAndPath("numismatics", "bevel")).orElse(null); // mc>=1.21.11
             if (bevelItem == null || bevelItem == Items.AIR) {
                 return pass("numismatics:bevel not in item registry — skipped");
             }

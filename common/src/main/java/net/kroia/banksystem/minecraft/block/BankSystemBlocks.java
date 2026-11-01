@@ -8,7 +8,8 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.block.custom.*;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.level.block.Block;
 
 import java.util.function.Supplier;
@@ -43,7 +44,8 @@ public class BankSystemBlocks {
 
     public static <T extends Block> RegistrySupplier<T> registerBlock(String name, Supplier<T> block)
     {
-        RegistrySupplier<T> toReturn = BLOCKS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), block);
+        RegistrySupplier<T> toReturn = BLOCKS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), block); // mc<=1.21.10
+        //RegistrySupplier<T> toReturn = BLOCKS.register(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), block); // mc>=1.21.11
         BankSystemItems.registerBlockItem(name, toReturn);
         return toReturn;
     }
@@ -56,6 +58,7 @@ public class BankSystemBlocks {
     */
     public static <T extends Block> RegistrySupplier<T> registerBlockNoItem(String name, Supplier<T> block)
     {
-        return BLOCKS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), block);
+        return BLOCKS.register(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), block); // mc<=1.21.10
+        //return BLOCKS.register(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, name), block); // mc>=1.21.11
     }
 }
