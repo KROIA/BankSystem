@@ -32,8 +32,8 @@ import java.util.List;
  *   <li>You MUST also add a matching editing field to the Mod Settings screen
  *       ({@code ModSettingsScreen}). The screen builds its fields generically from
  *       {@link #getEditableGroups()}, so a setting in a registered group with a
- *       supported type (Boolean/Integer/Long/Float/ItemStack/List&lt;String&gt;/
- *       PlaceholderSettingData) appears automatically — but you still must add its
+ *       supported type (Boolean/Integer/Long/Float/String/ItemStack/List&lt;String&gt;)
+ *       appears automatically — but you still must add its
  *       label/tooltip lang keys
  *       ({@code gui.banksystem.mod_settings_screen.setting.<Group>.<NAME>[.tooltip]})
  *       and verify the field renders and applies correctly. Unsupported types need
@@ -403,50 +403,12 @@ public final class BankSystemModSettings extends ModSettings {
 
     public static final class Placeholder extends SettingsGroup
     {
-        public static final class PlaceholderSettingParser implements CustomJsonParser<PlaceholderSettingData> {
-
-            @Override
-            public JsonElement toJson(PlaceholderSettingData value) {
-                JsonObject jsonObject = new JsonObject();
-                jsonObject.addProperty("identifier", value.getIdentifier());
-                jsonObject.addProperty("refreshRate", value.getRefreshRate());
-                return jsonObject;
-            }
-
-            @Override
-            public PlaceholderSettingData fromJson(JsonElement json) {
-                if (json.isJsonObject()) {
-                    JsonObject jsonObject = json.getAsJsonObject();
-                    String identifier = jsonObject.has("identifier") ? jsonObject.get("identifier").getAsString() : "";
-                    int refreshRate = jsonObject.has("refreshRate") ? jsonObject.get("refreshRate").getAsInt() : 0;
-                    return new PlaceholderSettingData(identifier, refreshRate);
-                }
-                return null; // or throw an exception if invalid format
-            }
-        }
-        public static final class PlaceholderSettingData
-        {
-            private String identifier;
-            private int refreshRate;
-
-            public PlaceholderSettingData(String identifier, int refreshRate) {
-                this.identifier = identifier;
-                this.refreshRate = refreshRate;
-            }
-            public String getIdentifier() {
-                return identifier;
-            }
-            public int getRefreshRate() {
-                return refreshRate;
-            }
-        }
-        private static final PlaceholderSettingParser parser = new PlaceholderSettingParser();
-        public final Setting<PlaceholderSettingData> PLAYER_BALANCE = registerSetting("PLAYER_BALANCE",new PlaceholderSettingData("%banksystem_player_balance%", 1000), PlaceholderSettingData.class, parser);
-        public final Setting<PlaceholderSettingData> PLAYER_LOCKED_BALANCE = registerSetting("PLAYER_LOCKED_BALANCE",new PlaceholderSettingData("%banksystem_player_locked_balance%", 1000), PlaceholderSettingData.class, parser);
-        public final Setting<PlaceholderSettingData> PLAYER_TOTAL_BALANCE = registerSetting("PLAYER_TOTAL_BALANCE",new PlaceholderSettingData("%banksystem_player_total_balance%", 1000), PlaceholderSettingData.class, parser);
-        public final Setting<PlaceholderSettingData> PLAYER_BANKUSER_JSON = registerSetting("PLAYER_BANKUSER_JSON",new PlaceholderSettingData("%banksystem_bankuser_json%", 10000), PlaceholderSettingData.class, parser);
-        public final Setting<PlaceholderSettingData> SERVER_CIRCULATION_JSON = registerSetting("SERVER_CIRCULATION_JSON",new PlaceholderSettingData("%banksystem_server_circulation_json%", 10000), PlaceholderSettingData.class, parser);
-
+        // Placeholder names are fixed (see BankSystemPlaceholders); only refresh and formatting are configurable.
+        public final Setting<Integer> PLAYER_REFRESH_MS = registerSetting("PLAYER_REFRESH_MS", 1000, Integer.class);
+        public final Setting<Integer> SERVER_REFRESH_MS = registerSetting("SERVER_REFRESH_MS", 30000, Integer.class);
+        public final Setting<Integer> TOP_COUNT = registerSetting("TOP_COUNT", 10, Integer.class);
+        /** Money display pattern; {@code %s} is replaced by the formatted number, e.g. "$%s" or "%s €". */
+        public final Setting<String> MONEY_FORMAT = registerSetting("MONEY_FORMAT", "$%s", String.class);
 
         public Placeholder() { super("Placeholder"); }
     }

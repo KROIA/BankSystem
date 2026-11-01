@@ -6,7 +6,6 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.client.render.StampedShareRenderer;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
-import net.kroia.banksystem.minecraft.compat.NEZNAMY_TAB_Placeholders;
 import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
 import org.quiltmc.loader.api.ModContainer;
 import org.quiltmc.loader.api.minecraft.MinecraftQuiltLoader;
@@ -36,10 +35,6 @@ public final class BankSystemQuilt implements ModInitializer {
         ServerLifecycleEvents.READY.register((server)->
         {
             BankSystemModBackend.onServerStart(server);
-            // Check if NEZNAMY/TAB is present and register placeholders
-            if (Platform.isModLoaded("tab")) {
-                NEZNAMY_TAB_Placeholders.register();
-            }
         });
 
         // Handle world save (stop)

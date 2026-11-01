@@ -55,8 +55,6 @@ subprojects {
         //    parchment("org.parchmentmc.data:parchment-${rootProject.minecraft_version}:${rootProject.mapping_version}")
         //}
 
-        // https://github.com/NEZNAMY/TAB API
-        compileOnly 'com.github.NEZNAMY:TAB-API:5.2.5'
 
 
     }

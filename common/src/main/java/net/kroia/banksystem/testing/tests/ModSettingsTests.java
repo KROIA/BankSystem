@@ -19,7 +19,7 @@ import java.util.List;
  * <ul>
  *   <li>the SettingsStore JSON round-trip used as the request's wire format
  *       (including the List&lt;String&gt; component lists and the Placeholder
- *       settings via their custom parser),</li>
+ *       refresh/format settings),</li>
  *   <li>the {@link ModSettingsRequest#sanitize} validation bounds and
  *       normalization rules, and</li>
  *   <li>graceful handling of partial payloads (missing groups keep their values).</li>
@@ -39,6 +39,7 @@ public class ModSettingsTests extends TestSuite {
         addTest("sanitize_clamps_lower_bounds", this::test_sanitizeClampsLowerBounds);
         addTest("sanitize_clamps_upper_bounds", this::test_sanitizeClampsUpperBounds);
         addTest("sanitize_normalizes_lists_and_placeholders", this::test_sanitizeNormalizesListsAndPlaceholders);
+        addTest("sanitize_money_format", this::test_sanitizeMoneyFormat);
         addTest("partial_payload_keeps_other_values", this::test_partialPayloadKeepsOtherValues);
     }
 
@@ -46,7 +47,7 @@ public class ModSettingsTests extends TestSuite {
      * Serializing the editable groups to a JSON string (the ModSettingsRequest wire
      * format) and loading it into a second settings instance must reproduce every
      * value, including the List&lt;String&gt; component lists and the Placeholder
-     * settings handled by their custom parser.
+     * refresh interval / money format.
      */
     private TestResult test_jsonRoundTrip() {
         BankSystemModSettings source = new BankSystemModSettings();
@@ -62,8 +63,8 @@ public class ModSettingsTests extends TestSuite {
         source.BANK.ADDITIONAL_DEPOSIT_GATED_COMPONENTS.set(new ArrayList<>(List.of("tfc:food")));
         source.BANK.CONFIRM_ITEMID_MERGE.set(true);
         source.BANK.CONFIRM_ITEMID_REPAIR.set(true);
-        source.PLACEHOLDER.PLAYER_BALANCE.set(
-                new BankSystemModSettings.Placeholder.PlaceholderSettingData("%custom_balance%", 2500));
+        source.PLACEHOLDER.PLAYER_REFRESH_MS.set(2500);
+        source.PLACEHOLDER.MONEY_FORMAT.set("%s €");
 
         SettingsStore store = new SettingsStore();
         String json = store.toJsonString(source.getEditableGroups());
@@ -97,10 +98,9 @@ public class ModSettingsTests extends TestSuite {
         if (!r.passed()) return r;
         r = assertTrue("CONFIRM_ITEMID_REPAIR survives round-trip", target.BANK.CONFIRM_ITEMID_REPAIR.get());
         if (!r.passed()) return r;
-        BankSystemModSettings.Placeholder.PlaceholderSettingData placeholder = target.PLACEHOLDER.PLAYER_BALANCE.get();
-        r = assertEquals("Placeholder identifier survives round-trip (custom parser)", "%custom_balance%", placeholder.getIdentifier());
+        r = assertEquals("PLAYER_REFRESH_MS survives round-trip", 2500, (int) target.PLACEHOLDER.PLAYER_REFRESH_MS.get());
         if (!r.passed()) return r;
-        r = assertEquals("Placeholder refresh rate survives round-trip (custom parser)", 2500, placeholder.getRefreshRate());
+        r = assertEquals("MONEY_FORMAT survives round-trip", "%s €", target.PLACEHOLDER.MONEY_FORMAT.get());
         if (!r.passed()) return r;
         return pass("SettingsStore JSON round-trip preserves all editable settings");
     }
@@ -116,8 +116,9 @@ public class ModSettingsTests extends TestSuite {
         settings.PLAYER.STARTING_BALANCE.set(-100L);
         settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(-20);
         settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(0);
-        settings.PLACEHOLDER.PLAYER_BALANCE.set(
-                new BankSystemModSettings.Placeholder.PlaceholderSettingData("%x%", 1));
+        settings.PLACEHOLDER.PLAYER_REFRESH_MS.set(1);
+        settings.PLACEHOLDER.SERVER_REFRESH_MS.set(-5);
+        settings.PLACEHOLDER.TOP_COUNT.set(-3);
 
         ModSettingsRequest.sanitize(settings);
 
@@ -139,8 +140,14 @@ public class ModSettingsTests extends TestSuite {
         r = assertEquals("upload block interval clamped to minimum",
                 ModSettingsRequest.MIN_TICK_INTERVAL, (int) settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get());
         if (!r.passed()) return r;
-        r = assertEquals("placeholder refresh rate clamped to minimum",
-                ModSettingsRequest.MIN_PLACEHOLDER_REFRESH_MS, settings.PLACEHOLDER.PLAYER_BALANCE.get().getRefreshRate());
+        r = assertEquals("player placeholder refresh clamped to minimum",
+                ModSettingsRequest.MIN_PLACEHOLDER_REFRESH_MS, (int) settings.PLACEHOLDER.PLAYER_REFRESH_MS.get());
+        if (!r.passed()) return r;
+        r = assertEquals("server placeholder refresh clamped to minimum",
+                ModSettingsRequest.MIN_PLACEHOLDER_REFRESH_MS, (int) settings.PLACEHOLDER.SERVER_REFRESH_MS.get());
+        if (!r.passed()) return r;
+        r = assertEquals("placeholder top count clamped to 0",
+                ModSettingsRequest.MIN_PLACEHOLDER_TOP_COUNT, (int) settings.PLACEHOLDER.TOP_COUNT.get());
         if (!r.passed()) return r;
         return pass("sanitize() clamps all lower bounds");
     }
@@ -156,8 +163,9 @@ public class ModSettingsTests extends TestSuite {
         settings.PLAYER.STARTING_BALANCE.set(Long.MAX_VALUE);
         settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(Integer.MAX_VALUE);
         settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(Integer.MAX_VALUE);
-        settings.PLACEHOLDER.PLAYER_BALANCE.set(
-                new BankSystemModSettings.Placeholder.PlaceholderSettingData("%x%", Integer.MAX_VALUE));
+        settings.PLACEHOLDER.PLAYER_REFRESH_MS.set(Integer.MAX_VALUE);
+        settings.PLACEHOLDER.SERVER_REFRESH_MS.set(Integer.MAX_VALUE);
+        settings.PLACEHOLDER.TOP_COUNT.set(1000);
 
         ModSettingsRequest.sanitize(settings);
 
@@ -179,8 +187,14 @@ public class ModSettingsTests extends TestSuite {
         r = assertEquals("upload block interval clamped to maximum",
                 ModSettingsRequest.MAX_TICK_INTERVAL, (int) settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get());
         if (!r.passed()) return r;
-        r = assertEquals("placeholder refresh rate clamped to maximum",
-                ModSettingsRequest.MAX_PLACEHOLDER_REFRESH_MS, settings.PLACEHOLDER.PLAYER_BALANCE.get().getRefreshRate());
+        r = assertEquals("player placeholder refresh clamped to maximum",
+                ModSettingsRequest.MAX_PLACEHOLDER_REFRESH_MS, (int) settings.PLACEHOLDER.PLAYER_REFRESH_MS.get());
+        if (!r.passed()) return r;
+        r = assertEquals("server placeholder refresh clamped to maximum",
+                ModSettingsRequest.MAX_PLACEHOLDER_REFRESH_MS, (int) settings.PLACEHOLDER.SERVER_REFRESH_MS.get());
+        if (!r.passed()) return r;
+        r = assertEquals("placeholder top count clamped to 100",
+                ModSettingsRequest.MAX_PLACEHOLDER_TOP_COUNT, (int) settings.PLACEHOLDER.TOP_COUNT.get());
         if (!r.passed()) return r;
         return pass("sanitize() clamps all upper bounds");
     }
@@ -196,9 +210,10 @@ public class ModSettingsTests extends TestSuite {
                 "  tfc:food  ", "", "tfc:food", "   ", "somemod:decay")));
         settings.BANK.ADDITIONAL_DEPOSIT_GATED_COMPONENTS.set(null);
         settings.BANK.CONFIRM_ITEMID_MERGE.set(null);
-        settings.PLACEHOLDER.PLAYER_BALANCE.set(null);
-        settings.PLACEHOLDER.PLAYER_TOTAL_BALANCE.set(
-                new BankSystemModSettings.Placeholder.PlaceholderSettingData("  %spaced%  ", 5000));
+        settings.PLACEHOLDER.PLAYER_REFRESH_MS.set(null);
+        settings.PLACEHOLDER.SERVER_REFRESH_MS.set(5000);
+        settings.PLACEHOLDER.TOP_COUNT.set(null);
+        settings.PLACEHOLDER.MONEY_FORMAT.set(null);
 
         ModSettingsRequest.sanitize(settings);
 
@@ -211,20 +226,44 @@ public class ModSettingsTests extends TestSuite {
         r = assertEquals("null CONFIRM_ITEMID_MERGE falls back to its default (false)",
                 Boolean.FALSE, settings.BANK.CONFIRM_ITEMID_MERGE.get());
         if (!r.passed()) return r;
-        r = assertNotNull("null placeholder falls back to the setting's default",
-                settings.PLACEHOLDER.PLAYER_BALANCE.get());
+        r = assertEquals("null PLAYER_REFRESH_MS falls back to its default",
+                settings.PLACEHOLDER.PLAYER_REFRESH_MS.getDefaultValue(), settings.PLACEHOLDER.PLAYER_REFRESH_MS.get());
         if (!r.passed()) return r;
-        r = assertEquals("defaulted placeholder keeps the default identifier",
-                settings.PLACEHOLDER.PLAYER_BALANCE.getDefaultValue().getIdentifier(),
-                settings.PLACEHOLDER.PLAYER_BALANCE.get().getIdentifier());
+        r = assertEquals("valid SERVER_REFRESH_MS untouched",
+                5000, (int) settings.PLACEHOLDER.SERVER_REFRESH_MS.get());
         if (!r.passed()) return r;
-        r = assertEquals("placeholder identifier trimmed",
-                "%spaced%", settings.PLACEHOLDER.PLAYER_TOTAL_BALANCE.get().getIdentifier());
+        r = assertEquals("null TOP_COUNT falls back to its default",
+                settings.PLACEHOLDER.TOP_COUNT.getDefaultValue(), settings.PLACEHOLDER.TOP_COUNT.get());
         if (!r.passed()) return r;
-        r = assertEquals("valid placeholder refresh rate untouched",
-                5000, settings.PLACEHOLDER.PLAYER_TOTAL_BALANCE.get().getRefreshRate());
+        r = assertEquals("null MONEY_FORMAT falls back to its default",
+                settings.PLACEHOLDER.MONEY_FORMAT.getDefaultValue(), settings.PLACEHOLDER.MONEY_FORMAT.get());
         if (!r.passed()) return r;
-        return pass("sanitize() normalizes component lists and placeholder data");
+        return pass("sanitize() normalizes component lists and placeholder settings");
+    }
+
+    /**
+     * MONEY_FORMAT must contain "%s": blank values or values without it are reset
+     * to the default, valid values are kept exactly as entered (not trimmed).
+     */
+    private TestResult test_sanitizeMoneyFormat() {
+        BankSystemModSettings settings = new BankSystemModSettings();
+        String def = settings.PLACEHOLDER.MONEY_FORMAT.getDefaultValue();
+
+        settings.PLACEHOLDER.MONEY_FORMAT.set("EUR");
+        ModSettingsRequest.sanitize(settings);
+        TestResult r = assertEquals("format without %s reset to default", def, settings.PLACEHOLDER.MONEY_FORMAT.get());
+        if (!r.passed()) return r;
+
+        settings.PLACEHOLDER.MONEY_FORMAT.set("   ");
+        ModSettingsRequest.sanitize(settings);
+        r = assertEquals("blank format reset to default", def, settings.PLACEHOLDER.MONEY_FORMAT.get());
+        if (!r.passed()) return r;
+
+        settings.PLACEHOLDER.MONEY_FORMAT.set(" %s € ");
+        ModSettingsRequest.sanitize(settings);
+        r = assertEquals("valid format kept as-is (not trimmed)", " %s € ", settings.PLACEHOLDER.MONEY_FORMAT.get());
+        if (!r.passed()) return r;
+        return pass("sanitize() validates MONEY_FORMAT");
     }
 
     /**

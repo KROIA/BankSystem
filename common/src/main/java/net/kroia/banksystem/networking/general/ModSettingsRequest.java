@@ -37,7 +37,7 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * <b>Wire format:</b> the payload is the {@link SettingsStore} JSON string of
  * {@link BankSystemModSettings#getEditableGroups()} — the exact same generic
- * serialization (including the custom parsers, e.g. for the Placeholder settings)
+ * serialization (including the custom parsers, e.g. for the item-id lists)
  * that is used for the settings.json file itself. This avoids duplicating a
  * structured codec for every setting and automatically covers settings added later.
  * <p>
@@ -91,10 +91,15 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
     /** Maximum block-update tick interval (1200 ticks = 1 minute). */
     public static final int MAX_TICK_INTERVAL = 1200;
 
-    /** Minimum TAB placeholder refresh rate in milliseconds. */
+    /** Minimum placeholder cache refresh interval in milliseconds. */
     public static final int MIN_PLACEHOLDER_REFRESH_MS = 100;
-    /** Maximum TAB placeholder refresh rate in milliseconds (1 day). */
+    /** Maximum placeholder cache refresh interval in milliseconds (1 day). */
     public static final int MAX_PLACEHOLDER_REFRESH_MS = 86_400_000;
+
+    /** Minimum number of {@code top_<n>} placeholder slots (0 = none). */
+    public static final int MIN_PLACEHOLDER_TOP_COUNT = 0;
+    /** Maximum number of {@code top_<n>} placeholder slots. */
+    public static final int MAX_PLACEHOLDER_TOP_COUNT = 100;
 
     /**
      * The two request actions.
@@ -213,7 +218,7 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         }
 
         // Clamp all numeric values into their documented bounds and normalize the
-        // component-id lists / placeholder data.
+        // component-id lists / placeholder money format.
         sanitize(settings);
 
         // Persist ONLY settings.json (targeted save via save_globalSettings() —
@@ -254,9 +259,11 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         //   (DepositItemsInBankRequest etc.), and the slave's AsyncBankManager routes
         //   IsItemIDAllowedAsync to the master through the ARRS dispatch as well. So the
         //   master's live setting always gates. No propagation required.
-        // * Placeholder: consumed once at TAB-integration registration during startup
-        //   of the server where the TAB mod runs, from that server's local file.
-        //   No propagation.
+        // * Placeholder (refresh intervals, TOP_COUNT, MONEY_FORMAT): read by the
+        //   placeholder provider on the server where TAB / Placeholder API runs, from
+        //   that server's OWN local settings.json (slaves only query the master for
+        //   the bank data, not for these settings). TOP_COUNT is read once at
+        //   placeholder registration (restart-required). No propagation.
         // => No active propagation is required for any group.
 
         // Notify other online admins (on this server) about the change.
@@ -283,8 +290,11 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
      *   <li>{@code ServerBank.ADDITIONAL_VOLATILE_COMPONENTS} /
      *       {@code ADDITIONAL_DEPOSIT_GATED_COMPONENTS}: entries trimmed, blanks
      *       dropped, duplicates removed (order preserved); null list → empty list</li>
-     *   <li>{@code Placeholder.*}: null data → the setting's default; identifier
-     *       trimmed; refreshRate ∈ [100 ms, 86,400,000 ms]</li>
+     *   <li>{@code Placeholder.PLAYER_REFRESH_MS} / {@code SERVER_REFRESH_MS}
+     *       ∈ [100 ms, 86,400,000 ms] (null → default)</li>
+     *   <li>{@code Placeholder.TOP_COUNT} ∈ [0, 100] (null → default)</li>
+     *   <li>{@code Placeholder.MONEY_FORMAT}: null, blank or missing {@code %s}
+     *       → the default; otherwise kept as-is (not trimmed)</li>
      * </ul>
      * Static and side-effect free apart from the settings object itself, so the
      * in-game test suite can verify the bounds without a running request.
@@ -326,11 +336,12 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         sanitizeBoolean(settings.BANK.CONFIRM_ITEMID_REPAIR);
 
         // Placeholder
-        sanitizePlaceholder(settings.PLACEHOLDER.PLAYER_BALANCE);
-        sanitizePlaceholder(settings.PLACEHOLDER.PLAYER_LOCKED_BALANCE);
-        sanitizePlaceholder(settings.PLACEHOLDER.PLAYER_TOTAL_BALANCE);
-        sanitizePlaceholder(settings.PLACEHOLDER.PLAYER_BANKUSER_JSON);
-        sanitizePlaceholder(settings.PLACEHOLDER.SERVER_CIRCULATION_JSON);
+        clampOrDefault(settings.PLACEHOLDER.PLAYER_REFRESH_MS, MIN_PLACEHOLDER_REFRESH_MS, MAX_PLACEHOLDER_REFRESH_MS);
+        clampOrDefault(settings.PLACEHOLDER.SERVER_REFRESH_MS, MIN_PLACEHOLDER_REFRESH_MS, MAX_PLACEHOLDER_REFRESH_MS);
+        clampOrDefault(settings.PLACEHOLDER.TOP_COUNT, MIN_PLACEHOLDER_TOP_COUNT, MAX_PLACEHOLDER_TOP_COUNT);
+        String moneyFormat = settings.PLACEHOLDER.MONEY_FORMAT.get();
+        if (moneyFormat == null || moneyFormat.isBlank() || !moneyFormat.contains("%s"))
+            settings.PLACEHOLDER.MONEY_FORMAT.set(settings.PLACEHOLDER.MONEY_FORMAT.getDefaultValue());
     }
 
     /** Clamps a Long setting value into [min, max]; null falls back to min. */
@@ -343,6 +354,12 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
     private static int clamp(@Nullable Integer value, int min, int max) {
         if (value == null) return min;
         return Math.max(min, Math.min(max, value));
+    }
+
+    /** Clamps an Integer setting into [min, max]; a null value falls back to the setting's default. */
+    private static void clampOrDefault(Setting<Integer> setting, int min, int max) {
+        Integer value = setting.get();
+        setting.set(clamp(value == null ? setting.getDefaultValue() : value, min, max));
     }
 
     /** Replaces a null Boolean value with the setting's default. */
@@ -366,26 +383,6 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
             }
         }
         return new ArrayList<>(normalized);
-    }
-
-    /**
-     * Sanitizes one Placeholder setting: null data falls back to the setting's
-     * default; the identifier is trimmed and the refresh rate clamped into
-     * [{@link #MIN_PLACEHOLDER_REFRESH_MS}, {@link #MAX_PLACEHOLDER_REFRESH_MS}].
-     * (The '%...%' identifier format is validated at TAB registration time, which
-     * skips malformed identifiers with a log message — not enforced here.)
-     */
-    private static void sanitizePlaceholder(Setting<BankSystemModSettings.Placeholder.PlaceholderSettingData> setting) {
-        BankSystemModSettings.Placeholder.PlaceholderSettingData data = setting.get();
-        if (data == null) {
-            setting.set(setting.getDefaultValue());
-            return;
-        }
-        String identifier = data.getIdentifier() == null ? "" : data.getIdentifier().trim();
-        int refreshRate = Math.max(MIN_PLACEHOLDER_REFRESH_MS, Math.min(MAX_PLACEHOLDER_REFRESH_MS, data.getRefreshRate()));
-        if (!identifier.equals(data.getIdentifier()) || refreshRate != data.getRefreshRate()) {
-            setting.set(new BankSystemModSettings.Placeholder.PlaceholderSettingData(identifier, refreshRate));
-        }
     }
 
     /**

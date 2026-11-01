@@ -48,14 +48,13 @@ import java.util.Set;
  * Fields are built generically from {@link BankSystemModSettings#getEditableGroups()}:
  * Booleans become checkboxes, Integer/Long/Float become numeric text boxes,
  * ItemStacks get an item view + creative-inventory item picker, {@code List<String>}
- * becomes a comma-separated text box and the Placeholder settings get an
- * identifier text box + refresh-rate box.
+ * becomes a comma-separated text box and Strings become a plain text box.
  * <p>
  * <b>DEVELOPER NOTE — when adding a new setting:</b>
  * <ol>
  *   <li>You MUST also add a matching editing field to this screen. Settings of a
- *       supported type (Boolean/Integer/Long/Float/ItemStack/List&lt;String&gt;/
- *       PlaceholderSettingData) inside a registered group appear automatically via
+ *       supported type (Boolean/Integer/Long/Float/String/ItemStack/
+ *       List&lt;String&gt;) inside a registered group appear automatically via
  *       the generic row builder — still add the label/tooltip lang keys
  *       ({@code gui.banksystem.mod_settings_screen.setting.<Group>.<NAME>[.tooltip]})
  *       and verify the field renders and applies correctly. Unsupported types need
@@ -85,8 +84,6 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         public static final Component STATUS_LOADED = Component.translatable(PREFIX + "status.loaded");
         public static final Component STATUS_SAVED = Component.translatable(PREFIX + "status.saved");
         public static final Component STATUS_FAILED = Component.translatable(PREFIX + "status.failed");
-        public static final Component PLACEHOLDER_IDENTIFIER_TOOLTIP = Component.translatable(PREFIX + "placeholder_identifier.tooltip");
-        public static final Component PLACEHOLDER_REFRESH_TOOLTIP = Component.translatable(PREFIX + "placeholder_refresh_rate.tooltip");
 
         /** Heading label of a settings group ("Utilities", "Player", "ServerBank", "Placeholder"). */
         public static Component group(String groupName) {
@@ -140,9 +137,9 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
      *       automatically reset to false after use. Editing them here is exactly how
      *       an admin approves a pending merge/repair without editing settings.json —
      *       set to true, apply, then restart the server once.</li>
-     *   <li>{@code Placeholder.*}: read once when the TAB-integration placeholders
-     *       are registered during server startup
-     *       ({@code NEZNAMY_TAB_Placeholders.register()}).</li>
+     *   <li>{@code Placeholder.TOP_COUNT}: read once when the placeholders are
+     *       registered during server startup (it fixes the number of
+     *       {@code top_<n>} slots). The other Placeholder settings are read live.</li>
      * </ul>
      * All other registered settings are read live at their point of use (autosave /
      * snapshot timers and logging flags per call or tick, starting balance per user
@@ -153,11 +150,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             "ServerBank.ADDITIONAL_DEPOSIT_GATED_COMPONENTS",
             "ServerBank.CONFIRM_ITEMID_MERGE",
             "ServerBank.CONFIRM_ITEMID_REPAIR",
-            "Placeholder.PLAYER_BALANCE",
-            "Placeholder.PLAYER_LOCKED_BALANCE",
-            "Placeholder.PLAYER_TOTAL_BALANCE",
-            "Placeholder.PLAYER_BANKUSER_JSON",
-            "Placeholder.SERVER_CIRCULATION_JSON"
+            "Placeholder.TOP_COUNT"
     );
 
     /**
@@ -197,8 +190,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
 
         // Render this screen smaller than the BankSystemGuiScreen default (0.8):
         // a lower GUI scale enlarges the logical content area (getWidth()/getHeight()
-        // grow by 1/scale), giving the many settings rows — especially the long TAB
-        // placeholder identifiers — substantially more usable space.
+        // grow by 1/scale), giving the many settings rows substantially more usable space.
         setGuiScale(0.65f);
 
         titleLabel = new Label(Texts.TITLE.getString());
@@ -292,8 +284,6 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         private TextBox textBox = null;
         private ItemView itemView = null;
         private Button selectItemButton = null;
-        private TextBox placeholderIdentifierBox = null;
-        private TextBox placeholderRefreshBox = null;
         private Label unsupportedLabel = null;
         private Label restartMarker = null;
 
@@ -310,13 +300,6 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             addChild(nameLabel);
 
             createEditor(group.getName(), setting, tooltip);
-
-            // Placeholder rows wrap onto two lines (label + marker on top, the long
-            // identifier box + refresh-rate box spanning the full width below), so
-            // the %...% identifier strings — the longest values of any setting —
-            // never overflow their text box.
-            if (placeholderIdentifierBox != null)
-                setHeight(2 * ELEMENT_HEIGHT + 2 * spacing);
 
             if (RESTART_REQUIRED_SETTINGS.contains(group.getName() + "." + setting.getName())) {
                 // Clearly visible warning-colored marker + explanatory hover tooltip
@@ -480,37 +463,22 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
                     }
                 });
             }
-            else if (type == BankSystemModSettings.Placeholder.PlaceholderSettingData.class) {
-                // TAB placeholder settings: identifier text box + refresh rate (ms) box.
-                Setting<BankSystemModSettings.Placeholder.PlaceholderSettingData> placeholderSetting =
-                        (Setting<BankSystemModSettings.Placeholder.PlaceholderSettingData>) setting;
-                placeholderIdentifierBox = new TextBox();
-                placeholderIdentifierBox.setHoverTooltipSupplier(() ->
-                        tooltip + "\n" + Texts.PLACEHOLDER_IDENTIFIER_TOOLTIP.getString());
-                placeholderIdentifierBox.setHoverTooltipFontScale(hoverToolTipFontSize);
-                placeholderIdentifierBox.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
-                addChild(placeholderIdentifierBox);
-
-                placeholderRefreshBox = new TextBox();
-                placeholderRefreshBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 9, 0));
-                placeholderRefreshBox.setHoverTooltipSupplier(Texts.PLACEHOLDER_REFRESH_TOOLTIP::getString);
-                placeholderRefreshBox.setHoverTooltipFontScale(hoverToolTipFontSize);
-                placeholderRefreshBox.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
-                addChild(placeholderRefreshBox);
-
+            else if (type == String.class) {
+                // Free-text settings (e.g. Placeholder.MONEY_FORMAT): stored as typed;
+                // the server validates on apply.
+                Setting<String> stringSetting = (Setting<String>) setting;
+                textBox = new TextBox();
+                textBox.setHoverTooltipSupplier(() -> tooltip);
+                textBox.setHoverTooltipFontScale(hoverToolTipFontSize);
+                textBox.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
+                addChild(textBox);
                 bindings.add(new FieldBinding() {
                     @Override public void loadFromSetting() {
-                        BankSystemModSettings.Placeholder.PlaceholderSettingData v = placeholderSetting.get();
-                        placeholderIdentifierBox.setText(v != null ? v.getIdentifier() : "");
-                        placeholderRefreshBox.setText(v != null ? v.getRefreshRate() : 0);
+                        String v = stringSetting.get();
+                        textBox.setText(v == null ? "" : v);
                     }
                     @Override public void storeToSetting() {
-                        BankSystemModSettings.Placeholder.PlaceholderSettingData current = placeholderSetting.get();
-                        int refreshRate = current != null ? current.getRefreshRate() : 0;
-                        try { refreshRate = placeholderRefreshBox.getInt(); }
-                        catch (Exception e) { /* invalid input — keep the current rate */ }
-                        placeholderSetting.set(new BankSystemModSettings.Placeholder.PlaceholderSettingData(
-                                placeholderIdentifierBox.getText().trim(), refreshRate));
+                        stringSetting.set(textBox.getText());
                     }
                 });
             }
@@ -540,24 +508,6 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             int markerW = restartMarker != null ? (int) (w * 0.2) : 0;
             int editorX = padding + labelW + spacing;
             int editorW = w - labelW - spacing - (markerW > 0 ? markerW + spacing : 0);
-
-            if (placeholderIdentifierBox != null) {
-                // Two-line Placeholder row: line 1 = label (full width up to the
-                // restart marker), line 2 = identifier box + refresh-rate box
-                // spanning the whole row width. The identifier holds the longest
-                // values of any setting (long %...% patterns), so it gets nearly
-                // the full screen width instead of the shared editor column.
-                int labelLineW = w - (markerW > 0 ? markerW + spacing : 0);
-                nameLabel.setBounds(padding, padding / 2, labelLineW, ELEMENT_HEIGHT);
-                if (restartMarker != null)
-                    restartMarker.setBounds(padding + w - markerW, padding / 2, markerW, ELEMENT_HEIGHT);
-
-                int line2Y = padding / 2 + ELEMENT_HEIGHT + spacing;
-                int refreshW = Math.max(60, w / 6);
-                placeholderIdentifierBox.setBounds(padding, line2Y, w - refreshW - spacing, ELEMENT_HEIGHT);
-                placeholderRefreshBox.setBounds(padding + w - refreshW, line2Y, refreshW, ELEMENT_HEIGHT);
-                return;
-            }
 
             nameLabel.setBounds(padding, padding / 2, labelW, ELEMENT_HEIGHT);
 

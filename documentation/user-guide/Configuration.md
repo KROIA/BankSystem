@@ -64,26 +64,10 @@ A freshly created `settings.json` looks like this:
     "BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL": 20
   },
   "Placeholder": {
-    "PLAYER_BALANCE": {
-      "identifier": "%banksystem_player_balance%",
-      "refreshRate": 1000
-    },
-    "PLAYER_LOCKED_BALANCE": {
-      "identifier": "%banksystem_player_locked_balance%",
-      "refreshRate": 1000
-    },
-    "PLAYER_TOTAL_BALANCE": {
-      "identifier": "%banksystem_player_total_balance%",
-      "refreshRate": 1000
-    },
-    "PLAYER_BANKUSER_JSON": {
-      "identifier": "%banksystem_bankuser_json%",
-      "refreshRate": 10000
-    },
-    "SERVER_CIRCULATION_JSON": {
-      "identifier": "%banksystem_server_circulation_json%",
-      "refreshRate": 10000
-    }
+    "PLAYER_REFRESH_MS": 1000,
+    "SERVER_REFRESH_MS": 30000,
+    "TOP_COUNT": 10,
+    "MONEY_FORMAT": "$%s"
   }
 }
 ```
@@ -126,24 +110,16 @@ A freshly created `settings.json` looks like this:
 ---
 ## Placeholder Section
 
-These entries define placeholder identifiers and refresh rates (in milliseconds) for the optional **TAB** plugin integration. Each entry has the shape:
+Settings for the optional placeholder support (TAB, Placeholder API). The placeholder names themselves are fixed; see [Placeholders](Placeholders.md) for the full list.
 
-```json
-{ "identifier": "%banksystem_player_balance%", "refreshRate": 1000 }
-```
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `PLAYER_REFRESH_MS` | number | `1000` | How often (ms) the cached per-player values (balance, locked, total, account number) are refreshed. |
+| `SERVER_REFRESH_MS` | number | `30000` | How often (ms) the server-wide values (circulation, account counts, richest players, rank) are refreshed. |
+| `TOP_COUNT` | number | `10` | Number of `top_<n>_…` richest-player slots (0–100). **Restart required.** |
+| `MONEY_FORMAT` | text | `$%s` | Display pattern for money values; `%s` is replaced by the number, e.g. `%s €`. A value without `%s` is reset to the default. |
 
-An identifier must start and end with `%`, otherwise its registration is skipped.
-
-| Key | Default identifier | Default refresh rate (ms) | Provides |
-|-----|--------------------|---------------------------|----------|
-| `PLAYER_BALANCE` | `%banksystem_player_balance%` | `1000` | The player's available money balance. |
-| `PLAYER_LOCKED_BALANCE` | `%banksystem_player_locked_balance%` | `1000` | The player's locked money balance (see [Locked Amounts](Administration.md#locked-amounts)). |
-| `PLAYER_TOTAL_BALANCE` | `%banksystem_player_total_balance%` | `1000` | The player's total money balance (available + locked). |
-| `PLAYER_BANKUSER_JSON` | `%banksystem_bankuser_json%` | `10000` | The player's whole bank account as a JSON string. |
-| `SERVER_CIRCULATION_JSON` | `%banksystem_server_circulation_json%` | `10000` | Server-wide item circulation data as a JSON string. |
-
-> [!NOTE]
-> In the current version the actual placeholder registration is disabled in the mod (pending master/slave compatibility work), so these settings have **no effect yet**. They are documented here because they appear in the file.
+Older settings files with the previous `PLAYER_BALANCE` … `SERVER_CIRCULATION_JSON` entries load fine; those entries are ignored.
 
 ---
 ## Volatile & Deposit-Gated Item Components
