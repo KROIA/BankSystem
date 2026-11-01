@@ -1434,8 +1434,14 @@ public class ItemIDManager implements ServerSaveable {
             }
         }
         // Adopt the sender's alias table so bank balances / markets keyed by a merged ID
-        // resolve on this side as well.
-        applyAliases(packet.getAliases());
+        // resolve on this side as well. Not in singleplayer: the client shares the integrated
+        // server's static maps, and the packet is a snapshot from send time — applying it on
+        // the client thread could re-add aliases the server has since removed (observed in the
+        // ItemID test suite: a queued sync packet re-inserted 6 live aliases while a test had
+        // swapped in its fixture state). The server is the only writer of the shared maps.
+        boolean ownsRegistryMaps = adoptComponentLists;
+        if(ownsRegistryMaps)
+            applyAliases(packet.getAliases());
         // Task #25: the wire format is now Map<ItemID, CompoundTag> — inflate each entry
         // via ItemStack.parseOptional against THIS side's RegistryAccess. Encoding by
         // resource key means entries whose host mod is missing on this side surface
@@ -1510,7 +1516,7 @@ public class ItemIDManager implements ServerSaveable {
             // in the network queue while a renormalize pass merges the ID into a canonical
             // one — re-inserting it here would leave the ID both aliased AND registered
             // (an inconsistent registry that would even be saved to disk in singleplayer).
-            if (!itemIDAliasMap.containsKey(id))
+            if (ownsRegistryMaps && !itemIDAliasMap.containsKey(id))
                 itemIDMap.putIfAbsent(id, cpy);
             id.tryUpdateNameCache();
         }
