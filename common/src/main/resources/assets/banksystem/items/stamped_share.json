@@ -1,0 +1,9 @@
+{
+  "model": {
+    "type": "minecraft:special",
+    "base": "banksystem:item/stamped_share",
+    "model": {
+      "type": "banksystem:stamped_share"
+    }
+  }
+}
