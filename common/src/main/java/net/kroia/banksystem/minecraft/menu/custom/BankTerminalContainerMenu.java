@@ -408,7 +408,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                 remainder = slot.safeInsert(remainder);
         }
         if (!remainder.isEmpty())
-            player.getInventory().placeItemBackInInventory(remainder);
+            player.getInventory().placeItemBackInInventory(remainder); // mc<=26.2
+            //player.getInventory().placeItemBackInInventory(remainder, net.minecraft.util.Prediction.SERVER_ONLY); // mc>=26.3
     }
 
     /** Clears the ghost layout (both sides; the server recomputes the result). */
@@ -1001,7 +1002,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                                 && inSlot.getCount() + remainder.getCount() <= inSlot.getMaxStackSize())
                             inSlot.grow(remainder.getCount());
                         else
-                            player.getInventory().placeItemBackInInventory(remainder);
+                            player.getInventory().placeItemBackInInventory(remainder); // mc<=26.2
+                            //player.getInventory().placeItemBackInInventory(remainder, net.minecraft.util.Prediction.SERVER_ONLY); // mc>=26.3
                     }
                 }
             }
@@ -1061,7 +1063,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         else
             // Known & accepted: with a full inventory the overflow of a shift-click
             // batch drops at the player's feet instead of stopping the batch early.
-            player.getInventory().placeItemBackInInventory(output);
+            player.getInventory().placeItemBackInInventory(output); // mc<=26.2
+            //player.getInventory().placeItemBackInInventory(output, net.minecraft.util.Prediction.SERVER_ONLY); // mc>=26.3
 
         if (player instanceof ServerPlayer serverPlayer) {
             serverPlayer.awardStat(net.minecraft.stats.Stats.ITEM_CRAFTED.get(match.result().getItem()), match.result().getCount() * craftCount);
@@ -1145,7 +1148,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                 + " fell back to the player inventory: " + reason);
         ServerPlayerUtilities.printToClientConsole(player.getUUID(),
                 BankSystemTextMessages.getCraftingDepositFallbackMessage(output.getHoverName().getString()));
-        runOnMainThread(() -> player.getInventory().placeItemBackInInventory(output));
+        runOnMainThread(() -> player.getInventory().placeItemBackInInventory(output)); // mc<=26.2
+        //runOnMainThread(() -> player.getInventory().placeItemBackInInventory(output, net.minecraft.util.Prediction.SERVER_ONLY)); // mc>=26.3
     }
 
     /**
