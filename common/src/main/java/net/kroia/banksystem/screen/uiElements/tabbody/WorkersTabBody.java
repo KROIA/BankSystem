@@ -189,7 +189,7 @@ public class WorkersTabBody extends TabBody {
                         bankManagerData.userMapData().userMap().values());
                 all.removeIf(u -> userWidgets.containsKey(u.userUUID()));
                 sel.setUsers(all);
-                Minecraft.getInstance().setScreen(sel);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(sel);
             });
         });
     }
