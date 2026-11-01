@@ -2,7 +2,8 @@ package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.networking.entity.S2CCraftingRecipesPacket;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -61,7 +62,8 @@ public final class BankCraftingRecipes {
         return server == null ? List.of() : serverRecipes(server.getRecipeManager());
     }
 
-    public static @Nullable RecipeHolder<CraftingRecipe> byId(Level level, ResourceLocation recipeId) {
+    public static @Nullable RecipeHolder<CraftingRecipe> byId(Level level, ResourceLocation recipeId) { // mc<=1.21.10
+    //public static @Nullable RecipeHolder<CraftingRecipe> byId(Level level, Identifier recipeId) { // mc>=1.21.11
         for (RecipeHolder<CraftingRecipe> holder : all(level)) {
             if (id(holder).equals(recipeId))
                 return holder;
@@ -134,9 +136,11 @@ public final class BankCraftingRecipes {
     // Version-neutral recipe accessors (all version toggles live here)
     // ------------------------------------------------------------------
 
-    public static ResourceLocation id(RecipeHolder<?> holder) {
+    public static ResourceLocation id(RecipeHolder<?> holder) { // mc<=1.21.10
+    //public static Identifier id(RecipeHolder<?> holder) { // mc>=1.21.11
         //return holder.id(); // mc<=1.21.1
-        return holder.id().location(); // mc>=1.21.2
+        return holder.id().location(); // mc>=1.21.2 mc<=1.21.10
+        //return holder.id().identifier(); // mc>=1.21.11
     }
 
     /** True if the recipe can be crafted in the 3x3 Bank Terminal grid. */
