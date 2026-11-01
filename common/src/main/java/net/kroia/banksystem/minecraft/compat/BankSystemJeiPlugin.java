@@ -189,7 +189,8 @@ public class BankSystemJeiPlugin implements IModPlugin {
         }
 
         @Override
-        public mezz.jei.api.recipe.RecipeType<RecipeHolder<CraftingRecipe>> getRecipeType() {
+        public mezz.jei.api.recipe.RecipeType<RecipeHolder<CraftingRecipe>> getRecipeType() { // mc<=1.21.3
+        //public mezz.jei.api.recipe.types.IRecipeType<RecipeHolder<CraftingRecipe>> getRecipeType() { // mc>=1.21.4
             return RecipeTypes.CRAFTING;
         }
 

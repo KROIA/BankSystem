@@ -11,6 +11,11 @@ The placeholders are only active when one of these mods is installed on the serv
 
 The placeholder names are fixed and listed below. Nothing has to be registered or configured to use them.
 
+TAB and Placeholder API are **server-side only**: players don't need to install them. In singleplayer the game runs its own integrated server, so TAB (or Placeholder API) must be in the client's `mods` folder there.
+
+> [!WARNING]
+> **Known TAB issue (TAB 5.5.0, also happens with only TAB installed):** opening a second singleplayer world in the same game session disconnects you with *"An objective with the name TAB-PlayerList already exists"*. Restart the game between singleplayer worlds. Dedicated servers are not affected.
+
 ---
 ## How Values Are Updated
 
