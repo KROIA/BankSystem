@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.BankStatus;
@@ -121,19 +122,19 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
     @Override
     public void loadAdditional(@NotNull CompoundTag tag, HolderLookup.Provider pRegistries) {
         super.loadAdditional(tag, pRegistries);
-        inventory.fromTag(tag.getList("Items", 10), pRegistries);
-        sendingEnabled = tag.getBoolean("SendingEnabled");
-        dropIfNotBankable = tag.getBoolean("DropIfNotBankable");
+        inventory.fromTag(NbtCompat.getList(tag, "Items", 10), pRegistries);
+        sendingEnabled = NbtCompat.getBoolean(tag, "SendingEnabled");
+        dropIfNotBankable = NbtCompat.getBoolean(tag, "DropIfNotBankable");
         if(tag.contains("BankAccountNumber"))
         {
-            bankAccountNumber = tag.getInt("BankAccountNumber");
+            bankAccountNumber = NbtCompat.getInt(tag, "BankAccountNumber");
         }
         else
             bankAccountNumber = 0;
         playerOwner = null;
         if(tag.contains("PlayerOwner"))
         {
-            playerOwner = tag.getUUID("PlayerOwner");
+            playerOwner = NbtCompat.getUUID(tag, "PlayerOwner");
         }
     }
 
@@ -146,7 +147,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         tag.putInt("BankAccountNumber", bankAccountNumber);
         if(playerOwner != null)
         {
-            tag.putUUID("PlayerOwner", playerOwner);
+            NbtCompat.putUUID(tag, "PlayerOwner", playerOwner);
         }
     }
 

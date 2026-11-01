@@ -1,5 +1,6 @@
 package net.kroia.banksystem.api.currency;
 
+import net.kroia.modutilities.NbtCompat;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -139,12 +140,12 @@ public record ExternalAccountRef(
         if (tag == null) return null;
         if (!tag.contains(NBT_KEY_PROVIDER_ID) || !tag.contains(NBT_KEY_ACCOUNT_KEY))
             return null;
-        String providerId = tag.getString(NBT_KEY_PROVIDER_ID);
-        String accountKey = tag.getString(NBT_KEY_ACCOUNT_KEY);
+        String providerId = NbtCompat.getString(tag, NBT_KEY_PROVIDER_ID);
+        String accountKey = NbtCompat.getString(tag, NBT_KEY_ACCOUNT_KEY);
         if (providerId.isEmpty() || accountKey.isEmpty())
             return null;
-        String label = tag.contains(NBT_KEY_LABEL) ? tag.getString(NBT_KEY_LABEL) : "";
-        boolean shared = tag.contains(NBT_KEY_SHARED) && tag.getBoolean(NBT_KEY_SHARED);
+        String label = tag.contains(NBT_KEY_LABEL) ? NbtCompat.getString(tag, NBT_KEY_LABEL) : "";
+        boolean shared = tag.contains(NBT_KEY_SHARED) && NbtCompat.getBoolean(tag, NBT_KEY_SHARED);
         return new ExternalAccountRef(providerId, accountKey, label, shared);
     }
 }

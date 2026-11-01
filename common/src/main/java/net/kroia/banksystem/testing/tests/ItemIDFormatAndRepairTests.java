@@ -1,5 +1,6 @@
 package net.kroia.banksystem.testing.tests;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
@@ -247,7 +248,7 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
         if (!r.passed()) return r;
         r = assertEquals("saved format version equals ITEM_IDS_FORMAT_CURRENT",
                 BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT,
-                tag.getInt(BankSystemSaveFormat.KEY_FORMAT_VERSION));
+                NbtCompat.getInt(tag, BankSystemSaveFormat.KEY_FORMAT_VERSION));
         if (!r.passed()) return r;
         return pass("save() stamps formatVersion = " + BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT);
     }
@@ -366,7 +367,7 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
                 return fail("conversion re-save failed");
             r = assertEquals("conversion re-save stamps the current format version",
                     BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT,
-                    resaved.getInt(BankSystemSaveFormat.KEY_FORMAT_VERSION));
+                    NbtCompat.getInt(resaved, BankSystemSaveFormat.KEY_FORMAT_VERSION));
             if (!r.passed()) return r;
             return pass("legacy version-less files load tolerantly and are converted by the next save");
         } catch (Throwable t) {
@@ -819,7 +820,7 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
             // the buggy build persisted it. (It cannot be installed via the live table —
             // the putAlias invariant would reject it, which is exactly the point.)
             net.minecraft.nbt.ListTag aliasList =
-                    tag.getList("itemIDAliases", net.minecraft.nbt.Tag.TAG_COMPOUND);
+                    NbtCompat.getList(tag, "itemIDAliases", net.minecraft.nbt.Tag.TAG_COMPOUND);
             CompoundTag aliasTag = new CompoundTag();
             aliasTag.putShort("from", fingerprintFrom.getShort());
             aliasTag.putShort("to", fingerprintTo.getShort());
@@ -1205,7 +1206,7 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
             if (!r.passed()) return r;
             CompoundTag metaShaped = new CompoundTag();
             metaShaped.put(BankSystemSaveFormat.KEY_ITEM_ID_DIGEST, digest);
-            ListTag reRead = metaShaped.getList(BankSystemSaveFormat.KEY_ITEM_ID_DIGEST,
+            ListTag reRead = NbtCompat.getList(metaShaped, BankSystemSaveFormat.KEY_ITEM_ID_DIGEST,
                     net.minecraft.nbt.Tag.TAG_COMPOUND);
 
             // Healthy round-trip: registry unchanged → silent.

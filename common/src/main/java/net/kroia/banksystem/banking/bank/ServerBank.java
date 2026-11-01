@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.bank;
 
+import net.kroia.modutilities.NbtCompat;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemMod;
@@ -1471,9 +1472,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
             return false;
 
         itemID = ItemID.INVALID_ID;
-        if(tag.contains("itemID",Tag.TAG_STRING))
+        if(NbtCompat.contains(tag, "itemID",Tag.TAG_STRING))
         {
-            String itemIDStr = tag.getString("itemID");
+            String itemIDStr = NbtCompat.getString(tag, "itemID");
             if(itemIDStr.equals("$") || itemIDStr.equals("money")) {
                 itemID = ItemID.getFromItemStack(BankSystemItems.MONEY.get().getDefaultInstance());
             }
@@ -1485,7 +1486,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         }
         else
         {
-            CompoundTag itemTag = tag.getCompound("itemID");
+            CompoundTag itemTag = NbtCompat.getCompound(tag, "itemID");
             itemID = ItemID.createFromTag(itemTag);
             // Canonicalize at load time: the saved ID may have been merged into another ID
             // (alias) by a volatile-component merge — possibly in an EARLIER session, before
@@ -1497,8 +1498,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
         }
 
 
-        long balance = tag.getLong("balance");
-        lockedBalance = tag.getLong("lockedBalance");
+        long balance = NbtCompat.getLong(tag, "balance");
+        lockedBalance = NbtCompat.getLong(tag, "lockedBalance");
         setBalanceInternal(balance);
         // Issue #61: when the item this bank held can no longer be resolved (its mod was
         // removed, or a removed mod's data component broke the saved template's parse), the

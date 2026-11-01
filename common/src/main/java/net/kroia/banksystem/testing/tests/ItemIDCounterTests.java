@@ -1,5 +1,6 @@
 package net.kroia.banksystem.testing.tests;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
@@ -173,13 +174,13 @@ public class ItemIDCounterTests extends TestSuite {
             r = assertTrue("tag contains the nextShortCounter key", tag.contains("nextShortCounter"));
             if (!r.passed()) return r;
             r = assertEquals("persisted counter equals the value that was set",
-                    probe, tag.getInt("nextShortCounter"));
+                    probe, NbtCompat.getInt(tag, "nextShortCounter"));
             if (!r.passed()) return r;
 
             // Mimic the load-branch: reset the field, then read from the tag as load() does.
             ItemIDManager.setNextShortCounter_forTesting(1);
             if (tag.contains("nextShortCounter"))
-                ItemIDManager.setNextShortCounter_forTesting(tag.getInt("nextShortCounter"));
+                ItemIDManager.setNextShortCounter_forTesting(NbtCompat.getInt(tag, "nextShortCounter"));
             r = assertEquals("counter restored from the persisted key",
                     probe, ItemIDManager.getNextShortCounter_forTesting());
             if (!r.passed()) return r;

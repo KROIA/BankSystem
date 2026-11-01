@@ -1,5 +1,6 @@
 package net.kroia.banksystem.util;
 
+import net.kroia.modutilities.NbtCompat;
 import com.ibm.icu.impl.Pair;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
@@ -1468,7 +1469,7 @@ public class ItemIDManager implements ServerSaveable {
                 {
                     // Try to surface the failing resource key so admins can tell WHICH
                     // mod is missing — the tag's "id" entry carries it in NBT form.
-                    String resourceKey = (stackTag != null && stackTag.contains("id")) ? stackTag.getString("id") : "<unknown>";
+                    String resourceKey = (stackTag != null && stackTag.contains("id")) ? NbtCompat.getString(stackTag, "id") : "<unknown>";
                     BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] SyncItemIDsPacket dropped entry short="
                             + id.getShort() + " id=" + resourceKey
                             + " (item unresolvable on this server — mod not installed here?)");
@@ -1559,7 +1560,7 @@ public class ItemIDManager implements ServerSaveable {
             {
                 if(BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
                 {
-                    String resourceKey = (stackTag != null && stackTag.contains("id")) ? stackTag.getString("id") : "<unknown>";
+                    String resourceKey = (stackTag != null && stackTag.contains("id")) ? NbtCompat.getString(stackTag, "id") : "<unknown>";
                     BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] RegisterItemIDPacket dropped entry id="
                             + resourceKey + " (item unresolvable on this server — mod not installed here?)");
                 }
@@ -1677,7 +1678,7 @@ public class ItemIDManager implements ServerSaveable {
         // ---- mutated, so a refused file leaves the manager exactly as it was.          ----
         // A missing version key means the file predates versioning: implicit legacy format 1.
         int fileFormatVersion = tag.contains(BankSystemSaveFormat.KEY_FORMAT_VERSION)
-                ? tag.getInt(BankSystemSaveFormat.KEY_FORMAT_VERSION)
+                ? NbtCompat.getInt(tag, BankSystemSaveFormat.KEY_FORMAT_VERSION)
                 : BankSystemSaveFormat.ITEM_IDS_FORMAT_LEGACY;
         if (fileFormatVersion > BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT) {
             // The file was written by a NEWER BankSystem build — its layout cannot be
@@ -1705,15 +1706,15 @@ public class ItemIDManager implements ServerSaveable {
         if(access == null)
             return false;
 
-        ListTag listTag =  tag.getList("itemIDs", Tag.TAG_COMPOUND);
+        ListTag listTag =  NbtCompat.getList(tag, "itemIDs", Tag.TAG_COMPOUND);
         for(Tag tagElement : listTag)
         {
             CompoundTag compoundTag = (CompoundTag)tagElement;
             if(compoundTag==null || !compoundTag.contains("itemID") || !compoundTag.contains("itemStack"))
                 continue;
 
-            CompoundTag itemStackTag = compoundTag.getCompound("itemStack");
-            CompoundTag itemIDTag = compoundTag.getCompound("itemID");
+            CompoundTag itemStackTag = NbtCompat.getCompound(compoundTag, "itemStack");
+            CompoundTag itemIDTag = NbtCompat.getCompound(compoundTag, "itemID");
 
             ItemID id = new ItemID(ItemID.INVALID_ID);
             if(!id.load(itemIDTag))
@@ -1777,26 +1778,26 @@ public class ItemIDManager implements ServerSaveable {
         // live alias table AFTER the insertion loop would therefore never contain them and
         // detection could never fire.
         LinkedHashMap<ItemID, ItemID> rawPersistedAliases = new LinkedHashMap<>();
-        ListTag aliasListTag = tag.getList("itemIDAliases", Tag.TAG_COMPOUND);
+        ListTag aliasListTag = NbtCompat.getList(tag, "itemIDAliases", Tag.TAG_COMPOUND);
         for(Tag tagElement : aliasListTag)
         {
             CompoundTag aliasTag = (CompoundTag)tagElement;
             if(aliasTag == null || !aliasTag.contains("from") || !aliasTag.contains("to"))
                 continue;
-            rawPersistedAliases.put(new ItemID(aliasTag.getShort("from")), new ItemID(aliasTag.getShort("to")));
+            rawPersistedAliases.put(new ItemID(NbtCompat.getShort(aliasTag, "from")), new ItemID(NbtCompat.getShort(aliasTag, "to")));
         }
 
         // Restore evidence quarantined by an earlier session (fingerprint aliases stripped
         // from itemIDAliases by a previous one-shot re-save — see the field Javadoc). These
         // pairs never enter itemIDAliasMap; they only feed detection and the next save().
         quarantinedAliases.clear();
-        ListTag quarantinedListTag = tag.getList(BankSystemSaveFormat.KEY_QUARANTINED_ALIASES, Tag.TAG_COMPOUND);
+        ListTag quarantinedListTag = NbtCompat.getList(tag, BankSystemSaveFormat.KEY_QUARANTINED_ALIASES, Tag.TAG_COMPOUND);
         for(Tag tagElement : quarantinedListTag)
         {
             CompoundTag aliasTag = (CompoundTag)tagElement;
             if(aliasTag == null || !aliasTag.contains("from") || !aliasTag.contains("to"))
                 continue;
-            quarantinedAliases.put(new ItemID(aliasTag.getShort("from")), new ItemID(aliasTag.getShort("to")));
+            quarantinedAliases.put(new ItemID(NbtCompat.getShort(aliasTag, "from")), new ItemID(NbtCompat.getShort(aliasTag, "to")));
         }
 
         // Restore previously persisted aliases (merged IDs from an earlier migration).
@@ -1828,7 +1829,7 @@ public class ItemIDManager implements ServerSaveable {
         //                     same world.
         if (tag.contains("nextShortCounter"))
         {
-            nextShortCounter = tag.getInt("nextShortCounter");
+            nextShortCounter = NbtCompat.getInt(tag, "nextShortCounter");
             if (nextShortCounter < 1)
                 nextShortCounter = 1;
         }
@@ -2741,8 +2742,8 @@ public class ItemIDManager implements ServerSaveable {
             if (!(element instanceof CompoundTag entryTag)
                     || !entryTag.contains(DIGEST_KEY_SHORT) || !entryTag.contains(DIGEST_KEY_NAME))
                 continue;
-            short shortValue = entryTag.getShort(DIGEST_KEY_SHORT);
-            String previousName = entryTag.getString(DIGEST_KEY_NAME);
+            short shortValue = NbtCompat.getShort(entryTag, DIGEST_KEY_SHORT);
+            String previousName = NbtCompat.getString(entryTag, DIGEST_KEY_NAME);
             ItemStack liveTemplate = getItemStackTemplate(new ItemID(shortValue));
             if (liveTemplate.isEmpty())
                 continue; // dropped entry — covered by the load()-time drop WARN

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.bankaccount;
 
+import net.kroia.modutilities.NbtCompat;
 import java.util.Objects;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -1079,10 +1080,10 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         tag.putString("accountName", accountName); // Save the account name
 
         if(personalBankOwner != null)
-            tag.putUUID("personalBankOwnerDataUUID", personalBankOwner.getUUID());
+            NbtCompat.putUUID(tag, "personalBankOwnerDataUUID", personalBankOwner.getUUID());
 
         if(creatorUUID != null)
-            tag.putUUID("creatorUUID", creatorUUID); // Task #58 — per-player account cap
+            NbtCompat.putUUID(tag, "creatorUUID", creatorUUID); // Task #58 — per-player account cap
 
         if (accountIcon != null) {
             CompoundTag iconTag = new CompoundTag();
@@ -1095,7 +1096,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             UUID userUUID = user.getUser().getUUID();
             int permissions = user.getPermission();
             CompoundTag userTag = new CompoundTag();
-            userTag.putUUID("userUUID", userUUID);
+            NbtCompat.putUUID(userTag, "userUUID", userUUID);
             userTag.putInt("permissions", permissions);
             usersTag.add(userTag);
         }
@@ -1120,28 +1121,28 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             return false; // Invalid data
         }
         ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
-        this.accountNumber = tag.getInt("accountNumber");
+        this.accountNumber = NbtCompat.getInt(tag, "accountNumber");
         if(tag.contains("accountName")) {
-            this.accountName = tag.getString("accountName");
+            this.accountName = NbtCompat.getString(tag, "accountName");
         } else {
             this.accountName = ""; // Default to empty if not set
         }
 
         if(tag.contains("personalBankOwnerDataUUID")) {
-            UUID personalBankOwnerDataUUID = tag.getUUID("personalBankOwnerDataUUID");
+            UUID personalBankOwnerDataUUID = NbtCompat.getUUID(tag, "personalBankOwnerDataUUID");
             this.personalBankOwner = bankManager.getUserByUUID(personalBankOwnerDataUUID);
         } else {
             this.personalBankOwner = null; // No personalBankOwnerData set
         }
 
         if(tag.contains("creatorUUID")) {
-            this.creatorUUID = tag.getUUID("creatorUUID"); // Task #58 — per-player account cap
+            this.creatorUUID = NbtCompat.getUUID(tag, "creatorUUID"); // Task #58 — per-player account cap
         } else {
             this.creatorUUID = null; // Legacy account (pre-#58) — does not count against any cap
         }
 
         if(tag.contains("accountIcon")) {
-            CompoundTag iconTag = tag.getCompound("accountIcon");
+            CompoundTag iconTag = NbtCompat.getCompound(tag, "accountIcon");
             // Canonicalize a possibly aliased icon ID (cosmetic — it would alias-resolve
             // for rendering anyway, but persisted data should reference the canonical ID).
             this.accountIcon = ItemIDManager.resolveAlias(ItemID.createFromTag(iconTag)); // Load account icon if set
@@ -1151,20 +1152,20 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
 
 
-        ListTag usersTag = tag.getList("users", Tag.TAG_COMPOUND);
+        ListTag usersTag = NbtCompat.getList(tag, "users", Tag.TAG_COMPOUND);
         for (int i = 0; i < usersTag.size(); i++) {
-            CompoundTag userTag = usersTag.getCompound(i);
-            UUID userUUID = userTag.getUUID("userUUID");
-            int permissions = userTag.getInt("permissions");
+            CompoundTag userTag = NbtCompat.getCompound(usersTag, i);
+            UUID userUUID = NbtCompat.getUUID(userTag, "userUUID");
+            int permissions = NbtCompat.getInt(userTag, "permissions");
             User user = bankManager.getUserByUUID(userUUID);
             if (user != null) {
                 users.put(user.getUUID(), new BankUser(user, permissions));
             }
         }
 
-        ListTag banksTag = tag.getList("banks", Tag.TAG_COMPOUND);
+        ListTag banksTag = NbtCompat.getList(tag, "banks", Tag.TAG_COMPOUND);
         for (int i = 0; i < banksTag.size(); i++) {
-            CompoundTag bankTag = banksTag.getCompound(i);
+            CompoundTag bankTag = NbtCompat.getCompound(banksTag, i);
             ServerBank bank = ServerBank.createFromTag(bankTag);
             if (bank != null) {
                 // Task #33: attach for bindings lookup — must happen for both branches
