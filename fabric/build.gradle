@@ -65,7 +65,8 @@ dependencies {
     modImplementation("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version")
     include("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version")
 
-    modCompileOnlyApi("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric-api:${rootProject.jei_version}")
+    modCompileOnlyApi("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric-api:${rootProject.jei_version}") // mc<=1.21.3
+    //compileOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-common-api:${rootProject.jei_version}") // mc>=1.21.4 (JEI has no Fabric build for 1.21.4)
     // Dev-runtime-only JEI: the Architectury platform transformer walks class
     // frames on launch and must resolve every referenced JEI type
     // (IJeiRuntime, IIngredientListOverlay, ...) even though JEI itself stays
@@ -73,7 +74,8 @@ dependencies {
     // with "TypeNotPresentException: Type mezz/jei/... not present".
     //modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric:${rootProject.jei_version}") // mc<=1.21.1
     // No JEI build exists for 1.21.2/1.21.3: only the 1.21.1 API jar at dev runtime.
-    modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric-api:${rootProject.jei_version}") // mc>=1.21.2
+    modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric-api:${rootProject.jei_version}") // mc>=1.21.2 mc<=1.21.3
+    //runtimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-common-api:${rootProject.jei_version}") // mc>=1.21.4 (JEI has no Fabric build for 1.21.4)
 }
 
 processResources {

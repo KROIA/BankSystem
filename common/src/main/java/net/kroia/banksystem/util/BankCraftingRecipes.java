@@ -177,8 +177,9 @@ public final class BankCraftingRecipes {
             return null;
         //ItemStack[] items = ingredient.getItems(); // mc<=1.21.1
         //return items.length > 0 ? items[0] : null; // mc<=1.21.1
-        var items = ingredient.items(); // mc>=1.21.2
-        return items.isEmpty() ? null : new ItemStack(items.get(0)); // mc>=1.21.2
+        var items = ingredient.items(); // mc>=1.21.2 mc<=1.21.3
+        return items.isEmpty() ? null : new ItemStack(items.get(0)); // mc>=1.21.2 mc<=1.21.3
+        //return ingredient.items().findFirst().map(item -> new ItemStack(item)).orElse(null); // mc>=1.21.4
     }
 
     /** Result stack of a shaped/shapeless recipe (their assemble() ignores the input). */
