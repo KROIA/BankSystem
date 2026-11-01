@@ -30,7 +30,8 @@ public class MoneyStockpileBlock extends Block implements EntityBlock {
 
     // Copy properties from wool
     public MoneyStockpileBlock() {
-        super(RegistryCompat.blockProperties(Properties.ofFullCopy(net.minecraft.world.level.block.Blocks.WHITE_WOOL), BankSystemMod.id(NAME)));
+        //super(RegistryCompat.blockProperties(Properties.ofFullCopy(net.minecraft.world.level.block.Blocks.WHITE_WOOL), BankSystemMod.id(NAME))); // mc<=26.1
+        super(RegistryCompat.blockProperties(Properties.ofFullCopy(net.minecraft.world.level.block.Blocks.WOOL.white()), BankSystemMod.id(NAME))); // mc>=26.2
     }
 
 
