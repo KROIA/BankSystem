@@ -6,6 +6,7 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.general.ModSettingsRequest;
+import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
@@ -170,6 +171,8 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
      */
     private final BankSystemModSettings workingCopy = new BankSystemModSettings();
     private final List<FieldBinding> bindings = new ArrayList<>();
+    private boolean dirty = false;          // unsaved field edits
+    private boolean closeAfterSave = false; // Save chosen in the unsaved-changes popup
 
     private final Label titleLabel;
     private final CloseButton closeButton;
@@ -300,6 +303,10 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             addChild(nameLabel);
 
             createEditor(group.getName(), setting, tooltip);
+            // User edits mark the screen dirty. CheckBox has no user-only hook, so its
+            // state callback also fires on refreshFields(); handleResponse clears dirty after that.
+            if (textBox != null) textBox.setOnTextChanged(text -> dirty = true);
+            if (checkBox != null) checkBox.setOnStateChanged(checked -> dirty = true);
 
             if (RESTART_REQUIRED_SETTINGS.contains(group.getName() + "." + setting.getName())) {
                 // Clearly visible warning-colored marker + explanatory hover tooltip
@@ -415,6 +422,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
                                 copy.setCount(1);
                                 stackSetting.set(copy);
                                 itemView.setItemStack(copy);
+                                dirty = true;
                                 net.kroia.modutilities.gui.client.ClientCompat.setScreen(ModSettingsScreen.this);
                             },
                             () -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(ModSettingsScreen.this));
@@ -568,7 +576,19 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         for (SettingsGroup group : workingCopy.getEditableGroups())
             group.setToDefaultValue();
         refreshFields();
+        dirty = true;
         setStatus("", STATUS_COLOR_NEUTRAL);
+    }
+
+    @Override
+    public void onClose() {
+        if (dirty) {
+            AskPopupScreen.openUnsavedChangesPopup(this,
+                    () -> { dirty = false; onClose(); },
+                    () -> { closeAfterSave = true; onApply(); });
+            return;
+        }
+        super.onClose();
     }
 
     /**
@@ -580,6 +600,8 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
      */
     private void handleResponse(ModSettingsRequest.OutputData output, String successStatus) {
         applyButton.setClickable(true);
+        boolean closeNow = closeAfterSave;
+        closeAfterSave = false;
         if (output == null) {
             setStatus(Texts.STATUS_FAILED.getString(), STATUS_COLOR_ERROR);
             return;
@@ -596,7 +618,9 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             }
         }
         if (output.success()) {
+            dirty = false; // fields now show the confirmed server state
             setStatus(successStatus, STATUS_COLOR_OK);
+            if (closeNow) onClose();
         } else {
             String msg = output.message() == null || output.message().isEmpty()
                     ? Texts.STATUS_FAILED.getString() : output.message();

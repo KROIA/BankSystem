@@ -42,6 +42,8 @@ public class OverviewTabBody extends TabBody {
     private final Button currencyButton;
     private final ItemView currencyIcon;
     private short currentCurrency = PayoutSchedule.MONEY_CURRENCY;
+    /** Unsaved description edit (the currency picker saves immediately). */
+    private boolean dirty = false;
 
     public OverviewTabBody(CompanyManagementScreen screen) {
         super(screen);
@@ -65,9 +67,10 @@ public class OverviewTabBody extends TabBody {
 
         descriptionBox = new MultiLineTextBox();
         descriptionBox.setMaxLength(512);
+        descriptionBox.setOnTextChanged(text -> dirty = true);
         descriptionLabel = new Label("");
         descriptionLabel.setAlignment(Label.Alignment.TOP_LEFT);
-        saveButton = new Button(Component.translatable(PREFIX + "save").getString(), this::onSave);
+        saveButton = new Button(Component.translatable(PREFIX + "save").getString(), () -> save(null));
         if (editable) {
             addChild(descriptionBox);
             addChild(saveButton);
@@ -119,7 +122,7 @@ public class OverviewTabBody extends TabBody {
         rowValues[6].setText(formatFounders(info.founderNames()));
 
         if (editable) {
-            if (!descriptionBox.isFocused()) descriptionBox.setText(info.description());
+            if (!dirty && !descriptionBox.isFocused()) descriptionBox.setText(info.description());
         } else {
             descriptionLabel.setText(info.description());
         }
@@ -183,7 +186,29 @@ public class OverviewTabBody extends TabBody {
                 .thenAccept(out -> onClientThread(screen::refreshInfo));
     }
 
-    private void onSave() {
+    public boolean hasUnsavedChanges() {
+        return dirty;
+    }
+
+    /** Drops the unsaved edit and shows the stored description again. */
+    public void discardChanges() {
+        dirty = false;
+        AsyncCompanyManager.CompanyInfoOutput info = screen.info();
+        if (info != null && info.present()) descriptionBox.setText(info.description());
+    }
+
+    /** Keeps an unsaved edit when the screen rebuilds its tab bodies. */
+    public void takeUnsavedChanges(OverviewTabBody previous) {
+        if (previous == null || !previous.dirty) return;
+        descriptionBox.setText(previous.descriptionBox.getText());
+        dirty = true;
+    }
+
+    /**
+     * Saves the description. {@code onSaved} (nullable) runs only when the server
+     * accepted it; on rejection the error popup is shown and the edit stays dirty.
+     */
+    public void save(Runnable onSaved) {
         AsyncCompanyManager.CompanyInfoOutput info = screen.info();
         if (info == null || !info.present()) return;
         String text = descriptionBox.getText();
@@ -197,6 +222,8 @@ public class OverviewTabBody extends TabBody {
                                 Component.translatable(PREFIX + "action_failed").getString()));
                         return;
                     }
+                    dirty = false;
+                    if (onSaved != null) onSaved.run();
                     screen.refreshInfo();
                 }));
     }

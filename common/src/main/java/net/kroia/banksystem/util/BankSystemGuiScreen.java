@@ -45,8 +45,17 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
      * current event pass completes.
      */
     public static void switchScreen(Screen newScreen) {
-        Minecraft.getInstance().tell(() -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(newScreen)); // mc<=1.21.1
-        //Minecraft.getInstance().schedule(() -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(newScreen)); // mc>=1.21.2
+        runLater(() -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(newScreen));
+    }
+
+    /**
+     * Enqueues {@code task} on the client thread (FIFO, after the current event
+     * pass). Tasks run in the order they were queued, so a task queued after a
+     * {@link #switchScreen} call runs once that screen swap has happened.
+     */
+    public static void runLater(Runnable task) {
+        Minecraft.getInstance().tell(task); // mc<=1.21.1
+        //Minecraft.getInstance().schedule(task); // mc>=1.21.2
     }
 
     /**
