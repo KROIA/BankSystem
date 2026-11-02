@@ -112,6 +112,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private final boolean isAdminMode;
     private boolean canManage = false;
     private static boolean screenIsOpen = false;
+    private boolean dirty = false;          // name / user / permission edits (other edits are tracked in isDirty())
+    /** Runs once a save chosen in the unsaved-changes popup was accepted (close or account switch). */
+    private Runnable afterSave = null;
 
 
     public BankAccountManagementScreen(GuiScreen parent, int accountNumber, boolean isAdminMode) {
@@ -151,6 +154,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                 break;
             }
         }
+        dirty = false; // (re)loaded from the server
+        accountIconChangedFlag = false;
         personalBankOwnerData = bankAccountData.personalBankOwnerData;
         bankAccountName = bankAccountData.accountName;
         this.canManage = (personalBankOwnerData != null && personalBankOwnerData.userUUID().equals(thisPlayerUUID)) || isAdminMode || isEditingPlayer;
@@ -181,6 +186,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             accountIconButton.setOnFallingEdge(this::onIconButtonClicked);
             accountNameTextBox = new TextBox();
             accountNameTextBox.setText(data.accountName);
+            accountNameTextBox.setOnTextChanged(text -> dirty = true);
             addElement(accountNameTextBox);
 
             deleteBankAccountButton = new Button(DELETE_ACCOUNT.getString(), this::onDeleteAccountButtonClicked);
@@ -200,8 +206,15 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, getThisPlayerUUID(), (accountNumber) -> {
                 if(!screenIsOpen)
                     return;
-                this.accountNumber = accountNumber;
-                setupGui(accountNumber);
+                if(isDirty())
+                {
+                    // Popup opens deferred, after the selection screen returned here.
+                    AskPopupScreen.openUnsavedChangesPopup(this,
+                            () -> switchAccount(accountNumber),
+                            () -> saveThen(() -> switchAccount(accountNumber)));
+                    return;
+                }
+                switchAccount(accountNumber);
             });
             net.kroia.modutilities.gui.client.ClientCompat.setScreen(selectionScreen);
         });
@@ -387,6 +400,37 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     @Override
     public void onClose() {
+        if (isDirty()) {
+            AskPopupScreen.openUnsavedChangesPopup(this, this::closeScreen, () -> saveThen(this::closeScreen));
+            return;
+        }
+        closeScreen();
+    }
+
+    /** Loads another account into this screen; unsaved edits are dropped by the reload. */
+    private void switchAccount(int accountNumber) {
+        this.accountNumber = accountNumber;
+        setupGui(accountNumber);
+    }
+
+    /** Saves, then runs {@code action} only if the save was accepted (see {@link #onSaveResult}). */
+    private void saveThen(Runnable action) {
+        afterSave = action;
+        onSaveChangesButtonClicked();
+    }
+
+    /** True while there are edits that Save would send. */
+    private boolean isDirty() {
+        if (dirty || accountIconChangedFlag || !createBankData.isEmpty())
+            return true;
+        for (BankAccountManagementItem item : bankAccountManagementItems.values()) {
+            if (item.balanceHasChanged() || item.deleteAccount() || item.freeLockedBalance())
+                return true;
+        }
+        return false;
+    }
+
+    private void closeScreen() {
         screenIsOpen = false;
         if(parent != null && this.minecraft != null) {
             net.kroia.modutilities.gui.client.ClientCompat.setScreen(parent);
@@ -442,6 +486,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             {
                 net.kroia.modutilities.PlayerCompat.sendMessage(minecraft.player, MUST_KEEP_MANAGER, false);
             }
+            afterSave = null; // rejected locally: stay on this account
             return;
         }
 
@@ -457,7 +502,45 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
         UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.itemView.getItemStack(), bankData, setUsers);
         accountIconChangedFlag = false;
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input).thenAccept(this::setupGui);
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input)
+                .thenAccept(data -> runLater(() -> onSaveResult(data, setUsers)));
+    }
+
+    /**
+     * Reloads the screen from the save response. A popup-triggered save runs its
+     * pending action (close / account switch) only if the server accepted it:
+     * {@code null} means rejected, and a user list that differs from the request means
+     * the server refused or adjusted the user change (it already told the player why).
+     * Either way the screen stays open on the current account.
+     */
+    private void onSaveResult(@Nullable BankAccountData data, Map<UUID, Integer> requestedUsers)
+    {
+        Runnable action = afterSave;
+        afterSave = null;
+        if (data == null)
+        {
+            if (minecraft != null && minecraft.player != null)
+                net.kroia.modutilities.PlayerCompat.sendMessage(minecraft.player, AskPopupScreen.UNSAVED_SAVE_FAILED, false);
+            return;
+        }
+        setupGui(data);
+        if (action == null || !screenIsOpen)
+            return;
+        Map<UUID, Integer> savedUsers = new HashMap<>();
+        for (BankUserData userData : data.users.values())
+            savedUsers.put(userData.userUUID, userData.permissions);
+        if (savedUsers.equals(requestedUsers))
+            action.run();
+    }
+
+    private BankUserWidget createUserWidget(BankUserData userData)
+    {
+        BankUserWidget widget = new BankUserWidget(userData, (w) -> {
+            toRemoveUserWidgets.add(w);
+            dirty = true;
+        }, canManage, this);
+        widget.setOnPermissionChanged(() -> dirty = true);
+        return widget;
     }
     private void updateBankData(BankAccountData bankAccountData)
     {
@@ -576,7 +659,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             if(userWidget == null)
             {
 
-                userWidget = new BankUserWidget(userData, toRemoveUserWidgets::add, canManage, this);
+                userWidget = createUserWidget(userData);
                 bankUserWidgets.put(userUUID, userWidget);
                 userElementListView.addChild(userWidget);
             }
@@ -642,7 +725,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                         if(bankUserWidgets.containsKey(userData.userUUID()))
                             return;
                         BankUserData bankUserData = new BankUserData(userData.userUUID(), userData.userName(), BankPermission.DEPOSIT.getValue());
-                        BankUserWidget userWidget = new BankUserWidget(bankUserData, toRemoveUserWidgets::add, canManage, this);
+                        BankUserWidget userWidget = createUserWidget(bankUserData);
+                        dirty = true;
                         bankUserWidgets.put(userData.userUUID(), userWidget);
                         userElementListView.addChild(userWidget);
                         refreshRemoveButtonStates();
@@ -721,7 +805,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                         if(success)
                         {
                             info("ServerBank account deleted successfully.");
-                            onClose();
+                            closeScreen();
                         }
                         else
                         {
