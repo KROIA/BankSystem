@@ -9,7 +9,7 @@ repositories {
         url = "https://maven.blamejared.com/"
     }
     flatDir {
-        dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/common/build/libs"
+        dir "../../../MC_ModUtilities/mc_26.1_MC_ModUtilities/common/build/libs" // folder named after the branch, not minecraft_version
     }
     maven { url 'https://jitpack.io' }
 
