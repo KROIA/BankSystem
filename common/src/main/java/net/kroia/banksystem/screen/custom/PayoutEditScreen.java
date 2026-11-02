@@ -3,6 +3,7 @@ package net.kroia.banksystem.screen.custom;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.banking.company.PayoutSchedule;
+import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.ItemBalancePickerPopup;
 import net.kroia.banksystem.screen.uiElements.SplitPlayerAccountPickerPopup;
 import net.kroia.banksystem.screen.util.PayoutCurrencyPrefs;
@@ -96,6 +97,8 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
     private final UUID caller;
     private final boolean canManage;
     private final Runnable onDirty;
+    /** Unsaved user edits (the {@code onDirty} callback above refreshes the parent list after a save). */
+    private boolean dirty = false;
 
     private UUID targetUUID;
     private String targetName = "";
@@ -169,6 +172,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         amountBox.setHoverTooltipSupplier(() ->
                 (isMoneyCurrency() ? AMOUNT_TOOLTIP_MONEY : AMOUNT_TOOLTIP_ITEM).getString());
         amountBox.setEnabled(canManage);
+        amountBox.setOnTextChanged(text -> dirty = true);
 
         // Spec B.3 — currency slot next to the amount input.
         currencyButton = new Button("", this::onPickCurrencyClicked);
@@ -211,12 +215,14 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         customMinutesBox.setText(String.valueOf(loadedMinutes));
         customMinutesBox.setHoverTooltipSupplier(INTERVAL_CUSTOM_TOOLTIP::getString);
         customMinutesBox.setEnabled(canManage);
+        customMinutesBox.setOnTextChanged(text -> dirty = true);
 
         selectedIntervalIdx = startIdx;
 
         pausedCheckBox = new CheckBox(PAUSED.getString());
         pausedCheckBox.setChecked(original != null && original.isPaused());
         pausedCheckBox.setEnabled(canManage);
+        pausedCheckBox.setOnStateChanged(checked -> dirty = true);
         // Bug batch 3 #3 (v2.1.0) — explain pause semantics on hover. Missed runs
         // are NOT accumulated while paused: PayoutExecutor skips paused schedules
         // via the isPaused() early-continue, and never invokes recordMissedExecution
@@ -229,14 +235,20 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         dividendCheckBox.setChecked(original != null && original.getMode() == PayoutSchedule.Mode.DIVIDEND);
         dividendCheckBox.setEnabled(canManage);
         dividendCheckBox.setHoverTooltipSupplier(MODE_DIVIDEND_TOOLTIP::getString);
-        dividendCheckBox.setOnStateChanged(checked -> applyModeVisibility(checked || (oneTimeCheckBox != null && oneTimeCheckBox.isChecked())));
+        dividendCheckBox.setOnStateChanged(checked -> {
+            dirty = true;
+            applyModeVisibility(checked || (oneTimeCheckBox != null && oneTimeCheckBox.isChecked()));
+        });
 
         // Feature C — ONE_TIME mode toggle.
         oneTimeCheckBox = new CheckBox(ONE_TIME.getString());
         oneTimeCheckBox.setChecked(original != null && original.getMode() == PayoutSchedule.Mode.ONE_TIME);
         oneTimeCheckBox.setEnabled(canManage);
         oneTimeCheckBox.setHoverTooltipSupplier(ONE_TIME_TOOLTIP::getString);
-        oneTimeCheckBox.setOnStateChanged(this::applyOneTimeModeVisibility);
+        oneTimeCheckBox.setOnStateChanged(checked -> {
+            dirty = true;
+            applyOneTimeModeVisibility(checked);
+        });
 
         // Feature C — delay text box for ONE_TIME mode (entered in real-time minutes).
         executeInBox = new TextBox();
@@ -244,6 +256,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         executeInBox.setText("1");
         executeInBox.setHoverTooltipSupplier(EXECUTE_IN_TOOLTIP::getString);
         executeInBox.setEnabled(canManage && oneTimeCheckBox.isChecked());
+        executeInBox.setOnTextChanged(text -> dirty = true);
 
         targetLabel = new Label(TARGET.getString() + ": " + targetDisplay());
         pickTargetButton = new Button(PICK_TARGET.getString(), this::onPickTargetClicked);
@@ -323,6 +336,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
     private void onIntervalSelected(int idx) {
         if (!canManage) return;
         selectedIntervalIdx = idx;
+        dirty = true;
         applyIntervalSelection();
     }
 
@@ -477,6 +491,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
                     targetName = playerName;
                     targetAccountNr = accountId;
                     targetAccountName = accountName;
+                    dirty = true;
                     targetLabel.setText(TARGET.getString() + ": " + targetDisplay());
                 }));
     }
@@ -484,7 +499,10 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
     private void onPickCurrencyClicked() {
         if (!canManage) return;
         switchScreen(new ItemBalancePickerPopup(this, companyId, caller,
-                picked -> applyCurrency(picked, null)));
+                picked -> {
+                    applyCurrency(picked, null);
+                    dirty = true;
+                }));
     }
 
     private void onSaveClicked() {
@@ -560,6 +578,11 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
 
     @Override
     public void onClose() {
+        if (dirty) {
+            // Save closes itself once the server answered; invalid input keeps the editor open.
+            AskPopupScreen.openUnsavedChangesPopup(this, () -> { dirty = false; closeToParent(); }, this::onSaveClicked);
+            return;
+        }
         closeToParent();
     }
 
