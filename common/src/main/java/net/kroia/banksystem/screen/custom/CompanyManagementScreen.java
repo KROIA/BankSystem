@@ -4,6 +4,7 @@ import dev.architectury.platform.Platform;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.client.cache.CompanyInfoCache;
+import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.CloseButton;
@@ -89,6 +90,8 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
     private CloseButton closeButton;
     private Label titleLabel;
     private TabElement tabs;
+    /** Current Overview body; the only tab with an unsaved-edit state (description). */
+    private net.kroia.banksystem.screen.uiElements.tabbody.OverviewTabBody overviewBody;
 
     /** Screen-open latch — every async continuation gates on this so callbacks after
      *  close are dropped. */
@@ -230,7 +233,20 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
         addElement(titleLabel);
         addElement(closeButton);
 
-        tabs = new TabElement();
+        tabs = new TabElement() {
+            @Override
+            public void selectTab(int index) {
+                // Leaving the Overview tab with an unsaved description asks first.
+                if (index != getSelectedTab() && overviewBody != null && overviewBody.hasUnsavedChanges()
+                        && getSelectedTabElement() == overviewBody) {
+                    AskPopupScreen.openUnsavedChangesPopup(CompanyManagementScreen.this,
+                            () -> { overviewBody.discardChanges(); tabs.selectTab(index); },
+                            () -> overviewBody.save(() -> tabs.selectTab(index)));
+                    return;
+                }
+                super.selectTab(index);
+            }
+        };
         tabs.addTab(TAB_OVERVIEW.getString(), buildOverviewBody());
         if (canManage || isFounder) tabs.addTab(TAB_WORKERS.getString(), buildWorkersBody());
         if (canManage || isFounder) tabs.addTab(TAB_PAYOUTS.getString(), buildPayoutsBody());
@@ -254,7 +270,10 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
     // ------------------------------------------------------------------
 
     private GuiElement buildOverviewBody() {
-        return new net.kroia.banksystem.screen.uiElements.tabbody.OverviewTabBody(this);
+        var body = new net.kroia.banksystem.screen.uiElements.tabbody.OverviewTabBody(this);
+        body.takeUnsavedChanges(overviewBody); // async rebuilds must not drop an unsaved edit
+        overviewBody = body;
+        return body;
     }
 
     private GuiElement buildWorkersBody() {
@@ -287,6 +306,13 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
 
     @Override
     public void onClose() {
+        if (overviewBody != null && overviewBody.hasUnsavedChanges()) {
+            // Save closes only once the server accepted the description.
+            AskPopupScreen.openUnsavedChangesPopup(this,
+                    () -> { overviewBody.discardChanges(); onClose(); },
+                    () -> overviewBody.save(this::onClose));
+            return;
+        }
         screenIsOpen = false;
         super.onClose();
     }
