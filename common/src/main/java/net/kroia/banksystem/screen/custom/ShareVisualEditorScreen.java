@@ -8,6 +8,7 @@ import net.kroia.banksystem.client.company.SharePresetRegistry;
 import net.kroia.banksystem.client.render.ShareVisualPreview;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
+import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.ColorPickerPopup;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
@@ -53,6 +54,7 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
     private final int companyId;
     private final UUID caller;
     private final boolean canManage;
+    private boolean dirty = false; // unsaved user edits
 
     private Label titleLabel;
     private CloseButton closeButton;
@@ -101,11 +103,13 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
         displayNameBox = new TextBox();
         displayNameBox.setText(initial.getDisplayName() == null ? "" : initial.getDisplayName());
         displayNameBox.setEnabled(canManage);
+        displayNameBox.setOnTextChanged(text -> dirty = true);
 
         descriptionLabel = new Label(DESCRIPTION.getString());
         descriptionBox = new TextBox();
         descriptionBox.setText(initial.getDescription() == null ? "" : initial.getDescription());
         descriptionBox.setEnabled(canManage);
+        descriptionBox.setOnTextChanged(text -> dirty = true);
 
         // Stage 1 — base card tint (applies to the stamped_share card texture itself).
         selectedBaseTint = initial.getBaseTint();
@@ -182,6 +186,7 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
         BankSystemGuiScreen.switchScreen(
                 new ColorPickerPopup(this, selectedBaseTint, argb -> {
                     selectedBaseTint = argb;
+                    dirty = true;
                     applyCardSwatchColor(argb);
                     updatePreview();
                 }));
@@ -212,6 +217,11 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
 
     @Override
     public void onClose() {
+        if (dirty) {
+            // Save closes itself once the server answered.
+            AskPopupScreen.openUnsavedChangesPopup(this, () -> { dirty = false; closeToParent(); }, this::onSaveClicked);
+            return;
+        }
         closeToParent();
     }
 
@@ -314,6 +324,7 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
                             ShareVisualEditorScreen.this,
                             presetId -> {
                                 selectedSymbolId = presetId == null ? "" : presetId;
+                                dirty = true;
                                 symbolButton.setText(selectedSymbolId.isEmpty() ? "(none)" : selectedSymbolId);
                                 updatePreview();
                             }));
@@ -324,6 +335,7 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
             BankSystemGuiScreen.switchScreen(
                     new ColorPickerPopup(ShareVisualEditorScreen.this, selectedTint, argb -> {
                         selectedTint = argb;
+                        dirty = true;
                         applySwatchColor(argb);
                         updatePreview();
                     }));
