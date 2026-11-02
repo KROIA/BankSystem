@@ -49,7 +49,7 @@ public class MultiServerSecurityTests extends TestSuite {
 
     @Override
     public TestCategory getCategory() {
-        return BankSystemTestCategories.NETWORKING;
+        return BankSystemTestCategories.BANK_MANAGER; // needs master-only ServerBankManager
     }
 
     @Override
