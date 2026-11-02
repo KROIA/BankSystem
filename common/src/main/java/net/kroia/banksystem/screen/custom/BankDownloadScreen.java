@@ -8,9 +8,11 @@ import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.minecraft.menu.custom.BankDownloadContainerMenu;
 import net.kroia.banksystem.networking.entity.SyncBankDownloadDataPacket;
 import net.kroia.banksystem.networking.entity.UpdateBankDownloadBlockEntityPacket;
+import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.client.ContainerView;
@@ -72,7 +74,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         private BankDownloadBlockEntity.WithdrawCondition condition = BankDownloadBlockEntity.WithdrawCondition.NONE;
 
 
-        public WithdrawOrderGuiElement(@NotNull ItemID selectedItemID, @NotNull Consumer<GuiElement> onRemoveOrder)
+        public WithdrawOrderGuiElement(@NotNull ItemID selectedItemID, @NotNull Consumer<GuiElement> onRemoveOrder, @NotNull Runnable onChanged)
         {
             this.selectedItemID = selectedItemID;
             itemView = new ItemView(selectedItemID.getStack());
@@ -81,6 +83,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             amountTextBox = new TextBox();
             amountTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 100,0));
             amountTextBox.setText("1");
+            amountTextBox.setOnTextChanged(text -> onChanged.run());
             conditionSelectionDropDown = new DropDownMenu(TEXT.CONDITION.getString());
             //conditionSelectionDropDown.setZ(1000);
             //conditionSelectionDropDown.setExpanded(true);
@@ -119,11 +122,13 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
                 condition = BankDownloadBlockEntity.WithdrawCondition.values()[index];
                 conditionSelectionDropDown.setLabelText(WithdrawOrderGuiElement.getConditionString(condition));
                 conditionSelectionDropDown.collapse();
+                onChanged.run();
             });
 
             conditionAmountTextBox = new TextBox();
             conditionAmountTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 100,0));
             conditionAmountTextBox.setText("0");
+            conditionAmountTextBox.setOnTextChanged(text -> onChanged.run());
             deleteButton = new Button("X", () -> onRemoveOrder.accept(this));
 
             this.addChild(itemView);
@@ -211,6 +216,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     }
     private static class ItemsList extends GuiElement
     {
+        private final BankDownloadScreen screen;
         private final ItemSelectionView itemSelectionView;
         private final Label bankBalanceLabel;
         private final Label targetAmountLabel;
@@ -222,8 +228,9 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
 
         private final List<WithdrawOrderGuiElement> toRemove = new ArrayList<>();
         private final Map<ItemID, WithdrawOrderGuiElement> orderElements = new HashMap<>();
-        public ItemsList()
+        public ItemsList(BankDownloadScreen screen)
         {
+            this.screen = screen;
             itemSelectionView = new ItemSelectionView(this::onNewItemSelected);
             itemSelectionView.clearItems();
 
@@ -304,7 +311,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             {
                 if(order == null || order.itemID == null)
                     continue;
-                WithdrawOrderGuiElement element = new WithdrawOrderGuiElement(order.itemID, this::onRemoveOrder);
+                WithdrawOrderGuiElement element = new WithdrawOrderGuiElement(order.itemID, this::onRemoveOrder, screen::markDirty);
                 orderElements.put(order.itemID, element);
                 ordersListView.addChild(element);
                 element.updateBankBalance(currentAccount);
@@ -362,28 +369,43 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         }
         private void onNewItemSelected(ItemStack itemStack)
         {
+            if(BankDownloadScreen.accountNr <= 0)
+            {
+                screen.settingsMenu.flashConnectButton(); // a withdraw order needs a bank
+                return;
+            }
             if(currentAccount == null)
                 return;
             ItemID itemID = ItemID.of(itemStack);
             if(orderElements.containsKey(itemID))
                 return;
-            WithdrawOrderGuiElement orderElement = new WithdrawOrderGuiElement(itemID, this::onRemoveOrder);
+            WithdrawOrderGuiElement orderElement = new WithdrawOrderGuiElement(itemID, this::onRemoveOrder, screen::markDirty);
             orderElements.put(itemID, orderElement);
             ordersListView.removeChild(spacer);
             ordersListView.addChild(orderElement);
             spacer.setHeight(orderElement.getDropDownExpandedHeight());
             ordersListView.addChild(spacer);
             orderElement.updateBankBalance(currentAccount);
+            screen.markDirty();
         }
         private void onRemoveOrder(GuiElement element)
         {
             toRemove.add((WithdrawOrderGuiElement)element);
+            screen.markDirty();
         }
     }
 
     private static class SettingsMenu extends BankSystemGuiElement {
+        private static final int CONNECT_HINT_COLOR = 0xFFE8711C;  // orange: no bank connected
+        private static final int CONNECT_FLASH_COLOR = 0xFFFFC04D; // bright orange: flash phase
+        private static final long FLASH_DURATION_MS = 1500;
+        private static final long FLASH_PHASE_MS = 150;
 
         private final Button connectDisconnectButton;
+        private final int defaultBackgroundColor;
+        private final int defaultHoverColor;
+        private final int defaultPressedColor;
+        private long flashEndMs = 0;
         private final Button applyButton;
         private final ItemsList itemView;
 
@@ -395,7 +417,10 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             this.parent = parent;
             this.accountNr = accountNr;
             connectDisconnectButton = new Button((accountNr>0?TEXT.DISCONNECT_BUTTON.getString():TEXT.CONNECT_BUTTON.getString()), this::onSelectBankAccountButtonClicked);
-            itemView = new ItemsList();
+            defaultBackgroundColor = connectDisconnectButton.getBackgroundColor();
+            defaultHoverColor = connectDisconnectButton.getHoverColor();
+            defaultPressedColor = connectDisconnectButton.getPressedColor();
+            itemView = new ItemsList(parent);
             applyButton = new Button(TEXT.SAVE_BUTTON.getString(), parent::applySettigns);
 
 
@@ -435,9 +460,28 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             itemView.setOrders(orders);
         }
 
+        public void flashConnectButton()
+        {
+            flashEndMs = System.currentTimeMillis() + FLASH_DURATION_MS;
+        }
+
         @Override
         protected void render() {
-
+            // Orange while no bank is connected, flashing after a blocked action.
+            if(accountNr > 0)
+            {
+                setConnectButtonColors(defaultBackgroundColor, defaultHoverColor, defaultPressedColor);
+                return;
+            }
+            long now = System.currentTimeMillis();
+            int color = (now < flashEndMs && (now / FLASH_PHASE_MS) % 2 == 0) ? CONNECT_FLASH_COLOR : CONNECT_HINT_COLOR;
+            setConnectButtonColors(color, ColorUtilities.setBrightness(color, 0.8f), ColorUtilities.setBrightness(color, 0.6f));
+        }
+        private void setConnectButtonColors(int background, int hover, int pressed)
+        {
+            connectDisconnectButton.setBackgroundColor(background);
+            connectDisconnectButton.setHoverColor(hover);
+            connectDisconnectButton.setPressedColor(pressed);
         }
 
         @Override
@@ -482,6 +526,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     private static BankDownloadScreen instance;
     private static int jeiModScreenWidthPercentage = 100;
     private int tickCount = 0;
+    private boolean dirty = false; // unsaved withdraw order / connection edits
 
     public BankDownloadScreen(BankDownloadContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
         super(pMenu, pPlayerInventory, pTitle);
@@ -499,7 +544,17 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
 
 
 
-        inventoryView = new ContainerView<>(pMenu, pPlayerInventory, TEXT.INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 256, 256));
+        inventoryView = new ContainerView<>(pMenu, pPlayerInventory, TEXT.INVENTORY_NAME_TEXT, new GuiTexture(BankSystemMod.MOD_ID, "textures/gui/inventory_hpc.png", 256, 256)) {
+            @Override
+            public void onClose() {
+                // Inventory key / touchscreen close path; bypasses BankDownloadScreen.onClose().
+                if (dirty) {
+                    openUnsavedChangesPrompt();
+                    return;
+                }
+                super.onClose();
+            }
+        };
         inventoryView.setSize(176, 166);
         inventoryView.setOnCloseEvent(this::onCloseCleanup);
         settingsMenu = new SettingsMenu(this, accountNr);
@@ -513,6 +568,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             settingsMenu.setBankableItems(allowedItems);
             settingsMenu.setOrders(withdrawOrders);
             settingsMenu.setBankAccountNumber(accountNr);
+            dirty = false; // settings loaded from the block entity
         });
         getBankManager().getBankAccountDataAsync(accountNr).thenAccept(settingsMenu::setBankAccountData);
     }
@@ -573,8 +629,30 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     }
     @Override
     public void onClose() {
+        if(dirty)
+        {
+            openUnsavedChangesPrompt();
+            return;
+        }
         onCloseCleanup();
         super.onClose();
+    }
+
+    void markDirty()
+    {
+        dirty = true;
+    }
+
+    /**
+     * Save / Discard prompt. Both callbacks run after the popup has switched back
+     * to this screen; dirty is cleared first so the close does not prompt again
+     * and closes the container menu as usual.
+     */
+    private void openUnsavedChangesPrompt()
+    {
+        AskPopupScreen.openUnsavedChangesPopup(this,
+                () -> { dirty = false; onClose(); },
+                () -> { applySettigns(); onClose(); });
     }
 
     private void onConnectDisconnectButtonClicked(int accountNr)
@@ -585,6 +663,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             sendUpdatePacket();
             return;
         }
+        dirty = true; // the connection is only stored on Save
         getBankManager().getBankAccountDataAsync(accountNr).thenAccept(settingsMenu::setBankAccountData);
     }
     private void applySettigns()
@@ -595,5 +674,6 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     private void sendUpdatePacket()
     {
         UpdateBankDownloadBlockEntityPacket.sendPacket(pos, settingsMenu.getOrders(), accountNr);
+        dirty = false;
     }
 }
