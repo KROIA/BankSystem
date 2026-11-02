@@ -7,6 +7,11 @@ import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.minecraft.client.Minecraft;
+
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Task #51 (v2.1.0) — client-only smoke test for {@link CompanyManagementScreen}.
@@ -22,6 +27,8 @@ import net.kroia.modutilities.testing.TestSuite;
  * touches {@code Minecraft.getInstance()} which is client-only.
  */
 public class CompanyManagementScreenSmokeTests extends TestSuite {
+
+    private static final long RENDER_THREAD_TIMEOUT_SECONDS = 10;
 
     @Override
     public TestCategory getCategory() {
@@ -39,22 +46,36 @@ public class CompanyManagementScreenSmokeTests extends TestSuite {
     }
 
     private TestResult testConstructValid() {
-        if (!isClient()) return pass("skipped: not client env");
-        try {
-            new CompanyManagementScreen(1234, "SmokeTestCo");
-        } catch (Throwable t) {
-            return fail("Screen constructor threw: " + t);
-        }
-        return pass("Screen constructed");
+        return construct(1234, "SmokeTestCo", "Screen constructed");
     }
 
     private TestResult testConstructEmptyName() {
+        return construct(0, "", "Screen constructed with empty name");
+    }
+
+    /**
+     * Constructs the screen on the render thread. In singleplayer the tests run on the
+     * integrated server thread, and since 1.21.9 Screen construction asserts the render thread.
+     */
+    private TestResult construct(int companyId, String companyName, String okMessage) {
         if (!isClient()) return pass("skipped: not client env");
+        Minecraft mc = Minecraft.getInstance();
         try {
-            new CompanyManagementScreen(0, "");
+            if (mc.isSameThread()) {
+                new CompanyManagementScreen(companyId, companyName);
+            } else {
+                // Timeout guards against the render thread being blocked on the server thread.
+                mc.submit(() -> new CompanyManagementScreen(companyId, companyName))
+                        .get(RENDER_THREAD_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            }
+        } catch (TimeoutException e) {
+            return fail("Render thread did not run the screen constructor within "
+                    + RENDER_THREAD_TIMEOUT_SECONDS + "s");
+        } catch (ExecutionException e) {
+            return fail("Screen constructor threw: " + e.getCause());
         } catch (Throwable t) {
             return fail("Screen constructor threw: " + t);
         }
-        return pass("Screen constructed with empty name");
+        return pass(okMessage);
     }
 }
