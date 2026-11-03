@@ -42,10 +42,14 @@ You want to support me?<br>
 ---
 ## Installation
 
-1. Install [Architectury API](https://www.curseforge.com/minecraft/mc-mods/architectury-api) and the mod loader API for your platform:
-   - **Fabric**: [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api)
-   - **Quilt**: [Quilted Fabric API](https://www.curseforge.com/minecraft/mc-mods/qsl) + [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities)
-   - **NeoForge / Forge**: No additional API needed
+BankSystem runs on **Fabric** and **NeoForge**.
+
+Supported MC versions (in development): 1.21.1 – 1.21.11, 26.1 (26.1.2), 26.2, 26.3
+
+1. Install the required dependencies:
+   - [Architectury API](https://www.curseforge.com/minecraft/mc-mods/architectury-api) (all loaders)
+   - **Fabric** only: [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api)
+   - [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities) **2.2.0** (the build for your Minecraft version, e.g. `1.21.1-2.2.0`) is required too. It is bundled inside the BankSystem jar, so you don't have to install it separately.
 2. Download the BankSystem jar for your Minecraft version and mod loader from [CurseForge](https://www.curseforge.com/minecraft/mc-mods/banksystem) or the [Downloads](#downloads) table below.
 3. Place the jar in your `mods/` folder and launch the game.
 
@@ -204,7 +208,7 @@ Server admins can edit the mod's `settings.json` in-game, without touching the f
 1. Run `/banksystem manage` (admin only) to open the banking settings window.
 2. Click **Mod Settings**.
 
-The screen lists every setting of the mod, grouped by category (Utilities, Player, Bank, TAB Placeholders), with a matching editor per setting type (checkboxes, number fields, text fields). **Apply** validates and saves the values on the server (out-of-range values are clamped and the corrected values are shown), **Reload** re-fetches the current server state and **Defaults** resets the fields to the built-in defaults (nothing is saved until Apply is pressed).
+The screen lists every setting of the mod, grouped by category (Utilities, Player, Bank, Placeholders), with a matching editor per setting type (checkboxes, number fields, text fields). **Apply** validates and saves the values on the server (out-of-range values are clamped and the corrected values are shown), **Reload** re-fetches the current server state and **Defaults** resets the fields to the built-in defaults (nothing is saved until Apply is pressed). Closing the screen with unapplied changes asks whether to **Save** or **Discard** them; **Esc** on that popup returns to the settings screen.
 
 Notes:
 

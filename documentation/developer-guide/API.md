@@ -262,6 +262,32 @@ Subscribe to events for reactive integration via `api.getEvents()`:
 
 Threading, which JVM each one fires on, and full payload contracts: [Events & Signals](EventsAndSignals.md).
 
+## Money Formatting (`MoneyFormat`)
+
+`net.kroia.banksystem.api.MoneyFormat` formats money the same way BankSystem's [placeholders](../user-guide/Placeholders.md#number-format) do, so dependent mods (e.g. StockMarket) can show money values in the same style. All methods are static and thread-safe.
+
+| Method | Description |
+|--------|-------------|
+| `static String formatMoney(long rawUnits)` | Formatted with the server's `MONEY_FORMAT` setting (default `$%s`): `123456` → `"$1'234.56"` |
+| `static String formatMoney(long rawUnits, String pattern)` | Formatted with your own pattern; `%s` is replaced by the number. A pattern without `%s` gives the bare number (`"1'234.56"`). |
+| `static String formatMoneyRaw(long rawUnits)` | Plain decimal without separator or symbol: `123456` → `"1234.56"` |
+| `static String getPattern()` | The current `MONEY_FORMAT` pattern |
+| `static void setPattern(String pattern)` | Set by BankSystem from the `MONEY_FORMAT` setting; dependent mods should not call it |
+
+Amounts are **raw** bank units (`100` raw = `1.00` money, see [Raw vs Real Amounts](#raw-vs-real-amounts)). The number always uses `'` as thousands separator and 2 decimals (rounded down); negative amounts get a leading `-`.
+
+```java
+import net.kroia.banksystem.api.MoneyFormat;
+
+long raw = 123456;                                   // 1234.56 money
+String shown = MoneyFormat.formatMoney(raw);         // "$1'234.56" with the default MONEY_FORMAT
+String euro  = MoneyFormat.formatMoney(raw, "%s €"); // "1'234.56 €"
+String plain = MoneyFormat.formatMoneyRaw(raw);      // "1234.56"
+```
+
+> [!NOTE]
+> The pattern is set from the server's `MONEY_FORMAT` setting when the server starts. On a client that is connected to a remote server, `formatMoney(long)` uses the default pattern `$%s`.
+
 ## API Package Structure
 
 All public interfaces are in `net.kroia.banksystem.api`:
@@ -273,6 +299,7 @@ api/
 ├── IBankSystemDataHandler.java     — Data persistence
 ├── ItemPriceProvider.java          — Price source for total-wealth tracking
 ├── PayDividendResult.java          — Dividend run result + typed reason
+├── MoneyFormat.java                — Shared money display format
 ├── bank/
 │   ├── IAsyncBank.java             — Async bank operations
 │   ├── ISyncServerBank.java        — Sync bank operations (master only)

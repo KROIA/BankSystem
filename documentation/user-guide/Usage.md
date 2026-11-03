@@ -49,6 +49,11 @@ If [JEI](https://www.curseforge.com/minecraft/mc-mods/jei) is installed:
 - Clicking an item in the bank list looks up its recipes and applies the best one your bank account can actually satisfy.
 - The JEI item panel sits beside the Bank Terminal screen without overlapping it.
 
+With **Use Bank Items** turned off, **+** moves the ingredients from your inventory (and the terminal's own inventory) into the grid. With **Use Bank Items** turned on, **+** only places the recipe layout: no items are moved, and every ingredient you do not place yourself is taken from the bank when you craft.
+
+> [!NOTE]
+> There is no JEI release for Minecraft **1.21.2**, **1.21.3** and **1.21.6**, nor for **Fabric 1.21.4**. On these versions the JEI recipe transfer is not available. Crafting in the Bank Terminal grid by hand works the same everywhere.
+
 ### Balance History Chart
 
 The **History** button in the top-right of the Bank Terminal opens a line chart of the selected account's balances over time — one colour-coded series per item.
@@ -113,6 +118,7 @@ To send the items to the bank account, the block must be powered by a redstone s
 
 To use the Bank Download Block, it has to be connected to your bank account.
 Open the block and press on the **Connect to Bank** button.
+While no bank account is connected, the button is orange. If you try something that needs a bank connection (e.g. picking an item for a withdraw order), the button flashes to show you what to do first.
 
 - **Balance:** Shows the current balance in the connected bank account.
 
@@ -124,7 +130,8 @@ Open the block and press on the **Connect to Bank** button.
    - **More than** — Only download items if the bank balance exceeds the specified value.
    - **Less than** — Only download items if the bank balance is below the specified value.
 
-Press the **Save** button to apply the changes.
+Press the **Save** button to apply the changes. Choosing a bank account with **Connect to Bank** is also only stored when you save.
+If you close the screen with unsaved changes, a popup asks whether to **Save** or **Discard** them. Press **Esc** on the popup to go back to the screen without deciding.
 Once the block is configured, a redstone signal triggers the block to work.
 
 ---
@@ -139,6 +146,8 @@ The Bank Display block shows live bank account data on its screen. Right-click t
 1. Select a **Display Type** — Balance Overview or Balance History.
 2. Select the **bank account** to display.
 3. Press **Apply** to save the configuration.
+
+If you close the screen without pressing **Apply**, a popup asks whether to **Save** or **Discard** the changes (**Esc** returns to the configuration screen).
 
 <div align="center">
     <img src="../images/BankDisplays.png"> 

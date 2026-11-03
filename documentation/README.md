@@ -27,3 +27,27 @@ Technical documentation for developers integrating with or extending BankSystem.
 | [Currency Integration](developer-guide/CurrencyIntegration.md) | `ExternalCurrencyProvider` SPI for currency-mod authors who want their mod in the binding picker |
 | [Item Price Provider API](developer-guide/ItemPriceProviderAPI.md) | Supply item prices for total-wealth tracking |
 | [Async Forwarding Architecture](developer-guide/AsyncForwardingArchitecture.md) | Internal RPC system for multi-server function forwarding |
+
+## Development & Testing
+
+BankSystem ships in-game tests and a few dev-only commands. They are compiled only when the Gradle property `enable_dev_features` is `true` (default in `gradle.properties`: `false`). Build a dev jar with:
+
+```
+./gradlew build -Penable_dev_features=true
+```
+
+A dev build of BankSystem also needs a ModUtilities jar built with `-Penable_dev_features=true`.
+
+In a dev build, operators (permission level 2) get:
+
+| Command | Description |
+|---------|-------------|
+| `/banksystem test` | Run all in-game tests |
+| `/banksystem test list` | List the test categories |
+| `/banksystem test <category>` | Run one category |
+| `/banksystem exportrecipes` | Export all BankSystem crafting recipes as PNG images |
+
+> [!WARNING]
+> The in-game tests change real bank data on the running world. Some tests disallow items, which removes those banks from **every** bank account. Never run them on a real world or server — use a throwaway test world.
+
+To run the tests automatically, use the autotest harness in the ModUtilities repository (`tools/autotest`). It builds the mods with dev features enabled, starts the game on Fabric and NeoForge in singleplayer, master/client and master/slave setups, runs every registered in-game test suite (ModUtilities, BankSystem, StockMarket) in a fresh world, and prints a pass/fail table.
