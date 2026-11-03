@@ -75,4 +75,15 @@ The placeholder settings are in the `Placeholder` section of [settings.json](Con
 | `TOP_COUNT` | number | `10` | Number of `top_<n>` slots in the richest-players list. Valid range `0`–`100`. **Requires a server restart.** |
 | `MONEY_FORMAT` | string | `"$%s"` | Format of the money placeholders. `%s` is replaced by the formatted number, e.g. `"%s €"` gives `1'234.56 €`. A value without `%s` is reset to the default. |
 
-> Older versions had configurable TAB placeholder identifiers (`PLAYER_BALANCE`, `PLAYER_BANKUSER_JSON`, ...). These settings are ignored now; use the fixed names above instead.
+---
+## Migrating from Older Versions
+
+Before 2.2.0, the TAB placeholder identifiers were configurable in `settings.json` (`PLAYER_BALANCE`, `PLAYER_LOCKED_BALANCE`, `PLAYER_TOTAL_BALANCE`, `PLAYER_BANKUSER_JSON`, `SERVER_CIRCULATION_JSON`). These settings were removed: old entries in `settings.json` are ignored, and the placeholder names are fixed. Update your TAB configuration:
+
+| Old default identifier | Replacement |
+|------------------------|-------------|
+| `%banksystem_player_balance%` | `%banksystem_balance%` |
+| `%banksystem_player_locked_balance%` | `%banksystem_locked%` |
+| `%banksystem_player_total_balance%` | `%banksystem_total%` |
+| `%banksystem_bankuser_json%` | No JSON placeholder anymore; use the individual player placeholders. |
+| `%banksystem_server_circulation_json%` | No JSON placeholder anymore; use `%banksystem_circulation%` and the other server placeholders. |

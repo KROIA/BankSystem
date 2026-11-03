@@ -103,7 +103,7 @@ The tabs shown depend on who you are:
 
 ---
 
-### Overview tab
+### Overview tab (Company Overview)
 
 <div align="center">
     <img src="../images/CompanyOverviewTab.png" alt="Company Management screen, Overview tab">
@@ -115,6 +115,8 @@ Managers additionally get:
 
 - **Company Currency** — an item button that opens *Choose payout currency*. This sets the default currency used for the company's balance display. Money is the default.
 - A description box plus **Save**. The description is what other players read on the company; the *share* description shown in the item tooltip is a separate field in the Share Visuals editor.
+
+If you switch to another tab or close the screen while the description has unsaved edits, a popup asks whether to **Save** or **Discard** them. Press **Esc** on the popup to stay on the Overview tab. The currency picker saves immediately and never asks.
 
 To read a company's details without opening any screen:
 
@@ -167,6 +169,8 @@ The payouts list has one row per schedule with the columns **Target | Amount | I
 | **Paused** | Stops the schedule. Missed runs are *not* accumulated while paused; it resumes at the next interval boundary. |
 | **History** | The last executions of this schedule, with **Total paid**. |
 | **Delete** | Removes the schedule. |
+
+Closing the payout editor with unsaved changes asks whether to **Save** or **Discard** them (**Esc** on the popup returns to the editor).
 
 #### Payout statuses
 
@@ -271,7 +275,9 @@ Place the Share Stamper and right-click it. Because it is not bound yet, the **B
 
 If you manage no companies you get *"You have no companies with MANAGE permission"*.
 
-To unbind later, use **Unbind** in the stamper's own screen, or the stamper list in the company's **Shares** tab.
+To unbind later, use **Unbind** in the stamper's own screen, or the stamper list in the company's **Shares** tab. Unbinding ejects the block's contents (Blank Shares and stamped shares) on top of the block.
+
+A bound stamper cannot be re-bound to a different company directly — unbind it first, then bind it again.
 
 Once bound, right-clicking the block opens the stamper itself — but only for players with `MANAGE` on that company. Everyone else is told *"Bound to MyCompany — no permission"*. A bound stamper also takes **20× longer to break** for anyone without `MANAGE`, and when it is finally broken the dropped block keeps its binding, so re-placing it re-binds automatically.
 
@@ -286,7 +292,7 @@ Once bound, right-clicking the block opens the stamper itself — but only for p
 | Supply line | `issued / max supply` for the bound company. |
 | **Start** / **Stop** | Starts or stops the stamping/redeeming process. |
 | **Mode: Stamp** / **Mode: Redeem** | Stamp turns Blank Shares into company shares; Redeem turns company shares back into Blank Shares. |
-| **Unbind** | Clears the block's company binding (contents are kept). |
+| **Unbind** | Clears the block's company binding. Everything in the block — Blank Shares and stamped shares — is ejected on top of the block. |
 | **Auto Input** | Allows hoppers to insert into the input slot. |
 | **Auto Output** | Allows hoppers to extract from the output slot. |
 
@@ -300,6 +306,8 @@ The machine **stops itself** and the button flips back to *Start* when:
 - (Redeem mode) the company has no issued shares left, or the inserted share belongs to a different company.
 
 Only one player can have a stamper open at a time — a second player gets *"Share Stamper is already in use by another player"*.
+
+If you lose the `MANAGE` right on the company while the stamper screen is open, the screen closes.
 
 ### 4. Automate it
 
@@ -330,6 +338,7 @@ Open **Shares → Edit Visual Layers**:
 | **Preview** | A live stamped share rendered with your unsaved settings. |
 
 Press **Save** to publish. Every player's stamped shares of that company update — the card, the item name and the name colour all follow the visuals.
+Closing the editor with unsaved changes asks whether to **Save** or **Discard** them (**Esc** on the popup returns to the editor).
 
 The finished item tooltip shows the company name, `Supply: <issued> / <max>`, and the description behind **SHIFT**:
 
