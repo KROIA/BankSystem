@@ -22,7 +22,7 @@ Lifecycle:
 - **Rewritten regularly while the server runs**: BankSystem saves all its data (including this file) on its save interval (`SAVE_INTERVAL_SECONDS`, default every 5 seconds while players are online), whenever the world is saved (autosave, `/save-all`), and on server shutdown.
 
 > [!TIP]
-> **Prefer the in-game settings GUI.** Ops can run `/banksystem manage` to open the bankable-items management screen and, from there, click the **Mod Settings** button to open the editor for every value in this file — booleans, numbers, and the component lists. Edits made there go through the normal save cycle instead of being overwritten. This is the recommended way to change settings at runtime; the section below documents the file for reference and for cases where the GUI is not available (e.g. bootstrap edits before the first server start).
+> **Prefer the in-game settings GUI.** Ops can run `/banksystem manage` to open the bankable-items management screen and, from there, click the **Mod Settings** button to open the editor for every value in this file — booleans, numbers, and the component lists. Edits made there go through the normal save cycle instead of being overwritten. Closing the editor with unapplied changes asks whether to **Save** or **Discard** them (**Esc** on that popup returns to the editor). This is the recommended way to change settings at runtime; the section below documents the file for reference and for cases where the GUI is not available (e.g. bootstrap edits before the first server start).
 >
 > The **Mod Settings** button is only shown on the master server. On a slave server the button is hidden — configure settings on the master; slaves receive the relevant values (component lists, etc.) through the master's sync.
 
