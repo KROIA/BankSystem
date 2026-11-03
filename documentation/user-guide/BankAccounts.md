@@ -47,6 +47,9 @@ Permissions for each player can be configured individually:
 > [!NOTE]
 > Only manually created bank accounts can be deleted. The personal bank account cannot be deleted.
 
+Changes to the account name, the user list and the permissions are stored when you press **Save changes**.
+If you close the screen, or pick a different account with the account selection button, while there are unsaved changes, a popup asks whether to **Save** or **Discard** them. Press **Esc** on the popup to go back to the management screen without deciding.
+
 Managers also get two extra buttons on the management screen:
 
 - **Bindings** — link a slot to an external currency mod's account. See [Currency Bindings](CurrencyBindings.md).
