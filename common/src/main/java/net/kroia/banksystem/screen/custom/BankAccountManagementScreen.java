@@ -45,6 +45,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final Component MUST_KEEP_MANAGER = Component.translatable(PREFIX+"must_keep_manager");
     private static final Component BINDINGS_BUTTON = Component.translatable(PREFIX+"bindings_button");
     private static final Component PAYOUTS_BUTTON = Component.translatable(PREFIX+"payouts_button");
+    private static final Component HISTORY_BUTTON = Component.translatable(PREFIX+"history_button");
 
     private static class ItemViewButton extends Button{
 
@@ -100,6 +101,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private Button addUserButton;
     private Button bindingsButton;
     private Button payoutsButton;
+    private Button historyButton;
     private Integer companyIdForPayouts = null;
     private ListView userElementListView;
     private ListView bankElementListView;
@@ -262,6 +264,12 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         bindingsButton = new Button(BINDINGS_BUTTON.getString(), this::onBindingsButtonClicked);
         addElement(bindingsButton);
 
+        // Task #101: balance history of the shown account (reads the field, so it follows switchAccount).
+        // The server gate (BalanceHistoryRequest, Task #100) allows members and BankSystem admins.
+        historyButton = new Button(HISTORY_BUTTON.getString(), () ->
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(new BalanceHistoryScreen(this, accountNumber)));
+        addElement(historyButton);
+
         // Task #45a / Spec A.3 (v2.1.0) — Payouts entry on its own second row (the
         // "Share Visuals" button was removed; those settings live in the Company
         // screen's Shares tab). Visibility gated on company presence via async lookup.
@@ -389,6 +397,10 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     ? createNewBankButton.getRight() + spacing
                     : selectAccountButton.getRight() + spacing;
             bindingsButton.setBounds(bindingsLeft, padding, bindingsTextWidth, closeButton.getHeight());
+            if(historyButton != null) {
+                int historyTextWidth = closeButton.getTextWidth(HISTORY_BUTTON.getString()) + 10;
+                historyButton.setBounds(bindingsButton.getRight() + spacing, padding, historyTextWidth, closeButton.getHeight());
+            }
         }
 
     }

@@ -5,6 +5,7 @@ import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.DriverShim;
 import net.kroia.banksystem.data.table.BalanceHistoryManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
+import net.kroia.banksystem.networking.general.BalanceHistoryRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -57,6 +58,35 @@ public class BalanceHistoryTests extends TestSuite {
         addTest("tiered_retention_preserves_bucket_keepers", this::tiered_retention_preserves_bucket_keepers);
         addTest("tiered_retention_prunes_beyond_1y", this::tiered_retention_prunes_beyond_1y);
         addTest("migration_from_flat_cap_history", this::migration_from_flat_cap_history);
+        addTest("history_access_denied_for_non_member", this::history_access_denied_for_non_member);
+        addTest("history_access_allowed_for_member", this::history_access_allowed_for_member);
+        addTest("history_access_allowed_for_admin", this::history_access_allowed_for_admin);
+    }
+
+    // -------------------------------------------------------------------------
+    // Part 3 — access gate (Task #100, BalanceHistoryRequest.isAccessAllowed)
+    // -------------------------------------------------------------------------
+
+    private TestResult history_access_denied_for_non_member() {
+        TestResult res = assertEquals("non-member, non-admin",
+                false, BalanceHistoryRequest.isAccessAllowed(false, false, false));
+        if (!res.passed()) return res;
+        res = assertEquals("non-member admin via untrusted slave",
+                false, BalanceHistoryRequest.isAccessAllowed(false, true, true));
+        if (!res.passed()) return res;
+        return pass("Non-members without a trusted admin flag are denied");
+    }
+
+    private TestResult history_access_allowed_for_member() {
+        TestResult res = assertEquals("member", true, BalanceHistoryRequest.isAccessAllowed(true, false, false));
+        if (!res.passed()) return res;
+        res = assertEquals("member via untrusted slave", true, BalanceHistoryRequest.isAccessAllowed(true, false, true));
+        if (!res.passed()) return res;
+        return pass("Account members are allowed");
+    }
+
+    private TestResult history_access_allowed_for_admin() {
+        return assertEquals("non-member admin", true, BalanceHistoryRequest.isAccessAllowed(false, true, false));
     }
 
     @Override

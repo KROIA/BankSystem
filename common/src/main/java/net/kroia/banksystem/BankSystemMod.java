@@ -39,8 +39,10 @@ public final class BankSystemMod {
     private static volatile BankSystemModBackend backend;
 
     public static synchronized void init() {
-        if(backend == null)
+        if(backend == null) {
+            net.kroia.banksystem.util.BankSystemPermissions.register();
             backend = new BankSystemModBackend();
+        }
     }
 
 

@@ -1,5 +1,7 @@
 package net.kroia.banksystem.networking.general;
 
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
@@ -56,6 +58,22 @@ public class BalanceHistoryRequest extends BankSystemGenericRequest<BalanceHisto
         if (BACKEND_INSTANCES.BALANCE_HISTORY_MANAGER == null) {
             return CompletableFuture.completedFuture(List.of());
         }
+        // Task #100: only account members and BankSystem admins may read an account's history.
+        // On a slave, needsRoutingToMaster() forwards the request, so this master-side gate covers
+        // both direct and slave-forwarded requests.
+        // An untrusted slave can forge the sender UUID (see isBlockedForUntrustedSlave), so its
+        // requests get no admin shortcut; only membership counts. Forging a member's UUID is
+        // still possible there, same exposure as the ungated reads tracked in Issue #69.
+        ISyncServerBankManager manager = getServerBankManager();
+        boolean untrustedSlave = slaveID != null && !slaveID.isEmpty()
+                && (manager == null || !manager.isSlaveServerTrusted(slaveID));
+        IServerBankAccount account = manager == null ? null : manager.getBankAccount(input.accountNumber());
+        boolean isMember = account != null && account.hasUser(sender);
+        if (!isAccessAllowed(isMember, playerIsAdmin(sender), untrustedSlave)) {
+            debug("Denied balance history of account " + input.accountNumber() + " to " + sender
+                    + (untrustedSlave ? " (untrusted slave " + slaveID + ")" : ""));
+            return CompletableFuture.completedFuture(List.of());
+        }
         int maxPoints = input.maxPoints() <= 0 ? 0 : input.maxPoints();
         return BACKEND_INSTANCES.BALANCE_HISTORY_MANAGER.getHistoryBucketed(
                 input.accountNumber(),
@@ -63,6 +81,14 @@ public class BalanceHistoryRequest extends BankSystemGenericRequest<BalanceHisto
                 input.toMs(),
                 maxPoints
         );
+    }
+
+    /**
+     * Access rule for balance-history reads (Task #100): account members always, BankSystem admins
+     * unless the request came through an untrusted slave (forgeable sender UUID).
+     */
+    public static boolean isAccessAllowed(boolean isMember, boolean isAdmin, boolean fromUntrustedSlave) {
+        return isMember || (isAdmin && !fromUntrustedSlave);
     }
 
     @Override

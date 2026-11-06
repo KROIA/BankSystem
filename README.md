@@ -276,6 +276,22 @@ Key commands for players and admins:
 
 For the full command reference, see [Commands](documentation/user-guide/Commands.md).
 
+### Permissions (LuckPerms)
+
+Admin functions check these permission nodes, so a permission mod such as LuckPerms can grant or deny them per player. Without a permission mod, each node requires operator level 2 (same as before). `banksystem.admin.*` grants all of them.
+
+| Node | Grants |
+|------|--------|
+| `banksystem.admin.command.trust` | `/banksystem trust` and `/banksystem untrust` (slave servers) |
+| `banksystem.admin.command.op` | `/banksystem op` and `/banksystem deop` (BankSystem admin flag) |
+| `banksystem.admin.command.backup` | `/banksystem backup ...` |
+| `banksystem.admin.command.symbols` | `/banksystem symbols ...` |
+| `banksystem.admin.command.exportrecipes` | `/banksystem exportrecipes` (dev builds only) |
+| `banksystem.admin.adminmode` | Setting the BankSystem admin mode of a player |
+| `banksystem.admin.software` | Using the Banking Software on another player in creative mode |
+
+Nodes only apply to players online on the server that runs the check; the console always passes.
+
 ---
 
 ## Documentation

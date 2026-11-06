@@ -99,6 +99,7 @@
   "gui.banksystem.bank_account_management_screen.must_keep_founder": "Es Firmenkonto mues d'Verwalte-Berächtigung bim Gründer bhalte — d'Änderig isch nöd übernoh worde.",
   "gui.banksystem.bank_account_management_screen.bindings_button": "Verchnüpfige",
   "gui.banksystem.bank_account_management_screen.payouts_button": "Uszahlige",
+  "gui.banksystem.bank_account_management_screen.history_button": "Verlauf",
   "gui.banksystem.payouts_overview_screen.title": "Uszahlige",
   "gui.banksystem.payouts_overview_screen.new_payout": "Neui Uszahlig",
   "gui.banksystem.payouts_overview_screen.total_per_hour": "Total / Stund: %s",

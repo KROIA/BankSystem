@@ -99,6 +99,7 @@
   "gui.banksystem.bank_account_management_screen.must_keep_founder": "A Company account must always keep the Manage permission on its founder — the change was not applied.",
   "gui.banksystem.bank_account_management_screen.bindings_button": "Bindings",
   "gui.banksystem.bank_account_management_screen.payouts_button": "Payouts",
+  "gui.banksystem.bank_account_management_screen.history_button": "History",
   "gui.banksystem.payouts_overview_screen.title": "Payouts",
   "gui.banksystem.payouts_overview_screen.new_payout": "New Payout",
   "gui.banksystem.payouts_overview_screen.total_per_hour": "Total / hour: %s",

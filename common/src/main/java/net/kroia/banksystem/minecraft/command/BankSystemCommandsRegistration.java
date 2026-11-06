@@ -9,6 +9,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.util.BankSystemPermissions;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
@@ -79,7 +80,7 @@ public class BankSystemCommandsRegistration {
                         })
                 )
                 .then(Commands.literal("trust")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, 2)) // Admin-only
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_TRUST, BankSystemPermissions.FALLBACK_LEVEL)) // Admin-only
                         .then(Commands.argument("slaveID", StringArgumentType.string()).suggests((context, builder) -> getSlaveServerIDSuggestion(builder))
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
@@ -95,7 +96,7 @@ public class BankSystemCommandsRegistration {
                         )
                 )
                 .then(Commands.literal("untrust")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, 2)) // Admin-only
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_TRUST, BankSystemPermissions.FALLBACK_LEVEL)) // Admin-only
                         .then(Commands.argument("slaveID", StringArgumentType.string()).suggests((context, builder) -> getSlaveServerIDSuggestion(builder))
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
@@ -111,7 +112,7 @@ public class BankSystemCommandsRegistration {
                         )
                 )
                 .then(Commands.literal("op")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, 2)) // Admin-only
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_OP, BankSystemPermissions.FALLBACK_LEVEL)) // Admin-only
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -136,7 +137,7 @@ public class BankSystemCommandsRegistration {
                         )
                 )
                 .then(Commands.literal("deop")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, 2)) // Admin-only
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_OP, BankSystemPermissions.FALLBACK_LEVEL)) // Admin-only
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -251,7 +252,7 @@ public class BankSystemCommandsRegistration {
                 )
                 // Dev-only: export all BankSystem crafting recipes as PNG images
                 .then(Commands.literal("exportrecipes")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, 2) && BankSystemMod.ENABLE_DEV_FEATURES)
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_EXPORTRECIPES, BankSystemPermissions.FALLBACK_LEVEL) && BankSystemMod.ENABLE_DEV_FEATURES)
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -265,7 +266,7 @@ public class BankSystemCommandsRegistration {
                 // /banksystem backup status                                    - Report IDLE / PAUSED (for Xs)
                 // /banksystem backup snapshot <path>                           - Write a consistent DB copy to <path>
                 .then(Commands.literal("backup")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, 2)) // op-only, matches vanilla save-off
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_BACKUP, BankSystemPermissions.FALLBACK_LEVEL)) // op-only, matches vanilla save-off
                         .then(Commands.literal("pause")
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
@@ -704,7 +705,7 @@ public class BankSystemCommandsRegistration {
         dispatcher.register(
             Commands.literal("banksystem")
                 .then(Commands.literal("symbols")
-                    .requires(src -> net.kroia.modutilities.PermissionCompat.hasPermission(src, 2))
+                    .requires(src -> net.kroia.modutilities.PermissionCompat.hasPermission(src, BankSystemPermissions.COMMAND_SYMBOLS, BankSystemPermissions.FALLBACK_LEVEL))
                     // list
                     .then(Commands.literal("list")
                         .executes(ctx -> {

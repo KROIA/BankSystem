@@ -99,6 +99,7 @@
   "gui.banksystem.bank_account_management_screen.must_keep_founder": "Ein Firmenkonto muss die Verwalten-Berechtigung beim Gründer behalten — die Änderung wurde nicht übernommen.",
   "gui.banksystem.bank_account_management_screen.bindings_button": "Verknüpfungen",
   "gui.banksystem.bank_account_management_screen.payouts_button": "Auszahlungen",
+  "gui.banksystem.bank_account_management_screen.history_button": "Verlauf",
   "gui.banksystem.payouts_overview_screen.title": "Auszahlungen",
   "gui.banksystem.payouts_overview_screen.new_payout": "Neue Auszahlung",
   "gui.banksystem.payouts_overview_screen.total_per_hour": "Gesamt / Stunde: %s",

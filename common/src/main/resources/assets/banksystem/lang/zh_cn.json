@@ -99,6 +99,7 @@
   "gui.banksystem.bank_account_management_screen.must_keep_founder": "公司账户必须始终保留创始人的管理权限——更改未被应用。",
   "gui.banksystem.bank_account_management_screen.bindings_button": "绑定",
   "gui.banksystem.bank_account_management_screen.payouts_button": "派息",
+  "gui.banksystem.bank_account_management_screen.history_button": "历史",
   "gui.banksystem.payouts_overview_screen.title": "派息",
   "gui.banksystem.payouts_overview_screen.new_payout": "新增派息",
   "gui.banksystem.payouts_overview_screen.total_per_hour": "每小时总额：%s",
