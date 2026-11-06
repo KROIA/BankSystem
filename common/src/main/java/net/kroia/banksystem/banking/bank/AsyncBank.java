@@ -279,6 +279,10 @@ public class AsyncBank implements IAsyncBank {
             if(bank == null)
                 return CompletableFuture.completedFuture(OutputData.of(input.function));
 
+            // Task #104: balance reads go to account members and admins only.
+            if(isBalanceRead(input.function) && !canReadAccount(playerSender, slaveID, bankAccount))
+                return CompletableFuture.completedFuture(deniedRead(input.function));
+
             return CompletableFuture.completedFuture(switch (input.function) {
                 case FunctionType.GetMinimalDataAsync ->                    OutputData.of(input.function, bank.getMinimalData());
                 case FunctionType.GetBalanceAsync ->                        OutputData.of(input.function, bank.getBalance());
@@ -351,6 +355,27 @@ public class AsyncBank implements IAsyncBank {
 
             });
         }
+        /** Task #104: functions that return balances of the bank. Item names and amount math stay open. */
+        private static boolean isBalanceRead(FunctionType function) {
+            return switch (function) {
+                case GetMinimalDataAsync, GetBalanceAsync, GetLockedBalanceAsync, GetTotalBalanceAsync,
+                     GetRealBalanceAsync, GetRealLockedBalanceAsync, GetRealTotalBalanceAsync,
+                     GetNormalizedBalanceAsync, GetNormalizedLockedBalanceAsync, GetNormalizedTotalBalanceAsync,
+                     GetFormattedBalanceAsync, GetFormattedLockedBalanceAsync, GetFormattedTotalBalanceAsync,
+                     ToStringAsync, ToStringNoOwnerAsync, ToJsonAsync, ToJsonStringAsync -> true;
+                default -> false;
+            };
+        }
+
+        /** Task #104: denied reads answer 0 for numbers, else an empty result that decodes as null. */
+        private static OutputData deniedRead(FunctionType function) {
+            return switch (function) {
+                case GetBalanceAsync, GetLockedBalanceAsync, GetTotalBalanceAsync -> OutputData.of(function, 0L);
+                case GetRealBalanceAsync, GetRealLockedBalanceAsync, GetRealTotalBalanceAsync -> OutputData.of(function, 0.0);
+                default -> OutputData.of(function);
+            };
+        }
+
         @Override
         protected boolean isAllowedToCallByClient(InputData input)
         {

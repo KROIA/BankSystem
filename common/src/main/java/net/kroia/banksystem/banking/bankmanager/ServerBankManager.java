@@ -1705,6 +1705,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
 
 
+    // Task #104: the circulation getters below (money, item, locked, JSON) are aggregate public
+    // statistics and stay readable by every client. If an item has only one holder, its
+    // circulation equals that holder's balance (accepted 2026-11-07).
     @Override
     public double getRealMoneyCirculation()
     {

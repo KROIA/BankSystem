@@ -1,6 +1,8 @@
 package net.kroia.banksystem.testing.tests;
 
+import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.banking.clientdata.UserData;
@@ -40,6 +42,12 @@ public class AccountReadAccessTests extends TestSuite {
         addTest("read_rule_null_sender", this::readRuleNullSender);
         addTest("account_data_has_user", this::accountDataHasUser);
         addTest("user_map_names_only_copy", this::userMapNamesOnly);
+        // Task #104
+        addTest("self_or_full_read_admin_query", this::selfOrFullRead);
+        addTest("user_names_only_copy", this::userNamesOnly);
+        addTest("company_stats_reduced_for_non_members", this::statsReduced);
+        addTest("company_stats_anonymous_shareholders", this::statsAnonymousShareholders);
+        addTest("player_accounts_without_permission_bits", this::accountsWithoutBits);
     }
 
     private TestResult readRuleMemberAndAdmin() {
@@ -99,5 +107,78 @@ public class AccountReadAccessTests extends TestSuite {
         if (!reduced.bankAccountsData().bankAccountMap().isEmpty()) return fail("account data leaked");
         if (full.userMapData().userMap().get(OWNER).customData().isEmpty()) return fail("original was modified");
         return pass("names-only copy keeps names and UUIDs, drops accounts and custom data");
+    }
+
+    // ── Task #104 ─────────────────────────────────────────────────────────
+
+    private TestResult selfOrFullRead() {
+        TestResult res = assertEquals("self", true, BankSystemGenericRequest.isSelfOrFullRead(MEMBER, MEMBER, false));
+        if (!res.passed()) return res;
+        res = assertEquals("other, no admin", false, BankSystemGenericRequest.isSelfOrFullRead(MEMBER, OWNER, false));
+        if (!res.passed()) return res;
+        res = assertEquals("other, admin", true, BankSystemGenericRequest.isSelfOrFullRead(MEMBER, OWNER, true));
+        if (!res.passed()) return res;
+        // Null sender: full read on master/trusted slave, nothing via an untrusted slave.
+        res = assertEquals("null sender, full read", true, BankSystemGenericRequest.isSelfOrFullRead(null, OWNER, true));
+        if (!res.passed()) return res;
+        return assertEquals("null sender, untrusted slave", false, BankSystemGenericRequest.isSelfOrFullRead(null, OWNER, false));
+    }
+
+    private TestResult userNamesOnly() {
+        User user = new User(OWNER, "Owner");
+        user.setBanksystemAdmin(true);
+        CompoundTag secret = new CompoundTag();
+        secret.putString("k", "v");
+        user.setCustomData(secret);
+        User reduced = user.namesOnly();
+        if (!OWNER.equals(reduced.getUUID()) || !"Owner".equals(reduced.getName())) return fail("uuid or name lost");
+        if (reduced.isBanksystemAdmin()) return fail("admin flag leaked");
+        if (!reduced.getCustomData().isEmpty()) return fail("custom data leaked");
+        if (!user.isBanksystemAdmin() || user.getCustomData().isEmpty()) return fail("original was modified");
+        return pass("names-only user keeps uuid and name, drops admin flag and custom data");
+    }
+
+    private static AsyncCompanyManager.CompanyStatsPayload fullStats() {
+        return new AsyncCompanyManager.CompanyStatsPayload(500L, 200L, 300L, 1, 50L, 1000L, 12L,
+                List.of(new AsyncCompanyManager.CashflowBucketWire(1L, 500L, 200L)),
+                List.of(new AsyncCompanyManager.ShareholderWire(7, "Alice", 60L, 0.6f),
+                        new AsyncCompanyManager.ShareholderWire(8, "Bob", 40L, 0.4f)),
+                false, 100L, 2);
+    }
+
+    private TestResult statsReduced() {
+        AsyncCompanyManager.CompanyStatsPayload r = AsyncCompanyManager.CompanyStatsPayload.reducedFor(100L, 2);
+        if (!r.reduced()) return fail("not marked reduced");
+        if (r.sharesIssued() != 100L || r.holderCount() != 2) return fail("share or holder count lost");
+        if (r.currentBalance() != 0L || r.totalEarnings() != 0L || r.totalSpendings() != 0L
+                || r.netCashflow() != 0L || r.missedPayoutAmount() != 0L || r.missedPayoutCount() != 0)
+            return fail("financials leaked");
+        if (!r.cashflowSeries().isEmpty() || !r.topShareholders().isEmpty()) return fail("series or shareholders leaked");
+        return pass("reduced stats hold share and holder counts only");
+    }
+
+    private TestResult statsAnonymousShareholders() {
+        AsyncCompanyManager.CompanyStatsPayload full = fullStats();
+        AsyncCompanyManager.CompanyStatsPayload anon = full.withAnonymousShareholders();
+        if (anon.topShareholders().size() != 2) return fail("shareholder count changed");
+        for (AsyncCompanyManager.ShareholderWire h : anon.topShareholders())
+            if (h.accountNr() != 0 || !h.accountName().isEmpty()) return fail("shareholder account leaked: " + h);
+        if (anon.topShareholders().get(0).shares() != 60L || anon.topShareholders().get(1).pct() != 0.4f)
+            return fail("shares or percentage lost");
+        if (anon.currentBalance() != 1000L || anon.cashflowSeries().size() != 1 || anon.reduced())
+            return fail("member financials lost");
+        if (full.topShareholders().get(0).accountNr() != 7) return fail("original was modified");
+        return pass("member stats keep financials, shareholder accounts removed");
+    }
+
+    private TestResult accountsWithoutBits() {
+        AsyncCompanyManager.ListPlayerAccountsOutput full = new AsyncCompanyManager.ListPlayerAccountsOutput(
+                AsyncCompanyManager.CODE_OK, List.of(new AsyncCompanyManager.AccountEntry(42, "Acc", 7)));
+        AsyncCompanyManager.ListPlayerAccountsOutput stripped = full.withoutPermissionBits();
+        if (stripped.resultCode() != AsyncCompanyManager.CODE_OK) return fail("result code lost");
+        AsyncCompanyManager.AccountEntry e = stripped.accounts().get(0);
+        if (e.accountId() != 42 || !"Acc".equals(e.accountName())) return fail("account number or name lost");
+        if (e.filterBits() != 0) return fail("permission bits leaked");
+        return pass("account list keeps number and name, drops permission bits");
     }
 }

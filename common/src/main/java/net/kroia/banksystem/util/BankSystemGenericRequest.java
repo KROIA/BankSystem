@@ -1,10 +1,12 @@
 package net.kroia.banksystem.util;
 
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.User;
 import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -105,6 +107,30 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
             return false;
         ISyncServerBankManager manager = getServerBankManager();
         return manager == null || !manager.isSlaveServerTrusted(slaveID);
+    }
+
+    /**
+     * Task #104: reads about one user (admin flag, account numbers, full user record) go to that
+     * user themselves or to a full reader (see {@link #isFullRead}).
+     */
+    public static boolean isSelfOrFullRead(@Nullable UUID sender, @Nullable UUID subject, boolean fullRead) {
+        return fullRead || (sender != null && sender.equals(subject));
+    }
+
+    /**
+     * Task #103/#104: true if the caller may read every account: a BankSystem admin or a
+     * server-internal call (null sender), never through an untrusted slave.
+     */
+    protected boolean isFullRead(@Nullable UUID playerSender, String slaveID)
+    {
+        return isAccessAllowed(false, playerSender == null || playerIsAdmin(playerSender), isFromUntrustedSlave(slaveID));
+    }
+
+    /** Task #104: {@link #isAccessAllowed} applied to one account. False if the account is null. */
+    protected boolean canReadAccount(@Nullable UUID playerSender, String slaveID, @Nullable ISyncServerBankAccount account)
+    {
+        return account != null && isAccessAllowed(playerSender != null && account.hasUser(playerSender),
+                playerSender == null || playerIsAdmin(playerSender), isFromUntrustedSlave(slaveID));
     }
 
     public CompletableFuture<OUT> handleOnServer(IN input, ServerPlayer sender) {

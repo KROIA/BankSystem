@@ -309,9 +309,7 @@ public class AsyncBankManager implements IAsyncBankManager {
             // Task #103: account-data reads. Members get their own accounts; BankSystem admins and
             // server-internal calls (null sender) get everything, but never through an untrusted
             // slave, which can forge the sender UUID.
-            boolean fullRead = isAccessAllowed(false,
-                    playerSender == null || bankManager.isBanksystemAdmin(playerSender),
-                    isFromUntrustedSlave(slaveID));
+            boolean fullRead = isFullRead(playerSender, slaveID);
             java.util.function.Predicate<BankAccountData> canRead =
                     d -> d != null && (fullRead || d.hasUser(playerSender));
 
@@ -338,7 +336,12 @@ public class AsyncBankManager implements IAsyncBankManager {
                     }
                     yield OutputData.of(input.function, false);
                 }
-                case FunctionType.IsBanksystemAdminAsync -> OutputData.of(input.function, bankManager.isBanksystemAdmin(input.decodeParams()));
+                case FunctionType.IsBanksystemAdminAsync -> {
+                    // Task #104: a player may ask about themselves; any other UUID needs a full reader.
+                    UUID subject = input.decodeParams();
+                    yield OutputData.of(input.function,
+                            isSelfOrFullRead(playerSender, subject, fullRead) && bankManager.isBanksystemAdmin(subject));
+                }
                 case FunctionType.IsSlaveServerTrustedAsync -> OutputData.of(input.function, bankManager.isSlaveServerTrusted(input.decodeParams()));
                 case FunctionType.GetAllowedItemsAsync -> OutputData.of(input.function, bankManager.getAllowedItems());
                 case FunctionType.GetBlacklistedItemsAsync -> OutputData.of(input.function, bankManager.getBlacklistedItems());
@@ -350,8 +353,8 @@ public class AsyncBankManager implements IAsyncBankManager {
                 }
                 case FunctionType.RemoveUserAsync -> OutputData.of(input.function, bankManager.removeUser(input.decodeParams()));
                 case FunctionType.UserExistsAsync -> OutputData.of(input.function, bankManager.userExists(input.decodeParams()));
-                case FunctionType.GetUserByUUIDAsync -> OutputData.of(input.function, bankManager.getUserByUUID(input.decodeParams()));
-                case FunctionType.GetUserByNameAsync -> OutputData.of(input.function, bankManager.getUserByName(input.decodeParams()));
+                case FunctionType.GetUserByUUIDAsync -> userResult(input.function, bankManager.getUserByUUID(input.decodeParams()), playerSender, fullRead);
+                case FunctionType.GetUserByNameAsync -> userResult(input.function, bankManager.getUserByName(input.decodeParams()), playerSender, fullRead);
                 case FunctionType.BankAccountExistsAsync -> OutputData.of(input.function, bankManager.bankAccountExists(input.decodeParams()));
                 case FunctionType.BankAccountHasBankAsync -> {
                     ParamGroup_int_ItemID  param = input.decodeParams();
@@ -371,8 +374,17 @@ public class AsyncBankManager implements IAsyncBankManager {
                 }
                 //case FunctionType.GetBankAccountAsync -> OutputData.of(input.function, bankManager.getBankAccount(input.decodeParams()));
                 //case FunctionType.GetBankAccountsAsync_1 -> OutputData.of(input.function, bankManager. );
-                case FunctionType.GetBankAccountNumbersAsync_1 -> OutputData.of(input.function, bankManager.getBankAccountNumbers((UUID)input.decodeParams()));
-                case FunctionType.GetBankAccountNumbersAsync_2 -> OutputData.of(input.function, bankManager.getBankAccountNumbers((ItemID)input.decodeParams()));
+                // Task #104: another user's account numbers only for full readers; otherwise the caller's own accounts.
+                case FunctionType.GetBankAccountNumbersAsync_1 -> {
+                    UUID subject = input.decodeParams();
+                    List<Integer> numbers = bankManager.getBankAccountNumbers(subject);
+                    yield OutputData.of(input.function, isSelfOrFullRead(playerSender, subject, fullRead)
+                            ? numbers : memberAccounts(numbers, bankManager, playerSender));
+                }
+                case FunctionType.GetBankAccountNumbersAsync_2 -> {
+                    List<Integer> numbers = bankManager.getBankAccountNumbers((ItemID)input.decodeParams());
+                    yield OutputData.of(input.function, fullRead ? numbers : memberAccounts(numbers, bankManager, playerSender));
+                }
                 case FunctionType.GetBankAccountsDataAsync_1 -> OutputData.of(input.function, bankManager.getBankAccountsData((UUID)input.decodeParams()).stream().filter(canRead).toList());
                 //case FunctionType.GetBankAccountsAsync_2 -> OutputData.of(input.function, bankManager. );
                 case FunctionType.GetBankAccountsDataAsync_2 -> OutputData.of(input.function, bankManager.getBankAccountsData((ItemID)input.decodeParams()).stream().filter(canRead).toList());
@@ -435,14 +447,16 @@ public class AsyncBankManager implements IAsyncBankManager {
                 }
                 case FunctionType.IsItemIDBlacklistedAsync -> OutputData.of(input.function, bankManager.isItemIDBlacklisted(input.decodeParams()) );
                 case FunctionType.GetItemFractionScaleFactorAsync -> OutputData.of(input.function, bankManager.getItemFractionScaleFactor());
+                // Task #104: circulation is aggregate public statistics, ungated (see ServerBankManager).
                 case FunctionType.GetRealMoneyCirculationAsync -> OutputData.of(input.function, bankManager.getRealMoneyCirculation() );
                 case FunctionType.GetRealLockedMoneyCirculationAsync -> OutputData.of(input.function, bankManager.getRealLockedMoneyCirculation() );
                 case FunctionType.GetRealItemCirculationAsync -> OutputData.of(input.function, bankManager.getRealItemCirculation(input.decodeParams()) );
                 case FunctionType.GetRealLockedItemCirculationAsync -> OutputData.of(input.function, bankManager.getRealLockedItemCirculation(input.decodeParams()) );
                 case FunctionType.GetCirculationDataJsonAsync -> OutputData.of(input.function, bankManager.getCirculationDataJson() );
                 case FunctionType.GetCirculationDataJsonStringAsync -> OutputData.of(input.function, bankManager.getCirculationDataJsonString() );
-                case FunctionType.ToJsonAsync -> OutputData.of(input.function, bankManager.toJson() );
-                case FunctionType.ToJsonStringAsync -> OutputData.of(input.function, bankManager.toJsonString() );
+                // Task #104: full dump of all users and accounts: full readers only.
+                case FunctionType.ToJsonAsync -> fullRead ? OutputData.of(input.function, bankManager.toJson()) : OutputData.of(input.function);
+                case FunctionType.ToJsonStringAsync -> fullRead ? OutputData.of(input.function, bankManager.toJsonString()) : OutputData.of(input.function);
                 case FunctionType.OnPlayerJoinAsync -> {
                     ParamGroup_UUID_String  param = input.decodeParams();
                     bankManager.onPlayerJoin(param.uuid, param.string);
@@ -452,6 +466,26 @@ public class AsyncBankManager implements IAsyncBankManager {
             });
         }
 
+
+        /** Task #104: the full user for themselves or a full reader, else names only (no admin flag, no custom data). */
+        private static OutputData userResult(FunctionType function, @Nullable User user, @Nullable UUID playerSender, boolean fullRead) {
+            if (user == null)
+                return OutputData.of(function);
+            return OutputData.of(function, isSelfOrFullRead(playerSender, user.getUUID(), fullRead) ? user : user.namesOnly());
+        }
+
+        /** Task #104: the account numbers the caller is a member of. */
+        private static List<Integer> memberAccounts(List<Integer> numbers, IServerBankManager bankManager, @Nullable UUID playerSender) {
+            if (numbers == null || playerSender == null)
+                return new ArrayList<>();
+            List<Integer> result = new ArrayList<>();
+            for (Integer nr : numbers) {
+                IServerBankAccount account = bankManager.getBankAccount(nr);
+                if (account != null && account.hasUser(playerSender))
+                    result.add(nr);
+            }
+            return result;
+        }
 
         /** Task #103: the account data if readable, else an empty result the caller decodes as null. */
         private static OutputData readable(FunctionType function, @Nullable BankAccountData data,

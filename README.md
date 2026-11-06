@@ -292,7 +292,9 @@ Admin functions check these permission nodes, so a permission mod such as LuckPe
 
 Nodes only apply to players online on the server that runs the check; the console always passes.
 
-Account data is private: players see only the accounts they belong to, and only BankSystem admins see everyone's accounts. On a slave server that the master does not trust yet, placeholders (including leaderboards) and display blocks show no account data until an admin trusts the slave with `/banksystem trust`. Player-name tab completion still lists names there.
+Account data is private: players see only the accounts they belong to, and only BankSystem admins see everyone's accounts. On a slave server that the master does not trust yet, placeholders (including leaderboards) and display blocks show no account data until an admin trusts the slave with `/banksystem trust`. Player-name tab completion still lists names there. On such a slave, BankSystem admins also do not get admin mode in `/banksystem manage` and `/bank manage` until the slave is trusted.
+
+Company statistics follow the same rule. Shareholders who are not members of the company account see only the number of shares issued and the number of holders. Account members also see the balance, cashflow and payouts, but the top-shareholder list shows only share amounts, not the shareholders' accounts. Only BankSystem admins see which accounts hold the shares. Total money and item circulation stays public, because it is a sum over all accounts.
 
 ---
 

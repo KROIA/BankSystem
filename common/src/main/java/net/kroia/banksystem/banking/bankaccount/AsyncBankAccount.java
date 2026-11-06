@@ -252,6 +252,10 @@ public class AsyncBankAccount implements IAsyncBankAccount {
             if(bankAccount == null)
                 return CompletableFuture.completedFuture(OutputData.of(input.function));
 
+            // Task #104: account reads go to members and admins only (rule in BankSystemGenericRequest).
+            if(isAccountRead(input.function) && !canReadAccount(playerSender, slaveID, bankAccount))
+                return CompletableFuture.completedFuture(deniedRead(input.function));
+
 
             return CompletableFuture.completedFuture(switch (input.function) {
                 case FunctionType.GetAccountDataAsync_1 ->              OutputData.of(input.function, bankAccount.getAccountData());
@@ -325,6 +329,29 @@ public class AsyncBankAccount implements IAsyncBankAccount {
 
             });
         }
+        /** Task #104: functions that return account data. */
+        private static boolean isAccountRead(FunctionType function) {
+            return switch (function) {
+                case GetAccountDataAsync_1, GetAccountDataAsync_2,
+                     GetBankDataAsync_1, GetBankDataAsync_2,
+                     GetUserDataAsync_1, GetUserDataAsync_2,
+                     GetPersonalBankOwnerDataAsync, GetAccountNameAsync, GetAccountIconAsync,
+                     GetPermissionAsync, HasPermissionAsync, HasAnyUserAsync, HasUserAsync,
+                     GetPersonalBankOwnerAsync, HasAnyBankAsync, HasBankAsync,
+                     ToJsonAsync, ToJsonStringAsync -> true;
+                default -> false;
+            };
+        }
+
+        /** Task #104: denied reads answer false/0 for primitives, else an empty result that decodes as null. */
+        private static OutputData deniedRead(FunctionType function) {
+            return switch (function) {
+                case GetPermissionAsync -> OutputData.of(function, 0);
+                case HasPermissionAsync, HasAnyUserAsync, HasUserAsync, HasAnyBankAsync, HasBankAsync -> OutputData.of(function, false);
+                default -> OutputData.of(function);
+            };
+        }
+
         @Override
         protected boolean isAllowedToCallByClient(InputData input)
         {
