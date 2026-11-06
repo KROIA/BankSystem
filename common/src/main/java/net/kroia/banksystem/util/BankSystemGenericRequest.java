@@ -85,6 +85,28 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
     }
 
 
+    /**
+     * Read-access rule for account data (Task #100, Task #103): account members always,
+     * BankSystem admins unless the request came through an untrusted slave (forgeable sender UUID).
+     * A server-internal call (null player sender) counts as admin: full data from a trusted slave,
+     * nothing from an untrusted one.
+     */
+    public static boolean isAccessAllowed(boolean isMember, boolean isAdmin, boolean fromUntrustedSlave) {
+        return isMember || (isAdmin && !fromUntrustedSlave);
+    }
+
+    /**
+     * Like {@link #isBlockedForUntrustedSlave} but without logging: true when the request
+     * came from a slave that is not trusted. Master-originated requests ({@code slaveID} empty) return false.
+     */
+    protected boolean isFromUntrustedSlave(String slaveID)
+    {
+        if (slaveID == null || slaveID.isEmpty())
+            return false;
+        ISyncServerBankManager manager = getServerBankManager();
+        return manager == null || !manager.isSlaveServerTrusted(slaveID);
+    }
+
     public CompletableFuture<OUT> handleOnServer(IN input, ServerPlayer sender) {
         if(needsRoutingToMaster())
         {

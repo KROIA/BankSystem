@@ -306,11 +306,30 @@ public class AsyncBankManager implements IAsyncBankManager {
                 throw new RuntimeException("Server bank manager not found");
             }
 
+            // Task #103: account-data reads. Members get their own accounts; BankSystem admins and
+            // server-internal calls (null sender) get everything, but never through an untrusted
+            // slave, which can forge the sender UUID.
+            boolean fullRead = isAccessAllowed(false,
+                    playerSender == null || bankManager.isBanksystemAdmin(playerSender),
+                    isFromUntrustedSlave(slaveID));
+            java.util.function.Predicate<BankAccountData> canRead =
+                    d -> d != null && (fullRead || d.hasUser(playerSender));
+
 
             return CompletableFuture.completedFuture(switch (input.function) {
-                case FunctionType.GetBankManagerDataAsync -> OutputData.of(input.function, bankManager.getBankManagerData());
-                case FunctionType.GetBankManagerUserMapDataAsync -> OutputData.of(input.function, bankManager.getBankManagerUserMapData());
-                case FunctionType.GetBankManagerBankAccountsDataAsync -> OutputData.of(input.function, bankManager.getBankManagerBankAccountsData());
+                case FunctionType.GetBankManagerDataAsync -> {
+                    BankManagerData data = bankManager.getBankManagerData();
+                    yield OutputData.of(input.function, fullRead ? data : data.namesOnly());
+                }
+                case FunctionType.GetBankManagerUserMapDataAsync -> {
+                    BankManagerData.UserMapData data = bankManager.getBankManagerUserMapData();
+                    yield OutputData.of(input.function, fullRead ? data : data.namesOnly());
+                }
+                case FunctionType.GetBankManagerBankAccountsDataAsync -> {
+                    Map<Integer, BankAccountData> accounts = new HashMap<>(bankManager.getBankManagerBankAccountsData().bankAccountMap());
+                    accounts.values().removeIf(canRead.negate());
+                    yield OutputData.of(input.function, new BankManagerData.BankAccountsData(accounts));
+                }
                 case FunctionType.SetBanksystemAdminModeAsync -> {
                     ParamGroup_UUID_bool param = input.decodeParams();
                     ServerPlayer serverPlayer = ServerPlayerUtilities.getOnlinePlayer(playerSender);
@@ -338,7 +357,7 @@ public class AsyncBankManager implements IAsyncBankManager {
                     ParamGroup_int_ItemID  param = input.decodeParams();
                     yield OutputData.of(input.function, bankManager.bankAccountHasBank(param.integer, param.itemID));
                 }
-                case FunctionType.GetBankAccountDataAsync -> OutputData.of(input.function, bankManager.getBankAccountData(input.decodeParams()));
+                case FunctionType.GetBankAccountDataAsync -> readable(input.function, bankManager.getBankAccountData(input.decodeParams()), canRead);
                 //case FunctionType.CreatePersonalBankAccountAsync -> OutputData.of(input.function, bankManager.createPersonalBankAccount(input.decodeParams()));
                 case FunctionType.CreatePersonalBankAccountGetAccountNrAsync_1 -> OutputData.of(input.function, bankManager.createPersonalBankAccountGetAccountNr((UUID)input.decodeParams()));
                 case FunctionType.CreatePersonalBankAccountGetAccountNrAsync_2 -> OutputData.of(input.function, bankManager.createPersonalBankAccountGetAccountNr((String)input.decodeParams()));
@@ -354,13 +373,13 @@ public class AsyncBankManager implements IAsyncBankManager {
                 //case FunctionType.GetBankAccountsAsync_1 -> OutputData.of(input.function, bankManager. );
                 case FunctionType.GetBankAccountNumbersAsync_1 -> OutputData.of(input.function, bankManager.getBankAccountNumbers((UUID)input.decodeParams()));
                 case FunctionType.GetBankAccountNumbersAsync_2 -> OutputData.of(input.function, bankManager.getBankAccountNumbers((ItemID)input.decodeParams()));
-                case FunctionType.GetBankAccountsDataAsync_1 -> OutputData.of(input.function, bankManager.getBankAccountsData((UUID)input.decodeParams()));
+                case FunctionType.GetBankAccountsDataAsync_1 -> OutputData.of(input.function, bankManager.getBankAccountsData((UUID)input.decodeParams()).stream().filter(canRead).toList());
                 //case FunctionType.GetBankAccountsAsync_2 -> OutputData.of(input.function, bankManager. );
-                case FunctionType.GetBankAccountsDataAsync_2 -> OutputData.of(input.function, bankManager.getBankAccountsData((ItemID)input.decodeParams()));
+                case FunctionType.GetBankAccountsDataAsync_2 -> OutputData.of(input.function, bankManager.getBankAccountsData((ItemID)input.decodeParams()).stream().filter(canRead).toList());
                 //case FunctionType.GetPersonalBankAccountAsync_1 -> OutputData.of(input.function, bankManager. );
-                case FunctionType.GetPersonalBankAccountDataAsync_1 -> OutputData.of(input.function, bankManager.getPersonalBankAccountData((UUID)input.decodeParams()));
+                case FunctionType.GetPersonalBankAccountDataAsync_1 -> readable(input.function, bankManager.getPersonalBankAccountData((UUID)input.decodeParams()), canRead);
                 //case FunctionType.GetPersonalBankAccountAsync_2 -> OutputData.of(input.function, bankManager. );
-                case FunctionType.GetPersonalBankAccountDataAsync_2 -> OutputData.of(input.function, bankManager.getPersonalBankAccountData((String)input.decodeParams()));
+                case FunctionType.GetPersonalBankAccountDataAsync_2 -> readable(input.function, bankManager.getPersonalBankAccountData((String)input.decodeParams()), canRead);
                 //case FunctionType.GetOrCreatePersonalBankAccountAsync_1 -> OutputData.of(input.function, bankManager. );
                 //case FunctionType.GetOrCreatePersonalBankAccountAsync_2 -> OutputData.of(input.function, bankManager. );
                 case FunctionType.UserHasPersonalBankAccountAsync -> OutputData.of(input.function, bankManager.userHasPersonalBankAccount(input.decodeParams()));
@@ -433,6 +452,12 @@ public class AsyncBankManager implements IAsyncBankManager {
             });
         }
 
+
+        /** Task #103: the account data if readable, else an empty result the caller decodes as null. */
+        private static OutputData readable(FunctionType function, @Nullable BankAccountData data,
+                                           java.util.function.Predicate<BankAccountData> canRead) {
+            return canRead.test(data) ? OutputData.of(function, data) : OutputData.of(function);
+        }
 
         @Override
         protected boolean isAllowedToCallByClient(InputData input)

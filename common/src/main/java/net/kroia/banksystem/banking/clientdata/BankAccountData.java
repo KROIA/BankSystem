@@ -47,6 +47,13 @@ public class BankAccountData {
     }
 
 
+    /** True if the user is a member of this account or its personal-bank owner. */
+    public boolean hasUser(@Nullable UUID userUUID)
+    {
+        return userUUID != null && (users.containsKey(userUUID)
+                || (personalBankOwnerData != null && userUUID.equals(personalBankOwnerData.userUUID())));
+    }
+
     public List<String> getAllUserNames()
     {
         List<String> names = new ArrayList<>();

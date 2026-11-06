@@ -229,7 +229,8 @@ public final class AsyncCompanyManager {
 
     public record CompanyInfoOutput(boolean present, int companyId, String name, int bankAccountNr,
                                     long maxSupply, long totalSharesIssued, String description,
-                                    List<String> founderNames, short companyCurrency) {
+                                    List<String> founderNames, short companyCurrency,
+                                    String accountName) {
         public static final StreamCodec<RegistryFriendlyByteBuf, CompanyInfoOutput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {
                     buf.writeBoolean(v.present);
@@ -242,6 +243,7 @@ public final class AsyncCompanyManager {
                     buf.writeVarInt(v.founderNames.size());
                     for (String s : v.founderNames) buf.writeUtf(s);
                     buf.writeShort(v.companyCurrency);
+                    buf.writeUtf(v.accountName);
                 },
                 buf -> {
                     boolean present = buf.readBoolean();
@@ -255,11 +257,12 @@ public final class AsyncCompanyManager {
                     List<String> founders = new ArrayList<>(n);
                     for (int i = 0; i < n; i++) founders.add(buf.readUtf());
                     short currency = buf.readShort();
-                    return new CompanyInfoOutput(present, id, name, accNr, ms, tsi, desc, founders, currency);
+                    String accountName = buf.readUtf();
+                    return new CompanyInfoOutput(present, id, name, accNr, ms, tsi, desc, founders, currency, accountName);
                 }
         );
         public static final CompanyInfoOutput ABSENT =
-                new CompanyInfoOutput(false, 0, "", 0, 0L, 0L, "", List.of(), (short) 0);
+                new CompanyInfoOutput(false, 0, "", 0, 0L, 0L, "", List.of(), (short) 0, "");
     }
 
     /** Task #43h — list company names visible to the caller under a rights filter. */
@@ -1420,6 +1423,13 @@ public final class AsyncCompanyManager {
                 new DescriptionOutput(CODE_OK, company.getCompanyId()));
     }
 
+    /** Task #103: company account name for CompanyInfoOutput, so non-members can show it without reading the account. */
+    private static String accountNameOf(IServerBankManager bm, int accountNr) {
+        IServerBankAccount account = bm.getBankAccount(accountNr);
+        String name = account == null ? null : account.getAccountName();
+        return name == null ? "" : name;
+    }
+
     private static OutputData handleInfo(String companyName, IServerBankManager bm, CompanyManager cm) {
         Company company = cm.getByName(companyName);
         if (company == null)
@@ -1435,7 +1445,8 @@ public final class AsyncCompanyManager {
                         company.getBankAccountNr(), company.getMaxSupply(),
                         company.getTotalSharesIssued(),
                         company.getDescription() == null ? "" : company.getDescription(),
-                        founderNames, company.getCompanyCurrency()));
+                        founderNames, company.getCompanyCurrency(),
+                        accountNameOf(bm, company.getBankAccountNr())));
     }
 
     private static OutputData handleListForCaller(ListInput in, CompanyManager cm) {
@@ -2045,7 +2056,8 @@ public final class AsyncCompanyManager {
                         company.getBankAccountNr(), company.getMaxSupply(),
                         company.getTotalSharesIssued(),
                         company.getDescription() == null ? "" : company.getDescription(),
-                        founderNames, company.getCompanyCurrency()));
+                        founderNames, company.getCompanyCurrency(),
+                        accountNameOf(bm, company.getBankAccountNr())));
     }
 
     /** Task #52 (v2.1.0) — count of accounts holding a strictly-positive balance
@@ -2085,7 +2097,8 @@ public final class AsyncCompanyManager {
                         company.getBankAccountNr(), company.getMaxSupply(),
                         company.getTotalSharesIssued(),
                         company.getDescription() == null ? "" : company.getDescription(),
-                        founderNames, company.getCompanyCurrency()));
+                        founderNames, company.getCompanyCurrency(),
+                        accountNameOf(bm, company.getBankAccountNr())));
     }
 
     // ------------------------------------------------------------------

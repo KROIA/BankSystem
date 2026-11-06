@@ -122,7 +122,7 @@ public class CompanyArrsRoundTripTests extends TestSuite {
     private TestResult testCompanyInfoCodecRoundTrip() {
         AsyncCompanyManager.CompanyInfoOutput out = new AsyncCompanyManager.CompanyInfoOutput(
                 true, 7, "Trip", 42, 12345L, 100L, "hello",
-                List.of("Alice", "Bob"), (short) 0);
+                List.of("Alice", "Bob"), (short) 0, "Trip Account");
         AsyncCompanyManager.CompanyInfoOutput outd =
                 roundTrip(AsyncCompanyManager.CompanyInfoOutput.STREAM_CODEC, out);
         if (outd.present() != true) return fail("present flag lost");
@@ -132,6 +132,7 @@ public class CompanyArrsRoundTripTests extends TestSuite {
         if (outd.maxSupply() != 12345L) return fail("maxSupply lost");
         if (outd.totalSharesIssued() != 100L) return fail("totalSharesIssued lost");
         if (!"hello".equals(outd.description())) return fail("description lost");
+        if (!"Trip Account".equals(outd.accountName())) return fail("accountName lost");
         if (outd.founderNames().size() != 2 || !"Alice".equals(outd.founderNames().get(0))
                 || !"Bob".equals(outd.founderNames().get(1))) return fail("founderNames lost");
 

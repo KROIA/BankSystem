@@ -6,6 +6,7 @@ import net.kroia.banksystem.testing.tests.AsyncForwardingTests;
 import net.kroia.banksystem.testing.tests.AsyncMethodAuditTests;
 import net.kroia.banksystem.testing.tests.BackupCommandTests;
 import net.kroia.banksystem.testing.tests.BankAccountTests;
+import net.kroia.banksystem.testing.tests.AccountReadAccessTests;
 import net.kroia.banksystem.testing.tests.BalanceHistoryTests;
 import net.kroia.banksystem.testing.tests.BankChangeStreamPublishTests;
 import net.kroia.banksystem.testing.tests.CompanyFounderInvariantTests;
@@ -52,6 +53,8 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new AsyncForwardingTests());
         TestRegistry.register(new NetworkingValidationTests());
         TestRegistry.register(new MultiServerSecurityTests());
+        // Task #103 — account-data read gate
+        TestRegistry.register(new AccountReadAccessTests());
         TestRegistry.register(new SerializationTests());
         TestRegistry.register(new LifecycleTests());
         TestRegistry.register(new DatabaseTests());

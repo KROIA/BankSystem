@@ -4,6 +4,7 @@ package net.kroia.banksystem.banking.clientdata;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -22,6 +23,22 @@ public record BankManagerData(UserMapData userMapData, BankAccountsData bankAcco
                 ExtraCodecUtils.mapStreamCodec(UUIDUtil.STREAM_CODEC, UserData.STREAM_CODEC, HashMap::new), p -> p.userMap,
                 UserMapData::new
         );
+
+        /** Task #103: copy with user names and UUIDs only (custom data dropped) for non-admin readers. */
+        public UserMapData namesOnly() {
+            Map<UUID, UserData> reduced = new HashMap<>();
+            userMap.forEach((uuid, u) -> reduced.put(uuid, new UserData(u.userUUID(), u.userName(), new CompoundTag())));
+            return new UserMapData(reduced);
+        }
+    }
+
+    /**
+     * Task #103: copy safe to send to non-admins: user names and UUIDs only, no bank accounts.
+     * The allow/blacklist item lists are kept; they are public server config (also readable via
+     * {@code getAllowedItemsAsync}).
+     */
+    public BankManagerData namesOnly() {
+        return new BankManagerData(userMapData.namesOnly(), new BankAccountsData(new HashMap<>()), allowedItems, blacklistedItems);
     }
 
     /**

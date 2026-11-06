@@ -62,11 +62,10 @@ public class BalanceHistoryRequest extends BankSystemGenericRequest<BalanceHisto
         // On a slave, needsRoutingToMaster() forwards the request, so this master-side gate covers
         // both direct and slave-forwarded requests.
         // An untrusted slave can forge the sender UUID (see isBlockedForUntrustedSlave), so its
-        // requests get no admin shortcut; only membership counts. Forging a member's UUID is
-        // still possible there, same exposure as the ungated reads tracked in Issue #69.
+        // requests get no admin shortcut; only membership counts. Same rule as the account-data
+        // reads in AsyncBankManager (Task #103).
         ISyncServerBankManager manager = getServerBankManager();
-        boolean untrustedSlave = slaveID != null && !slaveID.isEmpty()
-                && (manager == null || !manager.isSlaveServerTrusted(slaveID));
+        boolean untrustedSlave = isFromUntrustedSlave(slaveID);
         IServerBankAccount account = manager == null ? null : manager.getBankAccount(input.accountNumber());
         boolean isMember = account != null && account.hasUser(sender);
         if (!isAccessAllowed(isMember, playerIsAdmin(sender), untrustedSlave)) {
@@ -81,14 +80,6 @@ public class BalanceHistoryRequest extends BankSystemGenericRequest<BalanceHisto
                 input.toMs(),
                 maxPoints
         );
-    }
-
-    /**
-     * Access rule for balance-history reads (Task #100): account members always, BankSystem admins
-     * unless the request came through an untrusted slave (forgeable sender UUID).
-     */
-    public static boolean isAccessAllowed(boolean isMember, boolean isAdmin, boolean fromUntrustedSlave) {
-        return isMember || (isAdmin && !fromUntrustedSlave);
     }
 
     @Override

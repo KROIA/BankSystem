@@ -114,8 +114,10 @@ public class OverviewTabBody extends TabBody {
 
         rowValues[0].setText(info.name());
         rowValues[1].setText(String.valueOf(info.companyId()));
-        rowValues[2].setText("#" + info.bankAccountNr());
-        fetchBankAccountName(info.bankAccountNr());
+        // Task #103: name comes with the company info; reading the account itself is members-only.
+        rowValues[2].setText(info.accountName() == null || info.accountName().isEmpty()
+                ? "#" + info.bankAccountNr()
+                : "#" + info.bankAccountNr() + " — " + info.accountName());
         rowValues[3].setText(formatNumber(info.maxSupply()));
         rowValues[4].setText(formatNumber(issued));
         rowValues[5].setText(String.valueOf(holders));
@@ -132,18 +134,6 @@ public class OverviewTabBody extends TabBody {
             currentCurrency = info.companyCurrency();
             applyCurrencyDisplay(currentCurrency);
         }
-    }
-
-    /** Lightweight follow-up lookup — CompanyInfoOutput only carries the account number,
-     *  so the account name is fetched async and patched into the row when it arrives. */
-    private void fetchBankAccountName(int accountNr) {
-        screen.clientBankManager().getBankAccountDataAsync(accountNr)
-                .thenAccept(data -> onClientThread(() -> {
-                    if (data == null || data.accountName == null || data.accountName.isEmpty()) return;
-                    var current = screen.info();
-                    if (current == null || !current.present() || current.bankAccountNr() != accountNr) return;
-                    rowValues[2].setText("#" + accountNr + " — " + data.accountName);
-                }));
     }
 
     private static String formatFounders(List<String> founders) {

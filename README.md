@@ -288,9 +288,11 @@ Admin functions check these permission nodes, so a permission mod such as LuckPe
 | `banksystem.admin.command.symbols` | `/banksystem symbols ...` |
 | `banksystem.admin.command.exportrecipes` | `/banksystem exportrecipes` (dev builds only) |
 | `banksystem.admin.adminmode` | Setting the BankSystem admin mode of a player |
-| `banksystem.admin.software` | Using the Banking Software on another player in creative mode |
+| `banksystem.admin.software` | Using the Banking Software on another player in creative mode (the player also needs the BankSystem admin flag) |
 
 Nodes only apply to players online on the server that runs the check; the console always passes.
+
+Account data is private: players see only the accounts they belong to, and only BankSystem admins see everyone's accounts. On a slave server that the master does not trust yet, placeholders (including leaderboards) and display blocks show no account data until an admin trusts the slave with `/banksystem trust`. Player-name tab completion still lists names there.
 
 ---
 
