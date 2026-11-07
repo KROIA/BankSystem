@@ -527,7 +527,9 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             double restoredWidth = chart.getViewWidth();
             long allHistoryThresholdMs = 400L * 24L * 60L * 60L * 1000L;
             if (restoredWidth > 0 && restoredWidth < allHistoryThresholdMs) {
-                windowMs = (long) restoredWidth;
+                // Task #106: snap up to a timescale; the restored width becomes the
+                // zoom-out cap, so a persisted collapsed width would lock the view.
+                windowMs = BalanceHistoryChart.timescaleCeilMs(restoredWidth);
                 chart.setMaxViewWidthMs(windowMs);
                 pendingRefetch = false;
                 chart.setClampBounds(null, System.currentTimeMillis());
