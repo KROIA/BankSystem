@@ -40,6 +40,13 @@ public class BankSystemTextMessages {
         BankSystemTextMessages.BACKEND_INSTANCES = backend;
     }
 
+    // Task #107: deop could not remove a LuckPerms group grant of banksystem.admin
+    private static final Component STILL_ADMIN_VIA_LUCKPERMS_GROUP = Component.translatable(prefix+"still_admin_via_luckperms_group");
+    public static String getStillAdminViaLuckPermsGroupMessage(String player)
+    {
+        return replaceVariable(STILL_ADMIN_VIA_LUCKPERMS_GROUP.getString(), Variables.PLAYER, player);
+    }
+
     private static final Component TRANSFERED_TO_USER = Component.translatable(prefix+"transferred_to_user");
     public static String getTransferedMessage(String amount, String itemName, String receiver)
     {

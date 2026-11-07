@@ -264,6 +264,10 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         //   that server's OWN local settings.json (slaves only query the master for
         //   the bank data, not for these settings). TOP_COUNT is read once at
         //   placeholder registration (restart-required). No propagation.
+        // * Utilities SYNC_ADMIN_FLAG_WITH_PERMISSION (Task #107): read live, per server. The master
+        //   honours slave sync writes only while its own value is on; each slave reads its own
+        //   settings.json to decide whether to forward LuckPerms changes. Turning it on here may
+        //   trigger the one-time LuckPerms migration (below). No propagation.
         // => No active propagation is required for any group.
 
         // Notify other online admins (on this server) about the change.
@@ -271,6 +275,7 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         info("Mod settings updated by " + getPlayerName(playerSender) + (saved ? " (persisted)" : " (PERSIST FAILED)"));
 
         boolean success = saved && applyError == null;
+        net.kroia.banksystem.util.AdminFlagSync.migrateIfNeeded(); // Task #107: setting may have just been turned on
         return CompletableFuture.completedFuture(new OutputData(success,
                 applyError == null ? "" : applyError,
                 store.toJsonString(settings.getEditableGroups())));
@@ -313,6 +318,7 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_WARNING);
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_ERROR);
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_DEBUG);
+        sanitizeBoolean(settings.UTILITIES.SYNC_ADMIN_FLAG_WITH_PERMISSION);
 
         // Player
         settings.PLAYER.STARTING_BALANCE.set(

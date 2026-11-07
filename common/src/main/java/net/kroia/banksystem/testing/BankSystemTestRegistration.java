@@ -1,6 +1,7 @@
 package net.kroia.banksystem.testing;
 
 import net.kroia.modutilities.testing.TestRegistry;
+import net.kroia.banksystem.testing.tests.AdminFlagSyncTests;
 import net.kroia.banksystem.testing.tests.ArithmeticTests;
 import net.kroia.banksystem.testing.tests.AsyncForwardingTests;
 import net.kroia.banksystem.testing.tests.AsyncMethodAuditTests;
@@ -55,6 +56,8 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new MultiServerSecurityTests());
         // Task #103 — account-data read gate
         TestRegistry.register(new AccountReadAccessTests());
+        // Task #107 — admin flag / LuckPerms sync decisions
+        TestRegistry.register(new AdminFlagSyncTests());
         TestRegistry.register(new SerializationTests());
         TestRegistry.register(new LifecycleTests());
         TestRegistry.register(new DatabaseTests());

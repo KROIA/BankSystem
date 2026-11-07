@@ -529,6 +529,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         markPersistDirty(); // Task #55
         info("Added new user: " + user.getName() + " with UUID: " + userUUID);
         BACKEND_INSTANCES.SERVER_EVENTS.USER_ADDED.notifyListeners(user);
+        net.kroia.banksystem.util.AdminFlagSync.onUserAdded(userUUID); // Task #107: LuckPerms grant of a new user
     }
 
     @Override

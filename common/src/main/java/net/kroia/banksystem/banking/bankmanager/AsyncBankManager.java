@@ -330,9 +330,21 @@ public class AsyncBankManager implements IAsyncBankManager {
                 }
                 case FunctionType.SetBanksystemAdminModeAsync -> {
                     ParamGroup_UUID_bool param = input.decodeParams();
-                    ServerPlayer serverPlayer = ServerPlayerUtilities.getOnlinePlayer(playerSender);
+                    ServerPlayer serverPlayer = playerSender != null ? ServerPlayerUtilities.getOnlinePlayer(playerSender) : null;
                     if(serverPlayer != null && net.kroia.modutilities.PermissionCompat.hasPermission(serverPlayer, net.kroia.banksystem.util.BankSystemPermissions.ADMIN_MODE, net.kroia.banksystem.util.BankSystemPermissions.FALLBACK_LEVEL)) {
                         yield OutputData.of(input.function, bankManager.setBanksystemAdminMode(param.uuid, param.bool));
+                    }
+                    // Task #107: permission sync from a slave. Server-internal (null sender), only from a
+                    // TRUSTED slave (untrusted ones are already refused by isRequestAllowed; checked again
+                    // here) and only while the master's own SYNC_ADMIN_FLAG_WITH_PERMISSION is on.
+                    if(playerSender == null && !slaveID.isEmpty() && !isFromUntrustedSlave(slaveID)
+                            && net.kroia.banksystem.util.AdminFlagSync.isEnabled()) {
+                        boolean changed = bankManager.isBanksystemAdmin(param.uuid) != param.bool;
+                        boolean ok = bankManager.setBanksystemAdminMode(param.uuid, param.bool);
+                        if(ok && changed)
+                            info("[AdminFlagSync] BankSystem admin flag of " + tryGetPlayerName(param.uuid) + " set to "
+                                    + param.bool + " (permission sync from slave '" + slaveID + "')");
+                        yield OutputData.of(input.function, ok);
                     }
                     yield OutputData.of(input.function, false);
                 }

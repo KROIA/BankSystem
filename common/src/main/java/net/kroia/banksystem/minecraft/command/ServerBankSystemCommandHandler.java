@@ -77,6 +77,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             sendMessage(executor, "Banksystem admin mode set to: "+(isAdmin?"ON":"OFF") + " for player: "+userName);
             if(!executor.equals(playerUUID))
                 sendMessage(playerUUID, "Banksystem admin mode set to: "+(isAdmin?"ON":"OFF") + " for player: "+userName);
+            net.kroia.banksystem.util.AdminFlagSync.pushToLuckPerms(executor, playerUUID, userName, isAdmin); // Task #107
             return true;
         }
         return false;

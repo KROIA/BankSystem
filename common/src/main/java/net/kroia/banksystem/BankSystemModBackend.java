@@ -230,6 +230,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.BANK_ACCOUNT_BINDINGS = new BankAccountBindings();
         BankAccountBindings.setBackend(INSTANCES);
         VolatileItemComponents.setBackend(INSTANCES);
+        AdminFlagSync.setBackend(INSTANCES);
         // Client-only class: touching it on a dedicated server crashes class loading.
         //if (dev.architectury.platform.Platform.getEnvironment() == dev.architectury.utils.Env.CLIENT) net.kroia.banksystem.client.render.StampedShareSpecialRenderer.setBackend(INSTANCES); // mc>=1.21.4
         MultiServerUtils.setBackend(INSTANCES);
@@ -285,6 +286,7 @@ public class BankSystemModBackend implements BankSystemAPI {
                 (ResourceManagerReloadListener) resourceManager -> VolatileItemComponents.onServerResourcesReloaded(),
                 BankSystemMod.id("volatile_components_reload"));
         TickEvent.SERVER_POST.register(server -> VolatileItemComponents.serverTick());
+        AdminFlagSync.init(); // Task #107: LuckPerms listener, no-op without LuckPerms
 
         if (BankSystemMod.ENABLE_DEV_FEATURES) {
             initDevFeatures();
@@ -508,6 +510,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             takeBalanceSnapshot();
         }
 
+        AdminFlagSync.migrateIfNeeded(); // Task #107: one-time push of admins to LuckPerms (master, setting on)
         BankSystemPlaceholders.start(INSTANCES); // TAB / Placeholder API via ModUtilities
         INSTANCES.SERVER_EVENTS.BANKSYSTEM_SETUP_COMPLETED.notifyListeners();
     }

@@ -289,8 +289,19 @@ Admin functions check these permission nodes, so a permission mod such as LuckPe
 | `banksystem.admin.command.exportrecipes` | `/banksystem exportrecipes` (dev builds only) |
 | `banksystem.admin.adminmode` | Setting the BankSystem admin mode of a player |
 | `banksystem.admin.software` | Using the Banking Software on another player in creative mode (the player also needs the BankSystem admin flag) |
+| `banksystem.admin` | Source of the BankSystem admin flag while `SYNC_ADMIN_FLAG_WITH_PERMISSION` is on (see below) |
 
 Nodes only apply to players online on the server that runs the check; the console always passes.
+
+**Syncing the BankSystem admin flag with LuckPerms.** The server setting `SYNC_ADMIN_FLAG_WITH_PERMISSION` (Mod Settings → Utilities, default off) keeps the BankSystem admin flag and the LuckPerms node `banksystem.admin` in step, in both directions:
+
+- `/banksystem op <player>` sets the flag and gives the player the node `banksystem.admin=true` in LuckPerms (this works for offline players too). `/banksystem deop <player>` clears the flag and removes the player's own `banksystem.admin` node.
+- Changing the node in LuckPerms (commands, web editor, a group) updates the flag straight away.
+- A LuckPerms group grant wins: if a group still grants `banksystem.admin`, the player stays a BankSystem admin right after `deop`, and the command tells you so. Remove the group grant to deop the player.
+- A player who joins for the first time while a LuckPerms group already grants `banksystem.admin` becomes a BankSystem admin straight away. Note that `banksystem.admin.*` does not include `banksystem.admin` itself; grant it on its own.
+- When the setting is first turned on (at server start or in the Mod Settings screen), every player who already has the admin flag gets `banksystem.admin=true` in LuckPerms, once. This never removes anything. A marker file `AdminFlagLuckPermsMigrated.marker` in the world's `data/BankSystem` folder records that it ran; delete it to run the migration again.
+- With multiple servers: set the option on the master. A slave server that also has it on passes LuckPerms changes of its players on to the master, but only if the master trusts that slave (`/banksystem trust`) and has the option on itself. Untrusted slaves never change the flag.
+- Without LuckPerms the setting does nothing: the flag only changes through `/banksystem op` and `deop`, and the node `banksystem.admin` falls back to operator level 2.
 
 Account data is private: players see only the accounts they belong to, and only BankSystem admins see everyone's accounts. On a slave server that the master does not trust yet, placeholders (including leaderboards) and display blocks show no account data until an admin trusts the slave with `/banksystem trust`. Player-name tab completion still lists names there. On such a slave, BankSystem admins also do not get admin mode in `/banksystem manage` and `/bank manage` until the slave is trusted.
 
