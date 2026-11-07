@@ -42,6 +42,10 @@ dependencies {
     // at compile time. The adapter is class-guarded and only loads when Platform.isModLoaded("numismatics").
     // compileOnly("maven.modrinth:numismatics:${numismatics_version}")
 
+    // LuckPerms API: compileOnly, never bundled. Only the dev-build LuckPerms tests (testing/) reference it,
+    // in nested classes loaded only when LuckPerms is present (Task #108).
+    compileOnly "net.luckperms:api:${rootProject.luckperms_api_version}"
+
     implementation('org.xerial:sqlite-jdbc:3.46.0.0'){
         exclude group: "org.slf4j"
     }
