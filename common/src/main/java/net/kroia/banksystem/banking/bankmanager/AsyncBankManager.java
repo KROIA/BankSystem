@@ -342,7 +342,12 @@ public class AsyncBankManager implements IAsyncBankManager {
                     yield OutputData.of(input.function,
                             isSelfOrFullRead(playerSender, subject, fullRead) && bankManager.isBanksystemAdmin(subject));
                 }
-                case FunctionType.IsSlaveServerTrustedAsync -> OutputData.of(input.function, bankManager.isSlaveServerTrusted(input.decodeParams()));
+                case FunctionType.IsSlaveServerTrustedAsync -> {
+                    // Task #105: an empty id asks about the server this request came through
+                    // (master / singleplayer: trusted; slave: the master's trust list).
+                    String id = input.decodeParams();
+                    yield OutputData.of(input.function, id.isEmpty() ? !isFromUntrustedSlave(slaveID) : bankManager.isSlaveServerTrusted(id));
+                }
                 case FunctionType.GetAllowedItemsAsync -> OutputData.of(input.function, bankManager.getAllowedItems());
                 case FunctionType.GetBlacklistedItemsAsync -> OutputData.of(input.function, bankManager.getBlacklistedItems());
                 case FunctionType.GetItemInfoDataAsync -> OutputData.of(input.function, bankManager.getItemInfoData(input.decodeParams()));

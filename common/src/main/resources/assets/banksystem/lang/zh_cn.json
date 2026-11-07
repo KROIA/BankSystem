@@ -100,6 +100,7 @@
   "gui.banksystem.bank_account_management_screen.bindings_button": "绑定",
   "gui.banksystem.bank_account_management_screen.payouts_button": "派息",
   "gui.banksystem.bank_account_management_screen.history_button": "历史",
+  "gui.banksystem.bank_account_management_screen.untrusted_server": "此服务器未受主服务器信任。在管理员执行 /banksystem trust 之前，无法进行更改。",
   "gui.banksystem.payouts_overview_screen.title": "派息",
   "gui.banksystem.payouts_overview_screen.new_payout": "新增派息",
   "gui.banksystem.payouts_overview_screen.total_per_hour": "每小时总额：%s",

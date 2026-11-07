@@ -100,6 +100,7 @@
   "gui.banksystem.bank_account_management_screen.bindings_button": "Verchnüpfige",
   "gui.banksystem.bank_account_management_screen.payouts_button": "Uszahlige",
   "gui.banksystem.bank_account_management_screen.history_button": "Verlauf",
+  "gui.banksystem.bank_account_management_screen.untrusted_server": "De Master-Server vertrout däm Server nöd. Änderige sind deaktiviert, bis en Admin /banksystem trust usfüehrt.",
   "gui.banksystem.payouts_overview_screen.title": "Uszahlige",
   "gui.banksystem.payouts_overview_screen.new_payout": "Neui Uszahlig",
   "gui.banksystem.payouts_overview_screen.total_per_hour": "Total / Stund: %s",

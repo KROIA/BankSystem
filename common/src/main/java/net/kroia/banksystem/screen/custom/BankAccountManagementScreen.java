@@ -46,6 +46,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final Component BINDINGS_BUTTON = Component.translatable(PREFIX+"bindings_button");
     private static final Component PAYOUTS_BUTTON = Component.translatable(PREFIX+"payouts_button");
     private static final Component HISTORY_BUTTON = Component.translatable(PREFIX+"history_button");
+    /** Task #105: shown when the master refuses this server's writes (untrusted slave). */
+    public static final Component UNTRUSTED_SERVER = Component.translatable(PREFIX+"untrusted_server");
+    private static final int GRAY_TEXT_COLOR = 0xFF808080;
 
     private static class ItemViewButton extends Button{
 
@@ -113,6 +116,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private final List<BankUserWidget> toRemoveUserWidgets = new ArrayList<>();
     private final boolean isAdminMode;
     private boolean canManage = false;
+    /** Task #105: false on an untrusted slave; the screen is then read-only. */
+    private boolean serverTrusted = true;
+    private Label untrustedNoteLabel;
     private static boolean screenIsOpen = false;
     private boolean dirty = false;          // name / user / permission edits (other edits are tracked in isDirty())
     /** Runs once a save chosen in the unsaved-changes popup was accepted (close or account switch). */
@@ -137,7 +143,27 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private void setupGui(int accountNumber)
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankAccountDataAsync(accountNumber).thenAccept(this::setupGui);
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankAccountDataAsync(accountNumber)
+                .thenCombine(BACKEND_INSTANCES.CLIENT_BANK_MANAGER.isServerTrustedAsync(), (data, trusted) -> {
+                    serverTrusted = Boolean.TRUE.equals(trusted);
+                    return data;
+                })
+                .thenAccept(this::setupGui);
+    }
+
+    /** Task #105: may the player change this account from this server? */
+    private boolean canEdit() {
+        return canManage && serverTrusted;
+    }
+
+    /** Task #105: greys out buttons whose action the master would refuse; the tooltip says why. */
+    private static void lockForUntrusted(Button... buttons) {
+        for (Button b : buttons) {
+            if (b == null) continue;
+            b.setClickable(false);
+            b.setTextColor(GRAY_TEXT_COLOR);
+            b.setHoverTooltipSupplier(UNTRUSTED_SERVER::getString);
+        }
     }
     private void setupGui(@Nullable BankAccountData bankAccountData)
     {
@@ -184,7 +210,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
         accountIconButton = new ItemViewButton(data.accountIcon);
         addElement(accountIconButton);
-        if(canManage) {
+        deleteBankAccountButton = null;
+        if(canEdit()) {
             accountIconButton.setOnFallingEdge(this::onIconButtonClicked);
             accountNameTextBox = new TextBox();
             accountNameTextBox.setText(data.accountName);
@@ -199,8 +226,22 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             accountNameLabel.setText(data.accountName);
             addElement(accountNameLabel);
 
-            addUserButton.setEnabled(false);
-            saveChangesButton.setEnabled(false);
+            if(canManage) {
+                // Task #105: manager on an untrusted slave: show the controls greyed out with the reason.
+                deleteBankAccountButton = new Button(DELETE_ACCOUNT.getString());
+                addElement(deleteBankAccountButton);
+                lockForUntrusted(deleteBankAccountButton, saveChangesButton, addUserButton, accountIconButton);
+            } else {
+                addUserButton.setEnabled(false);
+                saveChangesButton.setEnabled(false);
+            }
+        }
+        untrustedNoteLabel = null;
+        if(!serverTrusted) {
+            untrustedNoteLabel = new Label(UNTRUSTED_SERVER.getString());
+            untrustedNoteLabel.setTextColor(0xFFFFAA00);
+            untrustedNoteLabel.setHoverTooltipSupplier(UNTRUSTED_SERVER::getString);
+            addElement(untrustedNoteLabel);
         }
 
         selectAccountButton = new Button(BankAccountSelectionScreen.TEXT.SELECT_ACCOUNT_BUTTON.getString());
@@ -316,6 +357,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         });
 
         addElement(createNewBankButton);
+        if(!serverTrusted)
+            lockForUntrusted(createNewBankButton);
 
 
     }
@@ -347,6 +390,12 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         if(getElements().isEmpty() || closeButton == null)
             return; // Not initialized yet
 
+        if(untrustedNoteLabel != null) {
+            // Task #105: note row at the bottom, the lists end above it.
+            height -= Label.DEFAULT_HEIGHT + spacing;
+            untrustedNoteLabel.setBounds(padding, padding + height + spacing, width, Label.DEFAULT_HEIGHT);
+        }
+
         closeButton.setBounds(getWidth() - 20-padding, padding,20,20);
         int textWidth = closeButton.getTextWidth(SAVE_CHANGES.getString())+10;
         saveChangesButton.setBounds(closeButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
@@ -359,9 +408,11 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         selectAccountButton.setBounds(padding, padding, leftWidth, 20);
         int accountNameY = selectAccountButton.getBottom()+spacing;
         accountIconButton.setBounds(padding, accountNameY, 20, 20);
-        if(canManage && deleteBankAccountButton != null && accountNameTextBox != null) {
+        if(deleteBankAccountButton != null) {
             textWidth = deleteBankAccountButton.getTextWidth(DELETE_ACCOUNT.getString())+10;
             deleteBankAccountButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
+        }
+        if(canEdit() && accountNameTextBox != null) {
             accountNameTextBox.setBounds(accountIconButton.getRight()+spacing, accountNameY, leftWidth-(accountIconButton.getRight()), 20);
         }else if(accountNameLabel != null) {
             accountNameLabel.setBounds(accountIconButton.getRight()+spacing, accountNameY, leftWidth-(accountIconButton.getRight()), 20);
@@ -550,7 +601,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         BankUserWidget widget = new BankUserWidget(userData, (w) -> {
             toRemoveUserWidgets.add(w);
             dirty = true;
-        }, canManage, this);
+        }, canEdit(), this);
         widget.setOnPermissionChanged(() -> dirty = true);
         return widget;
     }
@@ -570,7 +621,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         {
             deleteBankAccountButton.setEnabled(false);
         }
-        if(!this.canManage && accountNameLabel != null)
+        if(!canEdit() && accountNameLabel != null)
         {
             accountNameLabel.setText(bankAccountData.accountName);
         }
@@ -599,7 +650,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             BankData bankData = pair.getSecond();
             if(item == null)
             {
-                item = new BankAccountManagementItem(pair.getFirst(), accountNumber, isAdminMode, canManage);
+                item = new BankAccountManagementItem(pair.getFirst(), accountNumber, isAdminMode && serverTrusted, canEdit());
                 item.setBalance(bankData.balance());
                 bankAccountManagementItems.put(pair.getFirst(), item);
                 bankElementListView.addChild(item);
@@ -713,7 +764,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         data.itemID = itemID;
         data.createBank = true;*/
 
-        BankAccountManagementItem accountItem = new BankAccountManagementItem(itemID, accountNumber, isAdminMode, canManage);
+        BankAccountManagementItem accountItem = new BankAccountManagementItem(itemID, accountNumber, isAdminMode && serverTrusted, canEdit());
         accountItem.setBalance(0);
         createBankData.put(itemID, accountItem);
         bankElementListView.addChild(accountItem);
@@ -800,7 +851,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
      */
     private void onBindingsButtonClicked()
     {
-        BankAccountBindingsScreen.openScreen(this, accountNumber, isAdminMode);
+        BankAccountBindingsScreen.openScreen(this, accountNumber, isAdminMode, serverTrusted);
     }
     private void onDeleteAccountButtonClicked()
     {

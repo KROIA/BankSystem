@@ -81,6 +81,12 @@ public class ClientBankManager implements IClientBankManager {
         return asyncServerBankManager.deleteBankAccountAsync(accountNumber);
     }
     @Override
+    public CompletableFuture<Boolean> isServerTrustedAsync()
+    {
+        // Task #105: "" asks the master about the server this request came through.
+        return asyncServerBankManager.isSlaveServerTrustedAsync("");
+    }
+    @Override
     public CompletableFuture<Integer> getItemFractionScaleFactorAsync()
     {
         CompletableFuture<Integer> fut = asyncServerBankManager.getItemFractionScaleFactorAsync();

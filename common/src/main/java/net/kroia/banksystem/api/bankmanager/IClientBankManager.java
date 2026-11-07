@@ -30,6 +30,8 @@ public interface IClientBankManager {
     CompletableFuture<Boolean> disallowItemIDAsync(ItemID itemID);
     CompletableFuture<List<BankAccountData>> getBankAccountsDataAsync(UUID userUUID);
     CompletableFuture<Boolean> deleteBankAccountAsync(int accountNumber);
+    /** True unless the server this client plays on is a slave the master does not trust (its writes are refused). */
+    CompletableFuture<Boolean> isServerTrustedAsync();
     CompletableFuture<Integer> getItemFractionScaleFactorAsync();
     int getItemFractionScaleFactor();
     int getItemFractionDigitsCount();

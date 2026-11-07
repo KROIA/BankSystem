@@ -102,6 +102,8 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     private final GuiScreen parent;
     private final int accountNumber;
     private final boolean isAdminMode;
+    /** Task #105: false on an untrusted slave; bind/unbind are then refused by the master. */
+    private final boolean serverTrusted;
 
     private @org.jetbrains.annotations.Nullable BankAccountData accountData;
     private final Map<ItemID, ExternalAccountRef> activeBindings = new HashMap<>();
@@ -122,11 +124,12 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
 
     private final Map<ItemID, BindingRow> rowWidgets = new HashMap<>();
 
-    public BankAccountBindingsScreen(GuiScreen parent, int accountNumber, boolean isAdminMode) {
+    public BankAccountBindingsScreen(GuiScreen parent, int accountNumber, boolean isAdminMode, boolean serverTrusted) {
         super(TITLE, parent);
         this.parent = parent;
         this.accountNumber = accountNumber;
         this.isAdminMode = isAdminMode;
+        this.serverTrusted = serverTrusted;
 
         titleLabel = new Label("");
         titleLabel.setAlignment(GuiElement.Alignment.CENTER);
@@ -164,9 +167,9 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
         addElement(emptyLabel);
     }
 
-    public static void openScreen(GuiScreen parent, int accountNumber, boolean isAdminMode) {
+    public static void openScreen(GuiScreen parent, int accountNumber, boolean isAdminMode, boolean serverTrusted) {
         screenIsOpen = true;
-        BankAccountBindingsScreen screen = new BankAccountBindingsScreen(parent, accountNumber, isAdminMode);
+        BankAccountBindingsScreen screen = new BankAccountBindingsScreen(parent, accountNumber, isAdminMode, serverTrusted);
         net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
         screen.refreshAll();
     }
@@ -201,7 +204,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
             return;
         }
         UUID me = getThisPlayerUUID();
-        canManage = isAdminMode || data.hasPermission(me, BankPermission.MANAGE);
+        canManage = serverTrusted && (isAdminMode || data.hasPermission(me, BankPermission.MANAGE));
         titleLabel.setText(Component.translatable(KEY_TITLE).getString()
                 .replace("{account}", data.accountName != null ? data.accountName : ""));
         subtitleLabel.setText("#" + data.accountNumber);
@@ -617,7 +620,9 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
 
             // Read-only mode: gray out the action button, keep it hoverable for the tooltip.
             if (!canManage) {
-                final String reason = Component.translatable(KEY_REQUIRES_MANAGE).getString();
+                final String reason = serverTrusted
+                        ? Component.translatable(KEY_REQUIRES_MANAGE).getString()
+                        : BankAccountManagementScreen.UNTRUSTED_SERVER.getString();
                 actionButton.setClickable(false);
                 actionButton.setTextColor(GRAY_TEXT_COLOR);
                 actionButton.setHoverTooltipSupplier(() -> reason);

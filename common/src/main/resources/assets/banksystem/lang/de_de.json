@@ -100,6 +100,7 @@
   "gui.banksystem.bank_account_management_screen.bindings_button": "Verknüpfungen",
   "gui.banksystem.bank_account_management_screen.payouts_button": "Auszahlungen",
   "gui.banksystem.bank_account_management_screen.history_button": "Verlauf",
+  "gui.banksystem.bank_account_management_screen.untrusted_server": "Dieser Server wird vom Master-Server nicht als vertrauenswürdig eingestuft. Änderungen sind deaktiviert, bis ein Admin /banksystem trust ausführt.",
   "gui.banksystem.payouts_overview_screen.title": "Auszahlungen",
   "gui.banksystem.payouts_overview_screen.new_payout": "Neue Auszahlung",
   "gui.banksystem.payouts_overview_screen.total_per_hour": "Gesamt / Stunde: %s",
