@@ -9,6 +9,9 @@ import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.api.ledger.LedgerActor;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.util.ItemID;
@@ -26,7 +29,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.concurrent.CompletableFuture;
 
 public class AsyncBank implements IAsyncBank {
@@ -283,7 +288,8 @@ public class AsyncBank implements IAsyncBank {
             if(isBalanceRead(input.function) && !canReadAccount(playerSender, slaveID, bankAccount))
                 return CompletableFuture.completedFuture(deniedRead(input.function));
 
-            return CompletableFuture.completedFuture(switch (input.function) {
+            final BankIdentifyAndDataPacket<?> params = inputData;
+            Supplier<OutputData> execute = () -> switch (input.function) {
                 case FunctionType.GetMinimalDataAsync ->                    OutputData.of(input.function, bank.getMinimalData());
                 case FunctionType.GetBalanceAsync ->                        OutputData.of(input.function, bank.getBalance());
                 case FunctionType.GetLockedBalanceAsync ->					OutputData.of(input.function, bank.getLockedBalance());
@@ -352,8 +358,55 @@ public class AsyncBank implements IAsyncBank {
                 case FunctionType.ToStringNoOwnerAsync ->					OutputData.of(input.function, bank.toStringNoOwner());
                 case FunctionType.ToJsonAsync ->							OutputData.of(input.function, bank.toJson());
                 case FunctionType.ToJsonStringAsync ->						OutputData.of(input.function, bank.toJsonString());
+            };
+            return CompletableFuture.completedFuture(executeWithLedger(input.function, params, bank, slaveID, execute));
+        }
 
-            });
+        /**
+         * Task #109 — runs the bank call and writes the ledger row on the master from the type
+         * code the slave sent with it. Reads write nothing. Value-moving calls check the code
+         * against the function's allow-list: NO_LOG writes nothing (raw calls, e.g. StockMarket
+         * settlement), an allowed code is written as sent, anything else is written as
+         * UNKNOWN_LEGACY with a "rejected code" note. Transfers always keep the TRANSFER pair
+         * written by {@code ServerBank.transfer}; the code only picks type and actor.
+         */
+        private static OutputData executeWithLedger(FunctionType function, BankIdentifyAndDataPacket<?> params,
+                                                    ISyncServerBank bank, String slaveID, Supplier<OutputData> execute) {
+            Set<LedgerType> allowed = ledgerAllowList(function);
+            if (allowed == null) return execute.get();
+            TransactionLedger.Resolved resolved = TransactionLedger.resolveSlaveCode(params.ledgerCode(), allowed,
+                    true, params.ledgerNote(), slaveID, "AsyncBank." + function.name());
+            LedgerActor actor = TransactionLedger.slaveActor(params.ledgerActor());
+            if (allowed == TransactionLedger.SLAVE_TRANSFER_CODES)
+                return TransactionLedger.withActor(actor, () -> TransactionLedger.withTransferType(resolved, execute));
+            OutputData out = execute.get();
+            if (resolved != null) {
+                Object result = out.decodeResult();
+                if (result == null || result == BankStatus.SUCCESS || Boolean.TRUE.equals(result))
+                    TransactionLedger.logBank(bank, resolved.type(), rawAmount(params.extra(), bank), actor, resolved.note());
+            }
+            return out;
+        }
+
+        /** Task #109 — allowed slave type codes per value-moving function; null for reads. */
+        static @Nullable Set<LedgerType> ledgerAllowList(FunctionType function) {
+            return switch (function) {
+                case DepositAsync, DepositRealAsync -> TransactionLedger.SLAVE_DEPOSIT_CODES;
+                case WithdrawAsync, WithdrawRealAsync, WithdrawLockedAsync, WithdrawLockedRealAsync,
+                     WithdrawLockedPreferedAsync, WithdrawLockedPreferedRealAsync -> TransactionLedger.SLAVE_WITHDRAW_CODES;
+                case TransferAsync, TransferRealAsync, TransferFromLockedAsync, TransferFromLockedRealAsync,
+                     TransferFromLockedPreferedAsync, TransferFromLockedPreferedRealAsync -> TransactionLedger.SLAVE_TRANSFER_CODES;
+                // Raw only (NO_LOG): total balance unchanged, or StockMarket / admin raw writes.
+                case SetBalanceAsync, SetRealBalanceAsync, LockAmountAsync, LockAmountRealAsync,
+                     UnlockAmountAsync, UnlockAmountRealAsync, UnlockAllAsync -> Set.of();
+                default -> null;
+            };
+        }
+
+        private static long rawAmount(@Nullable Object extra, ISyncServerBank bank) {
+            if (extra instanceof Long l) return l;
+            if (extra instanceof Double d) return bank.convertToRawAmount(d);
+            return 0L;
         }
         /** Task #104: functions that return balances of the bank. Item names and amount math stay open. */
         private static boolean isBalanceRead(FunctionType function) {
@@ -481,11 +534,20 @@ public class AsyncBank implements IAsyncBank {
     //
     // ================================================================================================================
 
-    public record BankIdentifyAndDataPacket<T>(int accountNr, ItemID itemID, T extra) {
+    /**
+     * @param ledgerCode  Task #109: ledger type code of this call ({@link TransactionLedger#NO_LOG}
+     *                    for raw calls); the master checks it per function
+     * @param ledgerActor player who caused the call, or null (SYSTEM)
+     * @param ledgerNote  free-text note for the ledger row
+     */
+    public record BankIdentifyAndDataPacket<T>(int accountNr, ItemID itemID, T extra,
+                                               int ledgerCode, @Nullable UUID ledgerActor, @Nullable String ledgerNote) {
 
+        /** Picks up the ledger tag set with {@link TransactionLedger#tagged} on this thread. */
         public static <T> BankIdentifyAndDataPacket<T> of(int accountNr, ItemID itemID, T extra)
         {
-            return new BankIdentifyAndDataPacket<>(accountNr, itemID, extra);
+            TransactionLedger.SlaveTag tag = TransactionLedger.currentTag();
+            return new BankIdentifyAndDataPacket<>(accountNr, itemID, extra, tag.code(), tag.actor(), tag.note());
         }
 
         // Encode: write accountNr, itemID, then the extra using the provided codec
@@ -497,6 +559,9 @@ public class AsyncBank implements IAsyncBank {
             buf.writeInt(params.accountNr);
             ItemID.STREAM_CODEC.encode(buf, params.itemID);
             ExtraCodecUtils.nullable(extraCodec).encode(buf, params.extra);
+            ByteBufCodecs.VAR_INT.encode(buf, params.ledgerCode);
+            ExtraCodecUtils.nullable(net.minecraft.core.UUIDUtil.STREAM_CODEC).encode(buf, params.ledgerActor);
+            ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).encode(buf, params.ledgerNote);
         }
 
         // Decode: read accountNr, itemID, then the extra using the provided codec
@@ -507,7 +572,10 @@ public class AsyncBank implements IAsyncBank {
             int accountNr = buf.readInt();
             ItemID itemID = ItemID.STREAM_CODEC.decode(buf);
             T extra = ExtraCodecUtils.nullable(extraCodec).decode(buf);
-            return new BankIdentifyAndDataPacket<>(accountNr, itemID, extra);
+            int ledgerCode = ByteBufCodecs.VAR_INT.decode(buf);
+            UUID ledgerActor = ExtraCodecUtils.nullable(net.minecraft.core.UUIDUtil.STREAM_CODEC).decode(buf);
+            String ledgerNote = ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).decode(buf);
+            return new BankIdentifyAndDataPacket<>(accountNr, itemID, extra, ledgerCode, ledgerActor, ledgerNote);
         }
 
         // Factory to build a StreamCodec for a specific extra type

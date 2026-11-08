@@ -328,6 +328,7 @@ Detailed guides are available in the [documentation](documentation/README.md) fo
 - [Currency Integration](documentation/developer-guide/CurrencyIntegration.md) — SPI for authors of currency mods who want to expose their mod to BankSystem
 - [Events & Signals](documentation/developer-guide/EventsAndSignals.md) — Every event/signal for dependent mods: user/account changes, ItemID merges, multi-server lifecycle
 - [Item Price Provider API](documentation/developer-guide/ItemPriceProviderAPI.md) — Contribute item prices for total-wealth tracking
+- [Transaction Ledger](documentation/developer-guide/TransactionLedger.md) — Ledger type codes, columns, and writing rows from other mods
 - [Async Forwarding Architecture](documentation/developer-guide/AsyncForwardingArchitecture.md) — Internal RPC system documentation
 
 ---

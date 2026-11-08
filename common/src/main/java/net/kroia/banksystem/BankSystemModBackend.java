@@ -251,6 +251,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         ItemID.setBackend(INSTANCES);
 
         BankSystemNetworking.setBackend(INSTANCES);
+        net.kroia.banksystem.banking.ledger.TransactionLedger.setBackend(INSTANCES); // Task #109
         BankSystemTextMessages.setBackend(INSTANCES);
 
         net.kroia.banksystem.integration.numismatics.NumismaticsProvider.setBackend(INSTANCES);
@@ -924,6 +925,12 @@ public class BankSystemModBackend implements BankSystemAPI {
             INSTANCES.PAYOUT_MANAGER = new net.kroia.banksystem.banking.company.PayoutManagerImpl(INSTANCES);
         }
         return INSTANCES.PAYOUT_MANAGER;
+    }
+
+    /** Task #109 (v2.1.0) — transaction ledger writer. Always non-null. */
+    @Override
+    public net.kroia.banksystem.api.ledger.ITransactionLedger getLedger() {
+        return net.kroia.banksystem.banking.ledger.TransactionLedger.INSTANCE;
     }
 
     /**

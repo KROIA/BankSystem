@@ -26,6 +26,7 @@ Technical documentation for developers integrating with or extending BankSystem.
 | [Events & Signals](developer-guide/EventsAndSignals.md) | Every event/signal for dependent mods: user/account changes, ItemID merges, multi-server connection lifecycle, slave-trust changes, payouts and dividends |
 | [Currency Integration](developer-guide/CurrencyIntegration.md) | `ExternalCurrencyProvider` SPI for currency-mod authors who want their mod in the binding picker |
 | [Item Price Provider API](developer-guide/ItemPriceProviderAPI.md) | Supply item prices for total-wealth tracking |
+| [Transaction Ledger](developer-guide/TransactionLedger.md) | Ledger type codes, columns, and writing rows from other mods |
 | [Async Forwarding Architecture](developer-guide/AsyncForwardingArchitecture.md) | Internal RPC system for multi-server function forwarding |
 
 ## Development & Testing

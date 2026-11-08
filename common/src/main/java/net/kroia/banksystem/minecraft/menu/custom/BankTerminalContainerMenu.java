@@ -1020,12 +1020,19 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         // withdrawn locks if a later step (delivery/stats) throws.
         List<Map.Entry<IAsyncBank, Long>> locksToWithdraw = new ArrayList<>(acquiredLocks);
         acquiredLocks.clear();
+        final int ledgerAccount = craftingAccountNumber;
+        final java.util.UUID ledgerPlayer = player.getUUID();
+        final String ledgerNote = "craft " + match.result().getItem() + " x" + (match.result().getCount() * craftCount);
         for (Map.Entry<IAsyncBank, Long> lock : locksToWithdraw) {
             final IAsyncBank bank = lock.getKey();
             final long rawAmount = lock.getValue();
-            bank.withdrawLockedPreferedAsync(rawAmount).whenComplete((status, throwable) -> {
-                if (throwable == null && status == BankStatus.SUCCESS)
+            net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, ledgerPlayer, ledgerNote,
+                    () -> bank.withdrawLockedPreferedAsync(rawAmount)).whenComplete((status, throwable) -> {
+                if (throwable == null && status == BankStatus.SUCCESS) {
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, bank.getItemIDAsync(), rawAmount,
+                            net.kroia.banksystem.banking.ledger.TransactionLedger.player(ledgerPlayer), null, ledgerNote);
                     return;
+                }
                 // Un-debited craft: the output has already been delivered and may
                 // already be in use, so there is nothing safe to roll back here
                 // (unlike sendToBlock, which can simply remove the inserted stack).
@@ -1130,9 +1137,17 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                     amountToDeposit = output.getCount() * ((MoneyItem) output.getItem()).worth();
                 else
                     amountToDeposit = BankManager.convertToRawAmountStatic(output.getCount());
-                bank.depositAsync(amountToDeposit).thenAccept(status -> {
+                final long finalAmountToDeposit = amountToDeposit;
+                final int ledgerAccount = craftingAccountNumber;
+                net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, player.getUUID(),
+                        "craft output " + output.getItem() + " x" + output.getCount(),
+                        () -> bank.depositAsync(finalAmountToDeposit)).thenAccept(status -> {
                     if (status != BankStatus.SUCCESS)
                         deliverDepositFallback(output, "deposit failed: " + status);
+                    else
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, bank.getItemIDAsync(),
+                                finalAmountToDeposit, net.kroia.banksystem.banking.ledger.TransactionLedger.player(player.getUUID()), null,
+                                "craft output " + output.getItem() + " x" + output.getCount());
                 });
             });
         });

@@ -2,7 +2,8 @@ package net.kroia.banksystem.networking.entity;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.data.table.record.TransactionLogRecord;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
@@ -219,7 +220,9 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 // against the base money ItemID (not the banknote denomination) so a
                 // downstream reader sees the same currency identity regardless of which
                 // denomination was chosen at the terminal. Amount is base-money units.
-                logMoneyWithdraw(finalCurrentSelectedAccountNumber, player, totalValue);
+                // Task #109: note names the denomination so banknote flows can be traced.
+                TransactionLedger.logBank(moneyBank, LedgerType.WITHDRAW, totalValue,
+                        TransactionLedger.player(player), "banknote " + itemID.getName() + " x" + requestedAmount);
             }
         }
 
@@ -228,7 +231,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         if(slaveID == null)
         {
             Map<ItemID, Long> notDropped = DropItemsInPlayerInventoryRequest.dropItems(UtilitiesPlatform.getServer(), player, requestedBankNotes);
-            putRemainingItemsBack(finalCurrentSelectedAccountNumber, notDropped);
+            putRemainingItemsBack(finalCurrentSelectedAccountNumber, player, notDropped);
         }
         else
         {
@@ -236,28 +239,14 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         }
     }
 
-    private static void logMoneyWithdraw(int accountNr, UUID player, long amount) {
-        net.kroia.banksystem.data.table.TransactionLogManager mgr =
-                BankSystemModBackend.getTransactionLogManager();
-        if (mgr == null || amount <= 0) return;
-        try {
-            mgr.save(TransactionLogRecord.simple(
-                    accountNr, player,
-                    TransactionLogRecord.Kind.WITHDRAW,
-                    MoneyItem.getItemID().getShort(),
-                    amount,
-                    System.currentTimeMillis()));
-        } catch (RuntimeException ignored) { }
-    }
-
     private void dropRequestToSlave(String slaveID, UUID player, int bankaccountNr, Map<ItemID, Long> items)
     {
         CompletableFuture<Map<ItemID, Long>> notDroppedItemsFuture = DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, player, items);
         notDroppedItemsFuture.thenAccept(notDropedItems -> {
-            putRemainingItemsBack(bankaccountNr, notDropedItems);
+            putRemainingItemsBack(bankaccountNr, player, notDropedItems);
         });
     }
-    private void putRemainingItemsBack(int bankaccountNr, Map<ItemID, Long> items)
+    private void putRemainingItemsBack(int bankaccountNr, UUID player, Map<ItemID, Long> items)
     {
         if(items.isEmpty())
             return;
@@ -289,7 +278,11 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 toDepositMoney += product;
             }
         }
-        redepositMoneyBank.deposit(toDepositMoney);
+        if (toDepositMoney > 0 && redepositMoneyBank.deposit(toDepositMoney) == BankStatus.SUCCESS) {
+            // Task #109: separate refund row; the WITHDRAW row above stays as written.
+            TransactionLedger.logBank(redepositMoneyBank, LedgerType.WITHDRAW_REFUND, toDepositMoney,
+                    TransactionLedger.player(player), "banknotes not handed out: " + items);
+        }
     }
 
 

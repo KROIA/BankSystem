@@ -766,34 +766,34 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
 
     /**
-     * Task #44 (v2.1.0) — Transaction Ledger write for a successful transfer. Two rows:
-     * one TRANSFER_OUT on the source account and one TRANSFER_IN on the destination.
-     * Actor is unknown at this layer (the transfer primitive carries no player context),
-     * so both rows are actor-null. Best-effort: manager missing (slave / shutdown) or
-     * counterparty not a {@code ServerBank} (unknown accountId) simply skips the write.
+     * Task #44 / #109 (v2.1.0) — Transaction Ledger write for a successful transfer. Two
+     * {@code TRANSFER} rows: {@code -amount} on the source account and {@code +amount} on the
+     * destination, each naming the other account. The actor comes from
+     * {@link net.kroia.banksystem.banking.ledger.TransactionLedger#currentActor()} (SYSTEM if the
+     * caller set none). Best-effort: a counterparty that is not an attached {@code ServerBank}
+     * simply skips the write.
      */
     private void logTransferLedger(ISyncServerBank other, long amount) {
-        if (amount <= 0) return;
-        net.kroia.banksystem.data.table.TransactionLogManager mgr =
-                BankSystemModBackend.getTransactionLogManager();
-        if (mgr == null) return;
+        if (amount <= 0 || net.kroia.banksystem.banking.ledger.TransactionLedger.isTransferLogSuppressed()) return;
         if (!(other instanceof ServerBank otherBank)) return;
         int srcAccount = this.accountId;
         int dstAccount = otherBank.accountId;
         if (srcAccount == UNATTACHED_ACCOUNT_ID || dstAccount == UNATTACHED_ACCOUNT_ID) return;
-        long now = System.currentTimeMillis();
+        net.kroia.banksystem.api.ledger.LedgerActor actor =
+                net.kroia.banksystem.banking.ledger.TransactionLedger.currentActor();
+        // Normally TRANSFER; UNKNOWN_LEGACY + note when a slave sent a rejected code.
+        net.kroia.banksystem.banking.ledger.TransactionLedger.Resolved kind =
+                net.kroia.banksystem.banking.ledger.TransactionLedger.currentTransferType();
         short srcItem = this.itemID == null ? 0 : this.itemID.getShort();
         short dstItem = otherBank.itemID == null ? srcItem : otherBank.itemID.getShort();
-        try {
-            mgr.save(net.kroia.banksystem.data.table.record.TransactionLogRecord.transfer(
-                    srcAccount, null,
-                    net.kroia.banksystem.data.table.record.TransactionLogRecord.Kind.TRANSFER_OUT,
-                    srcItem, amount, dstAccount, now));
-            mgr.save(net.kroia.banksystem.data.table.record.TransactionLogRecord.transfer(
-                    dstAccount, null,
-                    net.kroia.banksystem.data.table.record.TransactionLogRecord.Kind.TRANSFER_IN,
-                    dstItem, amount, srcAccount, now));
-        } catch (RuntimeException ignored) { }
+        net.kroia.banksystem.banking.ledger.TransactionLedger.write(
+                net.kroia.banksystem.data.table.record.TransactionLogRecord.of(srcAccount,
+                        kind.type(), srcItem, -amount, actor,
+                        dstAccount, null, null, kind.note(), this.getTotalBalance()));
+        net.kroia.banksystem.banking.ledger.TransactionLedger.write(
+                net.kroia.banksystem.data.table.record.TransactionLogRecord.of(dstAccount,
+                        kind.type(), dstItem, amount, actor,
+                        srcAccount, null, null, kind.note(), otherBank.getTotalBalance()));
     }
     @Override
     public BankStatus transfer(long amount, int toAccount)

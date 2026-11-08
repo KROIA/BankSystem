@@ -3,6 +3,9 @@ package net.kroia.banksystem.networking.multi_server;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
+import net.kroia.banksystem.api.ledger.LedgerActor;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
@@ -32,12 +35,21 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
 
 
 
-    public record InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items)
+    /**
+     * @param ledgerTypeCode Task #109: {@link LedgerType} code written to the ledger for each
+     *                       deposited item (e.g. CONVERTER_DEPOSIT); DEPOSIT by default. The master
+     *                       checks it against {@link TransactionLedger#SLAVE_DEPOSIT_CODES}.
+     */
+    public record InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, int ledgerTypeCode)
     {
+        public InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items) {
+            this(bankAccount, executor, items, LedgerType.DEPOSIT.code());
+        }
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.INT, p->p.bankAccount,
                 ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC), p->p.executor,
                 ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap<ItemID, Long>::new), p -> p.items,
+                ByteBufCodecs.VAR_INT, p -> p.ledgerTypeCode,
                 InputData::new
         );
     }
@@ -59,7 +71,13 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
      */
     public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items)
     {
-        DepositItemsInBankRequest.InputData inputData = new DepositItemsInBankRequest.InputData(bankAccount, executor, items);
+        return sendToMaster(bankAccount, executor, items, LedgerType.DEPOSIT);
+    }
+
+    /** Task #109: same as {@link #sendToMaster(int, UUID, Map)} with an explicit ledger row type. */
+    public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, LedgerType ledgerType)
+    {
+        DepositItemsInBankRequest.InputData inputData = new DepositItemsInBankRequest.InputData(bankAccount, executor, items, ledgerType.code());
         CompletableFuture<Map<ItemID, Long>> future = new CompletableFuture<>();
         BankSystemNetworking.DEPOSIT_ITEMS_IN_BANK_REQUEST.sendRequestToMaster(inputData).whenComplete((response, ex) -> {
             if (ex != null || response == null) {
@@ -127,6 +145,9 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
             }
         }
 
+        // Task #109: validate the slave's type code once; a disallowed code is logged as 0 + note.
+        TransactionLedger.Resolved ledger = TransactionLedger.resolveSlaveCode(input.ledgerTypeCode,
+                TransactionLedger.SLAVE_DEPOSIT_CODES, false, null, slaveID, "DepositItemsInBankRequest");
         Map<ItemID, Long> notDepositedItems = new HashMap<>();
         BankAccountBindings bindings = BankAccountBindings.get();
         for(Map.Entry<ItemID, Long> entry : input.items.entrySet())
@@ -158,6 +179,9 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                             }
                             IServerBank baseBank = account.getOrCreateBank(new ItemID(row.itemIdShort()));
                             if (baseBank != null && baseBank.deposit(amount) == BankStatus.SUCCESS) {
+                                String coin = "coin " + itemID.getName() + " x" + toDeposit;
+                                TransactionLedger.logBank(baseBank, ledger.type(), amount, ledgerActor(input),
+                                        ledger.note() == null ? coin : ledger.note() + "; " + coin);
                                 continue;
                             }
                             notDepositedItems.put(itemID, toDeposit);
@@ -172,6 +196,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
             {
                 if(itemBank.deposit(toDeposit) == BankStatus.SUCCESS)
                 {
+                    logDeposit(input, ledger, itemBank, toDeposit);
                     toDeposit = 0;
                 }
             }
@@ -180,45 +205,28 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                 notDepositedItems.put(itemID, toDeposit);
             }
         }
-        // Task #44 (v2.1.0) — Transaction Ledger. One DEPOSIT row per ItemID whose net
-        // deposited amount was > 0. Best-effort: manager is null on slaves / pre-init,
-        // and a save failure must never fail the deposit. Runs async on the DB worker.
-        logDeposits(input, notDepositedItems);
         return CompletableFuture.completedFuture(new OutputData(notDepositedItems));
     }
 
-    private static void logDeposits(InputData input, Map<ItemID, Long> notDeposited) {
-        net.kroia.banksystem.data.table.TransactionLogManager mgr =
-                BankSystemModBackend.getTransactionLogManager();
-        if (mgr == null) return;
-        long now = System.currentTimeMillis();
-        for (Map.Entry<ItemID, Long> entry : input.items.entrySet()) {
-            long requested = Math.max(0, entry.getValue());
-            long remaining = notDeposited.getOrDefault(entry.getKey(), 0L);
-            long deposited = requested - remaining;
-            if (deposited <= 0) continue;
-            try {
-                // Task #48 (v2.1.0) — if this ItemID resolves to a stamped share, log a
-                // SHARE_TRADE row (with company id populated) instead of a plain DEPOSIT
-                // so the ledger records share flow distinctly. This is the placeholder
-                // hook until a StockMarket match-observer surface exists — see spec §4c.
-                Integer companyId = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
-                        .getCompanyIdForItemID(entry.getKey());
-                if (companyId != null) {
-                    mgr.save(TransactionLogRecord.shareTrade(
-                            input.bankAccount, input.executor,
-                            entry.getKey().getShort(), deposited, companyId, now));
-                } else {
-                    mgr.save(TransactionLogRecord.simple(
-                            input.bankAccount, input.executor,
-                            TransactionLogRecord.Kind.DEPOSIT,
-                            entry.getKey().getShort(), deposited, now));
-                }
-            } catch (RuntimeException ignored) {
-                // DB layer errors must not break the deposit path — the balance is already
-                // updated at this point and the log is a best-effort audit artefact.
-            }
+    /**
+     * Task #44 / #48 / #109 — one ledger row per deposited item. A stamped share is logged
+     * as SHARE_TRADE with its company id, anything else with the request's type code.
+     */
+    private static void logDeposit(InputData input, TransactionLedger.Resolved ledger, IServerBank bank, long amount) {
+        try {
+            ItemID itemID = bank.getItemID();
+            Integer companyId = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                    .getCompanyIdForItemID(itemID);
+            LedgerType type = companyId != null ? LedgerType.SHARE_TRADE : ledger.type();
+            TransactionLedger.write(TransactionLogRecord.of(input.bankAccount, type, itemID.getShort(), amount,
+                    ledgerActor(input), null, companyId, null, ledger.note(), bank.getTotalBalance()));
+        } catch (RuntimeException ignored) {
+            // best-effort: the balance is already updated
         }
+    }
+
+    private static LedgerActor ledgerActor(InputData input) {
+        return input.executor == null ? LedgerActor.system() : TransactionLedger.player(input.executor);
     }
 
 

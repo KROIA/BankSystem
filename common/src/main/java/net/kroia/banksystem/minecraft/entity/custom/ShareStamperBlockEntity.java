@@ -300,20 +300,20 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
                 ItemStack made = StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), boundCompanyId);
                 if (output.isEmpty()) items.set(SLOT_OUTPUT, made);
                 else output.grow(1);
-                logLedger(company, TransactionLogRecord.Kind.SHARE_STAMP);
+                logLedger(company, net.kroia.banksystem.api.ledger.LedgerType.SHARE_STAMP);
             } else {
                 if (!cm.redeemShare(boundCompanyId)) { setChanged(); return; }
                 input.shrink(1);
                 items.set(SLOT_INPUT, input);
                 if (output.isEmpty()) items.set(SLOT_OUTPUT, new ItemStack(BankSystemItems.BLANK_SHARE.get()));
                 else output.grow(1);
-                logLedger(company, TransactionLogRecord.Kind.SHARE_REDEEM);
+                logLedger(company, net.kroia.banksystem.api.ledger.LedgerType.SHARE_REDEEM);
             }
             setChanged();
         }
     }
 
-    private void logLedger(Company company, TransactionLogRecord.Kind kind) {
+    private void logLedger(Company company, net.kroia.banksystem.api.ledger.LedgerType kind) {
         TransactionLogManager mgr = BankSystemModBackend.getTransactionLogManager();
         if (mgr == null) return;
         try {

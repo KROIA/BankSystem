@@ -393,9 +393,13 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                     }
                                     return;
                                 }
-                                baseBank.depositAsync(finalDeposit).thenAccept(status -> {
+                                net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
+                                        uploadNote("coin " + itemID.getName() + " x" + stack.getCount()),
+                                        () -> baseBank.depositAsync(finalDeposit)).thenAccept(status -> {
                                     if (status != BankStatus.SUCCESS) {
                                         inventory.setItem(finalI, stack);
+                                    } else {
+                                        logUpload(baseSlotId, finalDeposit, "coin " + itemID.getName() + " x" + stack.getCount());
                                     }
                                 });
                             });
@@ -442,19 +446,26 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             if(isMoney)
                             {
                                 long finalAmount = amount * ((MoneyItem)stack.getItem()).worth();
-                                CompletableFuture<BankStatus> depositStatusFuture = bank.depositAsync(finalAmount);
+                                CompletableFuture<BankStatus> depositStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
+                                        uploadNote("banknote " + itemID.getName() + " x" + amount), () -> bank.depositAsync(finalAmount));
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus != BankStatus.SUCCESS) {
                                         inventory.setItem(finalI, stack); // Restore item on failure
+                                    } else {
+                                        logUpload(bank.getItemIDAsync(), finalAmount, "banknote " + itemID.getName() + " x" + amount);
                                     }
                                 });
                             }
                             else
                             {
-                                CompletableFuture<BankStatus> depositStatusFuture = bank.depositRealAsync((double)amount);
+                                CompletableFuture<BankStatus> depositStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
+                                        uploadNote(null), () -> bank.depositRealAsync((double)amount));
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus != BankStatus.SUCCESS) {
                                         inventory.setItem(finalI, stack); // Restore item on failure
+                                    } else {
+                                        logUpload(bank.getItemIDAsync(),
+                                                amount * net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR, null);
                                     }
                                 });
                             }
@@ -467,6 +478,20 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             });
         });
     }
+    /**
+     * Task #109 — UPLOAD_DEPOSIT ledger row on the master, actor = the block's owner. Best-effort;
+     * a no-op on a slave, where the tagged bank call carries the row to the master.
+     */
+    private void logUpload(ItemID bankItem, long amount, @Nullable String note) {
+        net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(bankAccountNumber, net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, bankItem, amount,
+                net.kroia.banksystem.banking.ledger.TransactionLedger.player(playerOwner), null, uploadNote(note));
+    }
+
+    private String uploadNote(@Nullable String note) {
+        String where = "upload block " + worldPosition.toShortString();
+        return note == null ? where : where + ", " + note;
+    }
+
     boolean hasItemsInInventory()
     {
         for (int i = 0; i < inventory.getContainerSize(); i++) {

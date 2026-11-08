@@ -1,5 +1,9 @@
 package net.kroia.banksystem.networking.general;
 
+import net.kroia.banksystem.api.ledger.LedgerActor;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
+import java.util.ArrayList;
 import net.kroia.banksystem.util.ItemStackNbt;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
@@ -171,8 +175,15 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
             return future;
         }
 
+        // Task #109: admins acting on an account they could not manage are ADMIN, else PLAYER.
+        final LedgerActor actor = isAdmin && !canManage ? TransactionLedger.admin(sender) : TransactionLedger.player(sender);
+        final LedgerActor adminActor = TransactionLedger.admin(sender);
+        List<String> edits = new ArrayList<>();
         if(input.accountName != null && !input.accountName.isEmpty()) {
+            String oldName = account.getAccountName();
             account.setAccountName(input.accountName);
+            if (!input.accountName.equals(oldName))
+                edits.add("name '" + oldName + "'->'" + input.accountName + "'");
         }
 
         if(input.bankData != null) {
@@ -182,7 +193,12 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 // admins. Reaching this handler already guarantees isAdmin || canManage (checked
                 // above), so no further permission check is needed for the removal.
                 if (data.removeBank) {
+                    ISyncServerBank closing = account.getBank(data.itemID);
+                    long destroyed = closing == null ? 0L : closing.getTotalBalance();
                     account.removeBank(data.itemID);
+                    if (closing != null)
+                        TransactionLedger.logRow(input.accountNumber, LedgerType.BANK_CLOSED, data.itemID, destroyed,
+                                actor, null, "bank closed");
                     continue;
                 }
                 // Balance manipulation (set balance, create a bank with a balance, or unlock
@@ -191,13 +207,26 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                     continue;
                 ISyncServerBank bank = account.getBank(data.itemID);
                 if (bank != null) {
-                    if (data.resetLockedBalance)
+                    if (data.resetLockedBalance) {
+                        long locked = bank.getLockedBalance();
                         bank.unlockAll();
-                    if (data.setBalance)
+                        if (locked != 0)
+                            TransactionLedger.logBank(bank, LedgerType.ADMIN_UNLOCK, locked, adminActor, "unlocked " + locked);
+                    }
+                    if (data.setBalance) {
+                        long oldBalance = bank.getBalance();
                         bank.setBalance(data.balance);
+                        long newBalance = bank.getBalance();
+                        if (newBalance != oldBalance)
+                            TransactionLedger.logBank(bank, LedgerType.ADMIN_SET, Math.abs(newBalance - oldBalance),
+                                    adminActor, oldBalance + "->" + newBalance);
+                    }
                 } else {
                     if (data.createBank) {
-                        account.createBank(data.itemID, data.balance);
+                        ISyncServerBank created = account.createBank(data.itemID, data.balance);
+                        if (created != null && data.balance != 0)
+                            TransactionLedger.logBank(created, LedgerType.ADMIN_SET, Math.abs(created.getBalance()),
+                                    adminActor, "bank created: 0->" + created.getBalance());
                     }
                 }
             }
@@ -263,6 +292,19 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 }
                 case OK -> account.setUsers(userList);
             }
+            if (outcome == ServerBankAccount.ManageInvariantOutcome.OK
+                    || outcome == ServerBankAccount.ManageInvariantOutcome.PROMOTED) {
+                Map<UUID, Integer> before = new HashMap<>();
+                for (Map.Entry<User, Integer> e : previous.entrySet()) before.put(e.getKey().getUUID(), e.getValue());
+                Map<UUID, Integer> after = new HashMap<>();
+                for (Map.Entry<User, Integer> e : userList.entrySet()) after.put(e.getKey().getUUID(), e.getValue());
+                if (owner != null) {
+                    before.remove(owner.getUUID());
+                    after.remove(owner.getUUID());
+                }
+                if (!before.equals(after))
+                    edits.add("users/permissions " + before + "->" + after);
+            }
             // Task #45 (v2.1.0) — cascade-strip payout schedules whose target was just removed.
             // Only fire when the user-set change actually landed (OK / PROMOTED); on refuse
             // paths the previous users are unchanged so nothing to strip.
@@ -284,12 +326,18 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
         if(input.accountIcon != null)
         {
             ItemID iconID = ItemID.getOrRegisterFromItemStackServerSide_direct(input.accountIcon);
+            ItemID oldIcon = account.getAccountIcon();
             account.setAccountIcon(iconID);
+            if (oldIcon == null || !oldIcon.equals(iconID))
+                edits.add("icon " + iconID.getName());
         }
+        if (!edits.isEmpty())
+            TransactionLedger.logRow(input.accountNumber, LedgerType.ADMIN_ACCOUNT_EDIT, ItemID.INVALID_ID, 0L,
+                    actor, null, String.join("; ", edits));
         if(!account.hasAnyUser())
         {
             // If the account has no users, we remove it
-            bankManager.deleteBankAccount(input.accountNumber);
+            TransactionLedger.withActor(actor, () -> bankManager.deleteBankAccount(input.accountNumber));
             future.complete(null);
             return future; // The account was deleted
         }

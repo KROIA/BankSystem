@@ -1,5 +1,7 @@
 package net.kroia.banksystem.data.table;
 
+import net.kroia.banksystem.api.ledger.LedgerActor;
+import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import org.jetbrains.annotations.Nullable;
@@ -29,7 +31,8 @@ import java.util.concurrent.CompletableFuture;
  * <ul>
  *     <li>{@link #getByAccount(int, int)} — newest-first N rows for one account;</li>
  *     <li>{@link #getByCompany(int, int)} — newest-first N rows for one company id;</li>
- *     <li>{@link #getByAccountAndKind(int, TransactionLogRecord.Kind, int)} — filtered view.</li>
+ *     <li>{@link #getByAccountAndType(int, int, long, int)} — filtered view;</li>
+ *     <li>{@link #getByRef(String)} / {@link #getByActor(UUID, long, int)} — Task #109.</li>
  * </ul>
  */
 public class TransactionLogManager implements ITableManager<TransactionLogRecord> {
@@ -37,10 +40,12 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
     private final DatabaseManager databaseManager;
 
     public static final String INSERT = "INSERT INTO TransactionLog " +
-            "(account_number, actor_uuid, kind, item_id, amount, other_account, company_id, ts, note) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            "(account_number, actor_uuid, kind, item_id, amount, other_account, company_id, ts, note, " +
+            "source_kind, tag, type_code, ref, money_amount, price, currency_item, actor_name, balance_after, virtual_qty) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     public static final String SELECT_COLS =
-            "id, account_number, actor_uuid, kind, item_id, amount, other_account, company_id, ts, note";
+            "id, account_number, actor_uuid, kind, item_id, amount, other_account, company_id, ts, note, " +
+            "source_kind, tag, type_code, ref, money_amount, price, currency_item, actor_name, balance_after, virtual_qty";
 
     public TransactionLogManager(DatabaseManager databaseManager) {
         this.databaseManager = databaseManager;
@@ -80,22 +85,33 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
     public void queueRecord(PreparedStatement stmt, TransactionLogRecord data) {
         try {
             stmt.setInt(1, data.accountNumber());
-            if (data.actorUuid() == null) stmt.setNull(2, java.sql.Types.VARCHAR);
-            else stmt.setString(2, data.actorUuid().toString());
-            stmt.setString(3, data.kind().name());
+            setNullable(stmt, 2, data.actorUuid() == null ? null : data.actorUuid().toString());
+            stmt.setString(3, data.type().name());
             stmt.setShort(4, data.itemId());
             stmt.setLong(5, data.amount());
-            if (data.otherAccount() == null) stmt.setNull(6, java.sql.Types.INTEGER);
-            else stmt.setInt(6, data.otherAccount());
-            if (data.companyId() == null) stmt.setNull(7, java.sql.Types.INTEGER);
-            else stmt.setInt(7, data.companyId());
+            setNullable(stmt, 6, data.otherAccount());
+            setNullable(stmt, 7, data.companyId());
             stmt.setLong(8, data.time());
-            if (data.note() == null) stmt.setNull(9, java.sql.Types.VARCHAR);
-            else stmt.setString(9, data.note());
+            setNullable(stmt, 9, data.note());
+            stmt.setString(10, data.source().name());
+            setNullable(stmt, 11, data.tag());
+            stmt.setInt(12, data.type().code());
+            setNullable(stmt, 13, data.ref());
+            setNullable(stmt, 14, data.moneyAmount());
+            setNullable(stmt, 15, data.price());
+            setNullable(stmt, 16, data.currencyItem() == null ? null : Integer.valueOf(data.currencyItem()));
+            setNullable(stmt, 17, data.actorName());
+            setNullable(stmt, 18, data.balanceAfter());
+            setNullable(stmt, 19, data.virtualQty());
             stmt.addBatch();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to queue transaction-log record", e);
         }
+    }
+
+    private static void setNullable(PreparedStatement stmt, int index, @Nullable Object value) throws SQLException {
+        if (value == null) stmt.setNull(index, java.sql.Types.NULL);
+        else stmt.setObject(index, value);
     }
 
     // ------------------------------------------------------------------
@@ -109,7 +125,7 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
      */
     public CompletableFuture<List<TransactionLogRecord>> getByAccount(int accountNumber, int limit) {
         String sql = "SELECT " + SELECT_COLS + " FROM TransactionLog WHERE account_number = ? " +
-                "ORDER BY ts DESC" + (limit > 0 ? " LIMIT ?" : "");
+                "ORDER BY ts DESC, id DESC" + (limit > 0 ? " LIMIT ?" : "");
         return CompletableFuture.supplyAsync(() -> queryOne(sql, ps -> {
             ps.setInt(1, accountNumber);
             if (limit > 0) ps.setInt(2, limit);
@@ -118,21 +134,51 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
 
     public CompletableFuture<List<TransactionLogRecord>> getByCompany(int companyId, int limit) {
         String sql = "SELECT " + SELECT_COLS + " FROM TransactionLog WHERE company_id = ? " +
-                "ORDER BY ts DESC" + (limit > 0 ? " LIMIT ?" : "");
+                "ORDER BY ts DESC, id DESC" + (limit > 0 ? " LIMIT ?" : "");
         return CompletableFuture.supplyAsync(() -> queryOne(sql, ps -> {
             ps.setInt(1, companyId);
             if (limit > 0) ps.setInt(2, limit);
         }), databaseManager.getDatabaseThread());
     }
 
-    public CompletableFuture<List<TransactionLogRecord>> getByAccountAndKind(
-            int accountNumber, TransactionLogRecord.Kind kind, int limit) {
+    /**
+     * Task #109 — rows of one account with one type code, newest first.
+     *
+     * @param sinceMs lower bound on {@code ts} (inclusive); {@code <= 0} means no bound
+     * @param limit   max rows ({@code <= 0} means unbounded)
+     */
+    public CompletableFuture<List<TransactionLogRecord>> getByAccountAndType(
+            int accountNumber, int typeCode, long sinceMs, int limit) {
         String sql = "SELECT " + SELECT_COLS + " FROM TransactionLog " +
-                "WHERE account_number = ? AND kind = ? " +
-                "ORDER BY ts DESC" + (limit > 0 ? " LIMIT ?" : "");
+                "WHERE account_number = ? AND type_code = ? AND ts >= ? " +
+                "ORDER BY ts DESC, id DESC" + (limit > 0 ? " LIMIT ?" : "");
         return CompletableFuture.supplyAsync(() -> queryOne(sql, ps -> {
             ps.setInt(1, accountNumber);
-            ps.setString(2, kind.name());
+            ps.setInt(2, typeCode);
+            ps.setLong(3, Math.max(0L, sinceMs));
+            if (limit > 0) ps.setInt(4, limit);
+        }), databaseManager.getDatabaseThread());
+    }
+
+    /** Task #109 — every row with this {@code ref} (e.g. all slices of one order), oldest first. */
+    public CompletableFuture<List<TransactionLogRecord>> getByRef(String ref) {
+        String sql = "SELECT " + SELECT_COLS + " FROM TransactionLog WHERE ref = ? ORDER BY ts ASC, id ASC";
+        return CompletableFuture.supplyAsync(() -> queryOne(sql, ps -> ps.setString(1, ref)),
+                databaseManager.getDatabaseThread());
+    }
+
+    /**
+     * Task #109 — rows caused by one actor, newest first.
+     *
+     * @param sinceMs lower bound on {@code ts} (inclusive); {@code <= 0} means no bound
+     * @param limit   max rows ({@code <= 0} means unbounded)
+     */
+    public CompletableFuture<List<TransactionLogRecord>> getByActor(UUID actor, long sinceMs, int limit) {
+        String sql = "SELECT " + SELECT_COLS + " FROM TransactionLog WHERE actor_uuid = ? AND ts >= ? " +
+                "ORDER BY ts DESC, id DESC" + (limit > 0 ? " LIMIT ?" : "");
+        return CompletableFuture.supplyAsync(() -> queryOne(sql, ps -> {
+            ps.setString(1, actor.toString());
+            ps.setLong(2, Math.max(0L, sinceMs));
             if (limit > 0) ps.setInt(3, limit);
         }), databaseManager.getDatabaseThread());
     }
@@ -166,10 +212,7 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
             binder.bind(ps);
             try (ResultSet rs = ps.executeQuery()) {
                 databaseManager.commitTransaction();
-                while (rs.next()) {
-                    TransactionLogRecord row = mapRow(rs);
-                    if (row != null) result.add(row);
-                }
+                while (rs.next()) result.add(mapRow(rs));
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -177,32 +220,46 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
         return result;
     }
 
-    private @Nullable TransactionLogRecord mapRow(ResultSet rs) {
-        try {
-            long id = rs.getLong(1);
-            int account = rs.getInt(2);
-            String actorStr = rs.getString(3);
-            UUID actor = null;
-            if (actorStr != null && !actorStr.isEmpty()) {
-                try { actor = UUID.fromString(actorStr); }
-                catch (IllegalArgumentException ignored) { actor = null; }
-            }
-            String kindStr = rs.getString(4);
-            TransactionLogRecord.Kind kind;
-            try { kind = TransactionLogRecord.Kind.valueOf(kindStr); }
-            catch (IllegalArgumentException ignored) { return null; }
-            short itemId = rs.getShort(5);
-            long amount = rs.getLong(6);
-            int other = rs.getInt(7);
-            Integer otherAccount = rs.wasNull() ? null : other;
-            int comp = rs.getInt(8);
-            Integer companyId = rs.wasNull() ? null : comp;
-            long ts = rs.getLong(9);
-            String note = rs.getString(10);
-            return new TransactionLogRecord(id, account, actor, kind, itemId, amount,
-                    otherAccount, companyId, ts, note);
-        } catch (SQLException e) {
-            return null;
+    /** Never drops a row: unknown codes map to UNKNOWN_LEGACY, unknown sources to SYSTEM. */
+    private static TransactionLogRecord mapRow(ResultSet rs) throws SQLException {
+        long id = rs.getLong(1);
+        int account = rs.getInt(2);
+        String actorStr = rs.getString(3);
+        UUID actor = null;
+        if (actorStr != null && !actorStr.isEmpty()) {
+            try { actor = UUID.fromString(actorStr); }
+            catch (IllegalArgumentException ignored) { actor = null; }
         }
+        short itemId = rs.getShort(5);
+        long amount = rs.getLong(6);
+        Integer otherAccount = nullableInt(rs, 7);
+        Integer companyId = nullableInt(rs, 8);
+        long ts = rs.getLong(9);
+        String note = rs.getString(10);
+        LedgerActor.Source source;
+        try { source = LedgerActor.Source.valueOf(rs.getString(11)); }
+        catch (IllegalArgumentException | NullPointerException ignored) { source = LedgerActor.Source.SYSTEM; }
+        String tag = rs.getString(12);
+        LedgerType type = LedgerType.fromCode(rs.getInt(13));
+        String ref = rs.getString(14);
+        Long moneyAmount = nullableLong(rs, 15);
+        Long price = nullableLong(rs, 16);
+        Integer currency = nullableInt(rs, 17);
+        String actorName = rs.getString(18);
+        Long balanceAfter = nullableLong(rs, 19);
+        Long virtualQty = nullableLong(rs, 20);
+        return new TransactionLogRecord(id, account, actor, actorName, source, type, itemId, amount,
+                otherAccount, companyId, ts, note, ref, moneyAmount, price,
+                currency == null ? null : (short) (int) currency, balanceAfter, virtualQty, tag);
+    }
+
+    private static @Nullable Integer nullableInt(ResultSet rs, int col) throws SQLException {
+        int v = rs.getInt(col);
+        return rs.wasNull() ? null : v;
+    }
+
+    private static @Nullable Long nullableLong(ResultSet rs, int col) throws SQLException {
+        long v = rs.getLong(col);
+        return rs.wasNull() ? null : v;
     }
 }

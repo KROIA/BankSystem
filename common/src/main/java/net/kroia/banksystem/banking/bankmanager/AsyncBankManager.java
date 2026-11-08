@@ -277,6 +277,14 @@ public class AsyncBankManager implements IAsyncBankManager {
             return super.sendRequestToServer(input);
         }
 
+        /** Task #109: ledger actor for a forwarded call; admins are recorded as ADMIN. */
+        private net.kroia.banksystem.api.ledger.LedgerActor ledgerActor(@Nullable UUID playerSender) {
+            if (playerSender == null) return net.kroia.banksystem.api.ledger.LedgerActor.system();
+            return playerIsAdmin(playerSender)
+                    ? net.kroia.banksystem.banking.ledger.TransactionLedger.admin(playerSender)
+                    : net.kroia.banksystem.banking.ledger.TransactionLedger.player(playerSender);
+        }
+
         /**
          * Gets called by the Request handler on the master side
          * @param input the input data provided by the function call
@@ -368,7 +376,11 @@ public class AsyncBankManager implements IAsyncBankManager {
                     bankManager.addUser(param.uuid, param.string);
                     yield OutputData.of(input.function);
                 }
-                case FunctionType.RemoveUserAsync -> OutputData.of(input.function, bankManager.removeUser(input.decodeParams()));
+                case FunctionType.RemoveUserAsync -> {
+                    UUID removed = input.decodeParams();
+                    yield OutputData.of(input.function, net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(ledgerActor(playerSender),
+                            () -> bankManager.removeUser(removed)));
+                }
                 case FunctionType.UserExistsAsync -> OutputData.of(input.function, bankManager.userExists(input.decodeParams()));
                 case FunctionType.GetUserByUUIDAsync -> userResult(input.function, bankManager.getUserByUUID(input.decodeParams()), playerSender, fullRead);
                 case FunctionType.GetUserByNameAsync -> userResult(input.function, bankManager.getUserByName(input.decodeParams()), playerSender, fullRead);
@@ -423,7 +435,8 @@ public class AsyncBankManager implements IAsyncBankManager {
                            !bankAccount.hasPermission(playerSender, BankPermission.MANAGE))
                             yield OutputData.of(input.function);
                     }
-                    yield OutputData.of(input.function, bankManager.deleteBankAccount(bankAccountNr));
+                    yield OutputData.of(input.function, net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(ledgerActor(playerSender),
+                            () -> bankManager.deleteBankAccount(bankAccountNr)));
                 }
                 case FunctionType.PersonalBankExistsAsync_1 -> {
                     ParamGroup_UUID_ItemID param = input.decodeParams();
@@ -460,7 +473,9 @@ public class AsyncBankManager implements IAsyncBankManager {
                         if(!bankManager.isBanksystemAdmin(playerSender))
                             yield OutputData.of(input.function);
                     }
-                    yield OutputData.of(input.function, bankManager.disallowItemID(input.decodeParams()) );
+                    ItemID disallowed = input.decodeParams();
+                    yield OutputData.of(input.function, net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(ledgerActor(playerSender),
+                            () -> bankManager.disallowItemID(disallowed)));
                 }
                 case FunctionType.IsItemIDBlacklistedAsync -> OutputData.of(input.function, bankManager.isItemIDBlacklisted(input.decodeParams()) );
                 case FunctionType.GetItemFractionScaleFactorAsync -> OutputData.of(input.function, bankManager.getItemFractionScaleFactor());

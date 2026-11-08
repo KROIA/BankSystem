@@ -554,6 +554,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 // Check if this is the user's personal bank account
                 User personalOwner = account.getPersonalBankOwner();
                 if (personalOwner != null && personalOwner.getUUID().equals(userUUID)) {
+                    logDeletePayout(account, userUUID);
                     collectAccountBalances(account, itemsToDrop);
                     personalAccountsToDrop.add(entry.getKey());
                     continue;
@@ -562,6 +563,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 if (account.hasUser(userUUID)) {
                     account.removeUser(userUUID);
                     if (!account.hasAnyUser()) {
+                        logDeletePayout(account, userUUID);
                         collectAccountBalances(account, itemsToDrop);
                         emptyAccounts.add(entry.getKey());
                     }
@@ -575,7 +577,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
             // Delete empty non-personal accounts
             for (int accountNr : emptyAccounts) {
-                deleteBankAccount(accountNr);
+                deleteBankAccount(accountNr, false); // balances already logged as ACCOUNT_DELETE_PAYOUT
                 info("Removed empty bank account with number: " + accountNr);
             }
 
@@ -604,6 +606,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     /**
      * Collects all non-zero balances (free + locked) from the given bank account into the target map.
      */
+    /** Task #109: one ACCOUNT_DELETE_PAYOUT row per non-empty bank of an account being deleted. */
+    private static void logDeletePayout(ServerBankAccount account, UUID deletedUser) {
+        for (Map.Entry<ItemID, IServerBank> e : account.getAllBanks().entrySet()) {
+            ISyncServerBank bank = e.getValue();
+            if (bank == null || bank.getTotalBalance() <= 0) continue;
+            net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(account.getAccountNumber(), net.kroia.banksystem.api.ledger.LedgerType.ACCOUNT_DELETE_PAYOUT, e.getKey(),
+                    bank.getTotalBalance(), net.kroia.banksystem.banking.ledger.TransactionLedger.currentActor(), null, "user deleted: " + deletedUser);
+        }
+    }
+
     private void collectAccountBalances(ServerBankAccount account, Map<ItemID, Long> target) {
         for (Map.Entry<ItemID, IServerBank> bankEntry : account.getAllBanks().entrySet()) {
             ItemID itemID = bankEntry.getKey();
@@ -1343,6 +1355,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean deleteBankAccount(int accountNumber)
     {
+        return deleteBankAccount(accountNumber, true);
+    }
+
+    /**
+     * @param logClosure Task #109: write a BANK_CLOSED ledger row per non-empty bank (actor from
+     *                   {@code TransactionLedger.currentActor()}); false when the caller already
+     *                   logged the balances (user deletion payout)
+     */
+    private boolean deleteBankAccount(int accountNumber, boolean logClosure)
+    {
         if(bankAccounts.containsKey(accountNumber)) {
             ServerBankAccount account = bankAccounts.get(accountNumber);
             if(account.getPersonalBankOwner() != null){
@@ -1354,6 +1376,14 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             if (cm != null && cm.getByBankAccount(accountNumber) != null) {
                 error("Cannot delete bank account " + accountNumber + ": it still belongs to a company.");
                 return false;
+            }
+            if (logClosure) {
+                for (Map.Entry<ItemID, IServerBank> e : account.getAllBanks().entrySet()) {
+                    ISyncServerBank bank = e.getValue();
+                    if (bank == null || bank.getTotalBalance() == 0) continue;
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(accountNumber, net.kroia.banksystem.api.ledger.LedgerType.BANK_CLOSED, e.getKey(), bank.getTotalBalance(),
+                            net.kroia.banksystem.banking.ledger.TransactionLedger.currentActor(), null, "account deleted");
+                }
             }
             bankAccounts.remove(accountNumber);
             markPersistDirty(); // Task #55 (removed account is no longer iterated by update())
@@ -1624,8 +1654,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         // 2) Remove the slot from every holder.
         for(DisallowedHolder holder : cleared) {
             ServerBankAccount account = bankAccounts.get(holder.accountNr());
-            if(account != null)
+            if(account != null) {
                 account.removeBank(finalItemID);
+                long cleared_ = holder.free() + holder.locked();
+                if (cleared_ != 0)
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(holder.accountNr(), net.kroia.banksystem.api.ledger.LedgerType.ADMIN_DISALLOW_ITEM, finalItemID, cleared_,
+                            net.kroia.banksystem.banking.ledger.TransactionLedger.currentActor(), null, "item disallowed, no refund");
+            }
         }
 
         // 3) Drop from the allowed set and add to the runtime blacklist so the disallow sticks
@@ -2302,6 +2337,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         bankAccounts.put(accountNumber, account);
         markPersistDirty(); // Task #55 (new personal account + advanced nextAccountNumber)
+        if (startBalance > 0) {
+            ServerBank startBank = account.getBank(MoneyItem.getItemID());
+            if (startBank != null)
+                net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(startBank, net.kroia.banksystem.api.ledger.LedgerType.STARTING_BALANCE, startBalance,
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.player(user), null);
+        }
         // Seed the default slots (money + each available external-currency provider) through
         // the allow/blacklist gate. Idempotent with createPersonal's own gated money seed, and
         // the single source of truth for what a fresh account starts with (Task #57).

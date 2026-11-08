@@ -605,9 +605,14 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                 int filledAmount = tryFillInventory(item, amountToFillFinal);
                 if(filledAmount > 0) {
                     long amountToWithdraw = (long) filledAmount * ratio;
-                    CompletableFuture<BankStatus> withdrawStatusFuture = itemBank.withdrawLockedPreferedAsync(amountToWithdraw);
+                    CompletableFuture<BankStatus> withdrawStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DOWNLOAD_WITHDRAW, null,
+                            "download block " + worldPosition.toShortString(), () -> itemBank.withdrawLockedPreferedAsync(amountToWithdraw));
                     withdrawStatusFuture.thenAccept((withdrawStatus) -> {
                         if(withdrawStatus == BankStatus.SUCCESS) {
+                            // Task #109: no player drives a download block; actor SYSTEM, position in the note.
+                            net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(bankAccountNumber, net.kroia.banksystem.api.ledger.LedgerType.DOWNLOAD_WITHDRAW, item,
+                                    amountToWithdraw, net.kroia.banksystem.api.ledger.LedgerActor.system(), null,
+                                    "download block " + worldPosition.toShortString());
                             if(filledAmount != amountToFillFinal)
                             {
                                 // If we filled less than requested, unlock the remaining amount

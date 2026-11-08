@@ -1,80 +1,87 @@
 package net.kroia.banksystem.data.table.record;
 
+import net.kroia.banksystem.api.ledger.LedgerActor;
+import net.kroia.banksystem.api.ledger.LedgerType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
 /**
- * Task #44 (v2.1.0) — Transaction Ledger row.
+ * Task #44 / #109 (v2.1.0) — Transaction Ledger row.
  * <p>
  * Persisted to the SQLite {@code TransactionLog} table (see {@code
- * common/src/main/resources/sql/TransactionLog.sql}). One row per user-facing money-or-item
- * movement so the future Company screen and audit tooling can render a filterable history
- * that spans an account's or a company's lifetime.
+ * common/src/main/resources/sql/TransactionLog.sql}). One row per money-or-item movement.
+ * {@link #type()} carries the stable numeric code ({@code type_code}); the {@code kind} text
+ * column keeps the type name for readability.
  * <p>
- * Kinds currently populated: {@link Kind#DEPOSIT}, {@link Kind#WITHDRAW},
- * {@link Kind#TRANSFER_OUT}, {@link Kind#TRANSFER_IN}. {@link Kind#PAYOUT} is a stub the
- * scheduler task (#45) will activate. {@link Kind#DIVIDEND}, {@link Kind#SHARE_STAMP},
- * {@link Kind#SHARE_REDEEM}, {@link Kind#SHARE_TRADE} are declared here so future Company
- * phases can write them without a schema migration.
- * <p>
- * {@code actorUuid} is {@code null} for system-initiated writes (e.g. a bank-to-bank
- * transfer performed without a player-scoped executor). {@code otherAccount} is populated
- * for {@code TRANSFER_*} rows; {@code companyId} is populated for share/payout/dividend
- * rows once those phases land.
+ * Trade rows ({@link LedgerType#TRADE_BUY}/{@link LedgerType#TRADE_SELL}) use
+ * {@code itemId}/{@code amount} for the item slice and {@code moneyAmount}/{@code price}/
+ * {@code currencyItem} for the money side. {@code tag} holds the trade row kind.
+ * {@code balanceAfter} is the bank balance of {@code itemId} after the operation, when known.
  */
 public record TransactionLogRecord(
         long id,
         int accountNumber,
         @Nullable UUID actorUuid,
-        Kind kind,
+        @Nullable String actorName,
+        LedgerActor.Source source,
+        LedgerType type,
         short itemId,
         long amount,
         @Nullable Integer otherAccount,
         @Nullable Integer companyId,
         long time,
-        @Nullable String note
+        @Nullable String note,
+        @Nullable String ref,
+        @Nullable Long moneyAmount,
+        @Nullable Long price,
+        @Nullable Short currencyItem,
+        @Nullable Long balanceAfter,
+        @Nullable Long virtualQty,
+        @Nullable String tag
 ) {
     /** Sentinel used when the row's DB id is not yet known (pre-insert construction). */
     public static final long UNSAVED_ID = -1L;
 
-    public enum Kind {
-        DEPOSIT,
-        WITHDRAW,
-        TRANSFER_OUT,
-        TRANSFER_IN,
-        PAYOUT,
-        DIVIDEND,
-        SHARE_STAMP,
-        SHARE_REDEEM,
-        SHARE_TRADE
+    /** Short form for non-trade rows. Source is PLAYER when {@code actor} is set, else SYSTEM. */
+    public TransactionLogRecord(long id, int accountNumber, @Nullable UUID actorUuid, LedgerType type,
+                                short itemId, long amount, @Nullable Integer otherAccount,
+                                @Nullable Integer companyId, long time, @Nullable String note) {
+        this(id, accountNumber, actorUuid, null,
+                actorUuid == null ? LedgerActor.Source.SYSTEM : LedgerActor.Source.PLAYER,
+                type, itemId, amount, otherAccount, companyId, time, note,
+                null, null, null, null, null, null, null);
     }
 
-    /** Convenience factory for a plain deposit/withdraw row (no counterparty, no company). */
+    /** Non-trade row with a full actor. */
+    public static TransactionLogRecord of(int accountNumber, LedgerType type, short itemId, long amount,
+                                          LedgerActor actor, @Nullable Integer otherAccount,
+                                          @Nullable Integer companyId, @Nullable String ref,
+                                          @Nullable String note, @Nullable Long balanceAfter) {
+        return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor.uuid(), actor.name(), actor.source(),
+                type, itemId, amount, otherAccount, companyId, System.currentTimeMillis(), note,
+                ref, null, null, null, balanceAfter, null, null);
+    }
+
+    /** Convenience factory for a plain row (no counterparty, no company). */
     public static TransactionLogRecord simple(int accountNumber, @Nullable UUID actor,
-                                              Kind kind, short itemId, long amount, long time) {
-        return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor, kind, itemId,
+                                              LedgerType type, short itemId, long amount, long time) {
+        return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor, type, itemId,
                 amount, null, null, time, null);
     }
 
-    /** Convenience factory for a transfer leg (source or destination account). */
+    /** Convenience factory for a transfer leg ({@link LedgerType#TRANSFER}, signed amount). */
     public static TransactionLogRecord transfer(int accountNumber, @Nullable UUID actor,
-                                                Kind kind, short itemId, long amount,
+                                                short itemId, long signedAmount,
                                                 int otherAccount, long time) {
-        return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor, kind, itemId,
-                amount, otherAccount, null, time, null);
+        return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor, LedgerType.TRANSFER, itemId,
+                signedAmount, otherAccount, null, time, null);
     }
 
-    /**
-     * Task #48 (v2.1.0) — factory for a {@link Kind#SHARE_TRADE} row emitted when stamped
-     * shares change hands via a bank deposit/withdraw (which is where StockMarket
-     * settlement lands in the absence of a dedicated match-observer hook). Populates
-     * {@code companyId} so the future company ledger UI can filter share flows.
-     */
-    public static TransactionLogRecord shareTrade(int accountNumber, @Nullable UUID actor,
-                                                  short itemId, long amount,
-                                                  int companyId, long time) {
-        return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor, Kind.SHARE_TRADE,
-                itemId, amount, null, companyId, time, null);
+    /** Copy with a different actor. */
+    public TransactionLogRecord withActor(LedgerActor actor) {
+        return new TransactionLogRecord(id, accountNumber, actor.uuid(), actor.name(), actor.source(), type,
+                itemId, amount, otherAccount, companyId, time, note, ref, moneyAmount, price,
+                currencyItem, balanceAfter, virtualQty, tag);
     }
 }

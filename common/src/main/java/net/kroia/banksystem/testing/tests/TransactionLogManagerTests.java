@@ -1,5 +1,6 @@
 package net.kroia.banksystem.testing.tests;
 
+import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.DriverShim;
 import net.kroia.banksystem.data.table.TransactionLogManager;
@@ -79,6 +80,8 @@ public class TransactionLogManagerTests extends TestSuite {
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_tx_log_company_ts " +
                         "ON TransactionLog (company_id, ts DESC)");
             }
+            // Task #109: bring the legacy schema up to date the same way a live world does.
+            DatabaseManager.migrateTransactionLog(connection);
             connection.commit();
 
             testDbManager = new TestDatabaseManager(connection);
@@ -105,9 +108,9 @@ public class TransactionLogManagerTests extends TestSuite {
         long t = 1_000L;
         try {
             manager.save(TransactionLogRecord.simple(42, actor,
-                    TransactionLogRecord.Kind.DEPOSIT, (short) 7, 500L, t)).get(10, TimeUnit.SECONDS);
+                    LedgerType.DEPOSIT, (short) 7, 500L, t)).get(10, TimeUnit.SECONDS);
             manager.save(TransactionLogRecord.simple(42, actor,
-                    TransactionLogRecord.Kind.WITHDRAW, (short) 7, 100L, t + 10)).get(10, TimeUnit.SECONDS);
+                    LedgerType.WITHDRAW, (short) 7, 100L, t + 10)).get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             return fail("save threw: " + e.getMessage());
         }
@@ -121,7 +124,7 @@ public class TransactionLogManagerTests extends TestSuite {
         if (!res.passed()) return res;
 
         TransactionLogRecord newest = rows.get(0);
-        res = assertEquals("newest kind", TransactionLogRecord.Kind.WITHDRAW, newest.kind());
+        res = assertEquals("newest kind", LedgerType.WITHDRAW, newest.type());
         if (!res.passed()) return res;
         res = assertEquals("newest amount", 100L, newest.amount());
         if (!res.passed()) return res;
@@ -131,7 +134,7 @@ public class TransactionLogManagerTests extends TestSuite {
         if (!res.passed()) return res;
 
         TransactionLogRecord older = rows.get(1);
-        res = assertEquals("older kind", TransactionLogRecord.Kind.DEPOSIT, older.kind());
+        res = assertEquals("older kind", LedgerType.DEPOSIT, older.type());
         if (!res.passed()) return res;
         res = assertEquals("older amount", 500L, older.amount());
         if (!res.passed()) return res;
@@ -143,14 +146,14 @@ public class TransactionLogManagerTests extends TestSuite {
         try {
             // Account row without company_id.
             manager.save(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    1, null, TransactionLogRecord.Kind.DEPOSIT, (short) 5, 10L,
+                    1, null, LedgerType.DEPOSIT, (short) 5, 10L,
                     null, null, t, null)).get(10, TimeUnit.SECONDS);
             // Company-scoped row.
             manager.save(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    2, null, TransactionLogRecord.Kind.PAYOUT, (short) 5, 200L,
+                    2, null, LedgerType.PAYOUT, (short) 5, 200L,
                     null, 99, t + 5, "wage")).get(10, TimeUnit.SECONDS);
             manager.save(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    3, null, TransactionLogRecord.Kind.PAYOUT, (short) 5, 300L,
+                    3, null, LedgerType.PAYOUT, (short) 5, 300L,
                     null, 99, t + 10, "wage")).get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             return fail("save threw: " + e.getMessage());
@@ -179,23 +182,23 @@ public class TransactionLogManagerTests extends TestSuite {
         long t = 9_000L;
         try {
             manager.save(TransactionLogRecord.simple(7, null,
-                    TransactionLogRecord.Kind.DEPOSIT, (short) 1, 10L, t)).get(10, TimeUnit.SECONDS);
+                    LedgerType.DEPOSIT, (short) 1, 10L, t)).get(10, TimeUnit.SECONDS);
             manager.save(TransactionLogRecord.simple(7, null,
-                    TransactionLogRecord.Kind.WITHDRAW, (short) 1, 5L, t + 1)).get(10, TimeUnit.SECONDS);
+                    LedgerType.WITHDRAW, (short) 1, 5L, t + 1)).get(10, TimeUnit.SECONDS);
             manager.save(TransactionLogRecord.transfer(7, null,
-                    TransactionLogRecord.Kind.TRANSFER_OUT, (short) 1, 3L, 8, t + 2))
+                    (short) 1, -3L, 8, t + 2))
                     .get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             return fail("save threw: " + e.getMessage());
         }
         try {
-            List<TransactionLogRecord> deposits = manager.getByAccountAndKind(7,
-                    TransactionLogRecord.Kind.DEPOSIT, 0).get(10, TimeUnit.SECONDS);
+            List<TransactionLogRecord> deposits = manager.getByAccountAndType(7,
+                    LedgerType.DEPOSIT.code(), 0, 0).get(10, TimeUnit.SECONDS);
             TestResult res = assertEquals("deposit rows", 1, deposits.size());
             if (!res.passed()) return res;
 
-            List<TransactionLogRecord> transfers = manager.getByAccountAndKind(7,
-                    TransactionLogRecord.Kind.TRANSFER_OUT, 0).get(10, TimeUnit.SECONDS);
+            List<TransactionLogRecord> transfers = manager.getByAccountAndType(7,
+                    LedgerType.TRANSFER.code(), 0, 0).get(10, TimeUnit.SECONDS);
             res = assertEquals("transfer_out rows", 1, transfers.size());
             if (!res.passed()) return res;
             res = assertEquals("transfer other_account", Integer.valueOf(8),
@@ -219,7 +222,7 @@ public class TransactionLogManagerTests extends TestSuite {
         long t = 42_000L;
         try {
             manager.save(TransactionLogRecord.simple(11, null,
-                    TransactionLogRecord.Kind.DEPOSIT, (short) 3, 77L, t)).get(10, TimeUnit.SECONDS);
+                    LedgerType.DEPOSIT, (short) 3, 77L, t)).get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             return fail("save threw: " + e.getMessage());
         }
@@ -244,7 +247,7 @@ public class TransactionLogManagerTests extends TestSuite {
         try {
             for (int i = 0; i < 5; i++) {
                 manager.save(TransactionLogRecord.simple(20, null,
-                        TransactionLogRecord.Kind.DEPOSIT, (short) 2, i,
+                        LedgerType.DEPOSIT, (short) 2, i,
                         t + i * 10L)).get(10, TimeUnit.SECONDS);
             }
         } catch (Exception e) {

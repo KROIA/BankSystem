@@ -131,7 +131,10 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
             return;
         }
         BankStatus status = moneyBank.deposit(amount);
-        if (status != BankStatus.SUCCESS) {
+        if (status == BankStatus.SUCCESS) {
+            net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(moneyBank, net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT, amount,
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.player(playerUUID), null);
+        } else {
             warn("ConverterCommitToBankPacket: bank deposit refused (" + status + ") — refunding cache");
             ConverterCacheManager.get().deposit(playerUUID, amount);
         }
@@ -158,7 +161,7 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
         }
         if (items.isEmpty()) return;
 
-        DepositItemsInBankRequest.sendToMaster(selectedAccountNumber, playerUUID, items)
+        DepositItemsInBankRequest.sendToMaster(selectedAccountNumber, playerUUID, items, net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT)
                 .whenComplete((notDeposited, ex) -> {
                     // ARRS response lands on the netty IO thread. Hop back to the server thread
                     // before touching the cache map and before dispatching a chat message —

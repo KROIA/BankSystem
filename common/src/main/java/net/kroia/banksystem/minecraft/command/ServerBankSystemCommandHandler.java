@@ -174,7 +174,8 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         // holder dump to the server console and returns the cleared holders for the capped
         // chat summary below.
         java.util.List<net.kroia.banksystem.api.bankmanager.ISyncServerBankManager.DisallowedHolder> cleared =
-                BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().disallowItemIDAndReport(itemID);
+                net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor),
+                        () -> BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().disallowItemIDAndReport(itemID));
         if (cleared == null) {
             sendMessage(executor, BankSystemTextMessages.getItemNotAllowedFailedMessage(itemID.getName()));
             return false;
@@ -308,6 +309,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         }
 
         BankStatus status = bank.depositReal(amount);
+        if(status == BankStatus.SUCCESS)
+            net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(bank, net.kroia.banksystem.api.ledger.LedgerType.ADMIN_ADD, bank.convertToRawAmount(amount),
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), "money add " + userName);
         if(status != BankStatus.SUCCESS){
             sendMessage(executor,
                     BankSystemTextMessages.getCantAddMessage(
@@ -352,7 +356,10 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getMoneyItemName()));
             return false;
         }
+        long oldBalance = bank.getBalance();
         bank.setRealBalance(amount);
+        net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(bank, net.kroia.banksystem.api.ledger.LedgerType.ADMIN_SET, Math.abs(bank.getBalance() - oldBalance),
+                net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), "money set " + userName + ": " + oldBalance + "->" + bank.getBalance());
         User owner = bankManager.getUserByName(userName);
         if (owner == null) {
             sendMessage(executor, BankSystemTextMessages.getUserNotFoundMessage(userName));
@@ -398,7 +405,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
         if(bank.getRealBalance() >= amount) {
-            bank.withdrawReal(amount);
+            if(bank.withdrawReal(amount) == BankStatus.SUCCESS)
+                net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(bank, net.kroia.banksystem.api.ledger.LedgerType.ADMIN_REMOVE, bank.convertToRawAmount(amount),
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), "money remove " + userName);
         }
         else {
             sendMessage(executor, BankSystemTextMessages.getNotEnoughInAccountMessage(userName, MoneyItem.getMoneyItemName()));
@@ -437,7 +446,8 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             sendMessage(executor, BankSystemTextMessages.getTransferToSameAccountMessage(MoneyItem.getMoneyItemName()));
             return false;
         }
-        BankStatus status = fromBank.transfer(fromBank.convertToRawAmount(amount), toBank);
+        BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.player(executor),
+                () -> fromBank.transfer(fromBank.convertToRawAmount(amount), toBank));
         if(status != BankStatus.SUCCESS) {
             if (fromBank.getRealBalance() < amount)
                 sendMessage(executor, BankSystemTextMessages.getNotEnoughMoneyForTransfer(fromUserName, toUserName, fromBank.getFormattedAmount(amount), MoneyItem.getMoneyItemName()));

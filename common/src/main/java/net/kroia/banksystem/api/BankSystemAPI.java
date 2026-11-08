@@ -136,6 +136,16 @@ public interface BankSystemAPI {
     net.kroia.banksystem.api.payout.IPayoutManager getPayoutManager();
 
     /**
+     * Task #109 (v2.1.0) — transaction ledger. Never {@code null}. Writes are fire-and-forget,
+     * thread-safe and best-effort; see {@link net.kroia.banksystem.api.ledger.ITransactionLedger}.
+     * Trade rows are deltas: per order {@code ref} they sum to the order totals.
+     *
+     * @return the ledger writer.
+     * @since 2.1.0
+     */
+    net.kroia.banksystem.api.ledger.ITransactionLedger getLedger();
+
+    /**
      * Task #49 (v2.1.0) — one-shot dividend distributor. Never {@code null}; on slaves
      * the returned instance is a fail-closed shim that returns
      * {@link net.kroia.banksystem.api.PayDividendResult.Reason#NOT_MASTER} for every

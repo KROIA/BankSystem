@@ -233,7 +233,8 @@ public final class PayoutExecutor {
             return new Outcome(money ? PayoutFailureReason.INSUFFICIENT_FUNDS
                     : PayoutFailureReason.CURRENCY_ITEM_MISSING, playerName, accountName);
         }
-        BankStatus status = sourceBank.transfer(amount, targetBank);
+        final ISyncServerBank finalTargetBank = targetBank;
+        BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutTransferLog(() -> sourceBank.transfer(amount, finalTargetBank));
         if (status != BankStatus.SUCCESS) {
             return new Outcome(money ? PayoutFailureReason.INSUFFICIENT_FUNDS
                     : PayoutFailureReason.CURRENCY_ITEM_MISSING, playerName, accountName);
@@ -241,11 +242,11 @@ public final class PayoutExecutor {
         // TransactionLog PAYOUT rows — one on the source account (out), one on the target (in).
         short currencyShort = currency.getShort();
         ledgerRows.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                company.getBankAccountNr(), null, TransactionLogRecord.Kind.PAYOUT, currencyShort,
+                company.getBankAccountNr(), null, net.kroia.banksystem.api.ledger.LedgerType.PAYOUT, currencyShort,
                 amount, targetAccount.getAccountNumber(), company.getCompanyId(),
                 nowMs, null));
         ledgerRows.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                targetAccount.getAccountNumber(), null, TransactionLogRecord.Kind.PAYOUT, currencyShort,
+                targetAccount.getAccountNumber(), null, net.kroia.banksystem.api.ledger.LedgerType.PAYOUT, currencyShort,
                 amount, company.getBankAccountNr(), company.getCompanyId(),
                 nowMs, null));
         return new Outcome(null, playerName, accountName);
@@ -332,7 +333,9 @@ public final class PayoutExecutor {
                         + " could not create a bank for the payout currency — skipped");
                 continue;
             }
-            BankStatus status = sourceBank.transfer(payAmount, targetBank);
+            final ISyncServerBank finalTargetBank = targetBank;
+            final long finalPayAmount = payAmount;
+            BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutTransferLog(() -> sourceBank.transfer(finalPayAmount, finalTargetBank));
             if (status != BankStatus.SUCCESS) {
                 logWarn("dividend schedule " + schedule.getScheduleId() + " company "
                         + company.getCompanyId() + ": transfer of " + payAmount
@@ -342,10 +345,10 @@ public final class PayoutExecutor {
             paidHolders++;
             paidTotal += payAmount;
             ledgerRows.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    companyAccountNr, null, TransactionLogRecord.Kind.DIVIDEND, currencyShort,
+                    companyAccountNr, null, net.kroia.banksystem.api.ledger.LedgerType.DIVIDEND, currencyShort,
                     payAmount, accountNr, company.getCompanyId(), nowMs, null));
             ledgerRows.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    accountNr, null, TransactionLogRecord.Kind.DIVIDEND, currencyShort,
+                    accountNr, null, net.kroia.banksystem.api.ledger.LedgerType.DIVIDEND, currencyShort,
                     payAmount, companyAccountNr, company.getCompanyId(), nowMs, null));
         }
         // BUG 4 fix (v2.1.0) — a run that moved no money must not report success.

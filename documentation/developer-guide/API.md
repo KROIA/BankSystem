@@ -24,6 +24,7 @@ The `BankSystemAPI` interface provides access to all subsystems:
 | `getDataHandler()` | `IBankSystemDataHandler` | Save/load operations |
 | `isSlave()` | `boolean` | Whether this server is a slave in multi-server mode |
 | `setItemPriceProvider(ItemPriceProvider)` / `getItemPriceProvider()` | `void` / `ItemPriceProvider` *(nullable)* | Supply market prices for total-wealth tracking — see [Item Price Provider API](ItemPriceProviderAPI.md) |
+| `getLedger()` | `ITransactionLedger` | Write transaction-ledger rows (generic `log` and StockMarket `logTrade`); master only, a no-op on slave servers — see [Transaction Ledger](TransactionLedger.md) |
 | `setPriceCurrencyItem(short)` / `getPriceCurrencyItem()` | `void` / `short` | The item prices are denominated in |
 | `registerCurrencyProvider(ExternalCurrencyProvider)` | `void` | Register a currency-mod adapter — see [Currency Integration](CurrencyIntegration.md) |
 | `unregisterCurrencyProvider(String providerId)` | `boolean` | Remove a previously registered provider |
@@ -330,6 +331,11 @@ api/
 │   ├── ExternalAccount.java        — An account inside a currency mod
 │   ├── ExternalAccountRef.java     — Stable reference to such an account
 │   └── ProviderFeature.java        — Optional capability flags
+├── ledger/
+│   ├── ITransactionLedger.java     — Write ledger rows (getLedger())
+│   ├── LedgerType.java             — Stable type codes
+│   ├── LedgerActor.java            — Who caused a row
+│   └── TradeLogEntry.java          — StockMarket trade slice (+ TradeSide, TradeRowKind)
 ├── event/
 │   ├── TrustChangeInfo.java        — Payload of getTrustChangedSignal()
 │   ├── PayoutExecutedInfo.java     — Payload of getPayoutExecutedEvent()
@@ -345,4 +351,5 @@ api/
 - [Events & Signals](EventsAndSignals.md) — Full event catalog with threading and side contracts
 - [Currency Integration](CurrencyIntegration.md) — Implementing `ExternalCurrencyProvider`
 - [Item Price Provider API](ItemPriceProviderAPI.md) — Supplying prices for total-wealth tracking
+- [Transaction Ledger](TransactionLedger.md) — `getLedger()`, type codes and columns
 - [Async Forwarding Architecture](AsyncForwardingArchitecture.md) — How that system works internally

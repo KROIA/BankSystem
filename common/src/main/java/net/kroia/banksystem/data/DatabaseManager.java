@@ -127,30 +127,66 @@ public class DatabaseManager {
     }
 
     /**
-     * v2.1.0 — column migration for TransactionLog.
-     * Adds source_kind and tag columns when missing (pre-existing worlds).
+     * v2.1.0 — column migration for TransactionLog (pre-existing worlds). See
+     * {@link #migrateTransactionLog(Connection)}.
      */
     private void migrateTransactionLogColumns() {
+        try {
+            for (String col : migrateTransactionLog(connection))
+                getLogger().info("[DatabaseManager] TransactionLog migration: added column " + col);
+            commitTransaction();
+        } catch (SQLException e) {
+            getLogger().error("TransactionLog column migration failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * v2.1.0 (Task #109) — brings an existing TransactionLog table up to the current schema:
+     * adds missing columns, creates the indexes on the new columns and maps legacy
+     * {@code kind} values to {@code type_code}. Idempotent: only rows with
+     * {@code type_code = 0} are mapped, and TRANSFER_OUT amounts are negated in the same
+     * UPDATE that sets the code, so a re-run never negates twice. Does not commit.
+     * Public static so the in-game tests can run it on an in-memory database.
+     *
+     * @return names of the columns that were added
+     */
+    public static java.util.List<String> migrateTransactionLog(Connection c) throws SQLException {
         java.util.Map<String, String> wanted = new java.util.LinkedHashMap<>();
         wanted.put("source_kind", "TEXT NOT NULL DEFAULT 'UNKNOWN'");
         wanted.put("tag", "TEXT");
-        try (Statement stmt = connection.createStatement()) {
+        wanted.put("type_code", "INTEGER NOT NULL DEFAULT 0");
+        wanted.put("ref", "TEXT");
+        wanted.put("money_amount", "INTEGER");
+        wanted.put("price", "INTEGER");
+        wanted.put("currency_item", "INTEGER");
+        wanted.put("actor_name", "TEXT");
+        wanted.put("balance_after", "INTEGER");
+        wanted.put("virtual_qty", "INTEGER");
+        java.util.List<String> added = new java.util.ArrayList<>();
+        try (Statement stmt = c.createStatement()) {
             java.util.Set<String> existing = new java.util.HashSet<>();
             try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(TransactionLog)")) {
                 while (rs.next()) existing.add(rs.getString("name"));
             }
             for (var e : wanted.entrySet()) {
                 if (existing.contains(e.getKey())) continue;
-                try (Statement alter = connection.createStatement()) {
-                    alter.execute("ALTER TABLE TransactionLog ADD COLUMN "
-                            + e.getKey() + " " + e.getValue());
-                }
-                getLogger().info("[DatabaseManager] TransactionLog migration: added column " + e.getKey());
+                stmt.execute("ALTER TABLE TransactionLog ADD COLUMN " + e.getKey() + " " + e.getValue());
+                added.add(e.getKey());
             }
-            commitTransaction();
-        } catch (SQLException e) {
-            getLogger().error("TransactionLog column migration failed: " + e.getMessage());
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_tx_log_type_ts ON TransactionLog (type_code, ts DESC)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_tx_log_ref ON TransactionLog (ref)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_tx_log_actor_ts ON TransactionLog (actor_uuid, ts DESC)");
+            // Legacy kind -> type_code. TRANSFER_OUT becomes a negative TRANSFER row.
+            stmt.execute("UPDATE TransactionLog SET type_code = 3, amount = -amount "
+                    + "WHERE type_code = 0 AND kind = 'TRANSFER_OUT'");
+            for (String kind : new String[]{"DEPOSIT", "WITHDRAW", "TRANSFER_IN", "PAYOUT", "DIVIDEND",
+                    "SHARE_STAMP", "SHARE_REDEEM", "SHARE_TRADE"}) {
+                int code = net.kroia.banksystem.api.ledger.LedgerType.fromLegacyKind(kind).code();
+                stmt.execute("UPDATE TransactionLog SET type_code = " + code
+                        + " WHERE type_code = 0 AND kind = '" + kind + "'");
+            }
         }
+        return added;
     }
 
     public void executeSqlFile(String resourcePath) throws IOException, SQLException {

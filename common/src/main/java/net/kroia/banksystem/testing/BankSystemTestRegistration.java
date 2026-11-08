@@ -90,6 +90,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.PayoutArrsRoundTripTests());
         // Task #44 (v2.1.0) — SQLite Transaction Ledger round-trip + read API.
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransactionLogManagerTests());
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.TransactionLedgerTests());
         // Task #45 (v2.1.0) — recurring payouts (schedule mutation, NBT roundtrip, cascade-strip).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.PayoutManagerTests());
         // Task #48 (v2.1.0) — share ItemID volatility guard (distinct companies, distinct ItemIDs).

@@ -1072,8 +1072,12 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                             BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
                                     return;
                                 }
-                                baseBank.depositAsync(finalAmountToDeposit).thenAccept(status -> {
+                                // Task #109: tagged so a slave's request carries the row type to the master.
+                                net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DEPOSIT, playerID, "coin " + itemID.getName() + " x" + finalAmount,
+                                        () -> baseBank.depositAsync(finalAmountToDeposit)).thenAccept(status -> {
                                     if (status == BankStatus.SUCCESS) {
+                                        logTerminal(accountNr, playerID, net.kroia.banksystem.api.ledger.LedgerType.DEPOSIT, baseSlotId, finalAmountToDeposit,
+                                                "coin " + itemID.getName() + " x" + finalAmount);
                                         runOnMainThread(() -> {
                                             inventory.removeItem(itemID, finalAmount);
                                             setChanged();
@@ -1124,11 +1128,14 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                 amountToDeposit = amount * ((MoneyItem) Objects.requireNonNull(itemID.getStack()).getItem()).worth();
                             }
                             final long finalAmountForLog = amountToDeposit;
-                            final short finalItemIdForLog = isMoney ? MoneyItem.getItemID().getShort() : itemID.getShort();
-                            CompletableFuture<BankStatus> depositResult = bank.depositAsync(amountToDeposit);
+                            final ItemID finalItemIdForLog = bank.getItemIDAsync();
+                            final String finalNoteForLog = isMoney ? "banknote " + itemID.getName() + " x" + amount : null;
+                            final long finalAmountToDeposit = amountToDeposit;
+                            CompletableFuture<BankStatus> depositResult = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DEPOSIT, playerID,
+                                    finalNoteForLog, () -> bank.depositAsync(finalAmountToDeposit));
                             depositResult.thenAccept(deposit -> {
                                 if (deposit == BankStatus.SUCCESS) {
-                                    logDeposit(accountNr, playerID, finalItemIdForLog, finalAmountForLog);
+                                    logTerminal(accountNr, playerID, net.kroia.banksystem.api.ledger.LedgerType.DEPOSIT, finalItemIdForLog, finalAmountForLog, finalNoteForLog);
                                     // WHY main thread: removeItem() mutates the terminal's
                                     // TerminalInventory, which is shared with the open menu. Vanilla
                                     // only emits slot-sync packets from broadcastChanges(), run on the
@@ -1152,16 +1159,14 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         });
     }
 
-    private static void logDeposit(int accountNr, UUID actor, short itemIdShort, long amount) {
-        net.kroia.banksystem.data.table.TransactionLogManager mgr =
-                BankSystemModBackend.getTransactionLogManager();
-        if (mgr == null || amount <= 0) return;
-        try {
-            mgr.save(net.kroia.banksystem.data.table.record.TransactionLogRecord.simple(
-                    accountNr, actor,
-                    net.kroia.banksystem.data.table.record.TransactionLogRecord.Kind.DEPOSIT,
-                    itemIdShort, amount, System.currentTimeMillis()));
-        } catch (RuntimeException ignored) { }
+    /**
+     * Task #44 / #109 — ledger row for a terminal deposit/withdraw on the master. Best-effort; a
+     * no-op on a slave, where the tagged bank call carries the row to the master instead.
+     */
+    private static void logTerminal(int accountNr, UUID actor, net.kroia.banksystem.api.ledger.LedgerType type, ItemID bankItem, long amount,
+                                    @Nullable String note) {
+        if (amount <= 0) return;
+        net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(accountNr, type, bankItem, amount, net.kroia.banksystem.banking.ledger.TransactionLedger.player(actor), null, note);
     }
 
     private void sendToBlock(UUID playerID, int accountNr, HashMap<ItemID, Long> items)
@@ -1240,7 +1245,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                             long addedAmount = inventory.addItem(itemID, itemsToDeposit);
                                             if (addedAmount > 0) {
                                                 long rawToWithdraw = addedAmount * ratio;
-                                                CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
+                                                CompletableFuture<BankStatus> withdrawResult = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, playerID, null, () -> bank.withdrawLockedPreferedAsync(rawToWithdraw));
                                                 withdrawResult.thenAccept(withdraw -> {
                                                     if (withdraw != BankStatus.SUCCESS) {
                                                         error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
@@ -1250,6 +1255,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                                         runOnMainThread(() -> inventory.removeItem(itemID, addedAmount));
                                                         bank.unlockAmountAsync(reducedAmount);
                                                     } else {
+                                                        logTerminal(accountNr, playerID, net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, itemID, rawToWithdraw, null);
                                                         // Unlock any remainder that was not withdrawn
                                                         long remainder = reducedAmount - rawToWithdraw;
                                                         if (remainder > 0)
@@ -1275,7 +1281,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                 long addedAmount = inventory.addItem(itemID, itemsToDeposit);
                                 if (addedAmount > 0) {
                                     long rawToWithdraw = addedAmount * ratio;
-                                    CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
+                                    CompletableFuture<BankStatus> withdrawResult = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, playerID, null, () -> bank.withdrawLockedPreferedAsync(rawToWithdraw));
                                     withdrawResult.thenAccept(withdraw -> {
                                         if (withdraw != BankStatus.SUCCESS) {
                                             error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
@@ -1285,6 +1291,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                             runOnMainThread(() -> inventory.removeItem(itemID, addedAmount));
                                             bank.unlockAmountAsync(withdrawAmountFinal);
                                         } else {
+                                            logTerminal(accountNr, playerID, net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, itemID, rawToWithdraw, null);
                                             // Unlock any remainder that was not withdrawn
                                             long remainder = withdrawAmountFinal - rawToWithdraw;
                                             if (remainder > 0)

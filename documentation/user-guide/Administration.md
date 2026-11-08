@@ -105,7 +105,7 @@ Bank accounts, the item registry and `settings.json` are ordinary NBT/JSON files
 ---
 ## Transaction Ledger
 
-Every deposit, withdrawal, transfer, payout, dividend and share stamp is recorded in the database with a timestamp, the account, and the kind of movement. It is what the company [Statistics tab](Companies.md#statistics-tab) and the payout history read from; there is no separate cleanup step for admins.
+Every balance change is recorded in the database: deposits and withdrawals (terminal, upload/download blocks, converter, crafting), transfers, admin edits (money commands, balance set, unlock, account edits, disallowed items), closed banks, starting balances, payouts, dividends, share rows and StockMarket trades. Each row stores a timestamp, the account, a type code, who caused it (player, admin, console, system or StockMarket) and the bank balance afterwards. On a multi-server network the master records every entry, including those from slave servers. Code table and columns: [Transaction Ledger](../developer-guide/TransactionLedger.md). It is what the company [Statistics tab](Companies.md#statistics-tab) and the payout history read from; there is no separate cleanup step for admins.
 
 ---
 ## Volatile Item Components
