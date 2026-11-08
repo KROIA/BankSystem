@@ -608,5 +608,22 @@
   "gui.banksystem.bank_account_management_screen.frozen_label": "Frozen",
   "gui.banksystem.bank_account_management_screen.frozen_tooltip": "This account is frozen by an admin. Deposits, withdrawals and transfers are blocked.\nAdmins: the change is applied on Save.",
   "gui.banksystem.payout_edit_screen.status_account_frozen": "Account frozen",
-  "gui.banksystem.company_account_frozen": "The company account is frozen"
+  "gui.banksystem.company_account_frozen": "The company account is frozen",
+  "gui.banksystem.mod_settings_screen.setting.Utilities.ALERTS_DEFAULT_ON": "Admin alerts on by default",
+  "gui.banksystem.mod_settings_screen.setting.Utilities.ALERTS_DEFAULT_ON.tooltip": "Chat alerts for admin actions and suspicion flags,\nfor admins that never ran /banksystem alerts on|off.\nThe audit files are written regardless.",
+  "message.banksystem.audit_alert": "[BankSystem audit] {message}",
+  "message.banksystem.alerts_on": "Admin alerts enabled",
+  "message.banksystem.alerts_off": "Admin alerts disabled (audit files are still written)",
+  "message.banksystem.audit_target_not_found": "No account or player found for \"{target}\"",
+  "gui.banksystem.audit_screen.title": "Audit",
+  "gui.banksystem.audit_screen.all_types": "All types",
+  "gui.banksystem.audit_screen.prev": "<",
+  "gui.banksystem.audit_screen.next": ">",
+  "gui.banksystem.audit_screen.denied": "Access denied",
+  "gui.banksystem.audit_screen.empty": "No entries",
+  "gui.banksystem.audit_screen.range_1h": "Last hour",
+  "gui.banksystem.audit_screen.range_24h": "Last 24h",
+  "gui.banksystem.audit_screen.range_7d": "Last 7 days",
+  "gui.banksystem.audit_screen.range_all": "All time",
+  "gui.banksystem.audit_screen.header": "Time | Type | Item | Amount | Counterparty | Actor | Note | Ref"
 }

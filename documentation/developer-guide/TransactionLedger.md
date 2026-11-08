@@ -102,6 +102,20 @@ Amounts are unsigned, except for TRANSFER, where the sign gives the direction.
 
 `TransactionLogManager`: `getByAccount`, `getByAccountAndType(account, typeCode, sinceMs, limit)`, `getByRef(ref)` (oldest first), `getByActor(uuid, sinceMs, limit)`, plus the company reads. All return newest first unless noted.
 
+`getPage(account, typeCode, sinceMs, offset, limit)` (newest first, `typeCode < 0` = all) backs the admin audit screen (`AuditPageRequest`, 100 rows per page, admin-checked on the master).
+
+## Admin audit and suspicion flags
+
+`TransactionLedger.write` passes every master row to `AdminAudit.onLedgerRow`. Admin rows (codes 7–11, 26, 27, and 12 when the source is ADMIN) are appended to `<world>/data/BankSystem/audit/<yyyy-mm-dd>.log` and sent to BankSystem admins with alerts on (see [Administration](../user-guide/Administration.md#audit-and-admin-alerts)).
+
+Features that detect suspicious activity call:
+
+```java
+AdminAudit.raise(int accountNumber, int flagType, int severity, long amount, @Nullable String ref, @Nullable String details);
+```
+
+It writes one row to the `SuspicionFlag` table (`id, ts, account_number, flag_type, severity, amount, ref, details, acknowledged`), the audit-file line `FLAG <type> ...` and the admin alert. Master only; it never throws. `flag_type` codes are append-only and owned by the raising feature. Read with `SuspicionFlagManager.getRecent(account, sinceMs, limit)`; mark handled with `acknowledge(id)`. Missing columns are added on start-up like for `TransactionLog`.
+
 ## Upgrading old databases
 
 On start-up, the missing columns and indexes are added. Old rows get a type code from their `kind` text. `TRANSFER_OUT` rows become TRANSFER with a negated amount, and `TRANSFER_IN` rows become TRANSFER with a positive amount. The update only touches rows that are still at code 0, so running it again never negates a row twice. Old rows that cannot be mapped stay at code 0 and are still readable.

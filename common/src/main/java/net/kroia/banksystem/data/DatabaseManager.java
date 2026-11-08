@@ -78,7 +78,8 @@ public class DatabaseManager {
     public static final java.util.List<String> SQL_SCHEMA_FILES = java.util.List.of(
             "/sql/BalanceHistory.sql",
             "/sql/TransactionLog.sql",
-            "/sql/PayoutHistory.sql"
+            "/sql/PayoutHistory.sql",
+            "/sql/SuspicionFlag.sql"
     );
 
     public boolean createDatabase(MinecraftServer server) {
@@ -92,6 +93,13 @@ public class DatabaseManager {
         }
         migratePayoutHistoryColumns();
         migrateTransactionLogColumns();
+        try {
+            for (String col : migrateSuspicionFlag(connection))
+                getLogger().info("[DatabaseManager] SuspicionFlag migration: added column " + col);
+            commitTransaction();
+        } catch (SQLException e) {
+            getLogger().error("SuspicionFlag column migration failed: " + e.getMessage());
+        }
         return true;
     }
 
@@ -185,6 +193,36 @@ public class DatabaseManager {
                 stmt.execute("UPDATE TransactionLog SET type_code = " + code
                         + " WHERE type_code = 0 AND kind = '" + kind + "'");
             }
+        }
+        return added;
+    }
+
+    /**
+     * Task #110 (v2.2.0) — brings an existing SuspicionFlag table up to the current schema
+     * (same pattern as {@link #migrateTransactionLog}). Add new columns here, never rename.
+     * Idempotent. Does not commit.
+     *
+     * @return names of the columns that were added
+     */
+    public static java.util.List<String> migrateSuspicionFlag(Connection c) throws SQLException {
+        java.util.Map<String, String> wanted = new java.util.LinkedHashMap<>();
+        wanted.put("severity", "INTEGER NOT NULL DEFAULT 0");
+        wanted.put("amount", "INTEGER NOT NULL DEFAULT 0");
+        wanted.put("ref", "TEXT");
+        wanted.put("details", "TEXT");
+        wanted.put("acknowledged", "INTEGER NOT NULL DEFAULT 0");
+        java.util.List<String> added = new java.util.ArrayList<>();
+        try (Statement stmt = c.createStatement()) {
+            java.util.Set<String> existing = new java.util.HashSet<>();
+            try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(SuspicionFlag)")) {
+                while (rs.next()) existing.add(rs.getString("name"));
+            }
+            for (var e : wanted.entrySet()) {
+                if (existing.contains(e.getKey())) continue;
+                stmt.execute("ALTER TABLE SuspicionFlag ADD COLUMN " + e.getKey() + " " + e.getValue());
+                added.add(e.getKey());
+            }
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_flag_account_ts ON SuspicionFlag (account_number, ts DESC)");
         }
         return added;
     }

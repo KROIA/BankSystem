@@ -137,6 +137,7 @@ public final class TransactionLedger implements ITransactionLedger {
                     warn("Ledger write failed: " + t.getMessage());
                     return null;
                 });
+                AdminAudit.onLedgerRow(row); // Task #110: audit file + admin alerts
             }
         } catch (RuntimeException e) {
             warn("Ledger write failed: " + e.getMessage());

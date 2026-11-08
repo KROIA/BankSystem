@@ -70,6 +70,11 @@ public class BankSystemClientHooks {
         Minecraft.getInstance().submit(ATMScreen::openScreen);
     }
 
+    public static void openAuditScreen(int accountNumber) // Task #110
+    {
+        Minecraft.getInstance().submit(() -> net.kroia.banksystem.screen.custom.AuditScreen.openScreen(accountNumber));
+    }
+
     public static void openBankAccountScreen(int accountNumber, boolean isAdminMode)
     {
         // Ensuring the code runs on the main thread

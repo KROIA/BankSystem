@@ -16,6 +16,8 @@ public interface IAsyncBankSystemCommandHandler {
     CompletableFuture<Boolean> banksystem_disallowItem_async(@NotNull UUID executor, ItemID itemID);
     /** Task #117 — freeze an account; mode 0 = off, 1 = on, 2 = toggle. @since 2.2.0 */
     CompletableFuture<Boolean> banksystem_freeze_async(@NotNull UUID executor, int accountNumber, int mode);
+    /** Task #110 — per-admin chat alerts toggle. @since 2.2.0 */
+    CompletableFuture<Boolean> banksystem_alerts_async(@NotNull UUID executor, boolean enabled);
     CompletableFuture<Boolean> banksystem_serverInfo_async(@NotNull UUID executor);
     CompletableFuture<Boolean> banksystem_serverNetworkInfo_async(@NotNull UUID executor);
 

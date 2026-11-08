@@ -49,7 +49,8 @@ A freshly created `settings.json` looks like this:
     "LOGGING_ENABLE_INFO": true,
     "LOGGING_ENABLE_WARNING": true,
     "LOGGING_ENABLE_ERROR": true,
-    "LOGGING_ENABLE_DEBUG": false
+    "LOGGING_ENABLE_DEBUG": false,
+    "ALERTS_DEFAULT_ON": true
   },
   "Player": {
     "STARTING_BALANCE": 0
@@ -86,6 +87,7 @@ A freshly created `settings.json` looks like this:
 | `LOGGING_ENABLE_WARNING` | boolean | `true` | Enables BankSystem's warning-level log messages. |
 | `LOGGING_ENABLE_ERROR` | boolean | `true` | Enables BankSystem's error-level log messages. |
 | `LOGGING_ENABLE_DEBUG` | boolean | `false` | Enables BankSystem's debug-level log messages. |
+| `ALERTS_DEFAULT_ON` | boolean | `true` | Whether BankSystem admins get [audit alerts](Administration.md#audit-and-admin-alerts) in chat until they choose otherwise with `/banksystem alerts on\|off`. Audit files are written either way. |
 
 ---
 ## Player Section

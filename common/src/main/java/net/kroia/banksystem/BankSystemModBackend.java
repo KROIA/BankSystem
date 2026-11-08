@@ -86,6 +86,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         public BalanceHistoryManager BALANCE_HISTORY_MANAGER;
         /** Task #44 (v2.1.0) — SQLite transaction ledger (master-only, nullable on slaves). */
         public net.kroia.banksystem.data.table.TransactionLogManager TRANSACTION_LOG_MANAGER;
+        /** Task #110 (v2.2.0) — SuspicionFlag table; master only. */
+        public net.kroia.banksystem.data.table.SuspicionFlagManager SUSPICION_FLAG_MANAGER;
         /** Task #45 (v2.1.0) — payout history SQLite writer (master-only, nullable on slaves). */
         public net.kroia.banksystem.data.table.PayoutHistoryManager PAYOUT_HISTORY_MANAGER;
         /** Task #45 (v2.1.0) — public payout API impl (always non-null; degrades to fail-closed on slave). */
@@ -253,6 +255,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemNetworking.setBackend(INSTANCES);
         net.kroia.banksystem.banking.ledger.TransactionLedger.setBackend(INSTANCES); // Task #109
         net.kroia.banksystem.banking.ledger.AccountFreeze.setBackend(INSTANCES); // Task #117
+        net.kroia.banksystem.banking.ledger.AdminAudit.setBackend(INSTANCES); // Task #110
         BankSystemTextMessages.setBackend(INSTANCES);
 
         net.kroia.banksystem.integration.numismatics.NumismaticsProvider.setBackend(INSTANCES);
@@ -414,6 +417,8 @@ public class BankSystemModBackend implements BankSystemAPI {
             // Task #44 (v2.1.0) — transaction ledger writer/reader.
             INSTANCES.TRANSACTION_LOG_MANAGER =
                     new net.kroia.banksystem.data.table.TransactionLogManager(INSTANCES.DATABASE_MANAGER);
+            INSTANCES.SUSPICION_FLAG_MANAGER =
+                    new net.kroia.banksystem.data.table.SuspicionFlagManager(INSTANCES.DATABASE_MANAGER);
             // Task #45 (v2.1.0) — payout history writer + IPayoutManager impl.
             INSTANCES.PAYOUT_HISTORY_MANAGER =
                     new net.kroia.banksystem.data.table.PayoutHistoryManager(INSTANCES.DATABASE_MANAGER);
@@ -550,6 +555,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.DATABASE_MANAGER = null;
         INSTANCES.BALANCE_HISTORY_MANAGER = null;
         INSTANCES.TRANSACTION_LOG_MANAGER = null;
+        INSTANCES.SUSPICION_FLAG_MANAGER = null;
         INSTANCES.PAYOUT_HISTORY_MANAGER = null;
         INSTANCES.PAYOUT_MANAGER = null;
         INSTANCES.DIVIDEND_PAYER = null;

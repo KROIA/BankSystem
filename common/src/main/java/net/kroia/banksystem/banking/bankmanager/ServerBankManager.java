@@ -354,6 +354,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return false;
         return user.isBanksystemAdmin();
     }
+    /** Task #110 — snapshot of every user with the BankSystem admin flag (alert recipients). */
+    public List<User> getAdminUsers() {
+        List<User> admins = new ArrayList<>();
+        for (User u : new ArrayList<>(userMap.values()))
+            if (u.isBanksystemAdmin()) admins.add(u);
+        return admins;
+    }
     @Override
     public CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID) {
         User user = userMap.get(playerUUID);

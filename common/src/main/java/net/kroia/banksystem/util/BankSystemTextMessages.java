@@ -308,6 +308,16 @@ public class BankSystemTextMessages {
     }
 
 
+    // Task #110 — audit / alerts
+    private static final Component AUDIT_ALERT = Component.translatable(prefix+"audit_alert");
+    private static final Component ALERTS_ON = Component.translatable(prefix+"alerts_on");
+    private static final Component ALERTS_OFF = Component.translatable(prefix+"alerts_off");
+    private static final Component AUDIT_TARGET_NOT_FOUND = Component.translatable(prefix+"audit_target_not_found");
+    public static String getAuditAlertMessage(String line) { return AUDIT_ALERT.getString().replace("{message}", line); }
+    public static String getAlertsOnMessage() { return ALERTS_ON.getString(); }
+    public static String getAlertsOffMessage() { return ALERTS_OFF.getString(); }
+    public static String getAuditTargetNotFoundMessage(String target) { return AUDIT_TARGET_NOT_FOUND.getString().replace("{target}", target); }
+
     // Task #117 — account freeze
     private static final Component ACCOUNT_FROZEN = Component.translatable(prefix+"account_frozen");
     private static final Component ACCOUNT_FREEZE_SET = Component.translatable(prefix+"account_freeze_set");

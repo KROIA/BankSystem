@@ -26,6 +26,7 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         BANK_ACCOUNT,
         ATM_SCREEN,
         EXPORT_RECIPES,
+        AUDIT, // Task #110
     }
 
     public static final Type<SyncOpenGUIPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "sync_open_gui_packet")); // mc<=1.21.10
@@ -92,6 +93,14 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
         SyncOpenGUIPacket packet = new SyncOpenGUIPacket(GUIType.ATM_SCREEN, null, 0, false);
         packet.sendToClient(player);
     }
+    /** Task #110 — opens the admin audit screen; every page is admin-checked on the master. */
+    public static void send_openAuditScreen(ServerPlayer player, int accountNumber)
+    {
+        if(player == null)
+            return;
+        new SyncOpenGUIPacket(GUIType.AUDIT, null, accountNumber, true).sendToClient(player);
+    }
+
     /**
      * Sends a packet to the client to trigger recipe image export.
      * The client will render all BankSystem crafting recipes to PNG files.
@@ -114,6 +123,9 @@ public class SyncOpenGUIPacket extends BankSystemNetworkPacket {
                 break;
             case BANK_ACCOUNT:
                 BankSystemClientHooks.openBankAccountScreen(accountNumber, isAdminMode);
+                break;
+            case AUDIT:
+                BankSystemClientHooks.openAuditScreen(accountNumber);
                 break;
             case ATM_SCREEN:
                 BankSystemClientHooks.openATMScreen();

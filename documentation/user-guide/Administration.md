@@ -115,6 +115,15 @@ Bank accounts, the item registry and `settings.json` are ordinary NBT/JSON files
 Every balance change is recorded in the database: deposits and withdrawals (terminal, upload/download blocks, converter, crafting), transfers, admin edits (money commands, balance set, unlock, account edits, disallowed items), closed banks, starting balances, payouts, dividends, share rows and StockMarket trades. Each row stores a timestamp, the account, a type code, who caused it (player, admin, console, system or StockMarket) and the bank balance afterwards. On a multi-server network the master records every entry, including those from slave servers. Code table and columns: [Transaction Ledger](../developer-guide/TransactionLedger.md). It is what the company [Statistics tab](Companies.md#statistics-tab) and the payout history read from; there is no separate cleanup step for admins.
 
 ---
+## Audit and Admin Alerts
+
+**Audit screen.** `/banksystem audit <player|account>` opens the ledger of a player's personal account (by name) or of any account (by number). Columns: time, type, item, amount (negative when it left the account), counterparty account, actor (player name, or the source such as console or system), note and reference. Filter by entry type and by time range (last hour, 24 hours, 7 days or all time); entries load 100 at a time with the **<** and **>** buttons. Hovering a row shows it in full. Only BankSystem admins can open it, and every page is checked again on the master server. On an untrusted slave server the screen shows "Access denied" until the slave is trusted with `/banksystem trust`.
+
+**Audit files.** The master server writes every admin action to `<world>/data/BankSystem/audit/<yyyy-mm-dd>.log`, one line per action: balance set/add/remove, unlocks, account edits, account freezes, disallowed items and banks closed by an admin. Each line has the time, the action, the account, item and amount, the admin (name and UUID) and the note. Suspicion flags are written to the same file. The files are plain text and are never pruned by BankSystem.
+
+**Chat alerts.** The same lines are sent in chat to every BankSystem admin who is online, on the master or on any slave server. Each admin can turn this off with `/banksystem alerts off` (and back on with `on`); the choice is saved per admin. Admins who never used the command follow the `ALERTS_DEFAULT_ON` setting ([Configuration](Configuration.md#utilities-section)). Turning alerts off only mutes chat; files and flags are still written. Disallowing an item writes one entry per account that held it, so it can produce many alert lines at once.
+
+---
 ## Volatile Item Components
 
 Some mods attach **time-varying data components** to item stacks — for example TerraFirmaCraft's food-decay timestamp (`tfc:food`) or heat state (`tfc:heat`). Because BankSystem identifies items by their full component data, such components would make identical items look different over time (e.g. every freshly caught fish would count as a "new" item, and stored food templates could rot inside the bank's item registry).

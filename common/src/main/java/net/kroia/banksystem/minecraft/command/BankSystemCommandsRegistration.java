@@ -208,6 +208,13 @@ public class BankSystemCommandsRegistration {
                                         .executes(ctx -> freezeCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"), 0)))
                         )
                 )
+                // Task #110: /banksystem audit <player|account>, /banksystem alerts on|off
+                .then(Commands.literal("audit")
+                        .then(Commands.argument("target", StringArgumentType.word())
+                                .executes(ctx -> auditCommand(ctx.getSource(), StringArgumentType.getString(ctx, "target")))))
+                .then(Commands.literal("alerts")
+                        .then(Commands.literal("on").executes(ctx -> alertsCommand(ctx.getSource(), true)))
+                        .then(Commands.literal("off").executes(ctx -> alertsCommand(ctx.getSource(), false))))
                 .then(Commands.literal("disallowItem")
                         .then(Commands.argument("itemID", StringArgumentType.string())
                                 .executes(context -> {
@@ -827,6 +834,46 @@ public class BankSystemCommandsRegistration {
         String msg = frozen ? BankSystemTextMessages.getAccountFreezeSetMessage(accountNumber)
                 : BankSystemTextMessages.getAccountFreezeClearedMessage(accountNumber);
         source.sendSuccess(() -> Component.literal(msg), true);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Task #110 — opens the audit screen for an account number or a player's personal account.
+     * The admin check here is a courtesy; every page is checked again on the master.
+     */
+    private static int auditCommand(CommandSourceStack source, String target) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("[BankSystem] audit needs a player"));
+            return 0;
+        }
+        var bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
+        bankManager.isBanksystemAdminAsync(player.getUUID()).thenCompose(isAdmin -> {
+            if (!Boolean.TRUE.equals(isAdmin)) return java.util.concurrent.CompletableFuture.completedFuture(-1);
+            try {
+                return java.util.concurrent.CompletableFuture.completedFuture(Integer.parseInt(target));
+            } catch (NumberFormatException e) {
+                return bankManager.getPersonalBankAccountNrAsync(target);
+            }
+        }).thenAccept(nr -> player.server.execute(() -> {
+            if (nr == null || nr == -1) {
+                player.sendSystemMessage(Component.literal("This command can only be used by BankSystem admins!"));
+            } else if (nr <= 0) {
+                player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditTargetNotFoundMessage(target)));
+            } else {
+                SyncOpenGUIPacket.send_openAuditScreen(player, nr);
+            }
+        }));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int alertsCommand(CommandSourceStack source, boolean enabled) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("[BankSystem] alerts needs a player"));
+            return 0;
+        }
+        handler().banksystem_alerts_async(player.getUUID(), enabled);
         return Command.SINGLE_SUCCESS;
     }
 }

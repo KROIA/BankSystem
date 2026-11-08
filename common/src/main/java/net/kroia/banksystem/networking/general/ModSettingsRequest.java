@@ -319,6 +319,7 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_ERROR);
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_DEBUG);
         sanitizeBoolean(settings.UTILITIES.SYNC_ADMIN_FLAG_WITH_PERMISSION);
+        sanitizeBoolean(settings.UTILITIES.ALERTS_DEFAULT_ON);
 
         // Player
         settings.PLAYER.STARTING_BALANCE.set(

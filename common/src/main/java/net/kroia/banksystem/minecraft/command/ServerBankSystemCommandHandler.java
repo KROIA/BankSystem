@@ -182,6 +182,21 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         return CompletableFuture.completedFuture(banksystem_freeze(executor, accountNumber, mode));
     }
 
+    /** Task #110 — per-admin chat alerts toggle (audit file and flags are written regardless). */
+    @Override
+    public boolean banksystem_alerts(@NotNull UUID executor, boolean enabled) {
+        if(!isPlayerAdmin(executor))
+            return false;
+        if(!net.kroia.banksystem.banking.ledger.AdminAudit.setAlertsEnabled(executor, enabled))
+            return false;
+        sendMessage(executor, enabled ? BankSystemTextMessages.getAlertsOnMessage() : BankSystemTextMessages.getAlertsOffMessage());
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> banksystem_alerts_async(@NotNull UUID executor, boolean enabled) {
+        return CompletableFuture.completedFuture(banksystem_alerts(executor, enabled));
+    }
+
     @Override
     public boolean banksystem_disallowItem(@NotNull UUID executor, ItemID itemID) {
         if(!isPlayerAdmin(executor))

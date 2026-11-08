@@ -103,6 +103,8 @@ public final class BankSystemModSettings extends ModSettings {
         public final Setting<Boolean> LOGGING_ENABLE_DEBUG = registerSetting("LOGGING_ENABLE_DEBUG",false, Boolean.class);
         /** Task #107: keep the BankSystem admin flag in sync with the permission node banksystem.admin (see AdminFlagSync). */
         public final Setting<Boolean> SYNC_ADMIN_FLAG_WITH_PERMISSION = registerSetting("SYNC_ADMIN_FLAG_WITH_PERMISSION", false, Boolean.class);
+        /** Task #110: chat alerts for admin actions / suspicion flags, for admins that never ran /banksystem alerts. */
+        public final Setting<Boolean> ALERTS_DEFAULT_ON = registerSetting("ALERTS_DEFAULT_ON", true, Boolean.class);
         //public final Setting<Integer> ADMIN_PERMISSION_LEVEL = registerSetting("ADMIN_PERMISSION_LEVEL",2, Integer.class);
 
         public Utilities() { super("Utilities"); }

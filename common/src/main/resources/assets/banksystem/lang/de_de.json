@@ -608,5 +608,22 @@
   "gui.banksystem.bank_account_management_screen.frozen_label": "Eingefroren",
   "gui.banksystem.bank_account_management_screen.frozen_tooltip": "Dieses Konto wurde von einem Admin eingefroren. Einzahlungen, Abhebungen und Überweisungen sind gesperrt.\nAdmins: die Änderung wird beim Speichern übernommen.",
   "gui.banksystem.payout_edit_screen.status_account_frozen": "Konto eingefroren",
-  "gui.banksystem.company_account_frozen": "Das Firmenkonto ist eingefroren"
+  "gui.banksystem.company_account_frozen": "Das Firmenkonto ist eingefroren",
+  "gui.banksystem.mod_settings_screen.setting.Utilities.ALERTS_DEFAULT_ON": "Admin-Benachrichtigungen standardmäßig an",
+  "gui.banksystem.mod_settings_screen.setting.Utilities.ALERTS_DEFAULT_ON.tooltip": "Chat-Benachrichtigungen für Admin-Aktionen und Verdachtsfälle,\nfür Admins, die /banksystem alerts on|off nie benutzt haben.\nDie Audit-Dateien werden immer geschrieben.",
+  "message.banksystem.audit_alert": "[BankSystem Audit] {message}",
+  "message.banksystem.alerts_on": "Admin-Benachrichtigungen aktiviert",
+  "message.banksystem.alerts_off": "Admin-Benachrichtigungen deaktiviert (Audit-Dateien werden weiter geschrieben)",
+  "message.banksystem.audit_target_not_found": "Kein Konto oder Spieler gefunden für \"{target}\"",
+  "gui.banksystem.audit_screen.title": "Audit",
+  "gui.banksystem.audit_screen.all_types": "Alle Typen",
+  "gui.banksystem.audit_screen.prev": "<",
+  "gui.banksystem.audit_screen.next": ">",
+  "gui.banksystem.audit_screen.denied": "Zugriff verweigert",
+  "gui.banksystem.audit_screen.empty": "Keine Einträge",
+  "gui.banksystem.audit_screen.range_1h": "Letzte Stunde",
+  "gui.banksystem.audit_screen.range_24h": "Letzte 24h",
+  "gui.banksystem.audit_screen.range_7d": "Letzte 7 Tage",
+  "gui.banksystem.audit_screen.range_all": "Gesamte Zeit",
+  "gui.banksystem.audit_screen.header": "Zeit | Typ | Item | Betrag | Gegenkonto | Akteur | Notiz | Ref"
 }

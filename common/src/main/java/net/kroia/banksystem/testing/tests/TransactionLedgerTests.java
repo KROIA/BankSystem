@@ -746,7 +746,7 @@ public class TransactionLedgerTests extends TestSuite {
         }
     }
 
-    private static Connection openMemoryDb() throws Exception {
+    static Connection openMemoryDb() throws Exception {
         Class<?> driverClass;
         try {
             driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
@@ -762,7 +762,7 @@ public class TransactionLedgerTests extends TestSuite {
     }
 
     /** DatabaseManager stand-in over a private connection (same pattern as TransactionLogManagerTests). */
-    private static final class MemoryDb extends DatabaseManager {
+    static final class MemoryDb extends DatabaseManager {
         private final Connection conn;
         private final java.util.concurrent.ExecutorService exec = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "ledger-test-db-worker");

@@ -183,6 +183,28 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
         }), databaseManager.getDatabaseThread());
     }
 
+    /**
+     * Task #110 — one page of an account's rows, newest first (ts DESC, id DESC).
+     *
+     * @param typeCode type code to keep, or {@code < 0} for all types
+     * @param sinceMs  lower bound on {@code ts} (inclusive); {@code <= 0} = no bound
+     * @param offset   rows to skip
+     * @param limit    page size ({@code > 0})
+     */
+    public CompletableFuture<List<TransactionLogRecord>> getPage(int accountNumber, int typeCode, long sinceMs,
+                                                                 int offset, int limit) {
+        String sql = "SELECT " + SELECT_COLS + " FROM TransactionLog WHERE account_number = ? AND ts >= ?"
+                + (typeCode >= 0 ? " AND type_code = ?" : "") + " ORDER BY ts DESC, id DESC LIMIT ? OFFSET ?";
+        return CompletableFuture.supplyAsync(() -> queryOne(sql, ps -> {
+            int i = 1;
+            ps.setInt(i++, accountNumber);
+            ps.setLong(i++, Math.max(0L, sinceMs));
+            if (typeCode >= 0) ps.setInt(i++, typeCode);
+            ps.setInt(i++, Math.max(1, limit));
+            ps.setInt(i, Math.max(0, offset));
+        }), databaseManager.getDatabaseThread());
+    }
+
     public CompletableFuture<Integer> getCount(int accountNumber) {
         return CompletableFuture.supplyAsync(() -> {
             try (PreparedStatement ps = databaseManager.getConnection().prepareStatement(

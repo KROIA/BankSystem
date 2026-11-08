@@ -71,7 +71,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
         Bank_create,
         Bank_show_user,
-        Banksystem_freeze
+        Banksystem_freeze,
+        Banksystem_alerts
 
     }
 
@@ -110,6 +111,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         put(FunctionType.Bank_create,                               codecPacket(ByteBufCodecs.STRING_UTF8.cast(), ByteBufCodecs.INT.cast()));
         put(FunctionType.Bank_show_user,                            codecPacket(ByteBufCodecs.STRING_UTF8.cast()));
         put(FunctionType.Banksystem_freeze,                         codecPacket(ParamGroup_int_int.STREAM_CODEC));
+        put(FunctionType.Banksystem_alerts,                         codecPacket(ByteBufCodecs.BOOL.cast()));
 
     }};
 
@@ -254,6 +256,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
                     ParamGroup_int_int data = (ParamGroup_int_int)inputData.extra;
                     result = commandHandler.banksystem_freeze(executorPlayer, data.a, data.b);
                 }
+                case FunctionType.Banksystem_alerts ->                      result = commandHandler.banksystem_alerts(executorPlayer, (Boolean)inputData.extra);
             }
 
             return CompletableFuture.completedFuture(OutputData.of(input.function, result));
@@ -464,6 +467,17 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         if(!MultiServerUtils.checkConnectionToMaster(executor))
             return CompletableFuture.completedFuture(false);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_freeze, executor, new ParamGroup_int_int(accountNumber, mode)));
+        handleResponse(outputDataFuture, executor);
+        CompletableFuture<Boolean>  future = new CompletableFuture<>();
+        outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> banksystem_alerts_async(@NotNull UUID executor, boolean enabled) {
+        if(!MultiServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_alerts, executor, enabled));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
         outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));

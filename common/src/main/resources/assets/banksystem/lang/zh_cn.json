@@ -608,5 +608,22 @@
   "gui.banksystem.bank_account_management_screen.frozen_label": "已冻结",
   "gui.banksystem.bank_account_management_screen.frozen_tooltip": "此账户已被管理员冻结。存款、取款和转账均被禁止。\n管理员：更改在保存后生效。",
   "gui.banksystem.payout_edit_screen.status_account_frozen": "账户已冻结",
-  "gui.banksystem.company_account_frozen": "公司账户已冻结"
+  "gui.banksystem.company_account_frozen": "公司账户已冻结",
+  "gui.banksystem.mod_settings_screen.setting.Utilities.ALERTS_DEFAULT_ON": "默认开启管理员提醒",
+  "gui.banksystem.mod_settings_screen.setting.Utilities.ALERTS_DEFAULT_ON.tooltip": "管理员操作和可疑标记的聊天提醒，\n适用于从未使用 /banksystem alerts on|off 的管理员。\n审计文件始终会写入。",
+  "message.banksystem.audit_alert": "[BankSystem 审计] {message}",
+  "message.banksystem.alerts_on": "管理员提醒已开启",
+  "message.banksystem.alerts_off": "管理员提醒已关闭（审计文件仍会写入）",
+  "message.banksystem.audit_target_not_found": "未找到 \"{target}\" 对应的账户或玩家",
+  "gui.banksystem.audit_screen.title": "审计",
+  "gui.banksystem.audit_screen.all_types": "所有类型",
+  "gui.banksystem.audit_screen.prev": "<",
+  "gui.banksystem.audit_screen.next": ">",
+  "gui.banksystem.audit_screen.denied": "拒绝访问",
+  "gui.banksystem.audit_screen.empty": "没有记录",
+  "gui.banksystem.audit_screen.range_1h": "最近一小时",
+  "gui.banksystem.audit_screen.range_24h": "最近24小时",
+  "gui.banksystem.audit_screen.range_7d": "最近7天",
+  "gui.banksystem.audit_screen.range_all": "全部时间",
+  "gui.banksystem.audit_screen.header": "时间 | 类型 | 物品 | 数额 | 对方账户 | 操作者 | 备注 | 引用"
 }
