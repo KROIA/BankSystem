@@ -123,6 +123,8 @@ public class BankSystemModBackend implements BankSystemAPI {
      * sweep runs synchronously at {@link #onServerStart(MinecraftServer)}.
      */
     private static long retentionSweepTickCounter = 0;
+    /** Task #114 (v2.2.0): tick counter for the wealth-jump sweep. */
+    private static long wealthSweepTickCounter = 0;
     /**
      * Task #45 (v2.1.0) — monotonic tick counter for the payout scheduler. Advances on every
      * master-side server tick; the scheduler evaluates due schedules every
@@ -256,6 +258,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         net.kroia.banksystem.banking.ledger.TransactionLedger.setBackend(INSTANCES); // Task #109
         net.kroia.banksystem.banking.ledger.AccountFreeze.setBackend(INSTANCES); // Task #117
         net.kroia.banksystem.banking.ledger.AdminAudit.setBackend(INSTANCES); // Task #110
+        net.kroia.banksystem.banking.ledger.SuspicionChecks.setBackend(INSTANCES); // Tasks #111/#114/#115
         BankSystemTextMessages.setBackend(INSTANCES);
 
         net.kroia.banksystem.integration.numismatics.NumismaticsProvider.setBackend(INSTANCES);
@@ -697,6 +700,15 @@ public class BankSystemModBackend implements BankSystemAPI {
             if (sweepIntervalTicks > 0 && retentionSweepTickCounter >= sweepIntervalTicks) {
                 retentionSweepTickCounter = 0;
                 INSTANCES.BALANCE_HISTORY_MANAGER.applyTieredRetention(System.currentTimeMillis());
+            }
+
+            // Task #114 (v2.2.0): wealth-jump sweep over the WEALTH series.
+            wealthSweepTickCounter++;
+            long wealthTicks = INSTANCES.SERVER_SETTINGS.AUDIT.WEALTH_SWEEP_MINUTES.get() * 1200L;
+            if (wealthTicks > 0 && wealthSweepTickCounter >= wealthTicks) {
+                wealthSweepTickCounter = 0;
+                if (INSTANCES.SERVER_BANK_MANAGER != null && INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof ServerBankManager bm)
+                    net.kroia.banksystem.banking.ledger.SuspicionChecks.sweepWealth(bm.getAllAccountNumbers(), System.currentTimeMillis());
             }
         }
 

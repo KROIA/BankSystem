@@ -69,6 +69,21 @@ A freshly created `settings.json` looks like this:
     "SERVER_REFRESH_MS": 30000,
     "TOP_COUNT": 10,
     "MONEY_FORMAT": "$%s"
+  },
+  "Audit": {
+    "LAUNDERING_FLAG_ENABLED": true,
+    "LAUNDERING_MIN_AMOUNT": 1000000,
+    "LAUNDERING_WINDOW_HOURS": 24,
+    "LARGE_NOTE_WITHDRAWAL_FLAG_ENABLED": true,
+    "LARGE_NOTE_WITHDRAWAL_AMOUNT": 10000000,
+    "WEALTH_JUMP_FLAG_ENABLED": true,
+    "WEALTH_SWEEP_MINUTES": 10,
+    "WEALTH_JUMP_PERCENT": 100,
+    "WEALTH_JUMP_AMOUNT": 1000000,
+    "WEALTH_JUMP_COOLDOWN_HOURS": 6,
+    "NEW_ACCOUNT_TRANSFER_FLAG_ENABLED": true,
+    "NEW_ACCOUNT_TRANSFER_AMOUNT": 1000000,
+    "NEW_ACCOUNT_AGE_HOURS": 24
   }
 }
 ```
@@ -122,6 +137,27 @@ Settings for the optional placeholder support (TAB, Placeholder API). The placeh
 | `MONEY_FORMAT` | text | `$%s` | Display pattern for money values; `%s` is replaced by the number, e.g. `%s €`. A value without `%s` is reset to the default. |
 
 Older settings files with the previous `PLAYER_BALANCE` … `SERVER_CIRCULATION_JSON` entries load fine; those entries are ignored.
+
+---
+## Audit Section
+
+Suspicious-activity flags ([Administration](Administration.md#suspicious-activity-flags)). Read live on the master server; slaves ignore this section. Money amounts are **whole dollars** (not cents).
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `LAUNDERING_FLAG_ENABLED` | boolean | `true` | Flag banknote deposits of money the depositor did not withdraw themselves. |
+| `LAUNDERING_MIN_AMOUNT` | number | `1000000` | Smallest banknote deposit that is checked (`0`–`10^12`). |
+| `LAUNDERING_WINDOW_HOURS` | number | `24` | How far back the depositor's own withdrawals are counted (`1`–`8760`). |
+| `LARGE_NOTE_WITHDRAWAL_FLAG_ENABLED` | boolean | `true` | Flag single large money withdrawals. |
+| `LARGE_NOTE_WITHDRAWAL_AMOUNT` | number | `10000000` | Withdrawal (after any refund) that raises a flag (`0`–`10^12`). |
+| `WEALTH_JUMP_FLAG_ENABLED` | boolean | `true` | Flag accounts whose wealth jumps within an hour. |
+| `WEALTH_SWEEP_MINUTES` | number | `10` | How often all accounts are checked (`0` = never, max `1440`). |
+| `WEALTH_JUMP_PERCENT` | number | `100` | Minimum growth in one hour, in percent (`1`–`100000`). |
+| `WEALTH_JUMP_AMOUNT` | number | `1000000` | Minimum gain in one hour (`0`–`10^12`). Both limits must be exceeded. |
+| `WEALTH_JUMP_COOLDOWN_HOURS` | number | `6` | At most one wealth-jump flag per account in this many hours (`0`–`8760`). |
+| `NEW_ACCOUNT_TRANSFER_FLAG_ENABLED` | boolean | `true` | Flag large incoming transfers, payouts and dividends to new accounts. |
+| `NEW_ACCOUNT_TRANSFER_AMOUNT` | number | `1000000` | Smallest incoming amount that is checked (`0`–`10^12`). |
+| `NEW_ACCOUNT_AGE_HOURS` | number | `24` | Accounts younger than this count as new (`1`–`8760`). |
 
 ---
 ## Volatile & Deposit-Gated Item Components

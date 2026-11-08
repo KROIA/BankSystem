@@ -57,6 +57,7 @@ public final class BankSystemModSettings extends ModSettings {
     public final Player PLAYER = createGroup(new Player());
     public final Bank BANK = createGroup(new Bank());
     public final Placeholder PLACEHOLDER = createGroup(new Placeholder());
+    public final Audit AUDIT = createGroup(new Audit());
 
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
@@ -417,6 +418,29 @@ public final class BankSystemModSettings extends ModSettings {
         public Placeholder() { super("Placeholder"); }
     }
 
+    /**
+     * Tasks #111 / #114 / #115 (v2.2.0) — suspicious-activity flags (see {@code SuspicionChecks}).
+     * Read live on the master. Money amounts are whole money units (dollars), not cents.
+     */
+    public static final class Audit extends SettingsGroup
+    {
+        public final Setting<Boolean> LAUNDERING_FLAG_ENABLED = registerSetting("LAUNDERING_FLAG_ENABLED", true, Boolean.class);
+        public final Setting<Long> LAUNDERING_MIN_AMOUNT = registerSetting("LAUNDERING_MIN_AMOUNT", 1_000_000L, Long.class);
+        public final Setting<Integer> LAUNDERING_WINDOW_HOURS = registerSetting("LAUNDERING_WINDOW_HOURS", 24, Integer.class);
+        public final Setting<Boolean> LARGE_NOTE_WITHDRAWAL_FLAG_ENABLED = registerSetting("LARGE_NOTE_WITHDRAWAL_FLAG_ENABLED", true, Boolean.class);
+        public final Setting<Long> LARGE_NOTE_WITHDRAWAL_AMOUNT = registerSetting("LARGE_NOTE_WITHDRAWAL_AMOUNT", 10_000_000L, Long.class);
+        public final Setting<Boolean> WEALTH_JUMP_FLAG_ENABLED = registerSetting("WEALTH_JUMP_FLAG_ENABLED", true, Boolean.class);
+        public final Setting<Integer> WEALTH_SWEEP_MINUTES = registerSetting("WEALTH_SWEEP_MINUTES", 10, Integer.class);
+        public final Setting<Integer> WEALTH_JUMP_PERCENT = registerSetting("WEALTH_JUMP_PERCENT", 100, Integer.class);
+        public final Setting<Long> WEALTH_JUMP_AMOUNT = registerSetting("WEALTH_JUMP_AMOUNT", 1_000_000L, Long.class);
+        public final Setting<Integer> WEALTH_JUMP_COOLDOWN_HOURS = registerSetting("WEALTH_JUMP_COOLDOWN_HOURS", 6, Integer.class);
+        public final Setting<Boolean> NEW_ACCOUNT_TRANSFER_FLAG_ENABLED = registerSetting("NEW_ACCOUNT_TRANSFER_FLAG_ENABLED", true, Boolean.class);
+        public final Setting<Long> NEW_ACCOUNT_TRANSFER_AMOUNT = registerSetting("NEW_ACCOUNT_TRANSFER_AMOUNT", 1_000_000L, Long.class);
+        public final Setting<Integer> NEW_ACCOUNT_AGE_HOURS = registerSetting("NEW_ACCOUNT_AGE_HOURS", 24, Integer.class);
+
+        public Audit() { super("Audit"); }
+    }
+
 
 
 
@@ -434,7 +458,7 @@ public final class BankSystemModSettings extends ModSettings {
      */
     public List<SettingsGroup> getEditableGroups()
     {
-        return List.of(UTILITIES, PLAYER, BANK, PLACEHOLDER);
+        return List.of(UTILITIES, PLAYER, BANK, PLACEHOLDER, AUDIT);
     }
 
     /**

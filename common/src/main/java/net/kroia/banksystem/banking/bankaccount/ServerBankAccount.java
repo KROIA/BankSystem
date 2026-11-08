@@ -96,6 +96,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
      * count against the creator's quota.
      */
     private @Nullable UUID creatorUUID;
+    /** Task #115 (v2.2.0) — creation time (epoch ms), NBT "createdAt"; 0 = legacy account (unknown). */
+    private long createdAt = 0L;
     private final Map<UUID, BankUser> users = new HashMap<>();
     private final Map<ItemID, ServerBank> banks = new HashMap<>();
     private boolean hasChanges = false;
@@ -104,10 +106,12 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
     private ServerBankAccount(int accountNumber) {
         this.accountNumber = accountNumber;
+        this.createdAt = System.currentTimeMillis();
         this.accountIcon = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.CHEST.getDefaultInstance());
     }
     private ServerBankAccount(int accountNumber, @Nullable User personalBankOwner, List<BankUser> users, Map<ItemID, ServerBank> banks) {
         this.accountNumber = accountNumber;
+        this.createdAt = System.currentTimeMillis();
         this.personalBankOwner = personalBankOwner;
         this.accountIcon = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.CHEST.getDefaultInstance());
         if( personalBankOwner != null) {
@@ -522,6 +526,17 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
 
 
+
+    /** Task #115 — creation time in epoch ms, or 0 for a legacy account saved before v2.2.0. */
+    public long getCreatedAt() {
+        return createdAt;
+    }
+
+    /** Task #115 — raw write (tests, data repair). */
+    public void setCreatedAt(long createdAt) {
+        hasChanges |= this.createdAt != createdAt;
+        this.createdAt = createdAt;
+    }
 
     /** Task #117 — see {@code ISyncServerBankManager.isAccountFrozen}. */
     public boolean isFrozen() {
@@ -1093,6 +1108,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         tag.putString("accountName", accountName); // Save the account name
         if (frozen)
             tag.putBoolean("frozen", true); // Task #117 — absent = not frozen
+        if (createdAt > 0)
+            tag.putLong("createdAt", createdAt); // Task #115 — absent = legacy
 
         if(personalBankOwner != null)
             NbtCompat.putUUID(tag, "personalBankOwnerDataUUID", personalBankOwner.getUUID());
@@ -1151,6 +1168,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         }
 
         this.frozen = tag.contains("frozen") && NbtCompat.getBoolean(tag, "frozen"); // Task #117
+        this.createdAt = tag.contains("createdAt") ? NbtCompat.getLong(tag, "createdAt") : 0L; // Task #115
 
         if(tag.contains("creatorUUID")) {
             this.creatorUUID = NbtCompat.getUUID(tag, "creatorUUID"); // Task #58 — per-player account cap

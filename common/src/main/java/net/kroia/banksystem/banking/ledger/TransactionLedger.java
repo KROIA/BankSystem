@@ -137,11 +137,36 @@ public final class TransactionLedger implements ITransactionLedger {
                     warn("Ledger write failed: " + t.getMessage());
                     return null;
                 });
-                AdminAudit.onLedgerRow(row); // Task #110: audit file + admin alerts
+                afterWrite(row);
             }
         } catch (RuntimeException e) {
             warn("Ledger write failed: " + e.getMessage());
         }
+    }
+
+    /**
+     * Batch form of {@link #write} (payout / dividend runs): one DB batch, then the same
+     * per-row audit and suspicion hooks. Master only; never throws.
+     */
+    public static void writeAll(java.util.List<TransactionLogRecord> rows) {
+        try {
+            if (rows.isEmpty() || (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer)) return;
+            TransactionLogManager mgr = BankSystemModBackend.getTransactionLogManager();
+            if (mgr == null) return;
+            mgr.save(rows).exceptionally(t -> {
+                warn("Ledger write failed: " + t.getMessage());
+                return null;
+            });
+            for (TransactionLogRecord row : rows) afterWrite(row);
+        } catch (RuntimeException e) {
+            warn("Ledger write failed: " + e.getMessage());
+        }
+    }
+
+    /** Hooks run after a row was queued for saving (queries on the DB worker see it). */
+    private static void afterWrite(TransactionLogRecord row) {
+        AdminAudit.onLedgerRow(row);      // Task #110: audit file + admin alerts
+        SuspicionChecks.onLedgerRow(row); // Tasks #111 / #115: suspicion flags
     }
 
     // ------------------------------------------------------------------

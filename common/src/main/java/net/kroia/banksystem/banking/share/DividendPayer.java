@@ -208,7 +208,7 @@ public final class DividendPayer implements IDividendPayer {
         }
 
         if (instances.TRANSACTION_LOG_MANAGER != null && !ledger.isEmpty()) {
-            instances.TRANSACTION_LOG_MANAGER.save(ledger);
+            net.kroia.banksystem.banking.ledger.TransactionLedger.writeAll(ledger); // Task #115: runs the ledger hooks
         }
 
         if (instances.SERVER_EVENTS instanceof BankSystemEvents bse) {

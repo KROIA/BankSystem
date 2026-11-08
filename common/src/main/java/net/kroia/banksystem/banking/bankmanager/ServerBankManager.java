@@ -354,6 +354,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return false;
         return user.isBanksystemAdmin();
     }
+    /** Task #114 — snapshot of every account number (wealth-jump sweep). Call on the server thread. */
+    public List<Integer> getAllAccountNumbers() {
+        return new ArrayList<>(bankAccounts.keySet());
+    }
+
     /** Task #110 — snapshot of every user with the BankSystem admin flag (alert recipients). */
     public List<User> getAdminUsers() {
         List<User> admins = new ArrayList<>();

@@ -124,6 +124,20 @@ Every balance change is recorded in the database: deposits and withdrawals (term
 **Chat alerts.** The same lines are sent in chat to every BankSystem admin who is online, on the master or on any slave server. Each admin can turn this off with `/banksystem alerts off` (and back on with `on`); the choice is saved per admin. Admins who never used the command follow the `ALERTS_DEFAULT_ON` setting ([Configuration](Configuration.md#utilities-section)). Turning alerts off only mutes chat; files and flags are still written. Disallowing an item writes one entry per account that held it, so it can produce many alert lines at once.
 
 ---
+## Suspicious-activity Flags
+
+The master server watches for patterns that often mean money changed hands outside the normal game. A hit raises a **flag**: it is stored in the database, written to the [audit file](#audit-and-admin-alerts) as a `FLAG <code> ...` line and sent to admins as an alert. A flag is a hint for an admin to look at the account in `/banksystem audit`, not proof and not an automatic action. Every check can be turned off and tuned in the [Audit section](Configuration.md#audit-section) of the settings (amounts in whole dollars).
+
+| Code | Flag | Raised when | Settings (default) |
+|---:|---|---|---|
+| 1 | Banknote laundering | Someone deposits at least the minimum in banknotes, but in the window before they withdrew less money than that themselves (withdrawals minus refunds minus banknotes they already deposited). Typical case: notes withdrawn by one player and deposited by another. | `LAUNDERING_FLAG_ENABLED` (on), `LAUNDERING_MIN_AMOUNT` ($1,000,000), `LAUNDERING_WINDOW_HOURS` (24) |
+| 2 | Large withdrawal | Money a player withdraws from one account in one go reaches the amount after refunds. Withdrawals count as one go until 30 seconds pass without another one, so splitting the amount across several note types is still one withdrawal; refunds for notes that did not fit are subtracted. One flag per go. | `LARGE_NOTE_WITHDRAWAL_FLAG_ENABLED` (on), `LARGE_NOTE_WITHDRAWAL_AMOUNT` ($10,000,000) |
+| 3 | Wealth jump | An account's wealth grows by more than the percent **and** more than the amount within the last hour. Checked every few minutes; at most one flag per account per cooldown. Wealth counts items at market prices, so a price spike can cause it; the flag shows the cash change so you can tell the two apart. Needs balance snapshots and a price source (StockMarket). | `WEALTH_JUMP_FLAG_ENABLED` (on), `WEALTH_SWEEP_MINUTES` (10), `WEALTH_JUMP_PERCENT` (100), `WEALTH_JUMP_AMOUNT` ($1,000,000), `WEALTH_JUMP_COOLDOWN_HOURS` (6) |
+| 4 | Transfer to a new account | A transfer, payout or dividend of at least the amount arrives in an account younger than the age. Accounts created before v2.2.0 use their earliest ledger or balance-history entry as their age; accounts without any are treated as old. | `NEW_ACCOUNT_TRANSFER_FLAG_ENABLED` (on), `NEW_ACCOUNT_TRANSFER_AMOUNT` ($1,000,000), `NEW_ACCOUNT_AGE_HOURS` (24) |
+
+Only money (not other items) is checked. On a multi-server network all checks run on the master, which sees every deposit, withdrawal and transfer.
+
+---
 ## Volatile Item Components
 
 Some mods attach **time-varying data components** to item stacks — for example TerraFirmaCraft's food-decay timestamp (`tfc:food`) or heat state (`tfc:heat`). Because BankSystem identifies items by their full component data, such components would make identical items look different over time (e.g. every freshly caught fish would count as a "new" item, and stored food templates could rot inside the bank's item registry).

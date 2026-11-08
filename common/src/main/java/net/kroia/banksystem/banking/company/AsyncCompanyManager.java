@@ -2025,7 +2025,7 @@ public final class AsyncCompanyManager {
                     new PayMissedOutput(code, schedule.getMissedAmount(), schedule.getMissedCount()));
         }
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.TRANSACTION_LOG_MANAGER != null && !ledger.isEmpty()) {
-            BACKEND_INSTANCES.TRANSACTION_LOG_MANAGER.save(ledger);
+            net.kroia.banksystem.banking.ledger.TransactionLedger.writeAll(ledger); // Task #115: runs the ledger hooks
         }
         cm.applyCatchUpPayment(in.companyId, in.scheduleId, in.amount);
         PayoutSchedule updated = company.findSchedule(in.scheduleId);

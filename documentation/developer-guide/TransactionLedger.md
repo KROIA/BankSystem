@@ -114,7 +114,18 @@ Features that detect suspicious activity call:
 AdminAudit.raise(int accountNumber, int flagType, int severity, long amount, @Nullable String ref, @Nullable String details);
 ```
 
-It writes one row to the `SuspicionFlag` table (`id, ts, account_number, flag_type, severity, amount, ref, details, acknowledged`), the audit-file line `FLAG <type> ...` and the admin alert. Master only; it never throws. `flag_type` codes are append-only and owned by the raising feature. Read with `SuspicionFlagManager.getRecent(account, sinceMs, limit)`; mark handled with `acknowledge(id)`. Missing columns are added on start-up like for `TransactionLog`.
+It writes one row to the `SuspicionFlag` table (`id, ts, account_number, flag_type, severity, amount, ref, details, acknowledged`), the audit-file line `FLAG <type> ...` and the admin alert. Master only; it never throws. `flag_type` codes are append-only and owned by the raising feature. Read with `SuspicionFlagManager.getRecent(account, sinceMs, limit)`; mark handled with `acknowledge(id)`.
+
+Flag codes in use (`SuspicionChecks`, append-only):
+
+| Code | Constant | Raised by |
+|---:|---|---|
+| 1 | `BANKNOTE_LAUNDERING` | ledger hook on DEPOSIT / UPLOAD_DEPOSIT money rows whose note contains `banknote ` |
+| 2 | `LARGE_NOTE_WITHDRAWAL` | ledger hook on WITHDRAW money rows: per actor + account burst (closed after 30 s without a new row), sum of WITHDRAW minus WITHDRAW_REFUND rows in the burst, one flag per burst |
+| 3 | `WEALTH_JUMP` | periodic sweep over the BalanceHistory WEALTH series (item id 32767) |
+| 4 | `TRANSFER_TO_NEW_ACCOUNT` | ledger hook on incoming TRANSFER (+), PAYOUT and DIVIDEND money rows |
+
+The hooks run from `TransactionLedger.write` and `TransactionLedger.writeAll` (payout and dividend batches), on the master only. Bank accounts store their creation time as NBT `createdAt` (absent for accounts created before v2.2.0). Missing columns are added on start-up like for `TransactionLog`.
 
 ## Upgrading old databases
 

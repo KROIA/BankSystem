@@ -96,6 +96,15 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
     /** Maximum placeholder cache refresh interval in milliseconds (1 day). */
     public static final int MAX_PLACEHOLDER_REFRESH_MS = 86_400_000;
 
+    /** Tasks #111/#114/#115: flag thresholds in whole money units (0 .. 1e12). */
+    public static final long MAX_FLAG_AMOUNT = 1_000_000_000_000L;
+    /** Tasks #111/#114/#115: hour windows (1 h .. 1 year); cooldown may be 0. */
+    public static final int MAX_FLAG_HOURS = 8_760;
+    /** Task #114: sweep interval in minutes (0 = off, max 1 day). */
+    public static final int MAX_WEALTH_SWEEP_MINUTES = 1_440;
+    /** Task #114: wealth-jump percent (1 .. 100000). */
+    public static final int MAX_WEALTH_JUMP_PERCENT = 100_000;
+
     /** Minimum number of {@code top_<n>} placeholder slots (0 = none). */
     public static final int MIN_PLACEHOLDER_TOP_COUNT = 0;
     /** Maximum number of {@code top_<n>} placeholder slots. */
@@ -268,6 +277,8 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         //   honours slave sync writes only while its own value is on; each slave reads its own
         //   settings.json to decide whether to forward LuckPerms changes. Turning it on here may
         //   trigger the one-time LuckPerms migration (below). No propagation.
+        // * Audit (suspicious-activity flags, Tasks #111/#114/#115): read live by the master's
+        //   ledger hook and wealth sweep only. No propagation.
         // => No active propagation is required for any group.
 
         // Notify other online admins (on this server) about the change.
@@ -346,6 +357,22 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         clampOrDefault(settings.PLACEHOLDER.PLAYER_REFRESH_MS, MIN_PLACEHOLDER_REFRESH_MS, MAX_PLACEHOLDER_REFRESH_MS);
         clampOrDefault(settings.PLACEHOLDER.SERVER_REFRESH_MS, MIN_PLACEHOLDER_REFRESH_MS, MAX_PLACEHOLDER_REFRESH_MS);
         clampOrDefault(settings.PLACEHOLDER.TOP_COUNT, MIN_PLACEHOLDER_TOP_COUNT, MAX_PLACEHOLDER_TOP_COUNT);
+        // Audit (suspicious-activity flags)
+        var a = settings.AUDIT;
+        sanitizeBoolean(a.LAUNDERING_FLAG_ENABLED);
+        sanitizeBoolean(a.LARGE_NOTE_WITHDRAWAL_FLAG_ENABLED);
+        sanitizeBoolean(a.WEALTH_JUMP_FLAG_ENABLED);
+        sanitizeBoolean(a.NEW_ACCOUNT_TRANSFER_FLAG_ENABLED);
+        clampOrDefault(a.LAUNDERING_MIN_AMOUNT, 0L, MAX_FLAG_AMOUNT);
+        clampOrDefault(a.LARGE_NOTE_WITHDRAWAL_AMOUNT, 0L, MAX_FLAG_AMOUNT);
+        clampOrDefault(a.WEALTH_JUMP_AMOUNT, 0L, MAX_FLAG_AMOUNT);
+        clampOrDefault(a.NEW_ACCOUNT_TRANSFER_AMOUNT, 0L, MAX_FLAG_AMOUNT);
+        clampOrDefault(a.LAUNDERING_WINDOW_HOURS, 1, MAX_FLAG_HOURS);
+        clampOrDefault(a.NEW_ACCOUNT_AGE_HOURS, 1, MAX_FLAG_HOURS);
+        clampOrDefault(a.WEALTH_JUMP_COOLDOWN_HOURS, 0, MAX_FLAG_HOURS);
+        clampOrDefault(a.WEALTH_SWEEP_MINUTES, 0, MAX_WEALTH_SWEEP_MINUTES);
+        clampOrDefault(a.WEALTH_JUMP_PERCENT, 1, MAX_WEALTH_JUMP_PERCENT);
+
         String moneyFormat = settings.PLACEHOLDER.MONEY_FORMAT.get();
         if (moneyFormat == null || moneyFormat.isBlank() || !moneyFormat.contains("%s"))
             settings.PLACEHOLDER.MONEY_FORMAT.set(settings.PLACEHOLDER.MONEY_FORMAT.getDefaultValue());
@@ -366,6 +393,12 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
     /** Clamps an Integer setting into [min, max]; a null value falls back to the setting's default. */
     private static void clampOrDefault(Setting<Integer> setting, int min, int max) {
         Integer value = setting.get();
+        setting.set(clamp(value == null ? setting.getDefaultValue() : value, min, max));
+    }
+
+    /** Clamps a Long setting into [min, max]; a null value falls back to the setting's default. */
+    private static void clampOrDefault(Setting<Long> setting, long min, long max) {
+        Long value = setting.get();
         setting.set(clamp(value == null ? setting.getDefaultValue() : value, min, max));
     }
 

@@ -134,7 +134,7 @@ public final class PayoutExecutor {
             historyManager.save(pendingHistoryRows);
         }
         if (instances.TRANSACTION_LOG_MANAGER != null && !pendingLedgerRows.isEmpty()) {
-            instances.TRANSACTION_LOG_MANAGER.save(pendingLedgerRows);
+            net.kroia.banksystem.banking.ledger.TransactionLedger.writeAll(pendingLedgerRows); // Task #115: runs the ledger hooks
         }
         if (events != null) {
             for (PayoutExecutedInfo info : pendingEvents) events.PAYOUT_EXECUTED.notifyListeners(info);
