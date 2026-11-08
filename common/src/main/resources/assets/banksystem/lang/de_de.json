@@ -598,5 +598,15 @@
   "gui.banksystem.company_management_screen.stats_col_amount": "Betrag",
   "gui.banksystem.company_management_screen.stats_dividend_target": "Gleichmaessig unter Aktionaeren aufgeteilt",
   "gui.banksystem.company_management_screen.company_currency": "Unternehmenswaehrung",
-  "gui.banksystem.company_management_screen.company_currency_tooltip": "Die Standardwaehrung fuer die Unternehmensbilanazanzeige.\nKlicken zum Aendern."
+  "gui.banksystem.company_management_screen.company_currency_tooltip": "Die Standardwaehrung fuer die Unternehmensbilanazanzeige.\nKlicken zum Aendern.",
+  "message.banksystem.account_frozen": "Bankkonto {account_number} wurde von einem Admin eingefroren. Einzahlungen, Abhebungen und Überweisungen sind gesperrt.",
+  "message.banksystem.account_freeze_set": "Bankkonto {account_number} ist jetzt eingefroren",
+  "message.banksystem.account_freeze_cleared": "Bankkonto {account_number} ist nicht mehr eingefroren",
+  "message.banksystem.account_freeze_failed": "Bankkonto {account_number} nicht gefunden",
+  "gui.banksystem.bank_account_management_screen.freeze_button": "Einfrieren",
+  "gui.banksystem.bank_account_management_screen.unfreeze_button": "Auftauen",
+  "gui.banksystem.bank_account_management_screen.frozen_label": "Eingefroren",
+  "gui.banksystem.bank_account_management_screen.frozen_tooltip": "Dieses Konto wurde von einem Admin eingefroren. Einzahlungen, Abhebungen und Überweisungen sind gesperrt.\nAdmins: die Änderung wird beim Speichern übernommen.",
+  "gui.banksystem.payout_edit_screen.status_account_frozen": "Konto eingefroren",
+  "gui.banksystem.company_account_frozen": "Das Firmenkonto ist eingefroren"
 }

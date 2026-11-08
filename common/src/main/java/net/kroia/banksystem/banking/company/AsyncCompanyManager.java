@@ -65,6 +65,8 @@ public final class AsyncCompanyManager {
     public static final int CODE_PER_PLAYER_COMPANY_LIMIT = 15;
     /** Task #58 (v2.1.1) — caller is at the per-player bank-account cap (company needs a slot). */
     public static final int CODE_PER_PLAYER_ACCOUNT_LIMIT = 16;
+    /** Task #117 (v2.2.0) — the company bank account is frozen by an admin. */
+    public static final int CODE_ACCOUNT_FROZEN = 17;
 
     // ------------------------------------------------------------------
     // Function enum
@@ -2016,6 +2018,7 @@ public final class AsyncCompanyManager {
                 case TARGET_NOT_FOUND -> CODE_MISSING_TARGET;
                 case TARGET_NO_DEPOSIT_RIGHT -> CODE_TARGET_NO_DEPOSIT;
                 case CURRENCY_ITEM_MISSING -> CODE_CURRENCY_ITEM_MISSING;
+                case ACCOUNT_FROZEN -> CODE_ACCOUNT_FROZEN;
                 default -> CODE_INTERNAL;
             };
             return OutputData.of(FunctionType.PAY_MISSED,
@@ -2388,6 +2391,7 @@ public final class AsyncCompanyManager {
             case NO_SHARES -> CODE_NO_SHARES;
             case INSUFFICIENT_FUNDS, CURRENCY_ITEM_MISSING -> CODE_INSUFFICIENT_FUNDS;
             case NO_PERMISSION -> CODE_NO_PERMISSION;
+            case ACCOUNT_FROZEN -> CODE_ACCOUNT_FROZEN;
         };
         return OutputData.of(FunctionType.PAY_DIVIDEND,
                 new PayDividendOutput(code, result.totalPaid(), result.holderCount()));

@@ -494,6 +494,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus deposit(long amount) {
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Dust-aware add to the free pool. The whole-native
         // portion goes through external.deposit; sub-native remainder is persisted
         // to row.dustBalance so no fraction is silently dropped. Unbound path unchanged.
@@ -561,6 +562,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdraw(long amount) {
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Dust-aware subtract from the free pool.
         // Unbound path unchanged.
         BoundView bv = resolveBound();
@@ -613,6 +615,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdrawLocked(long amount) {
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. External balance was already decremented on lock —
         // just decrement local locked. Unbound path unchanged.
         BoundView bv = resolveBound();
@@ -662,6 +665,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdrawLockedPrefered(long amount) {
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Discount from locked first (no external op — the
         // funds were already deducted at lock time), then fall back to the free
         // pool via the dust-aware split. Unbound path unchanged.
@@ -730,6 +734,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus transfer(long amount, @NotNull ISyncServerBank other) {
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Decompose into primitives (withdraw + deposit) so we
         // never have to special-case bound-source-to-bound-target. Unbound path unchanged.
         BindingRow boundRow = lookupBindingRow();
@@ -842,6 +847,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus transferFromLocked(long amount, @NotNull ISyncServerBank other) {
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Decompose into withdrawLocked + deposit primitives.
         // Unbound path unchanged.
         BindingRow boundRow = lookupBindingRow();
@@ -927,6 +933,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus transferFromLockedPrefered(long amount, @NotNull ISyncServerBank other) {
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Decompose into withdrawLockedPrefered + deposit.
         // Unbound path unchanged.
         BindingRow boundRow = lookupBindingRow();

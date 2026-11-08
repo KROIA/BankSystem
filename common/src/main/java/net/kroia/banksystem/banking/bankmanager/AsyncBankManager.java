@@ -138,7 +138,8 @@ public class AsyncBankManager implements IAsyncBankManager {
         GetCirculationDataJsonStringAsync,
         ToJsonAsync,
         ToJsonStringAsync,
-        OnPlayerJoinAsync
+        OnPlayerJoinAsync,
+        IsAccountFrozenAsync
     }
 
 
@@ -212,6 +213,7 @@ public class AsyncBankManager implements IAsyncBankManager {
         put(FunctionType.GetCirculationDataJsonStringAsync,		    new AsyncFunctionDataCodecs(null, ByteBufCodecs.STRING_UTF8.cast()));
         put(FunctionType.ToJsonAsync,							    new AsyncFunctionDataCodecs(null, ExtraCodecUtils.JSON_ELEMENT_CODEC));
         put(FunctionType.ToJsonStringAsync,						    new AsyncFunctionDataCodecs(null, ByteBufCodecs.STRING_UTF8.cast()));
+        put(FunctionType.IsAccountFrozenAsync,                      new AsyncFunctionDataCodecs(ByteBufCodecs.INT.cast(), ByteBufCodecs.BOOL.cast()));
         put(FunctionType.OnPlayerJoinAsync,						    new AsyncFunctionDataCodecs( ParamGroup_UUID_String.STREAM_CODEC, null));
     }};
 
@@ -385,6 +387,7 @@ public class AsyncBankManager implements IAsyncBankManager {
                 case FunctionType.GetUserByUUIDAsync -> userResult(input.function, bankManager.getUserByUUID(input.decodeParams()), playerSender, fullRead);
                 case FunctionType.GetUserByNameAsync -> userResult(input.function, bankManager.getUserByName(input.decodeParams()), playerSender, fullRead);
                 case FunctionType.BankAccountExistsAsync -> OutputData.of(input.function, bankManager.bankAccountExists(input.decodeParams()));
+                case FunctionType.IsAccountFrozenAsync -> OutputData.of(input.function, bankManager.isAccountFrozen(input.decodeParams()));
                 case FunctionType.BankAccountHasBankAsync -> {
                     ParamGroup_int_ItemID  param = input.decodeParams();
                     yield OutputData.of(input.function, bankManager.bankAccountHasBank(param.integer, param.itemID));
@@ -541,6 +544,7 @@ public class AsyncBankManager implements IAsyncBankManager {
                      FunctionType.GetUserByUUIDAsync,
                      FunctionType.GetUserByNameAsync,
                      FunctionType.BankAccountExistsAsync,
+                     FunctionType.IsAccountFrozenAsync,
                      FunctionType.BankAccountHasBankAsync,
                      FunctionType.GetBankAccountDataAsync,
                      FunctionType.GetPersonalBankAccountNrAsync_1,
@@ -587,6 +591,7 @@ public class AsyncBankManager implements IAsyncBankManager {
                      FunctionType.GetUserByUUIDAsync,
                      FunctionType.GetUserByNameAsync,
                      FunctionType.BankAccountExistsAsync,
+                     FunctionType.IsAccountFrozenAsync,
                      FunctionType.BankAccountHasBankAsync,
                      FunctionType.GetBankAccountDataAsync,
                      FunctionType.GetPersonalBankAccountNrAsync_1,
@@ -872,6 +877,17 @@ public class AsyncBankManager implements IAsyncBankManager {
 
 
 
+
+    @Override
+    public CompletableFuture<Boolean> isAccountFrozenAsync(int accountNumber)
+    {
+        if(!MultiServerUtils.canInteractWithBankSystem())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        sendRequest(InputData.of(FunctionType.IsAccountFrozenAsync, accountNumber))
+                .thenAccept(outputData -> future.complete(Boolean.TRUE.equals(outputData.decodeResult())));
+        return future;
+    }
 
     @Override
     public CompletableFuture<Boolean> bankAccountExistsAsync(int accountNumber)

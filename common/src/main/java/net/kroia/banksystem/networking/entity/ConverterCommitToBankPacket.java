@@ -125,6 +125,8 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
             return;
         }
 
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocks(selectedAccountNumber, net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT, playerUUID))
+            return; // Task #117: cache stays intact
         // Reserve the cache first so the pending deposit is never double-spent.
         if (!ConverterCacheManager.get().withdraw(playerUUID, amount)) {
             debug("ConverterCommitToBankPacket: race — cache changed under commit for " + playerUUID);

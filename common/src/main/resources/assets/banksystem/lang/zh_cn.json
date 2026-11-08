@@ -598,5 +598,15 @@
   "gui.banksystem.company_management_screen.stats_col_amount": "金额",
   "gui.banksystem.company_management_screen.stats_dividend_target": "在股东之间平均分配",
   "gui.banksystem.company_management_screen.company_currency": "公司货币",
-  "gui.banksystem.company_management_screen.company_currency_tooltip": "用于公司余额显示的默认货币。点击更改。"
+  "gui.banksystem.company_management_screen.company_currency_tooltip": "用于公司余额显示的默认货币。点击更改。",
+  "message.banksystem.account_frozen": "银行账户 {account_number} 已被管理员冻结。存款、取款和转账均被禁止。",
+  "message.banksystem.account_freeze_set": "银行账户 {account_number} 已冻结",
+  "message.banksystem.account_freeze_cleared": "银行账户 {account_number} 已解冻",
+  "message.banksystem.account_freeze_failed": "未找到银行账户 {account_number}",
+  "gui.banksystem.bank_account_management_screen.freeze_button": "冻结",
+  "gui.banksystem.bank_account_management_screen.unfreeze_button": "解冻",
+  "gui.banksystem.bank_account_management_screen.frozen_label": "已冻结",
+  "gui.banksystem.bank_account_management_screen.frozen_tooltip": "此账户已被管理员冻结。存款、取款和转账均被禁止。\n管理员：更改在保存后生效。",
+  "gui.banksystem.payout_edit_screen.status_account_frozen": "账户已冻结",
+  "gui.banksystem.company_account_frozen": "公司账户已冻结"
 }

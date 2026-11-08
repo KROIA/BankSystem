@@ -139,6 +139,8 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
         // Task #109: validate the slave's type code once; a disallowed code is logged as 0 + note.
         TransactionLedger.Resolved ledger = TransactionLedger.resolveSlaveCode(input.ledgerTypeCode,
                 TransactionLedger.SLAVE_WITHDRAW_CODES, false, null, slaveID, "WithdrawItemsFromBankRequest");
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocks(input.bankAccount, ledger.type(), input.executor)) // Task #117
+            return CompletableFuture.completedFuture(new OutputData(new HashMap<>()));
         Map<ItemID, Long> withdrawnItems = new HashMap<>();
         for(Map.Entry<ItemID, Long> entry : input.items.entrySet())
         {

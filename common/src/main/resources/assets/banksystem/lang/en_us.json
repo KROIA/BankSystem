@@ -598,5 +598,15 @@
   "gui.banksystem.company_management_screen.stats_col_amount": "Amount",
   "gui.banksystem.company_management_screen.stats_dividend_target": "Equally shared among shareholders",
   "gui.banksystem.company_management_screen.company_currency": "Company Currency",
-  "gui.banksystem.company_management_screen.company_currency_tooltip": "The default currency used for the company balance display.\nClick to change."
+  "gui.banksystem.company_management_screen.company_currency_tooltip": "The default currency used for the company balance display.\nClick to change.",
+  "message.banksystem.account_frozen": "Bank account {account_number} is frozen by an admin. Deposits, withdrawals and transfers are blocked.",
+  "message.banksystem.account_freeze_set": "Bank account {account_number} is now frozen",
+  "message.banksystem.account_freeze_cleared": "Bank account {account_number} is no longer frozen",
+  "message.banksystem.account_freeze_failed": "Bank account {account_number} not found",
+  "gui.banksystem.bank_account_management_screen.freeze_button": "Freeze",
+  "gui.banksystem.bank_account_management_screen.unfreeze_button": "Unfreeze",
+  "gui.banksystem.bank_account_management_screen.frozen_label": "Frozen",
+  "gui.banksystem.bank_account_management_screen.frozen_tooltip": "This account is frozen by an admin. Deposits, withdrawals and transfers are blocked.\nAdmins: the change is applied on Save.",
+  "gui.banksystem.payout_edit_screen.status_account_frozen": "Account frozen",
+  "gui.banksystem.company_account_frozen": "The company account is frozen"
 }

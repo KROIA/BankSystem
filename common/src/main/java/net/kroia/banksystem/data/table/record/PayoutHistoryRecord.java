@@ -48,7 +48,9 @@ public record PayoutHistoryRecord(
         TARGET_NO_DEPOSIT_RIGHT,
         CURRENCY_ITEM_MISSING,
         PAUSED,
-        UNKNOWN
+        UNKNOWN,
+        /** Task #117 — source (company) account frozen. Appended: the UI maps by ordinal. */
+        ACCOUNT_FROZEN
     }
 
     /** Spec B.4 — normal scheduled fire vs manual missed-payout catch-up. */

@@ -377,9 +377,12 @@ public class AsyncBank implements IAsyncBank {
             TransactionLedger.Resolved resolved = TransactionLedger.resolveSlaveCode(params.ledgerCode(), allowed,
                     true, params.ledgerNote(), slaveID, "AsyncBank." + function.name());
             LedgerActor actor = TransactionLedger.slaveActor(params.ledgerActor());
+            // Task #117: the tag lets ServerBank refuse player movements on frozen accounts.
+            Supplier<OutputData> run = resolved == null ? execute
+                    : () -> TransactionLedger.tagged(resolved.type(), params.ledgerActor(), null, execute);
             if (allowed == TransactionLedger.SLAVE_TRANSFER_CODES)
-                return TransactionLedger.withActor(actor, () -> TransactionLedger.withTransferType(resolved, execute));
-            OutputData out = execute.get();
+                return TransactionLedger.withActor(actor, () -> TransactionLedger.withTransferType(resolved, run));
+            OutputData out = run.get();
             if (resolved != null) {
                 Object result = out.decodeResult();
                 if (result == null || result == BankStatus.SUCCESS || Boolean.TRUE.equals(result))

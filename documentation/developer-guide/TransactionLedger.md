@@ -68,7 +68,7 @@ Codes are stored in `type_code` and are **append-only**: a code is never renumbe
 | 23 | SHARE_REDEEM | Shares redeemed at a Share Stamper |
 | 24 | SHARE_TRADE | Stamped shares deposited into or withdrawn from a bank |
 | 25 | ACCOUNT_DELETE_PAYOUT | Balance paid out when a user and their account were deleted |
-| 26 | ACCOUNT_FREEZE | Reserved, not written yet |
+| 26 | ACCOUNT_FREEZE | An account was frozen or unfrozen; amount 0, item 0, note `frozen` / `unfrozen`, actor = admin, console or the API caller |
 | 27 | ADMIN_DISALLOW_ITEM | An admin disallowed an item; one row per holder with the removed (non-refunded) balance |
 
 Amounts are unsigned, except for TRANSFER, where the sign gives the direction.

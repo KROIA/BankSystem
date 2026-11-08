@@ -198,6 +198,16 @@ public class BankSystemCommandsRegistration {
                         })
 
                 )
+                // Task #117: /banksystem freeze <account> [on|off] (no state = toggle). Admin check on the master.
+                .then(Commands.literal("freeze")
+                        .then(Commands.argument("account", IntegerArgumentType.integer(0))
+                                .executes(ctx -> freezeCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"), 2))
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> freezeCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"), 1)))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> freezeCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"), 0)))
+                        )
+                )
                 .then(Commands.literal("disallowItem")
                         .then(Commands.argument("itemID", StringArgumentType.string())
                                 .executes(context -> {
@@ -790,5 +800,33 @@ public class BankSystemCommandsRegistration {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Task #117 — players go through the command handler (admin check on the master); the
+     * console / command blocks act directly on the master with the console actor.
+     */
+    private static int freezeCommand(CommandSourceStack source, int accountNumber, int mode) {
+        ServerPlayer player = source.getPlayer();
+        if (player != null) {
+            handler().banksystem_freeze_async(player.getUUID(), accountNumber, mode);
+            return Command.SINGLE_SUCCESS;
+        }
+        net.kroia.banksystem.api.bankmanager.ISyncServerBankManager bankManager =
+                BACKEND_INSTANCES.SERVER_BANK_MANAGER == null ? null : BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if (bankManager == null || !net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_OP, BankSystemPermissions.FALLBACK_LEVEL)) {
+            source.sendFailure(Component.literal("[BankSystem] freeze from the console works on the master server only"));
+            return 0;
+        }
+        if (bankManager.getBankAccount(accountNumber) == null) {
+            source.sendFailure(Component.literal(BankSystemTextMessages.getAccountFreezeFailedMessage(accountNumber)));
+            return 0;
+        }
+        boolean frozen = mode == 2 ? !bankManager.isAccountFrozen(accountNumber) : mode == 1;
+        bankManager.setAccountFrozen(accountNumber, frozen, net.kroia.banksystem.api.ledger.LedgerActor.console());
+        String msg = frozen ? BankSystemTextMessages.getAccountFreezeSetMessage(accountNumber)
+                : BankSystemTextMessages.getAccountFreezeClearedMessage(accountNumber);
+        source.sendSuccess(() -> Component.literal(msg), true);
+        return Command.SINGLE_SUCCESS;
     }
 }

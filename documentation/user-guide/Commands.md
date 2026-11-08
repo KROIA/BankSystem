@@ -11,6 +11,7 @@
 | `/banksystem allowItemInHand` | Adds the item currently in your main hand to the bankable items list | | X |
 | `/banksystem disallowItem <itemID>` | Removes the item from the bankable items list (removes from all players) | | X |
 | `/banksystem disallowItemInHand` | Removes the item in your main hand from the bankable items list | | X |
+| `/banksystem freeze <account> [on\|off]` | Freezes or unfreezes a bank account; without `on`/`off` it toggles. Also works from the server console (master only) | | X |
 | `/banksystem trust <slaveID>` | Adds a slave server to the trusted list (master only) | X | |
 | `/banksystem untrust <slaveID>` | Removes a slave server from the trusted list (master only) | X | |
 | `/banksystem serverInfo` | Shows information about this server | | |

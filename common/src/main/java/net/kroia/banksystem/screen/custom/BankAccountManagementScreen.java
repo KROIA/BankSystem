@@ -46,6 +46,10 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final Component BINDINGS_BUTTON = Component.translatable(PREFIX+"bindings_button");
     private static final Component PAYOUTS_BUTTON = Component.translatable(PREFIX+"payouts_button");
     private static final Component HISTORY_BUTTON = Component.translatable(PREFIX+"history_button");
+    private static final Component FREEZE_BUTTON = Component.translatable(PREFIX+"freeze_button");
+    private static final Component UNFREEZE_BUTTON = Component.translatable(PREFIX+"unfreeze_button");
+    private static final Component FROZEN_LABEL = Component.translatable(PREFIX+"frozen_label");
+    private static final Component FROZEN_TOOLTIP = Component.translatable(PREFIX+"frozen_tooltip");
     /** Task #105: shown when the master refuses this server's writes (untrusted slave). */
     public static final Component UNTRUSTED_SERVER = Component.translatable(PREFIX+"untrusted_server");
     private static final int GRAY_TEXT_COLOR = 0xFF808080;
@@ -105,6 +109,10 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private Button bindingsButton;
     private Button payoutsButton;
     private Button historyButton;
+    /** Task #117: admin freeze toggle / frozen indicator. */
+    private Button freezeButton;
+    private boolean frozen = false;
+    private int pendingFrozen = -1; // -1 = unchanged, else 0/1 sent with Save
     private Integer companyIdForPayouts = null;
     private ListView userElementListView;
     private ListView bankElementListView;
@@ -183,6 +191,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             }
         }
         dirty = false; // (re)loaded from the server
+        frozen = bankAccountData.frozen;
+        pendingFrozen = -1;
         accountIconChangedFlag = false;
         personalBankOwnerData = bankAccountData.personalBankOwnerData;
         bankAccountName = bankAccountData.accountName;
@@ -310,6 +320,25 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         historyButton = new Button(HISTORY_BUTTON.getString(), () ->
                 net.kroia.modutilities.gui.client.ClientCompat.setScreen(new BalanceHistoryScreen(this, accountNumber)));
         addElement(historyButton);
+
+        // Task #117: admins toggle the freeze (applied on Save); others see an indicator while frozen.
+        freezeButton = null;
+        if (isAdminMode) {
+            freezeButton = new Button(freezeButtonText(), () -> {
+                pendingFrozen = (pendingFrozen == -1 ? frozen : pendingFrozen == 1) ? 0 : 1;
+                if ((pendingFrozen == 1) == frozen) pendingFrozen = -1;
+                freezeButton.setLabel(freezeButtonText());
+            });
+            freezeButton.setHoverTooltipSupplier(FROZEN_TOOLTIP::getString);
+            if (!serverTrusted)
+                lockForUntrusted(freezeButton);
+        } else if (frozen) {
+            freezeButton = new Button(FROZEN_LABEL.getString());
+            freezeButton.setClickable(false);
+            freezeButton.setHoverTooltipSupplier(FROZEN_TOOLTIP::getString);
+        }
+        if (freezeButton != null)
+            addElement(freezeButton);
 
         // Task #45a / Spec A.3 (v2.1.0) — Payouts entry on its own second row (the
         // "Share Visuals" button was removed; those settings live in the Company
@@ -451,6 +480,11 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             if(historyButton != null) {
                 int historyTextWidth = closeButton.getTextWidth(HISTORY_BUTTON.getString()) + 10;
                 historyButton.setBounds(bindingsButton.getRight() + spacing, padding, historyTextWidth, closeButton.getHeight());
+                if(freezeButton != null) {
+                    int freezeTextWidth = Math.max(closeButton.getTextWidth(FREEZE_BUTTON.getString()),
+                            Math.max(closeButton.getTextWidth(UNFREEZE_BUTTON.getString()), closeButton.getTextWidth(FROZEN_LABEL.getString()))) + 20;
+                    freezeButton.setBounds(historyButton.getRight() + spacing, padding, freezeTextWidth, closeButton.getHeight());
+                }
             }
         }
 
@@ -482,9 +516,15 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         onSaveChangesButtonClicked();
     }
 
+    /** Task #117: label shows the action; a pending (unsaved) change shows its target state. */
+    private String freezeButtonText() {
+        boolean target = pendingFrozen == -1 ? frozen : pendingFrozen == 1;
+        return (target ? UNFREEZE_BUTTON : FREEZE_BUTTON).getString() + (pendingFrozen == -1 ? "" : " *");
+    }
+
     /** True while there are edits that Save would send. */
     private boolean isDirty() {
-        if (dirty || accountIconChangedFlag || !createBankData.isEmpty())
+        if (dirty || accountIconChangedFlag || !createBankData.isEmpty() || pendingFrozen != -1)
             return true;
         for (BankAccountManagementItem item : bankAccountManagementItems.values()) {
             if (item.balanceHasChanged() || item.deleteAccount() || item.freeLockedBalance())
@@ -563,7 +603,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             accountName = accountNameLabel.getText();
         }
 
-        UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.itemView.getItemStack(), bankData, setUsers);
+        UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.itemView.getItemStack(), bankData, setUsers, pendingFrozen);
         accountIconChangedFlag = false;
         BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input)
                 .thenAccept(data -> runLater(() -> onSaveResult(data, setUsers)));

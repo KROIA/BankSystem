@@ -252,6 +252,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         BankSystemNetworking.setBackend(INSTANCES);
         net.kroia.banksystem.banking.ledger.TransactionLedger.setBackend(INSTANCES); // Task #109
+        net.kroia.banksystem.banking.ledger.AccountFreeze.setBackend(INSTANCES); // Task #117
         BankSystemTextMessages.setBackend(INSTANCES);
 
         net.kroia.banksystem.integration.numismatics.NumismaticsProvider.setBackend(INSTANCES);

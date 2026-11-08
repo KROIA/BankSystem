@@ -13,14 +13,30 @@ import java.util.*;
 
 public class BankAccountData {
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, BankAccountData> STREAM_CODEC = StreamCodec.composite(
-            ByteBufCodecs.INT, p -> p.accountNumber,
-            ByteBufCodecs.STRING_UTF8, p -> p.accountName,
-            ExtraCodecUtils.nullable(ItemID.STREAM_CODEC), p -> p.accountIcon,
-            ExtraCodecUtils.nullable(UserData.STREAM_CODEC), p -> p.personalBankOwnerData,
-            ExtraCodecUtils.mapStreamCodec(UUIDUtil.STREAM_CODEC, BankUserData.STREAM_CODEC, HashMap::new), p -> p.users,
-            ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, BankData.STREAM_CODEC, HashMap::new), p -> p.bankData,
-            BankAccountData::new
+    private static final StreamCodec<RegistryFriendlyByteBuf, Map<UUID, BankUserData>> USERS_CODEC =
+            ExtraCodecUtils.mapStreamCodec(UUIDUtil.STREAM_CODEC, BankUserData.STREAM_CODEC, HashMap::new);
+    private static final StreamCodec<RegistryFriendlyByteBuf, Map<ItemID, BankData>> BANKS_CODEC =
+            ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, BankData.STREAM_CODEC, HashMap::new);
+
+    // Hand-written: 7 fields (Task #117 added "frozen") exceed StreamCodec.composite's arity.
+    public static final StreamCodec<RegistryFriendlyByteBuf, BankAccountData> STREAM_CODEC = StreamCodec.of(
+            (buf, p) -> {
+                ByteBufCodecs.INT.encode(buf, p.accountNumber);
+                ByteBufCodecs.STRING_UTF8.encode(buf, p.accountName);
+                ExtraCodecUtils.nullable(ItemID.STREAM_CODEC).encode(buf, p.accountIcon);
+                ExtraCodecUtils.nullable(UserData.STREAM_CODEC).encode(buf, p.personalBankOwnerData);
+                USERS_CODEC.encode(buf, p.users);
+                BANKS_CODEC.encode(buf, p.bankData);
+                ByteBufCodecs.BOOL.encode(buf, p.frozen);
+            },
+            buf -> new BankAccountData(
+                    ByteBufCodecs.INT.decode(buf),
+                    ByteBufCodecs.STRING_UTF8.decode(buf),
+                    ExtraCodecUtils.nullable(ItemID.STREAM_CODEC).decode(buf),
+                    ExtraCodecUtils.nullable(UserData.STREAM_CODEC).decode(buf),
+                    USERS_CODEC.decode(buf),
+                    BANKS_CODEC.decode(buf),
+                    ByteBufCodecs.BOOL.decode(buf))
     );
 
     public final int accountNumber;
@@ -30,6 +46,8 @@ public class BankAccountData {
     public final @Nullable UserData personalBankOwnerData; // The creator of the bank account, usually the owner of the bank
     public final Map<UUID, BankUserData> users = new HashMap<>();
     public final Map<ItemID, BankData> bankData = new HashMap<>();
+    /** Task #117 — account frozen by an admin. */
+    public final boolean frozen;
 
 
     public BankAccountData(int accountNumber,
@@ -38,6 +56,17 @@ public class BankAccountData {
                            @Nullable UserData personalBankOwnerData,
                            Map<UUID, BankUserData> users,
                            Map<ItemID, BankData> bankData) {
+        this(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData, false);
+    }
+
+    public BankAccountData(int accountNumber,
+                           String accountName,
+                           @Nullable ItemID accountIcon,
+                           @Nullable UserData personalBankOwnerData,
+                           Map<UUID, BankUserData> users,
+                           Map<ItemID, BankData> bankData,
+                           boolean frozen) {
+        this.frozen = frozen;
         this.accountNumber = accountNumber;
         this.accountName = accountName;
         this.accountIcon = accountIcon;

@@ -818,6 +818,36 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
 
     @Override
+    public boolean isAccountFrozen(int accountNumber) {
+        ServerBankAccount account = bankAccounts.get(accountNumber);
+        return account != null && account.isFrozen();
+    }
+
+    @Override
+    public CompletableFuture<Boolean> isAccountFrozenAsync(int accountNumber) {
+        return CompletableFuture.completedFuture(isAccountFrozen(accountNumber));
+    }
+
+    @Override
+    public boolean setAccountFrozen(int accountNumber, boolean frozen, net.kroia.banksystem.api.ledger.LedgerActor actor) {
+        ServerBankAccount account = bankAccounts.get(accountNumber);
+        if (account == null)
+            return false;
+        if (account.isFrozen() == frozen)
+            return true; // no change: no ledger row, no event
+        account.setFrozen(frozen);
+        markPersistDirty();
+        net.kroia.banksystem.api.ledger.LedgerActor who = actor == null ? net.kroia.banksystem.api.ledger.LedgerActor.system() : actor;
+        net.kroia.banksystem.banking.ledger.TransactionLedger.INSTANCE.log(accountNumber,
+                net.kroia.banksystem.api.ledger.LedgerType.ACCOUNT_FREEZE, ItemID.INVALID_ID, 0L, who, null,
+                frozen ? "frozen" : "unfrozen");
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_EVENTS != null)
+            BACKEND_INSTANCES.SERVER_EVENTS.ACCOUNT_FREEZE_CHANGED.notifyListeners(
+                    new net.kroia.banksystem.api.event.AccountFreezeChangedEvent(accountNumber, frozen, who));
+        return true;
+    }
+
+    @Override
     public CompletableFuture<Boolean> bankAccountExistsAsync(int accountNumber) {
         return CompletableFuture.completedFuture(bankAccounts.containsKey(accountNumber));
     }

@@ -148,6 +148,8 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
         // Task #109: validate the slave's type code once; a disallowed code is logged as 0 + note.
         TransactionLedger.Resolved ledger = TransactionLedger.resolveSlaveCode(input.ledgerTypeCode,
                 TransactionLedger.SLAVE_DEPOSIT_CODES, false, null, slaveID, "DepositItemsInBankRequest");
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocks(input.bankAccount, ledger.type(), input.executor)) // Task #117
+            return CompletableFuture.completedFuture(new OutputData(input.items));
         Map<ItemID, Long> notDepositedItems = new HashMap<>();
         BankAccountBindings bindings = BankAccountBindings.get();
         for(Map.Entry<ItemID, Long> entry : input.items.entrySet())

@@ -25,7 +25,14 @@ public enum BankStatus {
      * Added in v2.0.5 (Task #33). Appended to the enum tail so the wire-format
      * ordinal used by {@link #STREAM_CODEC} stays stable for existing values.
      */
-    FAILED_EXTERNAL_UNAVAILABLE;
+    FAILED_EXTERNAL_UNAVAILABLE,
+    /**
+     * Task #117 — the account is frozen by an admin and the call was a player-initiated
+     * movement. Nothing changed. Appended to keep existing ordinals stable.
+     *
+     * @since 2.2.0
+     */
+    FAILED_ACCOUNT_FROZEN;
 
     public static final StreamCodec<RegistryFriendlyByteBuf, BankStatus> STREAM_CODEC = ExtraCodecUtils.enumStreamCodec(BankStatus.class);
 }

@@ -156,6 +156,17 @@ public interface IAsyncBankManager {
     CompletableFuture<Boolean> bankAccountExistsAsync(int accountNumber);
 
     /**
+     * Task #117 — async variant of {@code ISyncServerBankManager.isAccountFrozen(int)};
+     * works on slaves (asks the master). Completes with false if the account does not exist
+     * or the master cannot be reached.
+     *
+     * @param accountNumber the bank account
+     * @return true if the account is frozen
+     * @since 2.2.0
+     */
+    CompletableFuture<Boolean> isAccountFrozenAsync(int accountNumber);
+
+    /**
      * Checks if a specific item bank exist in a bank account with the specific accountNumber
      * @param accountNumber in which it checks for the item bank
      * @param itemID to check for an item bank

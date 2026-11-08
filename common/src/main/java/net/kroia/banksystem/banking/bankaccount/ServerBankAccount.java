@@ -77,6 +77,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     private int accountNumber;
     private String accountName = ""; // Optional account name, can be empty
     private @Nullable ItemID accountIcon;
+    /** Task #117 — frozen by an admin; persisted as "frozen" (missing = not frozen). */
+    private boolean frozen = false;
 
     /**
      * The owner of the personal bank account, if this is a personal bank account.
@@ -277,7 +279,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             bankData.put(canonical, new BankData(canonical, balance, lockedBalance, ratio));
         }
 
-        return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
+        return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData, frozen);
     }
 
     /**
@@ -327,7 +329,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             }
         }
 
-        return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
+        return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData, frozen);
     }*/
 
     @Override
@@ -379,7 +381,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         ServerBank bank = this.banks.get(itemID);
         if (bank != null) {
             bankData.put(itemID, bank.getMinimalData()); // Convert ServerBank to BankData
-            return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
+            return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData, frozen);
         }
         else {
             return null; // No bank found for the item ID
@@ -520,6 +522,17 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
 
 
+
+    /** Task #117 — see {@code ISyncServerBankManager.isAccountFrozen}. */
+    public boolean isFrozen() {
+        return frozen;
+    }
+
+    /** Task #117 — raw flag write; use {@code ServerBankManager.setAccountFrozen} (ledger + event). */
+    public void setFrozen(boolean frozen) {
+        hasChanges |= this.frozen != frozen;
+        this.frozen = frozen;
+    }
 
     @Override
     public void setAccountIcon(@Nullable ItemID accountIcon) {
@@ -1078,6 +1091,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     public boolean save(CompoundTag tag) {
         tag.putInt("accountNumber", accountNumber);
         tag.putString("accountName", accountName); // Save the account name
+        if (frozen)
+            tag.putBoolean("frozen", true); // Task #117 — absent = not frozen
 
         if(personalBankOwner != null)
             NbtCompat.putUUID(tag, "personalBankOwnerDataUUID", personalBankOwner.getUUID());
@@ -1134,6 +1149,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         } else {
             this.personalBankOwner = null; // No personalBankOwnerData set
         }
+
+        this.frozen = tag.contains("frozen") && NbtCompat.getBoolean(tag, "frozen"); // Task #117
 
         if(tag.contains("creatorUUID")) {
             this.creatorUUID = NbtCompat.getUUID(tag, "creatorUUID"); // Task #58 — per-player account cap

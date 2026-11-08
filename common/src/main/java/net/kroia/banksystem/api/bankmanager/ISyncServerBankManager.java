@@ -212,6 +212,32 @@ public interface ISyncServerBankManager {
     @Nullable IServerBankAccount getBankAccount(int accountNumber);
 
     /**
+     * Task #117 — is the account frozen by an admin? A frozen account refuses every
+     * player-initiated movement in or out (deposits, withdrawals, transfers, converter,
+     * upload/download blocks, crafting with bank items, payouts and dividends from it).
+     * Admin edits and raw API bank calls still work.
+     *
+     * @param accountNumber the bank account
+     * @return true if the account exists and is frozen
+     * @since 2.2.0
+     */
+    boolean isAccountFrozen(int accountNumber);
+
+    /**
+     * Task #117 — freezes or unfreezes an account (master only). A real change writes an
+     * ACCOUNT_FREEZE ledger row (note "frozen" / "unfrozen") and fires
+     * {@link net.kroia.banksystem.api.IBankSystemEvents#getAccountFreezeChangedEvent()};
+     * setting the current state again does neither.
+     *
+     * @param accountNumber the bank account
+     * @param frozen        the new state
+     * @param actor         who made the change (ledger + event), e.g. {@code LedgerActor.admin(..)}
+     * @return true if the account exists (also when the state did not change)
+     * @since 2.2.0
+     */
+    boolean setAccountFrozen(int accountNumber, boolean frozen, net.kroia.banksystem.api.ledger.LedgerActor actor);
+
+    /**
      * Gets the bank account data for the given account number.
      * @param accountNumber The account number for which the data is requested.
      * @return The BankAccountData object if found, null otherwise.

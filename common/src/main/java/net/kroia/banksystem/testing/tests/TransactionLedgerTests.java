@@ -49,7 +49,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Task #109 (v2.1.0) — transaction ledger: code table, legacy migration and the main write
  * paths (withdraw + refund, item deposit/withdraw, admin edits, transfers, account deletion,
- * trade rows).
+ * trade rows). Task #117 (v2.2.0) adds the account-freeze tests ({@code freeze_*}).
  * <p>
  * <b>Server type:</b> MASTER_ONLY (BANK_MANAGER category) — the live paths need the master
  * {@code ServerBankManager} and the live ledger DB. Every created user/account and every
@@ -95,6 +95,12 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("slave_code_allow_list", this::slaveCodeAllowList);
         addTest("async_bank_code_logged_on_master", this::asyncBankCodeLoggedOnMaster);
         addTest("item_request_rejects_disallowed_code", this::itemRequestRejectsDisallowedCode);
+        // Task #117 — account freeze
+        addTest("freeze_flag_persists_save_load", this::freezePersists);
+        addTest("freeze_api_row_and_event_once", this::freezeApiRowAndEvent);
+        addTest("freeze_command_admin_only", this::freezeCommand);
+        addTest("freeze_blocks_player_paths", this::freezeBlocksPlayerPaths);
+        addTest("freeze_allows_admin_and_raw_calls", this::freezeAllowsAdminAndRaw);
     }
 
     @Override
@@ -500,6 +506,187 @@ public class TransactionLedgerTests extends TestSuite {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    // ------------------------------------------------------------------ Task #117 freeze
+
+    private TestResult freezePersists() {
+        if (!ready()) return fail("live setup missing");
+        try {
+            manager.setAccountFrozen(accountNr, true, LedgerActor.system());
+            ServerBankAccount live = (ServerBankAccount) manager.getBankAccount(accountNr);
+            net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
+            if (!live.save(tag)) return fail("save failed");
+            ServerBankAccount loaded = ServerBankAccount.createFromTag(tag);
+            if (loaded == null || !loaded.isFrozen()) return fail("frozen flag lost on save/load");
+            tag.remove("frozen"); // pre-2.2.0 data
+            ServerBankAccount old = ServerBankAccount.createFromTag(tag);
+            if (old == null || old.isFrozen()) return fail("missing flag must load as not frozen");
+            return pass("flag round-trips; missing = not frozen");
+        } finally {
+            manager.setAccountFrozen(accountNr, false, LedgerActor.system());
+        }
+    }
+
+    private TestResult freezeApiRowAndEvent() {
+        if (!ready()) return fail("live setup missing");
+        List<net.kroia.banksystem.api.event.AccountFreezeChangedEvent> events = new ArrayList<>();
+        java.util.function.Consumer<net.kroia.banksystem.api.event.AccountFreezeChangedEvent> listener = e -> {
+            if (e.accountNumber() == accountNr) events.add(e);
+        };
+        var event = BankSystemMod.getAPI().getEvents().getAccountFreezeChangedEvent();
+        event.addListener(listener);
+        try {
+            // earlier tests leave freeze rows on this account; only count rows written here
+            long startId = rows(accountNr).stream().mapToLong(TransactionLogRecord::id).max().orElse(0L);
+            LedgerActor admin = TransactionLedger.admin(ADMIN);
+            if (!manager.setAccountFrozen(accountNr, true, admin)) return fail("set returned false");
+            manager.setAccountFrozen(accountNr, true, admin); // no change
+            if (!manager.isAccountFrozen(accountNr)) return fail("not frozen");
+            if (events.size() != 1 || !events.get(0).frozen() || !ADMIN.equals(events.get(0).actor().uuid()))
+                return fail("expected one freeze event, got " + events);
+            manager.setAccountFrozen(accountNr, false, admin);
+            if (manager.isAccountFrozen(accountNr) || events.size() != 2 || events.get(1).frozen())
+                return fail("unfreeze: " + events);
+            if (manager.setAccountFrozen(-12345, true, admin)) return fail("unknown account returned true");
+            int frozenRows = 0, unfrozenRows = 0;
+            for (TransactionLogRecord r : rows(accountNr)) {
+                if (r.type() != LedgerType.ACCOUNT_FREEZE || r.id() <= startId) continue;
+                if (r.amount() != 0 || r.itemId() != 0 || !ADMIN.equals(r.actorUuid())) return fail("row " + r);
+                if ("frozen".equals(r.note())) frozenRows++;
+                if ("unfrozen".equals(r.note())) unfrozenRows++;
+            }
+            if (frozenRows != 1 || unfrozenRows != 1) return fail("rows frozen=" + frozenRows + " unfrozen=" + unfrozenRows);
+            return pass("one row + one event per real change");
+        } finally {
+            event.removeListener(listener);
+            manager.setAccountFrozen(accountNr, false, LedgerActor.system());
+        }
+    }
+
+    private TestResult freezeCommand() {
+        if (!ready()) return fail("live setup missing");
+        ServerBankSystemCommandHandler h = new ServerBankSystemCommandHandler();
+        try {
+            if (h.banksystem_freeze(PLAYER, accountNr, 1) || manager.isAccountFrozen(accountNr))
+                return fail("non-admin froze the account");
+            if (!h.banksystem_freeze(ADMIN, accountNr, 1) || !manager.isAccountFrozen(accountNr)) return fail("on");
+            if (!h.banksystem_freeze(ADMIN, accountNr, 2) || manager.isAccountFrozen(accountNr)) return fail("toggle");
+            if (!h.banksystem_freeze(ADMIN, accountNr, 2) || !manager.isAccountFrozen(accountNr)) return fail("toggle back");
+            if (!h.banksystem_freeze(ADMIN, accountNr, 0) || manager.isAccountFrozen(accountNr)) return fail("off");
+            TransactionLogRecord r = find(rows(accountNr), LedgerType.ACCOUNT_FREEZE);
+            if (r == null || r.source() != LedgerActor.Source.ADMIN || !ADMIN.equals(r.actorUuid())) return fail("row " + r);
+            return pass("on / toggle / off by admin; non-admin refused");
+        } finally {
+            manager.setAccountFrozen(accountNr, false, LedgerActor.system());
+        }
+    }
+
+    private TestResult freezeBlocksPlayerPaths() {
+        if (!ready()) return fail("live setup missing");
+        ItemID moneyId = MoneyItem.getItemID();
+        ItemID diamond = allow(Items.DIAMOND.getDefaultInstance());
+        IServerBank money = manager.getBankAccount(accountNr).getOrCreateBank(moneyId);
+        IServerBank gems = manager.getBankAccount(accountNr).getOrCreateBank(diamond);
+        IServerBank otherMoney = manager.getBankAccount(otherAccountNr).getOrCreateBank(moneyId);
+        if (money == null || gems == null || otherMoney == null) return fail("no banks");
+        money.deposit(10_000L);
+        gems.deposit(500L);
+        otherMoney.deposit(10_000L);
+        long m = money.getBalance(), g = gems.getBalance(), o = otherMoney.getBalance();
+        manager.setAccountFrozen(accountNr, true, LedgerActor.system());
+        try {
+            Map<ItemID, Long> items = new HashMap<>();
+            items.put(diamond, 5L);
+            Map<ItemID, Long> back = new DepositItemsInBankRequest().handleOnMasterServer(
+                    new DepositItemsInBankRequest.InputData(accountNr, PLAYER, items), "", null).join().items();
+            if (!Long.valueOf(5L).equals(back.get(diamond))) return fail("deposit request not refused: " + back);
+            Map<ItemID, Long> out = new WithdrawItemsFromBankRequest().handleOnMasterServer(
+                    new WithdrawItemsFromBankRequest.InputData(accountNr, PLAYER, items), "", null).join().items();
+            if (!out.isEmpty()) return fail("withdraw request not refused: " + out);
+            // Rejected (disallowed) slave code counts as player movement too.
+            back = new DepositItemsInBankRequest().handleOnMasterServer(new DepositItemsInBankRequest.InputData(
+                    accountNr, PLAYER, items, LedgerType.ADMIN_SET.code()), "", null).join().items();
+            if (back.isEmpty()) return fail("forged code bypassed the freeze");
+
+            HashMap<ItemID, Long> notes = new HashMap<>();
+            notes.put(ItemID.of(BankSystemItems.MONEY5.get().getDefaultInstance()), 2L);
+            new WithdrawMoneyPacket(notes, accountNr).handle(PLAYER, null);
+
+            net.kroia.banksystem.banking.bank.AsyncBank.Request handler = net.kroia.banksystem.banking.bank.AsyncBank.Request.instance;
+            for (LedgerType t : new LedgerType[]{LedgerType.DEPOSIT, LedgerType.UPLOAD_DEPOSIT, LedgerType.CRAFT_OUTPUT}) {
+                var in = TransactionLedger.tagged(t, PLAYER, null, () -> net.kroia.banksystem.banking.bank.AsyncBank.InputData.of(
+                        net.kroia.banksystem.banking.bank.AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 7L));
+                handler.handleOnMasterServer(in, "", null).join();
+            }
+            for (LedgerType t : new LedgerType[]{LedgerType.WITHDRAW, LedgerType.DOWNLOAD_WITHDRAW, LedgerType.CRAFT_CONSUME}) {
+                var in = TransactionLedger.tagged(t, PLAYER, null, () -> net.kroia.banksystem.banking.bank.AsyncBank.InputData.of(
+                        net.kroia.banksystem.banking.bank.AsyncBank.FunctionType.WithdrawLockedPreferedAsync, accountNr, moneyId, 7L));
+                handler.handleOnMasterServer(in, "", null).join();
+            }
+            // Master-local tagged calls (terminal / upload / download / crafting).
+            if (TransactionLedger.tagged(LedgerType.DEPOSIT, PLAYER, null, () -> money.depositAsync(3L)).join() != net.kroia.banksystem.api.bank.BankStatus.FAILED_ACCOUNT_FROZEN)
+                return fail("tagged local deposit not refused");
+            if (TransactionLedger.tagged(LedgerType.WITHDRAW, PLAYER, null, () -> gems.withdrawLockedPreferedAsync(3L)).join() != net.kroia.banksystem.api.bank.BankStatus.FAILED_ACCOUNT_FROZEN)
+                return fail("tagged local withdraw not refused");
+            // Transfers in both directions.
+            if (TransactionLedger.tagged(LedgerType.TRANSFER, PLAYER, null, () -> money.transfer(100L, otherMoney)) != net.kroia.banksystem.api.bank.BankStatus.FAILED_ACCOUNT_FROZEN)
+                return fail("transfer out of frozen not refused");
+            if (TransactionLedger.tagged(LedgerType.TRANSFER, OTHER, null, () -> otherMoney.transfer(100L, money)) != net.kroia.banksystem.api.bank.BankStatus.FAILED_ACCOUNT_FROZEN)
+                return fail("transfer into frozen not refused");
+            if (!net.kroia.banksystem.banking.ledger.AccountFreeze.blocks(accountNr, LedgerType.CONVERTER_DEPOSIT, null))
+                return fail("converter deposit not blocked");
+
+            if (money.getBalance() != m || gems.getBalance() != g || otherMoney.getBalance() != o)
+                return fail("balances changed: money " + m + "->" + money.getBalance() + ", gems " + g + "->" + gems.getBalance()
+                        + ", other " + o + "->" + otherMoney.getBalance());
+            return pass("item requests, money withdraw, async/local tagged calls and transfers refused; balances unchanged");
+        } finally {
+            manager.setAccountFrozen(accountNr, false, LedgerActor.system());
+        }
+    }
+
+    private TestResult freezeAllowsAdminAndRaw() {
+        if (!ready()) return fail("live setup missing");
+        ItemID moneyId = MoneyItem.getItemID();
+        IServerBank money = manager.getBankAccount(accountNr).getOrCreateBank(moneyId);
+        if (money == null) return fail("no money bank");
+        money.deposit(1_000L);
+        manager.setAccountFrozen(accountNr, true, LedgerActor.system());
+        try {
+            net.kroia.banksystem.banking.bank.AsyncBank.Request handler = net.kroia.banksystem.banking.bank.AsyncBank.Request.instance;
+            long b = money.getBalance();
+            // Raw (NO_LOG) calls, e.g. StockMarket settlement: lock, unlock, withdraw.
+            handler.handleOnMasterServer(net.kroia.banksystem.banking.bank.AsyncBank.InputData.of(
+                    net.kroia.banksystem.banking.bank.AsyncBank.FunctionType.LockAmountAsync, accountNr, moneyId, 50L), "", null).join();
+            handler.handleOnMasterServer(net.kroia.banksystem.banking.bank.AsyncBank.InputData.of(
+                    net.kroia.banksystem.banking.bank.AsyncBank.FunctionType.UnlockAmountAsync, accountNr, moneyId, 50L), "", null).join();
+            if (money.getLockedBalance() != 0 || money.getBalance() != b) return fail("raw lock/unlock");
+            handler.handleOnMasterServer(net.kroia.banksystem.banking.bank.AsyncBank.InputData.of(
+                    net.kroia.banksystem.banking.bank.AsyncBank.FunctionType.WithdrawAsync, accountNr, moneyId, 10L), "", null).join();
+            if (money.getBalance() != b - 10L) return fail("raw withdraw refused");
+            // Admin edit through the account screen request.
+            List<UpdateBankAccountRequest.InputData.BankData> data = new ArrayList<>();
+            data.add(new UpdateBankAccountRequest.InputData.BankData(moneyId, 777L, true, false, false, false));
+            new UpdateBankAccountRequest().handleOnMasterServer(new UpdateBankAccountRequest.InputData(accountNr, "", null,
+                    data, null), "", ADMIN).join();
+            if (money.getBalance() != 777L) return fail("admin set balance refused: " + money.getBalance());
+            // Owner (non-admin) may not close a bank of a frozen account; the admin may unfreeze via the screen request.
+            List<UpdateBankAccountRequest.InputData.BankData> close = new ArrayList<>();
+            close.add(new UpdateBankAccountRequest.InputData.BankData(moneyId, 0L, false, false, true, false));
+            new UpdateBankAccountRequest().handleOnMasterServer(new UpdateBankAccountRequest.InputData(accountNr, "", null,
+                    close, null), "", PLAYER).join();
+            if (manager.getBankAccount(accountNr).getBank(moneyId) == null) return fail("owner closed a frozen bank");
+            new UpdateBankAccountRequest().handleOnMasterServer(new UpdateBankAccountRequest.InputData(accountNr, "", null,
+                    null, null, 0), "", PLAYER).join();
+            if (!manager.isAccountFrozen(accountNr)) return fail("owner unfroze via the screen request");
+            new UpdateBankAccountRequest().handleOnMasterServer(new UpdateBankAccountRequest.InputData(accountNr, "", null,
+                    null, null, 0), "", ADMIN).join();
+            if (manager.isAccountFrozen(accountNr)) return fail("admin unfreeze via the screen request");
+            return pass("raw lock/unlock/withdraw and admin edits work on a frozen account");
+        } finally {
+            manager.setAccountFrozen(accountNr, false, LedgerActor.system());
+        }
+    }
 
     private boolean ready() {
         return manager != null && ledger != null && accountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER

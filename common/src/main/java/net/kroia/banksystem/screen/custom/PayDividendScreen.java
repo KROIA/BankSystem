@@ -215,6 +215,10 @@ public class PayDividendScreen extends BankSystemGuiScreen {
                     statusLabel.setTextColor(COLOR_ERR);
                     payButton.setEnabled(true);
                 }
+                case AsyncCompanyManager.CODE_ACCOUNT_FROZEN -> {
+                    statusLabel.setText(Component.translatable("gui.banksystem.company_account_frozen").getString());
+                    statusLabel.setTextColor(COLOR_ERR);
+                }
                 case AsyncCompanyManager.CODE_NOT_FOUND -> {
                     statusLabel.setText(RESULT_NOT_FOUND.getString());
                     statusLabel.setTextColor(COLOR_ERR);

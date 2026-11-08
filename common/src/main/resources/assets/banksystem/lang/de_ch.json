@@ -598,5 +598,15 @@
   "gui.banksystem.company_management_screen.stats_col_amount": "Betrag",
   "gui.banksystem.company_management_screen.stats_dividend_target": "Gliichmaessig under Aktionaere uufgteilt",
   "gui.banksystem.company_management_screen.company_currency": "Firmewaehrig",
-  "gui.banksystem.company_management_screen.company_currency_tooltip": "D Standardwaehrig fuer d Firmebilanzaazaig.\nClicke zum Aendere."
+  "gui.banksystem.company_management_screen.company_currency_tooltip": "D Standardwaehrig fuer d Firmebilanzaazaig.\nClicke zum Aendere.",
+  "message.banksystem.account_frozen": "S Bankkonto {account_number} isch vomene Admin igfrore worde. Iizahlige, Abhebige und Überwiisige sind gsperrt.",
+  "message.banksystem.account_freeze_set": "S Bankkonto {account_number} isch jetzt igfrore",
+  "message.banksystem.account_freeze_cleared": "S Bankkonto {account_number} isch nümme igfrore",
+  "message.banksystem.account_freeze_failed": "S Bankkonto {account_number} isch nöd gfunde worde",
+  "gui.banksystem.bank_account_management_screen.freeze_button": "Ifrüüre",
+  "gui.banksystem.bank_account_management_screen.unfreeze_button": "Uftaue",
+  "gui.banksystem.bank_account_management_screen.frozen_label": "Igfrore",
+  "gui.banksystem.bank_account_management_screen.frozen_tooltip": "Das Konto isch vomene Admin igfrore worde. Iizahlige, Abhebige und Überwiisige sind gsperrt.\nAdmins: d Änderig gilt erst nachem Speichere.",
+  "gui.banksystem.payout_edit_screen.status_account_frozen": "Konto igfrore",
+  "gui.banksystem.company_account_frozen": "S Firmekonto isch igfrore"
 }

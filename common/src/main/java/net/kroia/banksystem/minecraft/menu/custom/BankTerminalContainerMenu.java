@@ -730,6 +730,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         // settings change must not split one craft's bank operations (permission
         // check, locks, withdrawals) across two different accounts.
         final IAsyncBankAccount account = this.craftingAccount;
+        final int craftAccountNr = this.craftingAccountNumber;
         final boolean needsWithdraw = match.usesBankItems();
         final boolean needsDeposit = depositOutputToBank;
         if ((needsWithdraw || needsDeposit) && account == null)
@@ -768,10 +769,19 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                         onCraftPermissionRevoked(account, canWithdraw, canDeposit);
                         return;
                     }
-                    if (rawNeeds.isEmpty())
-                        runOnMainThread(() -> guardedApplyCraftResults(match, craftCount, gridSnapshot, new ArrayList<>()));
-                    else
-                        lockSequentially(account, new ArrayList<>(rawNeeds.entrySet()), 0, new ArrayList<>(), match, craftCount, gridSnapshot);
+                    // Task #117: a frozen account refuses CRAFT_CONSUME / CRAFT_OUTPUT. Check before
+                    // locking: the withdraw runs after the output was delivered.
+                    craftStep(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isAccountFrozenAsync(craftAccountNr), List.of(), frozen -> {
+                        if (Boolean.TRUE.equals(frozen)) {
+                            ServerPlayerUtilities.printToClientConsole(playerUUID, BankSystemTextMessages.getAccountFrozenMessage(craftAccountNr));
+                            runOnMainThread(() -> craftInProgress = false);
+                            return;
+                        }
+                        if (rawNeeds.isEmpty())
+                            runOnMainThread(() -> guardedApplyCraftResults(match, craftCount, gridSnapshot, new ArrayList<>()));
+                        else
+                            lockSequentially(account, new ArrayList<>(rawNeeds.entrySet()), 0, new ArrayList<>(), match, craftCount, gridSnapshot);
+                    });
                 }));
     }
 

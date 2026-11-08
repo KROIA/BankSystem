@@ -77,6 +77,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
     private static final Component STATUS_CURRENCY = Component.translatable(PREFIX + "status_currency_missing");
     private static final Component STATUS_PAUSED = Component.translatable(PREFIX + "status_paused");
     private static final Component STATUS_UNKNOWN = Component.translatable(PREFIX + "status_unknown");
+    private static final Component STATUS_FROZEN = Component.translatable(PREFIX + "status_account_frozen");
     private static final Component TYPE_CATCH_UP = Component.translatable(PREFIX + "type_catch_up");
     private static final int COLOR_OK = 0xFF10b981;
     private static final int COLOR_INSUFF = 0xFFeab308;
@@ -399,6 +400,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
             case 3 -> STATUS_NO_DEPOSIT.getString();
             case 4 -> STATUS_CURRENCY.getString();
             case 5 -> STATUS_PAUSED.getString();
+            case 7 -> STATUS_FROZEN.getString(); // Task #117 (6 = UNKNOWN)
             default -> STATUS_UNKNOWN.getString();
         };
     }

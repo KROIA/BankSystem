@@ -86,6 +86,9 @@ public class BankSystemEvents implements IBankSystemEvents {
     /** Task #49 (v2.1.0) — one event per successful dividend run. Master-only. */
     public final DataEvent<DividendPaidEvent> DIVIDEND_PAID = new DataEvent<>();
 
+    /** Task #117 (v2.2.0) — one event per real account freeze/unfreeze. Master-only. */
+    public final DataEvent<net.kroia.banksystem.api.event.AccountFreezeChangedEvent> ACCOUNT_FREEZE_CHANGED = new DataEvent<>();
+
 
     @Override
     public void removeListeners() {
@@ -106,6 +109,7 @@ public class BankSystemEvents implements IBankSystemEvents {
         TRUST_CHANGED.removeListeners();
         PAYOUT_EXECUTED.removeListeners();
         DIVIDEND_PAID.removeListeners();
+        ACCOUNT_FREEZE_CHANGED.removeListeners();
     }
 
 
@@ -206,5 +210,11 @@ public class BankSystemEvents implements IBankSystemEvents {
     public DataEvent<DividendPaidEvent> getDividendPaidEvent()
     {
         return DIVIDEND_PAID;
+    }
+
+    @Override
+    public DataEvent<net.kroia.banksystem.api.event.AccountFreezeChangedEvent> getAccountFreezeChangedEvent()
+    {
+        return ACCOUNT_FREEZE_CHANGED;
     }
 }

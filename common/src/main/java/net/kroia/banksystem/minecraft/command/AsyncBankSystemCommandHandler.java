@@ -70,7 +70,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
 
         Bank_create,
-        Bank_show_user
+        Bank_show_user,
+        Banksystem_freeze
 
     }
 
@@ -108,6 +109,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
 
         put(FunctionType.Bank_create,                               codecPacket(ByteBufCodecs.STRING_UTF8.cast(), ByteBufCodecs.INT.cast()));
         put(FunctionType.Bank_show_user,                            codecPacket(ByteBufCodecs.STRING_UTF8.cast()));
+        put(FunctionType.Banksystem_freeze,                         codecPacket(ParamGroup_int_int.STREAM_CODEC));
 
     }};
 
@@ -248,6 +250,10 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
                     return CompletableFuture.completedFuture(OutputData.of(input.function, accountNr));
                 }
                 case FunctionType.Bank_show_user ->                         result = commandHandler.bank_show_user(executorPlayer, (String)inputData.extra);
+                case FunctionType.Banksystem_freeze -> {
+                    ParamGroup_int_int data = (ParamGroup_int_int)inputData.extra;
+                    result = commandHandler.banksystem_freeze(executorPlayer, data.a, data.b);
+                }
             }
 
             return CompletableFuture.completedFuture(OutputData.of(input.function, result));
@@ -335,6 +341,14 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         }
     }
 
+    private record ParamGroup_int_int(int a, int b)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_int_int> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.INT, p -> p.a,
+                ByteBufCodecs.INT, p -> p.b,
+                ParamGroup_int_int::new
+        );
+    }
     private record ParamGroup_UUID_int(UUID uuid, int integer)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_UUID_int> STREAM_CODEC = StreamCodec.composite(
@@ -442,6 +456,17 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         outputDataFuture.thenAccept(outputData -> {
             future.complete(outputData.decodeResult());
         });
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> banksystem_freeze_async(@NotNull UUID executor, int accountNumber, int mode) {
+        if(!MultiServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_freeze, executor, new ParamGroup_int_int(accountNumber, mode)));
+        handleResponse(outputDataFuture, executor);
+        CompletableFuture<Boolean>  future = new CompletableFuture<>();
+        outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
         return future;
     }
 

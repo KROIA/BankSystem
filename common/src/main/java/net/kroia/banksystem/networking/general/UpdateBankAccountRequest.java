@@ -40,7 +40,8 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                             String accountName,
                             @Nullable ItemStack accountIcon,
                             List<BankData> bankData,
-                            Map<UUID, Integer> setUsers)
+                            Map<UUID, Integer> setUsers,
+                            int setFrozen) // Task #117: -1 = unchanged, 0 = unfreeze, 1 = freeze (admins only)
     {
 
         public record BankData(ItemID itemID,
@@ -108,6 +109,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 ExtraCodecUtils.nullable(ITEM_STACK_NBT_CODEC), InputData::accountIcon,
                 ExtraCodecUtils.listStreamCodec(BankData.STREAM_CODEC), InputData::bankData,
                 ExtraCodecUtils.mapStreamCodec(UUIDUtil.STREAM_CODEC, ByteBufCodecs.INT, HashMap<UUID, Integer>::new), InputData::setUsers,
+                ByteBufCodecs.INT, InputData::setFrozen,
                 InputData::new
         );
 
@@ -118,6 +120,17 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                          List<BankData> bankData,
                          Map<UUID, Integer> setUsers)
         {
+            this(accountNumber, accountName, accountIcon, bankData, setUsers, -1);
+        }
+
+        public InputData(int accountNumber,
+                         String accountName,
+                         @Nullable ItemStack accountIcon,
+                         List<BankData> bankData,
+                         Map<UUID, Integer> setUsers,
+                         int setFrozen)
+        {
+            this.setFrozen = setFrozen;
             this.accountNumber = accountNumber;
             this.accountName = accountName;
             if(accountIcon != null)
@@ -186,6 +199,9 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 edits.add("name '" + oldName + "'->'" + input.accountName + "'");
         }
 
+        if (isAdmin && input.setFrozen >= 0) // Task #117: ledger row + event inside setAccountFrozen
+            bankManager.setAccountFrozen(input.accountNumber, input.setFrozen == 1, adminActor);
+
         if(input.bankData != null) {
             for (InputData.BankData data : input.bankData) {
                 // Closing a bank destroys its balance but cannot create value, so an account
@@ -193,6 +209,8 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 // admins. Reaching this handler already guarantees isAdmin || canManage (checked
                 // above), so no further permission check is needed for the removal.
                 if (data.removeBank) {
+                    if (!isAdmin && bankManager.isAccountFrozen(input.accountNumber))
+                        continue; // Task #117: a frozen account's banks can only be closed by an admin
                     ISyncServerBank closing = account.getBank(data.itemID);
                     long destroyed = closing == null ? 0L : closing.getTotalBalance();
                     account.removeBank(data.itemID);

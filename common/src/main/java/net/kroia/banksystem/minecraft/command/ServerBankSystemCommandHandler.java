@@ -161,6 +161,27 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
 
 
 
+    /** Task #117 — mode 0 = off, 1 = on, 2 = toggle. Admin only. */
+    @Override
+    public boolean banksystem_freeze(@NotNull UUID executor, int accountNumber, int mode) {
+        if(!isPlayerAdmin(executor))
+            return false;
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if (bankManager.getBankAccount(accountNumber) == null) {
+            sendMessage(executor, BankSystemTextMessages.getAccountFreezeFailedMessage(accountNumber));
+            return false;
+        }
+        boolean frozen = mode == 2 ? !bankManager.isAccountFrozen(accountNumber) : mode == 1;
+        bankManager.setAccountFrozen(accountNumber, frozen, net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor));
+        sendMessage(executor, frozen ? BankSystemTextMessages.getAccountFreezeSetMessage(accountNumber)
+                : BankSystemTextMessages.getAccountFreezeClearedMessage(accountNumber));
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> banksystem_freeze_async(@NotNull UUID executor, int accountNumber, int mode) {
+        return CompletableFuture.completedFuture(banksystem_freeze(executor, accountNumber, mode));
+    }
+
     @Override
     public boolean banksystem_disallowItem(@NotNull UUID executor, ItemID itemID) {
         if(!isPlayerAdmin(executor))
@@ -446,8 +467,12 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             sendMessage(executor, BankSystemTextMessages.getTransferToSameAccountMessage(MoneyItem.getMoneyItemName()));
             return false;
         }
+        // Task #117: tagged TRANSFER so a frozen source or target account refuses the transfer.
         BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.player(executor),
-                () -> fromBank.transfer(fromBank.convertToRawAmount(amount), toBank));
+                () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.TRANSFER, executor, null,
+                        () -> fromBank.transfer(fromBank.convertToRawAmount(amount), toBank)));
+        if (status == BankStatus.FAILED_ACCOUNT_FROZEN)
+            return false; // the player was already told
         if(status != BankStatus.SUCCESS) {
             if (fromBank.getRealBalance() < amount)
                 sendMessage(executor, BankSystemTextMessages.getNotEnoughMoneyForTransfer(fromUserName, toUserName, fromBank.getFormattedAmount(amount), MoneyItem.getMoneyItemName()));

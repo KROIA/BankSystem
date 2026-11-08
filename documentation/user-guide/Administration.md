@@ -66,6 +66,13 @@ Click the <b>Save changes</b> button to apply your changes.
 </details>
 
 <details>
+<summary><b>Freeze account</b></summary>
+Click <b>Freeze</b> in the header row (it reads <b>Unfreeze</b> while the account is frozen; a <b>*</b> marks an unsaved change), then <b>Save changes</b>. The same works with <code>/banksystem freeze &lt;account&gt; [on|off]</code> (BankSystem admins, or the master server console).<br>
+A frozen account refuses every player action that moves money or items in or out: terminal deposits and withdrawals, bank notes, the converter, Bank Upload/Download blocks, crafting with bank items, money transfers to or from it, and payouts/dividends paid from it (the payout history shows <i>Account frozen</i>). The player gets a chat message and keeps their items. Members still see the account (a grey <b>Frozen</b> marker), but only admins can close its banks.<br>
+Admin edits keep working, and so does StockMarket's settlement (unlocking and paying out existing orders). Every freeze and unfreeze is recorded in the <a href="#transaction-ledger">transaction ledger</a> (code 26) with the admin or console as actor. On an untrusted slave server the button is greyed out like the other admin edits.
+</details>
+
+<details>
 <summary><b>Release locked amount</b></summary>
 Check the checkbox if you want to release the locked amount for a specific item. This may affect other mods which have locked the money/item in the first place.<br>
 Click the <b>Save changes</b> button to apply your changes.

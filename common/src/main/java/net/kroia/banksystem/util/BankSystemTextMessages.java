@@ -308,6 +308,28 @@ public class BankSystemTextMessages {
     }
 
 
+    // Task #117 — account freeze
+    private static final Component ACCOUNT_FROZEN = Component.translatable(prefix+"account_frozen");
+    private static final Component ACCOUNT_FREEZE_SET = Component.translatable(prefix+"account_freeze_set");
+    private static final Component ACCOUNT_FREEZE_CLEARED = Component.translatable(prefix+"account_freeze_cleared");
+    private static final Component ACCOUNT_FREEZE_FAILED = Component.translatable(prefix+"account_freeze_failed");
+    public static String getAccountFrozenMessage(int accountNumber)
+    {
+        return replaceVariable(ACCOUNT_FROZEN.getString(), Variables.ACCOUNT, String.valueOf(accountNumber));
+    }
+    public static String getAccountFreezeSetMessage(int accountNumber)
+    {
+        return replaceVariable(ACCOUNT_FREEZE_SET.getString(), Variables.ACCOUNT, String.valueOf(accountNumber));
+    }
+    public static String getAccountFreezeClearedMessage(int accountNumber)
+    {
+        return replaceVariable(ACCOUNT_FREEZE_CLEARED.getString(), Variables.ACCOUNT, String.valueOf(accountNumber));
+    }
+    public static String getAccountFreezeFailedMessage(int accountNumber)
+    {
+        return replaceVariable(ACCOUNT_FREEZE_FAILED.getString(), Variables.ACCOUNT, String.valueOf(accountNumber));
+    }
+
     private static final Component ITEM_NOT_ALLOWED = Component.translatable(prefix+"item_not_allowed");
     public static String getItemNotAllowedMessage(String itemName)
     {

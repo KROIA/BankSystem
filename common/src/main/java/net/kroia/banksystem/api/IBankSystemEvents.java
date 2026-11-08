@@ -193,6 +193,14 @@ public interface IBankSystemEvents {
     DataEvent<DividendPaidEvent> getDividendPaidEvent();
 
     /**
+     * Task #117 — fires on the <b>master server</b> once per real freeze/unfreeze of a bank
+     * account, after the flag was written. See {@link net.kroia.banksystem.api.event.AccountFreezeChangedEvent}.
+     *
+     * @since 2.2.0
+     */
+    DataEvent<net.kroia.banksystem.api.event.AccountFreezeChangedEvent> getAccountFreezeChangedEvent();
+
+    /**
      * Removes all listeners for the events and signals in this class.
      */
     void removeListeners();

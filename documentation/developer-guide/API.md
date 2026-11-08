@@ -178,6 +178,29 @@ bank.depositAsync(amount).thenAccept(status -> {
 });
 ```
 
+`FAILED_ACCOUNT_FROZEN` (since 2.2.0): the account is frozen and the call was a player action (see below).
+
+### Account Freeze (since 2.2.0)
+
+Admins can freeze an account (`/banksystem freeze`, management screen, or the API):
+
+```java
+// ISyncServerBankManager (master)
+boolean isAccountFrozen(int accountNumber);
+boolean setAccountFrozen(int accountNumber, boolean frozen, LedgerActor actor); // false = no such account
+// IAsyncBankManager (master + slaves)
+CompletableFuture<Boolean> isAccountFrozenAsync(int accountNumber);
+// IBankSystemEvents (master)
+DataEvent<AccountFreezeChangedEvent> getAccountFreezeChangedEvent();
+record AccountFreezeChangedEvent(int accountNumber, boolean frozen, LedgerActor actor) {}
+```
+
+A real change writes one `ACCOUNT_FREEZE` ledger row and fires the event once; setting the current state again does nothing.
+
+The master refuses player movements on a frozen account by their ledger type (DEPOSIT, WITHDRAW, TRANSFER, CONVERTER_*, UPLOAD_DEPOSIT, DOWNLOAD_WITHDRAW, CRAFT_*, SHARE_TRADE, and rejected slave codes) with `FAILED_ACCOUNT_FROZEN`; nothing changes. Payouts and dividends from a frozen company account fail with `ACCOUNT_FROZEN`.
+
+**Not blocked:** untagged raw bank calls (no ledger type, e.g. StockMarket settlement, locks/unlocks) and admin edits. Add-ons that move player funds should check `isAccountFrozen(Async)` themselves (StockMarket refuses new orders on a frozen account).
+
 ### Locking Mechanism
 
 The locking system prevents double-spending for pending transactions. This is critical for mods like the StockMarket that need to reserve funds.
@@ -259,6 +282,7 @@ Subscribe to events for reactive integration via `api.getEvents()`:
 | `getTrustChangedSignal()` → `DataEvent<TrustChangeInfo>` | Fires when a slave is trusted/untrusted |
 | `getPayoutExecutedEvent()` → `DataEvent<PayoutExecutedInfo>` | Fires on every payout-schedule evaluation, success or failure |
 | `getDividendPaidEvent()` → `DataEvent<DividendPaidEvent>` | Fires after a successful dividend run |
+| `getAccountFreezeChangedEvent()` → `DataEvent<AccountFreezeChangedEvent>` | Fires once per real freeze/unfreeze of an account (since 2.2.0) |
 | `removeListeners()` → `void` | Unsubscribe all listeners |
 
 Threading, which JVM each one fires on, and full payload contracts: [Events & Signals](EventsAndSignals.md).

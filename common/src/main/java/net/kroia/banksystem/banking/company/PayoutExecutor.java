@@ -207,6 +207,8 @@ public final class PayoutExecutor {
 
         IServerBankAccount sourceAccount = bm.getBankAccount(company.getBankAccountNr());
         if (sourceAccount == null) return new Outcome(PayoutFailureReason.UNKNOWN, playerName, accountName);
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.isFrozen(company.getBankAccountNr())) // Task #117
+            return new Outcome(PayoutFailureReason.ACCOUNT_FROZEN, playerName, accountName);
 
         ItemID currency = resolveCurrency(schedule);
         boolean money = schedule.isMoneyCurrency();
@@ -287,6 +289,8 @@ public final class PayoutExecutor {
 
         IServerBankAccount sourceAccount = bm.getBankAccount(companyAccountNr);
         if (sourceAccount == null) return new Outcome(PayoutFailureReason.UNKNOWN, dividendName, "");
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.isFrozen(companyAccountNr)) // Task #117
+            return new Outcome(PayoutFailureReason.ACCOUNT_FROZEN, dividendName, "");
         ItemID currency = resolveCurrency(schedule);
         boolean money = schedule.isMoneyCurrency();
         if (currency == null) {

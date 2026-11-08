@@ -166,6 +166,8 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
             return;
         }
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocks(finalCurrentSelectedAccountNumber, LedgerType.WITHDRAW, player)) // Task #117
+            return;
 
         ISyncServerBank moneyBank = account.getBank(MoneyItem.getItemID());
         if(moneyBank == null) {

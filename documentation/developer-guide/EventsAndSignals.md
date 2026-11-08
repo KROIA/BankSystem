@@ -72,6 +72,7 @@ Each entry below states its side and thread. When in doubt, marshal to the serve
 | `getTrustChangedSignal()` | `DataEvent<TrustChangeInfo>` | `{slaveID, trusted}` | **master** | server main | a slave was trusted/untrusted at runtime |
 | `getPayoutExecutedEvent()` | `DataEvent<PayoutExecutedInfo>` | `{companyId, scheduleId, sourceAccount, targetUuid, amount, status, time}` | **master** | server | a company payout schedule was evaluated — success **or** failure |
 | `getDividendPaidEvent()` | `DataEvent<DividendPaidEvent>` | `{companyId, perShareAmount, totalPaid, holderCount, time}` | **master** | server | a dividend run completed successfully |
+| `getAccountFreezeChangedEvent()` | `DataEvent<AccountFreezeChangedEvent>` | `{accountNumber, frozen, actor}` | **master** | caller's thread | an account was frozen or unfrozen (once per real change; since 2.2.0) |
 
 ---
 

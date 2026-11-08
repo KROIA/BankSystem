@@ -124,6 +124,8 @@ public final class DividendPayer implements IDividendPayer {
 
         IServerBankAccount sourceAccount = bm.getBankAccount(companyAccountNr);
         if (sourceAccount == null) return PayDividendResult.of(PayDividendResult.Reason.INTERNAL);
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.isFrozen(companyAccountNr)) // Task #117
+            return PayDividendResult.of(PayDividendResult.Reason.ACCOUNT_FROZEN);
 
         // Task #57b — "unset" currency (its item was blacklisted while money was also banned):
         // refuse to pay with a clear reason instead of constructing an invalid ItemID.
