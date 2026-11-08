@@ -109,8 +109,14 @@ public final class AdminAudit {
 
     /** @return the audit file of {@code day} (server time zone), or null without a world. */
     public static @Nullable Path auditFile(LocalDate day) {
+        Path dir = auditDir();
+        return dir == null ? null : dir.resolve(day + ".log");
+    }
+
+    /** @return the audit folder (audit files and digests), or null without a world. */
+    public static @Nullable Path auditDir() {
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_DATA_HANDLER == null) return null;
-        return BACKEND_INSTANCES.SERVER_DATA_HANDLER.getAbsoluteSavePath("audit").resolve(day + ".log");
+        return BACKEND_INSTANCES.SERVER_DATA_HANDLER.getAbsoluteSavePath("audit");
     }
 
     private static synchronized void appendLine(long timeMs, String line) {

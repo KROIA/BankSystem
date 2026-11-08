@@ -134,8 +134,29 @@ The master server watches for patterns that often mean money changed hands outsi
 | 2 | Large withdrawal | Money a player withdraws from one account in one go reaches the amount after refunds. Withdrawals count as one go until 30 seconds pass without another one, so splitting the amount across several note types is still one withdrawal; refunds for notes that did not fit are subtracted. One flag per go. | `LARGE_NOTE_WITHDRAWAL_FLAG_ENABLED` (on), `LARGE_NOTE_WITHDRAWAL_AMOUNT` ($10,000,000) |
 | 3 | Wealth jump | An account's wealth grows by more than the percent **and** more than the amount within the last hour. Checked every few minutes; at most one flag per account per cooldown. Wealth counts items at market prices, so a price spike can cause it; the flag shows the cash change so you can tell the two apart. Needs balance snapshots and a price source (StockMarket). | `WEALTH_JUMP_FLAG_ENABLED` (on), `WEALTH_SWEEP_MINUTES` (10), `WEALTH_JUMP_PERCENT` (100), `WEALTH_JUMP_AMOUNT` ($1,000,000), `WEALTH_JUMP_COOLDOWN_HOURS` (6) |
 | 4 | Transfer to a new account | A transfer, payout or dividend of at least the amount arrives in an account younger than the age. Accounts created before v2.2.0 use their earliest ledger or balance-history entry as their age; accounts without any are treated as old. | `NEW_ACCOUNT_TRANSFER_FLAG_ENABLED` (on), `NEW_ACCOUNT_TRANSFER_AMOUNT` ($1,000,000), `NEW_ACCOUNT_AGE_HOURS` (24) |
+| 5 | Money-supply growth | The total money of all accounts (free and locked) grows by more than the percent **and** more than the amount within the last hour. Checked together with the wealth jump; the flag is server-wide (account 0) and at most one is raised per cooldown. The value an hour ago comes from the balance snapshots, so the check needs snapshots that are at least an hour old (it stays quiet for the first hour of a new world). Money in accounts opened within the hour counts as growth. | `MONEY_SUPPLY_FLAG_ENABLED` (on), `MONEY_SUPPLY_GROWTH_PERCENT` (10), `MONEY_SUPPLY_GROWTH_AMOUNT` ($10,000,000), `MONEY_SUPPLY_COOLDOWN_HOURS` (6) |
 
 Only money (not other items) is checked. On a multi-server network all checks run on the master, which sees every deposit, withdrawal and transfer.
+
+## Audit Digest
+
+The master writes a short summary of the previous day to `<world>/data/BankSystem/audit/digest-<yyyy-mm-dd>.md` on the first server tick after midnight (server time). It is a markdown file with:
+
+- the money supply (money item, free and locked, over all accounts) at the start and end of the day,
+- the top accounts by cash gain (`DIGEST_TOP_N`, default 10),
+- every suspicion flag of the day,
+- the number of admin actions per type and the last 20 admin actions.
+
+A digest that already exists is never rewritten, so restarting the server does not write a day twice. If the server was offline at midnight, the previous day is written on the next start. Turn it off with `DAILY_DIGEST_ENABLED`. Cash values come from the balance snapshots (each account's last snapshot before the start and the end of the period).
+
+`/banksystem auditreport <hours>` (1 to 720) writes the same summary for the last N hours to `digest-<yyyy-mm-dd_HHmm>-<hours>h.md` and tells you the full path. On a slave server the report is written on the master, so the path is on the master's machine.
+
+## Balance History for Admins
+
+- **Whole server.** The **Server history** button at the top of `/banksystem manage` opens the balance history chart summed over every account, per item. Each account's last value is carried forward until its next snapshot, so accounts that save snapshots at different times still add up correctly; an account counts from its first snapshot on. Money-supply flags appear as markers.
+- **Any account.** `/banksystem history <player|account>` or the **History** button in the audit screen opens the balance history of any account, including its total wealth line. The account's suspicion flags are shown as red markers on the chart; hover a marker to see the flag type and details.
+
+Both are for BankSystem admins only and are checked on the master; untrusted slave servers get no data.
 
 ---
 ## Volatile Item Components

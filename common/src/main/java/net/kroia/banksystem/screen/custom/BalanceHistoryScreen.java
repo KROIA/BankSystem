@@ -62,6 +62,8 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private record ToggleRow(GuiElement element, String name) {}
 
     private final int accountNumber;
+    /** Task #116: opened from an admin entry point; loads suspicion-flag markers. */
+    private final boolean adminView;
     private final BalanceHistoryChart chart;
     private final Label searchLabel;
     private final TextBox searchField;
@@ -111,10 +113,22 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private final Map<Short, Long> ratioByItem = new HashMap<>();
 
     public BalanceHistoryScreen(Screen parent, int accountNumber) {
+        this(parent, accountNumber, false);
+    }
+
+    /**
+     * @param accountNumber account, or {@link BalanceHistoryRequest.Query#SERVER_WIDE_ACCOUNT} for
+     *                      the whole-server sum (Task #112, admin only)
+     * @param adminView     Task #116: also show the account's suspicion flags as markers (admin only)
+     */
+    public BalanceHistoryScreen(Screen parent, int accountNumber, boolean adminView) {
         super(Component.literal("Balance History"), parent);
         this.accountNumber = accountNumber;
+        this.adminView = adminView;
 
-        titleLabel = new Label("Balance History - Account #" + accountNumber);
+        titleLabel = new Label(isServerWide()
+                ? Component.translatable("gui." + BankSystemMod.MOD_ID + ".balance_history.server_title").getString()
+                : "Balance History - Account #" + accountNumber);
         titleLabel.setTextFontScale(1.0f);
         addElement(titleLabel);
 
@@ -137,8 +151,28 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         toggleListView.setLayout(toggleLayout);
         addElement(toggleListView);
 
-        fetchAccountName();
+        if (!isServerWide()) fetchAccountName();
         loadUserSettings();
+        if (adminView) fetchFlagMarkers();
+    }
+
+    private boolean isServerWide() {
+        return accountNumber == BalanceHistoryRequest.Query.SERVER_WIDE_ACCOUNT;
+    }
+
+    /** Task #116: flags of this account (server-wide: the account-0 money-supply flags) as chart markers. */
+    private void fetchFlagMarkers() {
+        net.kroia.banksystem.networking.BankSystemNetworking.FLAG_MARKERS_REQUEST
+                .sendRequestToServer(isServerWide() ? 0 : accountNumber)
+                .thenAccept(r -> Minecraft.getInstance().execute(() -> {
+                    if (r == null || r.denied()) return;
+                    java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm");
+                    List<BalanceHistoryChart.Marker> list = new ArrayList<>();
+                    for (var m : r.markers())
+                        list.add(new BalanceHistoryChart.Marker(m.time(),
+                                m.typeName() + " (" + fmt.format(new Date(m.time())) + ")\n" + m.details()));
+                    chart.setMarkers(list);
+                }));
     }
 
     @Override

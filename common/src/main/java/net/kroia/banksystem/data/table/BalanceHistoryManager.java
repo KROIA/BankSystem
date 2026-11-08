@@ -5,12 +5,17 @@ import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.data.filter.DateFilter;
 import net.kroia.banksystem.data.filter.EqualityFilter;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -315,6 +320,131 @@ public class BalanceHistoryManager implements ITableManager<BalanceHistoryRecord
                 throw new RuntimeException(e);
             }
         }, databaseManager.getDatabaseThread());
+    }
+
+    /** Task #112: account number of the summed rows returned by {@link #getServerHistoryBucketed}. */
+    public static final int SERVER_WIDE_ACCOUNT = -1;
+
+    /**
+     * Task #112 (v2.2.0) — whole-server history: per item, the sum over every account.
+     * <p>
+     * Accounts snapshot at different times, so summing the raw rows of a bucket would drop every
+     * account that has no row in that bucket. Instead each account's last value is carried
+     * forward: the DB returns the anchor (last row before {@code from}) and the last row per
+     * (account, item, bucket), and {@link #carryForwardSum} keeps a running per-account value and
+     * emits the item's sum at the end of each bucket in which any account changed. An account adds
+     * nothing before its first snapshot (same left-edge rule as the per-account chart); the
+     * chart's right-edge extension to "now" works unchanged on the summed series. Rows of deleted
+     * accounts keep their last value.
+     * <p>
+     * ponytail: scans the whole BalanceHistory window (no time-only index); fine for an admin-only
+     * view on retention-pruned data, add an (item_id, time) index if it gets slow.
+     *
+     * @return rows with {@code accountNumber == SERVER_WIDE_ACCOUNT}, ascending time
+     */
+    public CompletableFuture<List<BalanceHistoryRecord>> getServerHistoryBucketed(long fromMs, long toMs, int maxPoints) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                Connection c = databaseManager.getConnection();
+                boolean sentinel = fromMs == Long.MIN_VALUE || toMs == Long.MAX_VALUE;
+                long from = fromMs, to = toMs;
+                if (sentinel) {
+                    try (PreparedStatement s = c.prepareStatement("SELECT MIN(time), MAX(time) FROM BalanceHistory");
+                         ResultSet rs = s.executeQuery()) {
+                        if (!rs.next()) return new ArrayList<BalanceHistoryRecord>();
+                        long min = rs.getLong(1);
+                        if (rs.wasNull()) return new ArrayList<BalanceHistoryRecord>();
+                        if (from == Long.MIN_VALUE) from = min;
+                        if (to == Long.MAX_VALUE) to = rs.getLong(2);
+                    }
+                }
+                if (to < from) { long t = from; from = to; to = t; }
+                long width = Math.max(1L, (to - from) / Math.max(1, maxPoints <= 0 ? 500 : maxPoints));
+
+                List<BalanceHistoryRecord> anchors = new ArrayList<>();
+                if (!sentinel) {
+                    try (PreparedStatement s = c.prepareStatement(
+                            "SELECT account_number, item_id, balance, locked_balance, time FROM ("
+                            + " SELECT account_number, item_id, balance, locked_balance, time, ROW_NUMBER() OVER ("
+                            + "  PARTITION BY account_number, item_id ORDER BY time DESC, id DESC) AS rn"
+                            + " FROM BalanceHistory WHERE time < ?) WHERE rn = 1")) {
+                        s.setLong(1, from);
+                        try (ResultSet rs = s.executeQuery()) {
+                            while (rs.next()) anchors.add(mapRow(rs));
+                        }
+                    }
+                }
+                List<BalanceHistoryRecord> window = new ArrayList<>();
+                try (PreparedStatement s = c.prepareStatement(
+                        "SELECT account_number, item_id, balance, locked_balance, time FROM ("
+                        + " SELECT account_number, item_id, balance, locked_balance, time, ROW_NUMBER() OVER ("
+                        + "  PARTITION BY account_number, item_id, ((time - ?) / ?) ORDER BY time DESC, id DESC) AS rn"
+                        + " FROM BalanceHistory WHERE time >= ? AND time <= ?) WHERE rn = 1 ORDER BY time ASC")) {
+                    s.setLong(1, from);
+                    s.setLong(2, width);
+                    s.setLong(3, from);
+                    s.setLong(4, to);
+                    try (ResultSet rs = s.executeQuery()) {
+                        while (rs.next()) window.add(mapRow(rs));
+                    }
+                }
+                databaseManager.commitTransaction();
+                return carryForwardSum(anchors, window, from, width);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }, databaseManager.getDatabaseThread());
+    }
+
+    /**
+     * Task #112: per-item sum over accounts, each account's last value carried forward.
+     * {@code window} must be in ascending time order. Anchors produce one point at {@code from}.
+     */
+    public static List<BalanceHistoryRecord> carryForwardSum(List<BalanceHistoryRecord> anchors,
+                                                             List<BalanceHistoryRecord> window, long from, long width) {
+        Map<Short, Map<Integer, long[]>> state = new HashMap<>();
+        List<BalanceHistoryRecord> out = new ArrayList<>();
+        for (BalanceHistoryRecord r : anchors)
+            state.computeIfAbsent(r.itemId(), k -> new HashMap<>()).put(r.accountNumber(), new long[]{r.balance(), r.lockedBalance()});
+        for (Map.Entry<Short, Map<Integer, long[]>> e : state.entrySet()) out.add(sum(e.getKey(), e.getValue(), from));
+        Map<Short, long[]> open = new LinkedHashMap<>(); // item -> {bucket, last time}
+        for (BalanceHistoryRecord r : window) {
+            long bucket = Math.floorDiv(r.time() - from, width);
+            long[] o = open.get(r.itemId());
+            if (o != null && o[0] != bucket) out.add(sum(r.itemId(), state.get(r.itemId()), o[1]));
+            state.computeIfAbsent(r.itemId(), k -> new HashMap<>()).put(r.accountNumber(), new long[]{r.balance(), r.lockedBalance()});
+            open.put(r.itemId(), new long[]{bucket, r.time()});
+        }
+        for (Map.Entry<Short, long[]> e : open.entrySet()) out.add(sum(e.getKey(), state.get(e.getKey()), e.getValue()[1]));
+        out.sort(Comparator.comparingLong(BalanceHistoryRecord::time));
+        return out;
+    }
+
+    private static BalanceHistoryRecord sum(short item, Map<Integer, long[]> perAccount, long time) {
+        long bal = 0, locked = 0;
+        for (long[] v : perAccount.values()) { bal += v[0]; locked += v[1]; }
+        return new BalanceHistoryRecord(SERVER_WIDE_ACCOUNT, item, bal, locked, time);
+    }
+
+    /**
+     * Tasks #112 / #113: free + locked balance of {@code item} per account at time {@code t}
+     * (each account's last row at or before {@code t}). Accounts without a row are absent.
+     * Call on the DB thread.
+     */
+    public static Map<Integer, Long> totalsAt(Connection c, short item, long t) throws SQLException {
+        Map<Integer, Long> out = new HashMap<>();
+        try (PreparedStatement s = c.prepareStatement(
+                "SELECT account_number, balance + locked_balance FROM ("
+                + " SELECT account_number, balance, locked_balance, ROW_NUMBER() OVER ("
+                + "  PARTITION BY account_number ORDER BY time DESC, id DESC) AS rn"
+                + " FROM BalanceHistory WHERE item_id = ? AND time <= ?) WHERE rn = 1")) {
+            s.setShort(1, item);
+            s.setLong(2, t);
+            try (ResultSet rs = s.executeQuery()) {
+                while (rs.next()) out.put(rs.getInt(1), rs.getLong(2));
+            }
+        }
+        return out;
     }
 
     private BalanceHistoryRecord mapRow(ResultSet rs) {

@@ -75,6 +75,12 @@ public class BankSystemClientHooks {
         Minecraft.getInstance().submit(() -> net.kroia.banksystem.screen.custom.AuditScreen.openScreen(accountNumber));
     }
 
+    public static void openAdminHistoryScreen(int accountNumber) // Task #116
+    {
+        Minecraft.getInstance().submit(() -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(
+                new net.kroia.banksystem.screen.custom.BalanceHistoryScreen(null, accountNumber, true)));
+    }
+
     public static void openBankAccountScreen(int accountNumber, boolean isAdminMode)
     {
         // Ensuring the code runs on the main thread

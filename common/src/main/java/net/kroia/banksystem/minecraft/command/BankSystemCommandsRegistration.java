@@ -215,6 +215,13 @@ public class BankSystemCommandsRegistration {
                 .then(Commands.literal("alerts")
                         .then(Commands.literal("on").executes(ctx -> alertsCommand(ctx.getSource(), true)))
                         .then(Commands.literal("off").executes(ctx -> alertsCommand(ctx.getSource(), false))))
+                // Task #113: /banksystem auditreport <hours>; Task #116: /banksystem history <player|account>
+                .then(Commands.literal("auditreport")
+                        .then(Commands.argument("hours", IntegerArgumentType.integer(1, net.kroia.banksystem.banking.ledger.AuditDigest.MAX_REPORT_HOURS))
+                                .executes(ctx -> auditReportCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "hours")))))
+                .then(Commands.literal("history")
+                        .then(Commands.argument("target", StringArgumentType.word())
+                                .executes(ctx -> historyCommand(ctx.getSource(), StringArgumentType.getString(ctx, "target")))))
                 .then(Commands.literal("disallowItem")
                         .then(Commands.argument("itemID", StringArgumentType.string())
                                 .executes(context -> {
@@ -842,9 +849,19 @@ public class BankSystemCommandsRegistration {
      * The admin check here is a courtesy; every page is checked again on the master.
      */
     private static int auditCommand(CommandSourceStack source, String target) {
+        return openForTarget(source, target, "audit", SyncOpenGUIPacket::send_openAuditScreen);
+    }
+
+    /** Task #116 — balance history of any account with flag markers. Admin check as for audit. */
+    private static int historyCommand(CommandSourceStack source, String target) {
+        return openForTarget(source, target, "history", SyncOpenGUIPacket::send_openHistoryScreen);
+    }
+
+    private static int openForTarget(CommandSourceStack source, String target, String name,
+                                     java.util.function.BiConsumer<ServerPlayer, Integer> open) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {
-            source.sendFailure(Component.literal("[BankSystem] audit needs a player"));
+            source.sendFailure(Component.literal("[BankSystem] " + name + " needs a player"));
             return 0;
         }
         var bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
@@ -861,8 +878,35 @@ public class BankSystemCommandsRegistration {
             } else if (nr <= 0) {
                 player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditTargetNotFoundMessage(target)));
             } else {
-                SyncOpenGUIPacket.send_openAuditScreen(player, nr);
+                open.accept(player, nr);
             }
+        }));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Task #113 — writes an audit digest of the last {@code hours} hours on the master and tells
+     * the admin its absolute path. From a slave the request is forwarded; the path is on the master.
+     */
+    private static int auditReportCommand(CommandSourceStack source, int hours) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            if (BACKEND_INSTANCES.isSlaveServer) {
+                source.sendFailure(Component.literal("[BankSystem] auditreport from the console works on the master server only"));
+                return 0;
+            }
+            ServerBankSystemCommandHandler.reportOnServerThread(hours).thenAccept(path -> {
+                if (path.isEmpty()) source.sendFailure(Component.literal(BankSystemTextMessages.getAuditReportFailedMessage()));
+                else source.sendSuccess(() -> Component.literal(BankSystemTextMessages.getAuditReportWrittenMessage(path, false)), false);
+            });
+            return Command.SINGLE_SUCCESS;
+        }
+        boolean onMaster = BACKEND_INSTANCES.isSlaveServer;
+        handler().banksystem_auditreport_async(player.getUUID(), hours).thenAccept(path -> player.server.execute(() -> {
+            if (!path.isEmpty())
+                player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditReportWrittenMessage(path, onMaster)));
+            else
+                player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditReportFailedMessage()));
         }));
         return Command.SINGLE_SUCCESS;
     }

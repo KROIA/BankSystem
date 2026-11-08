@@ -13,6 +13,8 @@
 | `/banksystem disallowItemInHand` | Removes the item in your main hand from the bankable items list | | X |
 | `/banksystem freeze <account> [on\|off]` | Freezes or unfreezes a bank account; without `on`/`off` it toggles. Also works from the server console (master only) | | X |
 | `/banksystem audit <player\|account>` | Opens the audit screen with the ledger entries of a player's personal account or of an account number | | X |
+| `/banksystem auditreport <hours>` | Writes an audit digest of the last 1 to 720 hours on the master and tells you the file path | | X |
+| `/banksystem history <player\|account>` | Opens the balance history of a player's personal account or of an account number, with suspicion flags as chart markers | | X |
 | `/banksystem alerts on\|off` | Turns your chat alerts for admin actions and suspicion flags on or off; the audit files are written either way | | X |
 | `/banksystem trust <slaveID>` | Adds a slave server to the trusted list (master only) | X | |
 | `/banksystem untrust <slaveID>` | Removes a slave server from the trusted list (master only) | X | |

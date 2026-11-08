@@ -62,6 +62,24 @@ public final class SuspicionChecks {
      * account younger than {@code NEW_ACCOUNT_AGE_HOURS}.
      */
     public static final int TRANSFER_TO_NEW_ACCOUNT = 4;
+    /**
+     * Task #112: total money supply (money item, free + locked, over all accounts) grew by more
+     * than {@code MONEY_SUPPLY_GROWTH_PERCENT} and more than {@code MONEY_SUPPLY_GROWTH_AMOUNT}
+     * within the last hour. Server-wide: account number 0.
+     */
+    public static final int MONEY_SUPPLY_GROWTH = 5;
+
+    /** @return the constant name of a flag type code, or "FLAG_&lt;code&gt;". */
+    public static String typeName(int flagType) {
+        return switch (flagType) {
+            case BANKNOTE_LAUNDERING -> "BANKNOTE_LAUNDERING";
+            case LARGE_NOTE_WITHDRAWAL -> "LARGE_NOTE_WITHDRAWAL";
+            case WEALTH_JUMP -> "WEALTH_JUMP";
+            case TRANSFER_TO_NEW_ACCOUNT -> "TRANSFER_TO_NEW_ACCOUNT";
+            case MONEY_SUPPLY_GROWTH -> "MONEY_SUPPLY_GROWTH";
+            default -> "FLAG_" + flagType;
+        };
+    }
 
     /** Note prefix that terminal and upload-block code writes on banknote rows. */
     public static final String BANKNOTE_NOTE = "banknote ";
@@ -350,6 +368,60 @@ public final class SuspicionChecks {
                 if (BACKEND_INSTANCES.LOGGER != null) BACKEND_INSTANCES.LOGGER.warn("[SuspicionChecks] wealth sweep failed: " + e.getMessage());
             }
             return raised;
+        }, db.getDatabaseThread());
+    }
+
+    /**
+     * Task #112 — money-supply growth check, run from the wealth sweep tick.
+     * <p>
+     * Baseline = sum over {@code accounts} of each account's last money snapshot at or before
+     * {@code now - 1h} (accounts without one count 0, so money of accounts opened within the hour
+     * counts as growth). No snapshot older than an hour at all (fresh world, history off) = no
+     * baseline, no flag. One flag per {@code MONEY_SUPPLY_COOLDOWN_HOURS}, checked on the flag table.
+     *
+     * @param accounts current account numbers (deleted accounts drop out of baseline and current)
+     * @param current  current raw money supply (free + locked) of those accounts
+     * @return true when a flag was raised
+     */
+    public static CompletableFuture<Boolean> checkMoneySupply(Collection<Integer> accounts, long current, long now) {
+        DatabaseManager db = BankSystemModBackend.getDatabaseManager();
+        if (db == null || BACKEND_INSTANCES == null || BACKEND_INSTANCES.isSlaveServer || BACKEND_INSTANCES.SERVER_SETTINGS == null)
+            return CompletableFuture.completedFuture(false);
+        BankSystemModSettings.Audit s = BACKEND_INSTANCES.SERVER_SETTINGS.AUDIT;
+        if (!s.MONEY_SUPPLY_FLAG_ENABLED.get()) return CompletableFuture.completedFuture(false);
+        long minGrowth = raw(s.MONEY_SUPPLY_GROWTH_AMOUNT.get());
+        int percent = s.MONEY_SUPPLY_GROWTH_PERCENT.get();
+        long cooldownSince = now - s.MONEY_SUPPLY_COOLDOWN_HOURS.get() * HOUR_MS;
+        short money = MoneyItem.getItemID().getShort();
+        List<Integer> list = new ArrayList<>(accounts);
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                Map<Integer, Long> base = net.kroia.banksystem.data.table.BalanceHistoryManager.totalsAt(
+                        db.getConnection(), money, now - WEALTH_WINDOW_MS);
+                if (base.isEmpty()) return false;
+                long baseline = 0;
+                for (int nr : list) baseline += base.getOrDefault(nr, 0L);
+                long growth = current - baseline;
+                if (growth <= minGrowth) return false;
+                if (baseline > 0 && (double) growth * 100.0 <= (double) percent * baseline) return false;
+                try (PreparedStatement flagged = db.getConnection().prepareStatement("SELECT 1 FROM SuspicionFlag "
+                        + "WHERE account_number = 0 AND flag_type = ? AND ts >= ? LIMIT 1")) {
+                    flagged.setInt(1, MONEY_SUPPLY_GROWTH);
+                    flagged.setLong(2, cooldownSince);
+                    try (ResultSet rs = flagged.executeQuery()) {
+                        if (rs.next()) return false; // cooldown
+                    }
+                }
+                db.commitTransaction();
+                if (!enabled(s.MONEY_SUPPLY_FLAG_ENABLED)) return false;
+                AdminAudit.raise(0, MONEY_SUPPLY_GROWTH, 1, growth, null,
+                        "total money supply grew from " + MoneyFormat.format(baseline) + " to " + MoneyFormat.format(current)
+                                + " in the last hour");
+                return true;
+            } catch (SQLException e) {
+                if (BACKEND_INSTANCES.LOGGER != null) BACKEND_INSTANCES.LOGGER.warn("[SuspicionChecks] money supply check failed: " + e.getMessage());
+                return false;
+            }
         }, db.getDatabaseThread());
     }
 

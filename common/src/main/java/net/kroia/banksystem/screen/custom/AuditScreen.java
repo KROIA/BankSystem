@@ -62,6 +62,7 @@ public class AuditScreen extends BankSystemGuiScreen {
     private DropDownMenu rangeMenu;
     private final Button prevButton;
     private final Button nextButton;
+    private final Button historyButton;
     private final Label pageLabel;
     private final Label headerLabel;
     private final ListView listView;
@@ -91,6 +92,9 @@ public class AuditScreen extends BankSystemGuiScreen {
 
         prevButton = new Button(PREV.getString(), () -> reload(page - 1));
         nextButton = new Button(NEXT.getString(), () -> reload(page + 1));
+        // Task #116: the account's balance history with its suspicion flags as markers
+        historyButton = new Button(Component.translatable(PREFIX + "history").getString(), () ->
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(new BalanceHistoryScreen(this, accountNumber, true)));
         pageLabel = new Label("");
         headerLabel = new Label(HEADER.getString());
 
@@ -108,6 +112,7 @@ public class AuditScreen extends BankSystemGuiScreen {
         addElement(prevButton);
         addElement(pageLabel);
         addElement(nextButton);
+        addElement(historyButton);
         addElement(headerLabel);
         addElement(listView);
         addElement(typeMenu);  // added last: the expanded menus overlay the list
@@ -211,6 +216,7 @@ public class AuditScreen extends BankSystemGuiScreen {
         prevButton.setBounds(x, p, 30, h);
         pageLabel.setBounds(x + 30 + s, p, 30, h);
         nextButton.setBounds(x + 60 + 2 * s, p, 30, h);
+        historyButton.setBounds(x + 90 + 3 * s, p, 60, h);
         int y = p + h + s;
         headerLabel.setBounds(p, y, w, 12);
         listView.setBounds(p, y + 14, w, getHeight() - y - 14 - p);

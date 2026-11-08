@@ -83,7 +83,13 @@ A freshly created `settings.json` looks like this:
     "WEALTH_JUMP_COOLDOWN_HOURS": 6,
     "NEW_ACCOUNT_TRANSFER_FLAG_ENABLED": true,
     "NEW_ACCOUNT_TRANSFER_AMOUNT": 1000000,
-    "NEW_ACCOUNT_AGE_HOURS": 24
+    "NEW_ACCOUNT_AGE_HOURS": 24,
+    "MONEY_SUPPLY_FLAG_ENABLED": true,
+    "MONEY_SUPPLY_GROWTH_PERCENT": 10,
+    "MONEY_SUPPLY_GROWTH_AMOUNT": 10000000,
+    "MONEY_SUPPLY_COOLDOWN_HOURS": 6,
+    "DAILY_DIGEST_ENABLED": true,
+    "DIGEST_TOP_N": 10
   }
 }
 ```
@@ -141,7 +147,7 @@ Older settings files with the previous `PLAYER_BALANCE` … `SERVER_CIRCULATION_
 ---
 ## Audit Section
 
-Suspicious-activity flags ([Administration](Administration.md#suspicious-activity-flags)). Read live on the master server; slaves ignore this section. Money amounts are **whole dollars** (not cents).
+Suspicious-activity flags ([Administration](Administration.md#suspicious-activity-flags)) and the [audit digest](Administration.md#audit-digest). Read live on the master server; slaves ignore this section. Money amounts are **whole dollars** (not cents).
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -158,6 +164,12 @@ Suspicious-activity flags ([Administration](Administration.md#suspicious-activit
 | `NEW_ACCOUNT_TRANSFER_FLAG_ENABLED` | boolean | `true` | Flag large incoming transfers, payouts and dividends to new accounts. |
 | `NEW_ACCOUNT_TRANSFER_AMOUNT` | number | `1000000` | Smallest incoming amount that is checked (`0`–`10^12`). |
 | `NEW_ACCOUNT_AGE_HOURS` | number | `24` | Accounts younger than this count as new (`1`–`8760`). |
+| `MONEY_SUPPLY_FLAG_ENABLED` | boolean | `true` | Flag fast growth of the total money of all accounts. |
+| `MONEY_SUPPLY_GROWTH_PERCENT` | number | `10` | Minimum growth in one hour, in percent (`1`–`100000`). |
+| `MONEY_SUPPLY_GROWTH_AMOUNT` | number | `10000000` | Minimum growth in one hour (`0`–`10^12`). Both limits must be exceeded. |
+| `MONEY_SUPPLY_COOLDOWN_HOURS` | number | `6` | At most one money-supply flag in this many hours (`0`–`8760`). |
+| `DAILY_DIGEST_ENABLED` | boolean | `true` | Write the daily [audit digest](Administration.md#audit-digest) for the previous day. |
+| `DIGEST_TOP_N` | number | `10` | Accounts listed under top cash gainers in a digest (`1`–`100`). |
 
 ---
 ## Volatile & Deposit-Gated Item Components

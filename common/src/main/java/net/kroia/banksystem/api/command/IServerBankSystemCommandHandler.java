@@ -17,6 +17,8 @@ public interface IServerBankSystemCommandHandler {
     boolean banksystem_freeze(@NotNull UUID executor, int accountNumber, int mode);
     /** Task #110 — per-admin chat alerts toggle. @since 2.2.0 */
     boolean banksystem_alerts(@NotNull UUID executor, boolean enabled);
+    /** Task #113 — audit digest of the last {@code hours} hours; completes on the server thread. @return absolute path, "" on failure. @since 2.2.0 */
+    java.util.concurrent.CompletableFuture<String> banksystem_auditreport(@NotNull UUID executor, int hours);
 
     boolean money(@NotNull UUID executor);
     boolean money_add(@NotNull UUID executor, float amount);

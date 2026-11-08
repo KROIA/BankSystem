@@ -18,6 +18,8 @@ public interface IAsyncBankSystemCommandHandler {
     CompletableFuture<Boolean> banksystem_freeze_async(@NotNull UUID executor, int accountNumber, int mode);
     /** Task #110 — per-admin chat alerts toggle. @since 2.2.0 */
     CompletableFuture<Boolean> banksystem_alerts_async(@NotNull UUID executor, boolean enabled);
+    /** Task #113 — writes an audit digest of the last {@code hours} hours on the master. @return absolute path on the master, "" on failure. @since 2.2.0 */
+    CompletableFuture<String> banksystem_auditreport_async(@NotNull UUID executor, int hours);
     CompletableFuture<Boolean> banksystem_serverInfo_async(@NotNull UUID executor);
     CompletableFuture<Boolean> banksystem_serverNetworkInfo_async(@NotNull UUID executor);
 

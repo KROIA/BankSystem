@@ -40,6 +40,9 @@ public class BalanceHistoryRequest extends BankSystemGenericRequest<BalanceHisto
         /** Sentinel {@code fromMs} value meaning "resolve from MIN(time) on the server". */
         public static final long ALL_HISTORY_SENTINEL = Long.MIN_VALUE;
 
+        /** Task #112: {@code accountNumber} value for the whole-server sum (admin only). */
+        public static final int SERVER_WIDE_ACCOUNT = net.kroia.banksystem.data.table.BalanceHistoryManager.SERVER_WIDE_ACCOUNT;
+
         public boolean isAllHistory() { return fromMs == ALL_HISTORY_SENTINEL; }
     }
 
@@ -66,6 +69,14 @@ public class BalanceHistoryRequest extends BankSystemGenericRequest<BalanceHisto
         // reads in AsyncBankManager (Task #103).
         ISyncServerBankManager manager = getServerBankManager();
         boolean untrustedSlave = isFromUntrustedSlave(slaveID);
+        // Task #112: whole-server sum, BankSystem admins only; untrusted slaves are refused.
+        if (input.accountNumber() == Query.SERVER_WIDE_ACCOUNT) {
+            if (untrustedSlave || !playerIsAdmin(sender)) {
+                debug("Denied whole-server balance history to " + sender + (untrustedSlave ? " (untrusted slave " + slaveID + ")" : ""));
+                return CompletableFuture.completedFuture(List.of());
+            }
+            return BACKEND_INSTANCES.BALANCE_HISTORY_MANAGER.getServerHistoryBucketed(input.fromMs(), input.toMs(), input.maxPoints());
+        }
         IServerBankAccount account = manager == null ? null : manager.getBankAccount(input.accountNumber());
         boolean isMember = account != null && account.hasUser(sender);
         if (!isAccessAllowed(isMember, playerIsAdmin(sender), untrustedSlave)) {

@@ -197,6 +197,31 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         return CompletableFuture.completedFuture(banksystem_alerts(executor, enabled));
     }
 
+    /** Task #113 — digest written on the DB worker; the future completes on the server thread. */
+    @Override
+    public CompletableFuture<String> banksystem_auditreport(@NotNull UUID executor, int hours) {
+        if(!isPlayerAdmin(executor))
+            return CompletableFuture.completedFuture("");
+        return reportOnServerThread(hours);
+    }
+    @Override
+    public CompletableFuture<String> banksystem_auditreport_async(@NotNull UUID executor, int hours) {
+        return banksystem_auditreport(executor, hours);
+    }
+
+    /** Task #113 — {@link net.kroia.banksystem.banking.ledger.AuditDigest#report}, completed on the server thread ("" on failure). */
+    public static CompletableFuture<String> reportOnServerThread(int hours) {
+        net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
+        CompletableFuture<String> out = new CompletableFuture<>();
+        net.kroia.banksystem.banking.ledger.AuditDigest.report(hours, System.currentTimeMillis()).whenComplete((path, t) -> {
+            if (t != null && BACKEND_INSTANCES.LOGGER != null) BACKEND_INSTANCES.LOGGER.warn("[AuditDigest] audit report failed: " + t);
+            String result = t == null && path != null ? path.toString() : "";
+            if (srv != null && !srv.isSameThread()) srv.execute(() -> out.complete(result));
+            else out.complete(result);
+        });
+        return out;
+    }
+
     @Override
     public boolean banksystem_disallowItem(@NotNull UUID executor, ItemID itemID) {
         if(!isPlayerAdmin(executor))

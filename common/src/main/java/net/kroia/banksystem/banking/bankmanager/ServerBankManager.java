@@ -359,6 +359,17 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         return new ArrayList<>(bankAccounts.keySet());
     }
 
+    /** Task #112 — raw money supply (money item, free + locked) over all accounts. Call on the server thread. */
+    public long getMoneySupplyRaw() {
+        long total = 0;
+        ItemID moneyItemID = MoneyItem.getItemID();
+        for (ServerBankAccount account : bankAccounts.values()) {
+            ISyncServerBank moneyBank = account.getBank(moneyItemID);
+            if (moneyBank != null) total += moneyBank.getTotalBalance();
+        }
+        return total;
+    }
+
     /** Task #110 — snapshot of every user with the BankSystem admin flag (alert recipients). */
     public List<User> getAdminUsers() {
         List<User> admins = new ArrayList<>();

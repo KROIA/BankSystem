@@ -61,6 +61,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
     // The one bank-crossing branch (commit-to-bank) routes via DepositItemsInBankRequest on
     // slave, inheriting the Task #26 untrusted-slave gate on master.
     public static GetConverterCachePacket GET_CONVERTER_CACHE_REQUEST = (GetConverterCachePacket) AsynchronousRequestResponseSystem.register(new GetConverterCachePacket());
+    public static net.kroia.banksystem.networking.general.FlagMarkersRequest FLAG_MARKERS_REQUEST = (net.kroia.banksystem.networking.general.FlagMarkersRequest) AsynchronousRequestResponseSystem.register(new net.kroia.banksystem.networking.general.FlagMarkersRequest()); // Task #116
     public static net.kroia.banksystem.networking.general.AuditPageRequest AUDIT_PAGE_REQUEST = (net.kroia.banksystem.networking.general.AuditPageRequest) AsynchronousRequestResponseSystem.register(new net.kroia.banksystem.networking.general.AuditPageRequest()); // Task #110
 
     public static BankAccountChangeStream BANKSYSTEM_ACCOUNT_CHANGE_STREAM = (BankAccountChangeStream) StreamSystem.register(new BankAccountChangeStream());

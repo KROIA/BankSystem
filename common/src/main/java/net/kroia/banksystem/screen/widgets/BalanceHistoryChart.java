@@ -71,6 +71,9 @@ public class BalanceHistoryChart extends GuiElement {
 
     public record DataPoint(long time, double value) {}
 
+    /** Task #116: vertical marker at {@code time} with a hover tooltip (suspicion flags). */
+    public record Marker(long time, String tooltip) {}
+
     public static class LineSeries {
         public final String name;
         public int color;
@@ -96,6 +99,8 @@ public class BalanceHistoryChart extends GuiElement {
     private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
     private final List<LineSeries> seriesList = new ArrayList<>();
+    private List<Marker> markers = List.of();
+    private static final int COLOR_MARKER = ColorUtilities.getRGB(230, 40, 40, 200);
     private final Rectangle canvasRect = new Rectangle(1, 1, 0, 0);
     private final Rectangle canvasScissorRect = new Rectangle(1, 1, 0, 0);
 
@@ -142,6 +147,7 @@ public class BalanceHistoryChart extends GuiElement {
 
     public BalanceHistoryChart() {
         setTextFontScale(0.8f);
+        setHoverTooltipSupplier(this::markerTooltipAtMouse);
         buildTimescaleButtons();
         highlightTimescaleButton(currentTimescaleIndex);
     }
@@ -359,6 +365,33 @@ public class BalanceHistoryChart extends GuiElement {
         seriesList.add(series);
     }
 
+    public void setMarkers(List<Marker> markers) {
+        this.markers = List.copyOf(markers);
+    }
+
+    /** @return tooltip of the markers within 3 px of the mouse, or null. */
+    private String markerTooltipAtMouse() {
+        if (markers.isEmpty()) return null;
+        int mx = getMouseX(), my = getMouseY();
+        if (my < canvasRect.y || my > canvasRect.y + canvasRect.height) return null;
+        StringBuilder sb = new StringBuilder();
+        for (Marker m : markers) {
+            if (Math.abs(toCanvasSpaceX(m.time()) - mx) > 3) continue;
+            if (sb.length() > 0) sb.append("\n\n");
+            sb.append(m.tooltip());
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    private void renderMarkers() {
+        for (Marker m : markers) {
+            int x = toCanvasSpaceX(m.time());
+            if (x < canvasRect.x || x > canvasRect.x + canvasRect.width) continue;
+            drawRect(x, canvasRect.y, 1, canvasRect.height, COLOR_MARKER);
+            drawRect(x - 2, canvasRect.y, 5, 5, COLOR_MARKER);
+        }
+    }
+
     public void clearSeries() {
         seriesList.clear();
         pinnedSeries = null;
@@ -561,6 +594,7 @@ public class BalanceHistoryChart extends GuiElement {
 
         enableScissor(canvasScissorRect);
         renderLines();
+        renderMarkers();
         disableScissor();
 
         drawFrame(canvasRect, COLOR_FRAME, 1);

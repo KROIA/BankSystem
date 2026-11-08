@@ -259,6 +259,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         net.kroia.banksystem.banking.ledger.AccountFreeze.setBackend(INSTANCES); // Task #117
         net.kroia.banksystem.banking.ledger.AdminAudit.setBackend(INSTANCES); // Task #110
         net.kroia.banksystem.banking.ledger.SuspicionChecks.setBackend(INSTANCES); // Tasks #111/#114/#115
+        net.kroia.banksystem.banking.ledger.AuditDigest.setBackend(INSTANCES); // Task #113
         BankSystemTextMessages.setBackend(INSTANCES);
 
         net.kroia.banksystem.integration.numismatics.NumismaticsProvider.setBackend(INSTANCES);
@@ -707,9 +708,16 @@ public class BankSystemModBackend implements BankSystemAPI {
             long wealthTicks = INSTANCES.SERVER_SETTINGS.AUDIT.WEALTH_SWEEP_MINUTES.get() * 1200L;
             if (wealthTicks > 0 && wealthSweepTickCounter >= wealthTicks) {
                 wealthSweepTickCounter = 0;
-                if (INSTANCES.SERVER_BANK_MANAGER != null && INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof ServerBankManager bm)
-                    net.kroia.banksystem.banking.ledger.SuspicionChecks.sweepWealth(bm.getAllAccountNumbers(), System.currentTimeMillis());
+                if (INSTANCES.SERVER_BANK_MANAGER != null && INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof ServerBankManager bm) {
+                    long now = System.currentTimeMillis();
+                    List<Integer> accounts = bm.getAllAccountNumbers();
+                    net.kroia.banksystem.banking.ledger.SuspicionChecks.sweepWealth(accounts, now);
+                    // Task #112: money-supply growth flag
+                    net.kroia.banksystem.banking.ledger.SuspicionChecks.checkMoneySupply(accounts, bm.getMoneySupplyRaw(), now);
+                }
             }
+            // Task #113: daily digest for the previous day, first tick after the date changes
+            net.kroia.banksystem.banking.ledger.AuditDigest.tick(System.currentTimeMillis());
         }
 
         // Task #45 (v2.1.0) — recurring payout evaluator. Master-only; the executor

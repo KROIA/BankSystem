@@ -205,6 +205,23 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
         }), databaseManager.getDatabaseThread());
     }
 
+    /**
+     * Task #113 — rows with one of {@code typeCodes} in {@code [fromMs, toMs)}, newest first.
+     * Synchronous: call on the DB thread.
+     */
+    public List<TransactionLogRecord> getByTypesInRangeSync(int[] typeCodes, long fromMs, long toMs) {
+        StringBuilder in = new StringBuilder();
+        for (int i = 0; i < typeCodes.length; i++) in.append(i == 0 ? "?" : ", ?");
+        String sql = "SELECT " + SELECT_COLS + " FROM TransactionLog WHERE type_code IN (" + in + ") AND ts >= ? AND ts < ?"
+                + " ORDER BY ts DESC, id DESC";
+        return queryOne(sql, ps -> {
+            int i = 1;
+            for (int code : typeCodes) ps.setInt(i++, code);
+            ps.setLong(i++, fromMs);
+            ps.setLong(i, toMs);
+        });
+    }
+
     public CompletableFuture<Integer> getCount(int accountNumber) {
         return CompletableFuture.supplyAsync(() -> {
             try (PreparedStatement ps = databaseManager.getConnection().prepareStatement(

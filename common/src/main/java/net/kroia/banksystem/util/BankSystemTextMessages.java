@@ -317,6 +317,14 @@ public class BankSystemTextMessages {
     public static String getAlertsOnMessage() { return ALERTS_ON.getString(); }
     public static String getAlertsOffMessage() { return ALERTS_OFF.getString(); }
     public static String getAuditTargetNotFoundMessage(String target) { return AUDIT_TARGET_NOT_FOUND.getString().replace("{target}", target); }
+    // Task #113 — audit report
+    private static final Component AUDIT_REPORT_WRITTEN = Component.translatable(prefix+"audit_report_written");
+    private static final Component AUDIT_REPORT_ON_MASTER = Component.translatable(prefix+"audit_report_on_master");
+    private static final Component AUDIT_REPORT_FAILED = Component.translatable(prefix+"audit_report_failed");
+    public static String getAuditReportWrittenMessage(String path, boolean onMaster) {
+        return AUDIT_REPORT_WRITTEN.getString().replace("{path}", path) + (onMaster ? " " + AUDIT_REPORT_ON_MASTER.getString() : "");
+    }
+    public static String getAuditReportFailedMessage() { return AUDIT_REPORT_FAILED.getString(); }
 
     // Task #117 — account freeze
     private static final Component ACCOUNT_FROZEN = Component.translatable(prefix+"account_frozen");

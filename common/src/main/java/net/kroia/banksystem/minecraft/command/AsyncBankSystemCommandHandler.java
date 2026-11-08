@@ -72,7 +72,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         Bank_create,
         Bank_show_user,
         Banksystem_freeze,
-        Banksystem_alerts
+        Banksystem_alerts,
+        Banksystem_auditreport
 
     }
 
@@ -112,6 +113,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         put(FunctionType.Bank_show_user,                            codecPacket(ByteBufCodecs.STRING_UTF8.cast()));
         put(FunctionType.Banksystem_freeze,                         codecPacket(ParamGroup_int_int.STREAM_CODEC));
         put(FunctionType.Banksystem_alerts,                         codecPacket(ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.Banksystem_auditreport,                    codecPacket(ByteBufCodecs.INT.cast(), ByteBufCodecs.STRING_UTF8.cast()));
 
     }};
 
@@ -257,6 +259,11 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
                     result = commandHandler.banksystem_freeze(executorPlayer, data.a, data.b);
                 }
                 case FunctionType.Banksystem_alerts ->                      result = commandHandler.banksystem_alerts(executorPlayer, (Boolean)inputData.extra);
+                case FunctionType.Banksystem_auditreport -> {
+                    // Task #113: the digest is written off the main thread; the reply waits for it.
+                    return commandHandler.banksystem_auditreport(executorPlayer, (Integer)inputData.extra)
+                            .thenApply(path -> OutputData.of(input.function, path));
+                }
             }
 
             return CompletableFuture.completedFuture(OutputData.of(input.function, result));
@@ -481,6 +488,23 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
         outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<String> banksystem_auditreport_async(@NotNull UUID executor, int hours) {
+        if(!MultiServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture("");
+        CompletableFuture<String> future = new CompletableFuture<>();
+        sendRequest(InputData.of(FunctionType.Banksystem_auditreport, executor, hours)).whenComplete((outputData, t) -> {
+            if (t != null) {
+                error("Audit report request failed for player: " + Request.tryGetPlayerName(executor), t);
+                future.complete("");
+            } else {
+                String path = outputData.decodeResult();
+                future.complete(path == null ? "" : path);
+            }
+        });
         return future;
     }
 

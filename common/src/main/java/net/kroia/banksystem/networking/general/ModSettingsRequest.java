@@ -372,6 +372,12 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         clampOrDefault(a.WEALTH_JUMP_COOLDOWN_HOURS, 0, MAX_FLAG_HOURS);
         clampOrDefault(a.WEALTH_SWEEP_MINUTES, 0, MAX_WEALTH_SWEEP_MINUTES);
         clampOrDefault(a.WEALTH_JUMP_PERCENT, 1, MAX_WEALTH_JUMP_PERCENT);
+        sanitizeBoolean(a.MONEY_SUPPLY_FLAG_ENABLED);
+        clampOrDefault(a.MONEY_SUPPLY_GROWTH_PERCENT, 1, MAX_WEALTH_JUMP_PERCENT);
+        clampOrDefault(a.MONEY_SUPPLY_GROWTH_AMOUNT, 0L, MAX_FLAG_AMOUNT);
+        clampOrDefault(a.MONEY_SUPPLY_COOLDOWN_HOURS, 0, MAX_FLAG_HOURS);
+        sanitizeBoolean(a.DAILY_DIGEST_ENABLED);
+        clampOrDefault(a.DIGEST_TOP_N, 1, 100);
 
         String moneyFormat = settings.PLACEHOLDER.MONEY_FORMAT.get();
         if (moneyFormat == null || moneyFormat.isBlank() || !moneyFormat.contains("%s"))

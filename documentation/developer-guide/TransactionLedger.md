@@ -124,6 +124,7 @@ Flag codes in use (`SuspicionChecks`, append-only):
 | 2 | `LARGE_NOTE_WITHDRAWAL` | ledger hook on WITHDRAW money rows: per actor + account burst (closed after 30 s without a new row), sum of WITHDRAW minus WITHDRAW_REFUND rows in the burst, one flag per burst |
 | 3 | `WEALTH_JUMP` | periodic sweep over the BalanceHistory WEALTH series (item id 32767) |
 | 4 | `TRANSFER_TO_NEW_ACCOUNT` | ledger hook on incoming TRANSFER (+), PAYOUT and DIVIDEND money rows |
+| 5 | `MONEY_SUPPLY_GROWTH` | wealth sweep tick; account 0 (server-wide), baseline from balance snapshots an hour ago |
 
 The hooks run from `TransactionLedger.write` and `TransactionLedger.writeAll` (payout and dividend batches), on the master only. Bank accounts store their creation time as NBT `createdAt` (absent for accounts created before v2.2.0). Missing columns are added on start-up like for `TransactionLog`.
 

@@ -437,6 +437,14 @@ public final class BankSystemModSettings extends ModSettings {
         public final Setting<Boolean> NEW_ACCOUNT_TRANSFER_FLAG_ENABLED = registerSetting("NEW_ACCOUNT_TRANSFER_FLAG_ENABLED", true, Boolean.class);
         public final Setting<Long> NEW_ACCOUNT_TRANSFER_AMOUNT = registerSetting("NEW_ACCOUNT_TRANSFER_AMOUNT", 1_000_000L, Long.class);
         public final Setting<Integer> NEW_ACCOUNT_AGE_HOURS = registerSetting("NEW_ACCOUNT_AGE_HOURS", 24, Integer.class);
+        // Task #112: money-supply growth flag (checked in the wealth sweep)
+        public final Setting<Boolean> MONEY_SUPPLY_FLAG_ENABLED = registerSetting("MONEY_SUPPLY_FLAG_ENABLED", true, Boolean.class);
+        public final Setting<Integer> MONEY_SUPPLY_GROWTH_PERCENT = registerSetting("MONEY_SUPPLY_GROWTH_PERCENT", 10, Integer.class);
+        public final Setting<Long> MONEY_SUPPLY_GROWTH_AMOUNT = registerSetting("MONEY_SUPPLY_GROWTH_AMOUNT", 10_000_000L, Long.class);
+        public final Setting<Integer> MONEY_SUPPLY_COOLDOWN_HOURS = registerSetting("MONEY_SUPPLY_COOLDOWN_HOURS", 6, Integer.class);
+        // Task #113: daily audit digest
+        public final Setting<Boolean> DAILY_DIGEST_ENABLED = registerSetting("DAILY_DIGEST_ENABLED", true, Boolean.class);
+        public final Setting<Integer> DIGEST_TOP_N = registerSetting("DIGEST_TOP_N", 10, Integer.class);
 
         public Audit() { super("Audit"); }
     }
