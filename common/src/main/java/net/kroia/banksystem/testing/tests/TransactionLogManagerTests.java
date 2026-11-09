@@ -45,6 +45,7 @@ public class TransactionLogManagerTests extends TestSuite {
         addTest("get_by_account_and_kind_filters", this::get_by_account_and_kind_filters);
         addTest("null_actor_and_note_roundtrip", this::null_actor_and_note_roundtrip);
         addTest("newest_first_ordering", this::newest_first_ordering);
+        addTest("close_drains_queued_writes", this::close_drains_queued_writes);
     }
 
     @Override
@@ -62,6 +63,16 @@ public class TransactionLogManagerTests extends TestSuite {
             } catch (Exception ignored) {}
 
             connection = DriverManager.getConnection("jdbc:sqlite::memory:");
+            createSchema(connection);
+
+            testDbManager = new TestDatabaseManager(connection);
+            manager = new TransactionLogManager(testDbManager);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to setup in-memory SQLite for tests", e);
+        }
+    }
+
+    private static void createSchema(Connection connection) throws SQLException {
             connection.setAutoCommit(false);
             try (Statement stmt = connection.createStatement()) {
                 stmt.execute("CREATE TABLE IF NOT EXISTS TransactionLog (" +
@@ -83,12 +94,6 @@ public class TransactionLogManagerTests extends TestSuite {
             // Task #109: bring the legacy schema up to date the same way a live world does.
             DatabaseManager.migrateTransactionLog(connection);
             connection.commit();
-
-            testDbManager = new TestDatabaseManager(connection);
-            manager = new TransactionLogManager(testDbManager);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to setup in-memory SQLite for tests", e);
-        }
     }
 
     @Override
@@ -269,6 +274,51 @@ public class TransactionLogManagerTests extends TestSuite {
         res = assertEquals("newest amount (i=4)", 4L, rows.get(0).amount());
         if (!res.passed()) return res;
         return pass("limit + newest-first honored");
+    }
+
+    /**
+     * Rows queued on the db-worker right before {@link DatabaseManager#close()} must all be
+     * persisted: close() drains the worker before it closes the connection.
+     */
+    private TestResult close_drains_queued_writes() {
+        java.nio.file.Path file = null;
+        try {
+            file = java.nio.file.Files.createTempFile("banksystem-close-drain-", ".db");
+            String url = "jdbc:sqlite:" + file.toAbsolutePath();
+            Connection c = DriverManager.getConnection(url);
+            createSchema(c);
+            TestDatabaseManager db = new TestDatabaseManager(c);
+            TransactionLogManager mgr = new TransactionLogManager(db);
+
+            // Hold the worker so the writes are still queued when close() starts.
+            db.getDatabaseThread().submit(() -> {
+                try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+            });
+            int n = 50;
+            java.util.concurrent.atomic.AtomicInteger failed = new java.util.concurrent.atomic.AtomicInteger();
+            for (int i = 0; i < n; i++) {
+                mgr.save(TransactionLogRecord.simple(7, null, LedgerType.DEPOSIT, (short) 1, i + 1, 1_000L + i))
+                        .exceptionally(t -> { failed.incrementAndGet(); return null; });
+            }
+            db.close();
+
+            TestResult res = assertEquals("connection closed after close()", true, c.isClosed());
+            if (!res.passed()) return res;
+            res = assertEquals("failed writes", 0, failed.get());
+            if (!res.passed()) return res;
+            try (Connection verify = DriverManager.getConnection(url);
+                 Statement stmt = verify.createStatement();
+                 java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM TransactionLog")) {
+                rs.next();
+                res = assertEquals("persisted rows", n, rs.getInt(1));
+                if (!res.passed()) return res;
+            }
+            return pass("close() drained " + n + " queued ledger writes before closing");
+        } catch (Exception e) {
+            return fail("close_drains_queued_writes threw: " + e.getMessage());
+        } finally {
+            if (file != null) try { java.nio.file.Files.deleteIfExists(file); } catch (Exception ignored) {}
+        }
     }
 
     // ------------------------------------------------------------------

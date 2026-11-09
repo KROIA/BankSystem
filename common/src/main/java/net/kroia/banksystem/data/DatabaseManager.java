@@ -292,25 +292,39 @@ public class DatabaseManager {
         }
     }
 
+    /** Max time {@link #close()} waits for queued DB jobs (ledger rows etc.) to finish. */
+    public static final long CLOSE_DRAIN_TIMEOUT_SECONDS = 30L;
+
+    /**
+     * Stops accepting jobs, drains every queued job on the db-worker, then commits and
+     * closes the connection. Draining first is what keeps ledger rows queued during
+     * shutdown from failing with "database connection closed".
+     */
     public void close() {
+        // A held backup pause would block the worker for the whole drain timeout.
+        endBackupPause();
+
+        ExecutorService worker = getDatabaseThread();
+        worker.shutdown();
         try {
-            if (connection != null && !connection.isClosed()) {
-                connection.commit();
-                connection.close();
+            if (!worker.awaitTermination(CLOSE_DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                getLogger().error("DB worker did not drain within " + CLOSE_DRAIN_TIMEOUT_SECONDS
+                        + "s at shutdown; dropping " + worker.shutdownNow().size() + " queued job(s)");
+            }
+        } catch (InterruptedException e) {
+            worker.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        Connection c = getConnection();
+        try {
+            if (c != null && !c.isClosed()) {
+                c.commit();
+                c.close();
                 getLogger().info("Successfully closed database connection");
             }
         } catch (SQLException e) {
             getLogger().error("Failed to close database connection: " + e.getMessage());
-        }
-
-        executor.shutdown();
-        try {
-            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            executor.shutdownNow();
-            Thread.currentThread().interrupt();
         }
 
         // Task #42 — release the backup safety-timer thread so the JVM can exit cleanly.
