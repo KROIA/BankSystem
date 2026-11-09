@@ -601,13 +601,16 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                     return; // Failed to lock the amount, return 0
                 }
 
-                // Try to fill the inventory with the item
-                int filledAmount = tryFillInventory(item, amountToFillFinal);
+                // Try to fill the inventory with the item. Keep the exact stack we insert so a
+                // failed debit can take back the same (component-equal) items.
+                ItemStack withdrawalStack = item.getStack();
+                int filledAmount = (int) ContainerItemInsertion.insertWithdrawnItems(inventory, withdrawalStack, amountToFillFinal);
                 if(filledAmount > 0) {
                     long amountToWithdraw = (long) filledAmount * ratio;
                     CompletableFuture<BankStatus> withdrawStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DOWNLOAD_WITHDRAW, null,
                             "download block " + worldPosition.toShortString(), () -> itemBank.withdrawLockedPreferedAsync(amountToWithdraw));
-                    withdrawStatusFuture.thenAccept((withdrawStatus) -> {
+                    // whenComplete, not thenAccept: an exceptional withdraw must also roll back.
+                    withdrawStatusFuture.whenComplete((withdrawStatus, withdrawError) -> {
                         if(withdrawStatus == BankStatus.SUCCESS) {
                             // Task #109: no player drives a download block; actor SYSTEM, position in the note.
                             net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(bankAccountNumber, net.kroia.banksystem.api.ledger.LedgerType.DOWNLOAD_WITHDRAW, item,
@@ -623,7 +626,15 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                             result.complete(filledAmount);
                             return; // Successfully withdrew and filled the inventory
                         } else {
+                            // Issue #74: the debit failed, so take the inserted items back out —
+                            // otherwise the block keeps items the account never paid for.
+                            long removed = ContainerItemInsertion.removeItems(inventory, withdrawalStack, filledAmount);
+                            if (removed < filledAmount)
+                                BACKEND_INSTANCES.LOGGER.error("[BankDownloadBlockEntity] Withdraw of " + filledAmount + " " + item
+                                        + " at " + worldPosition.toShortString() + " failed (" + (withdrawError != null ? withdrawError : withdrawStatus)
+                                        + ") and only " + removed + " item(s) could be taken back out of the block");
                             itemBank.unlockAmountAsync(amountToReserveFinal); // Unlock the amount if withdrawal failed
+                            setChanged();
                             result.complete(0);
                         }
                     });
@@ -639,25 +650,6 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         return result;
     }
 
-    /**
-     * Materializes up to {@code amountToFill} withdrawn items into the block inventory and
-     * returns how many were actually placed (the remainder stays locked in the bank and is
-     * unlocked by the caller).
-     * <p>
-     * Placement must NOT merge by ItemID equality: identity deliberately ignores
-     * volatile/deposit-gated components, so an ItemID-equal stack in a slot can still be
-     * component-distinct (e.g. spoiled food) — merging onto it would silently rewrite the
-     * withdrawn items' state. {@link ContainerItemInsertion} merges only into
-     * component-equal stacks ({@code ItemStack.isSameItemSameComponents}) and places full
-     * template copies into empty slots (the previous {@code new ItemStack(item, count)}
-     * dropped the template's data components entirely).
-     */
-    private int tryFillInventory(ItemID item, int amountToFill)
-    {
-        if(item == null || amountToFill <= 0)
-            return 0;
-        return (int) ContainerItemInsertion.insertWithdrawnItems(inventory, item, amountToFill);
-    }
 
     /**
      * Counts how many items of the given ItemID the block inventory holds, to decide how

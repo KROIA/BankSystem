@@ -56,6 +56,7 @@ public class WithdrawMergeTests extends TestSuite {
         addTest("merge_preferred_over_empty_slot", this::testMergePreferredOverEmptySlot);
         addTest("full_container_inserts_nothing_and_keeps_stacks", this::testFullContainerNoSilentLoss);
         addTest("terminal_inventory_keeps_mismatched_stack_untouched", this::testTerminalInventoryKeepsMismatchedStack);
+        addTest("failed_debit_rollback_removes_inserted_items", this::testRollbackRemovesInsertedItems);
     }
 
     @Override
@@ -142,6 +143,41 @@ public class WithdrawMergeTests extends TestSuite {
                 slot1.has(DataComponents.CUSTOM_DATA));
         if (!r.passed()) return r;
         return pass("withdrawn items never merge onto a component-mismatched stack");
+    }
+
+    /**
+     * Issue #74: when the bank debit behind a download-block insert fails, the inserted items
+     * are taken back out. The container must end exactly as before the insert, and a
+     * component-mismatched stack with the same ItemID must stay untouched.
+     */
+    private TestResult testRollbackRemovesInsertedItems() {
+        ItemID paperId = gateCustomDataAndGetPaperId();
+        if (!paperId.isValid())
+            return fail("Plain paper is not registered — default ItemIDs missing on this server?");
+
+        SimpleContainer container = new SimpleContainer(9);
+        container.setItem(0, paperWithCustomData("spoiled", 10));
+        container.setItem(1, new ItemStack(Items.PAPER, 60)); // insert tops this up, then spills
+
+        ItemStack withdrawalStack = paperId.getStack();
+        long inserted = ContainerItemInsertion.insertWithdrawnItems(container, withdrawalStack, 20);
+        TestResult r = assertEquals("all 20 items inserted", 20L, inserted);
+        if (!r.passed()) return r;
+
+        long removed = ContainerItemInsertion.removeItems(container, withdrawalStack, inserted);
+        r = assertEquals("all 20 items removed again", 20L, removed);
+        if (!r.passed()) return r;
+        r = assertEquals("mismatched stack untouched", 10, container.getItem(0).getCount());
+        if (!r.passed()) return r;
+        r = assertTrue("mismatched stack kept its gated component", container.getItem(0).has(DataComponents.CUSTOM_DATA));
+        if (!r.passed()) return r;
+        r = assertEquals("pre-existing equal stack back to 60", 60, container.getItem(1).getCount());
+        if (!r.passed()) return r;
+        for (int i = 2; i < container.getContainerSize(); i++) {
+            r = assertTrue("slot " + i + " empty again", container.getItem(i).isEmpty());
+            if (!r.passed()) return r;
+        }
+        return pass("rollback restores the container exactly");
     }
 
     /** Component-equal stacks must still merge (normal stacking is unchanged). */
