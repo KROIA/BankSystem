@@ -434,13 +434,31 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         // (Delete Account + Save Changes + Close) don't collide with Create/Bindings on the left.
         int leftWidth = (width - spacing) * 2 / 5;
         int rightWidth = width - spacing - leftWidth;
-        selectAccountButton.setBounds(padding, padding, leftWidth, 20);
-        int accountNameY = selectAccountButton.getBottom()+spacing;
-        accountIconButton.setBounds(padding, accountNameY, 20, 20);
         if(deleteBankAccountButton != null) {
             textWidth = deleteBankAccountButton.getTextWidth(DELETE_ACCOUNT.getString())+10;
             deleteBankAccountButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
         }
+        // Header row: the buttons after the account selector are chained off its right edge. Shrink the
+        // selector (never the buttons) so the chain ends one spacing before Delete Account / Save Changes.
+        int createTextWidth = closeButton.getTextWidth(CREATE_NEW_BANK.getString()) + 10;
+        int bindingsTextWidth = closeButton.getTextWidth(BINDINGS_BUTTON.getString()) + 10;
+        int historyTextWidth = closeButton.getTextWidth(HISTORY_BUTTON.getString()) + 10;
+        int freezeTextWidth = Math.max(closeButton.getTextWidth(FREEZE_BUTTON.getString()),
+                Math.max(closeButton.getTextWidth(UNFREEZE_BUTTON.getString()), closeButton.getTextWidth(FROZEN_LABEL.getString()))) + 20;
+        int headerButtonsWidth = 0;
+        if(isAdminMode) headerButtonsWidth += spacing + createTextWidth;
+        if(bindingsButton != null) {
+            headerButtonsWidth += spacing + bindingsTextWidth;
+            if(historyButton != null) {
+                headerButtonsWidth += spacing + historyTextWidth;
+                if(freezeButton != null) headerButtonsWidth += spacing + freezeTextWidth;
+            }
+        }
+        int rightBlockLeft = deleteBankAccountButton != null ? deleteBankAccountButton.getLeft() : saveChangesButton.getLeft();
+        int selectWidth = Math.min(leftWidth, rightBlockLeft - spacing - padding - headerButtonsWidth);
+        selectAccountButton.setBounds(padding, padding, selectWidth, 20);
+        int accountNameY = selectAccountButton.getBottom()+spacing;
+        accountIconButton.setBounds(padding, accountNameY, 20, 20);
         if(canEdit() && accountNameTextBox != null) {
             accountNameTextBox.setBounds(accountIconButton.getRight()+spacing, accountNameY, leftWidth-(accountIconButton.getRight()), 20);
         }else if(accountNameLabel != null) {
@@ -465,24 +483,19 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
         if(isAdminMode)
         {
-            textWidth = createNewBankButton.getTextWidth(CREATE_NEW_BANK.getString())+10;
-            createNewBankButton.setBounds(selectAccountButton.getRight()+spacing, padding, textWidth, closeButton.getHeight());
+            createNewBankButton.setBounds(selectAccountButton.getRight()+spacing, padding, createTextWidth, closeButton.getHeight());
         }
 
         // Bindings button — placed in the header row, after "Create new Bank" in admin mode (or at
         // selectAccountButton.getRight() in non-admin mode where createNewBankButton doesn't exist).
         if(bindingsButton != null) {
-            int bindingsTextWidth = closeButton.getTextWidth(BINDINGS_BUTTON.getString()) + 10;
             int bindingsLeft = isAdminMode && createNewBankButton != null
                     ? createNewBankButton.getRight() + spacing
                     : selectAccountButton.getRight() + spacing;
             bindingsButton.setBounds(bindingsLeft, padding, bindingsTextWidth, closeButton.getHeight());
             if(historyButton != null) {
-                int historyTextWidth = closeButton.getTextWidth(HISTORY_BUTTON.getString()) + 10;
                 historyButton.setBounds(bindingsButton.getRight() + spacing, padding, historyTextWidth, closeButton.getHeight());
                 if(freezeButton != null) {
-                    int freezeTextWidth = Math.max(closeButton.getTextWidth(FREEZE_BUTTON.getString()),
-                            Math.max(closeButton.getTextWidth(UNFREEZE_BUTTON.getString()), closeButton.getTextWidth(FROZEN_LABEL.getString()))) + 20;
                     freezeButton.setBounds(historyButton.getRight() + spacing, padding, freezeTextWidth, closeButton.getHeight());
                 }
             }
