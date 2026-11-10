@@ -20,6 +20,7 @@ import net.kroia.banksystem.data.table.record.SuspicionFlagRecord;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.minecraft.command.ServerBankSystemCommandHandler;
 import net.kroia.banksystem.networking.general.AuditPageRequest;
+import net.kroia.banksystem.networking.multi_server.ServerNetworkInfoRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.modutilities.testing.TestCategory;
@@ -36,6 +37,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -70,6 +72,7 @@ public class AdminAuditTests extends TestSuite {
         addTest("suspicion_flag_migration_idempotent", this::flagMigration);
         addTest("audit_page_refuses_non_admin", this::pageAccess);
         addTest("suspicion_flagged_event_once", this::flagEvent); // Task #119
+        addTest("server_network_info_admin_only", this::networkInfoAccess); // Task #142
     }
 
     @Override
@@ -255,6 +258,26 @@ public class AdminAuditTests extends TestSuite {
         if (!req.handleOnMasterServer(q, "audit-test-untrusted-slave", ADMIN).join().denied()) return fail("untrusted slave got a page");
         if (req.handleOnMasterServer(q, "", ADMIN).join().denied()) return fail("admin denied");
         return pass("non-admin and untrusted slave refused; admin served");
+    }
+
+    /**
+     * Task #142: the server network list (addresses, ports, players) is refused to non-admins and to anything
+     * arriving through an untrusted slave. A refusal is an immediately completed empty list; the admin call may
+     * still be waiting on slave answers, so it is checked with getNow instead of join.
+     */
+    private TestResult networkInfoAccess() {
+        if (!ready()) return fail("live setup missing");
+        ServerNetworkInfoRequest req = new ServerNetworkInfoRequest();
+        ServerNetworkInfoRequest.InputData in = new ServerNetworkInfoRequest.InputData(false);
+        if (!refused(req.handleOnMasterServer(in, "", PLAYER))) return fail("non-admin got the server list");
+        if (!refused(req.handleOnMasterServer(in, "audit-test-untrusted-slave", ADMIN))) return fail("untrusted slave got the server list");
+        if (refused(req.handleOnMasterServer(in, "", ADMIN))) return fail("admin refused");
+        return pass("non-admin and untrusted slave refused; admin served");
+    }
+
+    private static boolean refused(CompletableFuture<ServerNetworkInfoRequest.OutputData> reply) {
+        ServerNetworkInfoRequest.OutputData out = reply.getNow(null);
+        return out != null && out.servers().isEmpty();
     }
 
     /** Task #119: SUSPICION_FLAGGED fires once per raise, with the flag's constant name. */

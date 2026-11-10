@@ -98,6 +98,10 @@ public class ServerNetworkInfoRequest extends BankSystemGenericRequest<ServerNet
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
+        // Task #142: addresses, ports and player lists are for the admin command (server-internal) and BankSystem
+        // admins only, never through an untrusted slave: it can forge the player and has no right to the list itself.
+        if(!isFullRead(playerSender, slaveID))
+            return CompletableFuture.completedFuture(new OutputData(List.of()));
         return createResponse();
     }
     //@Override
