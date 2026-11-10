@@ -22,6 +22,7 @@ import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
+import net.kroia.modutilities.discord.DiscordWebhooks;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -373,6 +374,8 @@ public class BankSystemCommandsRegistration {
                                 )
                         )
                 )
+                // /banksystem discord status|reload: ModUtilities' node, gated by its own permission (modutilities.command.discord, level 3)
+                .then(DiscordWebhooks.command())
         );
 
         // /money                               - Show balance

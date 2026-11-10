@@ -185,6 +185,11 @@ Settings files from versions before 2.2.0 are migrated automatically on the firs
 
 ### Discord Feed
 
+Two commands manage the feed. They need op level 3 or the permission `modutilities.command.discord`. `/modutilities discord status|reload` does the same.
+
+- `/banksystem discord status` lists the webhook names with valid or invalid, and for every mod that uses the Discord feed which message types are on, their `minAmount` and their webhooks. Webhook URLs are never shown.
+- `/banksystem discord reload` reads `webhooks.json` and the mod files in `config/modutilities/discord/` again, so changes work without a restart.
+
 To protect players' privacy, the default `bank-*` messages name the player only. They leave out the account number, the player UUID and the counterparty account. These values are still provided. To show them, give the type its own `fields` list in `config/modutilities/discord/banksystem.json`. The list replaces the default fields completely, so it must contain every field you want to keep:
 
 ```json

@@ -28,6 +28,8 @@
 | `/banksystem symbols add <id>` | Imports a PNG from the server inbox folder as a new share symbol (master only) | X | |
 | `/banksystem symbols remove <id>` | Deletes a share symbol; remaining ids are compacted automatically (master only) | X | |
 | `/banksystem symbols reload` | Re-reads the symbol manifest from disk and pushes it to all clients (master only) | X | |
+| `/banksystem discord status` | Shows the [Discord feed](Configuration.md#discord-feed) state of all mods: webhook names, enabled types, `minAmount`; never the webhook URLs. Permission `modutilities.command.discord` | X | |
+| `/banksystem discord reload` | Re-reads the Discord feed config files; same as `/modutilities discord reload`. Permission `modutilities.command.discord` | X | |
 
 ## Money Commands
 
