@@ -18,6 +18,7 @@ import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.bankmanager.ClientBankManager;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.data.DatabaseManager;
+import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.data.table.BalanceHistoryManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
@@ -84,6 +85,8 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         public BankSystemLogger LOGGER;
         public DatabaseManager DATABASE_MANAGER;
+        /** Task #123 — write-only diagnostics DB for the audit tool (every role; null outside a server session). */
+        public DiagnosticsDatabase DIAGNOSTICS_DB;
         public BalanceHistoryManager BALANCE_HISTORY_MANAGER;
         /** Task #44 (v2.1.0) — SQLite transaction ledger (master-only, nullable on slaves). */
         public net.kroia.banksystem.data.table.TransactionLogManager TRANSACTION_LOG_MANAGER;
@@ -257,6 +260,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         BankSystemNetworking.setBackend(INSTANCES);
         net.kroia.banksystem.banking.ledger.TransactionLedger.setBackend(INSTANCES); // Task #109
+        DiagnosticsDatabase.setBackend(INSTANCES); // Task #123
         net.kroia.banksystem.banking.ledger.AccountFreeze.setBackend(INSTANCES); // Task #117
         net.kroia.banksystem.banking.ledger.AdminAudit.setBackend(INSTANCES); // Task #110
         net.kroia.banksystem.banking.ledger.SuspicionChecks.setBackend(INSTANCES); // Tasks #111/#114/#115
@@ -383,6 +387,9 @@ public class BankSystemModBackend implements BankSystemAPI {
         boolean multiServerEnabled = config.enable;
         boolean isSlave = multiServerEnabled && !config.isMaster;
         INSTANCES.isSlaveServer = isSlave;
+        // Task #123: every role; the file is only created by the first write.
+        INSTANCES.DIAGNOSTICS_DB = new DiagnosticsDatabase(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
+                .resolve(DatabaseManager.DATABASE_PATH).resolve(DiagnosticsDatabase.FILE_NAME));
 
         if(isSlave)
         {
@@ -554,6 +561,11 @@ public class BankSystemModBackend implements BankSystemAPI {
             // stacking a fresh handler on each session (see onSlaveLatchTimeoutTick Javadoc).
             TickEvent.SERVER_POST.unregister(ON_SLAVE_LATCH_TICK);
         }
+        // Task #123: after the shutdown save above, so its bank_last_save_ms write is drained too.
+        if (INSTANCES.DIAGNOSTICS_DB != null) {
+            INSTANCES.DIAGNOSTICS_DB.close();
+        }
+        INSTANCES.DIAGNOSTICS_DB = null;
 
         if (INSTANCES.SERVER_BANK_MANAGER != null
                 && INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof net.kroia.banksystem.banking.bankmanager.ServerBankManager serverBankManager)

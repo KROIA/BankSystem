@@ -109,6 +109,8 @@ BankSystem keeps its balance history and transaction ledger in a SQLite database
 
 Bank accounts, the item registry and `settings.json` are ordinary NBT/JSON files under `<world>/data/BankSystem/` and are written on the auto-save interval — copy them with the rest of the world folder as usual.
 
+`<world>/data/BankSystem/Database/banksystem_diagnostics.db` (on the master, slaves and single servers) holds diagnostics for an external audit tool. BankSystem only writes it and never reads it back, so it is safe to delete: it is recreated empty on the next write, and a damaged copy is renamed to `.corrupt-<time>` and replaced.
+
 ---
 ## Transaction Ledger
 

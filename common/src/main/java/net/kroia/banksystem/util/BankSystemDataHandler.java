@@ -564,6 +564,10 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             // Only a confirmed successful write clears the dirty flag.
             bankManager.clearPersistDirty();
             BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_SAVED_TO_FILE.notifyListeners();
+            // Task #123: the bank NBT has no timestamp; the audit tool reads it from here.
+            if (written && BACKEND_INSTANCES.DIAGNOSTICS_DB != null)
+                BACKEND_INSTANCES.DIAGNOSTICS_DB.setMeta(net.kroia.banksystem.data.DiagnosticsDatabase.META_BANK_LAST_SAVE_MS,
+                        Long.toString(System.currentTimeMillis()));
         }
         return success;
     }
