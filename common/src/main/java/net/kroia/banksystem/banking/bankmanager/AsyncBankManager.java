@@ -388,17 +388,23 @@ public class AsyncBankManager implements IAsyncBankManager {
                 case FunctionType.GetUserByUUIDAsync -> userResult(input.function, bankManager.getUserByUUID(input.decodeParams()), playerSender, fullRead);
                 case FunctionType.GetUserByNameAsync -> userResult(input.function, bankManager.getUserByName(input.decodeParams()), playerSender, fullRead);
                 case FunctionType.BankAccountExistsAsync -> OutputData.of(input.function, bankManager.bankAccountExists(input.decodeParams()));
-                case FunctionType.IsAccountFrozenAsync -> OutputData.of(input.function, bankManager.isAccountFrozen(input.decodeParams()));
+                // Task #144: frozen state, bank slots and personal account numbers only for readers of that account.
+                case FunctionType.IsAccountFrozenAsync -> {
+                    int accountNr = input.decodeParams();
+                    yield OutputData.of(input.function, canReadAccount(playerSender, slaveID, bankManager.getBankAccount(accountNr))
+                            && bankManager.isAccountFrozen(accountNr));
+                }
                 case FunctionType.BankAccountHasBankAsync -> {
                     ParamGroup_int_ItemID  param = input.decodeParams();
-                    yield OutputData.of(input.function, bankManager.bankAccountHasBank(param.integer, param.itemID));
+                    yield OutputData.of(input.function, canReadAccount(playerSender, slaveID, bankManager.getBankAccount(param.integer))
+                            && bankManager.bankAccountHasBank(param.integer, param.itemID));
                 }
                 case FunctionType.GetBankAccountDataAsync -> readable(input.function, bankManager.getBankAccountData(input.decodeParams()), canRead);
                 //case FunctionType.CreatePersonalBankAccountAsync -> OutputData.of(input.function, bankManager.createPersonalBankAccount(input.decodeParams()));
                 case FunctionType.CreatePersonalBankAccountGetAccountNrAsync_1 -> OutputData.of(input.function, bankManager.createPersonalBankAccountGetAccountNr((UUID)input.decodeParams()));
                 case FunctionType.CreatePersonalBankAccountGetAccountNrAsync_2 -> OutputData.of(input.function, bankManager.createPersonalBankAccountGetAccountNr((String)input.decodeParams()));
-                case FunctionType.GetPersonalBankAccountNrAsync_1 -> OutputData.of(input.function, bankManager.getPersonalBankAccountNr((UUID)input.decodeParams()));
-                case FunctionType.GetPersonalBankAccountNrAsync_2 -> OutputData.of(input.function, bankManager.getPersonalBankAccountNr((String)input.decodeParams()));
+                case FunctionType.GetPersonalBankAccountNrAsync_1 -> OutputData.of(input.function, readableNr(playerSender, slaveID, bankManager.getPersonalBankAccount((UUID)input.decodeParams())));
+                case FunctionType.GetPersonalBankAccountNrAsync_2 -> OutputData.of(input.function, readableNr(playerSender, slaveID, bankManager.getPersonalBankAccount((String)input.decodeParams())));
                 //case FunctionType.CreateBankAccountAsync -> OutputData.of(input.function, bankManager.createBankAccount(input.decodeParams()));
                 case FunctionType.CreateBankAccountGetAccountNrAsync -> OutputData.of(input.function, bankManager.createBankAccountGetAccountNr(input.decodeParams()));
                 case FunctionType.GetBankAccountNrByNameAsync -> {
@@ -427,7 +433,8 @@ public class AsyncBankManager implements IAsyncBankManager {
                 case FunctionType.GetPersonalBankAccountDataAsync_2 -> readable(input.function, bankManager.getPersonalBankAccountData((String)input.decodeParams()), canRead);
                 //case FunctionType.GetOrCreatePersonalBankAccountAsync_1 -> OutputData.of(input.function, bankManager. );
                 //case FunctionType.GetOrCreatePersonalBankAccountAsync_2 -> OutputData.of(input.function, bankManager. );
-                case FunctionType.UserHasPersonalBankAccountAsync -> OutputData.of(input.function, bankManager.userHasPersonalBankAccount(input.decodeParams()));
+                case FunctionType.UserHasPersonalBankAccountAsync -> OutputData.of(input.function,
+                        readableNr(playerSender, slaveID, bankManager.getPersonalBankAccount((UUID)input.decodeParams())) != ServerBankAccount.INVALID_ACCOUNT_NUMBER);
                 case FunctionType.DeleteBankAccountAsync -> {
                     int bankAccountNr = input.decodeParams();
                     if(playerSender != null)
@@ -444,11 +451,13 @@ public class AsyncBankManager implements IAsyncBankManager {
                 }
                 case FunctionType.PersonalBankExistsAsync_1 -> {
                     ParamGroup_UUID_ItemID param = input.decodeParams();
-                    yield OutputData.of(input.function, bankManager.personalBankExists(param.uuid, param.itemID));
+                    yield OutputData.of(input.function, readableNr(playerSender, slaveID, bankManager.getPersonalBankAccount(param.uuid)) != ServerBankAccount.INVALID_ACCOUNT_NUMBER
+                            && bankManager.personalBankExists(param.uuid, param.itemID));
                 }
                 case FunctionType.PersonalBankExistsAsync_2 -> {
                     ParamGroup_String_ItemID param = input.decodeParams();
-                    yield OutputData.of(input.function, bankManager.personalBankExists(param.string, param.itemID));
+                    yield OutputData.of(input.function, readableNr(playerSender, slaveID, bankManager.getPersonalBankAccount(param.string)) != ServerBankAccount.INVALID_ACCOUNT_NUMBER
+                            && bankManager.personalBankExists(param.string, param.itemID));
                 }
                 //case FunctionType.GetPersonalBankAsync_1 -> OutputData.of(input.function, bankManager.);
                 //case FunctionType.GetPersonalBankAsync_2 -> OutputData.of(input.function, bankManager. );
@@ -508,6 +517,17 @@ public class AsyncBankManager implements IAsyncBankManager {
             if (user == null)
                 return OutputData.of(function);
             return OutputData.of(function, isSelfOrFullRead(playerSender, user.getUUID(), fullRead) ? user : user.namesOnly());
+        }
+
+        /**
+         * Task #144: the personal account's number if the caller may read it, else INVALID_ACCOUNT_NUMBER. A player
+         * needs to be a member or an admin. Server-side calls (null sender) are answered from any slave: an untrusted
+         * slave could name the owner as sender anyway (documented member-read trade-off), and slave items and blocks
+         * look up their own player's account this way (banking software, legacy download blocks).
+         */
+        private int readableNr(@Nullable UUID playerSender, String slaveID, @Nullable IServerBankAccount account) {
+            return account != null && (playerSender == null || canReadAccount(playerSender, slaveID, account))
+                    ? account.getAccountNumber() : ServerBankAccount.INVALID_ACCOUNT_NUMBER;
         }
 
         /** Task #104: the account numbers the caller is a member of. */

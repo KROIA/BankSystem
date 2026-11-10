@@ -7,10 +7,13 @@ import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.banking.bankmanager.AsyncBankManager;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
+import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
@@ -80,6 +83,9 @@ public class BankManagerTests extends TestSuite {
         addTest("disallow_clears_holders_with_amount_capture",
                 this::testDisallowClearsHoldersWithAmountCapture);
         addTest("money_absent_crash_safety", this::testMoneyAbsentCrashSafety);
+        // Task #144 — small lookups only for readers of the account
+        addTest("personal_account_lookups_need_reader", this::testPersonalAccountLookupsNeedReader);
+        addTest("company_account_list_visible_to_caller", this::testCompanyAccountListVisibleToCaller);
     }
 
     @Override
@@ -644,6 +650,101 @@ public class BankManagerTests extends TestSuite {
      * Acceptance H: with money disallowed, seeding, resurrection and money getters degrade
      * gracefully (no slot, null bank, no exception) instead of crashing.
      */
+    // ============== Task #144: lookups only for readers ==============
+
+    private static final String UNTRUSTED_SLAVE_144 = "bm-test-untrusted-slave-144";
+
+    /** Runs one AsyncBankManager function through the master handler as the given sender. */
+    private static <T> T ask(AsyncBankManager.FunctionType function, Object param, String slaveID, UUID sender) {
+        return AsyncBankManager.Request.instance
+                .handleOnMasterServer(AsyncBankManager.InputData.of(function, param), slaveID, sender)
+                .join().decodeResult();
+    }
+
+    private IServerBankAccount personalOfA() {
+        IServerBankAccount personal = manager.getPersonalBankAccount(TEST_USER_A);
+        return personal != null ? personal : manager.createPersonalBankAccount(TEST_USER_A);
+    }
+
+    /**
+     * Task #144: another player gets no personal account number, no "has a personal account" and no frozen
+     * state for an account they are not in; the owner and server-side calls do. A server-side personal lookup
+     * through an untrusted slave is answered (it could name the owner as sender anyway); the frozen state is not.
+     * (BankAccountHasBank / PersonalBankExists use the same gate; their params are private records.)
+     */
+    private TestResult testPersonalAccountLookupsNeedReader() {
+        if (manager == null) return fail("Manager not available");
+        IServerBankAccount personal = personalOfA();
+        if (personal == null) return fail("Could not create a personal account for user A");
+        int nr = personal.getAccountNumber();
+        int invalid = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
+        AsyncBankManager.FunctionType getNr = AsyncBankManager.FunctionType.GetPersonalBankAccountNrAsync_1;
+
+        Integer forOther = ask(getNr, TEST_USER_A, "", TEST_USER_B);
+        if (forOther != invalid) return fail("Task #144: another player got the personal account number");
+        Integer forSelf = ask(getNr, TEST_USER_A, "", TEST_USER_A);
+        if (forSelf != nr) return fail("Owner did not get their own personal account number");
+        Integer forServer = ask(getNr, TEST_USER_A, "", null);
+        if (forServer != nr) return fail("Server-internal lookup did not get the personal account number");
+        Integer viaUntrusted = ask(getNr, TEST_USER_A, UNTRUSTED_SLAVE_144, null);
+        if (viaUntrusted != nr) return fail("Server-side lookup through an untrusted slave lost the personal account number");
+
+        AsyncBankManager.FunctionType hasPersonal = AsyncBankManager.FunctionType.UserHasPersonalBankAccountAsync;
+        Boolean hasForOther = ask(hasPersonal, TEST_USER_A, "", TEST_USER_B);
+        if (hasForOther) return fail("Task #144: another player learned that the personal account exists");
+        Boolean hasForSelf = ask(hasPersonal, TEST_USER_A, "", TEST_USER_A);
+        if (!hasForSelf) return fail("Owner was told they have no personal account");
+
+        // Account-level flag: no ledger row, no event; undone below.
+        if (!(personal instanceof ServerBankAccount account)) return fail("Personal account is not a ServerBankAccount");
+        account.setFrozen(true);
+        try {
+            AsyncBankManager.FunctionType frozen = AsyncBankManager.FunctionType.IsAccountFrozenAsync;
+            Boolean frozenForOther = ask(frozen, nr, "", TEST_USER_B);
+            if (frozenForOther) return fail("Task #144: another player saw the frozen state");
+            Boolean frozenForSelf = ask(frozen, nr, "", TEST_USER_A);
+            if (!frozenForSelf) return fail("Owner did not see their account is frozen");
+            Boolean frozenViaUntrusted = ask(frozen, nr, UNTRUSTED_SLAVE_144, null);
+            if (frozenViaUntrusted) return fail("Task #144: an untrusted slave saw the frozen state");
+        } finally {
+            account.setFrozen(false);
+        }
+        return pass("Personal account number, existence and frozen state only for the owner and the server");
+    }
+
+    /**
+     * Task #144: the payout target list a company manager gets for another player holds only that
+     * player's personal account and the accounts the manager is a member of too. The player sees all.
+     */
+    private TestResult testCompanyAccountListVisibleToCaller() {
+        if (manager == null) return fail("Manager not available");
+        User userA = manager.getUserByUUID(TEST_USER_A);
+        User userB = manager.getUserByUUID(TEST_USER_B);
+        IServerBankAccount personal = personalOfA();
+        IServerBankAccount onlyA = manager.createBankAccount("Task144OnlyA");
+        IServerBankAccount shared = manager.createBankAccount("Task144Shared");
+        if (onlyA != null) createdAccountNumbers.add(onlyA.getAccountNumber());
+        if (shared != null) createdAccountNumbers.add(shared.getAccountNumber());
+        if (userA == null || userB == null || personal == null || onlyA == null || shared == null)
+            return fail("Test setup failed");
+        onlyA.addUser(userA, BankPermission.getAllPermissions());
+        shared.addUser(userA, BankPermission.getAllPermissions());
+        shared.addUser(userB, BankPermission.DEPOSIT.getValue());
+
+        List<AsyncCompanyManager.AccountEntry> entries = new ArrayList<>();
+        for (IServerBankAccount acc : List.of(personal, onlyA, shared))
+            entries.add(new AsyncCompanyManager.AccountEntry(acc.getAccountNumber(), acc.getAccountName(), 0));
+        AsyncCompanyManager.ListPlayerAccountsOutput full = new AsyncCompanyManager.ListPlayerAccountsOutput(0, entries);
+
+        List<Integer> forB = AsyncCompanyManager.visibleTo(full, TEST_USER_B, TEST_USER_A, manager)
+                .accounts().stream().map(AsyncCompanyManager.AccountEntry::accountId).toList();
+        if (!forB.equals(List.of(personal.getAccountNumber(), shared.getAccountNumber())))
+            return fail("Task #144: another player's list should be personal + shared only, got " + forB);
+        if (AsyncCompanyManager.visibleTo(full, TEST_USER_A, TEST_USER_A, manager).accounts().size() != 3)
+            return fail("The player's own list was filtered");
+        return pass("Other player's accounts: personal and shared only; own list complete");
+    }
+
     private TestResult testMoneyAbsentCrashSafety() {
         if (manager == null) return fail("ServerBankManager is null -- cannot run on slave server");
         ItemID money = MoneyItem.getItemID();

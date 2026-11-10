@@ -1267,10 +1267,12 @@ public final class AsyncCompanyManager {
                 case IS_MARKET_OPEN            -> handleIsMarketOpen(input.decodeParams(), cm);
                 case UNBIND_STAMPER            -> handleUnbindStamper(input.decodeParams(), bm, cm);
                 case LIST_PLAYER_ACCOUNTS_WITH_FILTER -> {
-                    OutputData out = handleListPlayerAccounts(input.decodeParams(), bm, cm);
+                    ListPlayerAccountsInput in = input.decodeParams();
+                    OutputData out = handleListPlayerAccounts(in, bm, cm);
                     if (fullRead) yield out;
                     ListPlayerAccountsOutput full = out.decodeResult();
-                    yield OutputData.of(FunctionType.LIST_PLAYER_ACCOUNTS_WITH_FILTER, full.withoutPermissionBits());
+                    yield OutputData.of(FunctionType.LIST_PLAYER_ACCOUNTS_WITH_FILTER,
+                            visibleTo(full, in.callerUUID(), in.subject(), bm).withoutPermissionBits());
                 }
                 case LIST_ACCOUNT_ITEM_BALANCES -> handleListItemBalances(input.decodeParams(), bm, cm);
                 case PAY_MISSED                -> handlePayMissed(input.decodeParams(), bm, cm);
@@ -1953,6 +1955,22 @@ public final class AsyncCompanyManager {
         }
         return OutputData.of(FunctionType.LIST_PLAYER_ACCOUNTS_WITH_FILTER,
                 new ListPlayerAccountsOutput(CODE_OK, entries));
+    }
+
+    /**
+     * Task #144: the part of another player's account list a non-admin caller may see: the subject's personal
+     * account (the default payout target) and the accounts the caller is a member of too. The subject sees all.
+     */
+    public static ListPlayerAccountsOutput visibleTo(ListPlayerAccountsOutput full, UUID caller, UUID subject, IServerBankManager bm) {
+        if (caller.equals(subject)) return full;
+        IServerBankAccount personal = bm.getPersonalBankAccount(subject);
+        List<AccountEntry> visible = new ArrayList<>();
+        for (AccountEntry e : full.accounts()) {
+            IServerBankAccount account = bm.getBankAccount(e.accountId());
+            if (account != null && ((personal != null && e.accountId() == personal.getAccountNumber()) || account.hasUser(caller)))
+                visible.add(e);
+        }
+        return new ListPlayerAccountsOutput(full.resultCode(), visible);
     }
 
     /** Spec B.3 — non-zero item balances on the company's bank account (money excluded). */
