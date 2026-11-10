@@ -822,7 +822,10 @@ public class TransactionLedgerTests extends TestSuite {
         return fail("no TRANSFER_PARKED flag");
     }
 
-    /** The DROP to an unknown slave is refused synchronously (ARRS failures are on), so the refund runs inside the call. */
+    /**
+     * The DROP to a trusted but unconnected slave is refused synchronously (ARRS failures are on), so the
+     * refund runs inside the call. The slave must be trusted: untrusted slaves may not withdraw at all.
+     */
     private TestResult dropNotSentRefundsWithSwitchOn() {
         if (!ready()) return fail("live setup missing");
         IServerBank money = manager.getBankAccount(accountNr).getOrCreateBank(MoneyItem.getItemID());
@@ -831,8 +834,17 @@ public class TransactionLedgerTests extends TestSuite {
         long before = money.getBalance();
         HashMap<ItemID, Long> request = new HashMap<>();
         request.put(ItemID.of(BankSystemItems.MONEY5.get().getDefaultInstance()), 2L);
-        new WithdrawMoneyPacket(request, accountNr).handle(PLAYER, "b126-no-such-slave");
-        List<TransactionLogRecord> rows = rows(accountNr);
+        String slave = "b126-no-such-slave";
+        boolean wasTrusted = manager.isSlaveServerTrusted(slave);
+        long lastId = rows(accountNr).stream().mapToLong(TransactionLogRecord::id).max().orElse(0L);
+        manager.trustSlaveServer(slave);
+        try {
+            new WithdrawMoneyPacket(request, accountNr).handle(PLAYER, slave);
+        } finally {
+            if (!wasTrusted) manager.untrustSlaveServer(slave);
+        }
+        // only this call's rows: older WITHDRAW / WITHDRAW_REFUND rows of the suite account must not satisfy it
+        List<TransactionLogRecord> rows = rows(accountNr).stream().filter(r -> r.id() > lastId).toList();
         TransactionLogRecord w = find(rows, LedgerType.WITHDRAW), refund = find(rows, LedgerType.WITHDRAW_REFUND);
         if (w == null || refund == null) return fail("expected WITHDRAW + WITHDRAW_REFUND, got " + rows);
         if (w.ref() == null || !w.ref().equals(refund.ref())) return fail("refs " + w.ref() + " / " + refund.ref());

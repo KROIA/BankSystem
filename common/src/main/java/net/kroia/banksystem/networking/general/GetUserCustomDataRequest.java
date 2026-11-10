@@ -26,7 +26,8 @@ public class GetUserCustomDataRequest extends BankSystemGenericRequest<Boolean, 
     @Override
     public CompletableFuture<CompoundTag> handleOnMasterServer(Boolean input, String slaveID, UUID sender) {
         ISyncServerBankManager manager = getServerBankManager();
-        if (manager == null) return CompletableFuture.completedFuture(new CompoundTag());
+        // An untrusted slave asserts the sender UUID, so it could read any player's data.
+        if (manager == null || isFromUntrustedSlave(slaveID)) return CompletableFuture.completedFuture(new CompoundTag());
         User user = manager.getUserByUUID(sender);
         if (user == null) return CompletableFuture.completedFuture(new CompoundTag());
         return CompletableFuture.completedFuture(user.getCustomData().copy());

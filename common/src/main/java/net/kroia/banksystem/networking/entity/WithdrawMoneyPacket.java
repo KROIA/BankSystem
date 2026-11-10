@@ -158,6 +158,14 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         ISyncServerBankManager bankManager = getSyncBankManager();
         if(bankManager == null)
             return;
+        // The player UUID is asserted by the slave: an untrusted slave could withdraw from any account.
+        if(slaveID != null && !slaveID.isEmpty() && !bankManager.isSlaveServerTrusted(slaveID))
+        {
+            warn("The slave server: '" + slaveID + "' tried to withdraw money, which is not allowed for an untrusted slave server!");
+            ServerPlayerUtilities.printToClientConsole(player, "[BankSystem] Your server '" + slaveID + "' is not trusted by the bank master. "
+                    + "Contact a bank admin to grant trust for cross-server bank operations.");
+            return;
+        }
         final int finalCurrentSelectedAccountNumber = currentSelectedAccountNumber;
         ISyncServerBankAccount account = bankManager.getBankAccount(finalCurrentSelectedAccountNumber);
         if(account == null)

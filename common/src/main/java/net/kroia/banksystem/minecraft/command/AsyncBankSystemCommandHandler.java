@@ -209,6 +209,9 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
                 warn("The player '"+playerName+"' try's to call the command: '"+input.function.toString()+"' directly from the client side, which is not allowed!");
                 return CompletableFuture.completedFuture(OutputData.of(input.function, false));
             }
+            // The executor UUID is asserted by the slave, so an untrusted slave could run any command as any player.
+            if(!isRequestAllowed(input, slaveID, null, playerName))
+                return CompletableFuture.completedFuture(OutputData.of(input.function));
 
             if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Received request to handle on master server for command: "+input.function.toString() + playerInfo);
@@ -277,6 +280,13 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         protected boolean isAllowedToCallByClient(InputData input)
         {
             return false;
+        }
+
+        /** Read-only commands whose answer goes only to the executor's own console: a forged executor learns nothing. */
+        @Override
+        protected boolean isAllowedToCallByUntrustedSlaveServer(InputData input)
+        {
+            return input.function == FunctionType.Money || input.function == FunctionType.Money_circulation;
         }
     }
 
