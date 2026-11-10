@@ -30,6 +30,11 @@ public class SlaveCompanyMirrorTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("list_all_visuals_codec_round_trip", this::testListAllVisualsCodec);
         addTest("bulk_packet_codec_round_trip", this::testBulkCodec);

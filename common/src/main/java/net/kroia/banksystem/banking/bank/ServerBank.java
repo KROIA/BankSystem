@@ -1757,7 +1757,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
         String exponents = "kMGTPEZY";
 
         if(amount < 0) {
-            BACKEND_INSTANCES.LOGGER.warn("[ServerBank] getNormalizedAmountStatic called with negative amount: " + amount);
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                BACKEND_INSTANCES.LOGGER.warn("[ServerBank] getNormalizedAmountStatic called with negative amount: " + amount);
             return "0";
         }
         if(amount == 0)

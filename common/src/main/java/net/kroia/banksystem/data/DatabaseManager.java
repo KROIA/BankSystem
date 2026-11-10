@@ -308,7 +308,7 @@ public class DatabaseManager {
         worker.shutdown();
         try {
             if (!worker.awaitTermination(CLOSE_DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                getLogger().error("DB worker did not drain within " + CLOSE_DRAIN_TIMEOUT_SECONDS
+                logError("DB worker did not drain within " + CLOSE_DRAIN_TIMEOUT_SECONDS
                         + "s at shutdown; dropping " + worker.shutdownNow().size() + " queued job(s)");
             }
         } catch (InterruptedException e) {
@@ -321,10 +321,10 @@ public class DatabaseManager {
             if (c != null && !c.isClosed()) {
                 c.commit();
                 c.close();
-                getLogger().info("Successfully closed database connection");
+                logInfo("Successfully closed database connection");
             }
         } catch (SQLException e) {
-            getLogger().error("Failed to close database connection: " + e.getMessage());
+            logError("Failed to close database connection: " + e.getMessage());
         }
 
         // Task #42 — release the backup safety-timer thread so the JVM can exit cleanly.

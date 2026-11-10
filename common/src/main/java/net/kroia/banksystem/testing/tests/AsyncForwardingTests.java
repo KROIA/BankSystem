@@ -15,6 +15,8 @@ import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionOutputDa
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -31,6 +33,11 @@ public class AsyncForwardingTests extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return BankSystemTestCategories.NETWORKING;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -53,6 +60,8 @@ public class AsyncForwardingTests extends TestSuite {
 
     @Override
     public void setup() {
+        SharedConstants.tryDetectVersion(); // offline JUnit run: registries for ItemID/ItemStack; no-op in game
+        Bootstrap.bootStrap();
         // No persistent setup needed; tests inspect static codec maps and method behavior
     }
 

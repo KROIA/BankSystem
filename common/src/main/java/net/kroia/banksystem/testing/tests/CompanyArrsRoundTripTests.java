@@ -32,6 +32,11 @@ public class CompanyArrsRoundTripTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("request_registered", this::testRequestRegistered);
         addTest("codec_map_covers_every_function", this::testCodecMapCoversEveryFunction);

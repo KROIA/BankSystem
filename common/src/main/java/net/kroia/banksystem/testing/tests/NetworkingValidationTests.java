@@ -22,6 +22,11 @@ public class NetworkingValidationTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("deop_command_passes_false", this::testDeopCommandPassesFalse);
         addTest("deposit_permission_check_uses_getValue", this::testDepositPermissionCheckUsesGetValue);

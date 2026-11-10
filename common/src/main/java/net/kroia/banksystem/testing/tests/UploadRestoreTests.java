@@ -5,6 +5,8 @@ import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -20,6 +22,17 @@ public class UploadRestoreTests extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return BankSystemTestCategories.ITEM_BANK;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
+    public void setup() {
+        SharedConstants.tryDetectVersion(); // offline JUnit run: registries for ItemID/ItemStack; no-op in game
+        Bootstrap.bootStrap();
     }
 
     @Override

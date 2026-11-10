@@ -53,6 +53,11 @@ public class BalanceHistoryTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("sample_on_change_dedupes_identical_balance", this::sample_on_change_dedupes_identical_balance);
         addTest("heartbeat_forces_row_after_interval", this::heartbeat_forces_row_after_interval);

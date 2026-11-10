@@ -9,6 +9,8 @@ import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionOutputDa
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 
@@ -35,6 +37,11 @@ public class ConverterCacheTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("get_returns_zero_for_missing_player", this::testGetForMissing);
         addTest("deposit_sums_correctly", this::testDepositSums);
@@ -53,6 +60,8 @@ public class ConverterCacheTests extends TestSuite {
 
     @Override
     public void setup() {
+        SharedConstants.tryDetectVersion(); // offline JUnit run: registries for ItemID/ItemStack; no-op in game
+        Bootstrap.bootStrap();
         ConverterCacheManager.get().clearAll_forTesting();
     }
 

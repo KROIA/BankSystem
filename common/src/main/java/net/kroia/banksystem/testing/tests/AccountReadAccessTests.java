@@ -11,6 +11,8 @@ import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.nbt.CompoundTag;
 
 import java.util.HashMap;
@@ -33,6 +35,17 @@ public class AccountReadAccessTests extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return BankSystemTestCategories.NETWORKING;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
+    public void setup() {
+        SharedConstants.tryDetectVersion(); // offline JUnit run: registries for ItemID/ItemStack; no-op in game
+        Bootstrap.bootStrap();
     }
 
     @Override

@@ -30,6 +30,11 @@ public class PayoutManagerTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("schedule_nbt_round_trip", this::testScheduleNbtRoundTrip);
         addTest("schedule_ids_monotonic", this::testScheduleIdsMonotonic);

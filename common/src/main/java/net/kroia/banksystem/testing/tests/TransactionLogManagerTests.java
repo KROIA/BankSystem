@@ -39,6 +39,11 @@ public class TransactionLogManagerTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("insert_and_get_by_account", this::insert_and_get_by_account);
         addTest("get_by_company_filters_correctly", this::get_by_company_filters_correctly);

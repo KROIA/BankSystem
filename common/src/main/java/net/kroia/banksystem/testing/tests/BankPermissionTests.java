@@ -17,6 +17,11 @@ public class BankPermissionTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("getValue_deposit_returns_1", this::testGetValueDeposit);
         addTest("getValue_withdraw_returns_2", this::testGetValueWithdraw);
