@@ -3,6 +3,8 @@ package net.kroia.banksystem.data;
 import net.kroia.banksystem.api.diagnostics.INoteFlowLog;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
@@ -19,13 +21,26 @@ public final class NoteFlowLog implements INoteFlowLog {
     private NoteFlowLog() {}
 
     @Override
-    public void record(String source, @Nullable UUID player, ItemID item, long amount, @Nullable String context) {
+    public void record(String source, @Nullable UUID player, ItemID item, long amount, @Nullable Entity villager, @Nullable String context) {
         try {
             DiagnosticsDatabase db = DiagnosticsDatabase.live();
             if (db == null || source == null || item == null) return;
-            db.execute("INSERT INTO NoteFlow (ts, source, player_uuid, item_id, amount, context) VALUES (?, ?, ?, ?, ?, ?)",
+            // Read the entity here, on the caller's thread; only plain values go to the writer thread.
+            String villagerUuid = null, dimension = null;
+            Integer x = null, y = null, z = null;
+            if (villager != null) {
+                BlockPos pos = villager.blockPosition();
+                villagerUuid = villager.getUUID().toString();
+                dimension = villager.level().dimension().location().toString(); // mc<=1.21.10
+                //dimension = villager.level().dimension().identifier().toString(); // mc>=1.21.11
+                x = pos.getX();
+                y = pos.getY();
+                z = pos.getZ();
+            }
+            db.execute("INSERT INTO NoteFlow (ts, source, player_uuid, item_id, amount, villager_uuid, dimension, x, y, z, context) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     System.currentTimeMillis(), source, player == null ? null : player.toString(), (int) item.getShort(),
-                    amount, context);
+                    amount, villagerUuid, dimension, x, y, z, context);
         } catch (RuntimeException ignored) {
             // never throws to callers
         }

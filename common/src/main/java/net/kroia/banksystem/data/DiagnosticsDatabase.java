@@ -10,10 +10,13 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
@@ -52,9 +55,14 @@ public final class DiagnosticsDatabase {
                     + "ts INTEGER NOT NULL, direction TEXT, path TEXT, step TEXT NOT NULL, account_number INTEGER, "
                     + "player_uuid TEXT, items_json TEXT, ledger_type INTEGER, context TEXT, detail TEXT)",
             "CREATE INDEX IF NOT EXISTS TransferJournal_tid ON TransferJournal(transfer_id)",
-            // Task #124 (B5): every role.
+            // Task #124 (B5): every role. Villager columns: NOTE_FLOW_ADDED.
             "CREATE TABLE IF NOT EXISTS NoteFlow (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, "
                     + "source TEXT NOT NULL, player_uuid TEXT, item_id INTEGER NOT NULL, amount INTEGER NOT NULL, context TEXT)");
+    /**
+     * NoteFlow columns added after the table reached dev worlds: the trading villager, null for other sources.
+     * Every open adds the missing ones, so new and old files take the same path.
+     */
+    private static final List<String> NOTE_FLOW_ADDED = List.of("villager_uuid TEXT", "dimension TEXT", "x INTEGER", "y INTEGER", "z INTEGER");
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
@@ -79,7 +87,8 @@ public final class DiagnosticsDatabase {
 
     /** Context text for the diagnostics tables: {@code "<dimension> x y z"}. */
     public static String at(@Nullable Level level, BlockPos pos) {
-        return (level == null ? "?" : level.dimension().location().toString()) + " " + pos.getX() + " " + pos.getY() + " " + pos.getZ();
+        return (level == null ? "?" : level.dimension().location().toString()) + " " + pos.getX() + " " + pos.getY() + " " + pos.getZ(); // mc<=1.21.10
+        //return (level == null ? "?" : level.dimension().identifier().toString()) + " " + pos.getX() + " " + pos.getY() + " " + pos.getZ(); // mc>=1.21.11
     }
 
     public DiagnosticsDatabase(Path file) {
@@ -233,6 +242,8 @@ public final class DiagnosticsDatabase {
             c.setAutoCommit(false);
             try (Statement st = c.createStatement()) {
                 for (String sql : SCHEMA) st.execute(sql);
+                addMissingColumns(c, "NoteFlow", NOTE_FLOW_ADDED);
+                st.execute("CREATE INDEX IF NOT EXISTS NoteFlow_villager ON NoteFlow(villager_uuid)");
                 st.execute("INSERT OR IGNORE INTO Meta (key, value) VALUES ('created_ms', '" + System.currentTimeMillis() + "')");
                 st.execute("INSERT OR REPLACE INTO Meta (key, value) VALUES ('schema_version', '" + SCHEMA_VERSION + "')");
             }
@@ -244,6 +255,19 @@ public final class DiagnosticsDatabase {
             } catch (SQLException ignored) {
             }
             throw e;
+        }
+    }
+
+    /** {@code ALTER TABLE ADD COLUMN} for each {@code "name TYPE"} the table lacks. */
+    private static void addMissingColumns(Connection c, String table, List<String> columns) throws SQLException {
+        Set<String> have = new HashSet<>();
+        try (Statement st = c.createStatement(); ResultSet rs = st.executeQuery("PRAGMA table_info(" + table + ")")) {
+            while (rs.next()) have.add(rs.getString("name"));
+        }
+        try (Statement st = c.createStatement()) {
+            for (String col : columns)
+                if (!have.contains(col.substring(0, col.indexOf(' '))))
+                    st.execute("ALTER TABLE " + table + " ADD COLUMN " + col);
         }
     }
 
