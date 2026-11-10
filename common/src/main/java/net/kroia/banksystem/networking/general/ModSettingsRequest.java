@@ -268,17 +268,22 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         //   (DepositItemsInBankRequest etc.), and the slave's AsyncBankManager routes
         //   IsItemIDAllowedAsync to the master through the ARRS dispatch as well. So the
         //   master's live setting always gates. No propagation required.
-        // * Placeholder (refresh intervals, TOP_COUNT, MONEY_FORMAT): read by the
-        //   placeholder provider on the server where TAB / Placeholder API runs, from
-        //   that server's OWN local settings.json (slaves only query the master for
-        //   the bank data, not for these settings). TOP_COUNT is read once at
-        //   placeholder registration (restart-required). No propagation.
-        // * Utilities SYNC_ADMIN_FLAG_WITH_PERMISSION (Task #107): read live, per server. The master
-        //   honours slave sync writes only while its own value is on; each slave reads its own
-        //   settings.json to decide whether to forward LuckPerms changes. Turning it on here may
-        //   trigger the one-time LuckPerms migration (below). No propagation.
         // * Audit (suspicious-activity flags, Tasks #111/#114/#115): read live by the master's
         //   ledger hook and wealth sweep only. No propagation.
+        // * Integrations (Task #119): every server reads these from its OWN local settings.json;
+        //   only the master's file is editable in-game, so a slave keeps its file values.
+        //   - PLACEHOLDERS_ENABLED / refresh intervals / TOP_COUNT / MONEY_FORMAT: read by the
+        //     placeholder provider on the server where TAB / Placeholder API runs (slaves only
+        //     query the master for the bank data, not for these settings). PLACEHOLDERS_ENABLED
+        //     and TOP_COUNT are read once at server start (restart-required).
+        //   - SYNC_ADMIN_FLAG_WITH_PERMISSION (Task #107): read live, per server. The master
+        //     honours slave sync writes only while its own value is on; each slave reads its own
+        //     value to decide whether to forward LuckPerms changes. Turning it on here may
+        //     trigger the one-time LuckPerms migration (below).
+        //   - NUMISMATICS_ENABLED / LIGHTMANS_CURRENCY_ENABLED: read live by every provider
+        //     lookup. The master's value gates the bank operations (they run there).
+        //   - DISCORD_ENABLED: read live; the feed only posts from the master.
+        //   No propagation.
         // => No active propagation is required for any group.
 
         // Notify other online admins (on this server) about the change.
@@ -306,10 +311,10 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
      *   <li>{@code ServerBank.ADDITIONAL_VOLATILE_COMPONENTS} /
      *       {@code ADDITIONAL_DEPOSIT_GATED_COMPONENTS}: entries trimmed, blanks
      *       dropped, duplicates removed (order preserved); null list → empty list</li>
-     *   <li>{@code Placeholder.PLAYER_REFRESH_MS} / {@code SERVER_REFRESH_MS}
+     *   <li>{@code Integrations.PLAYER_REFRESH_MS} / {@code SERVER_REFRESH_MS}
      *       ∈ [100 ms, 86,400,000 ms] (null → default)</li>
-     *   <li>{@code Placeholder.TOP_COUNT} ∈ [0, 100] (null → default)</li>
-     *   <li>{@code Placeholder.MONEY_FORMAT}: null, blank or missing {@code %s}
+     *   <li>{@code Integrations.TOP_COUNT} ∈ [0, 100] (null → default)</li>
+     *   <li>{@code Integrations.MONEY_FORMAT}: null, blank or missing {@code %s}
      *       → the default; otherwise kept as-is (not trimmed)</li>
      * </ul>
      * Static and side-effect free apart from the settings object itself, so the
@@ -329,7 +334,6 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_WARNING);
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_ERROR);
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_DEBUG);
-        sanitizeBoolean(settings.UTILITIES.SYNC_ADMIN_FLAG_WITH_PERMISSION);
         sanitizeBoolean(settings.UTILITIES.ALERTS_DEFAULT_ON);
 
         // Player
@@ -353,10 +357,15 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         sanitizeBoolean(settings.BANK.CONFIRM_ITEMID_MERGE);
         sanitizeBoolean(settings.BANK.CONFIRM_ITEMID_REPAIR);
 
-        // Placeholder
-        clampOrDefault(settings.PLACEHOLDER.PLAYER_REFRESH_MS, MIN_PLACEHOLDER_REFRESH_MS, MAX_PLACEHOLDER_REFRESH_MS);
-        clampOrDefault(settings.PLACEHOLDER.SERVER_REFRESH_MS, MIN_PLACEHOLDER_REFRESH_MS, MAX_PLACEHOLDER_REFRESH_MS);
-        clampOrDefault(settings.PLACEHOLDER.TOP_COUNT, MIN_PLACEHOLDER_TOP_COUNT, MAX_PLACEHOLDER_TOP_COUNT);
+        // Integrations
+        sanitizeBoolean(settings.INTEGRATIONS.PLACEHOLDERS_ENABLED);
+        sanitizeBoolean(settings.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION);
+        sanitizeBoolean(settings.INTEGRATIONS.NUMISMATICS_ENABLED);
+        sanitizeBoolean(settings.INTEGRATIONS.LIGHTMANS_CURRENCY_ENABLED);
+        sanitizeBoolean(settings.INTEGRATIONS.DISCORD_ENABLED);
+        clampOrDefault(settings.INTEGRATIONS.PLAYER_REFRESH_MS, MIN_PLACEHOLDER_REFRESH_MS, MAX_PLACEHOLDER_REFRESH_MS);
+        clampOrDefault(settings.INTEGRATIONS.SERVER_REFRESH_MS, MIN_PLACEHOLDER_REFRESH_MS, MAX_PLACEHOLDER_REFRESH_MS);
+        clampOrDefault(settings.INTEGRATIONS.TOP_COUNT, MIN_PLACEHOLDER_TOP_COUNT, MAX_PLACEHOLDER_TOP_COUNT);
         // Audit (suspicious-activity flags)
         var a = settings.AUDIT;
         sanitizeBoolean(a.LAUNDERING_FLAG_ENABLED);
@@ -379,9 +388,9 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         sanitizeBoolean(a.DAILY_DIGEST_ENABLED);
         clampOrDefault(a.DIGEST_TOP_N, 1, 100);
 
-        String moneyFormat = settings.PLACEHOLDER.MONEY_FORMAT.get();
+        String moneyFormat = settings.INTEGRATIONS.MONEY_FORMAT.get();
         if (moneyFormat == null || moneyFormat.isBlank() || !moneyFormat.contains("%s"))
-            settings.PLACEHOLDER.MONEY_FORMAT.set(settings.PLACEHOLDER.MONEY_FORMAT.getDefaultValue());
+            settings.INTEGRATIONS.MONEY_FORMAT.set(settings.INTEGRATIONS.MONEY_FORMAT.getDefaultValue());
     }
 
     /** Clamps a Long setting value into [min, max]; null falls back to min. */

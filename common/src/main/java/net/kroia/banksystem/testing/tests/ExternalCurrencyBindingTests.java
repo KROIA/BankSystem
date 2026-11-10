@@ -93,6 +93,7 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         addTest("bind_overflow_leaves_local_state_untouched", this::testBindOverflowAtomicity);
         addTest("withdraw_refused_when_external_says_no", this::testWithdrawRefusedByExternal);
         addTest("membership_sync_propagates_to_external_account", this::testMembershipSyncPropagates);
+        addTest("unbind_refused_while_unavailable_with_locked", this::testUnbindRefusedWhileUnavailableWithLocked);
         // Cascade cleanup must run LAST: it deletes the shared testAccountNr, which would
         // strand any subsequent test that references it.
         addTest("cascade_cleanup_on_account_and_bank_removal", this::testCascadeCleanup);
@@ -750,6 +751,57 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         }
         return pass("Default-slot seeding: money + provider-declared item slot added, allowlist "
                 + "updated, second call is idempotent");
+    }
+
+    /**
+     * Task #119 (D4). Unbind while the provider is unavailable (mod missing or disabled in
+     * Integrations settings) must be refused while the binding row holds locked funds: they
+     * were already taken out of the external account, so zeroing them would destroy money.
+     * Once the provider is back, the normal unbind brings them home.
+     */
+    private TestResult testUnbindRefusedWhileUnavailableWithLocked() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return fail("BankAccountBindings backend is not available");
+        ISyncServerBank bank = account.getBank(slotItemA);
+        if (bank == null) return fail("Bank slot A missing");
+
+        bank.setBalance(80L);
+        BankStatus lockStatus = bank.lockAmount(30L);
+        if (lockStatus != BankStatus.SUCCESS) return fail("lockAmount(30) returned " + lockStatus);
+        long locked = bank.getLockedBalance();
+        StubCurrencyProvider.create(STUB_KEY_A, true, 0L);
+        ExternalAccountRef ref = new ExternalAccountRef(
+                StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "UnbindGuard", true);
+        BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, slotItemA, ref);
+        if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
+
+        StubCurrencyProvider.getInstance().setAvailable(false);
+        BankStatus unbind = manager.unbindExternalAccount(testAccountNr, slotItemA, true);
+        if (unbind != BankStatus.FAILED_EXTERNAL_UNAVAILABLE) {
+            return fail("unbind while unavailable with locked=" + locked + " returned " + unbind
+                    + " (expected FAILED_EXTERNAL_UNAVAILABLE)");
+        }
+        if (bindings.getBinding(testAccountNr, slotItemA) == null) {
+            return fail("refused unbind removed the binding row");
+        }
+        if (bindings.getLocked(testAccountNr, slotItemA) != locked) {
+            return fail("refused unbind changed BindingRow.lockedBalance to "
+                    + bindings.getLocked(testAccountNr, slotItemA) + " (expected " + locked + ")");
+        }
+
+        StubCurrencyProvider.getInstance().setAvailable(true);
+        unbind = manager.unbindExternalAccount(testAccountNr, slotItemA, true);
+        if (unbind != BankStatus.SUCCESS) return fail("unbind after provider is back returned " + unbind);
+        if (bank.getLockedBalance() != locked) {
+            return fail("After unbind: locked = " + bank.getLockedBalance() + " (expected " + locked + ")");
+        }
+        bank.unlockAmount(30L); // leave the slot as perTestReset expects
+        return pass("Unbind refused while the provider is unavailable and locked=" + locked
+                + "; row kept; unbind after re-enable restored the locked funds");
     }
 
     /**

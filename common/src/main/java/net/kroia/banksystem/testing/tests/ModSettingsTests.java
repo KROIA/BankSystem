@@ -10,6 +10,8 @@ import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,11 +20,12 @@ import java.util.List;
  * ({@link ModSettingsRequest} + {@link BankSystemModSettings}):
  * <ul>
  *   <li>the SettingsStore JSON round-trip used as the request's wire format
- *       (including the List&lt;String&gt; component lists and the Placeholder
+ *       (including the List&lt;String&gt; component lists and the Integrations
  *       refresh/format settings),</li>
  *   <li>the {@link ModSettingsRequest#sanitize} validation bounds and
  *       normalization rules, and</li>
- *   <li>graceful handling of partial payloads (missing groups keep their values).</li>
+ *   <li>graceful handling of partial payloads (missing groups keep their values),</li>
+ *   <li>the one-time Placeholder/Utilities to Integrations file migration (Task #119).</li>
  * </ul>
  * Pure logic tests on fresh settings instances — no running bank manager required.
  */
@@ -41,12 +44,15 @@ public class ModSettingsTests extends TestSuite {
         addTest("sanitize_normalizes_lists_and_placeholders", this::test_sanitizeNormalizesListsAndPlaceholders);
         addTest("sanitize_money_format", this::test_sanitizeMoneyFormat);
         addTest("partial_payload_keeps_other_values", this::test_partialPayloadKeepsOtherValues);
+        addTest("migrate_integrations_old_file", this::test_migrateIntegrationsOldFile);
+        addTest("migrate_integrations_already_migrated", this::test_migrateIntegrationsAlreadyMigrated);
+        addTest("migrate_integrations_no_old_keys", this::test_migrateIntegrationsNoOldKeys);
     }
 
     /**
      * Serializing the editable groups to a JSON string (the ModSettingsRequest wire
      * format) and loading it into a second settings instance must reproduce every
-     * value, including the List&lt;String&gt; component lists and the Placeholder
+     * value, including the List&lt;String&gt; component lists and the Integrations
      * refresh interval / money format.
      */
     private TestResult test_jsonRoundTrip() {
@@ -63,8 +69,8 @@ public class ModSettingsTests extends TestSuite {
         source.BANK.ADDITIONAL_DEPOSIT_GATED_COMPONENTS.set(new ArrayList<>(List.of("tfc:food")));
         source.BANK.CONFIRM_ITEMID_MERGE.set(true);
         source.BANK.CONFIRM_ITEMID_REPAIR.set(true);
-        source.PLACEHOLDER.PLAYER_REFRESH_MS.set(2500);
-        source.PLACEHOLDER.MONEY_FORMAT.set("%s €");
+        source.INTEGRATIONS.PLAYER_REFRESH_MS.set(2500);
+        source.INTEGRATIONS.MONEY_FORMAT.set("%s €");
 
         SettingsStore store = new SettingsStore();
         String json = store.toJsonString(source.getEditableGroups());
@@ -98,9 +104,9 @@ public class ModSettingsTests extends TestSuite {
         if (!r.passed()) return r;
         r = assertTrue("CONFIRM_ITEMID_REPAIR survives round-trip", target.BANK.CONFIRM_ITEMID_REPAIR.get());
         if (!r.passed()) return r;
-        r = assertEquals("PLAYER_REFRESH_MS survives round-trip", 2500, (int) target.PLACEHOLDER.PLAYER_REFRESH_MS.get());
+        r = assertEquals("PLAYER_REFRESH_MS survives round-trip", 2500, (int) target.INTEGRATIONS.PLAYER_REFRESH_MS.get());
         if (!r.passed()) return r;
-        r = assertEquals("MONEY_FORMAT survives round-trip", "%s €", target.PLACEHOLDER.MONEY_FORMAT.get());
+        r = assertEquals("MONEY_FORMAT survives round-trip", "%s €", target.INTEGRATIONS.MONEY_FORMAT.get());
         if (!r.passed()) return r;
         return pass("SettingsStore JSON round-trip preserves all editable settings");
     }
@@ -116,9 +122,9 @@ public class ModSettingsTests extends TestSuite {
         settings.PLAYER.STARTING_BALANCE.set(-100L);
         settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(-20);
         settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(0);
-        settings.PLACEHOLDER.PLAYER_REFRESH_MS.set(1);
-        settings.PLACEHOLDER.SERVER_REFRESH_MS.set(-5);
-        settings.PLACEHOLDER.TOP_COUNT.set(-3);
+        settings.INTEGRATIONS.PLAYER_REFRESH_MS.set(1);
+        settings.INTEGRATIONS.SERVER_REFRESH_MS.set(-5);
+        settings.INTEGRATIONS.TOP_COUNT.set(-3);
 
         ModSettingsRequest.sanitize(settings);
 
@@ -141,13 +147,13 @@ public class ModSettingsTests extends TestSuite {
                 ModSettingsRequest.MIN_TICK_INTERVAL, (int) settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get());
         if (!r.passed()) return r;
         r = assertEquals("player placeholder refresh clamped to minimum",
-                ModSettingsRequest.MIN_PLACEHOLDER_REFRESH_MS, (int) settings.PLACEHOLDER.PLAYER_REFRESH_MS.get());
+                ModSettingsRequest.MIN_PLACEHOLDER_REFRESH_MS, (int) settings.INTEGRATIONS.PLAYER_REFRESH_MS.get());
         if (!r.passed()) return r;
         r = assertEquals("server placeholder refresh clamped to minimum",
-                ModSettingsRequest.MIN_PLACEHOLDER_REFRESH_MS, (int) settings.PLACEHOLDER.SERVER_REFRESH_MS.get());
+                ModSettingsRequest.MIN_PLACEHOLDER_REFRESH_MS, (int) settings.INTEGRATIONS.SERVER_REFRESH_MS.get());
         if (!r.passed()) return r;
         r = assertEquals("placeholder top count clamped to 0",
-                ModSettingsRequest.MIN_PLACEHOLDER_TOP_COUNT, (int) settings.PLACEHOLDER.TOP_COUNT.get());
+                ModSettingsRequest.MIN_PLACEHOLDER_TOP_COUNT, (int) settings.INTEGRATIONS.TOP_COUNT.get());
         if (!r.passed()) return r;
         return pass("sanitize() clamps all lower bounds");
     }
@@ -163,9 +169,9 @@ public class ModSettingsTests extends TestSuite {
         settings.PLAYER.STARTING_BALANCE.set(Long.MAX_VALUE);
         settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(Integer.MAX_VALUE);
         settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(Integer.MAX_VALUE);
-        settings.PLACEHOLDER.PLAYER_REFRESH_MS.set(Integer.MAX_VALUE);
-        settings.PLACEHOLDER.SERVER_REFRESH_MS.set(Integer.MAX_VALUE);
-        settings.PLACEHOLDER.TOP_COUNT.set(1000);
+        settings.INTEGRATIONS.PLAYER_REFRESH_MS.set(Integer.MAX_VALUE);
+        settings.INTEGRATIONS.SERVER_REFRESH_MS.set(Integer.MAX_VALUE);
+        settings.INTEGRATIONS.TOP_COUNT.set(1000);
 
         ModSettingsRequest.sanitize(settings);
 
@@ -188,13 +194,13 @@ public class ModSettingsTests extends TestSuite {
                 ModSettingsRequest.MAX_TICK_INTERVAL, (int) settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get());
         if (!r.passed()) return r;
         r = assertEquals("player placeholder refresh clamped to maximum",
-                ModSettingsRequest.MAX_PLACEHOLDER_REFRESH_MS, (int) settings.PLACEHOLDER.PLAYER_REFRESH_MS.get());
+                ModSettingsRequest.MAX_PLACEHOLDER_REFRESH_MS, (int) settings.INTEGRATIONS.PLAYER_REFRESH_MS.get());
         if (!r.passed()) return r;
         r = assertEquals("server placeholder refresh clamped to maximum",
-                ModSettingsRequest.MAX_PLACEHOLDER_REFRESH_MS, (int) settings.PLACEHOLDER.SERVER_REFRESH_MS.get());
+                ModSettingsRequest.MAX_PLACEHOLDER_REFRESH_MS, (int) settings.INTEGRATIONS.SERVER_REFRESH_MS.get());
         if (!r.passed()) return r;
         r = assertEquals("placeholder top count clamped to 100",
-                ModSettingsRequest.MAX_PLACEHOLDER_TOP_COUNT, (int) settings.PLACEHOLDER.TOP_COUNT.get());
+                ModSettingsRequest.MAX_PLACEHOLDER_TOP_COUNT, (int) settings.INTEGRATIONS.TOP_COUNT.get());
         if (!r.passed()) return r;
         return pass("sanitize() clamps all upper bounds");
     }
@@ -202,7 +208,7 @@ public class ModSettingsTests extends TestSuite {
     /**
      * The component-id lists must be normalized (entries trimmed, blanks dropped,
      * duplicates removed, null → empty list) and null values of Booleans and
-     * Placeholder settings must fall back to the setting's default.
+     * Integrations settings must fall back to the setting's default.
      */
     private TestResult test_sanitizeNormalizesListsAndPlaceholders() {
         BankSystemModSettings settings = new BankSystemModSettings();
@@ -210,10 +216,11 @@ public class ModSettingsTests extends TestSuite {
                 "  tfc:food  ", "", "tfc:food", "   ", "somemod:decay")));
         settings.BANK.ADDITIONAL_DEPOSIT_GATED_COMPONENTS.set(null);
         settings.BANK.CONFIRM_ITEMID_MERGE.set(null);
-        settings.PLACEHOLDER.PLAYER_REFRESH_MS.set(null);
-        settings.PLACEHOLDER.SERVER_REFRESH_MS.set(5000);
-        settings.PLACEHOLDER.TOP_COUNT.set(null);
-        settings.PLACEHOLDER.MONEY_FORMAT.set(null);
+        settings.INTEGRATIONS.PLAYER_REFRESH_MS.set(null);
+        settings.INTEGRATIONS.SERVER_REFRESH_MS.set(5000);
+        settings.INTEGRATIONS.TOP_COUNT.set(null);
+        settings.INTEGRATIONS.MONEY_FORMAT.set(null);
+        settings.INTEGRATIONS.DISCORD_ENABLED.set(null);
 
         ModSettingsRequest.sanitize(settings);
 
@@ -227,16 +234,19 @@ public class ModSettingsTests extends TestSuite {
                 Boolean.FALSE, settings.BANK.CONFIRM_ITEMID_MERGE.get());
         if (!r.passed()) return r;
         r = assertEquals("null PLAYER_REFRESH_MS falls back to its default",
-                settings.PLACEHOLDER.PLAYER_REFRESH_MS.getDefaultValue(), settings.PLACEHOLDER.PLAYER_REFRESH_MS.get());
+                settings.INTEGRATIONS.PLAYER_REFRESH_MS.getDefaultValue(), settings.INTEGRATIONS.PLAYER_REFRESH_MS.get());
         if (!r.passed()) return r;
         r = assertEquals("valid SERVER_REFRESH_MS untouched",
-                5000, (int) settings.PLACEHOLDER.SERVER_REFRESH_MS.get());
+                5000, (int) settings.INTEGRATIONS.SERVER_REFRESH_MS.get());
         if (!r.passed()) return r;
         r = assertEquals("null TOP_COUNT falls back to its default",
-                settings.PLACEHOLDER.TOP_COUNT.getDefaultValue(), settings.PLACEHOLDER.TOP_COUNT.get());
+                settings.INTEGRATIONS.TOP_COUNT.getDefaultValue(), settings.INTEGRATIONS.TOP_COUNT.get());
         if (!r.passed()) return r;
         r = assertEquals("null MONEY_FORMAT falls back to its default",
-                settings.PLACEHOLDER.MONEY_FORMAT.getDefaultValue(), settings.PLACEHOLDER.MONEY_FORMAT.get());
+                settings.INTEGRATIONS.MONEY_FORMAT.getDefaultValue(), settings.INTEGRATIONS.MONEY_FORMAT.get());
+        if (!r.passed()) return r;
+        r = assertEquals("null DISCORD_ENABLED falls back to its default (false)",
+                Boolean.FALSE, settings.INTEGRATIONS.DISCORD_ENABLED.get());
         if (!r.passed()) return r;
         return pass("sanitize() normalizes component lists and placeholder settings");
     }
@@ -247,21 +257,21 @@ public class ModSettingsTests extends TestSuite {
      */
     private TestResult test_sanitizeMoneyFormat() {
         BankSystemModSettings settings = new BankSystemModSettings();
-        String def = settings.PLACEHOLDER.MONEY_FORMAT.getDefaultValue();
+        String def = settings.INTEGRATIONS.MONEY_FORMAT.getDefaultValue();
 
-        settings.PLACEHOLDER.MONEY_FORMAT.set("EUR");
+        settings.INTEGRATIONS.MONEY_FORMAT.set("EUR");
         ModSettingsRequest.sanitize(settings);
-        TestResult r = assertEquals("format without %s reset to default", def, settings.PLACEHOLDER.MONEY_FORMAT.get());
+        TestResult r = assertEquals("format without %s reset to default", def, settings.INTEGRATIONS.MONEY_FORMAT.get());
         if (!r.passed()) return r;
 
-        settings.PLACEHOLDER.MONEY_FORMAT.set("   ");
+        settings.INTEGRATIONS.MONEY_FORMAT.set("   ");
         ModSettingsRequest.sanitize(settings);
-        r = assertEquals("blank format reset to default", def, settings.PLACEHOLDER.MONEY_FORMAT.get());
+        r = assertEquals("blank format reset to default", def, settings.INTEGRATIONS.MONEY_FORMAT.get());
         if (!r.passed()) return r;
 
-        settings.PLACEHOLDER.MONEY_FORMAT.set(" %s € ");
+        settings.INTEGRATIONS.MONEY_FORMAT.set(" %s € ");
         ModSettingsRequest.sanitize(settings);
-        r = assertEquals("valid format kept as-is (not trimmed)", " %s € ", settings.PLACEHOLDER.MONEY_FORMAT.get());
+        r = assertEquals("valid format kept as-is (not trimmed)", " %s € ", settings.INTEGRATIONS.MONEY_FORMAT.get());
         if (!r.passed()) return r;
         return pass("sanitize() validates MONEY_FORMAT");
     }
@@ -290,5 +300,105 @@ public class ModSettingsTests extends TestSuite {
         r = assertEquals("ServerBank setting missing from payload preserved", 33, (int) settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.get());
         if (!r.passed()) return r;
         return pass("Partial payloads only change the settings they contain");
+    }
+
+    // ---- Task #119: one-time migration into the Integrations group ----
+
+    /** Writes {@code json} to a temp file, loads it like load_globalSettings does, runs {@code body}, deletes the file. */
+    private TestResult withSettingsFile(String json, MigrationCase body) {
+        Path file = null;
+        try {
+            file = Files.createTempFile("banksystem_settings_migration", ".json");
+            Files.writeString(file, json);
+            BankSystemModSettings settings = new BankSystemModSettings();
+            new SettingsStore().loadFromFile(settings.getEditableGroups(), file.toFile());
+            return body.run(settings, file);
+        } catch (Exception e) {
+            return fail("Migration test threw " + e);
+        } finally {
+            try { if (file != null) Files.deleteIfExists(file); } catch (Exception ignored) {}
+        }
+    }
+
+    private interface MigrationCase {
+        TestResult run(BankSystemModSettings settings, Path file) throws Exception;
+    }
+
+    /** A pre-2.2.0 file: Placeholder.* and Utilities.SYNC_* are copied, and a re-save drops the old keys. */
+    private TestResult test_migrateIntegrationsOldFile() {
+        String json = "{\"Utilities\":{\"SAVE_INTERVAL_SECONDS\":9,\"SYNC_ADMIN_FLAG_WITH_PERMISSION\":true},"
+                + "\"Placeholder\":{\"PLAYER_REFRESH_MS\":2500,\"SERVER_REFRESH_MS\":40000,\"TOP_COUNT\":7,\"MONEY_FORMAT\":\"%s EUR\"}}";
+        return withSettingsFile(json, (settings, file) -> {
+            TestResult r = assertTrue("migration reports copied values", settings.migrateIntegrations(file));
+            if (!r.passed()) return r;
+            BankSystemModSettings.Integrations in = settings.INTEGRATIONS;
+            r = assertEquals("PLAYER_REFRESH_MS copied", 2500, (int) in.PLAYER_REFRESH_MS.get());
+            if (!r.passed()) return r;
+            r = assertEquals("SERVER_REFRESH_MS copied", 40000, (int) in.SERVER_REFRESH_MS.get());
+            if (!r.passed()) return r;
+            r = assertEquals("TOP_COUNT copied", 7, (int) in.TOP_COUNT.get());
+            if (!r.passed()) return r;
+            r = assertEquals("MONEY_FORMAT copied", "%s EUR", in.MONEY_FORMAT.get());
+            if (!r.passed()) return r;
+            r = assertTrue("SYNC_ADMIN_FLAG_WITH_PERMISSION copied", in.SYNC_ADMIN_FLAG_WITH_PERMISSION.get());
+            if (!r.passed()) return r;
+            r = assertTrue("new PLACEHOLDERS_ENABLED keeps its default (true)", in.PLACEHOLDERS_ENABLED.get());
+            if (!r.passed()) return r;
+            r = assertFalse("new DISCORD_ENABLED keeps its default (false)", in.DISCORD_ENABLED.get());
+            if (!r.passed()) return r;
+            r = assertEquals("unrelated Utilities value still loaded", 9L, (long) settings.UTILITIES.SAVE_INTERVAL_SECONDS.get());
+            if (!r.passed()) return r;
+
+            // Re-save like load_globalSettings does: registered groups only.
+            new SettingsStore().saveToFile(settings.getEditableGroups(), file.toFile());
+            JsonObject root = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+            r = assertTrue("rewritten file has Integrations", root.has("Integrations"));
+            if (!r.passed()) return r;
+            r = assertFalse("rewritten file has no Placeholder group", root.has("Placeholder"));
+            if (!r.passed()) return r;
+            r = assertFalse("rewritten file has no Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION",
+                    root.getAsJsonObject("Utilities").has("SYNC_ADMIN_FLAG_WITH_PERMISSION"));
+            if (!r.passed()) return r;
+            r = assertEquals("rewritten Integrations.TOP_COUNT", 7, root.getAsJsonObject("Integrations").get("TOP_COUNT").getAsInt());
+            if (!r.passed()) return r;
+            r = assertFalse("second migration is a no-op", settings.migrateIntegrations(file));
+            if (!r.passed()) return r;
+            return pass("Old Placeholder/Utilities keys migrated into Integrations; re-save drops them");
+        });
+    }
+
+    /** A file that already has Integrations is left alone, even if stale old keys are still present. */
+    private TestResult test_migrateIntegrationsAlreadyMigrated() {
+        String json = "{\"Integrations\":{\"TOP_COUNT\":3},\"Placeholder\":{\"TOP_COUNT\":9}}";
+        return withSettingsFile(json, (settings, file) -> {
+            TestResult r = assertFalse("migration skipped", settings.migrateIntegrations(file));
+            if (!r.passed()) return r;
+            r = assertEquals("Integrations value wins", 3, (int) settings.INTEGRATIONS.TOP_COUNT.get());
+            if (!r.passed()) return r;
+            r = assertEquals("file untouched", json, Files.readString(file));
+            if (!r.passed()) return r;
+            return pass("Already-migrated file left untouched; Integrations wins");
+        });
+    }
+
+    /** No old keys: nothing to migrate, defaults stay, no save requested. */
+    private TestResult test_migrateIntegrationsNoOldKeys() {
+        String json = "{\"Utilities\":{\"SAVE_INTERVAL_SECONDS\":9}}";
+        return withSettingsFile(json, (settings, file) -> {
+            TestResult r = assertFalse("migration reports nothing to do", settings.migrateIntegrations(file));
+            if (!r.passed()) return r;
+            BankSystemModSettings.Integrations in = settings.INTEGRATIONS;
+            r = assertEquals("TOP_COUNT default", in.TOP_COUNT.getDefaultValue(), in.TOP_COUNT.get());
+            if (!r.passed()) return r;
+            r = assertFalse("SYNC_ADMIN_FLAG_WITH_PERMISSION default (false)", in.SYNC_ADMIN_FLAG_WITH_PERMISSION.get());
+            if (!r.passed()) return r;
+            r = assertTrue("NUMISMATICS_ENABLED default (true)", in.NUMISMATICS_ENABLED.get());
+            if (!r.passed()) return r;
+            r = assertTrue("LIGHTMANS_CURRENCY_ENABLED default (true)", in.LIGHTMANS_CURRENCY_ENABLED.get());
+            if (!r.passed()) return r;
+            r = assertEquals("file untouched", json, Files.readString(file));
+            if (!r.passed()) return r;
+            return pass("No old keys: defaults kept, nothing to save");
+        });
     }
 }

@@ -522,7 +522,10 @@ public class BankSystemModBackend implements BankSystemAPI {
         }
 
         AdminFlagSync.migrateIfNeeded(); // Task #107: one-time push of admins to LuckPerms (master, setting on)
-        BankSystemPlaceholders.start(INSTANCES); // TAB / Placeholder API via ModUtilities
+        // api.MoneyFormat is shared with StockMarketPlaceholders: apply the pattern even with placeholders off.
+        net.kroia.banksystem.api.MoneyFormat.setPattern(INSTANCES.SERVER_SETTINGS.INTEGRATIONS.MONEY_FORMAT.get());
+        if (INSTANCES.SERVER_SETTINGS.INTEGRATIONS.PLACEHOLDERS_ENABLED.get())
+            BankSystemPlaceholders.start(INSTANCES); // TAB / Placeholder API via ModUtilities
         INSTANCES.SERVER_EVENTS.BANKSYSTEM_SETUP_COMPLETED.notifyListeners();
     }
 
@@ -932,13 +935,25 @@ public class BankSystemModBackend implements BankSystemAPI {
     public Collection<ExternalCurrencyProvider> getCurrencyProviders() {
         // Defensive snapshot — callers must not be able to mutate the registry through
         // the returned view, and iteration must be safe against concurrent registration.
-        return Collections.unmodifiableCollection(new ArrayList<>(CURRENCY_PROVIDERS.values()));
+        return CURRENCY_PROVIDERS.values().stream()
+                .filter(p -> providerEnabled(p.providerId())).toList();
     }
 
     @Override
     public @Nullable ExternalCurrencyProvider getCurrencyProvider(@Nullable String providerId) {
-        if (providerId == null || providerId.isEmpty()) return null;
+        if (providerId == null || providerId.isEmpty() || !providerEnabled(providerId)) return null;
         return CURRENCY_PROVIDERS.get(providerId);
+    }
+
+    /** Task #119: a provider switched off in Integrations behaves exactly like its mod being absent. */
+    private static boolean providerEnabled(String id) {
+        BankSystemModSettings s = INSTANCES.SERVER_SETTINGS;
+        if (s == null) return true; // before world load / client
+        return switch (id) {
+            case "numismatics" -> s.INTEGRATIONS.NUMISMATICS_ENABLED.get();
+            case "lightmanscurrency" -> s.INTEGRATIONS.LIGHTMANS_CURRENCY_ENABLED.get();
+            default -> true; // third-party API providers are not gated
+        };
     }
 
     /**

@@ -208,13 +208,14 @@ Server admins can edit the mod's `settings.json` in-game, without touching the f
 1. Run `/banksystem manage` (admin only) to open the banking settings window.
 2. Click **Mod Settings**.
 
-The screen lists every setting of the mod, grouped by category (Utilities, Player, Bank, Placeholders), with a matching editor per setting type (checkboxes, number fields, text fields). **Apply** validates and saves the values on the server (out-of-range values are clamped and the corrected values are shown), **Reload** re-fetches the current server state and **Defaults** resets the fields to the built-in defaults (nothing is saved until Apply is pressed). Closing the screen with unapplied changes asks whether to **Save** or **Discard** them; **Esc** on that popup returns to the settings screen.
+The screen lists every setting of the mod, grouped by category (Utilities, Player, Bank, Suspicious activity, Integrations), with a matching editor per setting type (checkboxes, number fields, text fields). **Apply** validates and saves the values on the server (out-of-range values are clamped and the corrected values are shown), **Reload** re-fetches the current server state and **Defaults** resets the fields to the built-in defaults (nothing is saved until Apply is pressed). Closing the screen with unapplied changes asks whether to **Save** or **Discard** them; **Esc** on that popup returns to the settings screen.
 
 Notes:
 
 - **Master-only:** the button is only shown when you are connected to the master server (or a regular single server). Only the master's `settings.json` can be edited; the server additionally rejects requests from non-admins regardless of the UI.
 - **Permission:** requires BankSystem admin status (the same permission as the other `/banksystem` admin commands).
 - **Restart markers:** settings that are only read once at server startup show an orange "⟳ Restart required" marker — the change is saved immediately but only takes effect after a server restart. This includes the volatile/deposit-gated component lists and the one-shot `CONFIRM_ITEMID_MERGE` / `CONFIRM_ITEMID_REPAIR` flags, which can be armed from this screen to approve a pending ItemID merge or world repair on the next restart.
+- **Integrations:** switches for placeholders, LuckPerms admin sync, Numismatics, Lightman's Currency and the Discord feed. A currency mod switched off behaves as if it were not installed: bound balances stay in that mod, frozen until it is switched back on. Only the placeholder switch and the top-list size need a restart. Each server reads its own `settings.json`, so a slave keeps the values in its own file. Settings files from older versions are moved into this group automatically.
 
 ---
 ## Blocks
@@ -293,7 +294,7 @@ Admin functions check these permission nodes, so a permission mod such as LuckPe
 
 Nodes only apply to players online on the server that runs the check; the console always passes.
 
-**Syncing the BankSystem admin flag with LuckPerms.** The server setting `SYNC_ADMIN_FLAG_WITH_PERMISSION` (Mod Settings → Utilities, default off) keeps the BankSystem admin flag and the LuckPerms node `banksystem.admin` in step, in both directions:
+**Syncing the BankSystem admin flag with LuckPerms.** The server setting `SYNC_ADMIN_FLAG_WITH_PERMISSION` (Mod Settings → Integrations, default off) keeps the BankSystem admin flag and the LuckPerms node `banksystem.admin` in step, in both directions:
 
 - `/banksystem op <player>` sets the flag and gives the player the node `banksystem.admin=true` in LuckPerms (this works for offline players too). `/banksystem deop <player>` clears the flag and removes the player's own `banksystem.admin` node.
 - Changing the node in LuckPerms (commands, web editor, a group) updates the flag straight away.

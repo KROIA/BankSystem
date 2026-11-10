@@ -2699,8 +2699,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      * <p>
      * On success:
      * <ul>
-     *   <li>If the provider is unavailable: the local {@code balance} and
-     *       {@code lockedBalance} are set to 0. The player has not lost money
+     *   <li>If the provider is unavailable (mod missing or disabled in Integrations
+     *       settings) and the row still holds locked funds or dust: refused with
+     *       FAILED_EXTERNAL_UNAVAILABLE. Both were already taken out of the external
+     *       account, so zeroing them would destroy money (Task #119).</li>
+     *   <li>If the provider is unavailable and locked = dust = 0: the local
+     *       {@code balance} is set to 0. The player has not lost money
      *       on the external side — they simply detached from it. The binding
      *       row is removed. {@code keepOnBankSystem} is ignored in this case
      *       because no safe transfer can be performed.</li>
@@ -2724,7 +2728,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      *                          fractional-dust loss accepted
      * @return SUCCESS in every reachable case when external is available or
      *         unavailable; FAILED_OVERFLOW when {@code keepOnBankSystem=false}
-     *         and the deposit-back would overflow external
+     *         and the deposit-back would overflow external; FAILED_EXTERNAL_UNAVAILABLE
+     *         when the provider is unavailable and locked/dust funds would be lost
      */
     public BankStatus unbindExternalAccount(int accountId, ItemID itemId, boolean keepOnBankSystem) {
         if (itemId == null || !itemId.isValid()) {
@@ -2748,13 +2753,22 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         ExternalCurrencyProvider provider = BankSystemMod.getAPI().getCurrencyProvider(row.ref().providerId());
         ExternalAccount external = (provider != null && provider.isAvailable()) ? provider.open(row.ref()) : null;
 
+        if (external == null && (row.lockedBalance() > 0 || row.dustBalance() > 0)) {
+            // Task #119: locked funds and dust were already withdrawn from the external
+            // account; zeroing them here would destroy them. Refuse until the provider is back.
+            warn("unbindExternalAccount on " + accountId + "/" + itemId + " refused: provider '"
+                    + row.ref().providerId() + "' is unavailable (mod missing or disabled in "
+                    + "Integrations settings) and the slot holds locked=" + row.lockedBalance()
+                    + " / dust=" + row.dustBalance() + ".");
+            return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+        }
         if (external == null) {
             // Provider unavailable — detach without access to funds. The user will
-            // need to reinstall the mod and re-bind to regain access.
+            // need to install or enable the mod and re-bind to regain access.
             warn("unbindExternalAccount on " + accountId + "/" + itemId + ": provider '"
-                    + row.ref().providerId() + "' is unavailable. Local balance will be set "
-                    + "to 0. External funds are not lost — reinstall the mod and re-bind to "
-                    + "regain access.");
+                    + row.ref().providerId() + "' is unavailable (mod missing or disabled in "
+                    + "Integrations settings). Local balance will be set to 0. External funds "
+                    + "are not lost — install or enable the mod and re-bind to regain access.");
             if (bank instanceof ServerBank serverBank) {
                 serverBank.writeLocalFieldsForUnbind_internal(0L, 0L);
             }

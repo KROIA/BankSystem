@@ -18,7 +18,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Task #107: opt-in two-way sync between the BankSystem admin flag and the LuckPerms node
- * {@link BankSystemPermissions#ADMIN} (setting {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION}).
+ * {@link BankSystemPermissions#ADMIN} (setting {@code Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION}).
  * Without the setting or without LuckPerms nothing here does anything.
  * <ul>
  *   <li>{@code /banksystem op|deop}: sets the flag, then writes the node ({@link #pushToLuckPerms}). Deop only
@@ -86,7 +86,7 @@ public final class AdminFlagSync {
     /** True if this server's own {@code SYNC_ADMIN_FLAG_WITH_PERMISSION} setting is on. */
     public static boolean isEnabled() {
         return BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_SETTINGS != null
-                && Boolean.TRUE.equals(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.SYNC_ADMIN_FLAG_WITH_PERMISSION.get());
+                && Boolean.TRUE.equals(BACKEND_INSTANCES.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get());
     }
 
     /**

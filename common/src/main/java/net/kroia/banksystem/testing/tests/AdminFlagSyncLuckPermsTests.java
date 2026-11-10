@@ -71,7 +71,7 @@ public class AdminFlagSyncLuckPermsTests extends TestSuite {
             BankSystemModBackend.Instances inst = BankSystemModBackend.getInstances_forTesting();
             if (getServer() == null || inst.SERVER_SETTINGS == null || manager() == null || inst.isSlaveServer)
                 return skip("no master server");
-            settingBefore = inst.SERVER_SETTINGS.UTILITIES.SYNC_ADMIN_FLAG_WITH_PERMISSION.get();
+            settingBefore = inst.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get();
             try {
                 return test.get();
             } finally {
@@ -261,7 +261,7 @@ public class AdminFlagSyncLuckPermsTests extends TestSuite {
     }
 
     private static void setSetting(boolean on) {
-        BankSystemModBackend.getInstances_forTesting().SERVER_SETTINGS.UTILITIES.SYNC_ADMIN_FLAG_WITH_PERMISSION.set(on);
+        BankSystemModBackend.getInstances_forTesting().SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.set(on);
     }
 
     private User fakeUser(String tag, boolean admin) {

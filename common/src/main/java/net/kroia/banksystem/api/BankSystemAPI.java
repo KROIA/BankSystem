@@ -109,7 +109,8 @@ public interface BankSystemAPI {
 
     /**
      * @return an immutable snapshot of every currently-registered
-     *         {@link ExternalCurrencyProvider}. Iteration order is unspecified.
+     *         {@link ExternalCurrencyProvider}, minus the built-in adapters switched off in
+     *         BankSystem's Integrations settings. Iteration order is unspecified.
      *         Never {@code null}; may be empty when no adapter has registered.
      * @since 2.0.5
      */
@@ -121,7 +122,7 @@ public interface BankSystemAPI {
      * @param providerId the {@link ExternalCurrencyProvider#providerId()} to find.
      *                   May be {@code null}, in which case {@code null} is returned.
      * @return the matching provider, or {@code null} if none is registered under
-     *         that id.
+     *         that id or it is switched off in BankSystem's Integrations settings.
      * @since 2.0.5
      */
     @Nullable ExternalCurrencyProvider getCurrencyProvider(@Nullable String providerId);

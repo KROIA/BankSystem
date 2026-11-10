@@ -70,7 +70,7 @@ public final class BankSystemPlaceholders {
      */
     public static void start(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
-        BankSystemModSettings.Placeholder settings = backend.SERVER_SETTINGS.PLACEHOLDER;
+        BankSystemModSettings.Integrations settings = backend.SERVER_SETTINGS.INTEGRATIONS;
         int playerMs = Math.max(1, settings.PLAYER_REFRESH_MS.get());
         int serverMs = Math.max(1, settings.SERVER_REFRESH_MS.get());
         int topCount = Math.max(0, settings.TOP_COUNT.get());
@@ -141,7 +141,7 @@ public final class BankSystemPlaceholders {
     private static void tick(MinecraftServer mcServer) {
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_BANK_MANAGER == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
             return;
-        BankSystemModSettings.Placeholder settings = BACKEND_INSTANCES.SERVER_SETTINGS.PLACEHOLDER;
+        BankSystemModSettings.Integrations settings = BACKEND_INSTANCES.SERVER_SETTINGS.INTEGRATIONS;
         MoneyFormat.setPattern(settings.MONEY_FORMAT.get());
         long now = System.currentTimeMillis();
         IAsyncBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();

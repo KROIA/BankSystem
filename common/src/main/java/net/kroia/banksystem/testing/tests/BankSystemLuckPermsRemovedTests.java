@@ -77,7 +77,7 @@ public class BankSystemLuckPermsRemovedTests extends TestSuite {
         if (!AutoTest.isEnabled())
             return skip("autotest runs only: phase 1 leaves the sync setting on");
         BankSystemModBackend.Instances inst = BankSystemModBackend.getInstances_forTesting();
-        inst.SERVER_SETTINGS.UTILITIES.SYNC_ADMIN_FLAG_WITH_PERMISSION.set(true);
+        inst.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.set(true);
         User admin = new User(UUID.randomUUID(), "LpRemovedAdmin");
         manager().addUser(admin);
         manager().setBanksystemAdminMode(admin.getUUID(), true);

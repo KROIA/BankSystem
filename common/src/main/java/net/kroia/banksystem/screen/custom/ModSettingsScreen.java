@@ -86,7 +86,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         public static final Component STATUS_SAVED = Component.translatable(PREFIX + "status.saved");
         public static final Component STATUS_FAILED = Component.translatable(PREFIX + "status.failed");
 
-        /** Heading label of a settings group ("Utilities", "Player", "ServerBank", "Placeholder"). */
+        /** Heading label of a settings group ("Utilities", "Player", "ServerBank", "Audit", "Integrations"). */
         public static Component group(String groupName) {
             return Component.translatable(PREFIX + "group." + groupName);
         }
@@ -138,9 +138,11 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
      *       automatically reset to false after use. Editing them here is exactly how
      *       an admin approves a pending merge/repair without editing settings.json —
      *       set to true, apply, then restart the server once.</li>
-     *   <li>{@code Placeholder.TOP_COUNT}: read once when the placeholders are
+     *   <li>{@code Integrations.PLACEHOLDERS_ENABLED}: checked once at server start
+     *       (placeholder registration is skipped when off).</li>
+     *   <li>{@code Integrations.TOP_COUNT}: read once when the placeholders are
      *       registered during server startup (it fixes the number of
-     *       {@code top_<n>} slots). The other Placeholder settings are read live.</li>
+     *       {@code top_<n>} slots). The other Integrations settings are read live.</li>
      * </ul>
      * All other registered settings are read live at their point of use (autosave /
      * snapshot timers and logging flags per call or tick, starting balance per user
@@ -151,7 +153,8 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             "ServerBank.ADDITIONAL_DEPOSIT_GATED_COMPONENTS",
             "ServerBank.CONFIRM_ITEMID_MERGE",
             "ServerBank.CONFIRM_ITEMID_REPAIR",
-            "Placeholder.TOP_COUNT"
+            "Integrations.PLACEHOLDERS_ENABLED",
+            "Integrations.TOP_COUNT"
     );
 
     /**
@@ -472,7 +475,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
                 });
             }
             else if (type == String.class) {
-                // Free-text settings (e.g. Placeholder.MONEY_FORMAT): stored as typed;
+                // Free-text settings (e.g. Integrations.MONEY_FORMAT): stored as typed;
                 // the server validates on apply.
                 Setting<String> stringSetting = (Setting<String>) setting;
                 textBox = new TextBox();

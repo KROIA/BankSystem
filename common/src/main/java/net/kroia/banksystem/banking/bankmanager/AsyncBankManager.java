@@ -346,7 +346,7 @@ public class AsyncBankManager implements IAsyncBankManager {
                     }
                     // Task #107: permission sync from a slave. Server-internal (null sender), only from a
                     // TRUSTED slave (untrusted ones are already refused by isRequestAllowed; checked again
-                    // here) and only while the master's own SYNC_ADMIN_FLAG_WITH_PERMISSION is on.
+                    // here) and only while the master's own Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION is on.
                     if(playerSender == null && !slaveID.isEmpty() && !isFromUntrustedSlave(slaveID)
                             && net.kroia.banksystem.util.AdminFlagSync.isEnabled()) {
                         boolean changed = bankManager.isBanksystemAdmin(param.uuid) != param.bool;

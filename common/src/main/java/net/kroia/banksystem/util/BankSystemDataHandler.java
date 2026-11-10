@@ -772,6 +772,12 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         {
             globalSettingsLoaded = true;
             settingsLoadState = LoadState.LOADED;
+            // Task #119: pre-2.2.0 files keep Placeholder.* / Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION;
+            // copy them into Integrations once and re-save so the old keys disappear.
+            if (BACKEND_INSTANCES.SERVER_SETTINGS.migrateIntegrations(filePath)) {
+                info("Migrated Placeholder settings and SYNC_ADMIN_FLAG_WITH_PERMISSION into the Integrations group.");
+                save_globalSettings(filePath);
+            }
             applyVolatileComponentSettings();
             return true;
         }

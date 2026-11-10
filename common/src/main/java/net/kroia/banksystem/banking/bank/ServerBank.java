@@ -253,10 +253,10 @@ public class ServerBank implements ServerSaveable, IServerBank {
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
             BACKEND_INSTANCES.LOGGER.warn("[ServerBank] Bound slot " + accountId + "/"
                     + itemID + " references external provider '" + row.ref().providerId()
-                    + "' which is not currently available (mod uninstalled or adapter not "
-                    + "loaded). Reads return degraded values (free=0, locked=" + row.lockedBalance()
+                    + "' which is not currently available (mod missing or disabled in Integrations "
+                    + "settings). Reads return degraded values (free=0, locked=" + row.lockedBalance()
                     + "); writes fail with FAILED_EXTERNAL_UNAVAILABLE. The binding row is "
-                    + "preserved — reinstall the mod to resume operation. "
+                    + "preserved — install or enable the mod to resume operation. "
                     + "This warning fires once per slot per session.");
         }
     }
