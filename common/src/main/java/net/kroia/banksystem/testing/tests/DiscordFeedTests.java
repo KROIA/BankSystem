@@ -1,5 +1,6 @@
 package net.kroia.banksystem.testing.tests;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.architectury.platform.Platform;
@@ -14,6 +15,7 @@ import net.kroia.banksystem.api.ledger.LedgerActor;
 import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
+import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.minecraft.compat.BankSystemDiscord;
@@ -21,6 +23,7 @@ import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.discord.DiscordWebhooks;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -28,6 +31,7 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,6 +39,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
@@ -45,11 +50,17 @@ import java.util.function.Supplier;
  * <p>
  * <b>Server type:</b> BOTH; master cases skip on a slave and the slave case skips on the master.
  * Synthetic accounts and company only; ledger / flag rows written here are deleted afterwards.
+ * <p>
+ * {@code live_webhook_posts} runs only when env var {@code MC_DISCORD_TEST_WEBHOOK_FILE} is set (path to a text file
+ * holding the webhook URL, so the URL never lands in the matrix launch JSON): it posts one embed per type to that
+ * webhook through the real {@link DiscordWebhooks} pipeline, to check the look in a Discord channel.
  */
 public class DiscordFeedTests extends TestSuite {
 
     private static final UUID PLAYER = UUID.fromString("00000000-0000-0000-0000-00000000d119");
     private static final String MARKER = "discord-feed-test-marker";
+    private static final String LIVE = "BankSystem live webhook test";
+    private static final UUID LIVE_PLAYER = UUID.fromString("00000000-0000-0000-0000-0000001d119e");
 
     private ISyncServerBankManager manager;
     private LiveStateGuard stateGuard;
@@ -73,6 +84,7 @@ public class DiscordFeedTests extends TestSuite {
         addTest("config_file_lists_all_types", () -> master(this::configFile));
         addTest("default_templates_hide_account", this::defaultTemplates);
         addTest("slave_posts_nothing", this::slave);
+        addTest("live_webhook_posts", () -> master(this::live));
     }
 
     @Override
@@ -225,6 +237,118 @@ public class DiscordFeedTests extends TestSuite {
         return posts.isEmpty() ? pass("slave: ledger write and direct onRow post nothing") : fail("posts " + posts);
     }
 
+    /**
+     * Posts one embed per type to the webhook URL in the file named by env {@code MC_DISCORD_TEST_WEBHOOK_FILE} through the real
+     * {@link DiscordWebhooks} config and sender. Swaps both config files for the test and restores them byte for byte.
+     * The URL is a secret: it never goes into a result, log or exception text.
+     */
+    private TestResult live() {
+        String file = System.getenv("MC_DISCORD_TEST_WEBHOOK_FILE");
+        if (file == null || file.isBlank()) return skip("env MC_DISCORD_TEST_WEBHOOK_FILE not set");
+        String url;
+        try {
+            url = Files.readString(Path.of(file.strip()), StandardCharsets.UTF_8).strip();
+        } catch (IOException | RuntimeException e) { // no e text: keep file content out of the result
+            return fail("env MC_DISCORD_TEST_WEBHOOK_FILE: cannot read " + file + " (" + e.getClass().getSimpleName() + ")");
+        }
+        if (url.isEmpty()) return fail("env MC_DISCORD_TEST_WEBHOOK_FILE: " + file + " is blank");
+        Path dir = Platform.getConfigFolder().resolve("modutilities").resolve("discord");
+        Path hooksFile = dir.resolve("webhooks.json"), routesFile = dir.resolve(BankSystemMod.MOD_ID + ".json");
+        byte[] oldHooks, oldRoutes;
+        try {
+            oldHooks = Files.exists(hooksFile) ? Files.readAllBytes(hooksFile) : null;
+            oldRoutes = Files.exists(routesFile) ? Files.readAllBytes(routesFile) : null;
+        } catch (IOException e) {
+            return fail("cannot back up the Discord config: " + e);
+        }
+        Setting<Boolean> setting = BankSystemModBackend.getInstances_forTesting().SERVER_SETTINGS.INTEGRATIONS.DISCORD_ENABLED;
+        boolean before = setting.get();
+        BiConsumer<String, Map<String, String>> previous = BankSystemDiscord.sink;
+        TestResult result;
+        boolean restored;
+        try {
+            result = livePosts(url, dir, hooksFile, routesFile, setting);
+        } catch (IOException e) {
+            result = fail("cannot write the Discord config: " + e);
+        } finally {
+            setting.set(before);
+            BankSystemDiscord.sink = previous;
+            restored = put(hooksFile, oldHooks) & put(routesFile, oldRoutes); // both, even if the first fails
+            DiscordWebhooks.reload();
+        }
+        return restored ? result : fail("could not restore webhooks.json / banksystem.json in " + dir + "; fix by hand");
+    }
+
+    /** Writes {@code content} to {@code file}, or deletes it if null (it did not exist). @return false on an I/O error */
+    private static boolean put(Path file, @Nullable byte[] content) {
+        try {
+            if (content == null) Files.deleteIfExists(file);
+            else Files.write(file, content);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** Body of {@link #live()}: writes the test config, posts 10 types, waits for the sender. Caller restores. */
+    private TestResult livePosts(String url, Path dir, Path hooksFile, Path routesFile, Setting<Boolean> setting) throws IOException {
+        JsonObject hooks = new JsonObject();
+        hooks.addProperty("live-test", url.trim());
+        JsonObject hooksRoot = new JsonObject();
+        hooksRoot.add("webhooks", hooks);
+        JsonObject types = new JsonObject();
+        for (String t : BankSystemDiscord.TYPES) {
+            JsonObject route = new JsonObject();
+            JsonArray names = new JsonArray();
+            names.add("live-test");
+            route.addProperty("enabled", true);
+            route.add("webhooks", names);
+            route.addProperty("minAmount", 0);
+            types.add(t, route);
+        }
+        JsonObject routesRoot = new JsonObject();
+        routesRoot.add("types", types);
+        Files.createDirectories(dir);
+        Files.writeString(hooksFile, hooksRoot.toString(), StandardCharsets.UTF_8);
+        Files.writeString(routesFile, routesRoot.toString(), StandardCharsets.UTF_8);
+        DiscordWebhooks.reload();
+        if (!DiscordWebhooks.isActive()) return fail("DiscordWebhooks inactive after reload (webhook URL rejected?)");
+
+        // other suites write ledger rows concurrently: only rows of this test reach Discord
+        Map<String, Integer> forwarded = new ConcurrentHashMap<>();
+        BankSystemDiscord.sink = (type, v) -> {
+            if (!LIVE.equals(v.get("note")) && !LIVE.equals(v.get("details"))) return;
+            forwarded.merge(type, 1, Integer::sum);
+            DiscordWebhooks.post(BankSystemMod.MOD_ID, type, v);
+        };
+        setting.set(true);
+        int cid = company.getCompanyId();
+        LedgerActor player = LedgerActor.player(LIVE_PLAYER, "LiveTestPlayer");
+        List<TransactionLogRecord> rows = List.of(
+                liveRow(holderAccount, LedgerType.DEPOSIT, 150_000L, player, null, null),
+                liveRow(holderAccount, LedgerType.WITHDRAW, -42_050L, player, null, null),
+                liveRow(holderAccount, LedgerType.TRANSFER, -75_000L, player, companyAccount, null),
+                liveRow(companyAccount, LedgerType.TRANSFER, 75_000L, player, holderAccount, null),
+                liveRow(holderAccount, LedgerType.PAYOUT, 120_000L, player, companyAccount, cid),
+                liveRow(holderAccount, LedgerType.DIVIDEND, 3_375L, player, companyAccount, cid),
+                liveRow(companyAccount, LedgerType.SHARE_STAMP, -10_000L, player, null, cid),
+                liveRow(holderAccount, LedgerType.ADMIN_ADD, 50_000L, LedgerActor.admin(LIVE_PLAYER, "LiveTestPlayer"), null, null),
+                liveRow(holderAccount, LedgerType.STARTING_BALANCE, 10_000L, LedgerActor.system(), null, null));
+        int flag = SuspicionChecks.LARGE_NOTE_WITHDRAWAL;
+        onServer(() -> {
+            TransactionLedger.writeAll(rows);
+            BankSystemMod.getAPI().getEvents().getSuspicionFlaggedEvent().notifyListeners(new SuspicionFlaggedEvent(
+                    holderAccount, flag, SuspicionChecks.typeName(flag), 1, 42_050L, null, LIVE, System.currentTimeMillis()));
+            BankSystemDiscord.flush(); // posts the coalesced dividend
+        });
+        for (String t : BankSystemDiscord.TYPES)
+            if (forwarded.getOrDefault(t, 0) != 1) return fail("forwarded per type " + forwarded);
+        // ponytail: no public drain hook on DiscordWebhooks; fixed wait for the sender (batching, rate limits).
+        // Queued items keep their URL, so a slower send still goes out after the caller's restore.
+        pump(10_000);
+        return pass("posted 10 types to the live webhook; check the channel");
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private TestResult master(Supplier<TestResult> body) {
@@ -240,6 +364,11 @@ public class DiscordFeedTests extends TestSuite {
     private TransactionLogRecord row(int account, LedgerType type, long amount, @Nullable Integer other, @Nullable Integer companyId) {
         return new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID, account, null, type, money, amount, other, companyId,
                 System.currentTimeMillis(), MARKER);
+    }
+
+    private TransactionLogRecord liveRow(int account, LedgerType type, long amount, LedgerActor actor,
+                                      @Nullable Integer other, @Nullable Integer companyId) {
+        return TransactionLogRecord.of(account, type, money, amount, actor, other, companyId, null, LIVE, null);
     }
 
     /**
