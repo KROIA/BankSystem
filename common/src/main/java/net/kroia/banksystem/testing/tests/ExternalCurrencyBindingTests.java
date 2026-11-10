@@ -7,6 +7,7 @@ import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.currency.ExternalAccount;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
@@ -14,6 +15,7 @@ import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.binding.BindingKey;
 import net.kroia.banksystem.banking.binding.BindingRow;
+import net.kroia.banksystem.networking.currency.BindExternalAccountRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.testing.StubCurrencyProvider;
@@ -95,6 +97,7 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         addTest("membership_sync_propagates_to_external_account", this::testMembershipSyncPropagates);
         addTest("unbind_refused_while_unavailable_with_locked", this::testUnbindRefusedWhileUnavailableWithLocked);
         addTest("user_deletion_payout_counts_only_local_part", this::testPayoutCountsOnlyLocalPart); // Task #136
+        addTest("bind_request_refuses_foreign_external_account", this::testBindRequestRefusesForeignRef);
         // Cascade cleanup must run LAST: it deletes the shared testAccountNr, which would
         // strand any subsequent test that references it.
         addTest("cascade_cleanup_on_account_and_bank_removal", this::testCascadeCleanup);
@@ -489,6 +492,38 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         }
         return pass("Shared/personal mismatch refused symmetrically with FAILED_WRONG_INSTANCE_TYPE, "
                 + "no rows created");
+    }
+
+    // -----------------------------------------------------------------------
+    // Bind request: a non-admin with MANAGE may only bind an external account that the
+    // provider lists as bindable for them. Binding someone else's would let them drain it.
+    // -----------------------------------------------------------------------
+    private TestResult testBindRequestRefusesForeignRef() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        User owner = manager.getUserByUUID(TEST_OWNER);
+        if (account == null || owner == null) return fail("Test account or owner missing");
+        account.addUser(owner, BankPermission.getAllPermissions());
+        try {
+            StubCurrencyProvider.create(STUB_KEY_A, true, 500L).setOwner(TEST_MEMBER); // the victim's
+            StubCurrencyProvider.create(STUB_KEY_B, true, 0L).setOwner(TEST_OWNER);
+            BindExternalAccountRequest req = new BindExternalAccountRequest();
+
+            BankStatus foreign = req.handleOnMasterServer(new BindExternalAccountRequest.InputData(testAccountNr, slotItemA,
+                    new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "victim", true)), "", TEST_OWNER).join().status();
+            if (foreign == BankStatus.SUCCESS) return fail("bound another player's external account");
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null && bindings.hasBinding(testAccountNr, slotItemA))
+                return fail("binding row written for another player's external account");
+
+            BankStatus own = req.handleOnMasterServer(new BindExternalAccountRequest.InputData(testAccountNr, slotItemB,
+                    new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_B, "mine", true)), "", TEST_OWNER).join().status();
+            if (own != BankStatus.SUCCESS) return fail("binding the sender's own external account returned " + own);
+            return pass("foreign external account refused (" + foreign + "), own account bound");
+        } finally {
+            account.removeUser(TEST_OWNER);
+        }
     }
 
     // -----------------------------------------------------------------------

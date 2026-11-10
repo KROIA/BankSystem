@@ -196,7 +196,8 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
     public @NotNull List<ExternalAccountRef> listBindableAccounts(@NotNull UUID player) {
         List<ExternalAccountRef> refs = new ArrayList<>();
         for (StubAccount account : accounts.values()) {
-            refs.add(account.ref());
+            if (account.owner == null || account.owner.equals(player))
+                refs.add(account.ref());
         }
         return refs;
     }
@@ -247,6 +248,8 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
         private long balance;
         private long overflowCeiling = Long.MAX_VALUE;
         private final Set<UUID> members = new HashSet<>();
+        /** Only this player may bind the account ({@link #listBindableAccounts}); null = everyone. */
+        private @Nullable UUID owner;
 
         private StubAccount(@NotNull String accountKey, boolean shared, long initialBalance) {
             this.accountKey = accountKey;
@@ -345,6 +348,12 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
         /** @return the account key this stub was created with. */
         public @NotNull String getAccountKey() {
             return accountKey;
+        }
+
+        /** Restricts {@link #listBindableAccounts} for this account to {@code player}. */
+        public @NotNull StubAccount setOwner(@Nullable UUID player) {
+            this.owner = player;
+            return this;
         }
     }
 }
