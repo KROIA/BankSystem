@@ -599,18 +599,30 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             if(!tag.contains("Slots"))
                 return false;
             ListTag inventoryTag = NbtCompat.getList(tag, "Slots", CompoundTag.TAG_COMPOUND);
+            // Issue #81: a bad entry is skipped with a warning and never stops the loop;
+            // aborting lost every later slot on the next save. Still returns true: the
+            // readable slots were loaded and callers must keep the player's data.
+            String where = "Terminal at " + blockEntity.getBlockPos().toShortString() + ": skipped slot entry ";
             for(int i = 0; i < inventoryTag.size(); i++)
             {
                 CompoundTag itemTag = NbtCompat.getCompound(inventoryTag, i);
-                if(!itemTag.contains("Slot") || !itemTag.contains("ItemStack"))
-                    return false;
+                if(!itemTag.contains("Slot") || !itemTag.contains("ItemStack")) {
+                    warn(where + i + ": missing Slot or ItemStack");
+                    continue;
+                }
                 int slot = NbtCompat.getInt(itemTag, "Slot");
+                if(slot < 0 || slot >= inventory.size()) {
+                    warn(where + i + ": slot " + slot + " is out of range 0-" + (inventory.size() - 1));
+                    continue;
+                }
                 CompoundTag stackTag = NbtCompat.getCompound(itemTag, "ItemStack");
                 ItemStack stack = ItemStackNbt.parse(pRegistries,
                                 stackTag)
                         .orElse(ItemStack.EMPTY);
-                if(stack.isEmpty())
-                    return false;
+                if(stack.isEmpty()) {
+                    warn(where + i + ": slot " + slot + " holds an unreadable item (removed mod?): " + stackTag);
+                    continue;
+                }
                 inventory.set(slot, stack);
             }
             return true;

@@ -105,6 +105,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.SlaveCompanyMirrorTests());
         // Task #55 (v2.1.1) — persistence dirty-flag contract (timer-gated save safety).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.SaveDirtyFlagTests());
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.TerminalInventoryLoadTests()); // Issue #81
         // Task #108 — admin flag sync against a real LuckPerms, then "LuckPerms removed" phase 1/2.
         // Last: the removed-suite's phase 1 leaves the sync setting on (autotest runs only).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.AdminFlagSyncLuckPermsTests());
