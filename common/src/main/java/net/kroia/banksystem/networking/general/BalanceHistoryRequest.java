@@ -51,6 +51,10 @@ public class BalanceHistoryRequest extends BankSystemGenericRequest<BalanceHisto
         return BalanceHistoryRequest.class.getSimpleName();
     }
 
+    /** Issue #85: history queries queue on the DB worker. */
+    @Override
+    public long getTimeoutMs() { return SLOW_READ_TIMEOUT_MS; }
+
     @Override
     public CompletableFuture<List<BalanceHistoryRecord>> handleOnServer(Query input, ServerPlayer sender) {
         return handleOnMasterServer(input, "", sender.getUUID());

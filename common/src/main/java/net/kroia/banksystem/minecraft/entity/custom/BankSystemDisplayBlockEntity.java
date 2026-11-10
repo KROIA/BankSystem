@@ -40,6 +40,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
@@ -138,7 +139,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     private Label historyStatusLabel;
     private final List<Frame> legendFrames = new ArrayList<>();
     private final List<ItemView> legendIcons = new ArrayList<>();
-    private boolean historyDataPending = false;
+    private volatile boolean historyDataPending = false;
     private volatile List<BalanceHistoryRecord> pendingHistoryRecords = null;
     private CompoundTag pendingChartState = null;
     private String pendingStatusText = null;
@@ -845,15 +846,14 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         if (historyDataPending) return;
         historyDataPending = true;
 
+        CompletableFuture<List<BalanceHistoryRecord>> reply;
         if (BACKEND.BALANCE_HISTORY_MANAGER != null) {
-            BACKEND.BALANCE_HISTORY_MANAGER.getHistory(
+            reply = BACKEND.BALANCE_HISTORY_MANAGER.getHistory(
                     Optional.empty(),
                     Optional.of(new EqualityFilter(accountNumber)),
                     Optional.empty(),
                     0
-            ).thenAccept(records -> {
-                pendingHistoryRecords = (records != null) ? records : List.of();
-            });
+            );
         } else if (BACKEND.isSlaveServer) {
             // Display blocks fetch the full history (0 = unlimited); Task #40's bucketed
             // downsampling is opt-in via a positive maxPoints — kept off here so the
@@ -864,12 +864,14 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
                     Long.MAX_VALUE,
                     0
             );
-            BankSystemNetworking.BALANCE_HISTORY_REQUEST
-                    .sendRequestToMaster(query)
-                    .thenAccept(records -> {
-                        pendingHistoryRecords = (records != null) ? records : List.of();
-                    });
+            reply = BankSystemNetworking.BALANCE_HISTORY_REQUEST.sendRequestToMaster(query);
+        } else {
+            return;
         }
+        reply.whenComplete((records, ex) -> {
+            if (ex == null) pendingHistoryRecords = (records != null) ? records : List.of();
+            else historyDataPending = false; // Issue #85: failed or timed-out reply, retry on the next poll
+        });
     }
 
     private void applyHistoryData(List<BalanceHistoryRecord> records) {

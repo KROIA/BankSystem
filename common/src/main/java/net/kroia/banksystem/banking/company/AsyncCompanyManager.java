@@ -1187,6 +1187,10 @@ public final class AsyncCompanyManager {
             return Request.class.getName();
         }
 
+        /** Issue #85: stats and history read the DB; the requester never refunds, and a false failure invites a repeated dividend. */
+        @Override
+        public long getTimeoutMs() { return SLOW_READ_TIMEOUT_MS; }
+
         @Override
         public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
             String playerName = "";
@@ -2469,12 +2473,12 @@ public final class AsyncCompanyManager {
         if (server == null) {
             // Physical client connected to a dedicated server — C2S over the game
             // connection (same path AsyncBankManager uses from the client side).
-            return Request.instance.sendRequestToServer(input);
+            return nullOnFailure(input, Request.instance.sendRequestToServer(input));
         }
         if (net.kroia.modutilities.networking.multi_server.MultiServerManager.isRunning()
                 && !net.kroia.modutilities.networking.multi_server.MultiServerManager.isMaster()) {
             // True slave server — standard S2S request hop to the bank master.
-            return Request.instance.sendRequestToMaster(input);
+            return nullOnFailure(input, Request.instance.sendRequestToMaster(input));
         }
         // Local master (dedicated master or singleplayer integrated server) — the MSM
         // sendToMaster path would drop the packet, so short-circuit to the handler on
@@ -2489,6 +2493,20 @@ public final class AsyncCompanyManager {
             }
         });
         return out;
+    }
+
+    /**
+     * Issue #85: a failed remote request (timeout, lost link) completes with null like the local path,
+     * so {@link #dispatchInput} never completes exceptionally and every helper's future completes.
+     * Helpers null-check the output; for value functions null means "outcome unknown", not "not applied".
+     */
+    private static CompletableFuture<OutputData> nullOnFailure(InputData input, CompletableFuture<OutputData> sent) {
+        return sent.exceptionally(t -> {
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                BACKEND_INSTANCES.LOGGER.warn("[AsyncCompanyManager] " + input.function + " got no answer: "
+                        + net.kroia.banksystem.networking.multi_server.TransferStatusRequest.cause(t));
+            return null;
+        });
     }
 
     /** Task #1 (v2.1.0) — slave helper: request market creation. */

@@ -604,6 +604,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         applyButton.setClickable(false);
         ModSettingsRequest.InputData input = new ModSettingsRequest.InputData(ModSettingsRequest.Action.GET, "");
         BankSystemNetworking.MOD_SETTINGS_REQUEST.sendRequestToServer(input)
+                .exceptionally(t -> null) // Issue #85: timeout or lost link shows STATUS_FAILED
                 .thenAccept(output -> Minecraft.getInstance().execute(() -> handleResponse(output, Texts.STATUS_LOADED.getString())));
     }
 
@@ -621,6 +622,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         applyButton.setClickable(false);
         ModSettingsRequest.InputData input = new ModSettingsRequest.InputData(ModSettingsRequest.Action.SET, payload);
         BankSystemNetworking.MOD_SETTINGS_REQUEST.sendRequestToServer(input)
+                .exceptionally(t -> null)
                 .thenAccept(output -> Minecraft.getInstance().execute(() -> handleResponse(output, Texts.STATUS_SAVED.getString())));
     }
 

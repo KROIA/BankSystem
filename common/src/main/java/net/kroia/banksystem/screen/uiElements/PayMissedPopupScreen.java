@@ -37,6 +37,7 @@ public class PayMissedPopupScreen extends BankSystemGuiScreen {
     private static final Component RESULT_INSUFFICIENT = Component.translatable(PREFIX + "result_insufficient");
     private static final Component RESULT_CURRENCY_MISSING = Component.translatable(PREFIX + "result_currency_missing");
     private static final Component RESULT_FAILED = Component.translatable(PREFIX + "result_failed");
+    private static final Component RESULT_UNCONFIRMED = Component.translatable("gui.banksystem.payment_unconfirmed");
     private static final String RESULT_OK_KEY = PREFIX + "result_ok";
 
     private static final int COLOR_OK = 0xFF10b981;
@@ -118,9 +119,9 @@ public class PayMissedPopupScreen extends BankSystemGuiScreen {
         AsyncCompanyManager.payMissedAsync(companyId, schedule.getScheduleId(), amount, caller)
                 .thenAccept(out -> Minecraft.getInstance().execute(() -> {
                     if (out == null) {
-                        statusLabel.setText(RESULT_FAILED.getString());
+                        // Issue #85: no answer (timeout, lost link): the payment may have gone through, so no retry button.
+                        statusLabel.setText(RESULT_UNCONFIRMED.getString());
                         statusLabel.setTextColor(COLOR_ERR);
-                        payButton.setEnabled(true);
                         return;
                     }
                     switch (out.resultCode()) {

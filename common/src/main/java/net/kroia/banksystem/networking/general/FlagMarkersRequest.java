@@ -43,6 +43,10 @@ public class FlagMarkersRequest extends BankSystemGenericRequest<Integer, FlagMa
         return FlagMarkersRequest.class.getSimpleName();
     }
 
+    /** Issue #85: flag queries queue on the DB worker. */
+    @Override
+    public long getTimeoutMs() { return SLOW_READ_TIMEOUT_MS; }
+
     @Override
     public CompletableFuture<Result> handleOnServer(Integer input, ServerPlayer sender) {
         return handleOnMasterServer(input, "", sender.getUUID());

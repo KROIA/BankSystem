@@ -583,6 +583,7 @@
   "gui.banksystem.pay_missed_popup.result_insufficient": "资金不足。",
   "gui.banksystem.pay_missed_popup.result_currency_missing": "公司资金不足，无法执行此付款。",
   "gui.banksystem.pay_missed_popup.result_failed": "补付失败。",
+  "gui.banksystem.payment_unconfirmed": "银行服务器无响应。付款可能已经完成；再次付款前请先查看历史记录。",
   "gui.banksystem.pay_missed_popup.result_ok": "已支付 %s。",
   "gui.banksystem.company_management_screen.tab.statistics": "统计",
   "gui.banksystem.company_management_screen.tf_24h": "24小时",

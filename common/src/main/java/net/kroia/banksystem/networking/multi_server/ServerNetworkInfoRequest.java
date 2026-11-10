@@ -58,9 +58,10 @@ public class ServerNetworkInfoRequest extends BankSystemGenericRequest<ServerNet
         for(String slave : slaves)
         {
             // Wrap each slave future so a single failure doesn't cancel everything
-            slavesFutures.add(ServerInfoRequest.sendRequest(slave).exceptionally(ex ->
-                    new ServerInfoRequest.ServerInfo(false, false, "unknown", slave, "", 0, List.of(), "Error: " + ex.getMessage())
-            ));
+            slavesFutures.add(ServerInfoRequest.sendRequest(slave).exceptionally(ex -> {
+                BACKEND_INSTANCES.LOGGER.warn("[ServerNetworkInfoRequest] no server info from slave '" + slave + "': " + TransferStatusRequest.cause(ex));
+                return new ServerInfoRequest.ServerInfo(false, false, "unknown", slave, "", 0, List.of(), "Error: no answer from this server");
+            }));
         }
 
         Set<String> trustedSlaves = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getTrustedSlaveServers();
@@ -89,6 +90,10 @@ public class ServerNetworkInfoRequest extends BankSystemGenericRequest<ServerNet
     public String getRequestTypeID() {
         return ServerNetworkInfoRequest.class.getName();
     }
+
+    /** Issue #85: the master waits on a ServerInfoRequest to every slave, so this must outwait that hop. */
+    @Override
+    public long getTimeoutMs() { return SLOW_READ_TIMEOUT_MS; }
 
 
     @Override

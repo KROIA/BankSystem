@@ -4,7 +4,9 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
+import net.kroia.modutilities.networking.client_server.arrs.RequestManager;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
@@ -12,6 +14,15 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<IN, OUT> {
+
+    /**
+     * Issue #85: requester wait for slow requests, returned by their {@link #getTimeoutMs()} override.
+     * Reads that queue on the DB worker or wait on a further hop get it. Requests whose requester never refunds,
+     * and where a false failure invites a retry of a value action, also get it. Value requests that refund or
+     * park on failure keep {@link RequestManager#DEFAULT_TIMEOUT_MS}.
+     */
+    // ponytail: outlasts a backup pause; a routed client→slave→master read waits the full 150 s if the master link drops (the client timer is the only timer)
+    public static final long SLOW_READ_TIMEOUT_MS = DatabaseManager.DEFAULT_PAUSE_SAFETY_TIMEOUT_MS + RequestManager.DEFAULT_TIMEOUT_MS;
 
     protected static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {

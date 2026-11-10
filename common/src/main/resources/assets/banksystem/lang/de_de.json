@@ -583,6 +583,7 @@
   "gui.banksystem.pay_missed_popup.result_insufficient": "Unzureichende Deckung.",
   "gui.banksystem.pay_missed_popup.result_currency_missing": "Das Unternehmen hat nicht genügend Mittel, um diese Zahlung auszuführen.",
   "gui.banksystem.pay_missed_popup.result_failed": "Nachzahlung fehlgeschlagen.",
+  "gui.banksystem.payment_unconfirmed": "Keine Antwort vom Bankserver. Die Zahlung wurde eventuell trotzdem ausgeführt; prüfe den Verlauf, bevor du erneut zahlst.",
   "gui.banksystem.pay_missed_popup.result_ok": "%s gezahlt.",
   "gui.banksystem.company_management_screen.tab.statistics": "Statistiken",
   "gui.banksystem.company_management_screen.tf_24h": "24h",

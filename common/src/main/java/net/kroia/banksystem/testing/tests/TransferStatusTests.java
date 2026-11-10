@@ -1,12 +1,24 @@
 package net.kroia.banksystem.testing.tests;
 
 import io.netty.buffer.Unpooled;
+import net.kroia.banksystem.banking.company.AsyncCompanyManager;
+import net.kroia.banksystem.data.DatabaseManager;
+import net.kroia.banksystem.minecraft.command.AsyncBankSystemCommandHandler;
+import net.kroia.banksystem.networking.general.AuditPageRequest;
+import net.kroia.banksystem.networking.general.BalanceHistoryRequest;
+import net.kroia.banksystem.networking.general.FlagMarkersRequest;
 import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
+import net.kroia.banksystem.networking.multi_server.ServerInfoRequest;
+import net.kroia.banksystem.networking.multi_server.ServerNetworkInfoRequest;
 import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.networking.multi_server.TransferStatusRequest.OutputData;
 import net.kroia.banksystem.networking.multi_server.TransferStatusRequest.Results;
+import net.kroia.banksystem.networking.multi_server.WithdrawItemsFromBankRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
+import net.kroia.modutilities.networking.client_server.arrs.RequestManager;
 import net.kroia.modutilities.networking.client_server.arrs.RequestNotSentException;
 import net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException;
 import net.kroia.modutilities.testing.TestCategory;
@@ -16,6 +28,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.Bootstrap;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -54,6 +67,7 @@ public class TransferStatusTests extends TestSuite {
         addTest("resolve_pending_stays_pending", this::testResolvePending);
         addTest("deposit_mapping", this::testDepositMapping);
         addTest("wire_roundtrip", this::testWire);
+        addTest("request_timeouts", this::testRequestTimeouts);
     }
 
     @Override
@@ -212,5 +226,21 @@ public class TransferStatusTests extends TestSuite {
         OutputData out = new OutputData(TransferStatusRequest.APPLIED, Map.of(A, 3L));
         req.encodeOutput(buf, out);
         return assertEquals("output roundtrip", out, req.decodeOutput(buf));
+    }
+
+    /** Issue #85: slow requests outlast a backup pause and their inner hop; value requests that refund or park keep the default. */
+    private TestResult testRequestTimeouts() {
+        long slow = BankSystemGenericRequest.SLOW_READ_TIMEOUT_MS;
+        if (slow <= DatabaseManager.DEFAULT_PAUSE_SAFETY_TIMEOUT_MS) return fail("slow requests must outlast a backup pause");
+        List<GenericRequest<?, ?>> slowOnes = List.of(new AuditPageRequest(), new BalanceHistoryRequest(), new FlagMarkersRequest(),
+                new ServerNetworkInfoRequest(), AsyncCompanyManager.Request.instance, AsyncBankSystemCommandHandler.Request.instance);
+        for (GenericRequest<?, ?> r : slowOnes)
+            if (r.getTimeoutMs() != slow) return fail(r.getRequestTypeID() + " must use SLOW_READ_TIMEOUT_MS");
+        List<GenericRequest<?, ?>> defaultOnes = List.of(new DepositItemsInBankRequest(), new WithdrawItemsFromBankRequest(),
+                new TransferStatusRequest(), new ServerInfoRequest());
+        for (GenericRequest<?, ?> r : defaultOnes)
+            if (r.getTimeoutMs() != RequestManager.DEFAULT_TIMEOUT_MS) return fail(r.getRequestTypeID() + " must keep the default timeout");
+        return assertTrue("network overview must outwait its per-slave hop",
+                new ServerNetworkInfoRequest().getTimeoutMs() > new ServerInfoRequest().getTimeoutMs() + 1_000L);
     }
 }

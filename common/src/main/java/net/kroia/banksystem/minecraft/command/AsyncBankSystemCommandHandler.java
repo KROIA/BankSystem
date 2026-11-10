@@ -175,6 +175,10 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
             return Request.class.getName();
         }
 
+        /** Issue #85: the audit report runs on the DB worker; the slave never refunds, and a false failure invites a repeated money command. */
+        @Override
+        public long getTimeoutMs() { return SLOW_READ_TIMEOUT_MS; }
+
         @Override
         public CompletableFuture<OutputData> sendRequestToServer(InputData input)
         {

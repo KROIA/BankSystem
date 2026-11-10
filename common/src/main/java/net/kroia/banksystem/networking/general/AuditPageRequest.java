@@ -64,6 +64,10 @@ public class AuditPageRequest extends BankSystemGenericRequest<AuditPageRequest.
         return AuditPageRequest.class.getSimpleName();
     }
 
+    /** Issue #85: a ledger page queues on the DB worker. */
+    @Override
+    public long getTimeoutMs() { return SLOW_READ_TIMEOUT_MS; }
+
     @Override
     public CompletableFuture<Page> handleOnServer(Query input, ServerPlayer sender) {
         return handleOnMasterServer(input, "", sender.getUUID());

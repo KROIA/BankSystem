@@ -583,6 +583,7 @@
   "gui.banksystem.pay_missed_popup.result_insufficient": "Unzureichende Deckung.",
   "gui.banksystem.pay_missed_popup.result_currency_missing": "De Firma het nöd gnug Mittel, um die Zahlig uuszfüehre.",
   "gui.banksystem.pay_missed_popup.result_failed": "Nachzahlung fehlgeschlagen.",
+  "gui.banksystem.payment_unconfirmed": "Kei Antwort vom Bankserver. D Zahlig isch villicht glich dure; lueg zersch in Verlauf, bevor du nomal zahlsch.",
   "gui.banksystem.pay_missed_popup.result_ok": "%s gezahlt.",
   "gui.banksystem.company_management_screen.tab.statistics": "Statistike",
   "gui.banksystem.company_management_screen.tf_24h": "24h",
