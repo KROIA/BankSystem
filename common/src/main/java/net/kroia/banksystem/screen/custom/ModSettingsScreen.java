@@ -13,6 +13,7 @@ import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.CloseButton;
+import net.kroia.modutilities.gui.elements.FeatureToggleSection;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
@@ -50,6 +51,9 @@ import java.util.Set;
  * Booleans become checkboxes, Integer/Long/Float become numeric text boxes,
  * ItemStacks get an item view + creative-inventory item picker, {@code List<String>}
  * becomes a comma-separated text box and Strings become a plain text box.
+ * Exception: the Integrations group is laid out by hand as collapsible on/off
+ * sections ({@link #buildIntegrationSections}); new settings there must be added
+ * explicitly.
  * <p>
  * <b>DEVELOPER NOTE — when adding a new setting:</b>
  * <ol>
@@ -97,6 +101,10 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         /** Hover tooltip of one setting. */
         public static Component settingTooltip(String groupName, String settingName) {
             return Component.translatable(PREFIX + "setting." + groupName + "." + settingName + ".tooltip");
+        }
+        /** Description text of an Integrations section (one label per "\n"-separated line). */
+        public static Component settingDescription(String groupName, String settingName) {
+            return Component.translatable(PREFIX + "setting." + groupName + "." + settingName + ".description");
         }
     }
 
@@ -273,10 +281,54 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             heading.setHeight(ELEMENT_HEIGHT);
             listView.addChild(heading);
 
+            if (group == workingCopy.INTEGRATIONS) {
+                buildIntegrationSections(workingCopy.INTEGRATIONS);
+                continue;
+            }
             for (Setting<?> setting : group.getAllSettings()) {
                 listView.addChild(new SettingRow(group, setting));
             }
         }
+    }
+
+    /**
+     * Task #119: the Integrations group is laid out by hand as one collapsible
+     * {@link FeatureToggleSection} per integration; the header check box is the
+     * integration's on/off setting.
+     */
+    private void buildIntegrationSections(BankSystemModSettings.Integrations group) {
+        FeatureToggleSection placeholders = addSection(group, group.PLACEHOLDERS_ENABLED);
+        for (Setting<?> setting : List.of(group.PLAYER_REFRESH_MS, group.SERVER_REFRESH_MS, group.TOP_COUNT, group.MONEY_FORMAT))
+            placeholders.addChild(new SettingRow(group, setting));
+        addSection(group, group.SYNC_ADMIN_FLAG_WITH_PERMISSION);
+        addSection(group, group.NUMISMATICS_ENABLED);
+        addSection(group, group.LIGHTMANS_CURRENCY_ENABLED);
+        addSection(group, group.DISCORD_ENABLED);
+    }
+
+    /** Adds a section titled with the toggle's setting label, its description lines and a binding for the toggle. */
+    private FeatureToggleSection addSection(SettingsGroup group, Setting<Boolean> toggle) {
+        FeatureToggleSection section = new FeatureToggleSection(Texts.setting(group.getName(), toggle.getName()).getString());
+        // Header marker replaces the SettingRow marker for the toggle itself (static, like RESTART_REQUIRED_SETTINGS).
+        section.setRestartRequired(RESTART_REQUIRED_SETTINGS.contains(group.getName() + "." + toggle.getName()));
+        // Also fires on refreshFields(); handleResponse clears dirty after that (same as CheckBox).
+        section.setOnFeatureToggled(enabled -> dirty = true);
+        // Labels do not wrap: the lang text carries its own line breaks.
+        for (String line : Texts.settingDescription(group.getName(), toggle.getName()).getString().split("\n")) {
+            Label label = new Label(line);
+            label.setTextColor(STATUS_COLOR_NEUTRAL);
+            section.addChild(label);
+        }
+        bindings.add(new FieldBinding() {
+            @Override public void loadFromSetting() {
+                section.setFeatureEnabled(Boolean.TRUE.equals(toggle.get()));
+            }
+            @Override public void storeToSetting() {
+                toggle.set(section.isFeatureEnabled());
+            }
+        });
+        listView.addChild(section);
+        return section;
     }
 
     /**

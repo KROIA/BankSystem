@@ -64,12 +64,6 @@ A freshly created `settings.json` looks like this:
     "BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL": 20,
     "BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL": 20
   },
-  "Placeholder": {
-    "PLAYER_REFRESH_MS": 1000,
-    "SERVER_REFRESH_MS": 30000,
-    "TOP_COUNT": 10,
-    "MONEY_FORMAT": "$%s"
-  },
   "Audit": {
     "LAUNDERING_FLAG_ENABLED": true,
     "LAUNDERING_MIN_AMOUNT": 1000000,
@@ -90,6 +84,17 @@ A freshly created `settings.json` looks like this:
     "MONEY_SUPPLY_COOLDOWN_HOURS": 6,
     "DAILY_DIGEST_ENABLED": true,
     "DIGEST_TOP_N": 10
+  },
+  "Integrations": {
+    "PLACEHOLDERS_ENABLED": true,
+    "PLAYER_REFRESH_MS": 1000,
+    "SERVER_REFRESH_MS": 30000,
+    "TOP_COUNT": 10,
+    "MONEY_FORMAT": "$%s",
+    "SYNC_ADMIN_FLAG_WITH_PERMISSION": false,
+    "NUMISMATICS_ENABLED": true,
+    "LIGHTMANS_CURRENCY_ENABLED": true,
+    "DISCORD_ENABLED": false
   }
 }
 ```
@@ -131,20 +136,6 @@ A freshly created `settings.json` looks like this:
 | `BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL` | number | `20` | Interval in game ticks between work cycles of the [Bank Upload Block](Usage.md#bank-upload-block) (20 ticks = 1 second). |
 
 ---
-## Placeholder Section
-
-Settings for the optional placeholder support (TAB, Placeholder API). The placeholder names themselves are fixed; see [Placeholders](Placeholders.md) for the full list.
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `PLAYER_REFRESH_MS` | number | `1000` | How often (ms) the cached per-player values (balance, locked, total, account number) are refreshed. |
-| `SERVER_REFRESH_MS` | number | `30000` | How often (ms) the server-wide values (circulation, account counts, richest players, rank) are refreshed. |
-| `TOP_COUNT` | number | `10` | Number of `top_<n>_…` richest-player slots (0–100). **Restart required.** |
-| `MONEY_FORMAT` | text | `$%s` | Display pattern for money values; `%s` is replaced by the number, e.g. `%s €`. A value without `%s` is reset to the default. |
-
-Older settings files with the previous `PLAYER_BALANCE` … `SERVER_CIRCULATION_JSON` entries load fine; those entries are ignored.
-
----
 ## Audit Section
 
 Suspicious-activity flags ([Administration](Administration.md#suspicious-activity-flags)) and the [audit digest](Administration.md#audit-digest). Read live on the master server; slaves ignore this section. Money amounts are **whole dollars** (not cents).
@@ -170,6 +161,27 @@ Suspicious-activity flags ([Administration](Administration.md#suspicious-activit
 | `MONEY_SUPPLY_COOLDOWN_HOURS` | number | `6` | At most one money-supply flag in this many hours (`0`–`8760`). |
 | `DAILY_DIGEST_ENABLED` | boolean | `true` | Write the daily [audit digest](Administration.md#audit-digest) for the previous day. |
 | `DIGEST_TOP_N` | number | `10` | Accounts listed under top cash gainers in a digest (`1`–`100`). |
+
+---
+## Integrations Section
+
+On/off switches for the optional integrations with other mods and services, plus the placeholder settings. In the **Mod Settings** screen every integration is a collapsible section: the check box in its header is the switch, a click on the header shows its settings. While a switch is off, the settings below it are greyed out.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `PLACEHOLDERS_ENABLED` | boolean | `true` | Provides the [placeholders](Placeholders.md) for TAB / Placeholder API. **Restart required.** |
+| `PLAYER_REFRESH_MS` | number | `1000` | How often (ms) the cached per-player values (balance, locked, total, account number) are refreshed. |
+| `SERVER_REFRESH_MS` | number | `30000` | How often (ms) the server-wide values (circulation, account counts, richest players, rank) are refreshed. |
+| `TOP_COUNT` | number | `10` | Number of `top_<n>_…` richest-player slots (0–100). **Restart required.** |
+| `MONEY_FORMAT` | text | `$%s` | Display pattern for money values; `%s` is replaced by the number, e.g. `%s €`. A value without `%s` is reset to the default. |
+| `SYNC_ADMIN_FLAG_WITH_PERMISSION` | boolean | `false` | Keeps the BankSystem admin flag and the LuckPerms node `banksystem.admin` in sync, in both directions. Does nothing without LuckPerms. |
+| `NUMISMATICS_ENABLED` | boolean | `true` | Lets bank accounts bind to Create: Numismatics accounts. Off behaves as if Numismatics were not installed: bound balances stay in Numismatics, frozen until the switch is on again. |
+| `LIGHTMANS_CURRENCY_ENABLED` | boolean | `true` | The same for Lightman's Currency. |
+| `DISCORD_ENABLED` | boolean | `false` | Posts bank events to Discord webhooks (master server only). The webhooks are configured in `config/modutilities/discord/banksystem.json`. |
+
+All switches except `PLACEHOLDERS_ENABLED` take effect immediately. Every server reads the values from its own `settings.json`; the Mod Settings screen edits the master's file.
+
+Settings files from versions before 2.2.0 are migrated automatically on the first start: the old `Placeholder` section and `Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION` are moved into `Integrations` with their values, and the new switches start at their defaults. Older entries `PLAYER_BALANCE` … `SERVER_CIRCULATION_JSON` are ignored.
 
 ---
 ## Volatile & Deposit-Gated Item Components

@@ -66,10 +66,11 @@ Every money placeholder also has a `_raw` variant without separator or symbol, e
 ---
 ## Settings
 
-The placeholder settings are in the `Placeholder` section of [settings.json](Configuration.md) and can also be edited in-game in the **Mod Settings** screen.
+The placeholder settings are in the `Integrations` section of [settings.json](Configuration.md#integrations-section) and can also be edited in-game in the **Mod Settings** screen, under **Integrations → Placeholders enabled**. Settings files from versions before 2.2.0 had them in a `Placeholder` section; they are moved automatically on the first start.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| `PLACEHOLDERS_ENABLED` | boolean | `true` | Provides the placeholders. When off, BankSystem does not provide them. **Requires a server restart.** |
 | `PLAYER_REFRESH_MS` | number | `1000` | How often the player placeholder values are refreshed, in milliseconds. Valid range `100`–`86400000`. |
 | `SERVER_REFRESH_MS` | number | `30000` | How often the server placeholder values (circulation, counts, average, richest-players list) are refreshed, in milliseconds. Valid range `100`–`86400000`. |
 | `TOP_COUNT` | number | `10` | Number of `top_<n>` slots in the richest-players list. Valid range `0`–`100`. **Requires a server restart.** |
