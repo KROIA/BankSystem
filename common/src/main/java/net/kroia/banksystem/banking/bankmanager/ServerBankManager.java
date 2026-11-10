@@ -40,6 +40,7 @@ import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRe
 import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.banksystem.util.MoneyDenominationOptimizer;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
@@ -570,8 +571,21 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         return removeUserWithPayout(userUUID) != null;
     }
 
-    /** Task #127: what a user-deletion payout could not hand out, and why ({@code reason} null when all of it arrived). */
-    public record PayoutResult(Map<ItemID, Long> undelivered, @Nullable String reason) {}
+    /**
+     * Task #127: what a user-deletion payout could not hand out, and why ({@code reason} null when all of it arrived).
+     * Task #136: raw units per bank item, like the balances. {@code delivered}: slave transfer_id → what that slave handed
+     * out, in chain order (the master's own drop is the rest of the payout). {@code unknownTransferId}: the DROP whose
+     * outcome stayed unknown; its items are in {@code undelivered}.
+     */
+    public record PayoutResult(Map<ItemID, Long> undelivered, @Nullable String reason,
+                               Map<String, Map<ItemID, Long>> delivered, @Nullable String unknownTransferId) {
+        public PayoutResult(Map<ItemID, Long> undelivered, @Nullable String reason) {
+            this(undelivered, reason, Map.of(), null);
+        }
+    }
+
+    /** Task #136: one physical item of a payout is {@code raw} units of the balance in {@code bank}. */
+    public record PayoutUnit(ItemID bank, long raw) {}
 
     /**
      * {@link #removeUser}, plus the payout. The future completes once delivery is known and the ledger rows are
@@ -587,7 +601,6 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             LedgerActor actor = TransactionLedger.currentActor();
 
             // Collect non-zero balances from accounts that will be deleted or are personal accounts of the removed user
-            Map<ItemID, Long> itemsToDrop = new HashMap<>();
             Map<Integer, Map<ItemID, Long>> balances = new LinkedHashMap<>(); // Task #127: per account, for the ledger
             List<Integer> emptyAccounts = new ArrayList<>();
             List<Integer> personalAccountsToDrop = new ArrayList<>();
@@ -599,7 +612,6 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 User personalOwner = account.getPersonalBankOwner();
                 if (personalOwner != null && personalOwner.getUUID().equals(userUUID)) {
                     collectAccountBalances(account, balances.computeIfAbsent(entry.getKey(), k -> new HashMap<>()));
-                    collectAccountBalances(account, itemsToDrop);
                     personalAccountsToDrop.add(entry.getKey());
                     continue;
                 }
@@ -614,11 +626,19 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                             continue;
                         }
                         collectAccountBalances(account, balances.computeIfAbsent(entry.getKey(), k -> new HashMap<>()));
-                        collectAccountBalances(account, itemsToDrop);
                         emptyAccounts.add(entry.getKey());
                     }
                 }
             }
+
+            // Task #136: raw balances to item counts, with the slot ratio (read before the binding rows are dropped below).
+            // What is below one item cannot be handed out.
+            Map<ItemID, Long> itemsToDrop = new HashMap<>(), fractions = new HashMap<>();
+            Map<ItemID, PayoutUnit> units = new HashMap<>();
+            balances.forEach((nr, items) -> items.forEach((id, raw) -> {
+                long rest = toItems(id, raw, BankAccountBindings.getRawUnitsPerItem(nr, id), itemsToDrop, units);
+                if (rest > 0) fractions.merge(id, rest, Long::sum);
+            }));
 
             // Drop collected items to the player before deleting accounts
             CompletableFuture<PayoutResult> delivery = itemsToDrop.isEmpty()
@@ -646,7 +666,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
             BACKEND_INSTANCES.SERVER_EVENTS.USER_REMOVED.notifyListeners(user);
             info("Removed user with UUID: " + userUUID);
-            return delivery.thenApply(r -> {
+            return delivery.thenApply(counts -> {
+                PayoutResult r = inRawUnits(counts, units, fractions);
                 logDeletePayout(balances, r, userUUID, actor);
                 return r;
             });
@@ -660,19 +681,50 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      * Task #109 / #127: ledger rows for the balances of a deleted user's accounts. Per item, the undelivered amount is
      * taken from that item's account rows in order: that part is an ACCOUNT_DELETE_LOSS row (value destroyed, note gives
      * the reason), the rest an ACCOUNT_DELETE_PAYOUT row. Public for the in-game test.
+     * <p>
+     * Task #136: the LOSS rows carry {@code unknownTransferId} as ref. Per item the payout is drained from a queue: the
+     * master's own drop first (ref null), then each slave's leg (ref = its transfer_id); one PAYOUT row per ref.
      */
     public void logDeletePayout(Map<Integer, Map<ItemID, Long>> balances, PayoutResult result, UUID deletedUser, LedgerActor actor) {
         Map<ItemID, Long> lost = new HashMap<>(result.undelivered());
         String note = "user deleted: " + deletedUser;
+        String unknown = result.unknownTransferId();
+        Map<ItemID, Long> total = new HashMap<>();
+        balances.values().forEach(b -> b.forEach((id, n) -> total.merge(id, n, Long::sum)));
+        Map<ItemID, Deque<AbstractMap.SimpleEntry<String, Long>>> sources = new HashMap<>();
+        total.forEach((id, sum) -> {
+            Deque<AbstractMap.SimpleEntry<String, Long>> q = new ArrayDeque<>();
+            long legs = 0;
+            for (Map.Entry<String, Map<ItemID, Long>> leg : result.delivered().entrySet()) {
+                long n = leg.getValue().getOrDefault(id, 0L);
+                if (n > 0) { q.add(new AbstractMap.SimpleEntry<>(leg.getKey(), n)); legs += n; }
+            }
+            long paid = sum - Math.min(sum, lost.getOrDefault(id, 0L));
+            q.addFirst(new AbstractMap.SimpleEntry<>(null, Math.max(0L, paid - legs))); // the queue holds >= paid
+            sources.put(id, q);
+        });
         for (Map.Entry<Integer, Map<ItemID, Long>> account : balances.entrySet()) {
             for (Map.Entry<ItemID, Long> e : account.getValue().entrySet()) {
                 long loss = Math.min(e.getValue(), lost.getOrDefault(e.getKey(), 0L));
                 lost.merge(e.getKey(), -loss, Long::sum);
-                if (e.getValue() > loss)
-                    TransactionLedger.logRow(account.getKey(), LedgerType.ACCOUNT_DELETE_PAYOUT, e.getKey(), e.getValue() - loss, actor, null, note);
-                if (loss > 0)
+                if (loss > 0) {
                     TransactionLedger.logRow(account.getKey(), LedgerType.ACCOUNT_DELETE_LOSS, e.getKey(), loss, actor, null,
-                            note + "; not delivered: " + result.reason());
+                            note + "; not delivered: " + result.reason(), unknown);
+                    if (unknown != null) // the items may have arrived after all: flag it, like a parked withdraw DROP
+                        net.kroia.banksystem.banking.ledger.AdminAudit.raise(account.getKey(),
+                                net.kroia.banksystem.banking.ledger.SuspicionChecks.TRANSFER_PARKED, 2, loss, unknown,
+                                "user deletion DROP outcome unknown, logged as lost: " + e.getKey().getName() + " " + loss);
+                }
+                Deque<AbstractMap.SimpleEntry<String, Long>> q = sources.get(e.getKey());
+                for (long pay = e.getValue() - loss; pay > 0; ) {
+                    AbstractMap.SimpleEntry<String, Long> head = q.peekFirst();
+                    long n = Math.min(pay, head.getValue());
+                    if (n > 0)
+                        TransactionLedger.logRow(account.getKey(), LedgerType.ACCOUNT_DELETE_PAYOUT, e.getKey(), n, actor, null, note, head.getKey());
+                    pay -= n;
+                    if (n == head.getValue()) q.pollFirst();
+                    else head.setValue(head.getValue() - n);
+                }
             }
         }
         if (!result.undelivered().isEmpty())
@@ -682,13 +734,18 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     /**
      * Collects all non-zero balances (free + locked) from the given bank account into the target map.
+     * Task #136 (user-deletion payout only): a bound slot counts only what BankSystem itself holds, its locked amount
+     * and dust (as unbind sees them). Its free balance is in the external mod's account, which the deletion leaves
+     * alone. Public for the in-game test.
      */
-    private void collectAccountBalances(ServerBankAccount account, Map<ItemID, Long> target) {
+    public void collectAccountBalances(ServerBankAccount account, Map<ItemID, Long> target) {
+        BankAccountBindings bindings = BankAccountBindings.get();
         for (Map.Entry<ItemID, IServerBank> bankEntry : account.getAllBanks().entrySet()) {
             ItemID itemID = bankEntry.getKey();
             ISyncServerBank bank = bankEntry.getValue();
             if (bank == null) continue;
-            long totalBalance = bank.getTotalBalance();
+            BindingRow row = bindings == null ? null : bindings.getBinding(account.getAccountNumber(), itemID);
+            long totalBalance = row != null ? row.lockedBalance() + row.dustBalance() : bank.getTotalBalance();
             if (totalBalance > 0) {
                 target.merge(itemID, totalBalance, Long::sum);
             }
@@ -791,31 +848,91 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     /**
      * Task #127: drops items to the player (forceDrop): on this server first, then on a multi-server master on each
      * connected slave in turn with what is left. Completes with what was not delivered; never fails.
+     * Task #136: in item counts (the result's maps too); {@link #inRawUnits} turns it into raw units.
      */
     private static CompletableFuture<PayoutResult> dropItemsToPlayer(UUID playerUUID, Map<ItemID, Long> items) {
         Map<ItemID, Long> remaining = new HashMap<>(DropItemsInPlayerInventoryRequest.dropItems(UtilitiesPlatform.getServer(), playerUUID, items, true));
         remaining.values().removeIf(v -> v <= 0);
         List<String> slaves = MultiServerManager.isRunning() && MultiServerManager.isMaster()
                 ? new ArrayList<>(MultiServerManager.getConnectedSlaveIDs()) : List.of();
-        // never fails: any throw (also a synchronous one from sendToSlave) reports the rest as unknown, so the ledger rows still get written
+        Map<String, Map<ItemID, Long>> legs = new LinkedHashMap<>(); // Task #136: filled by the chain, one slave at a time
+        // never fails: any throw reports the rest as unknown, so the ledger rows still get written
         return CompletableFuture.completedFuture(slaves.iterator())
-                .thenCompose(it -> dropOnSlaves(playerUUID, remaining, it))
-                .exceptionally(ex -> new PayoutResult(remaining, "outcome unknown: " + TransferStatusRequest.cause(ex)));
+                .thenCompose(it -> dropOnSlaves(playerUUID, remaining, it, legs))
+                .exceptionally(ex -> {
+                    Map<ItemID, Long> left = new HashMap<>(remaining);
+                    legs.values().forEach(leg -> leg.forEach((id, n) -> left.merge(id, -n, Long::sum)));
+                    left.values().removeIf(v -> v <= 0);
+                    return new PayoutResult(left, "outcome unknown: " + TransferStatusRequest.cause(ex), legs, null);
+                });
     }
 
     /**
      * One slave per step, each with its own transfer id. sendToSlave (#126) resolves "not sent" and NOT_APPLIED to the
      * full map and APPLIED to the slave's remainder; it fails only when the outcome stays unknown: the chain stops there.
+     * Task #136: what a slave delivered goes to {@code legs} under its transfer id.
      */
-    private static CompletableFuture<PayoutResult> dropOnSlaves(UUID playerUUID, Map<ItemID, Long> remaining, Iterator<String> slaves) {
-        if (remaining.isEmpty()) return CompletableFuture.completedFuture(new PayoutResult(Map.of(), null));
-        if (!slaves.hasNext()) return CompletableFuture.completedFuture(new PayoutResult(remaining, "player offline"));
+    private static CompletableFuture<PayoutResult> dropOnSlaves(UUID playerUUID, Map<ItemID, Long> remaining, Iterator<String> slaves,
+                                                                Map<String, Map<ItemID, Long>> legs) {
+        if (remaining.isEmpty()) return CompletableFuture.completedFuture(new PayoutResult(Map.of(), null, legs, null));
+        if (!slaves.hasNext()) return CompletableFuture.completedFuture(new PayoutResult(remaining, "player offline", legs, null));
         String slaveID = slaves.next();
         String transferId = TransferJournal.newTransferId();
-        return DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, playerUUID, new HashMap<>(remaining), true, transferId)
-                .handle((notDropped, ex) -> ex == null ? dropOnSlaves(playerUUID, notDroppedOf(remaining, notDropped), slaves)
-                        : CompletableFuture.completedFuture(new PayoutResult(remaining, "outcome unknown, transfer " + transferId)))
+        // thenCompose: a synchronous throw from sendToSlave also ends up in handle, as unknown under this transfer id
+        return CompletableFuture.completedFuture(slaveID)
+                .thenCompose(s -> DropItemsInPlayerInventoryRequest.sendToSlave(s, playerUUID, new HashMap<>(remaining), true, transferId))
+                .handle((notDropped, ex) -> {
+                    if (ex != null)
+                        return CompletableFuture.completedFuture(new PayoutResult(remaining, "outcome unknown, transfer " + transferId, legs, transferId));
+                    Map<ItemID, Long> left = notDroppedOf(remaining, notDropped), leg = new HashMap<>();
+                    remaining.forEach((id, n) -> { if (n > left.getOrDefault(id, 0L)) leg.put(id, n - left.getOrDefault(id, 0L)); });
+                    if (!leg.isEmpty()) legs.put(transferId, leg);
+                    return dropOnSlaves(playerUUID, left, slaves, legs);
+                })
                 .thenCompose(f -> f);
+    }
+
+    /**
+     * Task #136: the physical items a raw balance pays out. Money (cents) is split into notes, any other item gives
+     * raw / ratio items. Adds them to {@code counts} and what one of them is worth to {@code units}; returns the raw rest
+     * below one item, which cannot be handed out. Public for the in-game test.
+     */
+    public static long toItems(ItemID bank, long raw, long ratio, Map<ItemID, Long> counts, Map<ItemID, PayoutUnit> units) {
+        // ponytail: one unit per physical item (first wins); the same item in two accounts with different binding ratios
+        // gets the first ratio, so only the LOSS/PAYOUT split of that item can be off (the rows still sum to the balances)
+        if (MoneyItem.isMoney(bank)) {
+            MoneyDenominationOptimizer.SplitResult split = MoneyDenominationOptimizer.split(raw);
+            split.counts().forEach((note, n) -> {
+                counts.merge(note, n, Long::sum);
+                units.putIfAbsent(note, new PayoutUnit(bank, note.getStack().getItem() instanceof MoneyItem m ? m.worth() : 0L));
+            });
+            return split.leftover();
+        }
+        if (raw >= ratio) {
+            counts.merge(bank, raw / ratio, Long::sum);
+            units.putIfAbsent(bank, new PayoutUnit(bank, ratio));
+        }
+        return raw % ratio;
+    }
+
+    /** Task #136: a {@link #dropItemsToPlayer} result back in raw units per bank item; the {@code fractions} are undelivered too. */
+    private static PayoutResult inRawUnits(PayoutResult counts, Map<ItemID, PayoutUnit> units, Map<ItemID, Long> fractions) {
+        Map<ItemID, Long> undelivered = toRaw(counts.undelivered(), units);
+        fractions.forEach((id, n) -> undelivered.merge(id, n, Long::sum));
+        String reason = fractions.isEmpty() ? counts.reason()
+                : (counts.reason() == null ? "" : counts.reason() + "; ") + "less than one item";
+        Map<String, Map<ItemID, Long>> delivered = new LinkedHashMap<>();
+        counts.delivered().forEach((transferId, leg) -> delivered.put(transferId, toRaw(leg, units)));
+        return new PayoutResult(undelivered, reason, delivered, counts.unknownTransferId());
+    }
+
+    private static Map<ItemID, Long> toRaw(Map<ItemID, Long> counts, Map<ItemID, PayoutUnit> units) {
+        Map<ItemID, Long> raw = new HashMap<>();
+        counts.forEach((id, n) -> {
+            PayoutUnit u = units.get(id);
+            if (u != null) raw.merge(u.bank(), n * u.raw(), Long::sum);
+        });
+        return raw;
     }
 
     /** The slave's not-dropped map, capped at what was sent (the reply comes from another server); null = nothing dropped. */

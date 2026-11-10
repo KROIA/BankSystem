@@ -113,9 +113,15 @@ public final class TransactionLedger implements ITransactionLedger {
     /** Generic row; {@code balance_after} is looked up on the master. */
     public static void logRow(int accountNumber, LedgerType type, ItemID item, long amount,
                            LedgerActor actor, @Nullable Integer otherAccount, @Nullable String note) {
+        logRow(accountNumber, type, item, amount, actor, otherAccount, note, null);
+    }
+
+    /** Same, with a {@code ref} (Task #136: a user-deletion payout leg's transfer_id). */
+    public static void logRow(int accountNumber, LedgerType type, ItemID item, long amount,
+                           LedgerActor actor, @Nullable Integer otherAccount, @Nullable String note, @Nullable String ref) {
         try {
             write(TransactionLogRecord.of(accountNumber, type, item.getShort(), amount, actor, otherAccount,
-                    null, null, note, balanceAfter(accountNumber, type, item)));
+                    null, ref, note, balanceAfter(accountNumber, type, item)));
         } catch (RuntimeException ignored) {
             // best-effort
         }

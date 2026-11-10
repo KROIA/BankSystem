@@ -112,6 +112,9 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("user_deletion_offline_writes_loss_rows", () -> threw(this::userDeletionOfflineLoss)); // Task #127
         addTest("user_deletion_splits_payout_and_loss", this::userDeletionSplit); // Task #127
         addTest("user_deletion_keeps_company_account", this::userDeletionKeepsCompanyAccount); // Task #127
+        addTest("user_deletion_payout_rows_per_transfer", this::userDeletionPayoutLegs); // Task #136
+        addTest("user_deletion_unknown_outcome_loss_ref", () -> threw(this::userDeletionUnknownOutcome)); // Task #136
+        addTest("user_deletion_raw_to_items", this::payoutRawToItems); // Task #136
         addTest("slave_code_allow_list", this::slaveCodeAllowList);
         addTest("async_bank_code_logged_on_master", this::asyncBankCodeLoggedOnMaster);
         addTest("item_request_rejects_disallowed_code", this::itemRequestRejectsDisallowedCode);
@@ -462,7 +465,7 @@ public class TransactionLedgerTests extends TestSuite {
         if (find(rows, LedgerType.ACCOUNT_DELETE_PAYOUT) != null) return fail("PAYOUT row for an offline user: " + rows);
         TransactionLogRecord r = find(rows, LedgerType.ACCOUNT_DELETE_LOSS, MoneyItem.getItemID());
         if (r == null) return fail("no ACCOUNT_DELETE_LOSS row; result " + result);
-        if (r.amount() != total || !ADMIN.equals(r.actorUuid())) return fail("row " + r);
+        if (r.amount() != total || !ADMIN.equals(r.actorUuid()) || r.ref() != null) return fail("row " + r);
         if (r.note() == null || !r.note().endsWith("player offline")) return fail("note " + r.note());
         return pass("offline user: ACCOUNT_DELETE_LOSS " + total + " (player offline), admin actor kept");
     }
@@ -485,7 +488,85 @@ public class TransactionLedgerTests extends TestSuite {
         if (pay2 == null || pay2.amount() != 30L) return fail("second account PAYOUT " + pay2);
         if (loss2 == null || loss2.amount() != 20L) return fail("second account LOSS " + loss2);
         if (loss2.note() == null || !loss2.note().endsWith("not delivered: test")) return fail("note " + loss2.note());
+        if (loss1.ref() != null || pay2.ref() != null || loss2.ref() != null) return fail("ref without slave legs: " + loss1 + " / " + pay2);
         return pass("120 of 150 undelivered: LOSS 100 + PAYOUT 30 / LOSS 20");
+    }
+
+    /**
+     * Task #136: LOSS first in account order; then each account's payout drains the master's own drop (ref null) and the
+     * slave legs in chain order (ref = transfer_id). Legs T1 60 / T2 40, undelivered 20, balances 100 / 50: local part 30.
+     */
+    private TestResult userDeletionPayoutLegs() {
+        if (!ready()) return fail("live setup missing");
+        if (!(manager instanceof ServerBankManager sbm)) return fail("live manager is not a ServerBankManager");
+        ItemID money = MoneyItem.getItemID();
+        UUID deleted = UUID.randomUUID();
+        String t1 = TransferJournal.newTransferId(), t2 = TransferJournal.newTransferId();
+        Map<Integer, Map<ItemID, Long>> balances = new LinkedHashMap<>();
+        balances.put(accountNr, Map.of(money, 100L));
+        balances.put(otherAccountNr, Map.of(money, 50L));
+        Map<String, Map<ItemID, Long>> legs = new LinkedHashMap<>();
+        legs.put(t1, Map.of(money, 60L));
+        legs.put(t2, Map.of(money, 40L));
+        sbm.logDeletePayout(balances, new ServerBankManager.PayoutResult(Map.of(money, 20L), "test", legs, null), deleted, LedgerActor.system());
+        Map<String, Long> first = deleteRowSums(accountNr, deleted), second = deleteRowSums(otherAccountNr, deleted);
+        Map<String, Long> want1 = Map.of("ACCOUNT_DELETE_LOSS null", 20L, "ACCOUNT_DELETE_PAYOUT null", 30L, "ACCOUNT_DELETE_PAYOUT " + t1, 50L);
+        Map<String, Long> want2 = Map.of("ACCOUNT_DELETE_PAYOUT " + t1, 10L, "ACCOUNT_DELETE_PAYOUT " + t2, 40L);
+        if (!want1.equals(first)) return fail("first account " + first + ", expected " + want1);
+        if (!want2.equals(second)) return fail("second account " + second + ", expected " + want2);
+        return pass("LOSS 20, PAYOUT 30 (master) + 50 (T1) / PAYOUT 10 (T1) + 40 (T2)");
+    }
+
+    /** Task #136: an unknown DROP outcome: the LOSS rows carry that transfer id and a TRANSFER_PARKED flag is raised. */
+    private TestResult userDeletionUnknownOutcome() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        if (!(manager instanceof ServerBankManager sbm)) return fail("live manager is not a ServerBankManager");
+        var flags = BankSystemModBackend.getInstances_forTesting().SUSPICION_FLAG_MANAGER;
+        if (flags == null) return fail("no flag manager");
+        ItemID money = MoneyItem.getItemID();
+        UUID deleted = UUID.randomUUID();
+        String tid = TransferJournal.newTransferId();
+        // otherAccountNr: drop_unknown_outcome_parks reads the TRANSFER_PARKED flags of accountNr
+        sbm.logDeletePayout(Map.of(otherAccountNr, Map.of(money, 100L)),
+                new ServerBankManager.PayoutResult(Map.of(money, 30L), "outcome unknown, transfer " + tid, Map.of(), tid),
+                deleted, LedgerActor.system());
+        Map<String, Long> want = Map.of("ACCOUNT_DELETE_LOSS " + tid, 30L, "ACCOUNT_DELETE_PAYOUT null", 70L);
+        Map<String, Long> got = deleteRowSums(otherAccountNr, deleted);
+        if (!want.equals(got)) return fail("rows " + got + ", expected " + want);
+        for (SuspicionFlagRecord f : flags.getRecent(otherAccountNr, 0, 0).get(10, TimeUnit.SECONDS))
+            if (f.flagType() == SuspicionChecks.TRANSFER_PARKED && tid.equals(f.ref()))
+                return f.amount() == 30L ? pass("LOSS 30 ref = transfer id, PAYOUT 70 ref null, flag 6 raised") : fail("flag " + f);
+        return fail("no TRANSFER_PARKED flag for " + tid);
+    }
+
+    /** Task #136: raw balances become item counts: money cents split into notes, items raw / ratio, the rest below one item returned. */
+    private TestResult payoutRawToItems() {
+        if (!ready()) return fail("live setup missing");
+        ItemID money = MoneyItem.getItemID();
+        ItemID diamond = allow(Items.DIAMOND.getDefaultInstance());
+        Map<ItemID, Long> counts = new HashMap<>();
+        Map<ItemID, ServerBankManager.PayoutUnit> units = new HashMap<>();
+        long moneyRest = ServerBankManager.toItems(money, 1_234L, 100L, counts, units); // 12.34
+        long diamondRest = ServerBankManager.toItems(diamond, 550L, 100L, counts, units); // 5.5 diamonds
+        if (moneyRest != 0L || diamondRest != 50L) return fail("rest " + moneyRest + " / " + diamondRest);
+        // money comes out as notes (10 + 1 + 0.20 + 0.10 + 0.01 for 12.34); the raw round trip below checks their worth
+        if (!Long.valueOf(5L).equals(counts.get(diamond)) || counts.size() < 3) return fail("counts " + counts);
+        Map<ItemID, Long> back = new HashMap<>();
+        counts.forEach((id, n) -> back.merge(units.get(id).bank(), n * units.get(id).raw(), Long::sum));
+        if (!Map.of(money, 1_234L, diamond, 500L).equals(back)) return fail("back to raw " + back + " from " + counts);
+        Map<ItemID, Long> bound = new HashMap<>();
+        long boundRest = ServerBankManager.toItems(diamond, 200L, 81L, bound, new HashMap<>()); // a bound slot's own ratio
+        if (boundRest != 38L || !Long.valueOf(2L).equals(bound.get(diamond))) return fail("ratio 81: " + bound + " rest " + boundRest);
+        return pass("12.34 -> " + counts.size() + " stacks of notes worth 1234, 550 -> 5 diamonds + rest 50, ratio 81: 200 -> 2 + rest 38");
+    }
+
+    /** Task #136: amount per "TYPE ref" over one deletion's ACCOUNT_DELETE_* rows (the note names the deleted user). */
+    private Map<String, Long> deleteRowSums(int account, UUID deletedUser) {
+        Map<String, Long> sums = new HashMap<>();
+        for (TransactionLogRecord r : rows(account))
+            if (r.note() != null && r.note().startsWith("user deleted: " + deletedUser))
+                sums.merge(r.type() + " " + r.ref(), r.amount(), Long::sum);
+        return sums;
     }
 
     /** Task #127: a company account left without users is not deleted, so it is not paid out and keeps its balance. */

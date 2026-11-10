@@ -94,6 +94,7 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         addTest("withdraw_refused_when_external_says_no", this::testWithdrawRefusedByExternal);
         addTest("membership_sync_propagates_to_external_account", this::testMembershipSyncPropagates);
         addTest("unbind_refused_while_unavailable_with_locked", this::testUnbindRefusedWhileUnavailableWithLocked);
+        addTest("user_deletion_payout_counts_only_local_part", this::testPayoutCountsOnlyLocalPart); // Task #136
         // Cascade cleanup must run LAST: it deletes the shared testAccountNr, which would
         // strand any subsequent test that references it.
         addTest("cascade_cleanup_on_account_and_bank_removal", this::testCascadeCleanup);
@@ -802,6 +803,35 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         bank.unlockAmount(30L); // leave the slot as perTestReset expects
         return pass("Unbind refused while the provider is unavailable and locked=" + locked
                 + "; row kept; unbind after re-enable restored the locked funds");
+    }
+
+    /**
+     * Task #136: a deleted user's bound slot pays out only what BankSystem holds (locked L + dust D). The free
+     * balance E is in the external account, which the deletion leaves alone, so it is not counted.
+     */
+    private TestResult testPayoutCountsOnlyLocalPart() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        if (!(manager.getBankAccount(testAccountNr) instanceof ServerBankAccount account)) return fail("Test account missing");
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return fail("BankAccountBindings backend is not available");
+        ISyncServerBank bank = account.getBank(slotItemA);
+        if (bank == null) return fail("Bank slot A missing");
+        bank.setBalance(80L);
+        if (bank.lockAmount(30L) != BankStatus.SUCCESS) return fail("lockAmount(30) failed"); // L = 30
+        StubCurrencyProvider.StubAccount stub = StubCurrencyProvider.create(STUB_KEY_A, true, 0L);
+        BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, slotItemA,
+                new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "Payout", true));
+        if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
+        stub.setBalance(500L); // E = 500
+        bindings.setDust(testAccountNr, slotItemA, 7L); // D = 7
+        if (bank.getTotalBalance() != 537L) return fail("setup: total " + bank.getTotalBalance() + ", expected 537");
+        Map<ItemID, Long> balances = new java.util.HashMap<>();
+        manager.collectAccountBalances(account, balances);
+        if (!Long.valueOf(37L).equals(balances.get(slotItemA)))
+            return fail("payout balance " + balances.get(slotItemA) + ", expected L + D = 37");
+        if (stub.getBalance() != 500L) return fail("external balance changed to " + stub.getBalance());
+        return pass("bound slot E=500 L=30 D=7: payout counts 37, external untouched");
     }
 
     /**
