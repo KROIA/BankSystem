@@ -17,6 +17,7 @@ import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.minecraft.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.networking.entity.SyncBankUploadDataPacket;
 import net.kroia.banksystem.networking.entity.UpdateBankUploadBlockEntityPacket;
+import net.kroia.banksystem.util.ContainerItemInsertion;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.VolatileItemComponents;
 import net.minecraft.core.BlockPos;
@@ -24,6 +25,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.Containers;
@@ -248,6 +250,36 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         Containers.dropItemStack(Objects.requireNonNull(this.getLevel()), this.getBlockPos().getX(), this.getBlockPos().getY(), this.getBlockPos().getZ(), stack);
     }
 
+    /**
+     * Issue #82: puts back a stack whose deposit failed. Its slot was cleared when the deposit
+     * started, so a hopper or player may have filled it meanwhile: never overwrite, merge or
+     * move instead, and drop at the block what does not fit (or everything once the block is
+     * gone). Deposit callbacks can complete off the server thread, so this hops onto it.
+     */
+    private void restore(int slot, ItemStack stack) {
+        Runnable put = () -> {
+            ItemStack rest = isRemoved() ? stack : restoreInto(inventory, slot, stack);
+            if (!rest.isEmpty())
+                dropItem(rest);
+            setChanged();
+        };
+        MinecraftServer server = level == null ? null : level.getServer();
+        if (server != null)
+            server.execute(put); // queued onto the server thread when called from another thread
+        else
+            put.run();
+    }
+
+    /** Placement part of {@link #restore}, public as a test seam. @return what did not fit (to drop). */
+    public static ItemStack restoreInto(Container container, int slot, ItemStack stack) {
+        if (container.getItem(slot).isEmpty()) {
+            container.setItem(slot, stack);
+            return ItemStack.EMPTY;
+        }
+        long placed = ContainerItemInsertion.insertWithdrawnItems(container, stack, stack.getCount());
+        return stack.copyWithCount(stack.getCount() - (int) placed);
+    }
+
     public void redstoneSignalChanged(boolean isPowered) {
         this.sendingEnabled = isPowered;
         if (level == null) return;
@@ -378,7 +410,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                 if (dropIfNotBankable) {
                                     dropItem(stack);
                                 } else {
-                                    inventory.setItem(finalI, stack);
+                                    restore(finalI, stack);
                                 }
                                 continue;
                             }
@@ -389,7 +421,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                     if (dropIfNotBankable) {
                                         dropItem(stack);
                                     } else {
-                                        inventory.setItem(finalI, stack);
+                                        restore(finalI, stack);
                                     }
                                     return;
                                 }
@@ -397,7 +429,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                         uploadNote("coin " + itemID.getName() + " x" + stack.getCount()),
                                         () -> baseBank.depositAsync(finalDeposit)).thenAccept(status -> {
                                     if (status != BankStatus.SUCCESS) {
-                                        inventory.setItem(finalI, stack);
+                                        restore(finalI, stack);
                                     } else {
                                         logUpload(baseSlotId, finalDeposit, "coin " + itemID.getName() + " x" + stack.getCount());
                                     }
@@ -438,7 +470,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                 if(dropIfNotBankable){
                                     dropItem(stack);
                                 } else {
-                                    inventory.setItem(finalI, stack); // Restore item on failure
+                                    restore(finalI, stack); // Restore item on failure
                                 }
                                 return;
                             }
@@ -450,7 +482,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                         uploadNote("banknote " + itemID.getName() + " x" + amount), () -> bank.depositAsync(finalAmount));
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus != BankStatus.SUCCESS) {
-                                        inventory.setItem(finalI, stack); // Restore item on failure
+                                        restore(finalI, stack); // Restore item on failure
                                     } else {
                                         logUpload(bank.getItemIDAsync(), finalAmount, "banknote " + itemID.getName() + " x" + amount);
                                     }
@@ -462,7 +494,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                         uploadNote(null), () -> bank.depositRealAsync((double)amount));
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus != BankStatus.SUCCESS) {
-                                        inventory.setItem(finalI, stack); // Restore item on failure
+                                        restore(finalI, stack); // Restore item on failure
                                     } else {
                                         logUpload(bank.getItemIDAsync(),
                                                 amount * net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR, null);
