@@ -9,7 +9,9 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.command.AsyncBankSystemCommandHandler;
+import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.currency.ListBindableAccountsRequest;
 import net.kroia.banksystem.networking.entity.WithdrawMoneyPacket;
@@ -24,6 +26,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
@@ -83,6 +86,10 @@ public class MultiServerSecurityTests extends TestSuite {
         addTest("withdrawMoneyPacket_rejects_untrusted_slave", this::testWithdrawMoneyRejectsUntrustedSlave);
         addTest("getUserCustomData_empty_for_untrusted_slave", this::testUserCustomDataEmptyForUntrustedSlave);
         addTest("listBindableAccounts_empty_for_untrusted_slave", this::testListBindableEmptyForUntrustedSlave);
+
+        // Task #141 — bank download block: settings gate and owner recheck
+        addTest("downloadBlock_rejects_settings_without_withdraw", this::testDownloadBlockRejectsSettingsWithoutWithdraw);
+        addTest("downloadBlock_rechecks_owner_withdraw", this::testDownloadBlockRechecksOwnerWithdraw);
     }
 
     @Override
@@ -130,6 +137,66 @@ public class MultiServerSecurityTests extends TestSuite {
             LiveStateGuard.restore(stateGuard);
             stateGuard = null;
         }
+    }
+
+    // ============== Task #141: bank download block ==============
+
+    /** A block entity outside any level: no block-state updates, no packets. */
+    private static BankDownloadBlockEntity downloadBlock() {
+        return new BankDownloadBlockEntity(BlockPos.ZERO, BankSystemBlocks.BANK_DOWNLOAD_BLOCK.get().defaultBlockState());
+    }
+
+    /**
+     * Task #141: a player without WITHDRAW on the connected account can neither disconnect the
+     * block (the accountNr <= 0 path) nor rewrite its orders; the owner can.
+     */
+    private TestResult testDownloadBlockRejectsSettingsWithoutWithdraw() {
+        if (manager == null || testAccountNr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+            return fail("Test account not set up");
+        }
+        BankDownloadBlockEntity block = downloadBlock();
+        if (!block.applySettings(TEST_OWNER, testAccountNr, List.of()).join()) {
+            return fail("Owner with WITHDRAW could not connect the block");
+        }
+        if (block.applySettings(TEST_OUTSIDER, 0, List.of()).join() || block.getBankAccountNumber() != testAccountNr) {
+            return fail("Task #141: a player without WITHDRAW disconnected the block");
+        }
+        if (!block.applySettings(TEST_OWNER, 0, List.of()).join() || block.getBankAccountNumber() != 0) {
+            return fail("Owner could not disconnect the block");
+        }
+        return pass("Settings change refused without WITHDRAW on the connected account; owner allowed");
+    }
+
+    /**
+     * Task #141: every withdraw rechecks the stored owner's WITHDRAW. A block without an owner
+     * (saved before the owner was stored) does not withdraw.
+     */
+    private TestResult testDownloadBlockRechecksOwnerWithdraw() {
+        if (manager == null || testAccountNr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+            return fail("Test account not set up");
+        }
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        BankDownloadBlockEntity block = downloadBlock();
+        if (block.ownerCanWithdraw(account).join()) {
+            return fail("Task #141: a block without an owner may withdraw");
+        }
+        if (!block.applySettings(TEST_OWNER, testAccountNr, List.of()).join()) {
+            return fail("Owner with WITHDRAW could not connect the block");
+        }
+        if (!block.ownerCanWithdraw(account).join()) {
+            return fail("Owner holding WITHDRAW was refused");
+        }
+        int permissions = account.getPermission(TEST_OWNER);
+        account.setPermission(TEST_OWNER, permissions & ~BankPermission.WITHDRAW.getValue());
+        try {
+            if (block.ownerCanWithdraw(account).join()) {
+                return fail("Task #141: the block still withdraws after its owner lost WITHDRAW");
+            }
+        } finally {
+            account.setPermission(TEST_OWNER, permissions);
+        }
+        return pass("Withdraw rechecks the owner's WITHDRAW; no owner, no withdraw");
     }
 
     // ============== Pure-logic invariants ==============

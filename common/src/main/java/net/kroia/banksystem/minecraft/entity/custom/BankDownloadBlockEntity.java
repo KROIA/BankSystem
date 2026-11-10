@@ -61,6 +61,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         public static final String BANK_ACCOUNT_NUMBER = "A";
         public static final String INVENTORY_ITEMS = "I";
         public static final String BLOCK_IS_POWERED = "P";
+        public static final String OWNER = "U";
     }
     private class ControlledContainer extends SimpleContainer {
         public ControlledContainer(int size) {
@@ -194,7 +195,11 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     private boolean blockIsPowered = false;
     private boolean currentlyReceiving = false;
 
-    //private UUID playerOwner = null;
+    /**
+     * Task #141: the player who connected the block; each withdraw needs their WITHDRAW permission.
+     * Blocks saved before 2.2.0 have none and stay idle until someone with WITHDRAW saves the settings again.
+     */
+    private @Nullable UUID playerOwner = null;
     //private ItemID itemID;
     //private int targetAmount;
     private int tickCounter = 0;
@@ -228,11 +233,13 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     private void loadState(CompoundTag tag, HolderLookup.Provider provider) {
         bankAccountNumber = 0;
         withdrawOrders.clear();
+        playerOwner = null;
 
         if(tag.contains("PlayerOwner") && tag.contains("TargetAmount"))
         {
             // Compatibility, convert to new Block data
             UUID playerOwner = NbtCompat.getUUID(tag, "PlayerOwner");
+            this.playerOwner = playerOwner; // Task #141: the old format drew from this player's own personal account
             int targetAmount = NbtCompat.getInt(tag, "TargetAmount");
             ItemStackNbt.fromTag(inventory, NbtCompat.getList(tag, "Items", Tag.TAG_COMPOUND), provider);
             blockIsPowered = NbtCompat.getBoolean(tag, "RecievingEnabled");
@@ -264,6 +271,9 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         else
             bankAccountNumber = 0; // Reset account number if not present
 
+        if(tag.contains(TAGS.OWNER))
+            playerOwner = NbtCompat.getUUID(tag, TAGS.OWNER);
+
         if(tag.contains(TAGS.WITHDRAW_ORDERS)) {
             ListTag ordersList = NbtCompat.getList(tag, TAGS.WITHDRAW_ORDERS, Tag.TAG_COMPOUND);
             for (int i = 0; i < ordersList.size(); i++) {
@@ -286,6 +296,8 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         tag.put(TAGS.INVENTORY_ITEMS, ItemStackNbt.createTag(inventory, provider));
         tag.putBoolean(TAGS.BLOCK_IS_POWERED, blockIsPowered);
         tag.putInt(TAGS.BANK_ACCOUNT_NUMBER, bankAccountNumber);
+        if(playerOwner != null)
+            NbtCompat.putUUID(tag, TAGS.OWNER, playerOwner);
         ListTag ordersList = new ListTag();
         for (WithdrawOrder order : withdrawOrders) {
             CompoundTag orderTag = order.toTag();
@@ -450,6 +462,11 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     }
     public CompletableFuture<Boolean> hasPermissionToOpenBlock(ServerPlayer player)
     {
+        return hasPermissionToOpenBlock(player.getUUID());
+    }
+    /** WITHDRAW on the connected account; true while the block is not connected. Also gates every settings change (Task #141). */
+    public CompletableFuture<Boolean> hasPermissionToOpenBlock(UUID player)
+    {
         CompletableFuture<Boolean> future =  new CompletableFuture<>();
         if(bankAccountNumber <= 0) {
             future.complete(true);
@@ -464,7 +481,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                 future.complete(true);
             }
             else {
-                CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(player.getUUID(), BankPermission.WITHDRAW.getValue());
+                CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(player, BankPermission.WITHDRAW.getValue());
                 hasPermissionFuture.thenAccept(future::complete);
             }
         });
@@ -497,30 +514,48 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     private void receiveItemsFromBank()
     {
-        if(!blockIsPowered || currentlyReceiving)
+        if(!blockIsPowered || currentlyReceiving || playerOwner == null)
             return;
 
-        CompletableFuture<IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(bankAccountNumber);
-        account.thenAccept(accountResult -> {
+        // Held across the account lookup and the owner check so a slow (slave) round trip cannot start a second cycle.
+        currentlyReceiving = true;
+        BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(bankAccountNumber).thenCompose(accountResult -> {
             if(accountResult == null) {
                 bankAccountNumber = 0; // Reset account number if it does not exist
                 setBockstate_connected(false);
-                return;
+                return CompletableFuture.completedFuture((IAsyncBankAccount) null);
             }
-
-            currentlyReceiving = true;
-            List<CompletableFuture<Boolean>> futures = new ArrayList<>();
-            for( WithdrawOrder order : withdrawOrders)
-            {
-                if(order != null) {
-                    futures.add(processWithdrawOrder(order, accountResult));
-                }
-            }
-
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenRun(() -> {
+            return ownerCanWithdraw(accountResult).thenApply(allowed -> allowed ? accountResult : null);
+        }).whenComplete((accountResult, ex) -> {
+            if(accountResult != null)
+                processWithdrawOrders(accountResult);
+            else
                 currentlyReceiving = false;
-                setChanged();
-            });
+        });
+    }
+
+    /** Task #141: the player who connected the block still holds WITHDRAW on the account. False without an owner. */
+    public CompletableFuture<Boolean> ownerCanWithdraw(IAsyncBankAccount account)
+    {
+        UUID owner = playerOwner;
+        return owner == null ? CompletableFuture.completedFuture(false)
+                : account.hasPermissionAsync(owner, BankPermission.WITHDRAW.getValue());
+    }
+
+    private void processWithdrawOrders(IAsyncBankAccount accountResult)
+    {
+        currentlyReceiving = true;
+        List<CompletableFuture<Boolean>> futures = new ArrayList<>();
+        for( WithdrawOrder order : withdrawOrders)
+        {
+            if(order != null) {
+                futures.add(processWithdrawOrder(order, accountResult));
+            }
+        }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenRun(() -> {
+            currentlyReceiving = false;
+            setChanged();
         });
     }
 
@@ -715,48 +750,56 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     public void handlePacket(ServerPlayer sender, UpdateBankDownloadBlockEntityPacket packet)
     {
-        final int finalAccountNr = packet.getAccountNr();
-        if(finalAccountNr <= 0) {
-            this.bankAccountNumber = 0;
-            this.withdrawOrders.clear();
-            List<WithdrawOrder> orders = packet.getWithdrawOrders();
-            for (WithdrawOrder order : orders) {
-                if(order != null) {
-                    this.withdrawOrders.add(order);
-                }
-            }
-            setChanged();
-            setBockstate_connected(false);
-            SyncBankDownloadDataPacket.sendPacket(sender, this);
-            return;
-        }
-        UUID senderUUID = sender.getUUID();
-        CompletableFuture<@Nullable IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(finalAccountNr);
-        account.thenAccept(bankAccount -> {
-            if(bankAccount == null) {
-                setBockstate_connected(false);
-                return;
-            }
-            CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(senderUUID, BankPermission.WITHDRAW.getValue());
-            hasPermissionFuture.thenAccept((hasPermission) -> {
-                if(!hasPermission) {
-                    setBockstate_connected(false);
-                    return; // Player does not have permission to withdraw from this bank account
-                }
-
-                this.bankAccountNumber = finalAccountNr;
-                this.withdrawOrders.clear();
-                List<WithdrawOrder> orders = packet.getWithdrawOrders();
-                for (WithdrawOrder order : orders) {
-                    if(order != null) {
-                        this.withdrawOrders.add(order);
-                    }
-                }
-
-                setChanged();
-                setBockstate_connected(true);
+        applySettings(sender.getUUID(), packet.getAccountNr(), packet.getWithdrawOrders()).thenAccept(applied -> {
+            if(applied)
                 SyncBankDownloadDataPacket.sendPacket(sender, this);
+        });
+    }
+
+    /**
+     * Applies new settings from {@code sender}. Task #141: any change needs WITHDRAW on the currently connected
+     * account (the same check that opens the menu); connecting also needs WITHDRAW on the new account and makes
+     * the sender the owner whose permission every later withdraw is checked against.
+     * @return true if the settings were applied
+     */
+    public CompletableFuture<Boolean> applySettings(UUID sender, int accountNr, List<WithdrawOrder> orders)
+    {
+        return hasPermissionToOpenBlock(sender).thenCompose(allowed -> {
+            if(!allowed)
+                return CompletableFuture.completedFuture(false);
+            if(accountNr <= 0) {
+                setSettings(0, null, orders);
+                setBockstate_connected(false);
+                return CompletableFuture.completedFuture(true);
+            }
+            return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(accountNr).thenCompose(bankAccount -> {
+                if(bankAccount == null) {
+                    setBockstate_connected(false);
+                    return CompletableFuture.completedFuture(false);
+                }
+                return bankAccount.hasPermissionAsync(sender, BankPermission.WITHDRAW.getValue()).thenApply(hasPermission -> {
+                    if(!hasPermission) {
+                        setBockstate_connected(false);
+                        return false; // Player does not have permission to withdraw from this bank account
+                    }
+                    setSettings(accountNr, sender, orders);
+                    setBockstate_connected(true);
+                    return true;
+                });
             });
         });
+    }
+
+    private void setSettings(int accountNr, @Nullable UUID owner, List<WithdrawOrder> orders)
+    {
+        this.bankAccountNumber = accountNr;
+        this.playerOwner = owner;
+        this.withdrawOrders.clear();
+        for (WithdrawOrder order : orders) {
+            if(order != null) {
+                this.withdrawOrders.add(order);
+            }
+        }
+        setChanged();
     }
 }
