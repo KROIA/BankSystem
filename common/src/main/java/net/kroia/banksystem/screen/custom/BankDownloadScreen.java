@@ -122,18 +122,10 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             rowTooltip(conditionSelectionDropDown, TEXT.ORDER_CONDITION_TOOLTIP::getString);
             for(BankDownloadBlockEntity.WithdrawCondition cond : BankDownloadBlockEntity.WithdrawCondition.values())
             {
-                // Own option label instead of addOption(): the open list hangs below this 20px row, so the
-                // parent-clipped isMouseOver() never saw the options and their tooltips never showed.
-                // DropDownMenu's option clicks use isMouseOverIgnoreParents() for the same reason.
-                Label option = new Label(getConditionString(cond)) {
-                    @Override
-                    public boolean isMouseOver() {
-                        return isMouseOverIgnoreParents();
-                    }
-                };
-                option.setHeight(20); // before addChild: it sizes the option button
-                option.setAlignment(Alignment.CENTER);
-                conditionSelectionDropDown.addChild(option);
+                // DropDownMenu hit-tests its open list itself (it hangs below this 20px row), so plain
+                // options get hover/tooltips. addOption() returns nothing: the new label is the last child.
+                conditionSelectionDropDown.addOption(getConditionString(cond));
+                GuiElement option = conditionSelectionDropDown.getChilds().getLast();
                 Component tooltip = switch(cond) {
                     case NONE -> TEXT.CONDITION_NONE_TOOLTIP;
                     case HAS_MORE_THEN -> TEXT.CONDITION_MORE_THAN_TOOLTIP;

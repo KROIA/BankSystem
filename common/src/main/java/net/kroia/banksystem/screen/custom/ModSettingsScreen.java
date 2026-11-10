@@ -311,6 +311,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         FeatureToggleSection section = new FeatureToggleSection(Texts.setting(group.getName(), toggle.getName()).getString());
         // Header marker replaces the SettingRow marker for the toggle itself (static, like RESTART_REQUIRED_SETTINGS).
         section.setRestartRequired(RESTART_REQUIRED_SETTINGS.contains(group.getName() + "." + toggle.getName()));
+        section.setRestartMarkerText(Texts.RESTART_REQUIRED, Texts.RESTART_REQUIRED_TOOLTIP); // BankSystem wording; harmless while hidden
         // Also fires on refreshFields(); handleResponse clears dirty after that (same as CheckBox).
         section.setOnFeatureToggled(enabled -> dirty = true);
         // Labels do not wrap: the lang text carries its own line breaks.
