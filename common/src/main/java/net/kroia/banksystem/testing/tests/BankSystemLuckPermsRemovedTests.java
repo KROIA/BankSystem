@@ -35,7 +35,7 @@ public class BankSystemLuckPermsRemovedTests extends TestSuite {
     private static final String MOD = "banksystem";
     private static final String[] NODES = {BankSystemPermissions.COMMAND_TRUST, BankSystemPermissions.COMMAND_OP,
             BankSystemPermissions.COMMAND_BACKUP, BankSystemPermissions.COMMAND_SYMBOLS,
-            BankSystemPermissions.COMMAND_EXPORTRECIPES, BankSystemPermissions.ADMIN_MODE,
+            BankSystemPermissions.COMMAND_EXPORTRECIPES, BankSystemPermissions.COMMAND_RESTORE_BINDING, BankSystemPermissions.ADMIN_MODE,
             BankSystemPermissions.SOFTWARE, BankSystemPermissions.ADMIN};
     private static final UUID EXECUTOR = UUID.fromString("00000000-0000-0000-0000-00000000b109");
 

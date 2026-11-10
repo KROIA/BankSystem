@@ -74,6 +74,12 @@ public final class SuspicionChecks {
      * Raised by WithdrawMoneyPacket, always on (the admin must reconcile it).
      */
     public static final int TRANSFER_PARKED = 6;
+    /**
+     * Task #146: an external-currency binding that the BankSystem account's managers may not bind
+     * (made before binds were checked) was suspended at start-up. ref = providerId:accountKey.
+     * Raised by ServerBankManager.suspendIfForeign; an admin lifts it with /banksystem restorebinding.
+     */
+    public static final int EXTERNAL_BINDING_SUSPENDED = 7;
 
     /** @return the constant name of a flag type code, or "FLAG_&lt;code&gt;". */
     public static String typeName(int flagType) {
@@ -84,6 +90,7 @@ public final class SuspicionChecks {
             case TRANSFER_TO_NEW_ACCOUNT -> "TRANSFER_TO_NEW_ACCOUNT";
             case MONEY_SUPPLY_GROWTH -> "MONEY_SUPPLY_GROWTH";
             case TRANSFER_PARKED -> "TRANSFER_PARKED";
+            case EXTERNAL_BINDING_SUSPENDED -> "EXTERNAL_BINDING_SUSPENDED";
             default -> "FLAG_" + flagType;
         };
     }

@@ -2698,7 +2698,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      *       the existing status enum for a bind-precondition violation.)</li>
      *   <li>The referenced provider is registered and available
      *       ({@link BankStatus#FAILED_EXTERNAL_UNAVAILABLE} otherwise).</li>
-     *   <li>The slot has no binding yet (unbind first;
+     *   <li>The slot has no binding yet, suspended or not (unbind first;
      *       {@link BankStatus#FAILED_INVALID_ITEM_ID} otherwise).</li>
      *   <li>The ref resolves ({@code provider.open(ref) != null},
      *       {@link BankStatus#FAILED_EXTERNAL_UNAVAILABLE} otherwise).</li>
@@ -2737,6 +2737,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         if (existingBindings != null && existingBindings.hasBinding(accountId, itemId)) {
             // Task #147: rebinding a bound slot read the OLD external balance as "local free" and
             // deposited it into the new account without debiting the old one (duplication).
+            // Also keeps a suspended row's (Task #146) locked funds out of a new binding. Unbind first.
             warn("bindExternalAccount refused: slot " + accountId + "/" + itemId + " is already bound; unbind it first");
             return BankStatus.FAILED_INVALID_ITEM_ID;
         }
@@ -2930,6 +2931,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             // Idempotent no-op — the slot was not bound.
             return BankStatus.SUCCESS;
         }
+        if (row.suspended()) {
+            // Task #146: either choice moves value or drops the row; an admin restores it first.
+            warn("unbindExternalAccount on " + accountId + "/" + itemId + " refused: the binding to "
+                    + row.ref() + " is suspended until an admin restores it");
+            return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+        }
         ServerBankAccount account = bankAccounts.get(accountId);
         IServerBank bank = account != null ? account.getBank(itemId) : null;
 
@@ -3042,6 +3049,101 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             }
             return BankStatus.SUCCESS;
         }
+    }
+
+    /**
+     * Task #146: runs {@link #suspendIfForeign} over every binding. Called once per master start,
+     * on the first server tick (every mod's SERVER_STARTED handler has run by then).
+     *
+     * @return the number of bindings suspended
+     */
+    public int suspendForeignBindings() {
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return 0;
+        int suspended = 0;
+        // ponytail: one pass in one tick (bindings x managers provider lookups); spread over ticks if a
+        // server ever has thousands of bindings.
+        for (BindingRow row : bindings.snapshot().values())
+            if (suspendIfForeign(row)) suspended++;
+        if (suspended > 0)
+            warn("Suspended " + suspended + " external-currency binding(s) to accounts the BankSystem account's "
+                    + "managers may not bind. Admins were alerted; /banksystem restorebinding lifts a suspension.");
+        return suspended;
+    }
+
+    /**
+     * Task #146: suspends {@code row} and raises an EXTERNAL_BINDING_SUSPENDED flag when its external
+     * account is not one the BankSystem account's managers may bind (the rule BindExternalAccountRequest
+     * enforces since #137): the owner for a personal account, at least one user with MANAGE for a shared
+     * one. Does nothing for an admin-approved or already suspended row, a missing or unavailable provider,
+     * or when a lookup throws or comes back empty: the adapters return an empty list when they cannot
+     * answer, and no answer never suspends.
+     *
+     * @return true if the row was suspended
+     */
+    public boolean suspendIfForeign(BindingRow row) {
+        if (row.suspended() || row.approved()) return false;
+        ExternalAccountRef ref = row.ref();
+        ExternalCurrencyProvider provider = BankSystemMod.getAPI().getCurrencyProvider(ref.providerId());
+        ServerBankAccount account = bankAccounts.get(row.bankAccountId());
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (provider == null || !provider.isAvailable() || account == null || bindings == null) return false;
+        User owner = account.getPersonalBankOwner();
+        List<UUID> managers = owner != null ? List.of(owner.getUUID()) : account.getUserData().stream()
+                .filter(u -> net.kroia.banksystem.banking.BankPermission.hasPermission(u.permissions,
+                        net.kroia.banksystem.banking.BankPermission.MANAGE))
+                .map(u -> u.userUUID).toList();
+        if (managers.isEmpty()) return false;
+        for (UUID manager : managers) {
+            List<ExternalAccountRef> bindable;
+            try {
+                bindable = provider.listBindableAccounts(manager);
+            } catch (Throwable t) {
+                warn("binding check of account " + row.bankAccountId() + " skipped: provider '" + ref.providerId()
+                        + "' threw while listing the accounts of " + manager + ": " + t);
+                return false;
+            }
+            if (bindable.isEmpty()) return false;
+            for (ExternalAccountRef own : bindable)
+                if (own.providerId().equals(ref.providerId()) && own.accountKey().equals(ref.accountKey()))
+                    return false;
+        }
+        ItemID item = new ItemID(row.itemIdShort());
+        bindings.suspend(row.bankAccountId(), item);
+        String who = String.join(", ", managers.stream().map(m -> {
+            User u = getUserByUUID(m);
+            return (u != null ? u.getName() : "?") + " (" + m + ")";
+        }).toList());
+        net.kroia.banksystem.banking.ledger.AdminAudit.raise(row.bankAccountId(),
+                net.kroia.banksystem.banking.ledger.SuspicionChecks.EXTERNAL_BINDING_SUSPENDED, 3, 0L,
+                ref.providerId() + ":" + ref.accountKey(),
+                "external binding suspended: slot " + item.getName() + " is bound to " + ref.providerId()
+                        + " account " + ref.accountKey() + " (\"" + ref.label() + "\"), which "
+                        + (owner != null ? "owner " : "managers ") + who + " may not bind. Restore with "
+                        + "/banksystem restorebinding " + row.bankAccountId() + " " + item.getName());
+        return true;
+    }
+
+    /**
+     * Task #146: lifts the suspension of {@code accountId}'s suspended bindings (only the slot of
+     * {@code itemName} when given) and marks them admin-approved, so the start-up check skips them.
+     * Each restore writes an ADMIN_ACCOUNT_EDIT ledger row (audit file + admin alert).
+     *
+     * @return the number of bindings restored
+     */
+    public int restoreSuspendedBindings(int accountId, @Nullable String itemName, LedgerActor actor) {
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return 0;
+        int restored = 0;
+        for (BindingRow row : bindings.listBindingsFor(accountId)) {
+            ItemID item = new ItemID(row.itemIdShort());
+            if (!row.suspended() || (itemName != null && !itemName.equals(item.getName()))) continue;
+            bindings.approve(accountId, item);
+            TransactionLedger.logRow(accountId, LedgerType.ADMIN_ACCOUNT_EDIT, item, 0L, actor, null,
+                    "external binding restored: " + row.ref().providerId() + ":" + row.ref().accountKey());
+            restored++;
+        }
+        return restored;
     }
 
 

@@ -223,10 +223,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
         if (row == null) return null;
         ExternalCurrencyProvider provider =
                 BankSystemMod.getAPI().getCurrencyProvider(row.ref().providerId());
+        // Task #146: a suspended binding takes the degraded path, so every write through it is
+        // refused (FAILED_EXTERNAL_UNAVAILABLE) and reads hide the external balance.
         ExternalAccount external =
-                (provider != null && provider.isAvailable()) ? provider.open(row.ref()) : null;
+                (!row.suspended() && provider != null && provider.isAvailable()) ? provider.open(row.ref()) : null;
         if (external == null) {
-            maybeWarnProviderUnavailable(row);
+            if (!row.suspended()) maybeWarnProviderUnavailable(row);
             return new BoundView(row, null, 0L, 1L, row.dustBalance());
         }
         // Under the transactional-lock protocol (Task #33 v2.0.5+), locked funds

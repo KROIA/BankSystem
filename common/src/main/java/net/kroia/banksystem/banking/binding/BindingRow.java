@@ -33,6 +33,8 @@ public final class BindingRow {
     private static final String NBT_LOCKED_BALANCE = "lockedBalance";
     private static final String NBT_DUST_BALANCE = "dustBalance";
     private static final String NBT_BOUND_AT = "boundAt";
+    private static final String NBT_SUSPENDED = "suspended";
+    private static final String NBT_APPROVED = "approved";
 
     private final int bankAccountId;
     private final short itemIdShort;
@@ -47,6 +49,14 @@ public final class BindingRow {
      */
     private long dustBalance;
     private final long boundAt;
+    /**
+     * Task #146: the external account is not one the BankSystem account's managers may bind
+     * (a binding made before that rule existed). Every value path through the slot is refused
+     * until an admin restores it.
+     */
+    private boolean suspended;
+    /** Task #146: made or restored by an admin; the start-up check skips it. */
+    private boolean approved;
 
     /**
      * Constructs a fresh binding row.
@@ -100,6 +110,20 @@ public final class BindingRow {
         return boundAt;
     }
 
+    public boolean suspended() {
+        return suspended;
+    }
+
+    public boolean approved() {
+        return approved;
+    }
+
+    /** Package-private — callers go through {@link BankAccountBindings#suspend} / {@link BankAccountBindings#approve}. */
+    void setFlags(boolean suspended, boolean approved) {
+        this.suspended = suspended;
+        this.approved = approved;
+    }
+
     /**
      * Overwrites the locked-balance amount. Values below zero are clamped to zero.
      * Only {@link BankAccountBindings} should call this directly — callers
@@ -135,6 +159,8 @@ public final class BindingRow {
         tag.putLong(NBT_LOCKED_BALANCE, lockedBalance);
         tag.putLong(NBT_DUST_BALANCE, dustBalance);
         tag.putLong(NBT_BOUND_AT, boundAt);
+        tag.putBoolean(NBT_SUSPENDED, suspended);
+        tag.putBoolean(NBT_APPROVED, approved);
         return tag;
     }
 
@@ -157,7 +183,9 @@ public final class BindingRow {
         long locked = tag.contains(NBT_LOCKED_BALANCE) ? NbtCompat.getLong(tag, NBT_LOCKED_BALANCE) : 0L;
         long dust = tag.contains(NBT_DUST_BALANCE) ? NbtCompat.getLong(tag, NBT_DUST_BALANCE) : 0L;
         long boundAt = tag.contains(NBT_BOUND_AT) ? NbtCompat.getLong(tag, NBT_BOUND_AT) : 0L;
-        return new BindingRow(accountId, itemShort, ref, locked, dust, boundAt);
+        BindingRow row = new BindingRow(accountId, itemShort, ref, locked, dust, boundAt);
+        row.setFlags(NbtCompat.getBoolean(tag, NBT_SUSPENDED), NbtCompat.getBoolean(tag, NBT_APPROVED)); // absent = false
+        return row;
     }
 
     @Override

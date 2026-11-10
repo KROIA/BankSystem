@@ -11,6 +11,7 @@ import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
@@ -211,6 +212,8 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 if (data.removeBank) {
                     if (!isAdmin && bankManager.isAccountFrozen(input.accountNumber))
                         continue; // Task #117: a frozen account's banks can only be closed by an admin
+                    if (!isAdmin && BankAccountBindings.isSuspended(input.accountNumber, data.itemID))
+                        continue; // Task #146: keep a suspended binding for the admins to investigate
                     ISyncServerBank closing = account.getBank(data.itemID);
                     long destroyed = closing == null ? 0L : closing.getTotalBalance();
                     account.removeBank(data.itemID);

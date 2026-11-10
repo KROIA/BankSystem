@@ -297,6 +297,7 @@ Admin functions check these permission nodes, so a permission mod such as LuckPe
 | `banksystem.admin.command.op` | `/banksystem op` and `/banksystem deop` (BankSystem admin flag) |
 | `banksystem.admin.command.backup` | `/banksystem backup ...` |
 | `banksystem.admin.command.symbols` | `/banksystem symbols ...` |
+| `banksystem.admin.command.restorebinding` | `/banksystem restorebinding <account> [item]` (lift a suspended currency-mod binding) |
 | `banksystem.admin.command.exportrecipes` | `/banksystem exportrecipes` (dev builds only) |
 | `banksystem.admin.adminmode` | Setting the BankSystem admin mode of a player |
 | `banksystem.admin.software` | Using the Banking Software on another player in creative mode (the player also needs the BankSystem admin flag) |

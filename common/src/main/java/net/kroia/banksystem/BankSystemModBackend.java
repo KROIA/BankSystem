@@ -136,6 +136,8 @@ public class BankSystemModBackend implements BankSystemAPI {
      * Reset on server start / stop.
      */
     private static long payoutTickCounter = 0;
+    /** Task #146: set on master start; the first tick runs the foreign-binding check once. */
+    private static boolean foreignBindingCheckPending = false;
     private static @Nullable ItemPriceProvider itemPriceProvider = null;
     private static short priceCurrencyItemId = 0;
 
@@ -426,6 +428,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             snapshotTickCounter = 0;
             retentionSweepTickCounter = 0;
             payoutTickCounter = 0;
+            foreignBindingCheckPending = true;
             DatabaseManager.setBackend(INSTANCES);
             INSTANCES.DATABASE_MANAGER = new DatabaseManager();
             INSTANCES.DATABASE_MANAGER.connectToDatabase(server);
@@ -701,6 +704,13 @@ public class BankSystemModBackend implements BankSystemAPI {
     {
         if(INSTANCES.SERVER_DATA_HANDLER != null)
             INSTANCES.SERVER_DATA_HANDLER.tickUpdate();
+
+        // Task #146: once per start, after every mod's SERVER_STARTED handler (provider data loaded).
+        if (foreignBindingCheckPending && INSTANCES.SERVER_BANK_MANAGER != null
+                && INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof ServerBankManager bm) {
+            foreignBindingCheckPending = false;
+            bm.suspendForeignBindings();
+        }
 
         if (INSTANCES.BALANCE_HISTORY_MANAGER != null && INSTANCES.SERVER_SETTINGS != null) {
             snapshotTickCounter++;

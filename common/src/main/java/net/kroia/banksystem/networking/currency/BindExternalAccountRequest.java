@@ -8,9 +8,11 @@ import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -124,6 +126,10 @@ public class BindExternalAccountRequest extends BankSystemGenericRequest<BindExt
             return CompletableFuture.completedFuture(new OutputData(BankStatus.FAILED_INVALID_ITEM_ID));
         }
         BankStatus status = sbm.bindExternalAccount(input.accountId, input.itemId, ref);
+        // Task #146: record admin-made bindings so the start-up check never suspends them.
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (isAdmin && status == BankStatus.SUCCESS && bindings != null)
+            bindings.approve(input.accountId, ItemIDManager.resolveAlias(input.itemId));
         return CompletableFuture.completedFuture(new OutputData(status != null ? status : BankStatus.FAILED_EXTERNAL_UNAVAILABLE));
     }
 

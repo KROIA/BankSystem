@@ -223,6 +223,14 @@ public class BankSystemCommandsRegistration {
                 .then(Commands.literal("history")
                         .then(Commands.argument("target", StringArgumentType.word())
                                 .executes(ctx -> historyCommand(ctx.getSource(), StringArgumentType.getString(ctx, "target")))))
+                // Task #146: /banksystem restorebinding <account> [item] — lift suspended external bindings
+                .then(Commands.literal("restorebinding")
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_RESTORE_BINDING, BankSystemPermissions.FALLBACK_LEVEL))
+                        .then(Commands.argument("account", IntegerArgumentType.integer(0))
+                                .executes(ctx -> restoreBindingCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"), null))
+                                .then(Commands.argument("item", StringArgumentType.greedyString())
+                                        .executes(ctx -> restoreBindingCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"),
+                                                StringArgumentType.getString(ctx, "item"))))))
                 .then(Commands.literal("disallowItem")
                         .then(Commands.argument("itemID", StringArgumentType.string())
                                 .executes(context -> {
@@ -922,5 +930,27 @@ public class BankSystemCommandsRegistration {
         }
         handler().banksystem_alerts_async(player.getUUID(), enabled);
         return Command.SINGLE_SUCCESS;
+    }
+
+    /** Task #146: lifts suspended external bindings of an account (one slot when {@code item} is given). Master only. */
+    private static int restoreBindingCommand(CommandSourceStack source, int account, @org.jetbrains.annotations.Nullable String item) {
+        if (BACKEND_INSTANCES.SERVER_BANK_MANAGER == null
+                || !(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof net.kroia.banksystem.banking.bankmanager.ServerBankManager bm)) {
+            source.sendFailure(Component.literal("[BankSystem] restorebinding works on the master server only"));
+            return 0;
+        }
+        ServerPlayer player = source.getPlayer();
+        net.kroia.banksystem.api.ledger.LedgerActor actor = player == null
+                ? net.kroia.banksystem.api.ledger.LedgerActor.console()
+                : net.kroia.banksystem.banking.ledger.TransactionLedger.admin(player.getUUID());
+        int restored = bm.restoreSuspendedBindings(account, item, actor);
+        if (restored == 0) {
+            source.sendFailure(Component.literal("[BankSystem] no suspended external binding on account " + account
+                    + (item != null ? " for " + item : "")));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("[BankSystem] restored " + restored
+                + " external binding(s) on account " + account), true);
+        return restored;
     }
 }

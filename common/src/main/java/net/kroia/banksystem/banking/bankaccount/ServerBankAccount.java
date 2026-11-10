@@ -966,8 +966,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         for (Map.Entry<ItemID, ServerBank> entry : banks.entrySet()) {
             ServerBank bank = entry.getValue();
             // Task #57: no "not-removable" special-casing anymore — an empty money slot is
-            // pruned like any other empty slot.
-            if (bank.getTotalBalance() <= 0) {
+            // pruned like any other empty slot. Task #146: a suspended binding reads as empty; keep it.
+            if (bank.getTotalBalance() <= 0 && !BankAccountBindings.isSuspended(accountNumber, entry.getKey())) {
                 emptyBanks.add(entry.getKey());
             }
         }

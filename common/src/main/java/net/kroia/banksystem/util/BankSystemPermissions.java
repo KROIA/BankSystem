@@ -16,6 +16,7 @@ public final class BankSystemPermissions {
     public static final String COMMAND_BACKUP = "banksystem.admin.command.backup";
     public static final String COMMAND_SYMBOLS = "banksystem.admin.command.symbols";
     public static final String COMMAND_EXPORTRECIPES = "banksystem.admin.command.exportrecipes";
+    public static final String COMMAND_RESTORE_BINDING = "banksystem.admin.command.restorebinding"; // Task #146
     public static final String ADMIN_MODE = "banksystem.admin.adminmode";
     public static final String SOFTWARE = "banksystem.admin.software";
     /** Task #107: source of the BankSystem admin flag while Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION is on. */
@@ -24,7 +25,7 @@ public final class BankSystemPermissions {
     /** Registers all nodes with ModUtilities. Must run during mod init, before the server starts (NeoForge). */
     public static void register() {
         for (String node : new String[]{COMMAND_TRUST, COMMAND_OP, COMMAND_BACKUP, COMMAND_SYMBOLS,
-                COMMAND_EXPORTRECIPES, ADMIN_MODE, SOFTWARE, ADMIN}) {
+                COMMAND_EXPORTRECIPES, COMMAND_RESTORE_BINDING, ADMIN_MODE, SOFTWARE, ADMIN}) {
             PermissionCompat.registerNode(node, FALLBACK_LEVEL);
         }
     }
