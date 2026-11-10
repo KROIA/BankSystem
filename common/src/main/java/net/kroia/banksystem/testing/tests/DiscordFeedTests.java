@@ -75,6 +75,7 @@ public class DiscordFeedTests extends TestSuite {
 
     @Override
     public void registerTests() {
+        addTest("amount_text_format", this::amountText);
         addTest("deposit_posts_one_embed", () -> master(this::deposit));
         addTest("transfer_posts_out_and_in", () -> master(this::transfer));
         addTest("payout_posts_recipient_leg_only", () -> master(this::payout));
@@ -130,10 +131,24 @@ public class DiscordFeedTests extends TestSuite {
         Map<String, String> v = posts.get(0).getValue();
         if (!"DiscordTestPlayer".equals(v.get("player")) || !PLAYER.toString().equals(v.get("player_uuid"))
                 || !v.get("account").startsWith("#" + holderAccount + " ") || !v.get("item").endsWith("(" + item.getName() + ")")
-                || !"12.34".equals(v.get("amount")) || !"DEPOSIT".equals(v.get("kind")) || !v.get("time").matches("<t:\\d+:f>")
+                || !"12.34".equals(v.get("amount")) || !"12.34".equals(v.get("amountText")) || !"DEPOSIT".equals(v.get("kind")) || !v.get("time").matches("<t:\\d+:f>")
                 || !v.get("other_account").isEmpty() || !v.get("holders").isEmpty())
             return fail("values " + v);
         return pass("1 bank-deposit with player, account, item, amount 12.34, kind and time");
+    }
+
+    /** amountText: money keeps 2 decimals with ' grouping, other items drop ".00", 0 stays empty like amount. */
+    private TestResult amountText() {
+        String[][] cases = {
+                {BankSystemDiscord.amountText(150_000L, true), "1'500.00"},
+                {BankSystemDiscord.amountText(42_050L, true), "420.50"},
+                {BankSystemDiscord.amountText(300L, false), "3"},
+                {BankSystemDiscord.amountText(150_000L, false), "1'500"},
+                {BankSystemDiscord.amountText(250L, false), "2.50"},
+                {BankSystemDiscord.amountText(0L, true), ""}};
+        for (String[] c : cases)
+            if (!c[1].equals(c[0])) return fail("amountText '" + c[0] + "', expected '" + c[1] + "'");
+        return pass("money 1'500.00 / 420.50, items 3 / 1'500 / 2.50, 0 empty");
     }
 
     private TestResult transfer() {
@@ -153,7 +168,7 @@ public class DiscordFeedTests extends TestSuite {
         if (posts.size() != 1 || !"bank-payout".equals(posts.get(0).getKey())) return fail("posts " + posts);
         Map<String, String> v = posts.get(0).getValue();
         if (!v.get("account").startsWith("#" + holderAccount + " ") || !company.getName().equals(v.get("company"))
-                || !"7".equals(v.get("amount")))
+                || !"7".equals(v.get("amount")) || !"7.00".equals(v.get("amountText")))
             return fail("values " + v);
         return pass("payout pair -> 1 post on the recipient account");
     }
@@ -168,7 +183,8 @@ public class DiscordFeedTests extends TestSuite {
         var posts = capture(true, () -> TransactionLedger.writeAll(rows));
         if (posts.size() != 1 || !"bank-dividend".equals(posts.get(0).getKey())) return fail("posts " + posts);
         Map<String, String> v = posts.get(0).getValue();
-        if (!"3".equals(v.get("holders")) || !"6".equals(v.get("amount"))) return fail("values " + v);
+        if (!"3".equals(v.get("holders")) || !"6".equals(v.get("amount")) || !"6.00".equals(v.get("amountText")))
+            return fail("values " + v);
         return pass("3 recipient rows -> 1 bank-dividend, holders 3, amount = sum");
     }
 
@@ -179,10 +195,11 @@ public class DiscordFeedTests extends TestSuite {
 
     private TestResult suspicion() {
         var posts = capture(true, () -> BankSystemMod.getAPI().getEvents().getSuspicionFlaggedEvent().notifyListeners(
-                new SuspicionFlaggedEvent(holderAccount, 9999, "FLAG_9999", 2, 123L, "ref-x", MARKER, System.currentTimeMillis())));
+                new SuspicionFlaggedEvent(holderAccount, 9999, "FLAG_9999", 2, 42_050L, "ref-x", MARKER, System.currentTimeMillis())));
         if (posts.size() != 1 || !"bank-suspicion".equals(posts.get(0).getKey())) return fail("posts " + posts);
         Map<String, String> v = posts.get(0).getValue();
-        if (!"FLAG_9999".equals(v.get("flag")) || !"2".equals(v.get("severity")) || !"1.23".equals(v.get("amount"))
+        if (!"FLAG_9999".equals(v.get("flag")) || !"2".equals(v.get("severity")) || !"420.5".equals(v.get("amount"))
+                || !"420.50".equals(v.get("amountText"))
                 || !"ref-x".equals(v.get("ref")) || !v.get("account").startsWith("#" + holderAccount + " "))
             return fail("values " + v);
         return pass("flag event -> 1 bank-suspicion");
@@ -212,7 +229,9 @@ public class DiscordFeedTests extends TestSuite {
                 JsonObject root = JsonParser.parseString(new String(in.readAllBytes(), StandardCharsets.UTF_8)).getAsJsonObject();
                 for (String type : BankSystemDiscord.TYPES) {
                     String values = root.getAsJsonObject(type).getAsJsonArray("fields").toString();
-                    if (type.equals("bank-suspicion")) {
+                    if (values.contains("{amount}") || !values.contains("{amountText}")) {
+                        return fail(lang + " " + type + " should show {amountText}, not {amount}: " + values);
+                    } else if (type.equals("bank-suspicion")) {
                         if (!values.contains("{account}")) return fail(lang + " bank-suspicion lacks {account}");
                     } else if (values.contains("{account}") || values.contains("{player_uuid}") || values.contains("{other_account}")) {
                         return fail(lang + " " + type + " shows account, UUID or counterparty: " + values);
@@ -224,7 +243,7 @@ public class DiscordFeedTests extends TestSuite {
                 return fail("cannot read " + lang + ".json: " + e);
             }
         }
-        return pass("4 languages: bank-* show {player} without account/UUID/counterparty; bank-suspicion keeps {account}");
+        return pass("4 languages: {amountText}; bank-* show {player} without account/UUID/counterparty; bank-suspicion keeps {account}");
     }
 
     private TestResult slave() {

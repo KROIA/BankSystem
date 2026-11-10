@@ -12,7 +12,9 @@ import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
 import net.kroia.banksystem.minecraft.command.ServerBankSystemCommandHandler;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.MoneyFormat;
 import net.kroia.modutilities.discord.DiscordWebhooks;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
@@ -96,6 +98,7 @@ public final class BankSystemDiscord {
             v.put("flag", e.flagName());
             v.put("severity", String.valueOf(e.severity()));
             v.put("amount", amount(Math.abs(e.amount())));
+            v.put("amountText", amountText(Math.abs(e.amount()), true)); // every flag amount is money
             v.put("details", e.details() == null ? "" : e.details());
             v.put("ref", e.ref() == null ? "" : e.ref());
             v.put("time", time(e.timeMs()));
@@ -156,6 +159,7 @@ public final class BankSystemDiscord {
         v.put("other_account", e.otherAccount() == null ? "" : account(e.otherAccount()));
         v.put("item", item(e.itemId()));
         v.put("amount", amount(raw));
+        v.put("amountText", amountText(raw, MoneyItem.isMoney(new ItemID(e.itemId()))));
         v.put("holders", holders > 0 ? String.valueOf(holders) : "");
         v.put("company", e.companyId() == null ? "" : c != null ? c.getName() : "#" + e.companyId());
         v.put("kind", e.type().name());
@@ -182,6 +186,13 @@ public final class BankSystemDiscord {
     /** Raw units (scale {@code ITEM_FRACTION_SCALE_FACTOR} = 100) as a plain number; empty for 0 so minAmount never hides it. */
     static String amount(long raw) {
         return raw == 0 ? "" : BigDecimal.valueOf(raw, 2).stripTrailingZeros().toPlainString();
+    }
+
+    /** Display text of {@link #amount}: money {@code 1'500.00}; other items drop ".00" ({@code 3}, {@code 1'500}, {@code 2.50}); empty for 0. */
+    public static String amountText(long raw, boolean money) {
+        if (raw == 0) return "";
+        String s = MoneyFormat.format(raw);
+        return money || raw % MoneyFormat.SCALE != 0 ? s : s.substring(0, s.length() - 3);
     }
 
     private static String time(long ms) {

@@ -5,7 +5,7 @@
     "fields": [
       {"name": "Player", "value": "{player}", "inline": true},
       {"name": "Item", "value": "{item}", "inline": true},
-      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Amount", "value": "{amountText}", "inline": true},
       {"name": "Holders", "value": "{holders}", "inline": true},
       {"name": "Company", "value": "{company}", "inline": true},
       {"name": "Kind", "value": "{kind}", "inline": true},
@@ -19,7 +19,7 @@
     "fields": [
       {"name": "Player", "value": "{player}", "inline": true},
       {"name": "Item", "value": "{item}", "inline": true},
-      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Amount", "value": "{amountText}", "inline": true},
       {"name": "Holders", "value": "{holders}", "inline": true},
       {"name": "Company", "value": "{company}", "inline": true},
       {"name": "Kind", "value": "{kind}", "inline": true},
@@ -33,7 +33,7 @@
     "fields": [
       {"name": "Player", "value": "{player}", "inline": true},
       {"name": "Item", "value": "{item}", "inline": true},
-      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Amount", "value": "{amountText}", "inline": true},
       {"name": "Holders", "value": "{holders}", "inline": true},
       {"name": "Company", "value": "{company}", "inline": true},
       {"name": "Kind", "value": "{kind}", "inline": true},
@@ -47,7 +47,7 @@
     "fields": [
       {"name": "Player", "value": "{player}", "inline": true},
       {"name": "Item", "value": "{item}", "inline": true},
-      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Amount", "value": "{amountText}", "inline": true},
       {"name": "Holders", "value": "{holders}", "inline": true},
       {"name": "Company", "value": "{company}", "inline": true},
       {"name": "Kind", "value": "{kind}", "inline": true},
@@ -61,7 +61,7 @@
     "fields": [
       {"name": "Player", "value": "{player}", "inline": true},
       {"name": "Item", "value": "{item}", "inline": true},
-      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Amount", "value": "{amountText}", "inline": true},
       {"name": "Holders", "value": "{holders}", "inline": true},
       {"name": "Company", "value": "{company}", "inline": true},
       {"name": "Kind", "value": "{kind}", "inline": true},
@@ -75,7 +75,7 @@
     "fields": [
       {"name": "Player", "value": "{player}", "inline": true},
       {"name": "Item", "value": "{item}", "inline": true},
-      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Amount", "value": "{amountText}", "inline": true},
       {"name": "Holders", "value": "{holders}", "inline": true},
       {"name": "Company", "value": "{company}", "inline": true},
       {"name": "Kind", "value": "{kind}", "inline": true},
@@ -89,7 +89,7 @@
     "fields": [
       {"name": "Player", "value": "{player}", "inline": true},
       {"name": "Item", "value": "{item}", "inline": true},
-      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Amount", "value": "{amountText}", "inline": true},
       {"name": "Holders", "value": "{holders}", "inline": true},
       {"name": "Company", "value": "{company}", "inline": true},
       {"name": "Kind", "value": "{kind}", "inline": true},
@@ -103,7 +103,7 @@
     "fields": [
       {"name": "Player", "value": "{player}", "inline": true},
       {"name": "Item", "value": "{item}", "inline": true},
-      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Amount", "value": "{amountText}", "inline": true},
       {"name": "Holders", "value": "{holders}", "inline": true},
       {"name": "Company", "value": "{company}", "inline": true},
       {"name": "Kind", "value": "{kind}", "inline": true},
@@ -117,7 +117,7 @@
     "fields": [
       {"name": "Player", "value": "{player}", "inline": true},
       {"name": "Item", "value": "{item}", "inline": true},
-      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Amount", "value": "{amountText}", "inline": true},
       {"name": "Holders", "value": "{holders}", "inline": true},
       {"name": "Company", "value": "{company}", "inline": true},
       {"name": "Kind", "value": "{kind}", "inline": true},
@@ -132,7 +132,7 @@
       {"name": "Account", "value": "{account}", "inline": true},
       {"name": "Flag", "value": "{flag}", "inline": true},
       {"name": "Severity", "value": "{severity}", "inline": true},
-      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Amount", "value": "{amountText}", "inline": true},
       {"name": "Details", "value": "{details}", "inline": false},
       {"name": "Reference", "value": "{ref}", "inline": true},
       {"name": "Time", "value": "{time}", "inline": false}

@@ -196,15 +196,15 @@ To protect players' privacy, the default `bank-*` messages name the player only.
     {"name": "Account", "value": "{account}", "inline": true},
     {"name": "Counterparty", "value": "{other_account}", "inline": true},
     {"name": "Item", "value": "{item}", "inline": true},
-    {"name": "Amount", "value": "{amount}", "inline": true},
+    {"name": "Amount", "value": "{amountText}", "inline": true},
     {"name": "Time", "value": "{time}", "inline": false}
   ]
 }
 ```
 
-Then run `/modutilities discord reload`. Available values: `{player}`, `{player_uuid}`, `{account}` (`#<number> <name>`), `{other_account}`, `{item}`, `{amount}`, `{holders}`, `{company}`, `{kind}`, `{note}`, `{time}`. A field whose value is empty is left out.
+Then run `/modutilities discord reload`. Available values: `{player}`, `{player_uuid}`, `{account}` (`#<number> <name>`), `{other_account}`, `{item}`, `{amountText}`, `{amount}`, `{holders}`, `{company}`, `{kind}`, `{note}`, `{time}`. A field whose value is empty is left out. `{amountText}` is the formatted amount: money as `1'500.00`, other items without decimals unless needed (`3`, `1'500`, `2.50`). `{amount}` is the plain number (`1500`) that `minAmount` is compared against.
 
-`bank-suspicion` is the exception: it shows the flagged account by default (values `{account}`, `{flag}`, `{severity}`, `{amount}`, `{details}`, `{ref}`, `{time}`). Route it to a channel that only admins can read.
+`bank-suspicion` is the exception: it shows the flagged account by default (values `{account}`, `{flag}`, `{severity}`, `{amountText}`, `{amount}`, `{details}`, `{ref}`, `{time}`). Route it to a channel that only admins can read.
 
 ---
 ## Volatile & Deposit-Gated Item Components

@@ -5,7 +5,7 @@
     "fields": [
       {"name": "Spieler", "value": "{player}", "inline": true},
       {"name": "Gegenstand", "value": "{item}", "inline": true},
-      {"name": "Betrag", "value": "{amount}", "inline": true},
+      {"name": "Betrag", "value": "{amountText}", "inline": true},
       {"name": "Halter", "value": "{holders}", "inline": true},
       {"name": "Unternehmen", "value": "{company}", "inline": true},
       {"name": "Art", "value": "{kind}", "inline": true},
@@ -19,7 +19,7 @@
     "fields": [
       {"name": "Spieler", "value": "{player}", "inline": true},
       {"name": "Gegenstand", "value": "{item}", "inline": true},
-      {"name": "Betrag", "value": "{amount}", "inline": true},
+      {"name": "Betrag", "value": "{amountText}", "inline": true},
       {"name": "Halter", "value": "{holders}", "inline": true},
       {"name": "Unternehmen", "value": "{company}", "inline": true},
       {"name": "Art", "value": "{kind}", "inline": true},
@@ -33,7 +33,7 @@
     "fields": [
       {"name": "Spieler", "value": "{player}", "inline": true},
       {"name": "Gegenstand", "value": "{item}", "inline": true},
-      {"name": "Betrag", "value": "{amount}", "inline": true},
+      {"name": "Betrag", "value": "{amountText}", "inline": true},
       {"name": "Halter", "value": "{holders}", "inline": true},
       {"name": "Unternehmen", "value": "{company}", "inline": true},
       {"name": "Art", "value": "{kind}", "inline": true},
@@ -47,7 +47,7 @@
     "fields": [
       {"name": "Spieler", "value": "{player}", "inline": true},
       {"name": "Gegenstand", "value": "{item}", "inline": true},
-      {"name": "Betrag", "value": "{amount}", "inline": true},
+      {"name": "Betrag", "value": "{amountText}", "inline": true},
       {"name": "Halter", "value": "{holders}", "inline": true},
       {"name": "Unternehmen", "value": "{company}", "inline": true},
       {"name": "Art", "value": "{kind}", "inline": true},
@@ -61,7 +61,7 @@
     "fields": [
       {"name": "Spieler", "value": "{player}", "inline": true},
       {"name": "Gegenstand", "value": "{item}", "inline": true},
-      {"name": "Betrag", "value": "{amount}", "inline": true},
+      {"name": "Betrag", "value": "{amountText}", "inline": true},
       {"name": "Halter", "value": "{holders}", "inline": true},
       {"name": "Unternehmen", "value": "{company}", "inline": true},
       {"name": "Art", "value": "{kind}", "inline": true},
@@ -75,7 +75,7 @@
     "fields": [
       {"name": "Spieler", "value": "{player}", "inline": true},
       {"name": "Gegenstand", "value": "{item}", "inline": true},
-      {"name": "Betrag", "value": "{amount}", "inline": true},
+      {"name": "Betrag", "value": "{amountText}", "inline": true},
       {"name": "Halter", "value": "{holders}", "inline": true},
       {"name": "Unternehmen", "value": "{company}", "inline": true},
       {"name": "Art", "value": "{kind}", "inline": true},
@@ -89,7 +89,7 @@
     "fields": [
       {"name": "Spieler", "value": "{player}", "inline": true},
       {"name": "Gegenstand", "value": "{item}", "inline": true},
-      {"name": "Betrag", "value": "{amount}", "inline": true},
+      {"name": "Betrag", "value": "{amountText}", "inline": true},
       {"name": "Halter", "value": "{holders}", "inline": true},
       {"name": "Unternehmen", "value": "{company}", "inline": true},
       {"name": "Art", "value": "{kind}", "inline": true},
@@ -103,7 +103,7 @@
     "fields": [
       {"name": "Spieler", "value": "{player}", "inline": true},
       {"name": "Gegenstand", "value": "{item}", "inline": true},
-      {"name": "Betrag", "value": "{amount}", "inline": true},
+      {"name": "Betrag", "value": "{amountText}", "inline": true},
       {"name": "Halter", "value": "{holders}", "inline": true},
       {"name": "Unternehmen", "value": "{company}", "inline": true},
       {"name": "Art", "value": "{kind}", "inline": true},
@@ -117,7 +117,7 @@
     "fields": [
       {"name": "Spieler", "value": "{player}", "inline": true},
       {"name": "Gegenstand", "value": "{item}", "inline": true},
-      {"name": "Betrag", "value": "{amount}", "inline": true},
+      {"name": "Betrag", "value": "{amountText}", "inline": true},
       {"name": "Halter", "value": "{holders}", "inline": true},
       {"name": "Unternehmen", "value": "{company}", "inline": true},
       {"name": "Art", "value": "{kind}", "inline": true},
@@ -132,7 +132,7 @@
       {"name": "Konto", "value": "{account}", "inline": true},
       {"name": "Art", "value": "{flag}", "inline": true},
       {"name": "Schweregrad", "value": "{severity}", "inline": true},
-      {"name": "Betrag", "value": "{amount}", "inline": true},
+      {"name": "Betrag", "value": "{amountText}", "inline": true},
       {"name": "Details", "value": "{details}", "inline": false},
       {"name": "Referenz", "value": "{ref}", "inline": true},
       {"name": "Zeit", "value": "{time}", "inline": false}
