@@ -12,6 +12,7 @@ import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
 import net.kroia.banksystem.networking.multi_server.ServerInfoRequest;
 import net.kroia.banksystem.networking.multi_server.ServerNetworkInfoRequest;
+import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
@@ -287,18 +288,26 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
     //{
     //    return Request.instance;
     //}
+    /**
+     * Issue #79: a failed request (timeout, disconnect) or a null reply (master answered, outcome unknown) fails the
+     * future instead of leaving it pending forever. Each command tells the admin through {@link #reportFailure}.
+     */
     private CompletableFuture<OutputData> sendRequest(InputData input)
     {
-        CompletableFuture<OutputData> future = new CompletableFuture<>();
         CompletableFuture<OutputData> tmpFuture;
         tmpFuture = Request.instance.sendRequestToMaster(input);
 
-        tmpFuture.thenAccept(outputData ->{
+        CompletableFuture<OutputData> future = tmpFuture.thenApply(outputData ->{
+            if(outputData == null)
+                throw new IllegalStateException("null ARRS reply: " + input.function);
             if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Response received for request: "+ input.function.toString());
-            future.complete(outputData);
+            return outputData;
         });
-
+        future.whenComplete((o, ex) -> {
+            if(ex != null)
+                warn("Request " + input.function + " failed: " + TransferStatusRequest.cause(ex));
+        });
         return future;
     }
 
@@ -413,7 +422,9 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         if(!MultiServerUtils.checkConnectionToMaster(executor))
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
-        BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(executor).thenAcceptAsync(result -> {
+        CompletableFuture<Boolean> isAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(executor).thenApply(java.util.Objects::requireNonNull);
+        failInto(isAdmin, future, executor);
+        isAdmin.thenAcceptAsync(result -> {
             ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
             if(result)
             {
@@ -437,9 +448,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_setBankSystemAdminMode, executor, isAdmin));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -450,9 +459,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_setBankSystemAdminMode_user, executor, new ParamGroup_String_Bool(userName, isAdmin)));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }*/
 
@@ -463,9 +470,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_allowItem, executor, itemID));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -476,7 +481,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_freeze, executor, new ParamGroup_int_int(accountNumber, mode)));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -487,7 +492,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_alerts, executor, enabled));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -496,16 +501,12 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         if(!MultiServerUtils.checkConnectionToMaster(executor))
             return CompletableFuture.completedFuture("");
         CompletableFuture<String> future = new CompletableFuture<>();
-        sendRequest(InputData.of(FunctionType.Banksystem_auditreport, executor, hours)).whenComplete((outputData, t) -> {
-            if (t != null) {
-                error("Audit report request failed for player: " + Request.tryGetPlayerName(executor), t);
-                future.complete("");
-            } else {
-                String path = outputData.decodeResult();
-                future.complete(path == null ? "" : path);
-            }
+        AsyncFunctionOutputData.relay(sendRequest(InputData.of(FunctionType.Banksystem_auditreport, executor, hours)), future);
+        future.whenComplete((path, ex) -> {
+            if(ex != null)
+                reportFailure(executor, ex);
         });
-        return future;
+        return future.thenApply(path -> path == null ? "" : path);
     }
 
     @Override
@@ -515,9 +516,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Banksystem_disallowItem, executor, itemID));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
     @Override
@@ -537,7 +536,13 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         if(server == null)
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
-        ServerNetworkInfoRequest.sendRequest().thenAccept(serverNetworkInfo -> {
+        var infoFuture = ServerNetworkInfoRequest.sendRequest().thenApply(o -> {
+            if(o == null)
+                throw new IllegalStateException("null ARRS reply: server network info");
+            return o;
+        });
+        failInto(infoFuture, future, executor);
+        infoFuture.thenAccept(serverNetworkInfo -> {
             StringBuilder builder = new StringBuilder();
             builder.append("§8============================================\n");
             List<ServerInfoRequest.ServerInfo> servers = serverNetworkInfo.servers();
@@ -563,9 +568,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money, executor));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -576,9 +579,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_add, executor, amount));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -589,9 +590,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_add_user, executor, new ParamGroup_String_Float(userName, amount)));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -602,9 +601,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_set, executor, amount));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -615,9 +612,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_set_user, executor, new ParamGroup_String_Float(userName, amount)));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -628,9 +623,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_remove, executor, amount));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -641,9 +634,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_remove_user, executor, new ParamGroup_String_Float(userName, amount)));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -654,9 +645,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_send_user, executor, new ParamGroup_String_Float(toUserName, amount)));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -667,9 +656,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Money_circulation, executor));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -682,8 +669,10 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         if(!MultiServerUtils.checkConnectionToMaster(executor))
             return CompletableFuture.completedFuture(false);
         CompletableFuture<IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getOrCreatePersonalBankAccountAsync(executor);
-        CompletableFuture<Boolean> isAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(executor);
+        CompletableFuture<Boolean> isAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(executor).thenApply(java.util.Objects::requireNonNull);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
+        failInto(account, future, executor);
+        failInto(isAdmin, future, executor);
 
         account.thenAccept(result -> {
             if(result == null)
@@ -708,8 +697,10 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
             return CompletableFuture.completedFuture(false);
         IAsyncBankManager manager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
         CompletableFuture<IAsyncBankAccount> account = manager.getBankAccountByNameAsync(accountName);
-        CompletableFuture<Boolean> isAdmin = manager.isBanksystemAdminAsync(executor);
+        CompletableFuture<Boolean> isAdmin = manager.isBanksystemAdminAsync(executor).thenApply(java.util.Objects::requireNonNull);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
+        failInto(account, future, executor);
+        failInto(isAdmin, future, executor);
 
         account.thenAccept(result -> {
 
@@ -718,7 +709,9 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
                 future.complete(false);
                 return;
             }
-            CompletableFuture<Boolean> hasPermission = result.hasUserAsync(executor);
+            // Issue #79: a null Boolean reply fails (unknown outcome -> reportFailure) instead of an unboxing NPE that hangs.
+            CompletableFuture<Boolean> hasPermission = result.hasUserAsync(executor).thenApply(java.util.Objects::requireNonNull);
+            failInto(hasPermission, future, executor);
             hasPermission.thenAccept(hasPermissionResult -> {
                 isAdmin.thenAccept(isAdminResult -> {
 
@@ -744,8 +737,10 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
             return CompletableFuture.completedFuture(false);
         IAsyncBankManager manager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
         CompletableFuture<IAsyncBankAccount> account = manager.getBankAccountAsync(accountNr);
-        CompletableFuture<Boolean> isAdmin = manager.isBanksystemAdminAsync(executor);
+        CompletableFuture<Boolean> isAdmin = manager.isBanksystemAdminAsync(executor).thenApply(java.util.Objects::requireNonNull);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
+        failInto(account, future, executor);
+        failInto(isAdmin, future, executor);
 
         account.thenAccept(result -> {
 
@@ -754,7 +749,9 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
                 future.complete(false);
                 return;
             }
-            CompletableFuture<Boolean> hasPermission = result.hasUserAsync(executor);
+            // Issue #79: a null Boolean reply fails (unknown outcome -> reportFailure) instead of an unboxing NPE that hangs.
+            CompletableFuture<Boolean> hasPermission = result.hasUserAsync(executor).thenApply(java.util.Objects::requireNonNull);
+            failInto(hasPermission, future, executor);
             hasPermission.thenAccept(hasPermissionResult -> {
                 isAdmin.thenAccept(isAdminResult -> {
 
@@ -777,30 +774,21 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
     {
         if(!MultiServerUtils.checkConnectionToMaster(executor))
             return CompletableFuture.completedFuture(null);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Bank_create, executor, accountName));
-        outputDataFuture.whenComplete((result, throwable) -> {
+        CompletableFuture<Integer> accountNrFuture = new CompletableFuture<>();
+        AsyncFunctionOutputData.relay(sendRequest(InputData.of(FunctionType.Bank_create, executor, accountName)), accountNrFuture);
+        accountNrFuture.whenComplete((accountNr, throwable) -> {
             if(throwable != null)
             {
-                error("Async command execution result for command "+result.function.name()+" from player: "+Request.tryGetPlayerName(executor)+" Result: Failure", throwable);
-                ServerPlayerUtilities.printToClientConsole(executor, "Bank creation failed");
+                reportFailure(executor, throwable);
+                return;
             }
-            else
-            {
-                int accountNr = result.decodeResult();
-                boolean success = accountNr > 0;
-                String text = "Async command execution result for command "+result.function.name()+" from player: "+Request.tryGetPlayerName(executor)+" Result: "+(success?"Success":"Failure");
-                info(text);
-                if(!success)
-                    ServerPlayerUtilities.printToClientConsole(executor, text);
-            }
+            boolean success = accountNr != null && accountNr > 0;
+            String text = "Async command execution result for command "+FunctionType.Bank_create.name()+" from player: "+Request.tryGetPlayerName(executor)+" Result: "+(success?"Success":"Failure");
+            info(text);
+            if(!success)
+                ServerPlayerUtilities.printToClientConsole(executor, text);
         });
-        CompletableFuture<IAsyncBankAccount> future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            int accountNr = outputData.decodeResult();
-            IAsyncBankAccount account = AsyncBankAccount.createSlaveServerBank(accountNr);
-            future.complete(account);
-        });
-        return future;
+        return accountNrFuture.thenApply(accountNr -> AsyncBankAccount.createSlaveServerBank(accountNr));
     }
 
 
@@ -812,9 +800,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         CompletableFuture<OutputData> outputDataFuture = sendRequest(InputData.of(FunctionType.Bank_show_user, executor, userName));
         handleResponse(outputDataFuture, executor);
         CompletableFuture<Boolean>  future = new CompletableFuture<>();
-        outputDataFuture.thenAccept(outputData -> {
-            future.complete(outputData.decodeResult());
-        });
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -825,15 +811,13 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
     private static void handleResponse(CompletableFuture<OutputData> response, UUID executor)
     {
         response.whenComplete((result, throwable) -> {
-            String playerName = Request.tryGetPlayerName(executor);
             if(throwable != null)
             {
-                String text = "Async command execution failed for player: "+playerName;
-                error(text, throwable);
-                ServerPlayerUtilities.printToClientConsole(executor, text);
+                reportFailure(executor, throwable);
                 return;
             }
-            boolean success = (Boolean)result.decodeResult();
+            String playerName = Request.tryGetPlayerName(executor);
+            boolean success = Boolean.TRUE.equals(result.decodeResult());
             String text = "Async command execution result for command "+result.function.name()+" from player: "+playerName+" Result: "+(success?"Success":"Failure");
             info(text);
 
@@ -841,6 +825,25 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
             {
                 ServerPlayerUtilities.printToClientConsole(executor, text);
             }
+        });
+    }
+
+    /**
+     * Issue #79: a forwarded command failed (timeout, not sent, null reply, disconnect). The outcome may be unknown, so the admin
+     * is told to check instead of being told it failed.
+     */
+    static void reportFailure(UUID executor, Throwable ex)
+    {
+        error("Async command execution failed for player: " + Request.tryGetPlayerName(executor), TransferStatusRequest.cause(ex));
+        ServerPlayerUtilities.printToClientConsole(executor, "Request to the master server failed or timed out; check the result before retrying.");
+    }
+
+    /** Issue #79: when {@code src} fails, {@code dst} fails with it and the admin is told once. */
+    private static void failInto(CompletableFuture<?> src, CompletableFuture<?> dst, UUID executor)
+    {
+        src.whenComplete((r, ex) -> {
+            if(ex != null && dst.completeExceptionally(ex))
+                reportFailure(executor, ex);
         });
     }
 

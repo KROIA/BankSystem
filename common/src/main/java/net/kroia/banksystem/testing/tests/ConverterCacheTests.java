@@ -203,6 +203,11 @@ public class ConverterCacheTests extends TestSuite {
         AsyncFunctionOutputData.relay(CompletableFuture.<AsyncBank.OutputData>failedFuture(new RuntimeException("boom")), failedSrc);
         if (!failedSrc.isCompletedExceptionally()) return fail("failed src must fail dst");
 
+        // Issue #79: a null reply (outcome unknown) must fail dst too, never hang it.
+        CompletableFuture<Long> nullSrc = new CompletableFuture<>();
+        AsyncFunctionOutputData.relay(CompletableFuture.<AsyncBank.OutputData>completedFuture(null), nullSrc);
+        if (!nullSrc.isCompletedExceptionally()) return fail("null src must fail dst");
+
         StreamCodec<RegistryFriendlyByteBuf, Long> throwing = StreamCodec.of((buf, v) -> {},
                 buf -> { throw new IllegalStateException("decode boom"); });
         CompletableFuture<Long> decodeFail = new CompletableFuture<>();

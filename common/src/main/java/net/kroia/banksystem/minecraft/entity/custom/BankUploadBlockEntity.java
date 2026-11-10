@@ -425,7 +425,8 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             }
                             ItemID baseSlotId = new ItemID(variantBinding.itemIdShort());
                             final long finalDeposit = amountToDeposit;
-                            account.getOrCreateBankAsync(baseSlotId).thenAccept(baseBank -> {
+                            // Issue #79: a failed bank lookup sent no deposit yet, so it falls back like "not created" (null)
+                            account.getOrCreateBankAsync(baseSlotId).exceptionally(ex -> null).thenAccept(baseBank -> {
                                 if (baseBank == null) {
                                     if (dropIfNotBankable) {
                                         dropItem(stack);
@@ -474,7 +475,8 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             bankFuture = account.getOrCreateBankAsync(itemID);
                         }
 
-                        bankFuture.thenAccept(bank->{
+                        // Issue #79: a failed bank lookup sent no deposit yet, so it falls back like "not created" (null)
+                        bankFuture.exceptionally(ex -> null).thenAccept(bank->{
                             if(bank == null)
                             {
                                 if(dropIfNotBankable){

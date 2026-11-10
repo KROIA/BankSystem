@@ -121,7 +121,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     // ── Balance overview state ──
 
     private int slotCount = 0;
-    private boolean overviewDataPending = false;
+    private volatile boolean overviewDataPending = false;
     private volatile BankAccountData pendingOverviewData = null;
     private Label overviewAccountLabel;
     private final List<ItemView> overviewIcons = new ArrayList<>();
@@ -565,8 +565,9 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         overviewDataPending = true;
 
         BACKEND.SERVER_BANK_MANAGER.getAsync().getBankAccountDataAsync(accountNumber)
-                .thenAccept(data -> {
-                    pendingOverviewData = data;
+                .whenComplete((data, ex) -> {
+                    if (data != null) pendingOverviewData = data;
+                    else overviewDataPending = false; // Issue #79: failed or empty reply, retry on the next poll
                 });
     }
 

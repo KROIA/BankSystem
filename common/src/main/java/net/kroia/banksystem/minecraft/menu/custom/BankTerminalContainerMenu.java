@@ -1139,7 +1139,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
             } else {
                 bankFuture = account.getOrCreateBankAsync(itemID);
             }
-            bankFuture.thenAccept(bank -> {
+            // Issue #79: a failed bank lookup sent no deposit yet, so it falls back like "not created" (null)
+            bankFuture.exceptionally(ex -> null).thenAccept(bank -> {
                 if (bank == null) {
                     ServerPlayerUtilities.printToClientConsole(player.getUUID(),
                             BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));

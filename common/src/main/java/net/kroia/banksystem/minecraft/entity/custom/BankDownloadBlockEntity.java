@@ -538,6 +538,9 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             return CompletableFuture.completedFuture(false);
 
         CompletableFuture<@Nullable BankData> itemBankDataFuture = account.getBankDataAsync(item);
+        // Issue #79: a failed request completes the order as "nothing withdrawn"; a pending result would leave
+        // currentlyReceiving stuck and the block dead until reload. No unlock on any failure: the outcome is unknown.
+        itemBankDataFuture.exceptionally(ex -> { result.complete(false); return null; });
         itemBankDataFuture.thenAccept((itemBankData) -> {
             if (itemBankData == null) {
                 result.complete(false);
@@ -559,7 +562,9 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
 
             CompletableFuture<@Nullable IAsyncBank> itemBankFuture = account.getBankAsync(item);
+            itemBankFuture.exceptionally(ex -> { result.complete(false); return null; });
             itemBankFuture.thenAccept((itemBank) -> {
+                if (itemBank == null) { result.complete(false); return; }
                 CompletableFuture<Integer> filledAmountFuture = withdrawAndFillInventory(item, amountToFill, itemBank);
                 filledAmountFuture.thenAccept((filledAmount) -> {
                     result.complete(filledAmount > 0);
@@ -578,6 +583,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         // and the withdraw math produces exactly 1 physical coin with zero dust.
         final long ratio = BankAccountBindings.getRawUnitsPerItem(bankAccountNumber, item);
         CompletableFuture<Long>  currentBalanceFuture = itemBank.getBalanceAsync();
+        currentBalanceFuture.exceptionally(ex -> { result.complete(0); return null; }); // Issue #79: never leave result pending
         currentBalanceFuture.thenAccept((currentBalance) -> {
             int amountToFill = amountToFillIn;
             long amountToReserve = (long) amountToFill * ratio;
@@ -594,6 +600,8 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             CompletableFuture<BankStatus> lockStatusFuture = itemBank.lockAmountAsync(amountToReserve);
             final int amountToFillFinal = amountToFill;
             final long amountToReserveFinal = amountToReserve;
+            // Failed lock: nothing inserted; no unlock, the lock may have applied (Task #126: left for the admin).
+            lockStatusFuture.exceptionally(ex -> { result.complete(0); return null; });
             lockStatusFuture.thenAccept((lockStatus) -> {
                 if(lockStatus != BankStatus.SUCCESS) // Lock the amount to prevent other transactions from interfering
                 {

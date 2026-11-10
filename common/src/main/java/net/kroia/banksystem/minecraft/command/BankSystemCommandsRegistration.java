@@ -559,7 +559,7 @@ public class BankSystemCommandsRegistration {
                                                     CompletableFuture<Integer> personalBankAccountNr = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountNrAsync(username);
                                                     personalBankAccountNr.thenAccept(bankAccountNr -> {
                                                         handler().bank_manage_account_async(playerUUID, bankAccountNr);
-                                                    });
+                                                    }).exceptionally(ex -> { AsyncBankSystemCommandHandler.reportFailure(playerUUID, ex); return null; });
                                                     return Command.SINGLE_SUCCESS;
                                                 })
                                         )
@@ -883,7 +883,7 @@ public class BankSystemCommandsRegistration {
             } else {
                 open.accept(player, nr);
             }
-        }));
+        })).exceptionally(ex -> { AsyncBankSystemCommandHandler.reportFailure(player.getUUID(), ex); return null; });
         return Command.SINGLE_SUCCESS;
     }
 
