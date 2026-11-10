@@ -69,11 +69,13 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     }
 
     /** Condition-row tooltip. Hidden while a condition drop-down is open, except on its options: the open list covers the rows below. */
-    private static void rowTooltip(GuiElement el, Supplier<String> text, GuiElement.Alignment side)
+    private static void rowTooltip(GuiElement el, Supplier<String> text)
     {
         el.setHoverTooltipSupplier(() -> isCoveredByOpenDropDown(el) ? null : text.get());
-        // switch to HoverTooltipData.autoSide + maxWidthFraction (~0.35) when ModUtilities ships them
-        el.setHoverTooltipMousePositionAlignment(side);
+        el.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.LEFT); // vertically centred; autoSide picks left/right
+        GuiElement.HoverTooltipData data = el.getHoverTooltipData();
+        data.autoSide = true;
+        data.maxWidthFraction = 0.35f;
     }
     private static boolean isCoveredByOpenDropDown(GuiElement el)
     {
@@ -109,15 +111,15 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             itemView.setSize(16, 16);
             itemView.setShowTooltip(false); // item name goes into the row tooltip instead of a second, stacked tooltip
             String itemName = stack.getHoverName().getString();
-            rowTooltip(itemView, () -> itemName + "\n" + TEXT.ORDER_ITEM_TOOLTIP.getString(), Alignment.LEFT);
+            rowTooltip(itemView, () -> itemName + "\n" + TEXT.ORDER_ITEM_TOOLTIP.getString());
             bankBalanceLabel = new Label("0");
-            rowTooltip(bankBalanceLabel, TEXT.ORDER_BALANCE_TOOLTIP::getString, Alignment.LEFT);
+            rowTooltip(bankBalanceLabel, TEXT.ORDER_BALANCE_TOOLTIP::getString);
             amountTextBox = new TextBox();
             amountTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 100,0));
             amountTextBox.setText("1");
-            rowTooltip(amountTextBox, TEXT.ORDER_AMOUNT_TOOLTIP::getString, Alignment.LEFT);
+            rowTooltip(amountTextBox, TEXT.ORDER_AMOUNT_TOOLTIP::getString);
             conditionSelectionDropDown = new DropDownMenu(TEXT.CONDITION.getString());
-            rowTooltip(conditionSelectionDropDown, TEXT.ORDER_CONDITION_TOOLTIP::getString, Alignment.LEFT);
+            rowTooltip(conditionSelectionDropDown, TEXT.ORDER_CONDITION_TOOLTIP::getString);
             for(BankDownloadBlockEntity.WithdrawCondition cond : BankDownloadBlockEntity.WithdrawCondition.values())
             {
                 // Own option label instead of addOption(): the open list hangs below this 20px row, so the
@@ -137,7 +139,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
                     case HAS_MORE_THEN -> TEXT.CONDITION_MORE_THAN_TOOLTIP;
                     case HAS_LESS_THEN -> TEXT.CONDITION_LESS_THAN_TOOLTIP;
                 };
-                rowTooltip(option, tooltip::getString, Alignment.LEFT);
+                rowTooltip(option, tooltip::getString);
             }
             conditionSelectionDropDown.setOnOptionSelected((index, label) -> {
                 condition = BankDownloadBlockEntity.WithdrawCondition.values()[index];
@@ -148,9 +150,9 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             conditionAmountTextBox = new TextBox();
             conditionAmountTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 100,0));
             conditionAmountTextBox.setText("0");
-            rowTooltip(conditionAmountTextBox, TEXT.ORDER_CONDITION_VALUE_TOOLTIP::getString, Alignment.RIGHT);
+            rowTooltip(conditionAmountTextBox, TEXT.ORDER_CONDITION_VALUE_TOOLTIP::getString);
             deleteButton = new Button("X", () -> onRemoveOrder.accept(this));
-            rowTooltip(deleteButton, TEXT.ORDER_DELETE_TOOLTIP::getString, Alignment.RIGHT);
+            rowTooltip(deleteButton, TEXT.ORDER_DELETE_TOOLTIP::getString);
 
             this.addChild(itemView);
             this.addChild(bankBalanceLabel);
