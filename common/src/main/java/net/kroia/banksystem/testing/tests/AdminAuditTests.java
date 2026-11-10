@@ -5,11 +5,13 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.api.event.SuspicionFlaggedEvent;
 import net.kroia.banksystem.api.ledger.LedgerActor;
 import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.ledger.AdminAudit;
+import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.table.SuspicionFlagManager;
@@ -67,6 +69,7 @@ public class AdminAuditTests extends TestSuite {
         addTest("suspicion_flag_raise_and_read", this::flagRaise);
         addTest("suspicion_flag_migration_idempotent", this::flagMigration);
         addTest("audit_page_refuses_non_admin", this::pageAccess);
+        addTest("suspicion_flagged_event_once", this::flagEvent); // Task #119
     }
 
     @Override
@@ -252,6 +255,37 @@ public class AdminAuditTests extends TestSuite {
         if (!req.handleOnMasterServer(q, "audit-test-untrusted-slave", ADMIN).join().denied()) return fail("untrusted slave got a page");
         if (req.handleOnMasterServer(q, "", ADMIN).join().denied()) return fail("admin denied");
         return pass("non-admin and untrusted slave refused; admin served");
+    }
+
+    /** Task #119: SUSPICION_FLAGGED fires once per raise, with the flag's constant name. */
+    private TestResult flagEvent() {
+        if (!ready()) return fail("live setup missing");
+        List<SuspicionFlaggedEvent> events = new ArrayList<>();
+        java.util.function.Consumer<SuspicionFlaggedEvent> listener = e -> {
+            if (e.accountNumber() == accountNr) synchronized (events) { events.add(e); }
+        };
+        var event = BankSystemMod.getAPI().getEvents().getSuspicionFlaggedEvent();
+        List<String> captured = new ArrayList<>();
+        AdminAudit.alertCapture = line -> { synchronized (captured) { captured.add(line); } };
+        event.addListener(listener);
+        try {
+            long before = System.currentTimeMillis();
+            AdminAudit.raise(accountNr, SuspicionChecks.WEALTH_JUMP, 3, 456L, "ref-" + MARKER, MARKER + "-event");
+            long after = System.currentTimeMillis();
+            awaitAlerts(captured, 1); // keep the capture until the (possibly deferred) alert arrived
+            synchronized (events) {
+                if (events.size() != 1) return fail("expected 1 event, got " + events);
+                SuspicionFlaggedEvent e = events.get(0);
+                if (e.flagType() != SuspicionChecks.WEALTH_JUMP || !"WEALTH_JUMP".equals(e.flagName())
+                        || e.severity() != 3 || e.amount() != 456L || !("ref-" + MARKER).equals(e.ref())
+                        || !(MARKER + "-event").equals(e.details()) || e.timeMs() < before || e.timeMs() > after)
+                    return fail("event " + e);
+            }
+            return pass("raise -> one event with flagName WEALTH_JUMP");
+        } finally {
+            event.removeListener(listener);
+            AdminAudit.alertCapture = null;
+        }
     }
 
     // ------------------------------------------------------------------ helpers

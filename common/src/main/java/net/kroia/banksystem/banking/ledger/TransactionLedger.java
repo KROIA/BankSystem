@@ -4,6 +4,7 @@ import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.api.event.TransactionLoggedEvent;
 import net.kroia.banksystem.api.ledger.ITransactionLedger;
 import net.kroia.banksystem.api.ledger.LedgerActor;
 import net.kroia.banksystem.api.ledger.LedgerType;
@@ -165,6 +166,17 @@ public final class TransactionLedger implements ITransactionLedger {
 
     /** Hooks run after a row was queued for saving (queries on the DB worker see it). */
     private static void afterWrite(TransactionLogRecord row) {
+        // Task #119: API event first (a row is announced before any flag it triggers); a throwing
+        // listener must not abort the writeAll loop or skip the hooks below.
+        try {
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_EVENTS != null)
+                BACKEND_INSTANCES.SERVER_EVENTS.TRANSACTION_LOGGED.notifyListeners(new TransactionLoggedEvent(
+                        row.accountNumber(), row.type(), row.itemId(), row.amount(),
+                        new LedgerActor(row.actorUuid(), row.actorName(), row.source()),
+                        row.otherAccount(), row.companyId(), row.time(), row.note()));
+        } catch (RuntimeException e) {
+            warn("TransactionLogged listener failed: " + e);
+        }
         AdminAudit.onLedgerRow(row);      // Task #110: audit file + admin alerts
         SuspicionChecks.onLedgerRow(row); // Tasks #111 / #115: suspicion flags
     }

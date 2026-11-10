@@ -9,7 +9,6 @@ import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
-import net.kroia.banksystem.data.table.TransactionLogManager;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
@@ -314,13 +313,10 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
 
     private void logLedger(Company company, net.kroia.banksystem.api.ledger.LedgerType kind) {
-        TransactionLogManager mgr = BankSystemModBackend.getTransactionLogManager();
-        if (mgr == null) return;
-        try {
-            mgr.save(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    company.getBankAccountNr(), linkedByUUID, kind, (short) 0, 1L,
-                    null, company.getCompanyId(), System.currentTimeMillis(), null));
-        } catch (RuntimeException ignored) { }
+        // via TransactionLedger.write so the row gets the audit hooks and the TRANSACTION_LOGGED event (Task #119)
+        net.kroia.banksystem.banking.ledger.TransactionLedger.write(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
+                company.getBankAccountNr(), linkedByUUID, kind, (short) 0, 1L,
+                null, company.getCompanyId(), System.currentTimeMillis(), null));
     }
 
     // -------- NBT --------

@@ -3,6 +3,8 @@ package net.kroia.banksystem.api;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.event.DividendPaidEvent;
 import net.kroia.banksystem.api.event.PayoutExecutedInfo;
+import net.kroia.banksystem.api.event.SuspicionFlaggedEvent;
+import net.kroia.banksystem.api.event.TransactionLoggedEvent;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.util.ItemID;
@@ -199,6 +201,33 @@ public interface IBankSystemEvents {
      * @since 2.2.0
      */
     DataEvent<net.kroia.banksystem.api.event.AccountFreezeChangedEvent> getAccountFreezeChangedEvent();
+
+    /**
+     * Task #119 — fires on the <b>master server</b> once per transaction-ledger row, right after
+     * the row was queued for saving. Never fires on a slave (its rows are written by the master).
+     * See {@link TransactionLoggedEvent}.
+     * <p>
+     * <b>Threading:</b> listeners run on the writer's thread: the server thread, an ARRS/netty
+     * handler thread (slave-forwarded operations) or a DB worker. Listeners must be thread-safe
+     * and fast, and must hop to the server thread ({@code server.execute(...)}) before touching
+     * game state. A throwing listener is logged and does not stop the write.
+     *
+     * @since 2.2.0
+     */
+    DataEvent<TransactionLoggedEvent> getTransactionLoggedEvent();
+
+    /**
+     * Task #119 — fires on the <b>master server</b> once per raised suspicion flag, after the flag
+     * row was queued for saving. Never fires on a slave. See {@link SuspicionFlaggedEvent}.
+     * <p>
+     * <b>Threading:</b> listeners run on the raising thread: the server thread, an ARRS/netty
+     * handler thread or a DB worker (periodic wealth / money-supply checks). Listeners must be
+     * thread-safe and fast, and must hop to the server thread ({@code server.execute(...)})
+     * before touching game state.
+     *
+     * @since 2.2.0
+     */
+    DataEvent<SuspicionFlaggedEvent> getSuspicionFlaggedEvent();
 
     /**
      * Removes all listeners for the events and signals in this class.

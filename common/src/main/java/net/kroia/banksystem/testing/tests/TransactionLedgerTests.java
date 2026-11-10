@@ -6,6 +6,7 @@ import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.api.event.TransactionLoggedEvent;
 import net.kroia.banksystem.api.ledger.LedgerActor;
 import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.api.ledger.TradeLogEntry;
@@ -101,6 +102,8 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("freeze_command_admin_only", this::freezeCommand);
         addTest("freeze_blocks_player_paths", this::freezeBlocksPlayerPaths);
         addTest("freeze_allows_admin_and_raw_calls", this::freezeAllowsAdminAndRaw);
+        // Task #119 — API event
+        addTest("transaction_logged_event_once_per_row", this::transactionLoggedEvent);
     }
 
     @Override
@@ -685,6 +688,45 @@ public class TransactionLedgerTests extends TestSuite {
             return pass("raw lock/unlock/withdraw and admin edits work on a frozen account");
         } finally {
             manager.setAccountFrozen(accountNr, false, LedgerActor.system());
+        }
+    }
+
+    // ------------------------------------------------------------------ Task #119 API event
+
+    /** TRANSACTION_LOGGED fires synchronously, once per row, for write and writeAll. */
+    private TestResult transactionLoggedEvent() {
+        if (!ready()) return fail("live setup missing");
+        List<TransactionLoggedEvent> events = new ArrayList<>();
+        java.util.function.Consumer<TransactionLoggedEvent> listener = e -> {
+            if (e.accountNumber() == accountNr || e.accountNumber() == otherAccountNr)
+                synchronized (events) { events.add(e); }
+        };
+        var event = BankSystemMod.getAPI().getEvents().getTransactionLoggedEvent();
+        event.addListener(listener);
+        try {
+            short money = MoneyItem.getItemID().getShort();
+            LedgerActor player = LedgerActor.player(PLAYER, PLAYER_NAME);
+            TransactionLogRecord single = TransactionLogRecord.of(accountNr, LedgerType.DEPOSIT, money, 1_234L,
+                    player, otherAccountNr, 7, null, "event-test", null);
+            TransactionLedger.write(single);
+            TransactionLogRecord out = TransactionLogRecord.of(accountNr, LedgerType.TRANSFER, money, -5L,
+                    LedgerActor.console(), otherAccountNr, null, null, null, null);
+            TransactionLogRecord in = TransactionLogRecord.of(otherAccountNr, LedgerType.TRANSFER, money, 5L,
+                    LedgerActor.console(), accountNr, null, null, null, null);
+            TransactionLedger.writeAll(List.of(out, in));
+            List<TransactionLoggedEvent> expected = List.of(
+                    new TransactionLoggedEvent(accountNr, LedgerType.DEPOSIT, money, 1_234L, player,
+                            otherAccountNr, 7, single.time(), "event-test"),
+                    new TransactionLoggedEvent(accountNr, LedgerType.TRANSFER, money, -5L, LedgerActor.console(),
+                            otherAccountNr, null, out.time(), null),
+                    new TransactionLoggedEvent(otherAccountNr, LedgerType.TRANSFER, money, 5L, LedgerActor.console(),
+                            accountNr, null, in.time(), null));
+            synchronized (events) {
+                if (!events.equals(expected)) return fail("events " + events + " != " + expected);
+            }
+            return pass("one event per row (write + writeAll) with the row's fields");
+        } finally {
+            event.removeListener(listener);
         }
     }
 

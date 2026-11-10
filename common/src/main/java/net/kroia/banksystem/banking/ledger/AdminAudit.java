@@ -1,6 +1,7 @@
 package net.kroia.banksystem.banking.ledger;
 
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.event.SuspicionFlaggedEvent;
 import net.kroia.banksystem.api.ledger.LedgerActor;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
@@ -102,6 +103,10 @@ public final class AdminAudit {
                     + (details != null ? " \"" + details + "\"" : "");
             appendLine(now, line);
             alert(line);
+            // Task #119: last, so a throwing listener cannot skip the file line or the alert
+            if (BACKEND_INSTANCES.SERVER_EVENTS != null)
+                BACKEND_INSTANCES.SERVER_EVENTS.SUSPICION_FLAGGED.notifyListeners(new SuspicionFlaggedEvent(accountNumber,
+                        flagType, SuspicionChecks.typeName(flagType), severity, amount, ref, details, now));
         } catch (RuntimeException ignored) {
             // best-effort
         }

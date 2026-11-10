@@ -3,6 +3,8 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.event.DividendPaidEvent;
 import net.kroia.banksystem.api.event.PayoutExecutedInfo;
+import net.kroia.banksystem.api.event.SuspicionFlaggedEvent;
+import net.kroia.banksystem.api.event.TransactionLoggedEvent;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.api.IBankSystemEvents;
 import net.kroia.banksystem.banking.User;
@@ -89,6 +91,12 @@ public class BankSystemEvents implements IBankSystemEvents {
     /** Task #117 (v2.2.0) — one event per real account freeze/unfreeze. Master-only. */
     public final DataEvent<net.kroia.banksystem.api.event.AccountFreezeChangedEvent> ACCOUNT_FREEZE_CHANGED = new DataEvent<>();
 
+    /** Task #119 (v2.2.0) — one event per ledger row, on the writer's thread. Master-only. */
+    public final DataEvent<TransactionLoggedEvent> TRANSACTION_LOGGED = new DataEvent<>();
+
+    /** Task #119 (v2.2.0) — one event per raised suspicion flag, on the raising thread. Master-only. */
+    public final DataEvent<SuspicionFlaggedEvent> SUSPICION_FLAGGED = new DataEvent<>();
+
 
     @Override
     public void removeListeners() {
@@ -110,6 +118,8 @@ public class BankSystemEvents implements IBankSystemEvents {
         PAYOUT_EXECUTED.removeListeners();
         DIVIDEND_PAID.removeListeners();
         ACCOUNT_FREEZE_CHANGED.removeListeners();
+        TRANSACTION_LOGGED.removeListeners();
+        SUSPICION_FLAGGED.removeListeners();
     }
 
 
@@ -216,5 +226,17 @@ public class BankSystemEvents implements IBankSystemEvents {
     public DataEvent<net.kroia.banksystem.api.event.AccountFreezeChangedEvent> getAccountFreezeChangedEvent()
     {
         return ACCOUNT_FREEZE_CHANGED;
+    }
+
+    @Override
+    public DataEvent<TransactionLoggedEvent> getTransactionLoggedEvent()
+    {
+        return TRANSACTION_LOGGED;
+    }
+
+    @Override
+    public DataEvent<SuspicionFlaggedEvent> getSuspicionFlaggedEvent()
+    {
+        return SUSPICION_FLAGGED;
     }
 }
