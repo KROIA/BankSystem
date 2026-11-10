@@ -608,7 +608,9 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                 if(filledAmount > 0) {
                     long amountToWithdraw = (long) filledAmount * ratio;
                     CompletableFuture<BankStatus> withdrawStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DOWNLOAD_WITHDRAW, null,
-                            "download block " + worldPosition.toShortString(), () -> itemBank.withdrawLockedPreferedAsync(amountToWithdraw));
+                            "download block " + worldPosition.toShortString(),
+                            net.kroia.banksystem.data.TransferJournal.ref("download_block " + net.kroia.banksystem.data.DiagnosticsDatabase.at(level, worldPosition)),
+                            () -> itemBank.withdrawLockedPreferedAsync(amountToWithdraw));
                     // whenComplete, not thenAccept: an exceptional withdraw must also roll back.
                     withdrawStatusFuture.whenComplete((withdrawStatus, withdrawError) -> {
                         if(withdrawStatus == BankStatus.SUCCESS) {

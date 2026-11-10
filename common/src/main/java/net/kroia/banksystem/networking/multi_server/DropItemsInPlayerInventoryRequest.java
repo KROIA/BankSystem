@@ -153,7 +153,11 @@ public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<
 
     public CompletableFuture<OutputData> handleOnSlaveServer(InputData input, @Nullable UUID playerSender) {
         MinecraftServer server = UtilitiesPlatform.getServer();
-        return CompletableFuture.completedFuture(new OutputData(input.playerReceiver, dropItems(server, input.playerReceiver, input.items, input.forceDrop)));
+        Map<ItemID, Long> notDropped = dropItems(server, input.playerReceiver, input.items, input.forceDrop);
+        // Task #124 (B2): DELIVERED / FAILED journal rows. Task #125: use the master's wire transfer_id here.
+        net.kroia.banksystem.data.TransferJournal.drop(net.kroia.banksystem.data.TransferJournal.newTransferId(),
+                input.playerReceiver, input.items, notDropped);
+        return CompletableFuture.completedFuture(new OutputData(input.playerReceiver, notDropped));
     }
 
 

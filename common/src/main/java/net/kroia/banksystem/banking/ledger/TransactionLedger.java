@@ -58,8 +58,12 @@ public final class TransactionLedger implements ITransactionLedger {
     /** Allow-list: codes a slave may send with an AsyncBank transfer*. */
     public static final Set<LedgerType> SLAVE_TRANSFER_CODES = EnumSet.of(LedgerType.TRANSFER);
 
-    /** Ledger fields a slave attaches to a value-moving request. */
-    public record SlaveTag(int code, @Nullable UUID actor, @Nullable String note) {}
+    /**
+     * Ledger fields a slave attaches to a value-moving request.
+     * @param journal Task #124: TransferJournal id + context for the slave's journal rows (not on the wire yet)
+     */
+    public record SlaveTag(int code, @Nullable UUID actor, @Nullable String note,
+                           @Nullable net.kroia.banksystem.data.TransferJournal.Ref journal) {}
 
     /** Type and note the master writes for a slave request after validation. */
     public record Resolved(LedgerType type, @Nullable String note) {}
@@ -191,8 +195,14 @@ public final class TransactionLedger implements ITransactionLedger {
      * ignored and the caller logs itself after success.
      */
     public static <T> T tagged(LedgerType type, @Nullable UUID actor, @Nullable String note, Supplier<T> body) {
+        return tagged(type, actor, note, null, body);
+    }
+
+    /** Same as {@link #tagged(LedgerType, UUID, String, Supplier)}, plus the Task #124 journal id + context. */
+    public static <T> T tagged(LedgerType type, @Nullable UUID actor, @Nullable String note,
+                               @Nullable net.kroia.banksystem.data.TransferJournal.Ref journal, Supplier<T> body) {
         SlaveTag previous = TAG.get();
-        TAG.set(new SlaveTag(type.code(), actor, note));
+        TAG.set(new SlaveTag(type.code(), actor, note, journal));
         try {
             return body.get();
         } finally {
@@ -204,7 +214,7 @@ public final class TransactionLedger implements ITransactionLedger {
     /** @return the tag set by {@link #tagged}, or a NO_LOG tag. */
     public static SlaveTag currentTag() {
         SlaveTag t = TAG.get();
-        return t == null ? new SlaveTag(NO_LOG, null, null) : t;
+        return t == null ? new SlaveTag(NO_LOG, null, null, null) : t;
     }
 
     /**

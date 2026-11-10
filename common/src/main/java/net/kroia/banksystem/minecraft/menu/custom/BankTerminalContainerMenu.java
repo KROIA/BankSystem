@@ -1037,7 +1037,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
             final IAsyncBank bank = lock.getKey();
             final long rawAmount = lock.getValue();
             net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, ledgerPlayer, ledgerNote,
-                    () -> bank.withdrawLockedPreferedAsync(rawAmount)).whenComplete((status, throwable) -> {
+                    net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawAmount)).whenComplete((status, throwable) -> {
                 if (throwable == null && status == BankStatus.SUCCESS) {
                     net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, bank.getItemIDAsync(), rawAmount,
                             net.kroia.banksystem.banking.ledger.TransactionLedger.player(ledgerPlayer), null, ledgerNote);
@@ -1149,11 +1149,12 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                     amountToDeposit = BankManager.convertToRawAmountStatic(output.getCount());
                 final long finalAmountToDeposit = amountToDeposit;
                 final int ledgerAccount = craftingAccountNumber;
+                final net.kroia.banksystem.data.TransferJournal.Ref journal = net.kroia.banksystem.data.TransferJournal.ref("terminal");
                 net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, player.getUUID(),
-                        "craft output " + output.getItem() + " x" + output.getCount(),
+                        "craft output " + output.getItem() + " x" + output.getCount(), journal,
                         () -> bank.depositAsync(finalAmountToDeposit)).thenAccept(status -> {
                     if (status != BankStatus.SUCCESS)
-                        deliverDepositFallback(output, "deposit failed: " + status);
+                        deliverDepositFallback(output, "deposit failed: " + status, journal);
                     else
                         net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, bank.getItemIDAsync(),
                                 finalAmountToDeposit, net.kroia.banksystem.banking.ledger.TransactionLedger.player(player.getUUID()), null,
@@ -1169,12 +1170,21 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * warning — never block the craft, never silently drop the item.
      */
     private void deliverDepositFallback(ItemStack output, String reason) {
+        deliverDepositFallback(output, reason, null);
+    }
+
+    /** @param journal Task #124: the failed deposit's journal ref; RETURNED is written once the output is handed back */
+    private void deliverDepositFallback(ItemStack output, String reason, @Nullable net.kroia.banksystem.data.TransferJournal.Ref journal) {
         warn("Auto-deposit of crafted output " + output + " for player " + player.getUUID()
                 + " fell back to the player inventory: " + reason);
         ServerPlayerUtilities.printToClientConsole(player.getUUID(),
                 BankSystemTextMessages.getCraftingDepositFallbackMessage(output.getHoverName().getString()));
-        runOnMainThread(() -> player.getInventory().placeItemBackInInventory(output)); // mc<=26.2
-        //runOnMainThread(() -> player.getInventory().placeItemBackInInventory(output, net.minecraft.util.Prediction.SERVER_ONLY)); // mc>=26.3
+        runOnMainThread(() -> {
+            player.getInventory().placeItemBackInInventory(output); // mc<=26.2
+            //player.getInventory().placeItemBackInInventory(output, net.minecraft.util.Prediction.SERVER_ONLY); // mc>=26.3
+            if (journal != null)
+                net.kroia.banksystem.data.TransferJournal.step(journal.transferId(), net.kroia.banksystem.data.TransferJournal.RETURNED, null, reason);
+        });
     }
 
     /**

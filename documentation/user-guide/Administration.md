@@ -109,7 +109,7 @@ BankSystem keeps its balance history and transaction ledger in a SQLite database
 
 Bank accounts, the item registry and `settings.json` are ordinary NBT/JSON files under `<world>/data/BankSystem/` and are written on the auto-save interval — copy them with the rest of the world folder as usual.
 
-`<world>/data/BankSystem/Database/banksystem_diagnostics.db` (on the master, slaves and single servers) holds diagnostics for an external audit tool. BankSystem only writes it and never reads it back, so it is safe to delete: it is recreated empty on the next write, and a damaged copy is renamed to `.corrupt-<time>` and replaced.
+`<world>/data/BankSystem/Database/banksystem_diagnostics.db` (on the master, slaves and single servers) holds diagnostics for an external audit tool. BankSystem only writes it and never reads it back, so it is safe to delete: it is recreated empty on the next write, and a damaged copy is renamed to `.corrupt-<time>` and replaced. Its `TransferJournal` table is written on slave servers only: one row per step of each transfer of value between the slave world and the master bank (requested, confirmed, delivered, returned, timed out, dropped or failed). Its `NoteFlow` table is written on every server: money notes that leave or enter the world outside the bank, for example notes put into or taken out of the ATM converter.
 
 ---
 ## Transaction Ledger

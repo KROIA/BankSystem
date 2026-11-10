@@ -11,6 +11,8 @@ import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.binding.BindingRow;
+import net.kroia.banksystem.data.DiagnosticsDatabase;
+import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.minecraft.block.custom.BankUploadBlock;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
@@ -257,11 +259,18 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
      * gone). Deposit callbacks can complete off the server thread, so this hops onto it.
      */
     private void restore(int slot, ItemStack stack) {
+        restore(slot, stack, null, null);
+    }
+
+    /** @param journal Task #124: the failed deposit's journal ref; RETURNED is written once the stack is back */
+    private void restore(int slot, ItemStack stack, @Nullable TransferJournal.Ref journal, @Nullable BankStatus status) {
         Runnable put = () -> {
             ItemStack rest = isRemoved() ? stack : restoreInto(inventory, slot, stack);
             if (!rest.isEmpty())
                 dropItem(rest);
             setChanged();
+            if (journal != null)
+                TransferJournal.step(journal.transferId(), TransferJournal.RETURNED, null, String.valueOf(status));
         };
         MinecraftServer server = level == null ? null : level.getServer();
         if (server != null)
@@ -425,11 +434,12 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                     }
                                     return;
                                 }
+                                TransferJournal.Ref journal = journalRef();
                                 net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
-                                        uploadNote("coin " + itemID.getName() + " x" + stack.getCount()),
+                                        uploadNote("coin " + itemID.getName() + " x" + stack.getCount()), journal,
                                         () -> baseBank.depositAsync(finalDeposit)).thenAccept(status -> {
                                     if (status != BankStatus.SUCCESS) {
-                                        restore(finalI, stack);
+                                        restore(finalI, stack, journal, status);
                                     } else {
                                         logUpload(baseSlotId, finalDeposit, "coin " + itemID.getName() + " x" + stack.getCount());
                                     }
@@ -478,11 +488,12 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             if(isMoney)
                             {
                                 long finalAmount = amount * ((MoneyItem)stack.getItem()).worth();
+                                TransferJournal.Ref journal = journalRef();
                                 CompletableFuture<BankStatus> depositStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
-                                        uploadNote("banknote " + itemID.getName() + " x" + amount), () -> bank.depositAsync(finalAmount));
+                                        uploadNote("banknote " + itemID.getName() + " x" + amount), journal, () -> bank.depositAsync(finalAmount));
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus != BankStatus.SUCCESS) {
-                                        restore(finalI, stack); // Restore item on failure
+                                        restore(finalI, stack, journal, depositStatus); // Restore item on failure
                                     } else {
                                         logUpload(bank.getItemIDAsync(), finalAmount, "banknote " + itemID.getName() + " x" + amount);
                                     }
@@ -490,11 +501,12 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             }
                             else
                             {
+                                TransferJournal.Ref journal = journalRef();
                                 CompletableFuture<BankStatus> depositStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
-                                        uploadNote(null), () -> bank.depositRealAsync((double)amount));
+                                        uploadNote(null), journal, () -> bank.depositRealAsync((double)amount));
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus != BankStatus.SUCCESS) {
-                                        restore(finalI, stack); // Restore item on failure
+                                        restore(finalI, stack, journal, depositStatus); // Restore item on failure
                                     } else {
                                         logUpload(bank.getItemIDAsync(),
                                                 amount * net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR, null);
@@ -517,6 +529,11 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
     private void logUpload(ItemID bankItem, long amount, @Nullable String note) {
         net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(bankAccountNumber, net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, bankItem, amount,
                 net.kroia.banksystem.banking.ledger.TransactionLedger.player(playerOwner), null, uploadNote(note));
+    }
+
+    /** Task #124: journal id + context ("upload_block <dim> x y z") for one deposit. */
+    private TransferJournal.Ref journalRef() {
+        return TransferJournal.ref("upload_block " + DiagnosticsDatabase.at(level, worldPosition));
     }
 
     private String uploadNote(@Nullable String note) {

@@ -14,6 +14,7 @@ import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
+import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
@@ -517,13 +518,47 @@ public class AsyncBank implements IAsyncBank {
         else
             tmpFuture = Request.instance.sendRequestToMaster(input);
 
-        return tmpFuture.thenApply(outputData ->{
+        CompletableFuture<OutputData> out = tmpFuture.thenApply(outputData ->{
             if(outputData == null)
                 throw new IllegalStateException("ARRS request not sent: " + input.function);
             if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Response received for request: "+ input.function.toString());
             return outputData;
         });
+        if(!isClientSide && BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer)
+            journal(input, out);
+        return out;
+    }
+
+    /**
+     * Task #124 (B2) — slave TransferJournal rows for a deposit / withdraw: REQUESTED now (tag context and id from
+     * {@link TransactionLedger#tagged}, or a fresh id), CONFIRMED / DELIVERED on SUCCESS, TIMED_OUT when the future
+     * fails. Other replies write nothing here (the master applied nothing; a caller that gives items back writes RETURNED).
+     */
+    private void journal(InputData input, CompletableFuture<OutputData> out)
+    {
+        try {
+            Set<LedgerType> codes = Request.ledgerAllowList(input.function);
+            boolean deposit = codes == TransactionLedger.SLAVE_DEPOSIT_CODES;
+            if (!deposit && codes != TransactionLedger.SLAVE_WITHDRAW_CODES) return;
+            BankIdentifyAndDataPacket<?> p = input.decodeParams();
+            long raw = p.extra() instanceof Double d ? net.kroia.banksystem.banking.bankmanager.BankManager.convertToRawAmountStatic(d)
+                    : p.extra() instanceof Long l ? l : 0L;
+            TransferJournal.Ref tagRef = TransactionLedger.currentTag().journal();
+            TransferJournal.Ref ref = tagRef != null ? tagRef : TransferJournal.ref(null);
+            TransferJournal.requested(ref, deposit ? TransferJournal.TO_MASTER : TransferJournal.FROM_MASTER,
+                    TransferJournal.ASYNC_BANK, accountNr, p.ledgerActor(), Map.of(itemID, raw),
+                    p.ledgerCode() == TransactionLedger.NO_LOG ? null : p.ledgerCode());
+            out.whenComplete((o, ex) -> {
+                if (ex != null)
+                    TransferJournal.step(ref.transferId(), TransferJournal.TIMED_OUT, null,
+                            String.valueOf(ex.getCause() != null ? ex.getCause() : ex));
+                else if (o.decodeResult() == BankStatus.SUCCESS)
+                    TransferJournal.step(ref.transferId(), deposit ? TransferJournal.CONFIRMED : TransferJournal.DELIVERED, null, null);
+            });
+        } catch (RuntimeException ignored) {
+            // diagnostics never affect the bank call
+        }
     }
 
 

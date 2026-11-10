@@ -261,6 +261,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemNetworking.setBackend(INSTANCES);
         net.kroia.banksystem.banking.ledger.TransactionLedger.setBackend(INSTANCES); // Task #109
         DiagnosticsDatabase.setBackend(INSTANCES); // Task #123
+        net.kroia.banksystem.data.TransferJournal.setBackend(INSTANCES); // Task #124
         net.kroia.banksystem.banking.ledger.AccountFreeze.setBackend(INSTANCES); // Task #117
         net.kroia.banksystem.banking.ledger.AdminAudit.setBackend(INSTANCES); // Task #110
         net.kroia.banksystem.banking.ledger.SuspicionChecks.setBackend(INSTANCES); // Tasks #111/#114/#115
@@ -989,6 +990,12 @@ public class BankSystemModBackend implements BankSystemAPI {
     @Override
     public net.kroia.banksystem.api.ledger.ITransactionLedger getLedger() {
         return net.kroia.banksystem.banking.ledger.TransactionLedger.INSTANCE;
+    }
+
+    /** Task #124 — note flow log (diagnostics DB). Always non-null. */
+    @Override
+    public net.kroia.banksystem.api.diagnostics.INoteFlowLog getNoteFlowLog() {
+        return net.kroia.banksystem.data.NoteFlowLog.INSTANCE;
     }
 
     /**

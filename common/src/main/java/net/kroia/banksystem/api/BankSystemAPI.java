@@ -147,6 +147,16 @@ public interface BankSystemAPI {
     net.kroia.banksystem.api.ledger.ITransactionLedger getLedger();
 
     /**
+     * Task #124 (v2.2.0) — money items created or destroyed outside the bank, written to this
+     * server's diagnostics DB (every role, slaves included). Never {@code null}; a no-op when the
+     * DB is missing or disabled. See {@link net.kroia.banksystem.api.diagnostics.INoteFlowLog}.
+     *
+     * @return the note flow log.
+     * @since 2.2.0
+     */
+    net.kroia.banksystem.api.diagnostics.INoteFlowLog getNoteFlowLog();
+
+    /**
      * Task #49 (v2.1.0) — one-shot dividend distributor. Never {@code null}; on slaves
      * the returned instance is a fail-closed shim that returns
      * {@link net.kroia.banksystem.api.PayDividendResult.Reason#NOT_MASTER} for every

@@ -7,6 +7,7 @@ import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.converter.ConverterCacheManager;
+import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
@@ -28,6 +29,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Client-to-server packet for the ATM Money Converter tab (Task #39, v2.0.7):
@@ -165,8 +167,13 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
         }
         if (items.isEmpty()) return;
 
-        DepositItemsInBankRequest.sendToMaster(selectedAccountNumber, playerUUID, items, net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT)
-                .whenComplete((notDeposited, ex) -> {
+        CompletableFuture<Map<ItemID, Long>> sent = DepositItemsInBankRequest.sendToMaster(selectedAccountNumber, playerUUID, items,
+                net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT);
+        // Task #124 (B2): slave TransferJournal rows for this commit, amounts in cents.
+        TransferJournal.Ref journal = TransferJournal.ref("converter");
+        TransferJournal.requested(journal, TransferJournal.TO_MASTER, TransferJournal.CONVERTER_DEPOSIT, selectedAccountNumber,
+                playerUUID, TransferJournal.rawUnits(items), net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT.code());
+        sent.whenComplete((notDeposited, ex) -> {
                     // ARRS response lands on the netty IO thread. Hop back to the server thread
                     // before touching the cache map and before dispatching a chat message —
                     // ServerPlayerUtilities.printToClientConsole ultimately calls
@@ -177,13 +184,22 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
                         error("ConverterCommitToBankPacket: deposit outcome unknown, no refund: "
                                 + (amount - leftover) + " cents to account " + selectedAccountNumber
                                 + " for player " + playerUUID, ex);
+                        TransferJournal.step(journal.transferId(), TransferJournal.TIMED_OUT, null,
+                                String.valueOf(ex.getCause() != null ? ex.getCause() : ex));
                         return;
                     }
+                    Map<ItemID, Long> deposited = new HashMap<>(items);
+                    notDeposited.forEach((id, n) -> deposited.computeIfPresent(id, (k, v) -> v - n > 0 ? v - n : null));
+                    if (!deposited.isEmpty())
+                        TransferJournal.step(journal.transferId(), TransferJournal.CONFIRMED,
+                                notDeposited.isEmpty() ? null : TransferJournal.rawUnits(deposited), null);
                     final long refund = valueOf(notDeposited); // includes "never sent" (full map)
                     if (refund <= 0) return;
 
                     Runnable applyRefund = () -> {
                         ConverterCacheManager.get().deposit(playerUUID, refund);
+                        TransferJournal.step(journal.transferId(), TransferJournal.RETURNED,
+                                deposited.isEmpty() ? null : TransferJournal.rawUnits(notDeposited), null);
                         ServerPlayerUtilities.printToClientConsole(playerUUID,
                                 "Converter deposit to bank refused by master; " + refund
                                         + " cents returned to converter cache.");

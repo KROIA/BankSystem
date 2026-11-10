@@ -109,6 +109,11 @@ public class ConverterWithdrawPacket extends BankSystemNetworkPacket {
         // amounts.
         MinecraftServer server = UtilitiesPlatform.getServer();
         Map<ItemID, Long> notDispensed = DropItemsInPlayerInventoryRequest.dropItems(server, playerUUID, validated, true);
+        // Task #124: NoteFlow converter_out for what actually came out.
+        Map<ItemID, Long> dispensed = new HashMap<>(validated);
+        notDispensed.forEach((id, n) -> dispensed.computeIfPresent(id, (k, v) -> v - n > 0 ? v - n : null));
+        net.kroia.banksystem.data.NoteFlowLog.converter(false, playerUUID, dispensed,
+                net.kroia.banksystem.data.DiagnosticsDatabase.at(sender.level(), sender.blockPosition()));
         if (!notDispensed.isEmpty()) {
             long refund = 0L;
             for (Map.Entry<ItemID, Long> e : notDispensed.entrySet()) {

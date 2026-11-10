@@ -1,6 +1,8 @@
 package net.kroia.banksystem.data;
 
 import net.kroia.banksystem.BankSystemModBackend;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Files;
@@ -44,7 +46,15 @@ public final class DiagnosticsDatabase {
 
     /** Run in order whenever the file is opened; later units append their CREATE TABLE IF NOT EXISTS here. */
     private static final List<String> SCHEMA = List.of(
-            "CREATE TABLE IF NOT EXISTS Meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+            "CREATE TABLE IF NOT EXISTS Meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            // Task #124 (B2): slaves only; follow-up rows leave direction / path / items_json NULL.
+            "CREATE TABLE IF NOT EXISTS TransferJournal (id INTEGER PRIMARY KEY AUTOINCREMENT, transfer_id TEXT NOT NULL, "
+                    + "ts INTEGER NOT NULL, direction TEXT, path TEXT, step TEXT NOT NULL, account_number INTEGER, "
+                    + "player_uuid TEXT, items_json TEXT, ledger_type INTEGER, context TEXT, detail TEXT)",
+            "CREATE INDEX IF NOT EXISTS TransferJournal_tid ON TransferJournal(transfer_id)",
+            // Task #124 (B5): every role.
+            "CREATE TABLE IF NOT EXISTS NoteFlow (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, "
+                    + "source TEXT NOT NULL, player_uuid TEXT, item_id INTEGER NOT NULL, amount INTEGER NOT NULL, context TEXT)");
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
@@ -60,6 +70,16 @@ public final class DiagnosticsDatabase {
 
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
+    }
+
+    /** @return the live instance, or null when none is open (client, before start, after stop) */
+    public static @Nullable DiagnosticsDatabase live() {
+        return BACKEND_INSTANCES == null ? null : BACKEND_INSTANCES.DIAGNOSTICS_DB;
+    }
+
+    /** Context text for the diagnostics tables: {@code "<dimension> x y z"}. */
+    public static String at(@Nullable Level level, BlockPos pos) {
+        return (level == null ? "?" : level.dimension().location().toString()) + " " + pos.getX() + " " + pos.getY() + " " + pos.getZ();
     }
 
     public DiagnosticsDatabase(Path file) {
