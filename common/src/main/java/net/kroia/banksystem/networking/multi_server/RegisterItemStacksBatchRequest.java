@@ -166,8 +166,8 @@ public class RegisterItemStacksBatchRequest extends BankSystemGenericRequest<Reg
      * latch (Task #16) still gates the mint if the master's own load hasn't completed yet.
      *
      * @param input        request slots (per-slot NBT)
-     * @param slaveID      the requesting slave's id (unused; used only for the client-safety
-     *                     guard on the {@code playerSender} path)
+     * @param slaveID      the requesting slave's id; an untrusted slave only gets lookups,
+     *                     never new ids (Task #143)
      * @param playerSender {@code null} for slave→master calls — a non-null value indicates a
      *                     client attempted to invoke this handler directly, which is refused
      *                     with an ALL-INVALID response (defensive: clients never mint IDs).
@@ -181,6 +181,8 @@ public class RegisterItemStacksBatchRequest extends BankSystemGenericRequest<Reg
                     + "INVALID_ID for all " + slotCount + " slots.");
             return CompletableFuture.completedFuture(new OutputData(allInvalid(slotCount)));
         }
+        // Task #143: an untrusted slave may look up item ids, not create them.
+        boolean lookupOnly = isFromUntrustedSlave(slaveID);
         if (slotCount == 0)
             return CompletableFuture.completedFuture(new OutputData(new ArrayList<>()));
 
@@ -214,7 +216,7 @@ public class RegisterItemStacksBatchRequest extends BankSystemGenericRequest<Reg
             // Route through the ItemID API rather than ItemIDManager directly so the master-side
             // lookup-then-register semantics (getOrRegister...) match the slave's positive-cache
             // hit path: an already-known short comes back without re-mint.
-            ItemID id = ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
+            ItemID id = lookupOnly ? ItemIDManager.getItemID(stack) : ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
             result.add(id != null ? id : ItemID.INVALID_ID);
         }
         // NOTE: the user-facing "item unknown to the master" chat notification is intentionally

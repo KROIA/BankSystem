@@ -148,11 +148,11 @@ public class RegisterItemIDPacket extends BankSystemNetworkPacket
 
     @Override
     protected void handleOnServer(NetworkManager.PacketContext context) {
-        ItemIDManager.receiveRegisterItemIDPacket(this);
+        ItemIDManager.receiveRegisterItemIDPacket(this, "", context.getPlayer().getUUID());
     }
     @Override
     protected void handleOnMaster(ForwardPacketContext context)
     {
-        ItemIDManager.receiveRegisterItemIDPacket(this);
+        ItemIDManager.receiveRegisterItemIDPacket(this, context.senderServerID, context.senderPlayerUUID);
     }
 }

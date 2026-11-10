@@ -1545,8 +1545,54 @@ public class ItemIDManager implements ServerSaveable {
             }
         }
     }
-    public static void receiveRegisterItemIDPacket(RegisterItemIDPacket packet)
+    /**
+     * Task #143: new item ids with components (beyond the item's plain default) one non-admin player may create
+     * through {@link RegisterItemIDPacket} per server session. Plain defaults are bounded by the item registry.
+     */
+    // ponytail: in-memory per-session count; a restart or an alt account gets a fresh budget. Persist it per player if it is ever worked around.
+    public static final int PLAYER_REGISTRATION_BUDGET = 256;
+    private static final Map<UUID, Integer> playerRegistrations = new ConcurrentHashMap<>();
+
+    /**
+     * Task #143: the stacks {@code player} may register. Plain item defaults always pass; any other stack uses up
+     * the player's {@link #PLAYER_REGISTRATION_BUDGET} (a client only sends stacks it does not know yet, so no
+     * lookup here). No limit for a server ({@code player == null}) or a BankSystem admin.
+     */
+    public static List<ItemStack> withinRegistrationBudget(@Nullable UUID player, List<ItemStack> stacks)
     {
+        var manager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if(player == null || (manager != null && manager.isBanksystemAdmin(player)))
+            return stacks;
+        List<ItemStack> allowed = new ArrayList<>(stacks.size());
+        for(ItemStack stack : stacks)
+        {
+            if(VolatileItemComponents.normalize(stack).getComponentsPatch().isEmpty())
+            {
+                allowed.add(stack);
+                continue;
+            }
+            int used = playerRegistrations.merge(player, 1, Integer::sum);
+            if(used <= PLAYER_REGISTRATION_BUDGET)
+                allowed.add(stack);
+            else if(used == PLAYER_REGISTRATION_BUDGET + 1)
+                BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Player " + player + " used up the " + PLAYER_REGISTRATION_BUDGET
+                        + " new item ids a player may create per server session; further new items from this player are dropped.");
+        }
+        return allowed;
+    }
+
+    /**
+     * {@link RegisterItemIDPacket} from a client ({@code slaveID} empty) or forwarded by a slave.
+     * Task #143: an untrusted slave may not create item ids; a player's new items count against their budget.
+     */
+    public static void receiveRegisterItemIDPacket(RegisterItemIDPacket packet, String slaveID, @Nullable UUID player)
+    {
+        var manager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if(!slaveID.isEmpty() && (manager == null || !manager.isSlaveServerTrusted(slaveID)))
+        {
+            BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] RegisterItemIDPacket from untrusted slave '" + slaveID + "' dropped.");
+            return;
+        }
         // Task #25: wire format is now List<CompoundTag> — inflate each entry via
         // ItemStack.parseOptional against THIS side's RegistryAccess. Entries whose host
         // mod is missing on the receiver drop out here (parse returns EMPTY) rather than
@@ -1575,6 +1621,7 @@ public class ItemIDManager implements ServerSaveable {
             }
             stacks.add(parsed.get());
         }
+        stacks = withinRegistrationBudget(player, stacks);
         if(!stacks.isEmpty())
             registerItemStackServerSide_direct(stacks);
     }
