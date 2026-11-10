@@ -508,22 +508,22 @@ public class AsyncBank implements IAsyncBank {
         Request instance = Request.instance;
     }
 
+    /** Task #121: a failed or null reply fails the returned future instead of hanging it. */
     private CompletableFuture<OutputData> sendRequest(InputData input)
     {
-        CompletableFuture<OutputData> future = new CompletableFuture<>();
         CompletableFuture<OutputData> tmpFuture;
         if(isClientSide)
             tmpFuture = Request.instance.sendRequestToServer(input);
         else
             tmpFuture = Request.instance.sendRequestToMaster(input);
 
-        tmpFuture.thenAccept(outputData ->{
+        return tmpFuture.thenApply(outputData ->{
+            if(outputData == null)
+                throw new IllegalStateException("ARRS request not sent: " + input.function);
             if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Response received for request: "+ input.function.toString());
-            future.complete(outputData);
+            return outputData;
         });
-
-        return future;
     }
 
 
@@ -627,7 +627,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankData> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetMinimalDataAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -638,7 +638,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<Long> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetBalanceAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -649,7 +649,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<Long> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetLockedBalanceAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -660,7 +660,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<Long> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetTotalBalanceAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -671,7 +671,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<Double> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetRealBalanceAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -682,7 +682,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<Double> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetRealLockedBalanceAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -693,7 +693,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<Double> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetRealTotalBalanceAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -709,7 +709,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetItemNameAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -720,7 +720,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.SetBalanceAsync, accountNr, itemID, balance);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -731,7 +731,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.SetRealBalanceAsync, accountNr, itemID, balance);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -742,7 +742,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.DepositAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -753,7 +753,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.DepositRealAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -764,7 +764,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.HasSufficientFundsAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -775,7 +775,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.WithdrawAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -786,7 +786,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.WithdrawRealAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -797,7 +797,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.WithdrawLockedAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -808,7 +808,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.WithdrawLockedRealAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -819,7 +819,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.WithdrawLockedPreferedAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -830,7 +830,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.WithdrawLockedPreferedRealAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -841,7 +841,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.TransferAsync, accountNr, itemID, new ParamGroup_long_int(amount, toAccount));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -852,7 +852,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.TransferRealAsync, accountNr, itemID, new ParamGroup_double_int(amount, toAccount));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -863,7 +863,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.TransferFromLockedAsync, accountNr, itemID, new ParamGroup_long_int(amount, toAccount));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -874,7 +874,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.TransferFromLockedRealAsync, accountNr, itemID, new ParamGroup_double_int(amount, toAccount));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -885,7 +885,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.TransferFromLockedPreferedAsync, accountNr, itemID, new ParamGroup_long_int(amount, toAccount));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -896,7 +896,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.TransferFromLockedPreferedRealAsync, accountNr, itemID, new ParamGroup_double_int(amount, toAccount));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -907,7 +907,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.LockAmountAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -918,7 +918,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.LockAmountRealAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -929,7 +929,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.UnlockAmountAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -940,7 +940,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.UnlockAmountRealAsync, accountNr, itemID, amount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -959,7 +959,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<Long> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ConvertToRawAmountAsync, accountNr, itemID, realAmount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -970,7 +970,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<Double> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ConvertToRealAmountAsync, accountNr, itemID, rawAmount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -981,7 +981,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetNormalizedBalanceAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -992,7 +992,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetNormalizedLockedBalanceAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -1003,7 +1003,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetNormalizedTotalBalanceAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -1014,7 +1014,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetFormattedBalanceAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -1025,7 +1025,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetFormattedLockedBalanceAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -1036,7 +1036,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetFormattedTotalBalanceAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -1047,7 +1047,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetNormalizedAmountAsync_1, accountNr, itemID, realAmount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -1058,7 +1058,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetNormalizedAmountAsync_2, accountNr, itemID, rawAmount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -1069,7 +1069,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetFormattedAmountAsync_1, accountNr, itemID, realAmount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -1080,7 +1080,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetFormattedAmountAsync_2, accountNr, itemID, rawAmount);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -1091,7 +1091,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ToStringAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -1102,7 +1102,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ToStringNoOwnerAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -1113,7 +1113,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<JsonElement> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ToJsonAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -1124,7 +1124,7 @@ public class AsyncBank implements IAsyncBank {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ToJsonStringAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 

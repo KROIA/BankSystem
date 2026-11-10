@@ -48,10 +48,12 @@ import java.util.UUID;
  *       (atomic withdraw), split it into money items via
  *       {@link MoneyDenominationOptimizer}, and forward via
  *       {@link DepositItemsInBankRequest#sendToMaster} — which already
- *       carries the Task #26 untrusted-slave gate. Undispensed value (e.g.
- *       master refuses because the slave is untrusted, or the account is
- *       gone) is refunded back into the cache so the player never loses
- *       anything.
+ *       carries the Task #26 untrusted-slave gate. Value the master reports
+ *       as not deposited (e.g. untrusted slave, account gone) or a request
+ *       that was never sent is refunded back into the cache. When the
+ *       outcome is unknown (the future fails, e.g. timeout or lost reply),
+ *       nothing is refunded and an error is logged: the master may have
+ *       applied the deposit, so a refund could duplicate value.
  *   </li>
  * </ul>
  *
@@ -145,8 +147,8 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
     /**
      * Slave-forward path. Reserves the local cache, splits into money items
      * via the optimizer, and forwards through {@code DepositItemsInBankRequest}
-     * (which is trust-gated on master). Any value that fails to deposit is
-     * refunded to the cache.
+     * (which is trust-gated on master). Value reported as not deposited is
+     * refunded to the cache; an unknown outcome is logged, not refunded.
      */
     private void commitFromSlave(UUID playerUUID, long amount) {
         // Reserve the cache atomically so a concurrent packet can't double-spend it.
@@ -169,14 +171,15 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
                     // before touching the cache map and before dispatching a chat message —
                     // ServerPlayerUtilities.printToClientConsole ultimately calls
                     // player.sendSystemMessage which is not documented as thread-safe.
-                    final long refund;
-                    if (ex != null || notDeposited == null) {
-                        refund = valueOf(items); // transport failure → refund the full reserved amount
-                    } else if (!notDeposited.isEmpty()) {
-                        refund = valueOf(notDeposited);
-                    } else {
-                        refund = 0L;
+                    if (ex != null) {
+                        // Task #121: outcome unknown (the master may have applied it). No refund,
+                        // a late success would duplicate the value.
+                        error("ConverterCommitToBankPacket: deposit outcome unknown, no refund: "
+                                + (amount - leftover) + " cents to account " + selectedAccountNumber
+                                + " for player " + playerUUID, ex);
+                        return;
                     }
+                    final long refund = valueOf(notDeposited); // includes "never sent" (full map)
                     if (refund <= 0) return;
 
                     Runnable applyRefund = () -> {

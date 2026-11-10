@@ -1,12 +1,21 @@
 package net.kroia.banksystem.testing.tests;
 
+import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.banking.converter.ConverterCacheManager;
+import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionOutputData;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Tests for {@link ConverterCacheManager} — the per-player in-memory cache
@@ -38,6 +47,8 @@ public class ConverterCacheTests extends TestSuite {
         addTest("clear_returns_amount_and_empties", this::testClearReturnsAndEmpties);
         addTest("clear_on_missing_returns_zero", this::testClearMissing);
         addTest("disconnect_drop_semantics", this::testDisconnectDropSemantics);
+        addTest("deposit_reply_null_or_error_is_not_success", this::testDepositReplyNullOrError);
+        addTest("relay_fails_dst_on_failure_or_decode_error", this::testRelayFailures);
     }
 
     @Override
@@ -150,5 +161,44 @@ public class ConverterCacheTests extends TestSuite {
         if (onDisconnect != 999_999L) return fail("disconnect clear expected 999999, got " + onDisconnect);
         if (after != 0L) return fail("balance after disconnect clear expected 0, got " + after);
         return pass("disconnect drop semantics: clear returns full balance and empties entry");
+    }
+
+    /** Task #121: a null reply refunds everything, a failed reply stays failed (unknown outcome). */
+    private TestResult testDepositReplyNullOrError() {
+        Map<ItemID, Long> requested = new HashMap<>();
+        requested.put(new ItemID((short) 1, null), 5L);
+        requested.put(new ItemID((short) 2, null), 7L);
+
+        Map<ItemID, Long> nullReply = DepositItemsInBankRequest.notDeposited(requested,
+                CompletableFuture.completedFuture(null)).join();
+        if (!requested.equals(nullReply)) return fail("null reply must return the full requested map, got " + nullReply);
+
+        Map<ItemID, Long> partial = Map.of(new ItemID((short) 2, null), 3L);
+        Map<ItemID, Long> partialReply = DepositItemsInBankRequest.notDeposited(requested,
+                CompletableFuture.completedFuture(new DepositItemsInBankRequest.OutputData(partial))).join();
+        if (!partial.equals(partialReply)) return fail("partial reply must pass through, got " + partialReply);
+
+        CompletableFuture<Map<ItemID, Long>> failed = DepositItemsInBankRequest.notDeposited(requested,
+                CompletableFuture.failedFuture(new RuntimeException("timeout")));
+        return assertTrue("failed reply must stay exceptional", failed.isCompletedExceptionally());
+    }
+
+    /** Task #121: AsyncFunctionOutputData.relay never leaves the outer future hanging. */
+    private TestResult testRelayFailures() {
+        CompletableFuture<Long> ok = new CompletableFuture<>();
+        AsyncFunctionOutputData.relay(CompletableFuture.completedFuture(AsyncBank.OutputData.of(
+                AsyncBank.FunctionType.GetBalanceAsync, 42L)), ok);
+        if (ok.getNow(-1L) != 42L) return fail("relay must pass the decoded value, got " + ok.getNow(-1L));
+
+        CompletableFuture<Long> failedSrc = new CompletableFuture<>();
+        AsyncFunctionOutputData.relay(CompletableFuture.<AsyncBank.OutputData>failedFuture(new RuntimeException("boom")), failedSrc);
+        if (!failedSrc.isCompletedExceptionally()) return fail("failed src must fail dst");
+
+        StreamCodec<RegistryFriendlyByteBuf, Long> throwing = StreamCodec.of((buf, v) -> {},
+                buf -> { throw new IllegalStateException("decode boom"); });
+        CompletableFuture<Long> decodeFail = new CompletableFuture<>();
+        AsyncFunctionOutputData.relay(CompletableFuture.completedFuture(new AsyncFunctionOutputData<>(
+                AsyncBank.FunctionType.GetBalanceAsync, throwing, new byte[]{1})), decodeFail);
+        return assertTrue("decode error must fail dst", decodeFail.isCompletedExceptionally());
     }
 }

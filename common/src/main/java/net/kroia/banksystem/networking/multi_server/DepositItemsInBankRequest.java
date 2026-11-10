@@ -67,7 +67,8 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
      * @param bankAccount target bank account
      * @param executor the player who has created this request
      * @param items list of items to deposit
-     * @return a future containing the items that have not been deposited
+     * @return a future containing the items that have not been deposited;
+     *         completes exceptionally when the outcome is unknown
      */
     public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items)
     {
@@ -78,22 +79,32 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
     public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, LedgerType ledgerType)
     {
         DepositItemsInBankRequest.InputData inputData = new DepositItemsInBankRequest.InputData(bankAccount, executor, items, ledgerType.code());
-        CompletableFuture<Map<ItemID, Long>> future = new CompletableFuture<>();
-        BankSystemNetworking.DEPOSIT_ITEMS_IN_BANK_REQUEST.sendRequestToMaster(inputData).whenComplete((response, ex) -> {
-            if (ex != null || response == null) {
-                future.complete(new HashMap<>()); // Return empty map on error
-            } else {
-                future.complete(response.items);
-            }
-        });
-        return future;
+        CompletableFuture<OutputData> sent;
+        try {
+            sent = BankSystemNetworking.DEPOSIT_ITEMS_IN_BANK_REQUEST.sendRequestToMaster(inputData);
+        } catch (RuntimeException e) {
+            BACKEND_INSTANCES.LOGGER.error("[DepositItemsInBankRequest] request not sent", e);
+            sent = CompletableFuture.completedFuture(null); // not sent = definitely not applied
+        }
+        return notDeposited(items, sent);
+    }
+
+    /**
+     * Task #121: maps the master's reply to the "not deposited" items. A null reply means the
+     * request was never sent, so everything comes back. An exceptional reply stays exceptional:
+     * the master may have applied the deposit, so the caller must not refund.
+     */
+    public static CompletableFuture<Map<ItemID, Long>> notDeposited(Map<ItemID, Long> requested, CompletableFuture<OutputData> sent)
+    {
+        return sent.thenApply(r -> r == null ? new HashMap<>(requested) : r.items);
     }
     /**
      * Deposits the requested amount of items onto the bank account
      * This does not check for bank account access permissions
      * @param bankAccount target bank account
      * @param items list of items to deposit
-     * @return a future containing the items that have not been deposited
+     * @return a future containing the items that have not been deposited;
+     *         completes exceptionally when the outcome is unknown
      */
     public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, Map<ItemID, Long> items)
     {
