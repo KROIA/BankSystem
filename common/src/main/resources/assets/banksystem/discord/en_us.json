@@ -1,0 +1,168 @@
+{
+  "bank-deposit": {
+    "title": "Bank deposit",
+    "color": 3447003,
+    "fields": [
+      {"name": "Player", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "Account", "value": "{account}", "inline": true},
+      {"name": "Counterparty", "value": "{other_account}", "inline": true},
+      {"name": "Item", "value": "{item}", "inline": true},
+      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Holders", "value": "{holders}", "inline": true},
+      {"name": "Company", "value": "{company}", "inline": true},
+      {"name": "Kind", "value": "{kind}", "inline": true},
+      {"name": "Note", "value": "{note}", "inline": false},
+      {"name": "Time", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-withdraw": {
+    "title": "Bank withdrawal",
+    "color": 3447003,
+    "fields": [
+      {"name": "Player", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "Account", "value": "{account}", "inline": true},
+      {"name": "Counterparty", "value": "{other_account}", "inline": true},
+      {"name": "Item", "value": "{item}", "inline": true},
+      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Holders", "value": "{holders}", "inline": true},
+      {"name": "Company", "value": "{company}", "inline": true},
+      {"name": "Kind", "value": "{kind}", "inline": true},
+      {"name": "Note", "value": "{note}", "inline": false},
+      {"name": "Time", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-transfer-in": {
+    "title": "Bank transfer (incoming)",
+    "color": 3447003,
+    "fields": [
+      {"name": "Player", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "Account", "value": "{account}", "inline": true},
+      {"name": "Counterparty", "value": "{other_account}", "inline": true},
+      {"name": "Item", "value": "{item}", "inline": true},
+      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Holders", "value": "{holders}", "inline": true},
+      {"name": "Company", "value": "{company}", "inline": true},
+      {"name": "Kind", "value": "{kind}", "inline": true},
+      {"name": "Note", "value": "{note}", "inline": false},
+      {"name": "Time", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-transfer-out": {
+    "title": "Bank transfer (outgoing)",
+    "color": 3447003,
+    "fields": [
+      {"name": "Player", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "Account", "value": "{account}", "inline": true},
+      {"name": "Counterparty", "value": "{other_account}", "inline": true},
+      {"name": "Item", "value": "{item}", "inline": true},
+      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Holders", "value": "{holders}", "inline": true},
+      {"name": "Company", "value": "{company}", "inline": true},
+      {"name": "Kind", "value": "{kind}", "inline": true},
+      {"name": "Note", "value": "{note}", "inline": false},
+      {"name": "Time", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-payout": {
+    "title": "Bank payout",
+    "color": 3447003,
+    "fields": [
+      {"name": "Player", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "Account", "value": "{account}", "inline": true},
+      {"name": "Counterparty", "value": "{other_account}", "inline": true},
+      {"name": "Item", "value": "{item}", "inline": true},
+      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Holders", "value": "{holders}", "inline": true},
+      {"name": "Company", "value": "{company}", "inline": true},
+      {"name": "Kind", "value": "{kind}", "inline": true},
+      {"name": "Note", "value": "{note}", "inline": false},
+      {"name": "Time", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-dividend": {
+    "title": "Bank dividend",
+    "color": 3447003,
+    "fields": [
+      {"name": "Player", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "Account", "value": "{account}", "inline": true},
+      {"name": "Counterparty", "value": "{other_account}", "inline": true},
+      {"name": "Item", "value": "{item}", "inline": true},
+      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Holders", "value": "{holders}", "inline": true},
+      {"name": "Company", "value": "{company}", "inline": true},
+      {"name": "Kind", "value": "{kind}", "inline": true},
+      {"name": "Note", "value": "{note}", "inline": false},
+      {"name": "Time", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-share": {
+    "title": "Share movement",
+    "color": 3447003,
+    "fields": [
+      {"name": "Player", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "Account", "value": "{account}", "inline": true},
+      {"name": "Counterparty", "value": "{other_account}", "inline": true},
+      {"name": "Item", "value": "{item}", "inline": true},
+      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Holders", "value": "{holders}", "inline": true},
+      {"name": "Company", "value": "{company}", "inline": true},
+      {"name": "Kind", "value": "{kind}", "inline": true},
+      {"name": "Note", "value": "{note}", "inline": false},
+      {"name": "Time", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-other": {
+    "title": "Bank action",
+    "color": 3447003,
+    "fields": [
+      {"name": "Player", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "Account", "value": "{account}", "inline": true},
+      {"name": "Counterparty", "value": "{other_account}", "inline": true},
+      {"name": "Item", "value": "{item}", "inline": true},
+      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Holders", "value": "{holders}", "inline": true},
+      {"name": "Company", "value": "{company}", "inline": true},
+      {"name": "Kind", "value": "{kind}", "inline": true},
+      {"name": "Note", "value": "{note}", "inline": false},
+      {"name": "Time", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-admin": {
+    "title": "Bank admin action",
+    "color": 3447003,
+    "fields": [
+      {"name": "Player", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "Account", "value": "{account}", "inline": true},
+      {"name": "Counterparty", "value": "{other_account}", "inline": true},
+      {"name": "Item", "value": "{item}", "inline": true},
+      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Holders", "value": "{holders}", "inline": true},
+      {"name": "Company", "value": "{company}", "inline": true},
+      {"name": "Kind", "value": "{kind}", "inline": true},
+      {"name": "Note", "value": "{note}", "inline": false},
+      {"name": "Time", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-suspicion": {
+    "title": "Suspicious activity",
+    "color": 15548997,
+    "fields": [
+      {"name": "Account", "value": "{account}", "inline": true},
+      {"name": "Flag", "value": "{flag}", "inline": true},
+      {"name": "Severity", "value": "{severity}", "inline": true},
+      {"name": "Amount", "value": "{amount}", "inline": true},
+      {"name": "Details", "value": "{details}", "inline": false},
+      {"name": "Reference", "value": "{ref}", "inline": true},
+      {"name": "Time", "value": "{time}", "inline": false}
+    ]
+  }
+}

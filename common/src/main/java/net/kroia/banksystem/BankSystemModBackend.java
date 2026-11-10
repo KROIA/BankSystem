@@ -22,6 +22,7 @@ import net.kroia.banksystem.data.table.BalanceHistoryManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.command.BankSystemCommands;
+import net.kroia.banksystem.minecraft.compat.BankSystemDiscord;
 import net.kroia.banksystem.minecraft.compat.BankSystemPlaceholders;
 import net.kroia.banksystem.minecraft.compat.OldBankDataLoader;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
@@ -284,6 +285,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         INSTANCES.NETWORKING = new BankSystemNetworking();
         INSTANCES.SERVER_EVENTS = new BankSystemEvents();
+        BankSystemDiscord.init(INSTANCES); // Task #119: ledger/flag listeners, once per JVM
 
         // Detect datapack reloads that change the volatile/deposit-gated component tags on a
         // RUNNING server: the change is rejected (normalization keeps the world-load tag
@@ -471,6 +473,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             }
 
             TickEvent.SERVER_POST.register(ON_SERVER_TICK);
+            BankSystemDiscord.register(); // Task #119: every start, even with the feed off, so the config file exists
 
             // Save the data when the game saves the world
             LifecycleEvent.SERVER_LEVEL_SAVE.register(ON_LEVEL_SAVE);
@@ -729,6 +732,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         if (payoutTickCounter % net.kroia.banksystem.banking.company.PayoutExecutor.PAYOUT_TICK_INTERVAL == 0) {
             net.kroia.banksystem.banking.company.PayoutExecutor.tick(payoutTickCounter, INSTANCES);
         }
+        BankSystemDiscord.flush(); // Task #119: coalesced dividend / disallow posts of this tick
     }
 
     private static void takeBalanceSnapshot() {

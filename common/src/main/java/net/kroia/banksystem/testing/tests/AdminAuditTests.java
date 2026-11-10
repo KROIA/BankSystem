@@ -330,7 +330,8 @@ public class AdminAuditTests extends TestSuite {
         }
     }
 
-    private static void deleteRows(List<Integer> accounts) {
+    /** Deletes the ledger and suspicion-flag rows of {@code accounts} (also used by DiscordFeedTests). */
+    static void deleteRows(List<Integer> accounts) {
         DatabaseManager db = BankSystemModBackend.getDatabaseManager();
         if (db == null) return;
         try {

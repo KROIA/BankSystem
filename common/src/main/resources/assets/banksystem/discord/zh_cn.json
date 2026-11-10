@@ -1,0 +1,168 @@
+{
+  "bank-deposit": {
+    "title": "银行存款",
+    "color": 3447003,
+    "fields": [
+      {"name": "玩家", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "账户", "value": "{account}", "inline": true},
+      {"name": "对方账户", "value": "{other_account}", "inline": true},
+      {"name": "物品", "value": "{item}", "inline": true},
+      {"name": "金额", "value": "{amount}", "inline": true},
+      {"name": "持有人", "value": "{holders}", "inline": true},
+      {"name": "公司", "value": "{company}", "inline": true},
+      {"name": "类型", "value": "{kind}", "inline": true},
+      {"name": "备注", "value": "{note}", "inline": false},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-withdraw": {
+    "title": "银行取款",
+    "color": 3447003,
+    "fields": [
+      {"name": "玩家", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "账户", "value": "{account}", "inline": true},
+      {"name": "对方账户", "value": "{other_account}", "inline": true},
+      {"name": "物品", "value": "{item}", "inline": true},
+      {"name": "金额", "value": "{amount}", "inline": true},
+      {"name": "持有人", "value": "{holders}", "inline": true},
+      {"name": "公司", "value": "{company}", "inline": true},
+      {"name": "类型", "value": "{kind}", "inline": true},
+      {"name": "备注", "value": "{note}", "inline": false},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-transfer-in": {
+    "title": "银行转账（转入）",
+    "color": 3447003,
+    "fields": [
+      {"name": "玩家", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "账户", "value": "{account}", "inline": true},
+      {"name": "对方账户", "value": "{other_account}", "inline": true},
+      {"name": "物品", "value": "{item}", "inline": true},
+      {"name": "金额", "value": "{amount}", "inline": true},
+      {"name": "持有人", "value": "{holders}", "inline": true},
+      {"name": "公司", "value": "{company}", "inline": true},
+      {"name": "类型", "value": "{kind}", "inline": true},
+      {"name": "备注", "value": "{note}", "inline": false},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-transfer-out": {
+    "title": "银行转账（转出）",
+    "color": 3447003,
+    "fields": [
+      {"name": "玩家", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "账户", "value": "{account}", "inline": true},
+      {"name": "对方账户", "value": "{other_account}", "inline": true},
+      {"name": "物品", "value": "{item}", "inline": true},
+      {"name": "金额", "value": "{amount}", "inline": true},
+      {"name": "持有人", "value": "{holders}", "inline": true},
+      {"name": "公司", "value": "{company}", "inline": true},
+      {"name": "类型", "value": "{kind}", "inline": true},
+      {"name": "备注", "value": "{note}", "inline": false},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-payout": {
+    "title": "银行发放",
+    "color": 3447003,
+    "fields": [
+      {"name": "玩家", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "账户", "value": "{account}", "inline": true},
+      {"name": "对方账户", "value": "{other_account}", "inline": true},
+      {"name": "物品", "value": "{item}", "inline": true},
+      {"name": "金额", "value": "{amount}", "inline": true},
+      {"name": "持有人", "value": "{holders}", "inline": true},
+      {"name": "公司", "value": "{company}", "inline": true},
+      {"name": "类型", "value": "{kind}", "inline": true},
+      {"name": "备注", "value": "{note}", "inline": false},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-dividend": {
+    "title": "银行分红",
+    "color": 3447003,
+    "fields": [
+      {"name": "玩家", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "账户", "value": "{account}", "inline": true},
+      {"name": "对方账户", "value": "{other_account}", "inline": true},
+      {"name": "物品", "value": "{item}", "inline": true},
+      {"name": "金额", "value": "{amount}", "inline": true},
+      {"name": "持有人", "value": "{holders}", "inline": true},
+      {"name": "公司", "value": "{company}", "inline": true},
+      {"name": "类型", "value": "{kind}", "inline": true},
+      {"name": "备注", "value": "{note}", "inline": false},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-share": {
+    "title": "股份变动",
+    "color": 3447003,
+    "fields": [
+      {"name": "玩家", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "账户", "value": "{account}", "inline": true},
+      {"name": "对方账户", "value": "{other_account}", "inline": true},
+      {"name": "物品", "value": "{item}", "inline": true},
+      {"name": "金额", "value": "{amount}", "inline": true},
+      {"name": "持有人", "value": "{holders}", "inline": true},
+      {"name": "公司", "value": "{company}", "inline": true},
+      {"name": "类型", "value": "{kind}", "inline": true},
+      {"name": "备注", "value": "{note}", "inline": false},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-other": {
+    "title": "银行操作",
+    "color": 3447003,
+    "fields": [
+      {"name": "玩家", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "账户", "value": "{account}", "inline": true},
+      {"name": "对方账户", "value": "{other_account}", "inline": true},
+      {"name": "物品", "value": "{item}", "inline": true},
+      {"name": "金额", "value": "{amount}", "inline": true},
+      {"name": "持有人", "value": "{holders}", "inline": true},
+      {"name": "公司", "value": "{company}", "inline": true},
+      {"name": "类型", "value": "{kind}", "inline": true},
+      {"name": "备注", "value": "{note}", "inline": false},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-admin": {
+    "title": "银行管理员操作",
+    "color": 3447003,
+    "fields": [
+      {"name": "玩家", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "账户", "value": "{account}", "inline": true},
+      {"name": "对方账户", "value": "{other_account}", "inline": true},
+      {"name": "物品", "value": "{item}", "inline": true},
+      {"name": "金额", "value": "{amount}", "inline": true},
+      {"name": "持有人", "value": "{holders}", "inline": true},
+      {"name": "公司", "value": "{company}", "inline": true},
+      {"name": "类型", "value": "{kind}", "inline": true},
+      {"name": "备注", "value": "{note}", "inline": false},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  },
+  "bank-suspicion": {
+    "title": "可疑活动",
+    "color": 15548997,
+    "fields": [
+      {"name": "账户", "value": "{account}", "inline": true},
+      {"name": "类型", "value": "{flag}", "inline": true},
+      {"name": "严重程度", "value": "{severity}", "inline": true},
+      {"name": "金额", "value": "{amount}", "inline": true},
+      {"name": "详情", "value": "{details}", "inline": false},
+      {"name": "参考", "value": "{ref}", "inline": true},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  }
+}

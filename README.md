@@ -208,14 +208,24 @@ Server admins can edit the mod's `settings.json` in-game, without touching the f
 1. Run `/banksystem manage` (admin only) to open the banking settings window.
 2. Click **Mod Settings**.
 
-The screen lists every setting of the mod, grouped by category (Utilities, Player, Bank, Suspicious activity, Integrations), with a matching editor per setting type (checkboxes, number fields, text fields). **Apply** validates and saves the values on the server (out-of-range values are clamped and the corrected values are shown), **Reload** re-fetches the current server state and **Defaults** resets the fields to the built-in defaults (nothing is saved until Apply is pressed). Closing the screen with unapplied changes asks whether to **Save** or **Discard** them; **Esc** on that popup returns to the settings screen.
+The screen lists every setting of the mod, grouped by category (Utilities, Player, Bank, Suspicious activity, Integrations), with a matching editor per setting type (checkboxes, number fields, text fields). The Integrations group shows one collapsible section per integration; the check box in the section header switches it on or off. **Apply** validates and saves the values on the server (out-of-range values are clamped and the corrected values are shown), **Reload** re-fetches the current server state and **Defaults** resets the fields to the built-in defaults (nothing is saved until Apply is pressed). Closing the screen with unapplied changes asks whether to **Save** or **Discard** them; **Esc** on that popup returns to the settings screen.
 
 Notes:
 
 - **Master-only:** the button is only shown when you are connected to the master server (or a regular single server). Only the master's `settings.json` can be edited; the server additionally rejects requests from non-admins regardless of the UI.
 - **Permission:** requires BankSystem admin status (the same permission as the other `/banksystem` admin commands).
 - **Restart markers:** settings that are only read once at server startup show an orange "⟳ Restart required" marker — the change is saved immediately but only takes effect after a server restart. This includes the volatile/deposit-gated component lists and the one-shot `CONFIRM_ITEMID_MERGE` / `CONFIRM_ITEMID_REPAIR` flags, which can be armed from this screen to approve a pending ItemID merge or world repair on the next restart.
-- **Integrations:** switches for placeholders, LuckPerms admin sync, Numismatics, Lightman's Currency and the Discord feed. A currency mod switched off behaves as if it were not installed: bound balances stay in that mod, frozen until it is switched back on. Only the placeholder switch and the top-list size need a restart. Each server reads its own `settings.json`, so a slave keeps the values in its own file. Settings files from older versions are moved into this group automatically.
+- **Integrations:** switches for placeholders, LuckPerms admin sync, Numismatics, Lightman's Currency and the [Discord feed](#discord-feed). A currency mod switched off behaves as if it were not installed: bound balances stay in that mod, frozen until it is switched back on. Only the placeholder switch and the top-list size need a restart. Each server reads its own `settings.json`, so a slave keeps the values in its own file. Settings files from older versions are moved into this group automatically.
+
+### Discord Feed
+
+The master server (or a single server) can post bank events to Discord webhooks, using ModUtilities' webhook module. Switch it on with `DISCORD_ENABLED` (Mod Settings → Integrations, default off, no restart needed). Slave servers never post, so each event is reported once.
+
+1. Start the server once. It creates `config/modutilities/discord/webhooks.json` and `config/modutilities/discord/banksystem.json`.
+2. In `webhooks.json`, add your webhook URLs by name. In `banksystem.json`, enable the message types you want and list the webhook names each one goes to. Every type starts disabled. `minAmount` skips smaller amounts, and `language` picks the message language (`en_us`, `de_de`, `de_ch`, `zh_cn`).
+3. Run `/modutilities discord reload` (or restart the server). `/modutilities discord status` shows which types are active.
+
+Message types: `bank-deposit`, `bank-withdraw`, `bank-transfer-in`, `bank-transfer-out`, `bank-payout`, `bank-dividend`, `bank-share`, `bank-admin`, `bank-suspicion` and `bank-other`. Stock trades (StockMarket buys and sells) are not posted. Payouts and dividends are posted for the receiving account only. A dividend run, or an item disallow that clears many accounts, is posted once, with the total amount and the number of holders. Webhook URLs are secrets: do not share `webhooks.json`.
 
 ---
 ## Blocks
