@@ -29,7 +29,7 @@ import java.util.function.Consumer;
  * Task #110 (v2.2.0) — admin audit trail, master only.
  * <ul>
  *     <li>Every admin ledger row (ADMIN_SET..ADMIN_ACCOUNT_EDIT, ACCOUNT_FREEZE, ADMIN_DISALLOW_ITEM,
- *     and BANK_CLOSED done by an admin) goes to {@code <world>/data/BankSystem/audit/<yyyy-mm-dd>.log}
+ *     and BANK_CLOSED / ACCOUNT_DELETE_LOSS done by an admin) goes to {@code <world>/data/BankSystem/audit/<yyyy-mm-dd>.log}
  *     and to every BankSystem admin with alerts on. Hooked in {@link TransactionLedger#write}.</li>
  *     <li>{@link #raise} writes a SuspicionFlag row plus the same file line and alert.</li>
  * </ul>
@@ -56,7 +56,7 @@ public final class AdminAudit {
     public static boolean isAdminRow(TransactionLogRecord r) {
         return switch (r.type()) {
             case ADMIN_SET, ADMIN_ADD, ADMIN_REMOVE, ADMIN_UNLOCK, ADMIN_ACCOUNT_EDIT, ACCOUNT_FREEZE, ADMIN_DISALLOW_ITEM -> true;
-            case BANK_CLOSED -> r.source() == LedgerActor.Source.ADMIN;
+            case BANK_CLOSED, ACCOUNT_DELETE_LOSS -> r.source() == LedgerActor.Source.ADMIN;
             default -> false;
         };
     }

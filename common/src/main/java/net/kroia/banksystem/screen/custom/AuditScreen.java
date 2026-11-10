@@ -48,7 +48,8 @@ public class AuditScreen extends BankSystemGuiScreen {
     /** Types whose stored (unsigned) amount leaves the account; shown with a minus. */
     private static final Set<LedgerType> OUTFLOW = EnumSet.of(LedgerType.WITHDRAW, LedgerType.ADMIN_REMOVE,
             LedgerType.BANK_CLOSED, LedgerType.CONVERTER_WITHDRAW, LedgerType.DOWNLOAD_WITHDRAW,
-            LedgerType.CRAFT_CONSUME, LedgerType.ACCOUNT_DELETE_PAYOUT, LedgerType.ADMIN_DISALLOW_ITEM);
+            LedgerType.CRAFT_CONSUME, LedgerType.ACCOUNT_DELETE_PAYOUT, LedgerType.ADMIN_DISALLOW_ITEM,
+            LedgerType.ACCOUNT_DELETE_LOSS);
 
     private final int accountNumber;
     private int typeCode = -1;

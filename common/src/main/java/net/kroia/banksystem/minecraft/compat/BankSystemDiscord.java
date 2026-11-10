@@ -136,7 +136,7 @@ public final class BankSystemDiscord {
             case SHARE_STAMP, SHARE_REDEEM, SHARE_TRADE -> "bank-share";
             case ADMIN_SET, ADMIN_ADD, ADMIN_REMOVE, ADMIN_UNLOCK, ADMIN_ACCOUNT_EDIT, ACCOUNT_FREEZE,
                  ADMIN_DISALLOW_ITEM -> "bank-admin";
-            case BANK_CLOSED -> e.actor().source() == LedgerActor.Source.ADMIN ? "bank-admin" : "bank-other";
+            case BANK_CLOSED, ACCOUNT_DELETE_LOSS -> e.actor().source() == LedgerActor.Source.ADMIN ? "bank-admin" : "bank-other";
             default -> "bank-other"; // UNKNOWN_LEGACY, CRAFT_*, STARTING_BALANCE, future codes
         };
     }

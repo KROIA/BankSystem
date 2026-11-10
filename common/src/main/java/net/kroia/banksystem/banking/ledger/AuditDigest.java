@@ -50,7 +50,8 @@ public final class AuditDigest {
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd_HHmm");
     private static final int[] ADMIN_TYPES = {LedgerType.ADMIN_SET.code(), LedgerType.ADMIN_ADD.code(),
             LedgerType.ADMIN_REMOVE.code(), LedgerType.ADMIN_UNLOCK.code(), LedgerType.ADMIN_ACCOUNT_EDIT.code(),
-            LedgerType.BANK_CLOSED.code(), LedgerType.ACCOUNT_FREEZE.code(), LedgerType.ADMIN_DISALLOW_ITEM.code()};
+            LedgerType.BANK_CLOSED.code(), LedgerType.ACCOUNT_FREEZE.code(), LedgerType.ADMIN_DISALLOW_ITEM.code(),
+            LedgerType.ACCOUNT_DELETE_LOSS.code()};
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
     /** Next time {@link #tick} looks at the date (start of tomorrow). */

@@ -50,7 +50,9 @@ public enum LedgerType {
     /** Reserved: admin freeze/unfreeze. Amount 0, note "frozen"/"unfrozen". */
     ACCOUNT_FREEZE(26),
     /** Item was disallowed by an admin; every holder's balance of it is cleared (no refund). */
-    ADMIN_DISALLOW_ITEM(27);
+    ADMIN_DISALLOW_ITEM(27),
+    /** Balance of a deleted user's account that could not be handed out (player offline / outcome unknown); destroyed. Note gives the reason. */
+    ACCOUNT_DELETE_LOSS(28);
 
     private final int code;
 

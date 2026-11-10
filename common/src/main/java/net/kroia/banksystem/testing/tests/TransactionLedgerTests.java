@@ -16,6 +16,9 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
+import net.kroia.banksystem.banking.company.Company;
+import net.kroia.banksystem.banking.company.CompanyManager;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.DriverShim;
@@ -55,6 +58,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -105,7 +109,9 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("api_log_records_console_actor", this::consoleActor);
         addTest("log_trade_round_trip_and_ref_sum", this::logTradeRoundTrip);
         addTest("starting_balance_row", this::startingBalance);
-        addTest("user_deletion_writes_payout_rows", this::userDeletionPayout);
+        addTest("user_deletion_offline_writes_loss_rows", () -> threw(this::userDeletionOfflineLoss)); // Task #127
+        addTest("user_deletion_splits_payout_and_loss", this::userDeletionSplit); // Task #127
+        addTest("user_deletion_keeps_company_account", this::userDeletionKeepsCompanyAccount); // Task #127
         addTest("slave_code_allow_list", this::slaveCodeAllowList);
         addTest("async_bank_code_logged_on_master", this::asyncBankCodeLoggedOnMaster);
         addTest("item_request_rejects_disallowed_code", this::itemRequestRejectsDisallowedCode);
@@ -177,7 +183,7 @@ public class TransactionLedgerTests extends TestSuite {
                 {LedgerType.CRAFT_OUTPUT, 18}, {LedgerType.STARTING_BALANCE, 19}, {LedgerType.PAYOUT, 20},
                 {LedgerType.DIVIDEND, 21}, {LedgerType.SHARE_STAMP, 22}, {LedgerType.SHARE_REDEEM, 23},
                 {LedgerType.SHARE_TRADE, 24}, {LedgerType.ACCOUNT_DELETE_PAYOUT, 25}, {LedgerType.ACCOUNT_FREEZE, 26},
-                {LedgerType.ADMIN_DISALLOW_ITEM, 27},
+                {LedgerType.ADMIN_DISALLOW_ITEM, 27}, {LedgerType.ACCOUNT_DELETE_LOSS, 28},
         };
         if (expected.length != LedgerType.values().length)
             return fail("LedgerType has " + LedgerType.values().length + " constants, table lists " + expected.length
@@ -433,8 +439,13 @@ public class TransactionLedgerTests extends TestSuite {
         }
     }
 
-    private TestResult userDeletionPayout() {
+    /**
+     * Task #127: the balance of a user who is online nowhere is destroyed: ACCOUNT_DELETE_LOSS "player offline", no
+     * PAYOUT row, actor kept although the rows are written after the (async on a master with slaves) delivery chain.
+     */
+    private TestResult userDeletionOfflineLoss() {
         if (!ready()) return fail("live setup missing");
+        if (!(manager instanceof ServerBankManager sbm)) return fail("live manager is not a ServerBankManager");
         UUID doomed = UUID.fromString("00000000-0000-0000-0000-00000000f10d");
         addUser(doomed, "LedgerTestDoomed");
         IServerBank bank = manager.getOrCreatePersonalBank(doomed, MoneyItem.getItemID());
@@ -442,11 +453,69 @@ public class TransactionLedgerTests extends TestSuite {
         int nr = manager.getPersonalBankAccount(doomed).getAccountNumber();
         touchedAccounts.add(nr);
         bank.deposit(1_234L);
-        TransactionLedger.withActor(LedgerActor.admin(ADMIN, ADMIN_NAME), () -> manager.removeUser(doomed));
-        TransactionLogRecord r = find(rows(nr), LedgerType.ACCOUNT_DELETE_PAYOUT);
-        if (r == null) return fail("no ACCOUNT_DELETE_PAYOUT row");
-        if (r.amount() < 1_234L || !ADMIN.equals(r.actorUuid())) return fail("row " + r);
-        return pass("user deletion pays out with ACCOUNT_DELETE_PAYOUT");
+        long total = bank.getTotalBalance();
+        var payout = TransactionLedger.withActor(LedgerActor.admin(ADMIN, ADMIN_NAME), () -> sbm.removeUserWithPayout(doomed));
+        if (payout == null) return fail("user not removed");
+        // one DROP per connected slave, each up to an ARRS timeout (30 s) + status check
+        ServerBankManager.PayoutResult result = await(payout, 65_000);
+        List<TransactionLogRecord> rows = rows(nr);
+        if (find(rows, LedgerType.ACCOUNT_DELETE_PAYOUT) != null) return fail("PAYOUT row for an offline user: " + rows);
+        TransactionLogRecord r = find(rows, LedgerType.ACCOUNT_DELETE_LOSS, MoneyItem.getItemID());
+        if (r == null) return fail("no ACCOUNT_DELETE_LOSS row; result " + result);
+        if (r.amount() != total || !ADMIN.equals(r.actorUuid())) return fail("row " + r);
+        if (r.note() == null || !r.note().endsWith("player offline")) return fail("note " + r.note());
+        return pass("offline user: ACCOUNT_DELETE_LOSS " + total + " (player offline), admin actor kept");
+    }
+
+    /** Task #127: per item the undelivered amount is taken from the account rows in order; the rest is PAYOUT. */
+    private TestResult userDeletionSplit() {
+        if (!ready()) return fail("live setup missing");
+        if (!(manager instanceof ServerBankManager sbm)) return fail("live manager is not a ServerBankManager");
+        ItemID money = MoneyItem.getItemID();
+        Map<Integer, Map<ItemID, Long>> balances = new LinkedHashMap<>();
+        balances.put(accountNr, Map.of(money, 100L));
+        balances.put(otherAccountNr, Map.of(money, 50L));
+        sbm.logDeletePayout(balances, new ServerBankManager.PayoutResult(Map.of(money, 120L), "test"), OTHER, LedgerActor.system());
+        List<TransactionLogRecord> first = rows(accountNr), second = rows(otherAccountNr);
+        TransactionLogRecord loss1 = find(first, LedgerType.ACCOUNT_DELETE_LOSS, money);
+        TransactionLogRecord pay2 = find(second, LedgerType.ACCOUNT_DELETE_PAYOUT, money);
+        TransactionLogRecord loss2 = find(second, LedgerType.ACCOUNT_DELETE_LOSS, money);
+        if (find(first, LedgerType.ACCOUNT_DELETE_PAYOUT, money) != null) return fail("first account fully lost, got a PAYOUT row");
+        if (loss1 == null || loss1.amount() != 100L) return fail("first account LOSS " + loss1);
+        if (pay2 == null || pay2.amount() != 30L) return fail("second account PAYOUT " + pay2);
+        if (loss2 == null || loss2.amount() != 20L) return fail("second account LOSS " + loss2);
+        if (loss2.note() == null || !loss2.note().endsWith("not delivered: test")) return fail("note " + loss2.note());
+        return pass("120 of 150 undelivered: LOSS 100 + PAYOUT 30 / LOSS 20");
+    }
+
+    /** Task #127: a company account left without users is not deleted, so it is not paid out and keeps its balance. */
+    private TestResult userDeletionKeepsCompanyAccount() {
+        if (!ready()) return fail("live setup missing");
+        CompanyManager cm = CompanyManager.get();
+        if (cm == null) return fail("no CompanyManager");
+        UUID member = UUID.fromString("00000000-0000-0000-0000-00000000f10e");
+        addUser(member, "LedgerTestMember");
+        int nr = newAccount("LedgerTestCompany", member);
+        Company company = nr == ServerBankAccount.INVALID_ACCOUNT_NUMBER ? null
+                : cm.createCompany("LedgerTest" + nr, nr, null, 100L).company; // null caller: no founder user, no caps
+        try {
+            if (company == null) return fail("company account not created");
+            IServerBank bank = manager.getBankAccount(nr).getOrCreateBank(MoneyItem.getItemID());
+            if (bank == null) return fail("no money bank");
+            bank.deposit(500L);
+            long before = bank.getTotalBalance();
+            manager.removeUser(member);
+            if (manager.getBankAccount(nr) == null) return fail("company account was deleted");
+            if (bank.getTotalBalance() != before) return fail("balance " + bank.getTotalBalance() + ", expected " + before);
+            List<TransactionLogRecord> rows = rows(nr);
+            if (find(rows, LedgerType.ACCOUNT_DELETE_PAYOUT) != null || find(rows, LedgerType.ACCOUNT_DELETE_LOSS) != null)
+                return fail("company account was paid out: " + rows);
+            return pass("company account kept with its balance, no ACCOUNT_DELETE_* rows");
+        } finally {
+            if (company != null) cm.deleteCompany(company.getCompanyId());
+            if (nr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) manager.deleteBankAccount(nr);
+            if (manager.userExists(member)) manager.removeUser(member);
+        }
     }
 
     // ------------------------------------------------------------------ slave type codes
@@ -1024,6 +1093,11 @@ public class TransactionLedgerTests extends TestSuite {
 
     private static TransactionLogRecord find(List<TransactionLogRecord> rows, LedgerType type) {
         for (TransactionLogRecord r : rows) if (r.type() == type) return r;
+        return null;
+    }
+
+    private static TransactionLogRecord find(List<TransactionLogRecord> rows, LedgerType type, ItemID item) {
+        for (TransactionLogRecord r : rows) if (r.type() == type && r.itemId() == item.getShort()) return r;
         return null;
     }
 

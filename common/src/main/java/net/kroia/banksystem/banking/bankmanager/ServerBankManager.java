@@ -21,6 +21,8 @@ import net.kroia.banksystem.api.currency.ExternalAccount;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
+import net.kroia.banksystem.api.ledger.LedgerActor;
+import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
@@ -30,9 +32,12 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.banking.clientdata.UserData;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
+import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRequest;
+import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.ItemUtilities;
@@ -562,12 +567,28 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public boolean removeUser(UUID userUUID) {
+        return removeUserWithPayout(userUUID) != null;
+    }
+
+    /** Task #127: what a user-deletion payout could not hand out, and why ({@code reason} null when all of it arrived). */
+    public record PayoutResult(Map<ItemID, Long> undelivered, @Nullable String reason) {}
+
+    /**
+     * {@link #removeUser}, plus the payout. The future completes once delivery is known and the ledger rows are
+     * written: inline on a single server, after the slave chain on a multi-server master. Never fails.
+     *
+     * @return null if there is no such user
+     */
+    public @Nullable CompletableFuture<PayoutResult> removeUserWithPayout(UUID userUUID) {
         if (userMap.containsKey(userUUID)) {
             User user = userMap.remove(userUUID);
             markPersistDirty(); // Task #55 (also cascades account removals below)
+            // Task #127: the rows are written when delivery is known; the caller's withActor scope is gone by then
+            LedgerActor actor = TransactionLedger.currentActor();
 
             // Collect non-zero balances from accounts that will be deleted or are personal accounts of the removed user
             Map<ItemID, Long> itemsToDrop = new HashMap<>();
+            Map<Integer, Map<ItemID, Long>> balances = new LinkedHashMap<>(); // Task #127: per account, for the ledger
             List<Integer> emptyAccounts = new ArrayList<>();
             List<Integer> personalAccountsToDrop = new ArrayList<>();
 
@@ -577,7 +598,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 // Check if this is the user's personal bank account
                 User personalOwner = account.getPersonalBankOwner();
                 if (personalOwner != null && personalOwner.getUUID().equals(userUUID)) {
-                    logDeletePayout(account, userUUID);
+                    collectAccountBalances(account, balances.computeIfAbsent(entry.getKey(), k -> new HashMap<>()));
                     collectAccountBalances(account, itemsToDrop);
                     personalAccountsToDrop.add(entry.getKey());
                     continue;
@@ -586,7 +607,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 if (account.hasUser(userUUID)) {
                     account.removeUser(userUUID);
                     if (!account.hasAnyUser()) {
-                        logDeletePayout(account, userUUID);
+                        // Task #127: an account deleteBankAccount refuses (company) stays, with its balance: no payout
+                        String refusal = deleteRefusal(entry.getKey(), account);
+                        if (refusal != null) {
+                            info("Bank account " + entry.getKey() + " has no users left and is kept: " + refusal);
+                            continue;
+                        }
+                        collectAccountBalances(account, balances.computeIfAbsent(entry.getKey(), k -> new HashMap<>()));
                         collectAccountBalances(account, itemsToDrop);
                         emptyAccounts.add(entry.getKey());
                     }
@@ -594,13 +621,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             }
 
             // Drop collected items to the player before deleting accounts
-            if (!itemsToDrop.isEmpty()) {
-                dropItemsToPlayer(userUUID, itemsToDrop);
-            }
+            CompletableFuture<PayoutResult> delivery = itemsToDrop.isEmpty()
+                    ? CompletableFuture.completedFuture(new PayoutResult(Map.of(), null))
+                    : dropItemsToPlayer(userUUID, itemsToDrop);
 
             // Delete empty non-personal accounts
             for (int accountNr : emptyAccounts) {
-                deleteBankAccount(accountNr, false); // balances already logged as ACCOUNT_DELETE_PAYOUT
+                deleteBankAccount(accountNr, false); // balances logged as ACCOUNT_DELETE_PAYOUT / _LOSS below
                 info("Removed empty bank account with number: " + accountNr);
             }
 
@@ -619,26 +646,43 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
             BACKEND_INSTANCES.SERVER_EVENTS.USER_REMOVED.notifyListeners(user);
             info("Removed user with UUID: " + userUUID);
-            return true;
+            return delivery.thenApply(r -> {
+                logDeletePayout(balances, r, userUUID, actor);
+                return r;
+            });
         } else {
             warn("No user found with UUID: " + userUUID);
-            return false;
+            return null;
         }
+    }
+
+    /**
+     * Task #109 / #127: ledger rows for the balances of a deleted user's accounts. Per item, the undelivered amount is
+     * taken from that item's account rows in order: that part is an ACCOUNT_DELETE_LOSS row (value destroyed, note gives
+     * the reason), the rest an ACCOUNT_DELETE_PAYOUT row. Public for the in-game test.
+     */
+    public void logDeletePayout(Map<Integer, Map<ItemID, Long>> balances, PayoutResult result, UUID deletedUser, LedgerActor actor) {
+        Map<ItemID, Long> lost = new HashMap<>(result.undelivered());
+        String note = "user deleted: " + deletedUser;
+        for (Map.Entry<Integer, Map<ItemID, Long>> account : balances.entrySet()) {
+            for (Map.Entry<ItemID, Long> e : account.getValue().entrySet()) {
+                long loss = Math.min(e.getValue(), lost.getOrDefault(e.getKey(), 0L));
+                lost.merge(e.getKey(), -loss, Long::sum);
+                if (e.getValue() > loss)
+                    TransactionLedger.logRow(account.getKey(), LedgerType.ACCOUNT_DELETE_PAYOUT, e.getKey(), e.getValue() - loss, actor, null, note);
+                if (loss > 0)
+                    TransactionLedger.logRow(account.getKey(), LedgerType.ACCOUNT_DELETE_LOSS, e.getKey(), loss, actor, null,
+                            note + "; not delivered: " + result.reason());
+            }
+        }
+        if (!result.undelivered().isEmpty())
+            warn("Deleted user " + deletedUser + ": could not deliver " + result.undelivered() + " (" + result.reason()
+                    + "). The value is destroyed; see the ledger rows ACCOUNT_DELETE_LOSS.");
     }
 
     /**
      * Collects all non-zero balances (free + locked) from the given bank account into the target map.
      */
-    /** Task #109: one ACCOUNT_DELETE_PAYOUT row per non-empty bank of an account being deleted. */
-    private static void logDeletePayout(ServerBankAccount account, UUID deletedUser) {
-        for (Map.Entry<ItemID, IServerBank> e : account.getAllBanks().entrySet()) {
-            ISyncServerBank bank = e.getValue();
-            if (bank == null || bank.getTotalBalance() <= 0) continue;
-            net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(account.getAccountNumber(), net.kroia.banksystem.api.ledger.LedgerType.ACCOUNT_DELETE_PAYOUT, e.getKey(),
-                    bank.getTotalBalance(), net.kroia.banksystem.banking.ledger.TransactionLedger.currentActor(), null, "user deleted: " + deletedUser);
-        }
-    }
-
     private void collectAccountBalances(ServerBankAccount account, Map<ItemID, Long> target) {
         for (Map.Entry<ItemID, IServerBank> bankEntry : account.getAllBanks().entrySet()) {
             ItemID itemID = bankEntry.getKey();
@@ -745,37 +789,44 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
 
     /**
-     * Drops items to the player using DropItemsInPlayerInventoryRequest with forceDrop=true.
-     * Tries locally first, then sends to all connected slave servers for remaining items.
+     * Task #127: drops items to the player (forceDrop): on this server first, then on a multi-server master on each
+     * connected slave in turn with what is left. Completes with what was not delivered; never fails.
      */
-    private void dropItemsToPlayer(UUID playerUUID, Map<ItemID, Long> items) {
-        // Try to drop locally first (player might be on the master server)
-        MinecraftServer server = UtilitiesPlatform.getServer();
-        Map<ItemID, Long> remaining = DropItemsInPlayerInventoryRequest.dropItems(server, playerUUID, items, true);
+    private static CompletableFuture<PayoutResult> dropItemsToPlayer(UUID playerUUID, Map<ItemID, Long> items) {
+        Map<ItemID, Long> remaining = new HashMap<>(DropItemsInPlayerInventoryRequest.dropItems(UtilitiesPlatform.getServer(), playerUUID, items, true));
+        remaining.values().removeIf(v -> v <= 0);
+        List<String> slaves = MultiServerManager.isRunning() && MultiServerManager.isMaster()
+                ? new ArrayList<>(MultiServerManager.getConnectedSlaveIDs()) : List.of();
+        // never fails: any throw (also a synchronous one from sendToSlave) reports the rest as unknown, so the ledger rows still get written
+        return CompletableFuture.completedFuture(slaves.iterator())
+                .thenCompose(it -> dropOnSlaves(playerUUID, remaining, it))
+                .exceptionally(ex -> new PayoutResult(remaining, "outcome unknown: " + TransferStatusRequest.cause(ex)));
+    }
 
-        // Remove zero-amount entries
-        remaining.entrySet().removeIf(e -> e.getValue() <= 0);
+    /**
+     * One slave per step, each with its own transfer id. sendToSlave (#126) resolves "not sent" and NOT_APPLIED to the
+     * full map and APPLIED to the slave's remainder; it fails only when the outcome stays unknown: the chain stops there.
+     */
+    private static CompletableFuture<PayoutResult> dropOnSlaves(UUID playerUUID, Map<ItemID, Long> remaining, Iterator<String> slaves) {
+        if (remaining.isEmpty()) return CompletableFuture.completedFuture(new PayoutResult(Map.of(), null));
+        if (!slaves.hasNext()) return CompletableFuture.completedFuture(new PayoutResult(remaining, "player offline"));
+        String slaveID = slaves.next();
+        String transferId = TransferJournal.newTransferId();
+        return DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, playerUUID, new HashMap<>(remaining), true, transferId)
+                .handle((notDropped, ex) -> ex == null ? dropOnSlaves(playerUUID, notDroppedOf(remaining, notDropped), slaves)
+                        : CompletableFuture.completedFuture(new PayoutResult(remaining, "outcome unknown, transfer " + transferId)))
+                .thenCompose(f -> f);
+    }
 
-        if (remaining.isEmpty()) {
-            return;
-        }
-
-        // Player not on master server; try all connected slave servers
-        if (MultiServerManager.isRunning() && MultiServerManager.isMaster()) {
-            List<String> slaves = MultiServerManager.getConnectedSlaveIDs();
-            for (String slaveID : slaves) {
-                final Map<ItemID, Long> itemsToSend = new HashMap<>(remaining);
-                DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, playerUUID, itemsToSend, true)
-                        .whenComplete((notDropped, ex) -> {
-                            if (ex != null) {
-                                warn("Failed to drop items to player " + playerUUID + " on slave " + slaveID + ": " + ex.getMessage());
-                            }
-                        });
-            }
-        } else {
-            // Not in multi-server mode and player not on this server — items are lost
-            warn("Could not drop items to offline player " + playerUUID + " during account deletion. Lost items: " + remaining);
-        }
+    /** The slave's not-dropped map, capped at what was sent (the reply comes from another server); null = nothing dropped. */
+    private static Map<ItemID, Long> notDroppedOf(Map<ItemID, Long> sent, @Nullable Map<ItemID, Long> notDropped) {
+        if (notDropped == null) return new HashMap<>(sent);
+        Map<ItemID, Long> left = new HashMap<>();
+        sent.forEach((id, n) -> {
+            long rest = Math.min(n, notDropped.getOrDefault(id, 0L));
+            if (rest > 0) left.put(id, rest);
+        });
+        return left;
     }
 
     @Override
@@ -1411,6 +1462,17 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         return deleteBankAccount(accountNumber, true);
     }
 
+    /** @return why {@link #deleteBankAccount} refuses the account (personal, or bound to a company), or null if it may be deleted. */
+    private static @Nullable String deleteRefusal(int accountNumber, ServerBankAccount account) {
+        if (account.getPersonalBankOwner() != null)
+            return "Cannot delete personal bank account with number: " + accountNumber + ".";
+        net.kroia.banksystem.banking.company.CompanyManager cm =
+                net.kroia.banksystem.banking.company.CompanyManager.get();
+        if (cm != null && cm.getByBankAccount(accountNumber) != null)
+            return "Cannot delete bank account " + accountNumber + ": it still belongs to a company.";
+        return null;
+    }
+
     /**
      * @param logClosure Task #109: write a BANK_CLOSED ledger row per non-empty bank (actor from
      *                   {@code TransactionLedger.currentActor()}); false when the caller already
@@ -1420,14 +1482,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     {
         if(bankAccounts.containsKey(accountNumber)) {
             ServerBankAccount account = bankAccounts.get(accountNumber);
-            if(account.getPersonalBankOwner() != null){
-                error("Cannot delete personal bank account with number: " + accountNumber + ".");
-                return false; // Cannot delete personal bank accounts
-            }
-            net.kroia.banksystem.banking.company.CompanyManager cm =
-                    net.kroia.banksystem.banking.company.CompanyManager.get();
-            if (cm != null && cm.getByBankAccount(accountNumber) != null) {
-                error("Cannot delete bank account " + accountNumber + ": it still belongs to a company.");
+            String refusal = deleteRefusal(accountNumber, account);
+            if (refusal != null) {
+                error(refusal);
                 return false;
             }
             if (logClosure) {

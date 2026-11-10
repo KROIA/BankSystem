@@ -145,6 +145,8 @@ public interface ISyncServerBankManager {
 
     /**
      * Removes the user with the given UUID.
+     * Balances of the user's personal account and of accounts left without users are handed to the player as items
+     * (this server first, then each slave). What cannot be delivered is destroyed and logged as ACCOUNT_DELETE_LOSS.
      *
      * //@note
      * //This method will emit the CLOSE_ITEM_BANK_EVENT for all banks of the user

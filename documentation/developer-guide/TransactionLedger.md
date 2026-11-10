@@ -67,9 +67,10 @@ Codes are stored in `type_code` and are **append-only**: a code is never renumbe
 | 22 | SHARE_STAMP | Shares stamped at a Share Stamper |
 | 23 | SHARE_REDEEM | Shares redeemed at a Share Stamper |
 | 24 | SHARE_TRADE | Stamped shares deposited into or withdrawn from a bank |
-| 25 | ACCOUNT_DELETE_PAYOUT | Balance paid out when a user and their account were deleted |
+| 25 | ACCOUNT_DELETE_PAYOUT | Balance handed to the player as items when a user and their account were deleted |
 | 26 | ACCOUNT_FREEZE | An account was frozen or unfrozen; amount 0, item 0, note `frozen` / `unfrozen`, actor = admin, console or the API caller |
 | 27 | ADMIN_DISALLOW_ITEM | An admin disallowed an item; one row per holder with the removed (non-refunded) balance |
+| 28 | ACCOUNT_DELETE_LOSS | Balance of a deleted user's account that could not be handed out and was destroyed; note gives the reason (`player offline` or `outcome unknown, transfer <id>`) |
 
 Amounts are unsigned, except for TRANSFER, where the sign gives the direction.
 
@@ -106,7 +107,7 @@ Amounts are unsigned, except for TRANSFER, where the sign gives the direction.
 
 ## Admin audit and suspicion flags
 
-`TransactionLedger.write` passes every master row to `AdminAudit.onLedgerRow`. Admin rows (codes 7–11, 26, 27, and 12 when the source is ADMIN) are appended to `<world>/data/BankSystem/audit/<yyyy-mm-dd>.log` and sent to BankSystem admins with alerts on (see [Administration](../user-guide/Administration.md#audit-and-admin-alerts)).
+`TransactionLedger.write` passes every master row to `AdminAudit.onLedgerRow`. Admin rows (codes 7–11, 26, 27, and 12 / 28 when the source is ADMIN) are appended to `<world>/data/BankSystem/audit/<yyyy-mm-dd>.log` and sent to BankSystem admins with alerts on (see [Administration](../user-guide/Administration.md#audit-and-admin-alerts)).
 
 Features that detect suspicious activity call:
 
