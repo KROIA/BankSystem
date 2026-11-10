@@ -38,7 +38,6 @@ import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.modutilities.networking.client_server.arrs.RequestManager;
 import net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -673,26 +672,16 @@ public class TransactionLedgerTests extends TestSuite {
         return fail("no TRANSFER_PARKED flag");
     }
 
-    /**
-     * Switch on for exactly one synchronous call on the server thread: the DROP to an unknown slave is refused inside
-     * it, so the refund runs inside it too. No tick runs in the window, so no other request (StockMarket's) can time out.
-     */
+    /** The DROP to an unknown slave is refused synchronously (ARRS failures are on), so the refund runs inside the call. */
     private TestResult dropNotSentRefundsWithSwitchOn() {
         if (!ready()) return fail("live setup missing");
-        var server = UtilitiesPlatform.getServer();
-        if (server == null || !server.isSameThread()) return skip("needs the server thread");
         IServerBank money = manager.getBankAccount(accountNr).getOrCreateBank(MoneyItem.getItemID());
         if (money == null) return fail("no money bank");
         money.deposit(10_000L);
         long before = money.getBalance();
         HashMap<ItemID, Long> request = new HashMap<>();
         request.put(ItemID.of(BankSystemItems.MONEY5.get().getDefaultInstance()), 2L);
-        RequestManager.ENABLE_REQUEST_FAILURES = true;
-        try {
-            new WithdrawMoneyPacket(request, accountNr).handle(PLAYER, "b126-no-such-slave");
-        } finally {
-            RequestManager.ENABLE_REQUEST_FAILURES = false;
-        }
+        new WithdrawMoneyPacket(request, accountNr).handle(PLAYER, "b126-no-such-slave");
         List<TransactionLogRecord> rows = rows(accountNr);
         TransactionLogRecord w = find(rows, LedgerType.WITHDRAW), refund = find(rows, LedgerType.WITHDRAW_REFUND);
         if (w == null || refund == null) return fail("expected WITHDRAW + WITHDRAW_REFUND, got " + rows);

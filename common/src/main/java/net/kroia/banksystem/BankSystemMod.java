@@ -40,6 +40,8 @@ public final class BankSystemMod {
 
     public static synchronized void init() {
         if(backend == null) {
+            // Task #126: let ARRS requests fail (not sent / timeout / disconnect); transfers then check their status, see TransferStatusRequest.
+            net.kroia.modutilities.networking.client_server.arrs.RequestManager.ENABLE_REQUEST_FAILURES = true;
             net.kroia.banksystem.util.BankSystemPermissions.register();
             backend = new BankSystemModBackend();
         }

@@ -67,6 +67,9 @@ public class TransferJournalTests extends TestSuite {
 
     @Override
     public void registerTests() {
+        // Task #126: BankSystemMod.init() turns ARRS failures on (master and slave)
+        addTest("request_failures_switch_on", () -> assertTrue("ENABLE_REQUEST_FAILURES after mod init",
+                net.kroia.modutilities.networking.client_server.arrs.RequestManager.ENABLE_REQUEST_FAILURES));
         if (slave) {
             addTest("async_bank_requested_has_full_columns", () -> run("requested.db", this::requested));
             addTest("follow_up_row_is_minimal", () -> run("followup.db", this::followUp));

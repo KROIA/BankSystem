@@ -7,7 +7,6 @@ import net.kroia.banksystem.networking.multi_server.TransferStatusRequest.Output
 import net.kroia.banksystem.networking.multi_server.TransferStatusRequest.Results;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.client_server.arrs.RequestManager;
 import net.kroia.modutilities.networking.client_server.arrs.RequestNotSentException;
 import net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException;
 import net.kroia.modutilities.testing.TestCategory;
@@ -26,7 +25,8 @@ import java.util.function.Supplier;
 /**
  * Task #126 (B6): the transfer result store and the sender's outcome resolution, offline. The clock is passed in, so no
  * test sleeps. The failure paths are injected as failed futures, the same as ARRS completes them while
- * {@code ENABLE_REQUEST_FAILURES} is on; a never-completing future is the switch-off behavior.
+ * {@code ENABLE_REQUEST_FAILURES} is on; a never-completing future is a request still in flight.
+ * The switch itself is checked in game (TransferJournalTests {@code request_failures_switch_on}): it is set by mod init.
  */
 public class TransferStatusTests extends TestSuite {
 
@@ -44,7 +44,6 @@ public class TransferStatusTests extends TestSuite {
 
     @Override
     public void registerTests() {
-        addTest("switch_stays_off", () -> assertFalse("#126 ships without the flip", RequestManager.ENABLE_REQUEST_FAILURES));
         addTest("store_hit_and_peer_isolation", this::testHitAndPeers);
         addTest("store_miss_young_vs_old", this::testMissAge);
         addTest("store_eviction_raises_horizon", this::testEviction);
@@ -185,8 +184,8 @@ public class TransferStatusTests extends TestSuite {
     private TestResult testResolvePending() {
         asks.set(0);
         CompletableFuture<String> out = resolve(new CompletableFuture<>(), answer(TransferStatusRequest.NOT_APPLIED, Map.of()));
-        if (out.isDone()) return fail("switch off: a pending request must stay pending");
-        return assertEquals("switch off: no status ask", 0, asks.get());
+        if (out.isDone()) return fail("in flight: a pending request must stay pending");
+        return assertEquals("in flight: no status ask", 0, asks.get());
     }
 
     private TestResult testDepositMapping() {
