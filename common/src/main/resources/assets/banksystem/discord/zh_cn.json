@@ -4,9 +4,6 @@
     "color": 3447003,
     "fields": [
       {"name": "玩家", "value": "{player}", "inline": true},
-      {"name": "UUID", "value": "{player_uuid}", "inline": true},
-      {"name": "账户", "value": "{account}", "inline": true},
-      {"name": "对方账户", "value": "{other_account}", "inline": true},
       {"name": "物品", "value": "{item}", "inline": true},
       {"name": "金额", "value": "{amount}", "inline": true},
       {"name": "持有人", "value": "{holders}", "inline": true},
@@ -21,9 +18,6 @@
     "color": 3447003,
     "fields": [
       {"name": "玩家", "value": "{player}", "inline": true},
-      {"name": "UUID", "value": "{player_uuid}", "inline": true},
-      {"name": "账户", "value": "{account}", "inline": true},
-      {"name": "对方账户", "value": "{other_account}", "inline": true},
       {"name": "物品", "value": "{item}", "inline": true},
       {"name": "金额", "value": "{amount}", "inline": true},
       {"name": "持有人", "value": "{holders}", "inline": true},
@@ -38,9 +32,6 @@
     "color": 3447003,
     "fields": [
       {"name": "玩家", "value": "{player}", "inline": true},
-      {"name": "UUID", "value": "{player_uuid}", "inline": true},
-      {"name": "账户", "value": "{account}", "inline": true},
-      {"name": "对方账户", "value": "{other_account}", "inline": true},
       {"name": "物品", "value": "{item}", "inline": true},
       {"name": "金额", "value": "{amount}", "inline": true},
       {"name": "持有人", "value": "{holders}", "inline": true},
@@ -55,9 +46,6 @@
     "color": 3447003,
     "fields": [
       {"name": "玩家", "value": "{player}", "inline": true},
-      {"name": "UUID", "value": "{player_uuid}", "inline": true},
-      {"name": "账户", "value": "{account}", "inline": true},
-      {"name": "对方账户", "value": "{other_account}", "inline": true},
       {"name": "物品", "value": "{item}", "inline": true},
       {"name": "金额", "value": "{amount}", "inline": true},
       {"name": "持有人", "value": "{holders}", "inline": true},
@@ -72,9 +60,6 @@
     "color": 3447003,
     "fields": [
       {"name": "玩家", "value": "{player}", "inline": true},
-      {"name": "UUID", "value": "{player_uuid}", "inline": true},
-      {"name": "账户", "value": "{account}", "inline": true},
-      {"name": "对方账户", "value": "{other_account}", "inline": true},
       {"name": "物品", "value": "{item}", "inline": true},
       {"name": "金额", "value": "{amount}", "inline": true},
       {"name": "持有人", "value": "{holders}", "inline": true},
@@ -89,9 +74,6 @@
     "color": 3447003,
     "fields": [
       {"name": "玩家", "value": "{player}", "inline": true},
-      {"name": "UUID", "value": "{player_uuid}", "inline": true},
-      {"name": "账户", "value": "{account}", "inline": true},
-      {"name": "对方账户", "value": "{other_account}", "inline": true},
       {"name": "物品", "value": "{item}", "inline": true},
       {"name": "金额", "value": "{amount}", "inline": true},
       {"name": "持有人", "value": "{holders}", "inline": true},
@@ -106,9 +88,6 @@
     "color": 3447003,
     "fields": [
       {"name": "玩家", "value": "{player}", "inline": true},
-      {"name": "UUID", "value": "{player_uuid}", "inline": true},
-      {"name": "账户", "value": "{account}", "inline": true},
-      {"name": "对方账户", "value": "{other_account}", "inline": true},
       {"name": "物品", "value": "{item}", "inline": true},
       {"name": "金额", "value": "{amount}", "inline": true},
       {"name": "持有人", "value": "{holders}", "inline": true},
@@ -123,9 +102,6 @@
     "color": 3447003,
     "fields": [
       {"name": "玩家", "value": "{player}", "inline": true},
-      {"name": "UUID", "value": "{player_uuid}", "inline": true},
-      {"name": "账户", "value": "{account}", "inline": true},
-      {"name": "对方账户", "value": "{other_account}", "inline": true},
       {"name": "物品", "value": "{item}", "inline": true},
       {"name": "金额", "value": "{amount}", "inline": true},
       {"name": "持有人", "value": "{holders}", "inline": true},
@@ -140,9 +116,6 @@
     "color": 3447003,
     "fields": [
       {"name": "玩家", "value": "{player}", "inline": true},
-      {"name": "UUID", "value": "{player_uuid}", "inline": true},
-      {"name": "账户", "value": "{account}", "inline": true},
-      {"name": "对方账户", "value": "{other_account}", "inline": true},
       {"name": "物品", "value": "{item}", "inline": true},
       {"name": "金额", "value": "{amount}", "inline": true},
       {"name": "持有人", "value": "{holders}", "inline": true},

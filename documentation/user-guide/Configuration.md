@@ -183,6 +183,29 @@ All switches except `PLACEHOLDERS_ENABLED` take effect immediately. Every server
 
 Settings files from versions before 2.2.0 are migrated automatically on the first start: the old `Placeholder` section and `Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION` are moved into `Integrations` with their values, and the new switches start at their defaults. Older entries `PLAYER_BALANCE` … `SERVER_CIRCULATION_JSON` are ignored.
 
+### Discord Feed
+
+To protect players' privacy, the default `bank-*` messages name the player only. They leave out the account number, the player UUID and the counterparty account. These values are still provided. To show them, give the type its own `fields` list in `config/modutilities/discord/banksystem.json`. The list replaces the default fields completely, so it must contain every field you want to keep:
+
+```json
+"bank-transfer-out": {
+  "enabled": true, "webhooks": ["bank"], "minAmount": 0,
+  "fields": [
+    {"name": "Player", "value": "{player}", "inline": true},
+    {"name": "UUID", "value": "{player_uuid}", "inline": true},
+    {"name": "Account", "value": "{account}", "inline": true},
+    {"name": "Counterparty", "value": "{other_account}", "inline": true},
+    {"name": "Item", "value": "{item}", "inline": true},
+    {"name": "Amount", "value": "{amount}", "inline": true},
+    {"name": "Time", "value": "{time}", "inline": false}
+  ]
+}
+```
+
+Then run `/modutilities discord reload`. Available values: `{player}`, `{player_uuid}`, `{account}` (`#<number> <name>`), `{other_account}`, `{item}`, `{amount}`, `{holders}`, `{company}`, `{kind}`, `{note}`, `{time}`. A field whose value is empty is left out.
+
+`bank-suspicion` is the exception: it shows the flagged account by default (values `{account}`, `{flag}`, `{severity}`, `{amount}`, `{details}`, `{ref}`, `{time}`). Route it to a channel that only admins can read.
+
 ---
 ## Volatile & Deposit-Gated Item Components
 

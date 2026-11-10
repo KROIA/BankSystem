@@ -41,7 +41,7 @@ import java.util.function.Supplier;
 /**
  * Task #119 (v2.2.0) — Discord feed ({@link BankSystemDiscord}) through its {@code sink} seam: type
  * mapping and values, recipient-leg filter, dividend coalescing, the live switch, suspicion posts, the
- * registered config file, and nothing posted from a slave.
+ * registered config file, the shipped default templates, and nothing posted from a slave.
  * <p>
  * <b>Server type:</b> BOTH; master cases skip on a slave and the slave case skips on the master.
  * Synthetic accounts and company only; ledger / flag rows written here are deleted afterwards.
@@ -71,6 +71,7 @@ public class DiscordFeedTests extends TestSuite {
         addTest("switch_off_posts_nothing", () -> master(this::switchOff));
         addTest("suspicion_flag_posts", () -> master(this::suspicion));
         addTest("config_file_lists_all_types", () -> master(this::configFile));
+        addTest("default_templates_hide_account", this::defaultTemplates);
         addTest("slave_posts_nothing", this::slave);
     }
 
@@ -186,6 +187,32 @@ public class DiscordFeedTests extends TestSuite {
         } catch (Exception e) {
             return fail("cannot read " + file + ": " + e);
         }
+    }
+
+    /**
+     * The shipped bank-* templates of every language show the player name but no UUID, account or counterparty
+     * (an admin adds them via {@code fields} in banksystem.json); bank-suspicion keeps its account field.
+     */
+    private TestResult defaultTemplates() {
+        for (String lang : List.of("en_us", "de_de", "de_ch", "zh_cn")) {
+            try (var in = DiscordFeedTests.class.getResourceAsStream("/assets/banksystem/discord/" + lang + ".json")) {
+                if (in == null) return fail("missing template file " + lang + ".json");
+                JsonObject root = JsonParser.parseString(new String(in.readAllBytes(), StandardCharsets.UTF_8)).getAsJsonObject();
+                for (String type : BankSystemDiscord.TYPES) {
+                    String values = root.getAsJsonObject(type).getAsJsonArray("fields").toString();
+                    if (type.equals("bank-suspicion")) {
+                        if (!values.contains("{account}")) return fail(lang + " bank-suspicion lacks {account}");
+                    } else if (values.contains("{account}") || values.contains("{player_uuid}") || values.contains("{other_account}")) {
+                        return fail(lang + " " + type + " shows account, UUID or counterparty: " + values);
+                    } else if (!values.contains("{player}")) {
+                        return fail(lang + " " + type + " lacks {player}");
+                    }
+                }
+            } catch (Exception e) {
+                return fail("cannot read " + lang + ".json: " + e);
+            }
+        }
+        return pass("4 languages: bank-* show {player} without account/UUID/counterparty; bank-suspicion keeps {account}");
     }
 
     private TestResult slave() {
