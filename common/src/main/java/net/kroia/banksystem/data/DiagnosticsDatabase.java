@@ -15,6 +15,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -27,18 +28,25 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Task #123 — write-only SQLite file for the external audit tool,
  * {@code <world>/data/BankSystem/Database/banksystem_diagnostics.db}, on master, slaves and single servers.
+ * Task #130 — add-ons reuse the writer for their own file through
+ * {@link #DiagnosticsDatabase(Path, String, String, List)}, which takes their thread name, schema version and
+ * tables; such a file gets only Meta plus those tables, never the BankSystem ones or their migration.
  * <p>
  * Gameplay never reads it; deleting, losing or corrupting it never changes game state. It has its own
- * connection and its own daemon thread ({@value #THREAD_NAME}), never the server thread or the
- * {@code banksystem-db-worker}. Calls enqueue and return at once; a full queue drops the write (counted,
- * one warning per session). The worker commits once per drained batch. The file is opened on the first
- * write: a corrupt file is renamed {@code .corrupt-<ms>} and recreated empty; any other open failure, or a
- * failed recreate, disables the instance for the session. Nothing here throws to callers.
+ * connection and its own daemon thread ({@value #THREAD_NAME} for the BankSystem file), never the server
+ * thread or the {@code banksystem-db-worker}. Calls enqueue and return at once; a full queue drops the write
+ * (counted, one warning per session). The worker commits once per drained batch. The file is opened on the
+ * first write: a corrupt file is renamed {@code .corrupt-<ms>} and recreated empty; any other open failure,
+ * or a failed recreate, disables the instance for the session. Nothing here throws to callers.
+ * <p>
+ * Every open writes Meta {@code created_ms} (first open only) and {@code schema_version}. Any other Meta row,
+ * such as a last-save time, is the caller's job through {@link #setMeta(String, String)}; BankSystem writes
+ * {@value #META_BANK_LAST_SAVE_MS} after each bank save.
  */
 public final class DiagnosticsDatabase {
     public static final String FILE_NAME = "banksystem_diagnostics.db";
     public static final String THREAD_NAME = "banksystem-diag-db";
-    /** Version of the file's schema; later units bump it when they add tables. */
+    /** Version of the BankSystem file's schema; later units bump it when they add tables. */
     public static final String SCHEMA_VERSION = "1";
     public static final String META_BANK_LAST_SAVE_MS = "bank_last_save_ms";
     public static final int DEFAULT_QUEUE_CAPACITY = 10_000;
@@ -47,9 +55,10 @@ public final class DiagnosticsDatabase {
     private static final long CLOSE_DRAIN_MS = 2_000L;
     private static final String TAG = "[DiagnosticsDatabase] ";
 
-    /** Run in order whenever the file is opened; later units append their CREATE TABLE IF NOT EXISTS here. */
-    private static final List<String> SCHEMA = List.of(
-            "CREATE TABLE IF NOT EXISTS Meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    /** Every file's first statement, before its own schema. */
+    private static final String META_TABLE = "CREATE TABLE IF NOT EXISTS Meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)";
+    /** The BankSystem file's tables, run in order after Meta on every open; later units append their CREATE ... IF NOT EXISTS here. */
+    private static final List<String> BANK_SCHEMA = List.of(
             // Task #124 (B2): slaves only; follow-up rows leave direction / path / items_json NULL.
             "CREATE TABLE IF NOT EXISTS TransferJournal (id INTEGER PRIMARY KEY AUTOINCREMENT, transfer_id TEXT NOT NULL, "
                     + "ts INTEGER NOT NULL, direction TEXT, path TEXT, step TEXT NOT NULL, account_number INTEGER, "
@@ -67,6 +76,11 @@ public final class DiagnosticsDatabase {
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
     private final Path file;
+    private final String threadName;
+    private final String schemaVersion;
+    private final List<String> schema;
+    /** BankSystem file only: the NoteFlow column migration. */
+    private final boolean bankMigration;
     private final ThreadPoolExecutor executor;
     private final AtomicLong dropped = new AtomicLong();
     private volatile boolean disabled;
@@ -91,15 +105,34 @@ public final class DiagnosticsDatabase {
         //return (level == null ? "?" : level.dimension().identifier().toString()) + " " + pos.getX() + " " + pos.getY() + " " + pos.getZ(); // mc>=1.21.11
     }
 
+    /** The BankSystem file: Meta, TransferJournal and NoteFlow, thread {@value #THREAD_NAME}. */
     public DiagnosticsDatabase(Path file) {
         this(file, DEFAULT_QUEUE_CAPACITY);
     }
 
     /** @param queueCapacity max queued writes before new ones are dropped (tests use a small value) */
     public DiagnosticsDatabase(Path file, int queueCapacity) {
+        this(file, THREAD_NAME, SCHEMA_VERSION, BANK_SCHEMA, true, queueCapacity);
+    }
+
+    /**
+     * Own diagnostics file: always a Meta table (created_ms, schema_version = schemaVersion), then
+     * {@code schema} run in order on every open (CREATE ... IF NOT EXISTS). Same writer semantics: own daemon
+     * thread named threadName, bounded queue, corrupt → renamed and recreated, never throws to callers.
+     */
+    public DiagnosticsDatabase(Path file, String threadName, String schemaVersion, List<String> schema) {
+        this(file, threadName, schemaVersion, schema, false, DEFAULT_QUEUE_CAPACITY);
+    }
+
+    private DiagnosticsDatabase(Path file, String threadName, String schemaVersion, List<String> schema,
+                                boolean bankMigration, int queueCapacity) {
         this.file = file.toAbsolutePath();
+        this.threadName = Objects.requireNonNull(threadName, "threadName");
+        this.schemaVersion = Objects.requireNonNull(schemaVersion, "schemaVersion");
+        this.schema = List.copyOf(Objects.requireNonNull(schema, "schema"));
+        this.bankMigration = bankMigration;
         executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(queueCapacity), r -> {
-            Thread t = new Thread(r, THREAD_NAME);
+            Thread t = new Thread(r, this.threadName);
             t.setDaemon(true);
             return t;
         }) {
@@ -241,11 +274,17 @@ public final class DiagnosticsDatabase {
         try {
             c.setAutoCommit(false);
             try (Statement st = c.createStatement()) {
-                for (String sql : SCHEMA) st.execute(sql);
-                addMissingColumns(c, "NoteFlow", NOTE_FLOW_ADDED);
-                st.execute("CREATE INDEX IF NOT EXISTS NoteFlow_villager ON NoteFlow(villager_uuid)");
+                st.execute(META_TABLE);
+                for (String sql : schema) st.execute(sql);
+                if (bankMigration) {
+                    addMissingColumns(c, "NoteFlow", NOTE_FLOW_ADDED);
+                    st.execute("CREATE INDEX IF NOT EXISTS NoteFlow_villager ON NoteFlow(villager_uuid)");
+                }
                 st.execute("INSERT OR IGNORE INTO Meta (key, value) VALUES ('created_ms', '" + System.currentTimeMillis() + "')");
-                st.execute("INSERT OR REPLACE INTO Meta (key, value) VALUES ('schema_version', '" + SCHEMA_VERSION + "')");
+            }
+            try (PreparedStatement ps = c.prepareStatement("INSERT OR REPLACE INTO Meta (key, value) VALUES ('schema_version', ?)")) {
+                ps.setString(1, schemaVersion); // caller-supplied text
+                ps.executeUpdate();
             }
             c.commit();
             return c;

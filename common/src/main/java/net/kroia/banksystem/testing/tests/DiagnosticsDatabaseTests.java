@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -29,7 +30,8 @@ import java.util.stream.Stream;
 
 /**
  * Task #123 — {@link DiagnosticsDatabase}: lazy create + Meta, created_ms kept on reopen, Meta upsert,
- * corrupt file renamed and recreated, writer thread, disabled instance, full queue, live instance path.
+ * corrupt file renamed and recreated, writer thread, disabled instance, full queue, live instance path;
+ * Task #130: an add-on file gets only Meta + its own schema, version and thread.
  * <p>
  * <b>Server type:</b> BOTH (the class runs on slaves too). Every case uses its own file in a temp dir,
  * never the world's diagnostics file.
@@ -56,6 +58,7 @@ public class DiagnosticsDatabaseTests extends TestSuite {
         addTest("disabled_instance_is_noop", () -> run(this::disabled));
         addTest("full_queue_drops_without_blocking", () -> run(this::overflow));
         addTest("live_instance_targets_world_file", () -> run(this::live));
+        addTest("addon_file_has_meta_and_own_schema_only", () -> run(this::addonFile));
     }
 
     @Override
@@ -88,6 +91,8 @@ public class DiagnosticsDatabaseTests extends TestSuite {
         db.close();
         Map<String, String> m = meta(f);
         if (!created) return fail("file not created by the first write");
+        Set<String> t = tables(f);
+        if (!t.equals(Set.of("Meta", "TransferJournal", "NoteFlow"))) return fail("tables " + t);
         if (!m.keySet().equals(Set.of("schema_version", "created_ms", K))) return fail("keys " + m);
         if (!DiagnosticsDatabase.SCHEMA_VERSION.equals(m.get("schema_version"))) return fail("schema_version " + m);
         long createdMs = Long.parseLong(m.get("created_ms"));
@@ -219,6 +224,28 @@ public class DiagnosticsDatabaseTests extends TestSuite {
         return pass((slave ? "slave" : "master") + " instance at " + expected);
     }
 
+    /** Task #130: an add-on's own file gets Meta + its schema, its version and its thread, nothing of ours. */
+    private TestResult addonFile() throws Exception {
+        Path f = dir.resolve("addon.db");
+        DiagnosticsDatabase db = new DiagnosticsDatabase(f, "test-diag-db", "7", List.of("CREATE TABLE IF NOT EXISTS Foo (a INTEGER)"));
+        db.execute("INSERT INTO Foo (a) VALUES (?)", 1);
+        String writer = await(db.flush(), WAIT_MS); // same single thread that ran the execute
+        db.close();
+        Set<String> t = tables(f);
+        Map<String, String> m = meta(f);
+        long fooRows;
+        try (Connection c = DiagnosticsDatabase.connect(f); Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM Foo")) {
+            fooRows = rs.next() ? rs.getLong(1) : -1;
+        }
+        if (!"test-diag-db".equals(writer)) return fail("writer thread " + writer);
+        if (!t.equals(Set.of("Meta", "Foo"))) return fail("tables " + t);
+        if (!m.keySet().equals(Set.of("schema_version", "created_ms")) || !"7".equals(m.get("schema_version")))
+            return fail("Meta " + m);
+        if (fooRows != 1) return fail("Foo rows " + fooRows);
+        return pass("tables " + t + ", schema_version 7, writer " + writer);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private TestResult run(Callable<TestResult> body) {
@@ -235,6 +262,16 @@ public class DiagnosticsDatabaseTests extends TestSuite {
         try (Connection c = DiagnosticsDatabase.connect(f); Statement st = c.createStatement();
              ResultSet rs = st.executeQuery("SELECT key, value FROM Meta")) {
             while (rs.next()) out.add(new String[]{rs.getString(1), rs.getString(2)});
+        }
+        return out;
+    }
+
+    /** Table names, without SQLite's own sqlite_sequence. */
+    private static Set<String> tables(Path f) throws SQLException {
+        Set<String> out = new HashSet<>();
+        try (Connection c = DiagnosticsDatabase.connect(f); Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name <> 'sqlite_sequence'")) {
+            while (rs.next()) out.add(rs.getString(1));
         }
         return out;
     }
