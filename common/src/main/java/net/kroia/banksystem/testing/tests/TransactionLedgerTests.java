@@ -22,6 +22,8 @@ import net.kroia.banksystem.data.DriverShim;
 import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.data.table.TransactionLogManager;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
+import net.kroia.banksystem.data.table.record.SuspicionFlagRecord;
+import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.minecraft.command.ServerBankSystemCommandHandler;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
@@ -29,12 +31,15 @@ import net.kroia.banksystem.networking.entity.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
 import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
 import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRequest;
+import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.networking.multi_server.WithdrawItemsFromBankRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.modutilities.networking.client_server.arrs.RequestManager;
+import net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -117,6 +122,10 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("async_bank_ref_is_transfer_id", this::asyncBankRefIsTransferId);
         addTest("deposit_items_ref_is_transfer_id", this::depositItemsRefIsTransferId);
         addTest("transfer_id_codec_compat", this::transferIdCodecCompat);
+        // Task #126 (B6)
+        addTest("transfer_id_applies_once", () -> threw(this::transferIdAppliesOnce));
+        addTest("drop_unknown_outcome_parks", () -> threw(this::dropUnknownParks));
+        addTest("drop_not_sent_refunds_with_switch_on", this::dropNotSentRefundsWithSwitchOn);
     }
 
     @Override
@@ -577,6 +586,120 @@ public class TransactionLedgerTests extends TestSuite {
         return pass("deposit row ref = transfer_id");
     }
 
+    // ------------------------------------------------------------------ Task #126 (B6) transfer status
+
+    private static final String FAKE_SLAVE = "b126-test-slave";
+
+    @FunctionalInterface
+    private interface Body { TestResult run() throws Exception; }
+
+    private TestResult threw(Body body) {
+        try {
+            return body.run();
+        } catch (Exception e) {
+            return fail("threw " + e);
+        }
+    }
+
+    /** A repeated transfer id from a slave applies once and gets the first reply; the status request reads the store. */
+    private TestResult transferIdAppliesOnce() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        ItemID moneyId = MoneyItem.getItemID();
+        ItemID diamond = allow(Items.DIAMOND.getDefaultInstance());
+        IServerBank money = manager.getBankAccount(accountNr).getOrCreateBank(moneyId);
+        if (money == null) return fail("no money bank");
+        TransferStatusRequest status = new TransferStatusRequest();
+        boolean wasTrusted = manager.isSlaveServerTrusted(FAKE_SLAVE);
+        manager.trustSlaveServer(FAKE_SLAVE);
+        try {
+            TransferJournal.Ref ref = TransferJournal.ref("b126_test");
+            AsyncBank.InputData in = TransactionLedger.tagged(LedgerType.UPLOAD_DEPOSIT, PLAYER, null, ref,
+                    () -> AsyncBank.InputData.of(AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 11L));
+            long before = money.getBalance();
+            AsyncBank.OutputData first = AsyncBank.Request.instance.handleOnMasterServer(in, FAKE_SLAVE, null).join();
+            AsyncBank.OutputData again = AsyncBank.Request.instance.handleOnMasterServer(in, FAKE_SLAVE, null).join();
+            if (first != again) return fail("repeat must get the stored reply");
+            if (money.getBalance() != before + 11L) return fail("money +" + (money.getBalance() - before) + ", expected +11 once");
+            if (ledger.getByRef(ref.transferId()).get(10, TimeUnit.SECONDS).size() != 1) return fail("repeat wrote a ledger row");
+
+            String tid = TransferJournal.newTransferId();
+            Map<ItemID, Long> items = new HashMap<>(Map.of(diamond, 3L));
+            DepositItemsInBankRequest dep = new DepositItemsInBankRequest();
+            var depIn = new DepositItemsInBankRequest.InputData(accountNr, PLAYER, items, LedgerType.CONVERTER_DEPOSIT.code(), tid);
+            if (!dep.handleOnMasterServer(depIn, FAKE_SLAVE, null).join().items().isEmpty()) return fail("deposit refused");
+            long diamonds = manager.getBankAccount(accountNr).getBank(diamond).getBalance();
+            if (!dep.handleOnMasterServer(depIn, FAKE_SLAVE, null).join().items().isEmpty()) return fail("repeat reply differs");
+            if (manager.getBankAccount(accountNr).getBank(diamond).getBalance() != diamonds) return fail("repeat deposited twice");
+            if (ledger.getByRef(tid).get(10, TimeUnit.SECONDS).size() != 1) return fail("repeat wrote an item row");
+
+            if (status.handleOnMasterServer(new TransferStatusRequest.InputData(0, tid), FAKE_SLAVE, null).join().state() != TransferStatusRequest.APPLIED)
+                return fail("status of an applied transfer");
+            if (status.handleOnMasterServer(new TransferStatusRequest.InputData(0, tid), "b126-other-slave", null).join().state() != TransferStatusRequest.NOT_APPLIED)
+                return fail("another slave must not see the transfer");
+            if (status.handleOnMasterServer(new TransferStatusRequest.InputData(0, tid), FAKE_SLAVE, PLAYER).join().state() != TransferStatusRequest.UNKNOWN)
+                return fail("a player must get UNKNOWN");
+
+            manager.untrustSlaveServer(FAKE_SLAVE);
+            String refused = TransferJournal.newTransferId();
+            Map<ItemID, Long> back = dep.handleOnMasterServer(new DepositItemsInBankRequest.InputData(accountNr, PLAYER, items,
+                    LedgerType.CONVERTER_DEPOSIT.code(), refused), FAKE_SLAVE, null).join().items();
+            if (!items.equals(back)) return fail("untrusted deposit returned " + back);
+            if (TransferStatusRequest.RESULTS.get(FAKE_SLAVE, refused) != null) return fail("refused transfer stored");
+            if (status.handleOnMasterServer(new TransferStatusRequest.InputData(0, refused), FAKE_SLAVE, null).join().state() != TransferStatusRequest.NOT_APPLIED)
+                return fail("status of a refused transfer");
+            return pass("deposit + item deposit apply once per (slave, transfer_id); status APPLIED / NOT_APPLIED / UNKNOWN");
+        } finally {
+            if (wasTrusted) manager.trustSlaveServer(FAKE_SLAVE);
+            else manager.untrustSlaveServer(FAKE_SLAVE);
+        }
+    }
+
+    /** A DROP whose outcome stays unknown is parked: no refund row, a TRANSFER_PARKED flag with the transfer id. */
+    private TestResult dropUnknownParks() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        var flags = BankSystemModBackend.getInstances_forTesting().SUSPICION_FLAG_MANAGER;
+        if (flags == null) return fail("no flag manager");
+        ItemID note = ItemID.of(BankSystemItems.MONEY5.get().getDefaultInstance());
+        long worth = ((MoneyItem) BankSystemItems.MONEY5.get()).worth();
+        String tid = TransferJournal.newTransferId();
+        new WithdrawMoneyPacket(new HashMap<>(), accountNr).onDropResult(FAKE_SLAVE, PLAYER, accountNr, Map.of(note, 2L), tid, null,
+                new java.util.concurrent.CompletionException(new RequestOutcomeUnknownException("test")));
+        // by ref: the suite-wide account already has a refund row from withdraw_money_writes_withdraw_and_refund
+        if (find(ledger.getByRef(tid).get(10, TimeUnit.SECONDS), LedgerType.WITHDRAW_REFUND) != null) return fail("unknown outcome was refunded");
+        for (SuspicionFlagRecord f : flags.getRecent(accountNr, 0, 0).get(10, TimeUnit.SECONDS))
+            if (f.flagType() == SuspicionChecks.TRANSFER_PARKED)
+                return tid.equals(f.ref()) && f.amount() == 2 * worth ? pass("parked: flag 6, ref = transfer id, amount " + f.amount())
+                        : fail("flag " + f);
+        return fail("no TRANSFER_PARKED flag");
+    }
+
+    /**
+     * Switch on for exactly one synchronous call on the server thread: the DROP to an unknown slave is refused inside
+     * it, so the refund runs inside it too. No tick runs in the window, so no other request (StockMarket's) can time out.
+     */
+    private TestResult dropNotSentRefundsWithSwitchOn() {
+        if (!ready()) return fail("live setup missing");
+        var server = UtilitiesPlatform.getServer();
+        if (server == null || !server.isSameThread()) return skip("needs the server thread");
+        IServerBank money = manager.getBankAccount(accountNr).getOrCreateBank(MoneyItem.getItemID());
+        if (money == null) return fail("no money bank");
+        money.deposit(10_000L);
+        long before = money.getBalance();
+        HashMap<ItemID, Long> request = new HashMap<>();
+        request.put(ItemID.of(BankSystemItems.MONEY5.get().getDefaultInstance()), 2L);
+        RequestManager.ENABLE_REQUEST_FAILURES = true;
+        try {
+            new WithdrawMoneyPacket(request, accountNr).handle(PLAYER, "b126-no-such-slave");
+        } finally {
+            RequestManager.ENABLE_REQUEST_FAILURES = false;
+        }
+        List<TransactionLogRecord> rows = rows(accountNr);
+        TransactionLogRecord w = find(rows, LedgerType.WITHDRAW), refund = find(rows, LedgerType.WITHDRAW_REFUND);
+        if (w == null || refund == null) return fail("expected WITHDRAW + WITHDRAW_REFUND, got " + rows);
+        if (w.ref() == null || !w.ref().equals(refund.ref())) return fail("refs " + w.ref() + " / " + refund.ref());
+        return assertEquals("balance restored", before, money.getBalance());
+    }
+
     /** transfer_id is the last, optional field: legacy payloads decode to null, legacy decoders ignore it. */
     private TestResult transferIdCodecCompat() {
         String tid = TransferJournal.newTransferId();
@@ -923,8 +1046,9 @@ public class TransactionLedgerTests extends TestSuite {
         try {
             db.getDatabaseThread().submit(() -> {
                 try (var ps = db.getConnection().prepareStatement("DELETE FROM TransactionLog WHERE account_number = ?");
+                     var pf = db.getConnection().prepareStatement("DELETE FROM SuspicionFlag WHERE account_number = ?"); // Task #126 park test
                      var pr = db.getConnection().prepareStatement("DELETE FROM TransactionLog WHERE ref = ?")) {
-                    for (int a : accounts) { ps.setInt(1, a); ps.executeUpdate(); }
+                    for (int a : accounts) { ps.setInt(1, a); ps.executeUpdate(); pf.setInt(1, a); pf.executeUpdate(); }
                     for (String r : refs) { pr.setString(1, r); pr.executeUpdate(); }
                     db.commitTransaction();
                 } catch (SQLException ignored) {

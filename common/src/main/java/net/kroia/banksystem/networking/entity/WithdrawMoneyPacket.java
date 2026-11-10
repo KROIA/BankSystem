@@ -3,6 +3,8 @@ package net.kroia.banksystem.networking.entity;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.AdminAudit;
+import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
@@ -245,11 +247,27 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
     private void dropRequestToSlave(String slaveID, UUID player, int bankaccountNr, Map<ItemID, Long> items, String transferId)
     {
-        CompletableFuture<Map<ItemID, Long>> notDroppedItemsFuture = DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, player, items, false, transferId);
-        notDroppedItemsFuture.thenAccept(notDropedItems -> {
-            putRemainingItemsBack(bankaccountNr, player, notDropedItems, transferId);
-        });
+        DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, player, items, false, transferId)
+                .whenComplete((notDropped, ex) -> onDropResult(slaveID, player, bankaccountNr, items, transferId, notDropped, ex));
     }
+
+    /**
+     * Task #126 (B6): a known result refunds what was not dropped. An outcome that is still unknown after the
+     * slave's status check is PARKED: no refund (the notes may be in the player's inventory), a TRANSFER_PARKED
+     * suspicion flag for the admin instead. Public for the in-game test.
+     */
+    public void onDropResult(String slaveID, UUID player, int bankaccountNr, Map<ItemID, Long> items, String transferId,
+                             @Nullable Map<ItemID, Long> notDropped, @Nullable Throwable ex)
+    {
+        if(ex == null) {
+            putRemainingItemsBack(bankaccountNr, player, notDropped, transferId);
+            return;
+        }
+        String details = "DROP to slave " + slaveID + " outcome unknown, not refunded: " + items;
+        error("WithdrawMoneyPacket: " + details + " (transfer " + transferId + ")", ex);
+        AdminAudit.raise(bankaccountNr, SuspicionChecks.TRANSFER_PARKED, 2, moneyValue(items), transferId, details);
+    }
+
     private void putRemainingItemsBack(int bankaccountNr, UUID player, Map<ItemID, Long> items, @Nullable String transferId)
     {
         if(items.isEmpty())
@@ -265,11 +283,20 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             return; // No money bank found for the player
         }
 
-        long toDepositMoney = 0;
+        long toDepositMoney = moneyValue(items);
+        if (toDepositMoney > 0 && redepositMoneyBank.deposit(toDepositMoney) == BankStatus.SUCCESS) {
+            // Task #109: separate refund row; the WITHDRAW row above stays as written.
+            TransactionLedger.logBank(redepositMoneyBank, LedgerType.WITHDRAW_REFUND, toDepositMoney,
+                    TransactionLedger.player(player), "banknotes not handed out: " + items, transferId);
+        }
+    }
+
+    /** Money value (raw units) of a banknote map; entries that would overflow are skipped. */
+    private static long moneyValue(Map<ItemID, Long> items)
+    {
+        long total = 0;
         for(Map.Entry<ItemID, Long> entry : items.entrySet()) {
-            ItemID  itemID = entry.getKey();
-            ItemStack itemStack = itemID.getStack();
-            if (itemStack.getItem() instanceof MoneyItem moneyItem) {
+            if (entry.getKey().getStack().getItem() instanceof MoneyItem moneyItem) {
                 long worth = moneyItem.worth();
                 long count = entry.getValue();
                 if (worth <= 0 || count <= 0)
@@ -277,16 +304,12 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 if (count > Long.MAX_VALUE / worth)
                     continue; // skip: multiplication would overflow
                 long product = worth * count;
-                if (toDepositMoney > Long.MAX_VALUE - product)
+                if (total > Long.MAX_VALUE - product)
                     continue; // skip: running sum would overflow
-                toDepositMoney += product;
+                total += product;
             }
         }
-        if (toDepositMoney > 0 && redepositMoneyBank.deposit(toDepositMoney) == BankStatus.SUCCESS) {
-            // Task #109: separate refund row; the WITHDRAW row above stays as written.
-            TransactionLedger.logBank(redepositMoneyBank, LedgerType.WITHDRAW_REFUND, toDepositMoney,
-                    TransactionLedger.player(player), "banknotes not handed out: " + items, transferId);
-        }
+        return total;
     }
 
 

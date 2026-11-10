@@ -1055,6 +1055,10 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                         + " — the crafted output was already delivered; the bank was not debited.");
                 if (throwable != null)
                     return; // request died mid-flight: lock state unknown, leave it untouched
+                // Task #126: never sent / not applied on a slave. The output is already delivered, so keep the
+                // ingredients locked (frozen for the admin) instead of releasing a free craft.
+                if (status == BankStatus.FAILED_NO_MASTER_CONNECTION)
+                    return;
                 // Release only what is verifiably still locked, never more than our
                 // own contribution. Residual (documented): the lock ledger is a
                 // single counter without per-owner tracking, so if the admin edit

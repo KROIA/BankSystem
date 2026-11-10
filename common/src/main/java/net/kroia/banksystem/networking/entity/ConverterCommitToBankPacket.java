@@ -177,8 +177,9 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
                     // ServerPlayerUtilities.printToClientConsole ultimately calls
                     // player.sendSystemMessage which is not documented as thread-safe.
                     if (ex != null) {
-                        // Task #121: outcome unknown (the master may have applied it). No refund,
-                        // a late success would duplicate the value.
+                        // Task #121 / #126: still unknown after the master's status check (the master may
+                        // have applied it). No refund, a late success would duplicate the value. Never-sent
+                        // and NOT_APPLIED arrive below as the full map and are refunded.
                         error("ConverterCommitToBankPacket: deposit outcome unknown, no refund: "
                                 + amount + " cents to account " + selectedAccountNumber
                                 + " for player " + playerUUID, ex);
@@ -186,7 +187,7 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
                                 String.valueOf(ex.getCause() != null ? ex.getCause() : ex));
                         return;
                     }
-                    // Not-deposited value comes back in cents (includes "never sent": the full map).
+                    // Not-deposited value comes back in cents (includes "never sent" and NOT_APPLIED: the full map).
                     // Clamped so a bad reply can never refund more than was reserved.
                     final long refund = Math.min(amount, Math.max(0L, notDeposited.getOrDefault(money, 0L)));
                     if (refund < amount)

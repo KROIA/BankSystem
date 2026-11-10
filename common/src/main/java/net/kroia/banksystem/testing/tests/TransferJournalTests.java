@@ -16,6 +16,7 @@ import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.entity.ConverterCommitToBankPacket;
 import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRequest;
+import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MultiServerUtils;
@@ -71,6 +72,7 @@ public class TransferJournalTests extends TestSuite {
             addTest("follow_up_row_is_minimal", () -> run("followup.db", this::followUp));
             addTest("drop_writes_delivered", () -> run("drop.db", this::drop));
             addTest("drop_uses_wire_transfer_id", () -> run("dropwire.db", this::dropUsesWireId)); // Task #125
+            addTest("drop_repeat_answered_from_cache", () -> run("dropcache.db", this::dropRepeat)); // Task #126
             addTest("converter_commit_credits_money_bank", () -> run("converter.db", this::converterCommit)); // Task #128
         } else {
             addTest("master_writes_no_journal_rows", () -> run("master.db", this::master));
@@ -160,6 +162,26 @@ public class TransferJournalTests extends TestSuite {
         return pass("wire id used; fresh id " + other.get(0).get("transfer_id") + " without one");
     }
 
+    /** Task #126: a repeated DROP gets the first reply and drops nothing again; the status handler reads the cache. */
+    private TestResult dropRepeat(DiagnosticsDatabase db, Path f) throws Exception {
+        ItemID money = MoneyItem.getItemID();
+        if (!money.isValid()) return skip("money ItemID not synced yet");
+        String tid = TransferJournal.newTransferId();
+        DropItemsInPlayerInventoryRequest req = new DropItemsInPlayerInventoryRequest();
+        var in = new DropItemsInPlayerInventoryRequest.InputData(PLAYER, Map.of(money, 5L), false, tid);
+        // PLAYER is offline: nothing is dropped, so the transfer is stored as not applied
+        var first = req.handleOnSlaveServer(in, null).join();
+        if (first != req.handleOnSlaveServer(in, null).join()) return fail("repeat must get the stored reply");
+        await(db.flush(), WAIT_MS);
+        if (query(f, "SELECT * FROM TransferJournal WHERE transfer_id = ?", tid).size() != 1) return fail("repeat wrote journal rows");
+        TransferStatusRequest status = new TransferStatusRequest();
+        if (status.handleOnSlaveServer(new TransferStatusRequest.InputData(0, tid), null).join().state() != TransferStatusRequest.NOT_APPLIED)
+            return fail("status of a DROP that dropped nothing");
+        if (status.handleOnSlaveServer(new TransferStatusRequest.InputData(0, tid), PLAYER).join().state() != TransferStatusRequest.UNKNOWN)
+            return fail("a player must get UNKNOWN");
+        return pass("repeat DROP answered from the cache; status NOT_APPLIED");
+    }
+
     /**
      * Task #128: a slave converter commit of a 3.00 cache; the branch depends on whether the master trusts this slave.
      * <ul>
@@ -194,6 +216,7 @@ public class TransferJournalTests extends TestSuite {
             Map<ItemID, Long> before = balances(account);
             ConverterCacheManager.get().clear(PLAYER);
             ConverterCacheManager.get().deposit(PLAYER, 300L);
+            long sentMs = System.currentTimeMillis();
             CompletableFuture<Map<ItemID, Long>> sent = new ConverterCommitToBankPacket(nr).commitFromSlave(PLAYER, 300L);
             if (sent == null) return fail("cache not reserved");
             Map<ItemID, Long> notDeposited = await(sent, WAIT_MS);
@@ -213,7 +236,10 @@ public class TransferJournalTests extends TestSuite {
             List<Map<String, Object>> ok = query(f, "SELECT * FROM TransferJournal WHERE transfer_id = ? AND step = ?",
                     req.get(0).get("transfer_id"), TransferJournal.CONFIRMED);
             if (ok.size() != 1 || ok.get(0).get("items_json") != null) return fail("CONFIRMED rows " + ok);
-            return pass("300 cents to the money bank, cache 0, no note bank, journal " + json);
+            // Task #126: real status round trip to the master
+            TransferStatusRequest.OutputData st = await(TransferStatusRequest.ask(null, (String) req.get(0).get("transfer_id"), sentMs), WAIT_MS);
+            if (st.state() != TransferStatusRequest.APPLIED || !st.remainder().isEmpty()) return fail("master status " + st);
+            return pass("300 cents to the money bank, cache 0, no note bank, journal " + json + ", master status APPLIED");
         } finally {
             mgr.deleteBankAccountAsync(nr);
         }
@@ -223,6 +249,7 @@ public class TransferJournalTests extends TestSuite {
         ItemID money = MoneyItem.getItemID();
         ConverterCacheManager.get().clear(PLAYER);
         ConverterCacheManager.get().deposit(PLAYER, 300L);
+        long sentMs = System.currentTimeMillis();
         // any account number: the master refuses an untrusted slave before the account lookup
         CompletableFuture<Map<ItemID, Long>> sent = new ConverterCommitToBankPacket(1).commitFromSlave(PLAYER, 300L);
         if (sent == null) return fail("cache not reserved");
@@ -242,7 +269,10 @@ public class TransferJournalTests extends TestSuite {
                 req.get(0).get("transfer_id"), TransferJournal.REQUESTED);
         if (next.size() != 1 || !TransferJournal.RETURNED.equals(next.get(0).get("step")) || next.get(0).get("items_json") != null)
             return fail("follow-up rows " + next);
-        return pass("untrusted slave: 300 cents refunded to the cache, journal REQUESTED {money:300} + RETURNED");
+        // Task #126: real status round trip; the master stored nothing for the refused transfer
+        TransferStatusRequest.OutputData st = await(TransferStatusRequest.ask(null, (String) req.get(0).get("transfer_id"), sentMs), WAIT_MS);
+        if (st.state() != TransferStatusRequest.NOT_APPLIED) return fail("master status " + st);
+        return pass("untrusted slave: 300 cents refunded to the cache, journal REQUESTED {money:300} + RETURNED, master status NOT_APPLIED");
     }
 
     private Map<ItemID, Long> balances(IAsyncBankAccount account) {

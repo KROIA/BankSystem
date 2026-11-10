@@ -179,16 +179,16 @@ public class ConverterCacheTests extends TestSuite {
         requested.put(new ItemID((short) 2, null), 7L);
 
         Map<ItemID, Long> nullReply = DepositItemsInBankRequest.notDeposited(requested,
-                CompletableFuture.completedFuture(null)).join();
+                CompletableFuture.completedFuture(null), null).join();
         if (!requested.equals(nullReply)) return fail("null reply must return the full requested map, got " + nullReply);
 
         Map<ItemID, Long> partial = Map.of(new ItemID((short) 2, null), 3L);
         Map<ItemID, Long> partialReply = DepositItemsInBankRequest.notDeposited(requested,
-                CompletableFuture.completedFuture(new DepositItemsInBankRequest.OutputData(partial))).join();
+                CompletableFuture.completedFuture(new DepositItemsInBankRequest.OutputData(partial)), null).join();
         if (!partial.equals(partialReply)) return fail("partial reply must pass through, got " + partialReply);
 
         CompletableFuture<Map<ItemID, Long>> failed = DepositItemsInBankRequest.notDeposited(requested,
-                CompletableFuture.failedFuture(new RuntimeException("timeout")));
+                CompletableFuture.failedFuture(new RuntimeException("timeout")), null);
         return assertTrue("failed reply must stay exceptional", failed.isCompletedExceptionally());
     }
 

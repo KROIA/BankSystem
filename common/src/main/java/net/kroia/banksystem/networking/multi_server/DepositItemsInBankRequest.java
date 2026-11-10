@@ -93,6 +93,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                                                                     LedgerType ledgerType, @Nullable String transferId)
     {
         DepositItemsInBankRequest.InputData inputData = new DepositItemsInBankRequest.InputData(bankAccount, executor, items, ledgerType.code(), transferId);
+        final long sentMs = System.currentTimeMillis();
         CompletableFuture<OutputData> sent;
         try {
             sent = BankSystemNetworking.DEPOSIT_ITEMS_IN_BANK_REQUEST.sendRequestToMaster(inputData);
@@ -100,17 +101,21 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
             BACKEND_INSTANCES.LOGGER.error("[DepositItemsInBankRequest] request not sent", e);
             sent = CompletableFuture.completedFuture(null); // not sent = definitely not applied
         }
-        return notDeposited(items, sent);
+        return notDeposited(items, sent, transferId == null ? null : () -> TransferStatusRequest.ask(null, transferId, sentMs));
     }
 
     /**
-     * Task #121: maps the master's reply to the "not deposited" items. A null reply means the
-     * request was never sent, so everything comes back. An exceptional reply stays exceptional:
-     * the master may have applied the deposit, so the caller must not refund.
+     * Task #121 / #126: maps the master's reply to the "not deposited" items. A null reply or a
+     * RequestNotSentException means the request was never sent, so everything comes back. Any other
+     * failure asks the master ({@code askStatus}): APPLIED → its not-deposited remainder, NOT_APPLIED →
+     * everything. If it stays unknown (or there is no id) the future fails: the master may have
+     * applied the deposit, so the caller must not refund.
      */
-    public static CompletableFuture<Map<ItemID, Long>> notDeposited(Map<ItemID, Long> requested, CompletableFuture<OutputData> sent)
+    public static CompletableFuture<Map<ItemID, Long>> notDeposited(Map<ItemID, Long> requested, CompletableFuture<OutputData> sent,
+                                                                    @Nullable java.util.function.Supplier<CompletableFuture<TransferStatusRequest.OutputData>> askStatus)
     {
-        return sent.thenApply(r -> r == null ? new HashMap<>(requested) : r.items);
+        return TransferStatusRequest.resolve(sent.thenApply(r -> r == null ? null : r.items),
+                () -> new HashMap<>(requested), remainder -> new HashMap<>(remainder), askStatus);
     }
     /**
      * Deposits the requested amount of items onto the bank account
@@ -146,6 +151,11 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
             warn("This request is not allowed to be sent from a client");
             return CompletableFuture.completedFuture(new OutputData(input.items));
         }
+        // Task #126 (B6): a repeated transfer gets the first reply; nothing is deposited twice.
+        final String transferId = slaveID == null || slaveID.isEmpty() ? null : input.transferId();
+        CompletableFuture<OutputData> seen = TransferStatusRequest.replay(slaveID, transferId);
+        if(seen != null)
+            return seen;
 
         IServerBankAccount account = getServerBankManager().getBankAccount(input.bankAccount);
         if(account == null)
@@ -175,6 +185,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                 TransactionLedger.SLAVE_DEPOSIT_CODES, false, null, slaveID, "DepositItemsInBankRequest");
         if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocks(input.bankAccount, ledger.type(), input.executor)) // Task #117
             return CompletableFuture.completedFuture(new OutputData(input.items));
+        TransferStatusRequest.applying(slaveID, transferId);
         Map<ItemID, Long> notDepositedItems = new HashMap<>();
         BankAccountBindings bindings = BankAccountBindings.get();
         for(Map.Entry<ItemID, Long> entry : input.items.entrySet())
@@ -232,7 +243,9 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                 notDepositedItems.put(itemID, toDeposit);
             }
         }
-        return CompletableFuture.completedFuture(new OutputData(notDepositedItems));
+        OutputData out = new OutputData(notDepositedItems);
+        TransferStatusRequest.remember(slaveID, transferId, !notDepositedItems.equals(input.items), notDepositedItems, out);
+        return CompletableFuture.completedFuture(out);
     }
 
     /**

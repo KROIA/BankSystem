@@ -68,6 +68,12 @@ public final class SuspicionChecks {
      * within the last hour. Server-wide: account number 0.
      */
     public static final int MONEY_SUPPLY_GROWTH = 5;
+    /**
+     * Task #126 (B6): banknotes debited for a DROP to a slave whose outcome stayed unknown after the
+     * status check (e.g. the slave restarted). Not refunded; ref = transfer_id, amount = the debit.
+     * Raised by WithdrawMoneyPacket, always on (the admin must reconcile it).
+     */
+    public static final int TRANSFER_PARKED = 6;
 
     /** @return the constant name of a flag type code, or "FLAG_&lt;code&gt;". */
     public static String typeName(int flagType) {
@@ -77,6 +83,7 @@ public final class SuspicionChecks {
             case WEALTH_JUMP -> "WEALTH_JUMP";
             case TRANSFER_TO_NEW_ACCOUNT -> "TRANSFER_TO_NEW_ACCOUNT";
             case MONEY_SUPPLY_GROWTH -> "MONEY_SUPPLY_GROWTH";
+            case TRANSFER_PARKED -> "TRANSFER_PARKED";
             default -> "FLAG_" + flagType;
         };
     }

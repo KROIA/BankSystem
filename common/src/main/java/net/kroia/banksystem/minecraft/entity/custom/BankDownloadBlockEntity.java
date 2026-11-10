@@ -607,9 +607,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                 int filledAmount = (int) ContainerItemInsertion.insertWithdrawnItems(inventory, withdrawalStack, amountToFillFinal);
                 if(filledAmount > 0) {
                     long amountToWithdraw = (long) filledAmount * ratio;
+                    final net.kroia.banksystem.data.TransferJournal.Ref journal =
+                            net.kroia.banksystem.data.TransferJournal.ref("download_block " + net.kroia.banksystem.data.DiagnosticsDatabase.at(level, worldPosition));
                     CompletableFuture<BankStatus> withdrawStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DOWNLOAD_WITHDRAW, null,
-                            "download block " + worldPosition.toShortString(),
-                            net.kroia.banksystem.data.TransferJournal.ref("download_block " + net.kroia.banksystem.data.DiagnosticsDatabase.at(level, worldPosition)),
+                            "download block " + worldPosition.toShortString(), journal,
                             () -> itemBank.withdrawLockedPreferedAsync(amountToWithdraw));
                     // whenComplete, not thenAccept: an exceptional withdraw must also roll back.
                     withdrawStatusFuture.whenComplete((withdrawStatus, withdrawError) -> {
@@ -635,7 +636,16 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                                 BACKEND_INSTANCES.LOGGER.error("[BankDownloadBlockEntity] Withdraw of " + filledAmount + " " + item
                                         + " at " + worldPosition.toShortString() + " failed (" + (withdrawError != null ? withdrawError : withdrawStatus)
                                         + ") and only " + removed + " item(s) could be taken back out of the block");
-                            itemBank.unlockAmountAsync(amountToReserveFinal); // Unlock the amount if withdrawal failed
+                            if (withdrawError == null) {
+                                itemBank.unlockAmountAsync(amountToReserveFinal); // not applied: release our lock
+                            } else {
+                                // Task #126: still unknown after the master's status check. The master may have
+                                // consumed the lock, and the lock is one counter: a blind unlock could free other
+                                // holders' locks. Leave it for the admin (slave journal: TIMED_OUT).
+                                BACKEND_INSTANCES.LOGGER.error("[BankDownloadBlockEntity] Withdraw of " + amountToWithdraw + " (raw) " + item
+                                        + " at " + worldPosition.toShortString() + " has an unknown outcome (transfer " + journal.transferId()
+                                        + "); items taken back, lock of " + amountToReserveFinal + " left for the admin", withdrawError);
+                            }
                             setChanged();
                             result.complete(0);
                         }

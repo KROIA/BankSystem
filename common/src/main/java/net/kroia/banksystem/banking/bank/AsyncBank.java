@@ -15,6 +15,7 @@ import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.data.TransferJournal;
+import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
@@ -281,6 +282,11 @@ public class AsyncBank implements IAsyncBank {
                 return CompletableFuture.completedFuture(OutputData.of(input.function));
 
             BankIdentifyAndDataPacket inputData = input.decodeParams();
+            // Task #126 (B6): a repeated deposit / withdraw gets the first reply; nothing is applied twice.
+            final String transferId = journaled(input.function) && slaveID != null && !slaveID.isEmpty() ? inputData.transferId : null;
+            CompletableFuture<OutputData> seen = TransferStatusRequest.replay(slaveID, transferId);
+            if(seen != null)
+                return seen;
             int accountNr = inputData.accountNr;
             IServerBankManager serverBankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
             if(serverBankManager == null) {
@@ -375,7 +381,11 @@ public class AsyncBank implements IAsyncBank {
                 case FunctionType.ToJsonAsync ->							OutputData.of(input.function, bank.toJson());
                 case FunctionType.ToJsonStringAsync ->						OutputData.of(input.function, bank.toJsonString());
             };
-            return CompletableFuture.completedFuture(executeWithLedger(input.function, params, bank, slaveID, execute));
+            TransferStatusRequest.applying(slaveID, transferId);
+            OutputData out = executeWithLedger(input.function, params, bank, slaveID, execute);
+            if(transferId != null)
+                TransferStatusRequest.remember(slaveID, transferId, out.decodeResult() == BankStatus.SUCCESS, Map.of(), out);
+            return CompletableFuture.completedFuture(out);
         }
 
         /**
@@ -525,23 +535,41 @@ public class AsyncBank implements IAsyncBank {
         Request instance = Request.instance;
     }
 
-    /** Task #121: a failed or null reply fails the returned future instead of hanging it. */
+    /**
+     * Task #121: a failed or null reply fails the returned future instead of hanging it.
+     * Task #126 (B6): a slave's deposit / withdraw that was never sent or not applied (status check) completes with
+     * FAILED_NO_MASTER_CONNECTION, so callers roll back; an unknown outcome is checked with the master first and fails
+     * only if it stays unknown (then nothing may be refunded).
+     */
     private CompletableFuture<OutputData> sendRequest(InputData input)
     {
+        final long sentMs = System.currentTimeMillis();
         CompletableFuture<OutputData> tmpFuture;
         if(isClientSide)
             tmpFuture = Request.instance.sendRequestToServer(input);
         else
             tmpFuture = Request.instance.sendRequestToMaster(input);
 
-        CompletableFuture<OutputData> out = tmpFuture.thenApply(outputData ->{
-            if(outputData == null)
-                throw new IllegalStateException("ARRS request not sent: " + input.function);
-            if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
-                info("Response received for request: "+ input.function.toString());
-            return outputData;
-        });
-        if(!isClientSide && BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer)
+        boolean slave = !isClientSide && BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer;
+        CompletableFuture<OutputData> out;
+        if(slave && journaled(input.function)) {
+            BankIdentifyAndDataPacket<?> params = input.decodeParams();
+            String transferId = params.transferId();
+            out = TransferStatusRequest.resolve(tmpFuture,
+                    () -> OutputData.of(input.function, BankStatus.FAILED_NO_MASTER_CONNECTION),
+                    remainder -> OutputData.of(input.function, BankStatus.SUCCESS),
+                    transferId == null ? null : () -> TransferStatusRequest.ask(null, transferId, sentMs));
+        }
+        else {
+            out = tmpFuture.thenApply(outputData -> {
+                if(outputData == null)
+                    throw new IllegalStateException("ARRS request not sent: " + input.function);
+                if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+                    info("Response received for request: "+ input.function.toString());
+                return outputData;
+            });
+        }
+        if(slave)
             journal(input, out);
         return out;
     }

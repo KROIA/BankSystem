@@ -205,7 +205,13 @@ public final class TransactionLedger implements ITransactionLedger {
         return tagged(type, actor, note, null, body);
     }
 
-    /** Same as {@link #tagged(LedgerType, UUID, String, Supplier)}, plus the Task #124 journal id + context. */
+    /**
+     * Same as {@link #tagged(LedgerType, UUID, String, Supplier)}, plus the Task #124 journal id + context.
+     * <p>
+     * Invariant (Task #126): one transfer_id = one value-moving call. {@code body} must make exactly one
+     * deposit / withdraw: the master stores each (slave, transfer_id) reply and answers a second call with
+     * the same id from that store without applying it, so a second call in one scope would be lost.
+     */
     public static <T> T tagged(LedgerType type, @Nullable UUID actor, @Nullable String note,
                                @Nullable net.kroia.banksystem.data.TransferJournal.Ref journal, Supplier<T> body) {
         SlaveTag previous = TAG.get();

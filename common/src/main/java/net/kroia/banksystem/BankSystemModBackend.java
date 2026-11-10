@@ -376,6 +376,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
 
         ItemIDManager.clear();
+        // Task #126 (B6): transfer results are per session; transfers sent before now answer UNKNOWN.
+        net.kroia.banksystem.networking.multi_server.TransferStatusRequest.RESULTS.reset(System.currentTimeMillis());
         MultiServerConfig config = MultiServerConfig.get();
         // Determine the multi-server role BEFORE creating the bank manager or bringing up
         // MultiServerManager (Task #21). Historically INSTANCES.isSlaveServer was set inside
