@@ -13,7 +13,6 @@ import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.banksystem.util.MoneyDenominationOptimizer;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -23,10 +22,8 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
 //import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -47,8 +44,7 @@ import java.util.concurrent.CompletableFuture;
  *       {@code moneyBank.deposit(cachedAmount)}, zero the cache on success.
  *   </li>
  *   <li>When the connected server is a slave: reserve the local cache
- *       (atomic withdraw), split it into money items via
- *       {@link MoneyDenominationOptimizer}, and forward via
+ *       (atomic withdraw) and forward it as {@code {money: cents}} via
  *       {@link DepositItemsInBankRequest#sendToMaster} — which already
  *       carries the Task #26 untrusted-slave gate. Value the master reports
  *       as not deposited (e.g. untrusted slave, account gone) or a request
@@ -147,33 +143,34 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
     }
 
     /**
-     * Slave-forward path. Reserves the local cache, splits into money items
-     * via the optimizer, and forwards through {@code DepositItemsInBankRequest}
-     * (which is trust-gated on master). Value reported as not deposited is
-     * refunded to the cache; an unknown outcome is logged, not refunded.
+     * Slave-forward path. Reserves the local cache and forwards it as
+     * {@code {money: cents}} through {@code DepositItemsInBankRequest} (which is
+     * trust-gated on master), so the master credits the money bank with the
+     * cents, the same as {@link #commitOnMaster}. Value reported as not
+     * deposited is refunded to the cache; an unknown outcome is logged, not
+     * refunded.
+     *
+     * @return the master's "not deposited" reply (public for the in-game test),
+     *         or null when the cache could not be reserved
      */
-    private void commitFromSlave(UUID playerUUID, long amount) {
+    public CompletableFuture<Map<ItemID, Long>> commitFromSlave(UUID playerUUID, long amount) {
         // Reserve the cache atomically so a concurrent packet can't double-spend it.
         if (!ConverterCacheManager.get().withdraw(playerUUID, amount)) {
             debug("ConverterCommitToBankPacket: race — cache changed under commit for " + playerUUID);
-            return;
+            return null;
         }
-        MoneyDenominationOptimizer.SplitResult split = MoneyDenominationOptimizer.split(amount);
-        Map<ItemID, Long> items = new HashMap<>(split.counts());
-        long leftover = split.leftover();
-        // Refund any non-representable leftover immediately (canonical set → always 0).
-        if (leftover > 0) {
-            ConverterCacheManager.get().deposit(playerUUID, leftover);
-        }
-        if (items.isEmpty()) return;
+        // Task #128: the request deposits raw units into the bank of each key, so the cache goes
+        // in as cents on the money item. A banknote split here credited note counts instead.
+        ItemID money = MoneyItem.getItemID();
+        Map<ItemID, Long> items = Map.of(money, amount);
 
         CompletableFuture<Map<ItemID, Long>> sent = DepositItemsInBankRequest.sendToMaster(selectedAccountNumber, playerUUID, items,
                 net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT);
         // Task #124 (B2): slave TransferJournal rows for this commit, amounts in cents.
         TransferJournal.Ref journal = TransferJournal.ref("converter");
         TransferJournal.requested(journal, TransferJournal.TO_MASTER, TransferJournal.CONVERTER_DEPOSIT, selectedAccountNumber,
-                playerUUID, TransferJournal.rawUnits(items), net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT.code());
-        sent.whenComplete((notDeposited, ex) -> {
+                playerUUID, items, net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT.code());
+        return sent.whenComplete((notDeposited, ex) -> {
                     // ARRS response lands on the netty IO thread. Hop back to the server thread
                     // before touching the cache map and before dispatching a chat message —
                     // ServerPlayerUtilities.printToClientConsole ultimately calls
@@ -182,24 +179,24 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
                         // Task #121: outcome unknown (the master may have applied it). No refund,
                         // a late success would duplicate the value.
                         error("ConverterCommitToBankPacket: deposit outcome unknown, no refund: "
-                                + (amount - leftover) + " cents to account " + selectedAccountNumber
+                                + amount + " cents to account " + selectedAccountNumber
                                 + " for player " + playerUUID, ex);
                         TransferJournal.step(journal.transferId(), TransferJournal.TIMED_OUT, null,
                                 String.valueOf(ex.getCause() != null ? ex.getCause() : ex));
                         return;
                     }
-                    Map<ItemID, Long> deposited = new HashMap<>(items);
-                    notDeposited.forEach((id, n) -> deposited.computeIfPresent(id, (k, v) -> v - n > 0 ? v - n : null));
-                    if (!deposited.isEmpty())
+                    // Not-deposited value comes back in cents (includes "never sent": the full map).
+                    // Clamped so a bad reply can never refund more than was reserved.
+                    final long refund = Math.min(amount, Math.max(0L, notDeposited.getOrDefault(money, 0L)));
+                    if (refund < amount)
                         TransferJournal.step(journal.transferId(), TransferJournal.CONFIRMED,
-                                notDeposited.isEmpty() ? null : TransferJournal.rawUnits(deposited), null);
-                    final long refund = valueOf(notDeposited); // includes "never sent" (full map)
+                                refund == 0 ? null : Map.of(money, amount - refund), null);
                     if (refund <= 0) return;
 
                     Runnable applyRefund = () -> {
                         ConverterCacheManager.get().deposit(playerUUID, refund);
                         TransferJournal.step(journal.transferId(), TransferJournal.RETURNED,
-                                deposited.isEmpty() ? null : TransferJournal.rawUnits(notDeposited), null);
+                                refund == amount ? null : Map.of(money, refund), null);
                         ServerPlayerUtilities.printToClientConsole(playerUUID,
                                 "Converter deposit to bank refused by master; " + refund
                                         + " cents returned to converter cache.");
@@ -213,29 +210,6 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
                         applyRefund.run();
                     }
                 });
-    }
-
-    /**
-     * Sums the cent value of a money-item map. Overflow-safe; any overflowing
-     * entry is skipped with a WARN — this only happens on pathological data
-     * (a cache amount of nearly {@link Long#MAX_VALUE}), and losing the extra
-     * entry on refund is better than throwing here.
-     */
-    private long valueOf(Map<ItemID, Long> items) {
-        long total = 0L;
-        for (Map.Entry<ItemID, Long> e : items.entrySet()) {
-            ItemStack s = e.getKey().getStack();
-            if (!(s.getItem() instanceof MoneyItem money)) continue;
-            long worth = money.worth();
-            long cnt = e.getValue() == null ? 0L : e.getValue();
-            if (worth <= 0 || cnt <= 0) continue;
-            try {
-                total = Math.addExact(total, Math.multiplyExact(cnt, worth));
-            } catch (ArithmeticException overflow) {
-                warn("ConverterCommitToBankPacket: overflow computing refund value for " + e.getKey());
-            }
-        }
-        return total;
     }
 
     @Override

@@ -1,12 +1,20 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.AsyncBank;
+import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.banking.clientdata.BankData;
+import net.kroia.banksystem.banking.converter.ConverterCacheManager;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.networking.entity.ConverterCommitToBankPacket;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MultiServerUtils;
@@ -23,15 +31,18 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
 /**
  * Task #124 (B2) — TransferJournal rows. Registered twice: SLAVE_ONLY (REQUESTED through the real AsyncBank
- * path has full columns, a follow-up row is minimal, DROP writes DELIVERED) and MASTER_ONLY (no rows).
+ * path has full columns, a follow-up row is minimal, DROP writes DELIVERED, Task #128 converter commit round
+ * trip) and MASTER_ONLY (no rows).
  * Every case swaps a temp-file DB in for the live one and restores it after.
  */
 public class TransferJournalTests extends TestSuite {
@@ -58,6 +69,7 @@ public class TransferJournalTests extends TestSuite {
             addTest("async_bank_requested_has_full_columns", () -> run("requested.db", this::requested));
             addTest("follow_up_row_is_minimal", () -> run("followup.db", this::followUp));
             addTest("drop_writes_delivered", () -> run("drop.db", this::drop));
+            addTest("converter_commit_credits_money_bank", () -> run("converter.db", this::converterCommit)); // Task #128
         } else {
             addTest("master_writes_no_journal_rows", () -> run("master.db", this::master));
         }
@@ -127,6 +139,97 @@ public class TransferJournalTests extends TestSuite {
         if (!"FAILED".equals(x.get("step")) || !("{\"" + s + "\":200}").equals(x.get("items_json")))
             return fail("FAILED row " + x);
         return pass("3 of 5 notes DELIVERED (300 raw), 2 FAILED (200 raw)");
+    }
+
+    /**
+     * Task #128: a slave converter commit of a 3.00 cache; the branch depends on whether the master trusts this slave.
+     * <ul>
+     *   <li>Trusted: 300 cents credited to the master's money bank of a test account, cache 0, no banknote bank,
+     *       journal REQUESTED {money: 300} + a minimal CONFIRMED row.</li>
+     *   <li>Untrusted (the autotest matrix slave): no test account (the master refuses creating one). The master
+     *       refuses the whole deposit, the 300 cents go back to the cache, journal REQUESTED {money: 300} + a minimal
+     *       RETURNED row and no CONFIRMED row.</li>
+     * </ul>
+     */
+    private TestResult converterCommit(DiagnosticsDatabase db, Path f) throws Exception {
+        if (!MultiServerUtils.canInteractWithBankSystem()) return skip("slave not connected to its master");
+        IAsyncBankManager mgr = BankSystemModBackend.getInstances_forTesting().SERVER_BANK_MANAGER.getAsync();
+        boolean trusted = Boolean.TRUE.equals(await(mgr.isSlaveServerTrustedAsync(""), WAIT_MS)); // "" = this slave
+        try {
+            return trusted ? converterCommitTrusted(db, f, mgr) : converterCommitUntrusted(db, f);
+        } finally {
+            ConverterCacheManager.get().clear(PLAYER);
+        }
+    }
+
+    private TestResult converterCommitTrusted(DiagnosticsDatabase db, Path f, IAsyncBankManager mgr) throws Exception {
+        ItemID money = MoneyItem.getItemID();
+        Integer nr = await(mgr.createBankAccountGetAccountNrAsync("Task128ConverterTest"), WAIT_MS);
+        if (nr == null || nr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) return fail("test account not created: " + nr);
+        try {
+            IAsyncBankAccount account = await(mgr.getBankAccountAsync(nr), WAIT_MS);
+            if (account == null) return fail("test account " + nr + " not found");
+            account.addUserAsync(new User(PLAYER, "converter_test"), BankPermission.DEPOSIT.getValue());
+            if (!await(account.hasPermissionAsync(PLAYER, BankPermission.DEPOSIT), WAIT_MS))
+                return fail("test player has no DEPOSIT permission");
+            Map<ItemID, Long> before = balances(account);
+            ConverterCacheManager.get().clear(PLAYER);
+            ConverterCacheManager.get().deposit(PLAYER, 300L);
+            CompletableFuture<Map<ItemID, Long>> sent = new ConverterCommitToBankPacket(nr).commitFromSlave(PLAYER, 300L);
+            if (sent == null) return fail("cache not reserved");
+            Map<ItemID, Long> notDeposited = await(sent, WAIT_MS);
+            if (!notDeposited.isEmpty()) return fail("master did not deposit " + notDeposited);
+            long cache = ConverterCacheManager.get().getCache(PLAYER);
+            Map<ItemID, Long> after = balances(account);
+            long credited = after.getOrDefault(money, 0L) - before.getOrDefault(money, 0L);
+            if (credited != 300L) return fail("money bank credited " + credited + ", expected 300");
+            if (cache != 0L) return fail("cache " + cache + " after commit, expected 0");
+            if (!after.keySet().equals(before.keySet())) return fail("banks changed " + before.keySet() + " -> " + after.keySet());
+
+            await(db.flush(), WAIT_MS);
+            String json = "{\"" + money.getShort() + "\":300}";
+            List<Map<String, Object>> req = query(f, "SELECT * FROM TransferJournal WHERE path = ? AND step = ?",
+                    TransferJournal.CONVERTER_DEPOSIT, TransferJournal.REQUESTED);
+            if (req.size() != 1 || !json.equals(req.get(0).get("items_json"))) return fail("REQUESTED rows " + req);
+            List<Map<String, Object>> ok = query(f, "SELECT * FROM TransferJournal WHERE transfer_id = ? AND step = ?",
+                    req.get(0).get("transfer_id"), TransferJournal.CONFIRMED);
+            if (ok.size() != 1 || ok.get(0).get("items_json") != null) return fail("CONFIRMED rows " + ok);
+            return pass("300 cents to the money bank, cache 0, no note bank, journal " + json);
+        } finally {
+            mgr.deleteBankAccountAsync(nr);
+        }
+    }
+
+    private TestResult converterCommitUntrusted(DiagnosticsDatabase db, Path f) throws Exception {
+        ItemID money = MoneyItem.getItemID();
+        ConverterCacheManager.get().clear(PLAYER);
+        ConverterCacheManager.get().deposit(PLAYER, 300L);
+        // any account number: the master refuses an untrusted slave before the account lookup
+        CompletableFuture<Map<ItemID, Long>> sent = new ConverterCommitToBankPacket(1).commitFromSlave(PLAYER, 300L);
+        if (sent == null) return fail("cache not reserved");
+        Map<ItemID, Long> notDeposited = await(sent, WAIT_MS);
+        if (!Map.of(money, 300L).equals(notDeposited)) return fail("not deposited " + notDeposited + ", expected {money: 300}");
+        // the refund hops to the server thread
+        if (!pumpUntil(() -> ConverterCacheManager.get().getCache(PLAYER) == 300L, WAIT_MS))
+            return fail("cache " + ConverterCacheManager.get().getCache(PLAYER) + " after refusal, expected 300");
+
+        await(db.flush(), WAIT_MS);
+        String json = "{\"" + money.getShort() + "\":300}";
+        List<Map<String, Object>> req = query(f, "SELECT * FROM TransferJournal WHERE path = ? AND step = ?",
+                TransferJournal.CONVERTER_DEPOSIT, TransferJournal.REQUESTED);
+        if (req.size() != 1 || !json.equals(req.get(0).get("items_json"))) return fail("REQUESTED rows " + req);
+        // exactly one follow-up: RETURNED without items (full refund); a full refund writes no CONFIRMED row
+        List<Map<String, Object>> next = query(f, "SELECT * FROM TransferJournal WHERE transfer_id = ? AND step <> ?",
+                req.get(0).get("transfer_id"), TransferJournal.REQUESTED);
+        if (next.size() != 1 || !TransferJournal.RETURNED.equals(next.get(0).get("step")) || next.get(0).get("items_json") != null)
+            return fail("follow-up rows " + next);
+        return pass("untrusted slave: 300 cents refunded to the cache, journal REQUESTED {money:300} + RETURNED");
+    }
+
+    private Map<ItemID, Long> balances(IAsyncBankAccount account) {
+        Map<ItemID, Long> out = new HashMap<>();
+        for (BankData d : await(account.getBankDataAsync(), WAIT_MS)) out.put(d.itemID(), d.balance());
+        return out;
     }
 
     private TestResult master(DiagnosticsDatabase db, Path f) throws Exception {
