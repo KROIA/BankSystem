@@ -189,6 +189,8 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
 
         Map<ItemID, Long> requestedBankNotes = new HashMap<>();
+        // Task #125: a DROP to a slave is one transfer; its debit and refund rows carry the id as ref.
+        final String transferId = slaveID == null ? null : net.kroia.banksystem.data.TransferJournal.newTransferId();
         // Ckeck if the player has enough balance to withdraw the requested amounts
         for (ItemID itemID : requestedBankNoteIDs.keySet()) {
             long requestedAmount = requestedBankNoteIDs.get(itemID);
@@ -224,7 +226,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 // denomination was chosen at the terminal. Amount is base-money units.
                 // Task #109: note names the denomination so banknote flows can be traced.
                 TransactionLedger.logBank(moneyBank, LedgerType.WITHDRAW, totalValue,
-                        TransactionLedger.player(player), "banknote " + itemID.getName() + " x" + requestedAmount);
+                        TransactionLedger.player(player), "banknote " + itemID.getName() + " x" + requestedAmount, transferId);
             }
         }
 
@@ -233,22 +235,22 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         if(slaveID == null)
         {
             Map<ItemID, Long> notDropped = DropItemsInPlayerInventoryRequest.dropItems(UtilitiesPlatform.getServer(), player, requestedBankNotes);
-            putRemainingItemsBack(finalCurrentSelectedAccountNumber, player, notDropped);
+            putRemainingItemsBack(finalCurrentSelectedAccountNumber, player, notDropped, null);
         }
         else
         {
-            dropRequestToSlave(slaveID, player, finalCurrentSelectedAccountNumber, requestedBankNotes);
+            dropRequestToSlave(slaveID, player, finalCurrentSelectedAccountNumber, requestedBankNotes, transferId);
         }
     }
 
-    private void dropRequestToSlave(String slaveID, UUID player, int bankaccountNr, Map<ItemID, Long> items)
+    private void dropRequestToSlave(String slaveID, UUID player, int bankaccountNr, Map<ItemID, Long> items, String transferId)
     {
-        CompletableFuture<Map<ItemID, Long>> notDroppedItemsFuture = DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, player, items);
+        CompletableFuture<Map<ItemID, Long>> notDroppedItemsFuture = DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, player, items, false, transferId);
         notDroppedItemsFuture.thenAccept(notDropedItems -> {
-            putRemainingItemsBack(bankaccountNr, player, notDropedItems);
+            putRemainingItemsBack(bankaccountNr, player, notDropedItems, transferId);
         });
     }
-    private void putRemainingItemsBack(int bankaccountNr, UUID player, Map<ItemID, Long> items)
+    private void putRemainingItemsBack(int bankaccountNr, UUID player, Map<ItemID, Long> items, @Nullable String transferId)
     {
         if(items.isEmpty())
             return;
@@ -283,7 +285,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         if (toDepositMoney > 0 && redepositMoneyBank.deposit(toDepositMoney) == BankStatus.SUCCESS) {
             // Task #109: separate refund row; the WITHDRAW row above stays as written.
             TransactionLedger.logBank(redepositMoneyBank, LedgerType.WITHDRAW_REFUND, toDepositMoney,
-                    TransactionLedger.player(player), "banknotes not handed out: " + items);
+                    TransactionLedger.player(player), "banknotes not handed out: " + items, transferId);
         }
     }
 

@@ -39,17 +39,24 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
      * @param ledgerTypeCode Task #109: {@link LedgerType} code written to the ledger for each
      *                       deposited item (e.g. CONVERTER_DEPOSIT); DEPOSIT by default. The master
      *                       checks it against {@link TransactionLedger#SLAVE_DEPOSIT_CODES}.
+     * @param transferId     Task #125: the slave's transfer_id, written as the ledger rows' {@code ref};
+     *                       last field on the wire, null from an older slave
      */
-    public record InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, int ledgerTypeCode)
+    public record InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, int ledgerTypeCode,
+                            @Nullable String transferId)
     {
         public InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items) {
             this(bankAccount, executor, items, LedgerType.DEPOSIT.code());
+        }
+        public InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, int ledgerTypeCode) {
+            this(bankAccount, executor, items, ledgerTypeCode, null);
         }
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.INT, p->p.bankAccount,
                 ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC), p->p.executor,
                 ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap<ItemID, Long>::new), p -> p.items,
                 ByteBufCodecs.VAR_INT, p -> p.ledgerTypeCode,
+                net.kroia.banksystem.data.TransferJournal.ID_CODEC, p -> p.transferId, // Task #125: keep last
                 InputData::new
         );
     }
@@ -78,7 +85,14 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
     /** Task #109: same as {@link #sendToMaster(int, UUID, Map)} with an explicit ledger row type. */
     public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, LedgerType ledgerType)
     {
-        DepositItemsInBankRequest.InputData inputData = new DepositItemsInBankRequest.InputData(bankAccount, executor, items, ledgerType.code());
+        return sendToMaster(bankAccount, executor, items, ledgerType, null);
+    }
+
+    /** Task #125: same, plus the transfer_id of the caller's TransferJournal rows (the master's ledger ref). */
+    public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items,
+                                                                    LedgerType ledgerType, @Nullable String transferId)
+    {
+        DepositItemsInBankRequest.InputData inputData = new DepositItemsInBankRequest.InputData(bankAccount, executor, items, ledgerType.code(), transferId);
         CompletableFuture<OutputData> sent;
         try {
             sent = BankSystemNetworking.DEPOSIT_ITEMS_IN_BANK_REQUEST.sendRequestToMaster(inputData);
@@ -194,7 +208,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                             if (baseBank != null && baseBank.deposit(amount) == BankStatus.SUCCESS) {
                                 String coin = "coin " + itemID.getName() + " x" + toDeposit;
                                 TransactionLedger.logBank(baseBank, ledger.type(), amount, ledgerActor(input),
-                                        ledger.note() == null ? coin : ledger.note() + "; " + coin);
+                                        ledger.note() == null ? coin : ledger.note() + "; " + coin, input.transferId());
                                 continue;
                             }
                             notDepositedItems.put(itemID, toDeposit);
@@ -232,7 +246,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                     .getCompanyIdForItemID(itemID);
             LedgerType type = companyId != null ? LedgerType.SHARE_TRADE : ledger.type();
             TransactionLedger.write(TransactionLogRecord.of(input.bankAccount, type, itemID.getShort(), amount,
-                    ledgerActor(input), null, companyId, null, ledger.note(), bank.getTotalBalance()));
+                    ledgerActor(input), null, companyId, input.transferId(), ledger.note(), bank.getTotalBalance()));
         } catch (RuntimeException ignored) {
             // best-effort: the balance is already updated
         }

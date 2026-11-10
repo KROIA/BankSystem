@@ -1,10 +1,14 @@
 package net.kroia.banksystem.data;
 
 import com.google.gson.JsonObject;
+import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -42,9 +46,36 @@ public final class TransferJournal {
         return new Ref(newTransferId(), context);
     }
 
-    /** Task #125: the slave still creates the id where it starts a transfer; DROP takes the master's wire value instead. */
+    /** The server that starts a transfer creates the id: the slave for ASYNC_BANK / CONVERTER_DEPOSIT, the master for DROP. */
     public static String newTransferId() {
         return UUID.randomUUID().toString();
+    }
+
+    private static final StreamCodec<ByteBuf, UUID> UUID_OR_NULL = ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC);
+
+    /**
+     * Task #125 — transfer_id on the wire, always the LAST field of a request (16-byte UUID). An older peer's
+     * decoder ignores the trailing bytes; a payload from an older peer has none left and decodes to null. An id
+     * that is not a canonical UUID string goes out as null (debug log), never throws.
+     */
+    public static final StreamCodec<ByteBuf, String> ID_CODEC = StreamCodec.of(
+            (buf, id) -> UUID_OR_NULL.encode(buf, toUuid(id)),
+            buf -> {
+                if (!buf.isReadable()) return null;
+                UUID u = UUID_OR_NULL.decode(buf);
+                return u == null ? null : u.toString();
+            });
+
+    private static @Nullable UUID toUuid(@Nullable String id) {
+        if (id == null) return null;
+        try {
+            UUID u = UUID.fromString(id);
+            if (u.toString().equals(id)) return u; // non-canonical forms would not match the journal rows
+        } catch (IllegalArgumentException ignored) {
+        }
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.debug("[TransferJournal] transfer id is not a UUID, sent as null: " + id);
+        return null;
     }
 
     public static void requested(Ref ref, String direction, String path, @Nullable Integer account, @Nullable UUID player,

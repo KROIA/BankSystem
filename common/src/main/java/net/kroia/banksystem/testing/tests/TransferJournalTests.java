@@ -15,6 +15,7 @@ import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.entity.ConverterCommitToBankPacket;
+import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MultiServerUtils;
@@ -69,6 +70,7 @@ public class TransferJournalTests extends TestSuite {
             addTest("async_bank_requested_has_full_columns", () -> run("requested.db", this::requested));
             addTest("follow_up_row_is_minimal", () -> run("followup.db", this::followUp));
             addTest("drop_writes_delivered", () -> run("drop.db", this::drop));
+            addTest("drop_uses_wire_transfer_id", () -> run("dropwire.db", this::dropUsesWireId)); // Task #125
             addTest("converter_commit_credits_money_bank", () -> run("converter.db", this::converterCommit)); // Task #128
         } else {
             addTest("master_writes_no_journal_rows", () -> run("master.db", this::master));
@@ -139,6 +141,23 @@ public class TransferJournalTests extends TestSuite {
         if (!"FAILED".equals(x.get("step")) || !("{\"" + s + "\":200}").equals(x.get("items_json")))
             return fail("FAILED row " + x);
         return pass("3 of 5 notes DELIVERED (300 raw), 2 FAILED (200 raw)");
+    }
+
+    /** Task #125: the slave's DROP rows use the master's wire transfer_id; without one (older master) a fresh id. */
+    private TestResult dropUsesWireId(DiagnosticsDatabase db, Path f) throws Exception {
+        ItemID money = MoneyItem.getItemID();
+        if (!money.isValid()) return skip("money ItemID not synced yet");
+        String tid = TransferJournal.newTransferId();
+        DropItemsInPlayerInventoryRequest req = new DropItemsInPlayerInventoryRequest();
+        // PLAYER is offline: nothing is dropped, so each call writes one FAILED row
+        req.handleOnSlaveServer(new DropItemsInPlayerInventoryRequest.InputData(PLAYER, Map.of(money, 5L), false, tid), null).join();
+        req.handleOnSlaveServer(new DropItemsInPlayerInventoryRequest.InputData(PLAYER, Map.of(money, 5L), false), null).join();
+        await(db.flush(), WAIT_MS);
+        List<Map<String, Object>> wire = query(f, "SELECT * FROM TransferJournal WHERE transfer_id = ?", tid);
+        if (wire.size() != 1 || !TransferJournal.FAILED.equals(wire.get(0).get("step"))) return fail("rows for the wire id " + wire);
+        List<Map<String, Object>> other = query(f, "SELECT * FROM TransferJournal WHERE transfer_id <> ?", tid);
+        if (other.size() != 1 || other.get(0).get("transfer_id") == null) return fail("rows without a wire id " + other);
+        return pass("wire id used; fresh id " + other.get(0).get("transfer_id") + " without one");
     }
 
     /**

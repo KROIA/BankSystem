@@ -60,7 +60,8 @@ public final class TransactionLedger implements ITransactionLedger {
 
     /**
      * Ledger fields a slave attaches to a value-moving request.
-     * @param journal Task #124: TransferJournal id + context for the slave's journal rows (not on the wire yet)
+     * @param journal Task #124: TransferJournal id + context for the slave's journal rows; Task #125: the id also
+     *                goes on the wire and becomes the master's ledger ref
      */
     public record SlaveTag(int code, @Nullable UUID actor, @Nullable String note,
                            @Nullable net.kroia.banksystem.data.TransferJournal.Ref journal) {}
@@ -123,10 +124,16 @@ public final class TransactionLedger implements ITransactionLedger {
     /** Row for a sync master bank; account and balance_after come from the bank itself. */
     public static void logBank(ISyncServerBank bank, LedgerType type, long amount,
                                LedgerActor actor, @Nullable String note) {
+        logBank(bank, type, amount, actor, note, null);
+    }
+
+    /** Same as {@link #logBank(ISyncServerBank, LedgerType, long, LedgerActor, String)} with a {@code ref} (Task #125: transfer_id). */
+    public static void logBank(ISyncServerBank bank, LedgerType type, long amount,
+                               LedgerActor actor, @Nullable String note, @Nullable String ref) {
         try {
             if (!(bank instanceof ServerBank sb) || sb.getAccountId() == 0) return;
             write(TransactionLogRecord.of(sb.getAccountId(), type, bank.getItemID().getShort(), amount, actor,
-                    null, null, null, note, bank.getTotalBalance()));
+                    null, null, ref, note, bank.getTotalBalance()));
         } catch (RuntimeException ignored) {
             // best-effort
         }

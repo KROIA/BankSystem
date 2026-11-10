@@ -193,14 +193,29 @@ public class AsyncBank implements IAsyncBank {
         }
         public static <T> InputData of(FunctionType functionType, int accountNr, ItemID itemID, T result)
         {
-            BankIdentifyAndDataPacket<T> packet = BankIdentifyAndDataPacket.of(accountNr, itemID, result);
+            BankIdentifyAndDataPacket<T> packet = BankIdentifyAndDataPacket.of(accountNr, itemID, result, transferIdFor(functionType));
             return (InputData) AsyncFunctionInputData.of(codecs.get(functionType).inputParamsCodec, functionType, packet, InputData::new);
         }
         public static InputData of(FunctionType functionType, int accountNr, ItemID itemID)
         {
-            BankIdentifyAndDataPacket packet = BankIdentifyAndDataPacket.of(accountNr, itemID, null);
+            BankIdentifyAndDataPacket packet = BankIdentifyAndDataPacket.of(accountNr, itemID, null, transferIdFor(functionType));
             return (InputData) AsyncFunctionInputData.of(codecs.get(functionType).inputParamsCodec, functionType, packet, InputData::new);
         }
+
+        /** Task #125: a deposit / withdraw carries the tag's journal id, else a fresh one; every other call none. */
+        private static @Nullable String transferIdFor(FunctionType function)
+        {
+            if (!journaled(function)) return null;
+            TransferJournal.Ref ref = TransactionLedger.currentTag().journal();
+            return ref != null ? ref.transferId() : TransferJournal.newTransferId();
+        }
+    }
+
+    /** Deposit / withdraw functions: the ones with slave TransferJournal rows and a transfer_id on the wire. */
+    private static boolean journaled(FunctionType function)
+    {
+        Set<LedgerType> codes = Request.ledgerAllowList(function);
+        return codes == TransactionLedger.SLAVE_DEPOSIT_CODES || codes == TransactionLedger.SLAVE_WITHDRAW_CODES;
     }
 
     /**
@@ -387,7 +402,8 @@ public class AsyncBank implements IAsyncBank {
             if (resolved != null) {
                 Object result = out.decodeResult();
                 if (result == null || result == BankStatus.SUCCESS || Boolean.TRUE.equals(result))
-                    TransactionLedger.logBank(bank, resolved.type(), rawAmount(params.extra(), bank), actor, resolved.note());
+                    TransactionLedger.logBank(bank, resolved.type(), rawAmount(params.extra(), bank), actor, resolved.note(),
+                            params.transferId()); // Task #125: ref = the slave's transfer_id
             }
             return out;
         }
@@ -538,14 +554,15 @@ public class AsyncBank implements IAsyncBank {
     private void journal(InputData input, CompletableFuture<OutputData> out)
     {
         try {
-            Set<LedgerType> codes = Request.ledgerAllowList(input.function);
-            boolean deposit = codes == TransactionLedger.SLAVE_DEPOSIT_CODES;
-            if (!deposit && codes != TransactionLedger.SLAVE_WITHDRAW_CODES) return;
+            if (!journaled(input.function)) return;
+            boolean deposit = Request.ledgerAllowList(input.function) == TransactionLedger.SLAVE_DEPOSIT_CODES;
             BankIdentifyAndDataPacket<?> p = input.decodeParams();
             long raw = p.extra() instanceof Double d ? net.kroia.banksystem.banking.bankmanager.BankManager.convertToRawAmountStatic(d)
                     : p.extra() instanceof Long l ? l : 0L;
+            // Task #125: the id that went on the wire, so the master's ledger ref matches these rows
             TransferJournal.Ref tagRef = TransactionLedger.currentTag().journal();
-            TransferJournal.Ref ref = tagRef != null ? tagRef : TransferJournal.ref(null);
+            TransferJournal.Ref ref = new TransferJournal.Ref(p.transferId() != null ? p.transferId() : TransferJournal.newTransferId(),
+                    tagRef == null ? null : tagRef.context());
             TransferJournal.requested(ref, deposit ? TransferJournal.TO_MASTER : TransferJournal.FROM_MASTER,
                     TransferJournal.ASYNC_BANK, accountNr, p.ledgerActor(), Map.of(itemID, raw),
                     p.ledgerCode() == TransactionLedger.NO_LOG ? null : p.ledgerCode());
@@ -577,15 +594,18 @@ public class AsyncBank implements IAsyncBank {
      *                    for raw calls); the master checks it per function
      * @param ledgerActor player who caused the call, or null (SYSTEM)
      * @param ledgerNote  free-text note for the ledger row
+     * @param transferId  Task #125: the transfer's id (deposit / withdraw only, else null); the master writes it as
+     *                    the ledger row's {@code ref}. Last field on the wire, null from an older slave.
      */
     public record BankIdentifyAndDataPacket<T>(int accountNr, ItemID itemID, T extra,
-                                               int ledgerCode, @Nullable UUID ledgerActor, @Nullable String ledgerNote) {
+                                               int ledgerCode, @Nullable UUID ledgerActor, @Nullable String ledgerNote,
+                                               @Nullable String transferId) {
 
         /** Picks up the ledger tag set with {@link TransactionLedger#tagged} on this thread. */
-        public static <T> BankIdentifyAndDataPacket<T> of(int accountNr, ItemID itemID, T extra)
+        public static <T> BankIdentifyAndDataPacket<T> of(int accountNr, ItemID itemID, T extra, @Nullable String transferId)
         {
             TransactionLedger.SlaveTag tag = TransactionLedger.currentTag();
-            return new BankIdentifyAndDataPacket<>(accountNr, itemID, extra, tag.code(), tag.actor(), tag.note());
+            return new BankIdentifyAndDataPacket<>(accountNr, itemID, extra, tag.code(), tag.actor(), tag.note(), transferId);
         }
 
         // Encode: write accountNr, itemID, then the extra using the provided codec
@@ -600,6 +620,7 @@ public class AsyncBank implements IAsyncBank {
             ByteBufCodecs.VAR_INT.encode(buf, params.ledgerCode);
             ExtraCodecUtils.nullable(net.minecraft.core.UUIDUtil.STREAM_CODEC).encode(buf, params.ledgerActor);
             ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).encode(buf, params.ledgerNote);
+            TransferJournal.ID_CODEC.encode(buf, params.transferId); // Task #125: keep last
         }
 
         // Decode: read accountNr, itemID, then the extra using the provided codec
@@ -613,7 +634,8 @@ public class AsyncBank implements IAsyncBank {
             int ledgerCode = ByteBufCodecs.VAR_INT.decode(buf);
             UUID ledgerActor = ExtraCodecUtils.nullable(net.minecraft.core.UUIDUtil.STREAM_CODEC).decode(buf);
             String ledgerNote = ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).decode(buf);
-            return new BankIdentifyAndDataPacket<>(accountNr, itemID, extra, ledgerCode, ledgerActor, ledgerNote);
+            String transferId = TransferJournal.ID_CODEC.decode(buf);
+            return new BankIdentifyAndDataPacket<>(accountNr, itemID, extra, ledgerCode, ledgerActor, ledgerNote, transferId);
         }
 
         // Factory to build a StreamCodec for a specific extra type

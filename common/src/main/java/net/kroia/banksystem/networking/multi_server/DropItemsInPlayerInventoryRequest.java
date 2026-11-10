@@ -23,12 +23,17 @@ import java.util.concurrent.CompletableFuture;
 public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<DropItemsInPlayerInventoryRequest.InputData,DropItemsInPlayerInventoryRequest.OutputData> {
 
 
-    public record InputData(UUID playerReceiver, Map<ItemID, Long> items, boolean forceDrop)
+    /** @param transferId Task #125: the master's transfer_id (its ledger ref); last field on the wire, null from an older master */
+    public record InputData(UUID playerReceiver, Map<ItemID, Long> items, boolean forceDrop, @Nullable String transferId)
     {
+        public InputData(UUID playerReceiver, Map<ItemID, Long> items, boolean forceDrop) {
+            this(playerReceiver, items, forceDrop, null);
+        }
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
                 UUIDUtil.STREAM_CODEC, p->p.playerReceiver,
                 ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap<ItemID, Long>::new), p -> p.items,
                 ByteBufCodecs.BOOL, p -> p.forceDrop,
+                net.kroia.banksystem.data.TransferJournal.ID_CODEC, p -> p.transferId, // Task #125: keep last
                 InputData::new
         );
     }
@@ -63,7 +68,14 @@ public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<
      */
     public static CompletableFuture<Map<ItemID, Long>> sendToSlave(String slaveID, UUID playerReceiver, Map<ItemID, Long> items, boolean forceDrop)
     {
-        InputData inputData = new InputData(playerReceiver, items, forceDrop);
+        return sendToSlave(slaveID, playerReceiver, items, forceDrop, null);
+    }
+
+    /** Task #125: same, plus the master's transfer_id (the ref of its debit / refund rows) for the slave's journal rows. */
+    public static CompletableFuture<Map<ItemID, Long>> sendToSlave(String slaveID, UUID playerReceiver, Map<ItemID, Long> items,
+                                                                   boolean forceDrop, @Nullable String transferId)
+    {
+        InputData inputData = new InputData(playerReceiver, items, forceDrop, transferId);
         CompletableFuture<Map<ItemID, Long>> future = new CompletableFuture<>();
         BankSystemNetworking.DROP_ITEMS_IN_PLAYER_INVENTORY_REQUEST.sendRequestToSlave(slaveID, inputData).whenComplete((response, ex) -> {
             if (ex != null || response == null) {
@@ -154,8 +166,9 @@ public class DropItemsInPlayerInventoryRequest extends BankSystemGenericRequest<
     public CompletableFuture<OutputData> handleOnSlaveServer(InputData input, @Nullable UUID playerSender) {
         MinecraftServer server = UtilitiesPlatform.getServer();
         Map<ItemID, Long> notDropped = dropItems(server, input.playerReceiver, input.items, input.forceDrop);
-        // Task #124 (B2): DELIVERED / FAILED journal rows. Task #125: use the master's wire transfer_id here.
-        net.kroia.banksystem.data.TransferJournal.drop(net.kroia.banksystem.data.TransferJournal.newTransferId(),
+        // Task #124 (B2): DELIVERED / FAILED journal rows. Task #125: under the master's transfer_id (fresh id from an older master).
+        net.kroia.banksystem.data.TransferJournal.drop(input.transferId != null ? input.transferId
+                        : net.kroia.banksystem.data.TransferJournal.newTransferId(),
                 input.playerReceiver, input.items, notDropped);
         return CompletableFuture.completedFuture(new OutputData(input.playerReceiver, notDropped));
     }

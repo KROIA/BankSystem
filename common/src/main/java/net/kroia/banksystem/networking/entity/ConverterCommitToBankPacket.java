@@ -164,10 +164,11 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
         ItemID money = MoneyItem.getItemID();
         Map<ItemID, Long> items = Map.of(money, amount);
 
-        CompletableFuture<Map<ItemID, Long>> sent = DepositItemsInBankRequest.sendToMaster(selectedAccountNumber, playerUUID, items,
-                net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT);
         // Task #124 (B2): slave TransferJournal rows for this commit, amounts in cents.
+        // Task #125: the same id goes on the wire and becomes the master's ledger ref.
         TransferJournal.Ref journal = TransferJournal.ref("converter");
+        CompletableFuture<Map<ItemID, Long>> sent = DepositItemsInBankRequest.sendToMaster(selectedAccountNumber, playerUUID, items,
+                net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT, journal.transferId());
         TransferJournal.requested(journal, TransferJournal.TO_MASTER, TransferJournal.CONVERTER_DEPOSIT, selectedAccountNumber,
                 playerUUID, items, net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT.code());
         return sent.whenComplete((notDeposited, ex) -> {

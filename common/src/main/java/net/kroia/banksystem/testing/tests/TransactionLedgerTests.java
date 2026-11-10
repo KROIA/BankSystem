@@ -14,10 +14,12 @@ import net.kroia.banksystem.api.ledger.TradeRowKind;
 import net.kroia.banksystem.api.ledger.TradeSide;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.DriverShim;
+import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.data.table.TransactionLogManager;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.minecraft.command.ServerBankSystemCommandHandler;
@@ -26,13 +28,20 @@ import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.entity.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
 import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
+import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRequest;
 import net.kroia.banksystem.networking.multi_server.WithdrawItemsFromBankRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.UtilitiesPlatform;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.Items;
 
 import java.sql.Connection;
@@ -104,6 +113,10 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("freeze_allows_admin_and_raw_calls", this::freezeAllowsAdminAndRaw);
         // Task #119 — API event
         addTest("transaction_logged_event_once_per_row", this::transactionLoggedEvent);
+        // Task #125 — transfer_id on the wire
+        addTest("async_bank_ref_is_transfer_id", this::asyncBankRefIsTransferId);
+        addTest("deposit_items_ref_is_transfer_id", this::depositItemsRefIsTransferId);
+        addTest("transfer_id_codec_compat", this::transferIdCodecCompat);
     }
 
     @Override
@@ -506,6 +519,141 @@ public class TransactionLedgerTests extends TestSuite {
         if (withdrawn.getOrDefault(diamond, 0L) != 4L) return fail("withdraw failed: " + withdrawn);
         if (find(rows(accountNr), LedgerType.DOWNLOAD_WITHDRAW) == null) return fail("allowed withdraw code not written");
         return pass("disallowed deposit code logged as 0, allowed withdraw code kept");
+    }
+
+    // ------------------------------------------------------------------ Task #125 transfer_id
+
+    /**
+     * The slave's journal id goes on the wire (AsyncBank.journal() writes the decoded id, so this is the slave
+     * TransferJournal transfer_id) and the master writes it as the row's ref.
+     */
+    private TestResult asyncBankRefIsTransferId() {
+        try {
+            return asyncBankRef();
+        } catch (Exception e) {
+            return fail("threw " + e);
+        }
+    }
+
+    private TestResult asyncBankRef() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        ItemID moneyId = MoneyItem.getItemID();
+        TransferJournal.Ref ref = TransferJournal.ref("ref_test");
+        AsyncBank.InputData in = TransactionLedger.tagged(LedgerType.UPLOAD_DEPOSIT, PLAYER, null, ref,
+                () -> AsyncBank.InputData.of(AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 7L));
+        AsyncBank.BankIdentifyAndDataPacket<?> p = in.decodeParams();
+        if (!ref.transferId().equals(p.transferId())) return fail("wire id " + p.transferId() + " != journal id " + ref.transferId());
+        AsyncBank.Request.instance.handleOnMasterServer(in, "", null).join();
+        List<TransactionLogRecord> byRef = ledger.getByRef(ref.transferId()).get(10, TimeUnit.SECONDS);
+        if (byRef.size() != 1 || byRef.get(0).type() != LedgerType.UPLOAD_DEPOSIT || byRef.get(0).amount() != 7L)
+            return fail("rows by ref " + byRef);
+
+        AsyncBank.BankIdentifyAndDataPacket<?> untagged = AsyncBank.InputData.of(
+                AsyncBank.FunctionType.WithdrawAsync, accountNr, moneyId, 1L).decodeParams();
+        String id = untagged.transferId();
+        if (id == null || !UUID.fromString(id).toString().equals(id)) return fail("untagged withdraw id " + id);
+        AsyncBank.BankIdentifyAndDataPacket<?> read = AsyncBank.InputData.of(
+                AsyncBank.FunctionType.GetBalanceAsync, accountNr, moneyId).decodeParams();
+        if (read.transferId() != null) return fail("read carries id " + read.transferId());
+        return pass("ledger ref = journal id; untagged deposit/withdraw gets a fresh UUID, reads none");
+    }
+
+    private TestResult depositItemsRefIsTransferId() {
+        if (!ready()) return fail("live setup missing");
+        ItemID diamond = allow(Items.DIAMOND.getDefaultInstance());
+        String tid = TransferJournal.newTransferId();
+        Map<ItemID, Long> items = new HashMap<>();
+        items.put(diamond, 3L);
+        new DepositItemsInBankRequest().handleOnMasterServer(new DepositItemsInBankRequest.InputData(
+                accountNr, PLAYER, items, LedgerType.CONVERTER_DEPOSIT.code(), tid), "", null).join();
+        List<TransactionLogRecord> byRef;
+        try {
+            byRef = ledger.getByRef(tid).get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            return fail("getByRef threw: " + e);
+        }
+        if (byRef.size() != 1 || byRef.get(0).type() != LedgerType.CONVERTER_DEPOSIT || byRef.get(0).amount() != 3L)
+            return fail("rows by ref " + byRef);
+        return pass("deposit row ref = transfer_id");
+    }
+
+    /** transfer_id is the last, optional field: legacy payloads decode to null, legacy decoders ignore it. */
+    private TestResult transferIdCodecCompat() {
+        String tid = TransferJournal.newTransferId();
+        ItemID money = MoneyItem.getItemID();
+        Map<ItemID, Long> items = Map.of(money, 5L);
+
+        // DepositItemsInBankRequest: the pre-#125 codec, copied
+        StreamCodec<RegistryFriendlyByteBuf, DepositItemsInBankRequest.InputData> depositLegacy = StreamCodec.composite(
+                ByteBufCodecs.INT, p -> p.bankAccount(),
+                ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC), p -> p.executor(),
+                ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap<ItemID, Long>::new), p -> p.items(),
+                ByteBufCodecs.VAR_INT, p -> p.ledgerTypeCode(),
+                DepositItemsInBankRequest.InputData::new);
+        var dOld = new DepositItemsInBankRequest.InputData(7, PLAYER, items, LedgerType.CONVERTER_DEPOSIT.code());
+        var dNew = new DepositItemsInBankRequest.InputData(7, PLAYER, items, LedgerType.CONVERTER_DEPOSIT.code(), tid);
+        TestResult r = compat("deposit", depositLegacy, DepositItemsInBankRequest.InputData.STREAM_CODEC, dOld, dNew);
+        if (!r.passed()) return r;
+
+        // DropItemsInPlayerInventoryRequest: the pre-#125 codec, copied
+        StreamCodec<RegistryFriendlyByteBuf, DropItemsInPlayerInventoryRequest.InputData> dropLegacy = StreamCodec.composite(
+                UUIDUtil.STREAM_CODEC, p -> p.playerReceiver(),
+                ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap<ItemID, Long>::new), p -> p.items(),
+                ByteBufCodecs.BOOL, p -> p.forceDrop(),
+                DropItemsInPlayerInventoryRequest.InputData::new);
+        r = compat("drop", dropLegacy, DropItemsInPlayerInventoryRequest.InputData.STREAM_CODEC,
+                new DropItemsInPlayerInventoryRequest.InputData(PLAYER, items, true),
+                new DropItemsInPlayerInventoryRequest.InputData(PLAYER, items, true, tid));
+        if (!r.passed()) return r;
+
+        // AsyncBank.BankIdentifyAndDataPacket: the pre-#125 encode/decode, copied
+        StreamCodec<RegistryFriendlyByteBuf, AsyncBank.BankIdentifyAndDataPacket<Long>> bankLegacy = StreamCodec.of(
+                (buf, p) -> {
+                    buf.writeInt(p.accountNr());
+                    ItemID.STREAM_CODEC.encode(buf, p.itemID());
+                    ExtraCodecUtils.nullable(ByteBufCodecs.VAR_LONG).encode(buf, p.extra());
+                    ByteBufCodecs.VAR_INT.encode(buf, p.ledgerCode());
+                    ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).encode(buf, p.ledgerActor());
+                    ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).encode(buf, p.ledgerNote());
+                },
+                buf -> new AsyncBank.BankIdentifyAndDataPacket<>(buf.readInt(), ItemID.STREAM_CODEC.decode(buf),
+                        ExtraCodecUtils.nullable(ByteBufCodecs.VAR_LONG).decode(buf), ByteBufCodecs.VAR_INT.decode(buf),
+                        ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).decode(buf),
+                        ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).decode(buf), null));
+        r = compat("async bank", bankLegacy, AsyncBank.BankIdentifyAndDataPacket.streamCodec(ByteBufCodecs.VAR_LONG.cast()),
+                new AsyncBank.BankIdentifyAndDataPacket<>(7, money, 42L, LedgerType.DEPOSIT.code(), PLAYER, "n", null),
+                new AsyncBank.BankIdentifyAndDataPacket<>(7, money, 42L, LedgerType.DEPOSIT.code(), PLAYER, "n", tid));
+        if (!r.passed()) return r;
+
+        // an id that is not a canonical UUID goes out as null instead of throwing
+        String bad = through(TransferJournal.ID_CODEC, "not-a-uuid", TransferJournal.ID_CODEC);
+        if (bad != null) return fail("non-UUID id decoded as " + bad);
+        return pass("3 codecs: legacy->new = null id, new->legacy ok, new->new keeps the id; bad id -> null");
+    }
+
+    /** {@code old} has a null transfer_id, {@code neu} the same fields plus one. */
+    private <T> TestResult compat(String what, StreamCodec<RegistryFriendlyByteBuf, T> legacy,
+                                  StreamCodec<RegistryFriendlyByteBuf, T> current, T old, T neu) {
+        try {
+            T a = through(legacy, old, current);
+            if (!old.equals(a)) return fail(what + " legacy->new: " + a);
+            T b = through(current, neu, legacy);
+            if (!old.equals(b)) return fail(what + " new->legacy: " + b);
+            T c = through(current, neu, current);
+            if (!neu.equals(c)) return fail(what + " new->new: " + c);
+            return pass(what);
+        } catch (RuntimeException e) {
+            return fail(what + " threw " + e);
+        }
+    }
+
+    /** Encodes with one codec and decodes the same bytes with another, like one ARRS payload. */
+    private static <A, B> B through(StreamCodec<? super RegistryFriendlyByteBuf, A> enc, A value,
+                                    StreamCodec<? super RegistryFriendlyByteBuf, B> dec) {
+        RegistryFriendlyByteBuf buf = UtilitiesPlatform.createRegistryFriendlyByteBufServerSide();
+        if (buf == null) throw new IllegalStateException("no server registry access");
+        enc.encode(buf, value);
+        return dec.decode(buf);
     }
 
     // ------------------------------------------------------------------ helpers
