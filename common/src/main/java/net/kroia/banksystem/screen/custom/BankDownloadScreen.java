@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloadContainerMenu> {
     private static final class TEXT {
@@ -59,6 +60,32 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         private static final Component CONDITION_MORE_THAN_TOOLTIP = Component.translatable(prefix + "condition_more_than.tooltip");
         private static final Component CONDITION_LESS_THAN_TOOLTIP = Component.translatable(prefix + "condition_less_than.tooltip");
 
+        private static final Component ORDER_ITEM_TOOLTIP = Component.translatable(prefix + "order_item.tooltip");
+        private static final Component ORDER_BALANCE_TOOLTIP = Component.translatable(prefix + "order_balance.tooltip");
+        private static final Component ORDER_AMOUNT_TOOLTIP = Component.translatable(prefix + "order_amount.tooltip");
+        private static final Component ORDER_CONDITION_TOOLTIP = Component.translatable(prefix + "order_condition.tooltip");
+        private static final Component ORDER_CONDITION_VALUE_TOOLTIP = Component.translatable(prefix + "order_condition_value.tooltip");
+        private static final Component ORDER_DELETE_TOOLTIP = Component.translatable(prefix + "order_delete.tooltip");
+    }
+
+    /** Condition-row tooltip. Hidden while a condition drop-down is open, except on its options: the open list covers the rows below. */
+    private static void rowTooltip(GuiElement el, Supplier<String> text, GuiElement.Alignment side)
+    {
+        el.setHoverTooltipSupplier(() -> isCoveredByOpenDropDown(el) ? null : text.get());
+        // switch to HoverTooltipData.autoSide + maxWidthFraction (~0.35) when ModUtilities ships them
+        el.setHoverTooltipMousePositionAlignment(side);
+    }
+    private static boolean isCoveredByOpenDropDown(GuiElement el)
+    {
+        if(instance == null)
+            return false;
+        for(WithdrawOrderGuiElement row : instance.settingsMenu.itemView.orderElements.values())
+        {
+            DropDownMenu dropDown = row.conditionSelectionDropDown;
+            if(dropDown.isExpanded() && !dropDown.getChilds().contains(el))
+                return true;
+        }
+        return false;
     }
 
 
@@ -74,62 +101,56 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         private BankDownloadBlockEntity.WithdrawCondition condition = BankDownloadBlockEntity.WithdrawCondition.NONE;
 
 
-        public WithdrawOrderGuiElement(@NotNull ItemID selectedItemID, @NotNull Consumer<GuiElement> onRemoveOrder, @NotNull Runnable onChanged)
+        public WithdrawOrderGuiElement(@NotNull ItemID selectedItemID, @NotNull Consumer<GuiElement> onRemoveOrder)
         {
             this.selectedItemID = selectedItemID;
-            itemView = new ItemView(selectedItemID.getStack());
+            ItemStack stack = selectedItemID.getStack();
+            itemView = new ItemView(stack);
             itemView.setSize(16, 16);
+            itemView.setShowTooltip(false); // item name goes into the row tooltip instead of a second, stacked tooltip
+            String itemName = stack.getHoverName().getString();
+            rowTooltip(itemView, () -> itemName + "\n" + TEXT.ORDER_ITEM_TOOLTIP.getString(), Alignment.LEFT);
             bankBalanceLabel = new Label("0");
+            rowTooltip(bankBalanceLabel, TEXT.ORDER_BALANCE_TOOLTIP::getString, Alignment.LEFT);
             amountTextBox = new TextBox();
             amountTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 100,0));
             amountTextBox.setText("1");
-            amountTextBox.setOnTextChanged(text -> onChanged.run());
+            rowTooltip(amountTextBox, TEXT.ORDER_AMOUNT_TOOLTIP::getString, Alignment.LEFT);
             conditionSelectionDropDown = new DropDownMenu(TEXT.CONDITION.getString());
-            //conditionSelectionDropDown.setZ(1000);
-            //conditionSelectionDropDown.setExpanded(true);
-            for(int i=0; i<BankDownloadBlockEntity.WithdrawCondition.values().length; i++)
+            rowTooltip(conditionSelectionDropDown, TEXT.ORDER_CONDITION_TOOLTIP::getString, Alignment.LEFT);
+            for(BankDownloadBlockEntity.WithdrawCondition cond : BankDownloadBlockEntity.WithdrawCondition.values())
             {
-                BankDownloadBlockEntity.WithdrawCondition cond = BankDownloadBlockEntity.WithdrawCondition.values()[i];
-                switch(cond)
-                {
-                    case NONE:
-                    {
-                        conditionSelectionDropDown.addOption(TEXT.CONDITION_NONE.getString());
-                        //GuiElement el = conditionSelectionDropDown.getChilds().get(i);
-                        //el.setHoverTooltipSupplier(TEXT.CONDITION_NONE_TOOLTIP::getString);
-                        //el.setHoverTooltipMousePositionAlignment(Alignment.BOTTOM);
-                        break;
+                // Own option label instead of addOption(): the open list hangs below this 20px row, so the
+                // parent-clipped isMouseOver() never saw the options and their tooltips never showed.
+                // DropDownMenu's option clicks use isMouseOverIgnoreParents() for the same reason.
+                Label option = new Label(getConditionString(cond)) {
+                    @Override
+                    public boolean isMouseOver() {
+                        return isMouseOverIgnoreParents();
                     }
-                    case HAS_MORE_THEN:
-                    {
-                        conditionSelectionDropDown.addOption(TEXT.CONDITION_MORE_THAN.getString());
-                        //GuiElement el = conditionSelectionDropDown.getChilds().get(i);
-                        //el.setHoverTooltipSupplier(TEXT.CONDITION_MORE_THAN_TOOLTIP::getString);
-                        //el.setHoverTooltipMousePositionAlignment(Alignment.BOTTOM);
-                        break;
-                    }
-                    case HAS_LESS_THEN:
-                    {
-                        conditionSelectionDropDown.addOption(TEXT.CONDITION_LESS_THAN.getString());
-                        //GuiElement el = conditionSelectionDropDown.getChilds().get(i);
-                        //el.setHoverTooltipSupplier(TEXT.CONDITION_LESS_THAN_TOOLTIP::getString);
-                        //el.setHoverTooltipMousePositionAlignment(Alignment.BOTTOM);
-                        break;
-                    }
-                }
+                };
+                option.setHeight(20); // before addChild: it sizes the option button
+                option.setAlignment(Alignment.CENTER);
+                conditionSelectionDropDown.addChild(option);
+                Component tooltip = switch(cond) {
+                    case NONE -> TEXT.CONDITION_NONE_TOOLTIP;
+                    case HAS_MORE_THEN -> TEXT.CONDITION_MORE_THAN_TOOLTIP;
+                    case HAS_LESS_THEN -> TEXT.CONDITION_LESS_THAN_TOOLTIP;
+                };
+                rowTooltip(option, tooltip::getString, Alignment.LEFT);
             }
             conditionSelectionDropDown.setOnOptionSelected((index, label) -> {
                 condition = BankDownloadBlockEntity.WithdrawCondition.values()[index];
                 conditionSelectionDropDown.setLabelText(WithdrawOrderGuiElement.getConditionString(condition));
                 conditionSelectionDropDown.collapse();
-                onChanged.run();
             });
 
             conditionAmountTextBox = new TextBox();
             conditionAmountTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 100,0));
             conditionAmountTextBox.setText("0");
-            conditionAmountTextBox.setOnTextChanged(text -> onChanged.run());
+            rowTooltip(conditionAmountTextBox, TEXT.ORDER_CONDITION_VALUE_TOOLTIP::getString, Alignment.RIGHT);
             deleteButton = new Button("X", () -> onRemoveOrder.accept(this));
+            rowTooltip(deleteButton, TEXT.ORDER_DELETE_TOOLTIP::getString, Alignment.RIGHT);
 
             this.addChild(itemView);
             this.addChild(bankBalanceLabel);
@@ -303,6 +324,17 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             }
             return orders;
         }
+        /** Order fields as typed (no normalising write-back like getOrders()); rows pending removal left out. */
+        public Map<ItemID, String> getOrdersState()
+        {
+            Map<ItemID, String> state = new HashMap<>();
+            for(WithdrawOrderGuiElement element : orderElements.values())
+            {
+                if(!toRemove.contains(element))
+                    state.put(element.selectedItemID, element.amountTextBox.getText() + "|" + element.condition + "|" + element.conditionAmountTextBox.getText());
+            }
+            return state;
+        }
         public void setOrders(List<BankDownloadBlockEntity.WithdrawOrder> orders)
         {
             ordersListView.removeChilds();
@@ -311,7 +343,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             {
                 if(order == null || order.itemID == null)
                     continue;
-                WithdrawOrderGuiElement element = new WithdrawOrderGuiElement(order.itemID, this::onRemoveOrder, screen::markDirty);
+                WithdrawOrderGuiElement element = new WithdrawOrderGuiElement(order.itemID, this::onRemoveOrder);
                 orderElements.put(order.itemID, element);
                 ordersListView.addChild(element);
                 element.updateBankBalance(currentAccount);
@@ -379,25 +411,24 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             ItemID itemID = ItemID.of(itemStack);
             if(orderElements.containsKey(itemID))
                 return;
-            WithdrawOrderGuiElement orderElement = new WithdrawOrderGuiElement(itemID, this::onRemoveOrder, screen::markDirty);
+            WithdrawOrderGuiElement orderElement = new WithdrawOrderGuiElement(itemID, this::onRemoveOrder);
             orderElements.put(itemID, orderElement);
             ordersListView.removeChild(spacer);
             ordersListView.addChild(orderElement);
             spacer.setHeight(orderElement.getDropDownExpandedHeight());
             ordersListView.addChild(spacer);
             orderElement.updateBankBalance(currentAccount);
-            screen.markDirty();
         }
         private void onRemoveOrder(GuiElement element)
         {
             toRemove.add((WithdrawOrderGuiElement)element);
-            screen.markDirty();
         }
     }
 
     private static class SettingsMenu extends BankSystemGuiElement {
         private static final int CONNECT_HINT_COLOR = 0xFFE8711C;  // orange: no bank connected
         private static final int CONNECT_FLASH_COLOR = 0xFFFFC04D; // bright orange: flash phase
+        private static final int UNSAVED_COLOR = 0xFFD99A26;       // amber: Save button while there are unsaved edits
         private static final long FLASH_DURATION_MS = 1500;
         private static final long FLASH_PHASE_MS = 150;
 
@@ -467,21 +498,19 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
 
         @Override
         protected void render() {
+            setButtonColor(applyButton, parent.hasUnsavedChanges() ? UNSAVED_COLOR : 0);
             // Orange while no bank is connected, flashing after a blocked action.
-            if(accountNr > 0)
-            {
-                setConnectButtonColors(defaultBackgroundColor, defaultHoverColor, defaultPressedColor);
-                return;
-            }
             long now = System.currentTimeMillis();
-            int color = (now < flashEndMs && (now / FLASH_PHASE_MS) % 2 == 0) ? CONNECT_FLASH_COLOR : CONNECT_HINT_COLOR;
-            setConnectButtonColors(color, ColorUtilities.setBrightness(color, 0.8f), ColorUtilities.setBrightness(color, 0.6f));
+            int connectColor = accountNr > 0 ? 0
+                    : (now < flashEndMs && (now / FLASH_PHASE_MS) % 2 == 0) ? CONNECT_FLASH_COLOR : CONNECT_HINT_COLOR;
+            setButtonColor(connectDisconnectButton, connectColor);
         }
-        private void setConnectButtonColors(int background, int hover, int pressed)
+        /** color 0 = default button colors */
+        private void setButtonColor(Button button, int color)
         {
-            connectDisconnectButton.setBackgroundColor(background);
-            connectDisconnectButton.setHoverColor(hover);
-            connectDisconnectButton.setPressedColor(pressed);
+            button.setBackgroundColor(color == 0 ? defaultBackgroundColor : color);
+            button.setHoverColor(color == 0 ? defaultHoverColor : ColorUtilities.setBrightness(color, 0.8f));
+            button.setPressedColor(color == 0 ? defaultPressedColor : ColorUtilities.setBrightness(color, 0.6f));
         }
 
         @Override
@@ -526,7 +555,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     private static BankDownloadScreen instance;
     private static int jeiModScreenWidthPercentage = 100;
     private int tickCount = 0;
-    private boolean dirty = false; // unsaved withdraw order / connection edits
+    private Object savedState = null; // orders + connection as last loaded/saved; null until loaded
 
     public BankDownloadScreen(BankDownloadContainerMenu pMenu, Inventory pPlayerInventory, Component pTitle) {
         super(pMenu, pPlayerInventory, pTitle);
@@ -548,7 +577,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             @Override
             public void onClose() {
                 // Inventory key / touchscreen close path; bypasses BankDownloadScreen.onClose().
-                if (dirty) {
+                if (hasUnsavedChanges()) {
                     openUnsavedChangesPrompt();
                     return;
                 }
@@ -568,7 +597,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             settingsMenu.setBankableItems(allowedItems);
             settingsMenu.setOrders(withdrawOrders);
             settingsMenu.setBankAccountNumber(accountNr);
-            dirty = false; // settings loaded from the block entity
+            markClean(); // settings loaded from the block entity
         });
         getBankManager().getBankAccountDataAsync(accountNr).thenAccept(settingsMenu::setBankAccountData);
     }
@@ -629,7 +658,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     }
     @Override
     public void onClose() {
-        if(dirty)
+        if(hasUnsavedChanges())
         {
             openUnsavedChangesPrompt();
             return;
@@ -638,20 +667,29 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         super.onClose();
     }
 
-    void markDirty()
+    /** Unsaved edits: orders or connection differ from the last loaded/saved state, so edits reverted by hand count as clean. */
+    private boolean hasUnsavedChanges()
     {
-        dirty = true;
+        return savedState != null && !savedState.equals(currentState());
+    }
+    private Object currentState()
+    {
+        return List.of(accountNr, settingsMenu.itemView.getOrdersState());
+    }
+    private void markClean()
+    {
+        savedState = currentState();
     }
 
     /**
      * Save / Discard prompt. Both callbacks run after the popup has switched back
-     * to this screen; dirty is cleared first so the close does not prompt again
-     * and closes the container menu as usual.
+     * to this screen; the state is marked clean first so the close does not prompt
+     * again and closes the container menu as usual.
      */
     private void openUnsavedChangesPrompt()
     {
         AskPopupScreen.openUnsavedChangesPopup(this,
-                () -> { dirty = false; onClose(); },
+                () -> { markClean(); onClose(); },
                 () -> { applySettigns(); onClose(); });
     }
 
@@ -663,7 +701,7 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             sendUpdatePacket();
             return;
         }
-        dirty = true; // the connection is only stored on Save
+        // the connection is only stored on Save (hasUnsavedChanges() sees the changed accountNr)
         getBankManager().getBankAccountDataAsync(accountNr).thenAccept(settingsMenu::setBankAccountData);
     }
     private void applySettigns()
@@ -674,6 +712,6 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     private void sendUpdatePacket()
     {
         UpdateBankDownloadBlockEntityPacket.sendPacket(pos, settingsMenu.getOrders(), accountNr);
-        dirty = false;
+        markClean(); // after getOrders(): it normalises the text fields
     }
 }
