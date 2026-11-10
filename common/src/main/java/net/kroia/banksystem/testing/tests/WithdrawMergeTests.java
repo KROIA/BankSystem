@@ -1,12 +1,16 @@
 package net.kroia.banksystem.testing.tests;
 
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
+import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ContainerItemInsertion;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.VolatileItemComponents;
+import net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -19,6 +23,9 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * In-game tests for component-aware physical stack placement when bank credits materialize
@@ -57,6 +64,7 @@ public class WithdrawMergeTests extends TestSuite {
         addTest("full_container_inserts_nothing_and_keeps_stacks", this::testFullContainerNoSilentLoss);
         addTest("terminal_inventory_keeps_mismatched_stack_untouched", this::testTerminalInventoryKeepsMismatchedStack);
         addTest("failed_debit_rollback_removes_inserted_items", this::testRollbackRemovesInsertedItems);
+        addTest("terminal_deposit_reserves_before_send", this::testTerminalDepositReservesBeforeSend); // Task #145
     }
 
     @Override
@@ -280,5 +288,55 @@ public class WithdrawMergeTests extends TestSuite {
         r = assertFalse("withdrawn items are clean", slot1.has(DataComponents.CUSTOM_DATA));
         if (!r.passed()) return r;
         return pass("terminal inventory withdrawal keeps component-mismatched stacks intact");
+    }
+
+    /** A slave deposit whose reply was lost, resolved by the status check the way AsyncBank does it. */
+    private static CompletableFuture<BankStatus> lostReply(byte statusCheck) {
+        return TransferStatusRequest.resolve(CompletableFuture.failedFuture(new RequestOutcomeUnknownException("timeout")),
+                () -> BankStatus.FAILED_NO_MASTER_CONNECTION, rem -> BankStatus.SUCCESS,
+                () -> CompletableFuture.completedFuture(new TransferStatusRequest.OutputData(statusCheck, Map.of())));
+    }
+
+    /**
+     * Task #145: a terminal deposit takes the items out before it sends. A lost reply the master may have applied
+     * (UNKNOWN) must not leave them in the terminal; NOT_APPLIED gives them back; only what was taken is deposited.
+     */
+    private TestResult testTerminalDepositReservesBeforeSend() {
+        ItemID paperId = ItemIDManager.getItemID(new ItemStack(Items.PAPER));
+        if (!paperId.isValid())
+            return fail("Plain paper is not registered — default ItemIDs missing on this server?");
+        // Detached block entity (no level): runOnMainThread runs inline, so the flow is synchronous.
+        BankTerminalBlockEntity blockEntity = new BankTerminalBlockEntity(
+                BlockPos.ZERO, BankSystemBlocks.BANK_TERMINAL_BLOCK.get().defaultBlockState());
+        BankTerminalBlockEntity.TerminalInventory inventory = new BankTerminalBlockEntity.TerminalInventory(blockEntity, 9);
+        UUID player = UUID.randomUUID();
+        long[] atSend = {-1}, credited = {0};
+
+        inventory.setStackInSlot(0, new ItemStack(Items.PAPER, 10));
+        blockEntity.depositReserved(inventory, player, paperId, 10, TransferJournal.ref("test"), n -> {
+            atSend[0] = inventory.getItemCount_direct(paperId);
+            return lostReply(TransferStatusRequest.UNKNOWN);
+        }, n -> credited[0] += n);
+        TestResult r = assertEquals("items taken out before the send", 0L, atSend[0]);
+        if (!r.passed()) return r;
+        r = assertEquals("UNKNOWN: items stay out of the terminal (parked)", 0L, inventory.getItemCount_direct(paperId));
+        if (!r.passed()) return r;
+
+        inventory.setStackInSlot(0, new ItemStack(Items.PAPER, 10));
+        blockEntity.depositReserved(inventory, player, paperId, 10, TransferJournal.ref("test"),
+                n -> lostReply(TransferStatusRequest.NOT_APPLIED), n -> credited[0] += n);
+        r = assertEquals("NOT_APPLIED: items given back", 10L, inventory.getItemCount_direct(paperId));
+        if (!r.passed()) return r;
+
+        long[] sent = {0};
+        blockEntity.depositReserved(inventory, player, paperId, 15, TransferJournal.ref("test"), n -> {
+            sent[0] = n;
+            return CompletableFuture.completedFuture(BankStatus.SUCCESS);
+        }, n -> credited[0] += n);
+        r = assertEquals("only the 10 still in the terminal are sent", 10L, sent[0]);
+        if (!r.passed()) return r;
+        r = assertEquals("SUCCESS: items stay out", 0L, inventory.getItemCount_direct(paperId));
+        if (!r.passed()) return r;
+        return assertEquals("only SUCCESS credits", 10L, credited[0]);
     }
 }
