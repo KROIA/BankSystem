@@ -632,12 +632,17 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                             // Issue #74: the debit failed, so take the inserted items back out —
                             // otherwise the block keeps items the account never paid for.
                             long removed = ContainerItemInsertion.removeItems(inventory, withdrawalStack, filledAmount);
+                            // Items that already left the block (hopper) were not paid for: their part stays locked.
+                            long escapedRaw = Math.max(0L, filledAmount - removed) * ratio;
                             if (removed < filledAmount)
                                 BACKEND_INSTANCES.LOGGER.error("[BankDownloadBlockEntity] Withdraw of " + filledAmount + " " + item
                                         + " at " + worldPosition.toShortString() + " failed (" + (withdrawError != null ? withdrawError : withdrawStatus)
-                                        + ") and only " + removed + " item(s) could be taken back out of the block");
+                                        + ") and only " + removed + " item(s) could be taken back out of the block; transfer "
+                                        + journal.transferId() + ", " + escapedRaw + " (raw) left locked for the admin");
                             if (withdrawError == null) {
-                                itemBank.unlockAmountAsync(amountToReserveFinal); // not applied: release our lock
+                                long unlock = Math.max(0L, amountToReserveFinal - escapedRaw);
+                                if (unlock > 0)
+                                    itemBank.unlockAmountAsync(unlock); // not applied: release our lock, minus the escaped items
                             } else {
                                 // Task #126: still unknown after the master's status check. The master may have
                                 // consumed the lock, and the lock is one counter: a blind unlock could free other

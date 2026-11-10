@@ -1264,8 +1264,16 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                                                 " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
                                                         // Roll back the inserted stack on the main thread so the
                                                         // client sees the reversal (slave callbacks run off-thread).
-                                                        runOnMainThread(() -> inventory.removeItem(itemID, addedAmount));
-                                                        bank.unlockAmountAsync(reducedAmount);
+                                                        // Items the player already took out were not paid for: their part stays locked.
+                                                        runOnMainThread(() -> {
+                                                            long escaped = Math.max(0L, addedAmount - inventory.removeItem(itemID, addedAmount));
+                                                            long unlock = Math.max(0L, reducedAmount - escaped * ratio);
+                                                            if (escaped > 0)
+                                                                error("Withdraw rollback: " + escaped + " " + itemID + " already taken out of the terminal by " + playerID
+                                                                        + "; " + escaped * ratio + " (raw) left locked for the admin");
+                                                            if (unlock > 0)
+                                                                bank.unlockAmountAsync(unlock);
+                                                        });
                                                     } else {
                                                         logTerminal(accountNr, playerID, net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, itemID, rawToWithdraw, null);
                                                         // Unlock any remainder that was not withdrawn
@@ -1300,8 +1308,16 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                                     " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
                                             // Roll back the inserted stack on the main thread so the
                                             // client sees the reversal (slave callbacks run off-thread).
-                                            runOnMainThread(() -> inventory.removeItem(itemID, addedAmount));
-                                            bank.unlockAmountAsync(withdrawAmountFinal);
+                                            // Items the player already took out were not paid for: their part stays locked.
+                                            runOnMainThread(() -> {
+                                                long escaped = Math.max(0L, addedAmount - inventory.removeItem(itemID, addedAmount));
+                                                long unlock = Math.max(0L, withdrawAmountFinal - escaped * ratio);
+                                                if (escaped > 0)
+                                                    error("Withdraw rollback: " + escaped + " " + itemID + " already taken out of the terminal by " + playerID
+                                                            + "; " + escaped * ratio + " (raw) left locked for the admin");
+                                                if (unlock > 0)
+                                                    bank.unlockAmountAsync(unlock);
+                                            });
                                         } else {
                                             logTerminal(accountNr, playerID, net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, itemID, rawToWithdraw, null);
                                             // Unlock any remainder that was not withdrawn
