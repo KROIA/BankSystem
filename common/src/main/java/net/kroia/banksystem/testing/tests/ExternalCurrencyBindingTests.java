@@ -98,6 +98,7 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         addTest("unbind_refused_while_unavailable_with_locked", this::testUnbindRefusedWhileUnavailableWithLocked);
         addTest("user_deletion_payout_counts_only_local_part", this::testPayoutCountsOnlyLocalPart); // Task #136
         addTest("bind_request_refuses_foreign_external_account", this::testBindRequestRefusesForeignRef);
+        addTest("rebind_of_bound_slot_refused_without_moving_funds", this::testRebindOfBoundSlotRefused); // Task #147
         // Cascade cleanup must run LAST: it deletes the shared testAccountNr, which would
         // strand any subsequent test that references it.
         addTest("cascade_cleanup_on_account_and_bank_removal", this::testCascadeCleanup);
@@ -524,6 +525,35 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         } finally {
             account.removeUser(TEST_OWNER);
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Task #147: binding an already-bound slot must be refused. Before, the old external balance
+    // was read as the slot's free balance and deposited into the new account (duplication).
+    // -----------------------------------------------------------------------
+    private TestResult testRebindOfBoundSlotRefused() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (account == null || bindings == null) return fail("Test account or bindings missing");
+        StubCurrencyProvider.create(STUB_KEY_A, true, 300L);
+        StubCurrencyProvider.create(STUB_KEY_B, true, 0L);
+        BankStatus bind = manager.bindExternalAccount(testAccountNr, slotItemA,
+                new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "X", true));
+        ISyncServerBank bank = account.getBank(slotItemA);
+        if (bind != BankStatus.SUCCESS || bank == null) return fail("setup: bind to X returned " + bind);
+        long totalBefore = bank.getTotalBalance();
+        BankStatus rebind = manager.bindExternalAccount(testAccountNr, slotItemA,
+                new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_B, "Y", true));
+        if (rebind == BankStatus.SUCCESS) return fail("rebind of a bound slot went through");
+        long x = StubCurrencyProvider.getAccount(STUB_KEY_A).getBalance();
+        long y = StubCurrencyProvider.getAccount(STUB_KEY_B).getBalance();
+        if (x != 300L || y != 0L) return fail("external balances moved: X=" + x + ", Y=" + y);
+        if (bank.getTotalBalance() != totalBefore) return fail("BankSystem total moved: " + totalBefore + " -> " + bank.getTotalBalance());
+        BindingRow row = bindings.getBinding(testAccountNr, slotItemA);
+        if (row == null || !STUB_KEY_A.equals(row.ref().accountKey())) return fail("binding row replaced: " + row);
+        return pass("rebind refused (" + rebind + "); X=300, Y=0, total " + totalBefore + " unchanged, still bound to X");
     }
 
     // -----------------------------------------------------------------------

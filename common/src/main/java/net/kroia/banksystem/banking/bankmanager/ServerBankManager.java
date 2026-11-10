@@ -2698,6 +2698,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      *       the existing status enum for a bind-precondition violation.)</li>
      *   <li>The referenced provider is registered and available
      *       ({@link BankStatus#FAILED_EXTERNAL_UNAVAILABLE} otherwise).</li>
+     *   <li>The slot has no binding yet (unbind first;
+     *       {@link BankStatus#FAILED_INVALID_ITEM_ID} otherwise).</li>
      *   <li>The ref resolves ({@code provider.open(ref) != null},
      *       {@link BankStatus#FAILED_EXTERNAL_UNAVAILABLE} otherwise).</li>
      *   <li>{@code ref.shared()} matches the account's shared state (personal →
@@ -2730,6 +2732,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             warn("bindExternalAccount refused: no bank slot for item " + itemId
                     + " on account " + accountId);
             return BankStatus.FAILED_NO_BANK;
+        }
+        BankAccountBindings existingBindings = BankAccountBindings.get();
+        if (existingBindings != null && existingBindings.hasBinding(accountId, itemId)) {
+            // Task #147: rebinding a bound slot read the OLD external balance as "local free" and
+            // deposited it into the new account without debiting the old one (duplication).
+            warn("bindExternalAccount refused: slot " + accountId + "/" + itemId + " is already bound; unbind it first");
+            return BankStatus.FAILED_INVALID_ITEM_ID;
         }
         // Auto-transfer local balance to external (Task #33 v2.0.5 refinement).
         // Free balance is deposited to external (split into whole-native + dust); locked
