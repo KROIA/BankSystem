@@ -2,6 +2,7 @@ package net.kroia.banksystem.networking.entity;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.minecraft.core.BlockPos;
@@ -12,8 +13,10 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
 //import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class UpdateDisplayBlockConfigPacket extends BankSystemNetworkPacket {
 
@@ -50,13 +53,28 @@ public class UpdateDisplayBlockConfigPacket extends BankSystemNetworkPacket {
         ServerPlayer player = (ServerPlayer) context.getPlayer();
         if (player.distanceToSqr(this.pos.getX() + 0.5, this.pos.getY() + 0.5, this.pos.getZ() + 0.5) > BankSystemMod.MAX_INTERACT_DISTANCE_SQR)
             return;
-        BlockEntity blockEntity = player.level().getBlockEntity(this.pos);
-        if (blockEntity instanceof BankSystemDisplayBlockEntity displayEntity) {
-            BankSystemDisplayBlockEntity.DisplayType type = BankSystemDisplayBlockEntity.DisplayType.fromId(this.displayType);
-            if (type != BankSystemDisplayBlockEntity.DisplayType.NONE && this.accountNumber > 0) {
-                displayEntity.setConfig(type, this.accountNumber);
+        BankSystemDisplayBlockEntity.DisplayType type = BankSystemDisplayBlockEntity.DisplayType.fromId(this.displayType);
+        if (type == BankSystemDisplayBlockEntity.DisplayType.NONE || this.accountNumber <= 0
+                || !(player.level().getBlockEntity(this.pos) instanceof BankSystemDisplayBlockEntity))
+            return;
+        // The display shows the account's balances to everyone nearby, so only someone who may read it can pick it.
+        mayShowAccount(player.getUUID(), this.accountNumber).thenAccept(allowed -> player.server.execute(() -> {
+            if (!allowed) {
+                warn("Player " + player.getName().getString() + " may not show account " + this.accountNumber + " on a display");
+                return;
             }
-        }
+            if (player.level().getBlockEntity(this.pos) instanceof BankSystemDisplayBlockEntity displayEntity)
+                displayEntity.setConfig(type, this.accountNumber);
+        }));
+    }
+
+    /** True if {@code player} is a member or a BankSystem admin of the account. Works on master and slaves. */
+    public static CompletableFuture<Boolean> mayShowAccount(UUID player, int accountNumber) {
+        IAsyncBankManager manager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
+        return manager.getBankAccountNumbersAsync(player)
+                .thenCombine(manager.isBanksystemAdminAsync(player),
+                        (accounts, admin) -> Boolean.TRUE.equals(admin) || (accounts != null && accounts.contains(accountNumber)))
+                .exceptionally(ex -> false);
     }
 
     @Override

@@ -8,6 +8,7 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.networking.entity.UpdateDisplayBlockConfigPacket;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
@@ -61,6 +62,9 @@ public class BankAccountTests extends TestSuite {
 
         // Listener Management
         addTest("unsubscribe_doesnt_throw", this::testUnsubscribeDoesntThrow);
+
+        // Display block: only members and admins may point a display at an account
+        addTest("display_config_requires_membership", this::testDisplayConfigRequiresMembership);
 
         // Manage-invariant (orphan-prevention) helper — pure, no manager needed
         addTest("manageInvariant_promotes_when_no_manage", this::testManageInvariantPromotesWhenNoManage);
@@ -520,5 +524,30 @@ public class BankAccountTests extends TestSuite {
         }
         return assertEquals("Mask must be unchanged for a personal account",
                 originalMask, (int) proposed.get(userA));
+    }
+
+    // ========================= Display block access =========================
+
+    private TestResult testDisplayConfigRequiresMembership() {
+        if (manager == null) {
+            return fail("ServerBankManager is null -- cannot run on slave server");
+        }
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        User userA = manager.getUserByUUID(TEST_USER_A);
+        if (account == null || userA == null) {
+            return fail("Test bank account or user A missing");
+        }
+        account.removeUser(TEST_USER_B);
+        boolean wasMember = account.hasUser(TEST_USER_A);
+        if (!wasMember) account.addUser(userA, BankPermission.DEPOSIT.getValue());
+        try {
+            if (UpdateDisplayBlockConfigPacket.mayShowAccount(TEST_USER_B, testAccountNr).join())
+                return fail("a non-member may show the account on a display");
+            if (!UpdateDisplayBlockConfigPacket.mayShowAccount(TEST_USER_A, testAccountNr).join())
+                return fail("a member may not show the account on a display");
+            return pass("non-member refused, member allowed");
+        } finally {
+            if (!wasMember) account.removeUser(TEST_USER_A);
+        }
     }
 }
