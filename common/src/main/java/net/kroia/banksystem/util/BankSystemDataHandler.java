@@ -431,7 +431,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         CompoundTag tag  = new CompoundTag();
         success = BACKEND_INSTANCES.ITEM_ID_MANAGER.save(tag);
 
-        saveDataCompound(getAbsoluteSavePath(ITEM_IDS_FILE_NAME), tag);
+        success &= saveDataCompound(getAbsoluteSavePath(ITEM_IDS_FILE_NAME), tag); // Issue #80
 
         if(success)
         {
@@ -557,7 +557,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         boolean success = true;
         Map<String, ListTag> bankData = new HashMap<>();
         success = bankManager.save(bankData);
-        saveDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME), bankData);
+        boolean written = saveDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME), bankData);
+        success = success && written; // Issue #80: a failed disk write keeps the bank dirty for the next save
         if(success)
         {
             // Only a confirmed successful write clears the dirty flag.
@@ -617,10 +618,10 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             return true;
         CompoundTag tag = new CompoundTag();
         boolean success = BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.save(tag);
-        if (success) {
-            saveDataCompound(getAbsoluteSavePath(BANK_ACCOUNT_BINDINGS_FILE_NAME), tag);
+        if (success)
+            success = saveDataCompound(getAbsoluteSavePath(BANK_ACCOUNT_BINDINGS_FILE_NAME), tag); // Issue #80
+        if (success)
             BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.clearChanges();
-        }
         return success;
     }
 
@@ -676,7 +677,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             return true;
         Map<String, ListTag> data = new HashMap<>();
         boolean success = mgr.save(data);
-        saveDataCompoundListMap(getAbsoluteSavePath(COMPANIES_FOLDER_NAME), data);
+        success &= saveDataCompoundListMap(getAbsoluteSavePath(COMPANIES_FOLDER_NAME), data); // Issue #80
         if (success)
             mgr.clearPersistDirty();
         return success;
