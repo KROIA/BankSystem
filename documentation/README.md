@@ -52,4 +52,4 @@ In a dev build, operators (permission level 2) get:
 > [!WARNING]
 > The in-game tests change real bank data on the running world. Some tests disallow items, which removes those banks from **every** bank account. Never run them on a real world or server — use a throwaway test world.
 
-To run the tests automatically, use the autotest harness in the ModUtilities repository (`tools/autotest`). It builds the mods with dev features enabled, starts the game on Fabric and NeoForge in singleplayer, master/client and master/slave setups, runs every registered in-game test suite (ModUtilities, BankSystem, StockMarket) in a fresh world, and prints a pass/fail table.
+To run the tests automatically, use the autotest harness in the shared `Tools/autotest` folder next to the mod repositories. It builds the mods with dev features enabled, starts the game on Fabric and NeoForge in singleplayer, master/client and master/slave setups, runs every registered in-game test suite (ModUtilities, BankSystem, StockMarket) in a fresh world, and prints a pass/fail table.
