@@ -393,6 +393,28 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
             settings.INTEGRATIONS.MONEY_FORMAT.set(settings.INTEGRATIONS.MONEY_FORMAT.getDefaultValue());
     }
 
+    /**
+     * Runs {@link #sanitize} and lists every setting it changed as
+     * {@code "Group.KEY: old -> new"}. Used on settings.json load so hand-edited
+     * out-of-range values are clamped and can be logged one line per key.
+     */
+    public static List<String> sanitizeAndListChanges(BankSystemModSettings settings) {
+        SettingsStore store = new SettingsStore();
+        JsonObject before = store.toJson(settings.getEditableGroups()).getAsJsonObject();
+        sanitize(settings);
+        JsonObject after = store.toJson(settings.getEditableGroups()).getAsJsonObject();
+        List<String> changes = new ArrayList<>();
+        for (String group : after.keySet()) {
+            JsonObject b = before.getAsJsonObject(group);
+            JsonObject a = after.getAsJsonObject(group);
+            for (String key : a.keySet()) {
+                if (!a.get(key).equals(b.get(key)))
+                    changes.add(group + "." + key + ": " + b.get(key) + " -> " + a.get(key));
+            }
+        }
+        return changes;
+    }
+
     /** Clamps a Long setting value into [min, max]; null falls back to min. */
     private static long clamp(@Nullable Long value, long min, long max) {
         if (value == null) return min;

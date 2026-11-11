@@ -783,6 +783,10 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
                 info("Migrated Placeholder settings and SYNC_ADMIN_FLAG_WITH_PERMISSION into the Integrations group.");
                 save_globalSettings(filePath);
             }
+            // Same clamps as the in-game Mod Settings Apply, so a hand-edited file can't bypass them.
+            for (String change : net.kroia.banksystem.networking.general.ModSettingsRequest
+                    .sanitizeAndListChanges(BACKEND_INSTANCES.SERVER_SETTINGS))
+                warn("settings.json value out of range, corrected " + change);
             applyVolatileComponentSettings();
             return true;
         }

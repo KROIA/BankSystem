@@ -47,6 +47,7 @@ public class ModSettingsTests extends TestSuite {
         addTest("migrate_integrations_old_file", this::test_migrateIntegrationsOldFile);
         addTest("migrate_integrations_already_migrated", this::test_migrateIntegrationsAlreadyMigrated);
         addTest("migrate_integrations_no_old_keys", this::test_migrateIntegrationsNoOldKeys);
+        addTest("load_clamps_hand_edited_values", this::test_loadClampsHandEditedValues);
     }
 
     /**
@@ -399,6 +400,30 @@ public class ModSettingsTests extends TestSuite {
             r = assertEquals("file untouched", json, Files.readString(file));
             if (!r.passed()) return r;
             return pass("No old keys: defaults kept, nothing to save");
+        });
+    }
+
+    /** Task #149: a hand-edited settings.json is clamped on load, and each clamped key is reported. */
+    private TestResult test_loadClampsHandEditedValues() {
+        String json = "{\"Utilities\":{\"SAVE_INTERVAL_SECONDS\":-5},"
+                + "\"Integrations\":{\"TOP_COUNT\":500,\"PLAYER_REFRESH_MS\":2500}}";
+        return withSettingsFile(json, (settings, file) -> {
+            List<String> changes = ModSettingsRequest.sanitizeAndListChanges(settings);
+            TestResult r = assertEquals("TOP_COUNT clamped to max",
+                    ModSettingsRequest.MAX_PLACEHOLDER_TOP_COUNT, (int) settings.INTEGRATIONS.TOP_COUNT.get());
+            if (!r.passed()) return r;
+            r = assertEquals("negative save interval clamped to min",
+                    ModSettingsRequest.MIN_SAVE_INTERVAL_SECONDS, (long) settings.UTILITIES.SAVE_INTERVAL_SECONDS.get());
+            if (!r.passed()) return r;
+            r = assertEquals("in-range value kept", 2500, (int) settings.INTEGRATIONS.PLAYER_REFRESH_MS.get());
+            if (!r.passed()) return r;
+            r = assertEquals("exactly the two clamped keys reported", 2, changes.size());
+            if (!r.passed()) return r;
+            r = assertTrue("TOP_COUNT change reported", changes.contains("Integrations.TOP_COUNT: 500 -> 100"));
+            if (!r.passed()) return r;
+            r = assertTrue("save interval change reported", changes.contains("Utilities.SAVE_INTERVAL_SECONDS: -5 -> 1"));
+            if (!r.passed()) return r;
+            return pass("Hand-edited out-of-range values are clamped on load and reported per key");
         });
     }
 }
