@@ -689,6 +689,7 @@
   "gui.banksystem.audit_screen.history": "Verlauf",
   "message.banksystem.audit_report_written": "Audit-Bericht geschrieben nach {path}",
   "message.banksystem.audit_report_on_master": "(auf dem Rechner des Master-Servers)",
+  "message.banksystem.not_connected_to_master": "[banksystem] Dies ist ein Slave-Server und er ist nicht mit einem BankSystem-Master-Server verbunden!",
   "message.banksystem.audit_report_failed": "Audit-Bericht fehlgeschlagen",
   "gui.banksystem.mod_settings_screen.setting.Audit.MONEY_SUPPLY_FLAG_ENABLED": "Geldmengenwachstum markieren",
   "gui.banksystem.mod_settings_screen.setting.Audit.MONEY_SUPPLY_FLAG_ENABLED.tooltip": "Markieren, wenn das Geld aller Konten\ninnerhalb einer Stunde zu stark wächst.",

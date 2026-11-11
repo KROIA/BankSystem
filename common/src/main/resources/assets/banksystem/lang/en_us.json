@@ -689,6 +689,7 @@
   "gui.banksystem.audit_screen.history": "History",
   "message.banksystem.audit_report_written": "Audit report written to {path}",
   "message.banksystem.audit_report_on_master": "(on the master server's machine)",
+  "message.banksystem.not_connected_to_master": "[banksystem] This is a slave server and it is not connected to a banksystem master server!",
   "message.banksystem.audit_report_failed": "Audit report failed",
   "gui.banksystem.mod_settings_screen.setting.Audit.MONEY_SUPPLY_FLAG_ENABLED": "Flag money-supply growth",
   "gui.banksystem.mod_settings_screen.setting.Audit.MONEY_SUPPLY_FLAG_ENABLED.tooltip": "Flag when the total money of all accounts\ngrows too fast within an hour.",
