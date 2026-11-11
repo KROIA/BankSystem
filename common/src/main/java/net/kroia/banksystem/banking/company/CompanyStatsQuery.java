@@ -148,11 +148,11 @@ public final class CompanyStatsQuery {
      * Estimates days until the company account runs out of money.
      *
      * @param accountNr the company's linked bank account number
+     * @param scheduleObligationPerDay snapshot from {@link #scheduleObligationPerDay}, taken on the
+     *        master thread so the DB worker never reads live Company state (Issue #93)
      * @return days to insolvency (floored), or -1 if outflow is zero (safe)
      */
-    public static long getDaysToInsolvency(Connection conn, int accountNr, Company company, long currentBalance) {
-        if (company == null) return -1L;
-
+    public static long getDaysToInsolvency(Connection conn, int accountNr, double scheduleObligationPerDay, long currentBalance) {
         double avgDailyOutflow = 0.0;
         if (conn != null) {
             long thirtyDaysMs = 30L * 86_400_000L;
@@ -173,17 +173,21 @@ public final class CompanyStatsQuery {
             }
         }
 
+        avgDailyOutflow += scheduleObligationPerDay;
+
+        if (avgDailyOutflow <= 0.0) return -1L;
+        return (long) (currentBalance / avgDailyOutflow);
+    }
+
+    /** Daily payout obligation of the company's active schedules. Call on the thread that owns Company state. */
+    public static double scheduleObligationPerDay(Company company) {
         double scheduleObl = 0.0;
         for (PayoutSchedule s : company.getPayoutSchedules()) {
             if (s.isPaused()) continue;
             long intervalTicks = s.getIntervalTicks();
             if (intervalTicks <= 0L) continue;
-            double perDay = s.getAmount() / (intervalTicks / 24000.0);
-            scheduleObl += perDay;
+            scheduleObl += s.getAmount() / (intervalTicks / 24000.0);
         }
-        avgDailyOutflow += scheduleObl;
-
-        if (avgDailyOutflow <= 0.0) return -1L;
-        return (long) (currentBalance / avgDailyOutflow);
+        return scheduleObl;
     }
 }

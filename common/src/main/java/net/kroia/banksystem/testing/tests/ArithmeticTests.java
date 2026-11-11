@@ -31,6 +31,11 @@ public class ArithmeticTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("placeholder_money_format", this::testPlaceholderMoneyFormat);
         addTest("convertToRawAmount_whole_number", this::testConvertToRawAmountWholeNumber);

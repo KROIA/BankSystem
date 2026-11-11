@@ -48,6 +48,8 @@ public final class CompanyInfoCache {
 
     private static final Map<Integer, Snapshot> infos = new ConcurrentHashMap<>();
     private static final Set<Integer> pending = Collections.synchronizedSet(new HashSet<>());
+    /** Task #167: retry delay after a failed / absent lookup, so a miss does not resend every frame. */
+    private static final LookupBackoff backoff = new LookupBackoff();
 
     private CompanyInfoCache() {}
 
@@ -106,16 +108,20 @@ public final class CompanyInfoCache {
      */
     public static void tryLookup(int companyId) {
         if (infos.containsKey(companyId)) return;
+        if (backoff.isWaiting(companyId, System.currentTimeMillis())) return;
         if (!pending.add(companyId)) return;
         try {
             AsyncCompanyManager.getCompanyInfoByIdAsync(companyId).whenComplete((out, err) -> {
                 if (err != null || out == null || !out.present()) {
+                    backoff.failed(companyId, System.currentTimeMillis());
                     pending.remove(companyId);
                     return;
                 }
+                backoff.succeeded(companyId);
                 put(out);
             });
         } catch (Throwable t) {
+            backoff.failed(companyId, System.currentTimeMillis());
             pending.remove(companyId);
         }
     }
@@ -124,5 +130,6 @@ public final class CompanyInfoCache {
     public static void clear() {
         infos.clear();
         pending.clear();
+        backoff.clear();
     }
 }

@@ -9,7 +9,6 @@ import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
-import net.kroia.banksystem.data.table.TransactionLogManager;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
@@ -300,27 +299,24 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
                 ItemStack made = StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), boundCompanyId);
                 if (output.isEmpty()) items.set(SLOT_OUTPUT, made);
                 else output.grow(1);
-                logLedger(company, TransactionLogRecord.Kind.SHARE_STAMP);
+                logLedger(company, net.kroia.banksystem.api.ledger.LedgerType.SHARE_STAMP);
             } else {
                 if (!cm.redeemShare(boundCompanyId)) { setChanged(); return; }
                 input.shrink(1);
                 items.set(SLOT_INPUT, input);
                 if (output.isEmpty()) items.set(SLOT_OUTPUT, new ItemStack(BankSystemItems.BLANK_SHARE.get()));
                 else output.grow(1);
-                logLedger(company, TransactionLogRecord.Kind.SHARE_REDEEM);
+                logLedger(company, net.kroia.banksystem.api.ledger.LedgerType.SHARE_REDEEM);
             }
             setChanged();
         }
     }
 
-    private void logLedger(Company company, TransactionLogRecord.Kind kind) {
-        TransactionLogManager mgr = BankSystemModBackend.getTransactionLogManager();
-        if (mgr == null) return;
-        try {
-            mgr.save(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    company.getBankAccountNr(), linkedByUUID, kind, (short) 0, 1L,
-                    null, company.getCompanyId(), System.currentTimeMillis(), null));
-        } catch (RuntimeException ignored) { }
+    private void logLedger(Company company, net.kroia.banksystem.api.ledger.LedgerType kind) {
+        // via TransactionLedger.write so the row gets the audit hooks and the TRANSACTION_LOGGED event (Task #119)
+        net.kroia.banksystem.banking.ledger.TransactionLedger.write(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
+                company.getBankAccountNr(), linkedByUUID, kind, (short) 0, 1L,
+                null, company.getCompanyId(), System.currentTimeMillis(), null));
     }
 
     // -------- NBT --------

@@ -10,6 +10,27 @@ import java.util.concurrent.CompletableFuture;
  * Represents a bank that can hold money or items for a player.
  * Banks can be used to deposit, withdraw, and transfer funds or items.
  * Each bank is associated with a specific player and item type.
+ * <p>
+ * <b>Failure contract (slaves and clients; on the master every call runs locally and never fails):</b>
+ * <ul>
+ *   <li>Not connected to the master when called: the future completes at once with a fallback
+ *       ({@code BankStatus.FAILED_NO_MASTER_CONNECTION}, {@code false}, {@code 0}, an empty value or {@code null}); nothing was sent.</li>
+ *   <li>Since 2.2.0 {@code BankSystemMod.init} sets the JVM-wide ModUtilities
+ *       {@code RequestManager.ENABLE_REQUEST_FAILURES = true} (it affects every mod's ARRS requests), so a sent request
+ *       without an answer fails the future instead of hanging. Default timeout 30 s
+ *       ({@code RequestManager.DEFAULT_TIMEOUT_MS}); request classes may override {@code getTimeoutMs()}.</li>
+ *   <li>{@code RequestNotSentException}: never sent, refunding is safe. {@code RequestOutcomeUnknownException}
+ *       (timeout or connection lost): the master may have applied it, do <b>not</b> refund. Treat any other
+ *       exception like an unknown outcome.</li>
+ *   <li>A request the master refuses (not allowed for clients or untrusted slaves) usually completes with {@code null}.</li>
+ * </ul>
+ * See {@code documentation/developer-guide/API.md}, "When an async call fails".
+ * <p>
+ * <b>Deposits and withdrawals</b> ({@code deposit*Async}, {@code withdraw*Async}) from a slave carry a transfer id.
+ * When the answer is missing the slave asks the master first: applied completes with {@code SUCCESS}, not applied
+ * with {@code FAILED_NO_MASTER_CONNECTION} (since 2.2.0 this status always means nothing changed), still unknown
+ * fails with {@code RequestOutcomeUnknownException}. The master applies a transfer id at most once.
+ * <b>Transfers, locks, unlocks and set-balance calls get no status check</b>: a missing answer just fails the future.
  */
 public interface IAsyncBank {
 
