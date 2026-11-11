@@ -14,6 +14,8 @@ import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.modutilities.networking.client_server.arrs.RequestNotSentException;
+import net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -61,7 +63,9 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
      * @param bankAccount target bank account
      * @param executor the player who has created this request
      * @param items list of items to deposit
-     * @return a future containing the items that have been withdrawn
+     * @return a future containing the items that have been withdrawn. Task #160: fails with
+     *         {@link RequestNotSentException} when the request was never sent (nothing withdrawn), and with
+     *         {@link RequestOutcomeUnknownException} on any other failure: the master may have withdrawn the items.
      */
     public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items)
     {
@@ -72,13 +76,37 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
     public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, LedgerType ledgerType)
     {
         WithdrawItemsFromBankRequest.InputData inputData = new WithdrawItemsFromBankRequest.InputData(bankAccount, executor, items, ledgerType.code());
+        CompletableFuture<OutputData> sent;
+        try {
+            sent = BankSystemNetworking.WITHDRAW_ITEMS_FROM_BANK_REQUEST.sendRequestToMaster(inputData);
+        } catch (RuntimeException e) {
+            RequestNotSentException notSent = new RequestNotSentException("withdraw request not sent: " + e);
+            notSent.initCause(e);
+            sent = CompletableFuture.failedFuture(notSent);
+        }
+        return withdrawn(sent);
+    }
+
+    /**
+     * Task #160: maps the master's reply to the withdrawn items. A {@link RequestNotSentException} is passed on;
+     * any other failure or a null reply fails with {@link RequestOutcomeUnknownException}, never "nothing withdrawn".
+     */
+    public static CompletableFuture<Map<ItemID, Long>> withdrawn(CompletableFuture<OutputData> sent)
+    {
         CompletableFuture<Map<ItemID, Long>> future = new CompletableFuture<>();
-        BankSystemNetworking.WITHDRAW_ITEMS_FROM_BANK_REQUEST.sendRequestToMaster(inputData).whenComplete((response, ex) -> {
-            if (ex != null || response == null) {
-                future.complete(new HashMap<>()); // Return empty map on error
-            } else {
+        sent.whenComplete((response, ex) -> {
+            if (ex == null && response != null) {
                 future.complete(response.items);
+                return;
             }
+            Throwable cause = ex == null ? null : TransferStatusRequest.cause(ex);
+            if (cause instanceof RequestNotSentException || cause instanceof RequestOutcomeUnknownException) {
+                future.completeExceptionally(cause);
+                return;
+            }
+            RequestOutcomeUnknownException unknown = new RequestOutcomeUnknownException("withdraw outcome unknown: " + (cause == null ? "null reply" : cause));
+            if (cause != null) unknown.initCause(cause);
+            future.completeExceptionally(unknown);
         });
         return future;
     }
