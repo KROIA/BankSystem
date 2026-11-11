@@ -789,10 +789,8 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         if (!records.isEmpty()) {
             INSTANCES.BALANCE_HISTORY_MANAGER.save(records);
-            // Task #41 (v2.0.7): flat-cap pruneOldRecords has been superseded by the
-            // tiered-retention sweep, which runs on its own cadence in onServerTick above
-            // (default: every BALANCE_HISTORY_RETENTION_SWEEP_MINUTES). No per-snapshot
-            // prune call needed.
+            // Pruning is done by the tiered-retention sweep in onServerTick above
+            // (every BALANCE_HISTORY_RETENTION_SWEEP_MINUTES), not per snapshot.
         }
     }
 
@@ -1043,8 +1041,10 @@ public class BankSystemModBackend implements BankSystemAPI {
                 net.kroia.banksystem.banking.company.ShareVisuals internal =
                         net.kroia.banksystem.client.cache.ShareVisualCache.getVisualsOrPlaceholder(companyId);
                 return new net.kroia.banksystem.api.company.ShareVisuals(
-                        internal.getIconPresetId(),
-                        internal.getTint(),
+                        internal.getBgLayer().symbolId(),
+                        internal.getBgLayer().tint(),
+                        internal.getFgLayer().symbolId(),
+                        internal.getFgLayer().tint(),
                         net.minecraft.network.chat.Component.literal(internal.getDisplayName()),
                         net.minecraft.network.chat.Component.literal(internal.getDescription()),
                         net.kroia.banksystem.client.cache.ShareVisualCache.getIssued(companyId),

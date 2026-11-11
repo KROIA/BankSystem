@@ -48,11 +48,6 @@ public class AskPopupScreen extends BankSystemGuiScreen {
 
     private int frameWidth = 200;
     private int frameHeight = 100;
-    // Kept for binary compatibility (StockMarket compiles against this signature).
-    public AskPopupScreen(GuiScreen parent, Runnable onYes, Runnable onNo, String title, String message) {
-        this((Screen) parent, onYes, onNo, title, message);
-    }
-
     /** Any parent screen, e.g. a container screen. */
     public AskPopupScreen(Screen parent, Runnable onYes, Runnable onNo, String title, String message) {
         super(TITLE);

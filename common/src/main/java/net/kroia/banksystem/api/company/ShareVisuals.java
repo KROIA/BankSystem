@@ -7,10 +7,8 @@ import net.minecraft.network.chat.Component;
  * share visuals + supply. Consumed by external mods (e.g. StockMarket) via
  * {@link IBankSystemVisualLookup#getShareVisuals(net.kroia.banksystem.util.ItemID)}.
  *
- * <p>v2.1.0 adds {@link #bgSymbolId()}/{@link #bgTint()} for the background layer and
- * {@link #fgSymbolId()}/{@link #fgTint()} for the foreground layer. Legacy accessors
- * {@link #iconPresetId()} and {@link #tint()} are kept as compat shims:
- * {@code iconPresetId()} → {@code fgSymbolId()}, {@code tint()} → {@code bgTint()}.
+ * <p>{@link #bgSymbolId()}/{@link #bgTint()} describe the background layer,
+ * {@link #fgSymbolId()}/{@link #fgTint()} the foreground layer.
  */
 public final class ShareVisuals {
 
@@ -40,20 +38,6 @@ public final class ShareVisuals {
         this.maxSupply = maxSupply;
     }
 
-    /**
-     * Legacy 6-arg compat constructor — maps {@code iconPresetId} → fgSymbolId,
-     * {@code tint} → bgTint; bgSymbolId = "" and fgTint = 0xFFFFFFFF.
-     */
-    public ShareVisuals(String iconPresetId,
-                        int tint,
-                        Component displayName,
-                        Component description,
-                        long totalSharesIssued,
-                        long maxSupply) {
-        this("", tint, iconPresetId == null ? "" : iconPresetId, 0xFFFFFFFF,
-                displayName, description, totalSharesIssued, maxSupply);
-    }
-
     /** Background layer symbol id; empty when unset. */
     public String bgSymbolId() { return bgSymbolId; }
     /** Background layer ARGB tint. */
@@ -62,11 +46,6 @@ public final class ShareVisuals {
     public String fgSymbolId() { return fgSymbolId; }
     /** Foreground layer ARGB tint. */
     public int fgTint() { return fgTint; }
-
-    /** Legacy compat: returns {@link #fgSymbolId()}. */
-    public String iconPresetId() { return fgSymbolId; }
-    /** Legacy compat: returns {@link #bgTint()}. */
-    public int tint() { return bgTint; }
 
     /** Human-readable company name; {@link Component#empty()} when unset. */
     public Component displayName() { return displayName; }

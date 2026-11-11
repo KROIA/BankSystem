@@ -76,7 +76,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
     private final SimpleContainer inventory = new ControlledContainer(27); // 27 slots like a chest
     private boolean sendingEnabled = false;
     private boolean dropIfNotBankable = false;
-    private int bankAccountNumber = 0; // Not used, but kept for compatibility
+    private int bankAccountNumber = 0; // target account for uploaded items (NBT "BankAccountNumber")
 
     private UUID playerOwner = null;
 

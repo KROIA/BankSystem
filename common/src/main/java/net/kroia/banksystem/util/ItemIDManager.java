@@ -3278,20 +3278,6 @@ public class ItemIDManager implements ServerSaveable {
         });
     }
 
-    /**
-     * Legacy overload retained for the slave-server call site in
-     * {@code BankSystemModBackend.onServerStart(...)}. The {@code server} parameter is no
-     * longer needed to obtain the registry (the no-arg {@link #createDefaultItemIDs()}
-     * resolves it via {@link UtilitiesPlatform#getRegistryAccessServerSide()}); this thin
-     * delegate simply preserves the existing call signature.
-     *
-     * @param server the running server (unused; kept for call-site compatibility)
-     */
-    public void createDefaultItemIDs(MinecraftServer server)
-    {
-        createDefaultItemIDs();
-    }
-
     /*@Override
     public boolean save(Map<String, ListTag> listTags) {
         ListTag listTag = new ListTag();
