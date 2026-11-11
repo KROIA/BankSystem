@@ -210,6 +210,7 @@
   "gui.banksystem.bank_account_bindings_screen.unbind_error.generic": "Trennen fehlgeschlagen",
   "gui.banksystem.bank_account_bindings_screen.no_providers": "Auf diesem Server sind keine externen Währungs-Mods installiert.",
   "gui.banksystem.bank_account_bindings_screen.provider_unavailable": "Anbieter nicht verfügbar",
+  "gui.banksystem.bank_account_bindings_screen.suspended": "Gesperrt: Ein Admin muss diese Verknüpfung prüfen. Bis dahin kann nichts darüber ein- oder ausgezahlt werden.",
   "gui.banksystem.bank_account_bindings_screen.requires_manage": "Erfordert Verwalten-Berechtigung",
   "gui.banksystem.bank_account_bindings_screen.shared_badge": "geteilt",
   "gui.banksystem.bank_account_bindings_screen.refresh": "Aktualisieren",

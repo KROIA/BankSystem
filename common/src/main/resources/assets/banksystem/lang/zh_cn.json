@@ -210,6 +210,7 @@
   "gui.banksystem.bank_account_bindings_screen.unbind_error.generic": "解绑失败",
   "gui.banksystem.bank_account_bindings_screen.no_providers": "此服务器未安装任何外部货币模组。",
   "gui.banksystem.bank_account_bindings_screen.provider_unavailable": "提供者不可用",
+  "gui.banksystem.bank_account_bindings_screen.suspended": "已暂停：需要管理员审核此绑定。在此之前无法通过它存取。",
   "gui.banksystem.bank_account_bindings_screen.requires_manage": "需要管理权限",
   "gui.banksystem.bank_account_bindings_screen.shared_badge": "共享",
   "gui.banksystem.bank_account_bindings_screen.refresh": "刷新",

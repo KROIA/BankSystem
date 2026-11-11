@@ -210,6 +210,7 @@
   "gui.banksystem.bank_account_bindings_screen.unbind_error.generic": "Trenne isch fehlgschlage",
   "gui.banksystem.bank_account_bindings_screen.no_providers": "Uf dem Server sind kei extärne Währigs-Mods installiert.",
   "gui.banksystem.bank_account_bindings_screen.provider_unavailable": "Abieter nöd verfüegbar",
+  "gui.banksystem.bank_account_bindings_screen.suspended": "Gsperrt: En Admin mues die Verknüpfig prüefe. Bis dänn chan nüt drüber ii- oder uusbezahlt werde.",
   "gui.banksystem.bank_account_bindings_screen.requires_manage": "Bruucht d'Verwalte-Berächtigung",
   "gui.banksystem.bank_account_bindings_screen.shared_badge": "gmeinsam",
   "gui.banksystem.bank_account_bindings_screen.refresh": "Aktualisiere",

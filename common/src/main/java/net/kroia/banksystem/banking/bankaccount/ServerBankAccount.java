@@ -948,6 +948,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             BankAccountBindings bindings =
                     BankAccountBindings.get();
             if (bindings != null) {
+                net.kroia.banksystem.banking.bankmanager.ServerBankManager.auditSuspendedDrop(this, itemID, "bank removed"); // Task #148
                 bindings.unbind(this.accountNumber, itemID);
             }
         }
@@ -997,6 +998,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         // the whole account's bindings in one pass.
         BankAccountBindings bindings = BankAccountBindings.get();
         if (bindings != null) {
+            net.kroia.banksystem.banking.bankmanager.ServerBankManager.auditSuspendedDrop(this, null, "all banks removed"); // Task #148
             bindings.removeAllForAccount(this.accountNumber);
         }
         banks.clear(); // Clear all banks in the account

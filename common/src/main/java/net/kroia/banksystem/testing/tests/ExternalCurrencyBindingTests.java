@@ -1,6 +1,9 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
@@ -28,6 +31,7 @@ import net.minecraft.world.item.Items;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * In-game tests for the Task #33 external-currency binding stack (v2.0.5).
@@ -105,6 +109,11 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         addTest("startup_check_skips_unavailable_provider", this::testUnavailableProviderSkipped);
         addTest("admin_restore_lifts_suspension_and_survives_recheck", this::testAdminRestore);
         addTest("rebind_of_bound_slot_refused_without_moving_funds", this::testRebindOfBoundSlotRefused); // Task #147
+        // Task #148: listing answers, and deletion of suspended bindings
+        addTest("startup_check_suspends_on_empty_listing", () -> listingCase(false));
+        addTest("startup_check_skips_throwing_listing", () -> listingCase(true));
+        addTest("account_deletion_drops_suspended_binding_unpaid", this::testAccountDeletionDropsSuspendedUnpaid);
+        addTest("user_deletion_pays_nothing_for_suspended_slot", this::testUserDeletionPaysNothingForSuspended);
         // Cascade cleanup must run LAST: it deletes the shared testAccountNr, which would
         // strand any subsequent test that references it.
         addTest("cascade_cleanup_on_account_and_bank_removal", this::testCascadeCleanup);
@@ -696,6 +705,128 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         BindingRow row = bindings.getBinding(testAccountNr, slotItemA);
         if (row == null || !STUB_KEY_A.equals(row.ref().accountKey())) return fail("binding row replaced: " + row);
         return pass("rebind refused (" + rebind + "); X=300, Y=0, total " + totalBefore + " unchanged, still bound to X");
+    }
+
+    // -----------------------------------------------------------------------
+    // Task #148: an empty listing is an answer (suspend), a throwing one is not (skip). Slot A is bound to an
+    // external account only TEST_MEMBER may bind; the manager TEST_OWNER has no external account at all.
+    // -----------------------------------------------------------------------
+    private TestResult listingCase(boolean listingThrows) {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        account.addUser(manager.getUserByUUID(TEST_OWNER), BankPermission.getAllPermissions());
+        try {
+            StubCurrencyProvider.create(STUB_KEY_A, true, FOREIGN_BALANCE).setOwner(TEST_MEMBER);
+            BankStatus status = manager.bindExternalAccount(testAccountNr, slotItemA,
+                    new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "foreign", true));
+            BankAccountBindings bindings = BankAccountBindings.get();
+            BindingRow row = status == BankStatus.SUCCESS && bindings != null ? bindings.getBinding(testAccountNr, slotItemA) : null;
+            if (row == null) return fail("bind returned " + status);
+            StubCurrencyProvider.getInstance().listingFails = listingThrows;
+            boolean suspended = manager.suspendIfForeign(row);
+            if (suspended == listingThrows || row.suspended() == listingThrows)
+                return fail((listingThrows ? "throwing" : "empty") + " listing: suspended=" + row.suspended());
+            return pass(listingThrows ? "throwing listing skipped, binding kept" : "empty listing suspended the binding");
+        } finally {
+            StubCurrencyProvider.getInstance().listingFails = false;
+            account.removeUser(TEST_OWNER);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Task #148: deleting an account or a user drops a suspended binding without paying out the locked + dust
+    // BankSystem held for it (one BANK_CLOSED row + an EXTERNAL_BINDING_SUSPENDED flag instead) and leaves the
+    // external account alone.
+    // -----------------------------------------------------------------------
+    private static final long LEFT_LOCKED = 40L, LEFT_DUST = 3L;
+
+    /** Binds slot A of {@code nr} to the foreign stub account, sets locked + dust, suspends. @return null, or why not */
+    private String bindSuspended(int nr, boolean shared) {
+        StubCurrencyProvider.create(STUB_KEY_A, shared, FOREIGN_BALANCE).setOwner(TEST_MEMBER);
+        BankStatus status = manager.bindExternalAccount(nr, slotItemA,
+                new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "foreign", shared));
+        BankAccountBindings bindings = BankAccountBindings.get();
+        BindingRow row = status == BankStatus.SUCCESS && bindings != null ? bindings.getBinding(nr, slotItemA) : null;
+        if (row == null) return "bind returned " + status;
+        bindings.setLocked(nr, slotItemA, LEFT_LOCKED);
+        bindings.setDust(nr, slotItemA, LEFT_DUST);
+        return manager.suspendIfForeign(row) ? null : "binding not suspended";
+    }
+
+    /** @return null if slot A of {@code nr} was dropped unpaid since {@code since}, else what is wrong */
+    private String droppedUnpaid(int nr, long since) throws Exception {
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings != null && bindings.hasBinding(nr, slotItemA)) return "binding row left behind";
+        long ext = StubCurrencyProvider.getAccount(STUB_KEY_A).getBalance();
+        if (ext != FOREIGN_BALANCE) return "external balance moved: " + ext;
+        long left = LEFT_LOCKED + LEFT_DUST, closed = 0;
+        int rows = 0;
+        for (var r : BankSystemModBackend.getTransactionLogManager().getByAccount(nr, 0).get(10, TimeUnit.SECONDS)) {
+            if (r.itemId() != slotItemA.getShort() || r.time() < since) continue;
+            if (r.type() == LedgerType.ACCOUNT_DELETE_PAYOUT || r.type() == LedgerType.ACCOUNT_DELETE_LOSS) return "paid out: " + r;
+            if (r.type() == LedgerType.BANK_CLOSED) { closed += r.amount(); rows++; }
+        }
+        if (rows != 1 || closed != left) return rows + " BANK_CLOSED row(s) summing " + closed + ", expected one of " + left;
+        for (var f : BankSystemModBackend.getInstances_forTesting().SUSPICION_FLAG_MANAGER.getRecent(nr, since, 0).get(10, TimeUnit.SECONDS))
+            if (f.flagType() == SuspicionChecks.EXTERNAL_BINDING_SUSPENDED && FOREIGN_FLAG_REF.equals(f.ref()) && f.amount() == left)
+                return null;
+        return "no EXTERNAL_BINDING_SUSPENDED flag of " + left;
+    }
+
+    private TestResult testAccountDeletionDropsSuspendedUnpaid() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount fresh = manager.createBankAccount(TEST_ACCOUNT_NAME + "_suspended");
+        if (fresh == null) return fail("account creation failed");
+        int nr = fresh.getAccountNumber();
+        try {
+            fresh.createBank(slotItemA, 0);
+            fresh.addUser(manager.getUserByUUID(TEST_OWNER), BankPermission.getAllPermissions());
+            String setup = bindSuspended(nr, true);
+            if (setup != null) return fail("setup: " + setup);
+            long since = System.currentTimeMillis();
+            if (!manager.deleteBankAccount(nr)) return fail("deleteBankAccount returned false");
+            String why = droppedUnpaid(nr, since);
+            return why == null ? pass("account deleted: binding dropped, one BANK_CLOSED + flag of locked + dust, external untouched")
+                    : fail(why);
+        } catch (Exception e) {
+            return fail("ledger/flag query threw " + e);
+        } finally {
+            if (manager.getBankAccount(nr) != null) manager.deleteBankAccount(nr);
+        }
+    }
+
+    private TestResult testUserDeletionPaysNothingForSuspended() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        UUID doomed = UUID.fromString("00000000-0000-0000-0000-00000000f148");
+        if (manager.userExists(doomed)) manager.removeUser(doomed);
+        manager.addUser(new User(doomed, "ExtCurrSuspendedUser"));
+        try {
+            ServerBankAccount personal = manager.createPersonalBankAccount(doomed);
+            if (personal == null) return fail("personal account not created");
+            int nr = personal.getAccountNumber();
+            personal.getAllBanks().values().forEach(b -> b.setBalance(0L)); // nothing else to hand out
+            personal.createBank(slotItemA, 0);
+            String setup = bindSuspended(nr, false);
+            if (setup != null) return fail("setup: " + setup);
+            Map<ItemID, Long> payout = new java.util.HashMap<>();
+            manager.collectAccountBalances(personal, payout);
+            if (payout.containsKey(slotItemA)) return fail("suspended slot counted for the payout: " + payout);
+            long since = System.currentTimeMillis();
+            var result = manager.removeUserWithPayout(doomed);
+            if (result == null) return fail("user not removed");
+            result.get(10, TimeUnit.SECONDS);
+            String why = droppedUnpaid(nr, since);
+            return why == null ? pass("user deleted: suspended slot paid nothing, one BANK_CLOSED + flag, external untouched")
+                    : fail(why);
+        } catch (Exception e) {
+            return fail("threw " + e);
+        } finally {
+            if (manager.userExists(doomed)) manager.removeUser(doomed);
+        }
     }
 
     // -----------------------------------------------------------------------

@@ -212,12 +212,13 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 if (data.removeBank) {
                     if (!isAdmin && bankManager.isAccountFrozen(input.accountNumber))
                         continue; // Task #117: a frozen account's banks can only be closed by an admin
-                    if (!isAdmin && BankAccountBindings.isSuspended(input.accountNumber, data.itemID))
+                    boolean suspended = BankAccountBindings.isSuspended(input.accountNumber, data.itemID);
+                    if (!isAdmin && suspended)
                         continue; // Task #146: keep a suspended binding for the admins to investigate
                     ISyncServerBank closing = account.getBank(data.itemID);
                     long destroyed = closing == null ? 0L : closing.getTotalBalance();
-                    account.removeBank(data.itemID);
-                    if (closing != null)
+                    TransactionLedger.withActor(actor, () -> { account.removeBank(data.itemID); return null; });
+                    if (closing != null && !suspended) // Task #148: removeBank logs a suspended binding's closure + flag
                         TransactionLedger.logRow(input.accountNumber, LedgerType.BANK_CLOSED, data.itemID, destroyed,
                                 actor, null, "bank closed");
                     continue;

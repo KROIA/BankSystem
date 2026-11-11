@@ -658,6 +658,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 if (removed != null) {
                     // Task #33 (v2.0.5): cascade-drop external-currency binding rows for
                     // the departing personal account. Idempotent when no rows exist.
+                    auditSuspendedDrop(removed, null, "personal account of deleted user " + userUUID); // Task #148
                     if (cascadeBindings != null) cascadeBindings.removeAllForAccount(accountNr);
                     BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_DELETED.notifyListeners(removed);
                 }
@@ -745,6 +746,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             ISyncServerBank bank = bankEntry.getValue();
             if (bank == null) continue;
             BindingRow row = bindings == null ? null : bindings.getBinding(account.getAccountNumber(), itemID);
+            if (row != null && row.suspended()) continue; // Task #148: never paid out, see auditSuspendedDrop
             long totalBalance = row != null ? row.lockedBalance() + row.dustBalance() : bank.getTotalBalance();
             if (totalBalance > 0) {
                 target.merge(itemID, totalBalance, Long::sum);
@@ -1604,10 +1606,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 error(refusal);
                 return false;
             }
+            Set<ItemID> suspended = auditSuspendedDrop(account, null, "account deleted"); // Task #148
             if (logClosure) {
                 for (Map.Entry<ItemID, IServerBank> e : account.getAllBanks().entrySet()) {
                     ISyncServerBank bank = e.getValue();
-                    if (bank == null || bank.getTotalBalance() == 0) continue;
+                    if (bank == null || bank.getTotalBalance() == 0 || suspended.contains(e.getKey())) continue;
                     net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(accountNumber, net.kroia.banksystem.api.ledger.LedgerType.BANK_CLOSED, e.getKey(), bank.getTotalBalance(),
                             net.kroia.banksystem.banking.ledger.TransactionLedger.currentActor(), null, "account deleted");
                 }
@@ -1882,9 +1885,10 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         for(DisallowedHolder holder : cleared) {
             ServerBankAccount account = bankAccounts.get(holder.accountNr());
             if(account != null) {
+                boolean suspended = BankAccountBindings.isSuspended(holder.accountNr(), finalItemID); // removeBank logs it (Task #148)
                 account.removeBank(finalItemID);
                 long cleared_ = holder.free() + holder.locked();
-                if (cleared_ != 0)
+                if (cleared_ != 0 && !suspended)
                     net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(holder.accountNr(), net.kroia.banksystem.api.ledger.LedgerType.ADMIN_DISALLOW_ITEM, finalItemID, cleared_,
                             net.kroia.banksystem.banking.ledger.TransactionLedger.currentActor(), null, "item disallowed, no refund");
             }
@@ -3076,8 +3080,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      * account is not one the BankSystem account's managers may bind (the rule BindExternalAccountRequest
      * enforces since #137): the owner for a personal account, at least one user with MANAGE for a shared
      * one. Does nothing for an admin-approved or already suspended row, a missing or unavailable provider,
-     * or when a lookup throws or comes back empty: the adapters return an empty list when they cannot
-     * answer, and no answer never suspends.
+     * or when a lookup throws: per the {@link ExternalCurrencyProvider#listBindableAccounts} contract a
+     * provider that cannot answer throws, and no answer never suspends. An empty list is an answer (Task #148).
      *
      * @return true if the row was suspended
      */
@@ -3103,25 +3107,64 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                         + "' threw while listing the accounts of " + manager + ": " + t);
                 return false;
             }
-            if (bindable.isEmpty()) return false;
             for (ExternalAccountRef own : bindable)
                 if (own.providerId().equals(ref.providerId()) && own.accountKey().equals(ref.accountKey()))
                     return false;
         }
         ItemID item = new ItemID(row.itemIdShort());
         bindings.suspend(row.bankAccountId(), item);
-        String who = String.join(", ", managers.stream().map(m -> {
-            User u = getUserByUUID(m);
-            return (u != null ? u.getName() : "?") + " (" + m + ")";
-        }).toList());
         net.kroia.banksystem.banking.ledger.AdminAudit.raise(row.bankAccountId(),
                 net.kroia.banksystem.banking.ledger.SuspicionChecks.EXTERNAL_BINDING_SUSPENDED, 3, 0L,
                 ref.providerId() + ":" + ref.accountKey(),
                 "external binding suspended: slot " + item.getName() + " is bound to " + ref.providerId()
                         + " account " + ref.accountKey() + " (\"" + ref.label() + "\"), which "
-                        + (owner != null ? "owner " : "managers ") + who + " may not bind. Restore with "
+                        + managerNames(account) + " may not bind. Restore with "
                         + "/banksystem restorebinding " + row.bankAccountId() + " " + item.getName());
         return true;
+    }
+
+    /** Task #146/#148: who may bind for {@code account}: its owner if personal, else its users with MANAGE. */
+    private static String managerNames(ServerBankAccount account) {
+        User owner = account.getPersonalBankOwner();
+        if (owner != null) return "owner " + owner.getName() + " (" + owner.getUUID() + ")";
+        List<String> names = account.getUserData().stream()
+                .filter(u -> net.kroia.banksystem.banking.BankPermission.hasPermission(u.permissions,
+                        net.kroia.banksystem.banking.BankPermission.MANAGE))
+                .map(u -> u.userName + " (" + u.userUUID + ")").toList();
+        return names.isEmpty() ? "no managers left" : "managers " + String.join(", ", names);
+    }
+
+    /**
+     * Task #148: a suspended binding feeds no value path, deletion included. Call it before the binding rows of
+     * {@code account} (only {@code item}'s when given) are dropped. Per suspended row, the locked + dust BankSystem
+     * held for it are logged as BANK_CLOSED (not paid out, no other closure row) and an EXTERNAL_BINDING_SUSPENDED
+     * flag tells the admins what was left behind. The external account is not touched; the caller drops the rows.
+     *
+     * @return the slots of the suspended rows, which the caller must not pay out or log again
+     */
+    public static Set<ItemID> auditSuspendedDrop(ServerBankAccount account, @Nullable ItemID item, String why) {
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return Set.of();
+        int nr = account.getAccountNumber();
+        Set<ItemID> slots = new HashSet<>();
+        for (BindingRow row : bindings.listBindingsFor(nr)) {
+            ItemID slot = new ItemID(row.itemIdShort());
+            if (!row.suspended() || (item != null && !item.equals(slot))) continue;
+            slots.add(slot);
+            long left = row.lockedBalance() + row.dustBalance();
+            ExternalAccountRef ref = row.ref();
+            if (left > 0)
+                TransactionLedger.logRow(nr, LedgerType.BANK_CLOSED, slot, left, TransactionLedger.currentActor(), null,
+                        why + "; suspended external binding, not paid out");
+            net.kroia.banksystem.banking.ledger.AdminAudit.raise(nr,
+                    net.kroia.banksystem.banking.ledger.SuspicionChecks.EXTERNAL_BINDING_SUSPENDED, 3, left,
+                    ref.providerId() + ":" + ref.accountKey(),
+                    "suspended external binding dropped (" + why + "): slot " + slot.getName() + " was bound to "
+                            + ref.providerId() + " account " + ref.accountKey() + " (\"" + ref.label() + "\"), "
+                            + managerNames(account) + ". BankSystem held locked " + row.lockedBalance() + " + dust "
+                            + row.dustBalance() + " for it; NOT paid out. The external account was not touched.");
+        }
+        return slots;
     }
 
     /**

@@ -83,6 +83,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     private static final String KEY_UNBIND_ERROR_GENERIC = PREFIX + "unbind_error.generic";
     private static final String KEY_NO_PROVIDERS = PREFIX + "no_providers";
     private static final String KEY_PROVIDER_UNAVAILABLE = PREFIX + "provider_unavailable";
+    private static final String KEY_SUSPENDED = PREFIX + "suspended";
     private static final String KEY_REQUIRES_MANAGE = PREFIX + "requires_manage";
     private static final String KEY_SHARED_BADGE = PREFIX + "shared_badge";
     private static final String KEY_REFRESH = PREFIX + "refresh";
@@ -107,6 +108,8 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
 
     private @org.jetbrains.annotations.Nullable BankAccountData accountData;
     private final Map<ItemID, ExternalAccountRef> activeBindings = new HashMap<>();
+    /** Task #148: slots whose binding is suspended until an admin restores it. */
+    private final java.util.Set<ItemID> suspendedBindings = new java.util.HashSet<>();
     /** Cached provider list from the master. Populated on open + refresh. */
     private final List<ListCurrencyProvidersRequest.ProviderInfo> availableProviders = new ArrayList<>();
     private boolean canManage = false;
@@ -222,9 +225,11 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     private void onBindingsReceived(List<ListBindingsForAccountRequest.BindingEntry> bindings) {
         if (!screenIsOpen) return;
         activeBindings.clear();
+        suspendedBindings.clear();
         if (bindings != null) {
             for (ListBindingsForAccountRequest.BindingEntry entry : bindings) {
                 activeBindings.put(entry.itemId(), entry.ref());
+                if (entry.suspended()) suspendedBindings.add(entry.itemId());
             }
         }
         rebuildRows();
@@ -605,16 +610,24 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
             } else {
                 boolean providerAvailable = isProviderAvailable(ref.providerId());
                 String providerLabel = ref.providerId() + ": " + (ref.label().isEmpty() ? ref.accountKey() : ref.label());
-                if (!providerAvailable) {
+                boolean suspended = suspendedBindings.contains(itemId);
+                if (!providerAvailable || suspended) {
                     statusLabel.setText(providerLabel);
                     statusLabel.setTextColor(GRAY_TEXT_COLOR);
-                    final String unavailableTooltip = Component.translatable(KEY_PROVIDER_UNAVAILABLE).getString();
+                    final String unavailableTooltip = Component.translatable(
+                            suspended ? KEY_SUSPENDED : KEY_PROVIDER_UNAVAILABLE).getString();
                     statusLabel.setHoverTooltipSupplier(() -> unavailableTooltip);
                 } else {
                     statusLabel.setText(providerLabel);
                 }
                 actionButton = new Button(Component.translatable(KEY_UNBIND_BUTTON).getString(),
                         () -> beginUnbindFlow(this, ref));
+                if (suspended) { // Task #148: the master refuses it until an admin restores the binding
+                    final String reason = Component.translatable(KEY_SUSPENDED).getString();
+                    actionButton.setClickable(false);
+                    actionButton.setTextColor(GRAY_TEXT_COLOR);
+                    actionButton.setHoverTooltipSupplier(() -> reason);
+                }
             }
             addChild(actionButton);
 

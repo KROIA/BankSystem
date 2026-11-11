@@ -209,6 +209,7 @@
   "gui.banksystem.bank_account_bindings_screen.unbind_error.generic": "Unbind failed",
   "gui.banksystem.bank_account_bindings_screen.no_providers": "No external currency mods are installed on this server.",
   "gui.banksystem.bank_account_bindings_screen.provider_unavailable": "Provider not available",
+  "gui.banksystem.bank_account_bindings_screen.suspended": "Suspended: an admin must review this link. Until then nothing can be paid in or out through it.",
   "gui.banksystem.bank_account_bindings_screen.requires_manage": "Requires MANAGE permission",
   "gui.banksystem.bank_account_bindings_screen.shared_badge": "shared",
   "gui.banksystem.bank_account_bindings_screen.refresh": "Refresh",

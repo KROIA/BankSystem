@@ -75,6 +75,9 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
      */
     private volatile @Nullable String baseCurrencyItemId = null;
 
+    /** Task #148: {@link #listBindableAccounts} throws, like a provider that cannot answer. Cleared by {@link #reset()}. */
+    public volatile boolean listingFails = false;
+
     private StubCurrencyProvider() {}
 
     // -----------------------------------------------------------------------
@@ -130,6 +133,7 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
     public static void reset() {
         INSTANCE.accounts.clear();
         INSTANCE.available = true;
+        INSTANCE.listingFails = false;
         INSTANCE.baseCurrencyItemId = null;
         // Re-register self so BankSystemMod.getAPI() knows about the fresh
         // instance state. registerCurrencyProvider is idempotent by providerId.
@@ -194,6 +198,7 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
 
     @Override
     public @NotNull List<ExternalAccountRef> listBindableAccounts(@NotNull UUID player) {
+        if (listingFails) throw new IllegalStateException("stub listing failure (test)");
         List<ExternalAccountRef> refs = new ArrayList<>();
         for (StubAccount account : accounts.values()) {
             if (account.owner == null || account.owner.equals(player))

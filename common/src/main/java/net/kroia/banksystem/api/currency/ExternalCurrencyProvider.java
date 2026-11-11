@@ -73,8 +73,15 @@ public interface ExternalCurrencyProvider {
      * is presentation-relevant; adapters typically return personal accounts first,
      * then shared accounts.
      *
+     * <b>An empty list is an answer:</b> the player may bind none of the provider's accounts. BankSystem's
+     * start-up check suspends existing bindings to accounts no manager of the BankSystem account may bind
+     * (since 2.2.0). When the provider cannot answer (not ready, an internal error, or only part of the list
+     * could be read), throw instead of returning an empty or partial list: the bind is then refused, the
+     * picker shows nothing, and the start-up check leaves the bindings alone.
+     *
      * @param player the player opening the binding picker. Never {@code null}.
      * @return the list of bindable accounts (possibly empty). Never {@code null}.
+     * @throws RuntimeException when the provider cannot give the complete list right now
      */
     @NotNull List<ExternalAccountRef> listBindableAccounts(@NotNull UUID player);
 

@@ -58,9 +58,6 @@ public final class NumismaticsProvider implements ExternalCurrencyProvider {
     /** Dedup flag for class-resolution failure warnings. */
     private static final AtomicBoolean CLASS_RESOLUTION_WARNED = new AtomicBoolean(false);
 
-    /** Dedup flag for BLAZE_BANKER enumeration failure warnings. */
-    private static final AtomicBoolean BLAZE_BANKER_ENUM_WARNED = new AtomicBoolean(false);
-
     /** Dedup flag for coin-variant reflection failure warnings. */
     private static final AtomicBoolean COIN_MAP_WARNED = new AtomicBoolean(false);
 
@@ -116,7 +113,8 @@ public final class NumismaticsProvider implements ExternalCurrencyProvider {
     @Override
     public @NotNull List<ExternalAccountRef> listBindableAccounts(@NotNull UUID player) {
         List<ExternalAccountRef> refs = new ArrayList<>();
-        if (!isAvailable()) return refs;
+        // Task #148: no answer throws (contract); an empty or half list would suspend real bindings.
+        if (!isAvailable()) throw new IllegalStateException("Numismatics is not available");
 
         try {
             Class<?> numismaticsClass = Class.forName("dev.ithundxr.createnumismatics.Numismatics");
@@ -142,51 +140,45 @@ public final class NumismaticsProvider implements ExternalCurrencyProvider {
                 ));
             }
 
-            try {
-                // GlobalBankManager exposes accounts as a public Map<UUID, BankAccount> field.
-                Object accountsField = managerClass.getField("accounts").get(bankManager);
-                if (accountsField instanceof java.util.Map) {
-                    @SuppressWarnings("unchecked")
-                    Collection<Object> accounts = ((java.util.Map<Object, Object>) accountsField).values();
+            // GlobalBankManager exposes accounts as a public Map<UUID, BankAccount> field.
+            Object accountsField = managerClass.getField("accounts").get(bankManager);
+            if (!(accountsField instanceof java.util.Map))
+                throw new IllegalStateException("GlobalBankManager.accounts is not a Map");
+            @SuppressWarnings("unchecked")
+            Collection<Object> accounts = ((java.util.Map<Object, Object>) accountsField).values();
 
-                    for (Object account : accounts) {
-                        if (account == null) continue;
+            for (Object account : accounts) {
+                if (account == null) continue;
 
-                        Object type = accountClass.getField("type").get(account);
-                        if (!blazeBankerType.equals(type)) continue;
+                Object type = accountClass.getField("type").get(account);
+                if (!blazeBankerType.equals(type)) continue;
 
-                        // isAuthorized(UUID) covers both direct owner and trust-list membership.
-                        boolean authorized = (boolean) accountClass.getMethod("isAuthorized", UUID.class)
-                                .invoke(account, player);
-                        if (!authorized) continue;
+                // isAuthorized(UUID) covers both direct owner and trust-list membership.
+                boolean authorized = (boolean) accountClass.getMethod("isAuthorized", UUID.class)
+                        .invoke(account, player);
+                if (!authorized) continue;
 
-                        UUID accountId = (UUID) accountClass.getField("id").get(account);
-                        String label = "Blaze Banker " + accountId.toString().substring(0, 8);
-                        try {
-                            Object rawLabel = accountClass.getMethod("getLabel").invoke(account);
-                            if (rawLabel instanceof String s && !s.isEmpty()) {
-                                label = s;
-                            }
-                        } catch (NoSuchMethodException e) {
-                            // getLabel() missing — fall back
-                        }
-
-                        refs.add(new ExternalAccountRef(
-                                PROVIDER_ID,
-                                accountId.toString(),
-                                label,
-                                true
-                        ));
+                UUID accountId = (UUID) accountClass.getField("id").get(account);
+                String label = "Blaze Banker " + accountId.toString().substring(0, 8);
+                try {
+                    Object rawLabel = accountClass.getMethod("getLabel").invoke(account);
+                    if (rawLabel instanceof String s && !s.isEmpty()) {
+                        label = s;
                     }
+                } catch (NoSuchMethodException e) {
+                    // getLabel() missing — fall back
                 }
-            } catch (NoSuchFieldException e) {
-                if (BLAZE_BANKER_ENUM_WARNED.compareAndSet(false, true)) {
-                    logWarn("Failed to enumerate BLAZE_BANKER accounts — GlobalBankManager.accounts field not found. Numismatics API may have changed: " + e.getMessage());
-                }
+
+                refs.add(new ExternalAccountRef(
+                        PROVIDER_ID,
+                        accountId.toString(),
+                        label,
+                        true
+                ));
             }
 
         } catch (Exception e) {
-            logWarn("Failed to list bindable accounts for player " + player + ": " + e.getMessage());
+            throw new IllegalStateException("Numismatics: cannot list the bindable accounts of " + player, e);
         }
 
         return refs;

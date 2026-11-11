@@ -49,10 +49,12 @@ public class ListBindingsForAccountRequest extends BankSystemGenericRequest<List
      * @param itemId the slot
      * @param ref    the external account reference bound to that slot; never {@code null}
      */
-    public record BindingEntry(ItemID itemId, ExternalAccountRef ref) {
+    /** {@code suspended}: Task #148, the binding waits for an admin review (Task #146). */
+    public record BindingEntry(ItemID itemId, ExternalAccountRef ref, boolean suspended) {
         public static final StreamCodec<RegistryFriendlyByteBuf, BindingEntry> STREAM_CODEC = StreamCodec.composite(
                 ItemID.STREAM_CODEC, BindingEntry::itemId,
                 ExternalAccountRef.STREAM_CODEC, BindingEntry::ref,
+                ByteBufCodecs.BOOL, BindingEntry::suspended,
                 BindingEntry::new
         );
     }
@@ -125,7 +127,7 @@ public class ListBindingsForAccountRequest extends BankSystemGenericRequest<List
             // Reconstruct the ItemID from the persisted short. Row stores the short only —
             // the client resolves the name/stack from its local ItemIDManager on receipt.
             ItemID itemId = new ItemID(row.itemIdShort());
-            result.add(new BindingEntry(itemId, row.ref()));
+            result.add(new BindingEntry(itemId, row.ref(), row.suspended()));
         }
         return CompletableFuture.completedFuture(new OutputData(result));
     }
