@@ -79,12 +79,19 @@ public class WorkersTabBody extends TabBody {
             return;
         }
         screen.clientBankManager().getBankAccountDataAsync(info.bankAccountNr())
-                .thenAccept(data -> onClientThread(() -> populate(data)));
+                .whenComplete((data, ex) -> onClientThread(() -> {
+                    if (ex != null) showPlaceholder("gui." + BankSystemMod.MOD_ID + ".request.could_not_load"); // Issue #95
+                    else populate(data);
+                }));
     }
 
     private void showPlaceholder() {
+        showPlaceholder(PREFIX + "workers_no_users");
+    }
+
+    private void showPlaceholder(String key) {
         userList.removeChilds();
-        userList.addChild(new Label(Component.translatable(PREFIX + "workers_no_users").getString()));
+        userList.addChild(new Label(Component.translatable(key).getString()));
         userWidgets.clear();
         layoutChangedInternal();
     }
@@ -213,8 +220,20 @@ public class WorkersTabBody extends TabBody {
                 List.of(),   // no bank-slot changes
                 setUsers);
 
+        // Issue #95: on a refusal or no answer, say so and reload the server's roster instead of
+        // leaving the edit on screen as if it was saved.
         screen.clientBankManager().requestUpdateBankAccount(input)
-                .thenAccept(data -> onClientThread(() -> populate(data)));
+                .whenComplete((data, ex) -> onClientThread(() -> {
+                    if (ex == null && data != null) {
+                        populate(data);
+                        return;
+                    }
+                    net.kroia.banksystem.util.BankSystemGuiScreen.switchScreen(new net.kroia.banksystem.screen.uiElements.InfoPopupScreen(screen,
+                            Component.translatable(PREFIX + "error_title").getString(),
+                            Component.translatable(ex != null ? "gui." + BankSystemMod.MOD_ID + ".request.no_answer"
+                                    : PREFIX + "action_failed").getString()));
+                    fetchUsers();
+                }));
     }
 
     private void onOpenAccount() {

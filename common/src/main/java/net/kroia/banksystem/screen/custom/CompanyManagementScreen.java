@@ -19,8 +19,7 @@ import java.util.UUID;
 /**
  * Task #51 (v2.1.0) — Dedicated company management UI.
  *
- * <p><b>Status: SKELETON.</b> Full implementation is spec'd in
- * {@code .claude/Features/CompanyManagementScreenSpec.md} and will be delivered
+ * <p><b>Status: SKELETON.</b> The full implementation will be delivered
  * by a subsequent implementation pass. This class currently ships:
  *
  * <ul>

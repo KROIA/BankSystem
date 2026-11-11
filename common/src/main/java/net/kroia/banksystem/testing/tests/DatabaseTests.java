@@ -30,6 +30,11 @@ public class DatabaseTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("record_field_access", this::record_field_access);
         addTest("dateFilter_clause", this::dateFilter_clause);
