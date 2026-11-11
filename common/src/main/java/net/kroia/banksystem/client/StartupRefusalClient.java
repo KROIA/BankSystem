@@ -45,7 +45,7 @@ public final class StartupRefusalClient {
         if (server != null && !server.isShutdown())
             return; // still stopping
         BankSystemModBackend.clearSingleplayerRefusal();
-        mc.disconnect(createScreen(mc, refusal));
+        mc.disconnect(createScreen(mc, refusal), false);
     }
 
     private static Screen createScreen(Minecraft mc, StartupRefusal refusal) {

@@ -611,7 +611,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         }
         singleplayerRefusal = new StartupRefusal(kind, count, List.copyOf(lines),
                 server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize());
-        server.tell(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false)));
+        server.tell(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc<=1.21.1
+        //server.schedule(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc>=1.21.2
     }
 
     // Called from the server side
