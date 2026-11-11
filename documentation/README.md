@@ -10,10 +10,10 @@ Guides for players and server administrators on how to use the BankSystem mod.
 | [Bank Accounts](user-guide/BankAccounts.md) | Shared bank accounts, creating accounts, permissions |
 | [Currency Bindings](user-guide/CurrencyBindings.md) | Link a bank slot to a Numismatics or Lightman's Currency account |
 | [Companies](user-guide/Companies.md) | Found a company, manage workers, issue shares with the Share Stamper, pay dividends and recurring payouts |
-| [Administration](user-guide/Administration.md) | Server admin guide: managing banking items, player accounts, locked amounts |
+| [Administration](user-guide/Administration.md) | Server admin guide: bankable items, player accounts, account freeze, locked amounts, backups, transaction ledger, audit screen and files, suspicious-activity flags, suspended currency bindings, admin role |
 | [Configuration](user-guide/Configuration.md) | Per-world `settings.json` reference; volatile & deposit-gated item components |
 | [Placeholders](user-guide/Placeholders.md) | Show balances, money in circulation and a richest-players list via TAB or Placeholder API |
-| [Multi-Server Setup](user-guide/MultiserverSetup.md) | Master-slave architecture setup for cross-server banking |
+| [Multi-Server Setup](user-guide/MultiserverSetup.md) | Master-slave setup, what runs where, trusted and untrusted slaves, failed requests and transfers, troubleshooting |
 | [Commands](user-guide/Commands.md) | Full command reference |
 
 ## For Mod Developers
@@ -23,7 +23,8 @@ Technical documentation for developers integrating with or extending BankSystem.
 | Guide | Description |
 |-------|-------------|
 | [API Reference](developer-guide/API.md) | Public API overview, entry points, and usage examples |
-| [Events & Signals](developer-guide/EventsAndSignals.md) | Every event/signal for dependent mods: user/account changes, ItemID merges, multi-server connection lifecycle, slave-trust changes, payouts and dividends |
+| [Events & Signals](developer-guide/EventsAndSignals.md) | Every event/signal for dependent mods: user/account changes, ItemID merges, multi-server connection lifecycle, slave-trust changes, payouts and dividends, transaction logged (ledger), suspicion flagged, account freeze changed |
+| [Diagnostics](developer-guide/API.md#note-flow-log-inoteflowlog) | `getNoteFlowLog()`: record money notes created or destroyed outside the bank in the diagnostics database (`banksystem_diagnostics.db`) for external audit tools |
 | [Currency Integration](developer-guide/CurrencyIntegration.md) | `ExternalCurrencyProvider` SPI for currency-mod authors who want their mod in the binding picker |
 | [Item Price Provider API](developer-guide/ItemPriceProviderAPI.md) | Supply item prices for total-wealth tracking |
 | [Transaction Ledger](developer-guide/TransactionLedger.md) | Ledger type codes, columns, and writing rows from other mods |

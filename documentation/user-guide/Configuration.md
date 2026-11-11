@@ -22,13 +22,15 @@ Lifecycle:
 - **Rewritten regularly while the server runs**: BankSystem saves all its data (including this file) on its save interval (`SAVE_INTERVAL_SECONDS`, default every 5 seconds while players are online), whenever the world is saved (autosave, `/save-all`), and on server shutdown.
 
 > [!TIP]
-> **Prefer the in-game settings GUI.** Ops can run `/banksystem manage` to open the bankable-items management screen and, from there, click the **Mod Settings** button to open the editor for every value in this file — booleans, numbers, and the component lists. Edits made there go through the normal save cycle instead of being overwritten. Closing the editor with unapplied changes asks whether to **Save** or **Discard** them (**Esc** on that popup returns to the editor). This is the recommended way to change settings at runtime; the section below documents the file for reference and for cases where the GUI is not available (e.g. bootstrap edits before the first server start).
+> **Prefer the in-game settings GUI.** BankSystem admins can run `/banksystem manage` to open the bankable-items management screen and, from there, click the **Mod Settings** button to open the editor for every value in this file — booleans, numbers, and the component lists. Edits made there go through the normal save cycle instead of being overwritten. Closing the editor with unapplied changes asks whether to **Save** or **Discard** them (**Esc** on that popup returns to the editor). This is the recommended way to change settings at runtime; the section below documents the file for reference and for cases where the GUI is not available (e.g. bootstrap edits before the first server start).
 >
 > The **Mod Settings** button is only shown on the master server. On a slave server the button is hidden — configure settings on the master; slaves receive the relevant values (component lists, etc.) through the master's sync.
 
 > [!WARNING]
 > Because the server rewrites `settings.json` on its save interval, **only edit the file directly while the world/server is stopped**. Edits made through the raw file while the server is running are silently overwritten. Use `/banksystem manage` → **Mod Settings** instead when the server is live.
 > Also make sure your edits are valid JSON and keep a backup — if the file cannot be loaded, BankSystem writes a fresh file, and your manual changes are lost.
+>
+> Numbers are checked when the file is loaded, with the same ranges as **Apply** in the Mod Settings screen (listed in the tables below). A value outside its range is set to the nearest allowed value, and the server log gets one line per changed key.
 
 > [!IMPORTANT]
 > **Multi-server networks:** every server (master and slaves) has its own `settings.json`, but the item component lists (`ADDITIONAL_VOLATILE_COMPONENTS`, `ADDITIONAL_DEPOSIT_GATED_COMPONENTS`) are overwritten at runtime on slave servers and clients by the master's sync packet. Configure the component lists **on the master server**. See [Multi-Server Behavior](#multi-server-behavior) below.
@@ -53,7 +55,9 @@ A freshly created `settings.json` looks like this:
     "ALERTS_DEFAULT_ON": true
   },
   "Player": {
-    "STARTING_BALANCE": 0
+    "STARTING_BALANCE": 0,
+    "MAX_BANK_ACCOUNTS_PER_PLAYER": 3,
+    "MAX_COMPANIES_PER_PLAYER": 3
   },
   "ServerBank": {
     "ADDITIONAL_VOLATILE_COMPONENTS": [],
@@ -105,7 +109,7 @@ A freshly created `settings.json` looks like this:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `SAVE_INTERVAL_SECONDS` | number | `5` | Interval in **seconds** at which BankSystem auto-saves all its data (bank accounts, item registry, and this settings file). Valid range `1`–`86400`; out-of-range values are clamped. Saves only run while at least one player is online, plus one final save after the last player leaves. <br>**Renamed in v2.1.0** (was `SAVE_INTERVAL_MINUTES`). A file still carrying the old key falls back to the 5-second default — if you ran a custom interval, set it again in seconds. The shorter window closes an item-duplication gap where a crash between a withdrawal and the next save left the items in both the bank and the player's inventory. |
-| `BALANCE_SNAPSHOT_INTERVAL_MINUTES` | number | `1` | Interval in minutes between balance snapshots. Snapshots feed the **Balance History** chart of the [Bank Terminal](Usage.md#balance-history-chart) and the [Bank Display block](Usage.md#bank-display). A row is only written when the balance actually changed since the last one (see `BALANCE_SNAPSHOT_HEARTBEAT_MINUTES`). One snapshot is also taken at server start. Set to `0` to disable periodic snapshots. |
+| `BALANCE_SNAPSHOT_INTERVAL_MINUTES` | number | `1` | Interval in minutes between balance snapshots. Snapshots feed the **Balance History** chart of the [Bank Terminal](Usage.md#balance-history-chart) and the [Bank Display block](Usage.md#bank-display). A row is only written when the balance actually changed since the last one (see `BALANCE_SNAPSHOT_HEARTBEAT_MINUTES`). One snapshot is also taken at server start. Range `0`–`10080`; set to `0` to disable periodic snapshots. |
 | `BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM` | number | `1440` | **Deprecated since v2.0.7 and no longer enforced** — the tiered retention plan below replaced it. The key is kept so existing files load unchanged; a non-zero value logs a one-shot warning at server start. |
 | `BALANCE_SNAPSHOT_HEARTBEAT_MINUTES` | number | `60` | Maximum minutes between forced snapshot rows for an idle account, so long-untouched series still have data points to draw. `0` disables the heartbeat — only real balance changes are recorded (chart lines still connect across the gaps). |
 | `BALANCE_HISTORY_RETENTION_SWEEP_MINUTES` | number | `60` | How often the balance-history downsample/prune sweep runs. One sweep also runs synchronously at server start, so histories written by v2.0.6 or earlier are compacted on the first boot after upgrading. Higher values mean less database work but a larger file between sweeps. `0` disables retention entirely — **the history database then grows without bound.** <br>The sweep keeps full resolution for the last 24 hours, one row per 15 minutes from 24 hours to 7 days, one row per hour from 7 to 30 days, one row per day from 30 days to a year, and deletes everything older than a year. |
@@ -120,7 +124,9 @@ A freshly created `settings.json` looks like this:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `STARTING_BALANCE` | number | `0` | Money balance credited to a player's personal bank account when the account is first created (first join). The value is given in the bank's internal fractional unit — balances are tracked in hundredths, so `100` = `1.00` money. |
+| `STARTING_BALANCE` | number | `0` | Money balance credited to a player's personal bank account when the account is first created (first join). The value is given in the bank's internal fractional unit — balances are tracked in hundredths, so `100` = `1.00` money. Range `0`–`10^12`. |
+| `MAX_BANK_ACCOUNTS_PER_PLAYER` | number | `3` | How many bank accounts a player may create with `/bank create`. Founding a company also uses one of these slots, because it creates the company's bank account. The personal account does not count, and neither do accounts the player was only added to. `-1` = unlimited, `0` = the player cannot create any. Range `-1`–`100000`. Applies immediately; accounts that already exist are kept. A player at the limit gets *"You have reached your limit of 3 bank account(s). You cannot create another one."* |
+| `MAX_COMPANIES_PER_PLAYER` | number | `3` | How many companies a player may found. `-1` = unlimited, `0` = none. Range `-1`–`100000`. Applies immediately. Founding also needs a free bank-account slot (see above). |
 
 ---
 ## ServerBank Section
@@ -132,13 +138,13 @@ A freshly created `settings.json` looks like this:
 | `ALLOW_ALL_ITEMS` | boolean | `false` | **Blacklist-only mode.** When `false` (default), only items in the explicit allow-list (see [Administration → allow / disallow items](Administration.md)) can carry a balance — this is the historical whitelist behavior and existing worlds keep it. When `true`, every valid item is bankable except those in the built-in blacklist (bedrock, barrier, command blocks, debug stick, knowledge book, all sub-denomination money items, …); useful for admins running large modpacks who don't want to curate the allow-list item-by-item. The blacklist always wins regardless of this setting. Toggling the value takes effect immediately — no restart needed — and the explicit allow-list is preserved as advisory data if you flip it back off later. |
 | `CONFIRM_ITEMID_MERGE` | boolean | `false` | **One-shot confirmation flag for the ItemID merge guard.** When a change to the component lists would irreversibly merge genuinely distinct bank items, the server refuses to start and logs a report. Setting this to `true` approves that merge on the next startup; the flag automatically resets to `false` afterwards. See [Changing the Lists on an Existing World](#changing-the-lists-on-an-existing-world). |
 | `CONFIRM_ITEMID_REPAIR` | boolean | `false` | **One-shot confirmation flag for the ItemID world-repair guard.** When world load detects the pre-v2.0.3 cent-shift corruption signature (`ItemIDs.nbt` overwritten with a fresh mapping while the rest of the world data still references the old shorts), the master server refuses to start and logs the proposed remap table. Setting this to `true` approves that repair on the next startup: the old mapping is restored, the previous file is copied aside as `ItemIDs.nbt.pre-repair-<timestamp>`, and the flag resets itself to `false`. Healthy worlds never trigger the guard. |
-| `BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL` | number | `20` | Interval in game ticks between work cycles of the [Bank Download Block](Usage.md#bank-download-block) (20 ticks = 1 second). |
-| `BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL` | number | `20` | Interval in game ticks between work cycles of the [Bank Upload Block](Usage.md#bank-upload-block) (20 ticks = 1 second). |
+| `BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL` | number | `20` | Interval in game ticks between work cycles of the [Bank Download Block](Usage.md#bank-download-block) (20 ticks = 1 second). Range `1`–`1200`. |
+| `BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL` | number | `20` | Interval in game ticks between work cycles of the [Bank Upload Block](Usage.md#bank-upload-block) (20 ticks = 1 second). Range `1`–`1200`. |
 
 ---
 ## Audit Section
 
-Suspicious-activity flags ([Administration](Administration.md#suspicious-activity-flags)) and the [audit digest](Administration.md#audit-digest). Read live on the master server; slaves ignore this section. Money amounts are **whole dollars** (not cents).
+Shown as **Suspicious activity** in the Mod Settings screen. Suspicious-activity flags ([Administration](Administration.md#suspicious-activity-flags)) and the [audit digest](Administration.md#audit-digest). Flags 6 and 7 are always on and have no settings here. Read live on the master server; slaves ignore this section. Money amounts are **whole dollars** (not cents).
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -170,20 +176,55 @@ On/off switches for the optional integrations with other mods and services, plus
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `PLACEHOLDERS_ENABLED` | boolean | `true` | Provides the [placeholders](Placeholders.md) for TAB / Placeholder API. **Restart required.** |
-| `PLAYER_REFRESH_MS` | number | `1000` | How often (ms) the cached per-player values (balance, locked, total, account number) are refreshed. |
-| `SERVER_REFRESH_MS` | number | `30000` | How often (ms) the server-wide values (circulation, account counts, richest players, rank) are refreshed. |
+| `PLAYER_REFRESH_MS` | number | `1000` | How often (ms) the cached per-player values (balance, locked, total, account number) are refreshed. Range `100`–`86400000`. |
+| `SERVER_REFRESH_MS` | number | `30000` | How often (ms) the server-wide values (circulation, account counts, richest players, rank) are refreshed. Range `100`–`86400000`. |
 | `TOP_COUNT` | number | `10` | Number of `top_<n>_…` richest-player slots (0–100). **Restart required.** |
 | `MONEY_FORMAT` | text | `$%s` | Display pattern for money values; `%s` is replaced by the number, e.g. `%s €`. A value without `%s` is reset to the default. |
 | `SYNC_ADMIN_FLAG_WITH_PERMISSION` | boolean | `false` | Keeps the BankSystem admin flag and the LuckPerms node `banksystem.admin` in sync, in both directions. Does nothing without LuckPerms. |
 | `NUMISMATICS_ENABLED` | boolean | `true` | Lets bank accounts bind to Create: Numismatics accounts. Off behaves as if Numismatics were not installed: bound balances stay in Numismatics, frozen until the switch is on again. |
 | `LIGHTMANS_CURRENCY_ENABLED` | boolean | `true` | The same for Lightman's Currency. |
-| `DISCORD_ENABLED` | boolean | `false` | Posts bank events to Discord webhooks (master server only). The webhooks are configured in `config/modutilities/discord/banksystem.json`. |
+| `DISCORD_ENABLED` | boolean | `false` | Posts bank events to Discord webhooks (master server only). The webhook URLs go in `config/modutilities/discord/webhooks.json`, the message types in `config/modutilities/discord/banksystem.json`; see [Discord Feed](#discord-feed). |
 
 All switches except `PLACEHOLDERS_ENABLED` take effect immediately. Every server reads the values from its own `settings.json`; the Mod Settings screen edits the master's file.
 
 Settings files from versions before 2.2.0 are migrated automatically on the first start: the old `Placeholder` section and `Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION` are moved into `Integrations` with their values, and the new switches start at their defaults. Older entries `PLAYER_BALANCE` … `SERVER_CIRCULATION_JSON` are ignored.
 
 ### Discord Feed
+
+The master server (or a single server) can post bank events to Discord webhooks. Slave servers never post, so each event is reported once. Switch it on with `DISCORD_ENABLED` (no restart needed).
+
+**Setup**
+
+1. Start the server once. It creates `config/modutilities/discord/webhooks.json` and `config/modutilities/discord/banksystem.json`.
+2. Add your webhook URLs by name to `webhooks.json`. Only Discord webhook URLs (`https://…/api/webhooks/…`) are accepted; other entries are skipped with a warning:
+   ```json
+   {
+     "webhooks": {
+       "bank": "https://discord.com/api/webhooks/<id>/<token>",
+       "admins": "https://discord.com/api/webhooks/<id>/<token>"
+     }
+   }
+   ```
+3. In `banksystem.json`, switch on the message types you want and list the webhook names each one goes to. Every type starts disabled. `minAmount` skips events with a smaller amount; `language` picks the message language (`en_us`, `de_de`, `de_ch`, `zh_cn`):
+   ```json
+   {
+     "language": "en_us",
+     "types": {
+       "bank-deposit":    { "enabled": true, "webhooks": ["bank"],   "minAmount": 1000 },
+       "bank-suspicion":  { "enabled": true, "webhooks": ["admins"], "minAmount": 0 }
+     }
+   }
+   ```
+4. Run `/banksystem discord reload` (or restart). `/banksystem discord status` shows which types are active.
+
+**Message types:** `bank-deposit`, `bank-withdraw`, `bank-transfer-in`, `bank-transfer-out`, `bank-payout`, `bank-dividend`, `bank-share`, `bank-admin`, `bank-suspicion` and `bank-other`.
+
+**Not posted:** stock trades (StockMarket buys and sells). Payouts and dividends are posted for the receiving account only. A dividend run, or an item disallow that clears many accounts, is posted once, with the total amount and the number of holders.
+
+> [!WARNING]
+> Webhook URLs are secrets: anyone who has one can post to your channel. Do not share `webhooks.json`.
+
+**Commands**
 
 Two commands manage the feed. They need op level 3 or the permission `modutilities.command.discord`. `/modutilities discord status|reload` does the same.
 

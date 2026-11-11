@@ -21,7 +21,7 @@ TAB and Placeholder API are **server-side only**: players don't need to install 
 
 Placeholder values are cached. Player values are refreshed every `PLAYER_REFRESH_MS` milliseconds and server values every `SERVER_REFRESH_MS` milliseconds (see [Settings](#settings)), so a displayed value may lag a little behind the real balance.
 
-Placeholders also work on [multi-server setups](MultiserverSetup.md): a slave server asks the master for the bank data, so players see the same values on every server.
+Placeholders also work on [multi-server setups](MultiserverSetup.md): a slave server asks the master for the bank data, so players see the same values on every trusted server. On a slave that the master does not trust yet, placeholders with account data (balances, account number, `rank`, account and player counts, the richest-players list) stay empty until an admin runs `/banksystem trust` ([details](MultiserverSetup.md#what-an-untrusted-slave-can-do)).
 
 ---
 ## Number Format
@@ -42,7 +42,7 @@ Every money placeholder also has a `_raw` variant without separator or symbol, e
 | `total` | `$1'334.56` | Available plus locked money. |
 | `total_raw` | `1334.56` | Same as `total`, unformatted. |
 | `account_number` | `12` | Number of the player's personal bank account, empty if the player has none. |
-| `rank` | `3` | The player's position in the richest-players list (by total money, personal accounts only), empty if the player has no personal account. |
+| `rank` | `3` | The player's position in the richest-players list (by total money, personal accounts only), empty if the player has no personal account. Refreshed every `SERVER_REFRESH_MS`, like the list itself. |
 
 ---
 ## Server Placeholders
@@ -67,6 +67,8 @@ Every money placeholder also has a `_raw` variant without separator or symbol, e
 ## Settings
 
 The placeholder settings are in the `Integrations` section of [settings.json](Configuration.md#integrations-section) and can also be edited in-game in the **Mod Settings** screen, under **Integrations → Placeholders enabled**. Settings files from versions before 2.2.0 had them in a `Placeholder` section; they are moved automatically on the first start.
+
+The [Discord feed](Configuration.md#discord-feed) does not use these placeholders; its messages have their own values (`{player}`, `{amountText}`, `{account}`, …), listed there.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

@@ -37,6 +37,9 @@ You want to support me?<br>
 - **Companies** — found a company with its own bank account and workers, mint physical shares with the Share Stamper, design the share card, and pay dividends or recurring wages on a timer
 - Multi-server support to share bank accounts across connected servers
 - **Currency mod bindings** — link a bank slot to an external currency mod's account ([Numismatics](https://modrinth.com/mod/numismatics), [Lightman's Currency](https://modrinth.com/mod/lightmans-currency)) so BankSystem, StockMarket, and the currency mod share one balance
+- **Admin tools** — a full transaction ledger, an audit screen and audit files, chat alerts, suspicious-activity flags, a daily audit digest, account freezing and per-player limits for bank accounts and companies
+- **Placeholders** for TAB and Placeholder API, a **Discord feed** of bank events, and LuckPerms permission nodes for every admin command
+- Reliable multi-server transfers: every transfer between servers is applied at most once and checked before anything is refunded
 - Mod API for developers to integrate with the banking system
 
 ---
@@ -227,6 +230,8 @@ The master server (or a single server) can post bank events to Discord webhooks,
 
 Message types: `bank-deposit`, `bank-withdraw`, `bank-transfer-in`, `bank-transfer-out`, `bank-payout`, `bank-dividend`, `bank-share`, `bank-admin`, `bank-suspicion` and `bank-other`. Stock trades (StockMarket buys and sells) are not posted. Payouts and dividends are posted for the receiving account only. A dividend run, or an item disallow that clears many accounts, is posted once, with the total amount and the number of holders. Webhook URLs are secrets: do not share `webhooks.json`.
 
+The [Configuration guide](documentation/user-guide/Configuration.md#discord-feed) has the file formats, how to add the account number, UUID or counterparty back to a message, and the full list of values.
+
 ---
 ## Blocks
 
@@ -330,15 +335,17 @@ Detailed guides are available in the [documentation](documentation/README.md) fo
 - [Bank Accounts](documentation/user-guide/BankAccounts.md) — Shared accounts, creating accounts, permissions
 - [Companies](documentation/user-guide/Companies.md) — Found a company, hire workers, mint shares with the Share Stamper, pay dividends and recurring payouts
 - [Currency Bindings](documentation/user-guide/CurrencyBindings.md) — Link a bank slot to a Numismatics or Lightman's Currency account
-- [Administration](documentation/user-guide/Administration.md) — Managing banking items, player accounts, locked amounts
+- [Administration](documentation/user-guide/Administration.md) — Managing banking items, player accounts, locked amounts, ledger, audit, suspicious-activity flags, suspended currency bindings, backups
 - [Configuration](documentation/user-guide/Configuration.md) — Per-world `settings.json` reference; volatile & deposit-gated item components
-- [Multi-Server Setup](documentation/user-guide/MultiserverSetup.md) — Master-slave architecture for cross-server banking
+- [Placeholders](documentation/user-guide/Placeholders.md) — Show balances, money in circulation and a richest-players list via TAB or Placeholder API
+- [Multi-Server Setup](documentation/user-guide/MultiserverSetup.md) — Master-slave architecture for cross-server banking, trusted slaves, what happens when the master does not answer, troubleshooting
 - [Commands](documentation/user-guide/Commands.md) — Full command reference
 
 **For Mod Developers:**
 - [API Reference](documentation/developer-guide/API.md) — Public API overview and usage examples
 - [Currency Integration](documentation/developer-guide/CurrencyIntegration.md) — SPI for authors of currency mods who want to expose their mod to BankSystem
-- [Events & Signals](documentation/developer-guide/EventsAndSignals.md) — Every event/signal for dependent mods: user/account changes, ItemID merges, multi-server lifecycle
+- [Events & Signals](documentation/developer-guide/EventsAndSignals.md) — Every event/signal for dependent mods: user/account changes, ItemID merges, multi-server lifecycle, transaction logged (ledger), suspicion flagged, account freeze changed
+- [Diagnostics](documentation/developer-guide/API.md#note-flow-log-inoteflowlog) — `getNoteFlowLog()`: record money notes your mod creates or destroys outside the bank in the diagnostics database (`banksystem_diagnostics.db`), which external audit tools read together with the slave transfer journal
 - [Item Price Provider API](documentation/developer-guide/ItemPriceProviderAPI.md) — Contribute item prices for total-wealth tracking
 - [Transaction Ledger](documentation/developer-guide/TransactionLedger.md) — Ledger type codes, columns, and writing rows from other mods
 - [Async Forwarding Architecture](documentation/developer-guide/AsyncForwardingArchitecture.md) — Internal RPC system documentation
@@ -453,7 +460,7 @@ All notable changes are documented in version-specific files under `changelog/`.
 
 ### Current
 
-- [2.2.0](changelog/v2.2.0.md) — In Development · Multi-version port
+- [2.2.0](changelog/v2.2.0.md) — In Development · Multi-version port, transaction ledger and admin audit tools, suspicious-activity flags, account freeze, placeholders, Discord feed, LuckPerms permissions, reliable multi-server transfers, untrusted-slave hardening
 - [2.1.2](changelog/v2.1.2.md) — Released 2026-10-25 · In-game test suite no longer mutates live world state; item allow-list self-heals
 - [2.1.1](changelog/v2.1.1.md) — Released 2026-08-20 · Bugfix development
 - [2.1.0](changelog/v2.1.0.md) — Released 2026-08-15 · Company system — found companies, hire workers, mint physical shares, pay dividends and recurring payouts, track it all on a live statistics dashboard

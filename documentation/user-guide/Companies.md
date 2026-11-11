@@ -37,6 +37,8 @@ The chat confirms with the new company ID, the bank account number and the max s
 | `Created company #2 'MyCompany' bound to bank account 6 (maxSupply=1000).` | Success. |
 | `Failed to create company 'MyCompany': NAME_TAKEN` | Another company already uses that name. Pick a different one. |
 | `Failed to create company 'MyCompany': INVALID_NAME` | The name was blank. |
+| `You have reached your limit of 3 company/companies. You cannot found another one.` | You already founded as many companies as the server allows (`MAX_COMPANIES_PER_PLAYER`, default 3, see [Configuration](Configuration.md#player-section)). |
+| `You have reached your limit of 3 bank account(s). Founding a company needs a free bank account slot.` | The company's bank account counts against your bank-account limit (`MAX_BANK_ACCOUNTS_PER_PLAYER`, default 3), and you have no free slot left. |
 | `Failed to create bank account for company 'MyCompany'.` | The bank account could not be created — usually a server-side problem; check the server log. |
 
 ---
@@ -98,7 +100,7 @@ The tabs shown depend on who you are:
 | **Payouts** | `MANAGE` or founder | Recurring payments and dividends |
 | **Shares** | Everyone (editing needs `MANAGE`) | Share card design, bound Share Stampers |
 | **Market** | Everyone, only when StockMarket is installed | Open, pause or close the share market |
-| **Statistics** | Everyone | Balance, cashflow, shareholders, upcoming payouts |
+| **Statistics** | Everyone (what you see depends on your role, see [Statistics tab](#statistics-tab)) | Balance, cashflow, shareholders, upcoming payouts |
 | **Danger Zone** | Founder only | Transfer founder, dissolve company |
 
 ---
@@ -182,6 +184,7 @@ Closing the payout editor with unsaved changes asks whether to **Save** or **Dis
 | **No deposit right** | The target account does not accept deposits from this payout. |
 | **Insufficient item balance** | An item-currency payout, and the company does not hold enough of that item. |
 | **Paused** | The schedule is paused. |
+| **Account frozen** | An admin froze the company account, so nothing can be paid from it. See [Administration](Administration.md#managing-player-bank-accounts). |
 
 A failed run does not retry immediately — the schedule advances to its next slot and the missed amount is added to its counter. Use **Pay Missed** to settle the backlog once the account has funds again; if it still cannot pay you get *"The company has insufficient funds to execute this payment."*
 
@@ -245,6 +248,14 @@ Pick a timeframe — **24h**, **7d**, **30d**, **90d**, **All Time** — and the
 
 Below that: an earnings/spendings chart over the selected period, a **Top Shareholders** table (Account | Shares | %) and an **Upcoming Payouts** table (Account | Amount).
 
+What you see depends on who you are:
+
+| Viewer | Sees |
+|---|---|
+| Shareholder who is not a member of the company account | Only the number of shares issued and the number of holders. |
+| Member of the company account (worker, manager, founder) | Balance, cashflow, solvency, payouts and the chart. The Top Shareholders table shows only share amounts, not which accounts hold them. |
+| BankSystem admin | Everything, including the accounts of the shareholders. |
+
 ---
 
 ### Danger Zone
@@ -279,7 +290,7 @@ To unbind later, use **Unbind** in the stamper's own screen, or the stamper list
 
 A bound stamper cannot be re-bound to a different company directly — unbind it first, then bind it again.
 
-Once bound, right-clicking the block opens the stamper itself — but only for players with `MANAGE` on that company. Everyone else is told *"Bound to MyCompany — no permission"*. A bound stamper also takes **20× longer to break** for anyone without `MANAGE`, and when it is finally broken the dropped block keeps its binding, so re-placing it re-binds automatically.
+Once bound, right-clicking the block opens the stamper itself — but only for founders, players with `MANAGE` on that company and BankSystem admins. The right is checked again while the screen is open: a player who loses `MANAGE` has the stamper closed at once. Everyone else is told *"Bound to MyCompany — no permission"*. A bound stamper also takes **20× longer to break** for anyone without `MANAGE`, and when it is finally broken the dropped block keeps its binding, so re-placing it re-binds automatically.
 
 ### 3. Stamp
 
