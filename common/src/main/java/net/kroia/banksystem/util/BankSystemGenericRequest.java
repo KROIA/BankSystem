@@ -149,7 +149,9 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
         {
             warn("Received packet that should have been sent to the master: "+getRequestTypeID());
         }
-        return CompletableFuture.completedFuture(null);
+        // Task #167: a null reply cannot be encoded (encodeOutput NPEs); fail cleanly instead.
+        return CompletableFuture.failedFuture(new UnsupportedOperationException(
+                getRequestTypeID() + " is answered by the bank master only"));
     }
 
     @Override

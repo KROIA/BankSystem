@@ -31,6 +31,8 @@ public final class ShareVisualCache {
 
     /** Dedupe set for outstanding lookups — mirrors {@code ItemID.tryUpdateNameCache}. */
     private static final Set<Integer> pending = Collections.synchronizedSet(new HashSet<>());
+    /** Task #167: retry delay after a failed / absent lookup, so a miss does not resend every frame. */
+    private static final LookupBackoff backoff = new LookupBackoff();
 
     private ShareVisualCache() {}
 
@@ -75,6 +77,7 @@ public final class ShareVisualCache {
      */
     public static void tryLookup(int companyId) {
         if (visuals.containsKey(companyId)) return;
+        if (backoff.isWaiting(companyId, System.currentTimeMillis())) return;
         if (!pending.add(companyId)) return;
         // Task #46 (v2.1.0) — by-id ARRS lookup. Dedupe via `pending` set mirrors
         // ItemID.tryUpdateNameCache. On response: on present, populate cache (self-heal
@@ -82,9 +85,11 @@ public final class ShareVisualCache {
         try {
             AsyncCompanyManager.getShareVisualsAsync(companyId).whenComplete((out, err) -> {
                 if (err != null || out == null || !out.present()) {
+                    backoff.failed(companyId, System.currentTimeMillis());
                     pending.remove(companyId);
                     return;
                 }
+                backoff.succeeded(companyId);
                 ShareVisuals v = new ShareVisuals(
                         new ShareVisuals.ShareLayer(out.bgSymbolId(), out.bgTint()),
                         new ShareVisuals.ShareLayer(out.fgSymbolId(), out.fgTint()),
@@ -92,6 +97,7 @@ public final class ShareVisualCache {
                 put(companyId, v, out.totalIssued(), out.maxSupply());
             });
         } catch (Throwable t) {
+            backoff.failed(companyId, System.currentTimeMillis());
             pending.remove(companyId);
         }
     }
@@ -102,5 +108,6 @@ public final class ShareVisualCache {
         totalIssued.clear();
         maxSupply.clear();
         pending.clear();
+        backoff.clear();
     }
 }

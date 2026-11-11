@@ -2504,8 +2504,14 @@ public final class AsyncCompanyManager {
             // connection (same path AsyncBankManager uses from the client side).
             return nullOnFailure(input, Request.instance.sendRequestToServer(input));
         }
-        if (net.kroia.modutilities.networking.multi_server.MultiServerManager.isRunning()
-                && !net.kroia.modutilities.networking.multi_server.MultiServerManager.isMaster()) {
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer) {
+            // Task #167: the client of a singleplayer slave (spslave) also sees the integrated
+            // server here; from the render thread go C2S like any client, never S2S.
+            if (net.kroia.banksystem.client.cache.ClientThread.isCurrent())
+                return nullOnFailure(input, Request.instance.sendRequestToServer(input));
+            // Master link down: nothing can answer, and the local handler is master-only.
+            if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem())
+                return CompletableFuture.completedFuture(null);
             // True slave server — standard S2S request hop to the bank master.
             return nullOnFailure(input, Request.instance.sendRequestToMaster(input));
         }

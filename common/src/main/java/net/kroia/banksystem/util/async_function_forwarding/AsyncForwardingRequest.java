@@ -137,6 +137,11 @@ public abstract class AsyncForwardingRequest<
 
     @Override
     public CompletableFuture<OUT> handleOnServer(IN input, ServerPlayer sender) {
+        // Task #167: a slave only gets here while its master link is down (ARRS then handles
+        // master-routed requests locally). The master handlers would throw and the client would
+        // wait for the timeout; answer at once with an empty reply, which decodes to null.
+        if (needsRoutingToMaster())
+            return CompletableFuture.completedFuture(outputConstructor.apply(input.function, new byte[0]));
         return handleOnMasterServer(input, "", sender.getUUID());
     }
 

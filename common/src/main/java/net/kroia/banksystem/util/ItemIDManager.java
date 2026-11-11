@@ -437,8 +437,9 @@ public class ItemIDManager implements ServerSaveable {
      * <p>
      * The negative cache, in contrast, MUST clear: a formerly-{@code INVALID_ID} stack might
      * now be known to a mod-updated master, and we want to give it exactly one retry per
-     * reconnect. Callers: {@code onSlaveConnectionLost} / {@code onSlaveDisconnected} in
-     * {@code BankSystemModBackend}. Idempotent — safe on master too (both fields stay empty).
+     * reconnect. Caller: {@code onSlaveConnectionAccepted} in {@code BankSystemModBackend}
+     * (Task #167: on reconnect, not on every failed reconnect attempt, so the retry backoff
+     * keeps growing while the master is down). Idempotent — safe on master too.
      */
     public static void clearSlaveNegativeCacheOnDisconnect() {
         slaveRetryBackoff.clear();
@@ -825,8 +826,9 @@ public class ItemIDManager implements ServerSaveable {
         }
         else
         {
-            RegisterItemIDPacket.sendRegisterItemIDPacketToMaster(cpy);
-            pendingItemIDs.put(cpy, future);
+            // Task #167: slave with the master link down. The packet could not be sent, so a
+            // pending future would never complete (leak, and the caller's items stay in limbo).
+            future.complete(ItemID.INVALID_ID);
         }
         return future;
     }

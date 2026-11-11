@@ -1110,6 +1110,10 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
     private static void onSlaveConnectionAccepted()
     {
+        // Task #23 / #167: drop the negative / in-flight ItemID cache on (re)connect, not on every
+        // failed reconnect attempt: the master might have a different registry now (mod update
+        // while we were away), and each unknown item gets one fresh retry per reconnect.
+        ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
         // Task #21 defense-in-depth: even with the fixed init ordering
         // (SERVER_BANK_MANAGER set before setupMultiServerInfrastructure), a reconnect race
         // can still fire this callback on a netty thread between onServerStop's
@@ -1184,12 +1188,11 @@ public class BankSystemModBackend implements BankSystemAPI {
         // usable. Fire AFTER the SERVER_BANK_MANAGER null guard above so
         // listeners never see a partially torn-down state. Fired on a Netty
         // event-loop thread — see IBankSystemEvents contract.
-        if (INSTANCES.SERVER_EVENTS != null) {
-            // Arm the loss latch (Issue #64) so the next real disconnect fires
-            // SLAVE_CONNECTION_LOST exactly once. Fires again on every reconnect.
-            slaveConnectionActive.set(true);
+        // Arm the loss latch (Issue #64) so the next real disconnect runs onSlaveLinkDown
+        // exactly once. Re-armed on every reconnect.
+        slaveConnectionActive.set(true);
+        if (INSTANCES.SERVER_EVENTS != null)
             INSTANCES.SERVER_EVENTS.SLAVE_CONNECTION_ACCEPTED.notifyListeners();
-        }
     }
     private static void onSlaveConnectionFailed(SlaveServerClient.ConnectionEstablishState state)
     {
@@ -1200,39 +1203,30 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
     private static void onSlaveConnectionLost(Throwable reason)
     {
-        // Task #23: preserve the positive itemIDMap (master re-sends full sync on reconnect
-        // via SyncItemIDsPacket, and register-if-absent semantics are idempotent), but drop
-        // the negative / in-flight cache: the reconnecting master might have a different
-        // registry (mod update on master while slave was disconnected), and we want a single
-        // fresh retry per unknown item per reconnect. Idempotent on master (no-op).
-        ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
+        onSlaveLinkDown();
+    }
+    private static void onSlaveDisconnected()
+    {
+        // Clean-disconnect path (local disconnect() call): same semantics, master is unreachable.
+        onSlaveLinkDown();
+    }
+    /**
+     * Shared by the lost / disconnected callbacks. Issue #64 / Task #167: the auto-reconnect
+     * loop re-enters onSlaveConnectionLost on every failed attempt (Netty thread), so all work
+     * here runs once per link-down period, on the connected->down edge only.
+     */
+    private static void onSlaveLinkDown()
+    {
+        if (!slaveConnectionActive.compareAndSet(true, false))
+            return;
         // Task #54 (v2.1.0) — drop the slave-side company mirror so a stale snapshot
         // cannot leak across reconnects when the master might have mutated companies.
         net.kroia.banksystem.banking.company.SlaveCompanyMirror.clear();
         // Pair to onSlaveConnectionAccepted: tell dependent mods that master is no longer
         // reachable so any cache populated from the last handshake is now stale. On reconnect,
         // SLAVE_CONNECTION_ACCEPTED fires again and caches can be re-fetched.
-        // Issue #64: the auto-reconnect loop re-enters this callback on every failed
-        // attempt; the CAS ensures SLAVE_CONNECTION_LOST fires only on the first
-        // connected->disconnected transition, not once per retry.
-        if (INSTANCES.SERVER_EVENTS != null && slaveConnectionActive.compareAndSet(true, false)) {
+        if (INSTANCES.SERVER_EVENTS != null)
             INSTANCES.SERVER_EVENTS.SLAVE_CONNECTION_LOST.notifyListeners();
-        }
-    }
-    private static void onSlaveDisconnected()
-    {
-        // Same rationale as onSlaveConnectionLost above — clear the negative cache so
-        // reconnect retries formerly-INVALID lookups exactly once.
-        ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
-        // Task #54 (v2.1.0) — drop the slave-side company mirror on clean disconnect.
-        net.kroia.banksystem.banking.company.SlaveCompanyMirror.clear();
-        // Clean-disconnect path (local disconnect() call). Dependent mods invalidate their
-        // caches the same way — the semantics are identical: master is unreachable.
-        // Issue #64: share the same edge-latch as onSlaveConnectionLost so a clean
-        // disconnect that follows a connection-lost storm doesn't double-fire.
-        if (INSTANCES.SERVER_EVENTS != null && slaveConnectionActive.compareAndSet(true, false)) {
-            INSTANCES.SERVER_EVENTS.SLAVE_CONNECTION_LOST.notifyListeners();
-        }
     }
 
     private static void onMasterServerStartupComplete()
