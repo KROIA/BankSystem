@@ -11,7 +11,6 @@ import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.npc.Villager;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -125,8 +124,9 @@ public class NoteFlowLogTests extends TestSuite {
     private TestResult villager(DiagnosticsDatabase db, Path f) throws Exception {
         MinecraftServer s = getServer();
         if (s == null) return skip("no server");
-        Villager v = EntityType.VILLAGER.create(s.overworld()); // never added to the world // mc<=1.21.1
-        //Villager v = EntityType.VILLAGER.create(s.overworld(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // never added to the world // mc>=1.21.2
+        var v = EntityType.VILLAGER.create(s.overworld()); // never added to the world // mc<=1.21.1
+        //var v = EntityType.VILLAGER.create(s.overworld(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // never added to the world // mc>=1.21.2 mc<=26.1
+        //var v = net.minecraft.world.entity.EntityTypes.VILLAGER.create(s.overworld(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // never added to the world // mc>=26.2
         if (v == null) return fail("villager not created");
         v.setPos(10.5, 64, -3.5); // block 10 64 -4
         net.kroia.banksystem.BankSystemMod.getAPI().getNoteFlowLog().record("test:villager", PLAYER, new ItemID((short) 5), 2L, v, "ctx");
