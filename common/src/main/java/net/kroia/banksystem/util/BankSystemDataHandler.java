@@ -339,7 +339,10 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
 
             if (loadInCompatibilityMode) {
-                success = true;
+                // Issue #60: the compat branch restarts success (the missing metadata already
+                // failed it), but must not mask an unreadable ItemIDs.nbt: this branch returns
+                // early, so the caller's recovery would never run and the latch would stay armed.
+                success = recoverUnreadableItemIDsForCompatMode();
                 // load in compatibility mode
                 info("Loading BankSystem Mod data in compatibility mode. This is only needed if you updated the mod to a newer version and the old data is not compatible with the new version.");
 
@@ -431,7 +434,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         CompoundTag tag  = new CompoundTag();
         success = BACKEND_INSTANCES.ITEM_ID_MANAGER.save(tag);
 
-        saveDataCompound(getAbsoluteSavePath(ITEM_IDS_FILE_NAME), tag);
+        success &= saveDataCompound(getAbsoluteSavePath(ITEM_IDS_FILE_NAME), tag); // Issue #80
 
         if(success)
         {
@@ -557,12 +560,17 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         boolean success = true;
         Map<String, ListTag> bankData = new HashMap<>();
         success = bankManager.save(bankData);
-        saveDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME), bankData);
+        boolean written = saveDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME), bankData);
+        success = success && written; // Issue #80: a failed disk write keeps the bank dirty for the next save
         if(success)
         {
             // Only a confirmed successful write clears the dirty flag.
             bankManager.clearPersistDirty();
             BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_SAVED_TO_FILE.notifyListeners();
+            // Task #123: the bank NBT has no timestamp; the audit tool reads it from here.
+            if (written && BACKEND_INSTANCES.DIAGNOSTICS_DB != null)
+                BACKEND_INSTANCES.DIAGNOSTICS_DB.setMeta(net.kroia.banksystem.data.DiagnosticsDatabase.META_BANK_LAST_SAVE_MS,
+                        Long.toString(System.currentTimeMillis()));
         }
         return success;
     }
@@ -617,10 +625,10 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             return true;
         CompoundTag tag = new CompoundTag();
         boolean success = BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.save(tag);
-        if (success) {
-            saveDataCompound(getAbsoluteSavePath(BANK_ACCOUNT_BINDINGS_FILE_NAME), tag);
+        if (success)
+            success = saveDataCompound(getAbsoluteSavePath(BANK_ACCOUNT_BINDINGS_FILE_NAME), tag); // Issue #80
+        if (success)
             BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.clearChanges();
-        }
         return success;
     }
 
@@ -676,7 +684,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             return true;
         Map<String, ListTag> data = new HashMap<>();
         boolean success = mgr.save(data);
-        saveDataCompoundListMap(getAbsoluteSavePath(COMPANIES_FOLDER_NAME), data);
+        success &= saveDataCompoundListMap(getAbsoluteSavePath(COMPANIES_FOLDER_NAME), data); // Issue #80
         if (success)
             mgr.clearPersistDirty();
         return success;
@@ -710,6 +718,27 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         boolean success = mgr.load(data);
         companiesLoadState = success ? LoadState.LOADED : LoadState.NOT_LOADED;
         return success;
+    }
+
+    /**
+     * Compatibility-mode counterpart of the {@link #backupFailedSubsystemData()} recovery for
+     * the ItemIDs subsystem (Issue #60): when ItemIDs.nbt was present but unreadable, move it
+     * aside, release the registration latch and register the default items, so the compat
+     * migration runs against a usable registry.
+     *
+     * @return {@code false} only when the unreadable file could not be moved aside (the
+     *         subsystem then stays save-prohibited and the latch armed)
+     */
+    public boolean recoverUnreadableItemIDsForCompatMode()
+    {
+        if (itemIDsLoadState != LoadState.NOT_LOADED)
+            return true;
+        if (!backupPath(getAbsoluteSavePath(ITEM_IDS_FILE_NAME), ".corrupt-" + System.currentTimeMillis()))
+            return false;
+        itemIDsLoadState = LoadState.FRESH;
+        ItemIDManager.markRegistryReady();
+        BACKEND_INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs();
+        return true;
     }
 
     public boolean load_bank_compatibilityMode()
@@ -772,6 +801,16 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         {
             globalSettingsLoaded = true;
             settingsLoadState = LoadState.LOADED;
+            // Task #119: pre-2.2.0 files keep Placeholder.* / Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION;
+            // copy them into Integrations once and re-save so the old keys disappear.
+            if (BACKEND_INSTANCES.SERVER_SETTINGS.migrateIntegrations(filePath)) {
+                info("Migrated Placeholder settings and SYNC_ADMIN_FLAG_WITH_PERMISSION into the Integrations group.");
+                save_globalSettings(filePath);
+            }
+            // Same clamps as the in-game Mod Settings Apply, so a hand-edited file can't bypass them.
+            for (String change : net.kroia.banksystem.networking.general.ModSettingsRequest
+                    .sanitizeAndListChanges(BACKEND_INSTANCES.SERVER_SETTINGS))
+                warn("settings.json value out of range, corrected " + change);
             applyVolatileComponentSettings();
             return true;
         }

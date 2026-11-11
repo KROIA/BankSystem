@@ -29,8 +29,8 @@ import java.util.concurrent.CompletableFuture;
  * master would derive it from {@code playerSender}), but must be carried explicitly to survive
  * the slave→master forwarding path where the master receives {@code playerSender=null} and only
  * the slave-authenticated {@code slaveID}. The master prefers {@code playerSender} when non-null
- * and falls back to the input {@code player} otherwise; forged input UUIDs are moot because this
- * is a read-only enumeration that never touches persistent state.
+ * and falls back to the input {@code player} otherwise. Untrusted slaves get an empty list: they
+ * could forge either UUID, and they cannot bind anyway.
  */
 public class ListBindableAccountsRequest extends BankSystemGenericRequest<ListBindableAccountsRequest.InputData, ListBindableAccountsRequest.OutputData> {
 
@@ -54,7 +54,7 @@ public class ListBindableAccountsRequest extends BankSystemGenericRequest<ListBi
      *
      * @param providerId the provider whose accounts to enumerate
      * @param player     the player whose bindable accounts to list — usually the local client
-     * @return future completing with a possibly-empty list; never {@code null}
+     * @return future completing with a possibly-empty list, or {@code null} on transport failure (no answer)
      */
     public static CompletableFuture<List<ExternalAccountRef>> sendRequest(String providerId, UUID player) {
         CompletableFuture<List<ExternalAccountRef>> future = new CompletableFuture<>();
@@ -62,7 +62,7 @@ public class ListBindableAccountsRequest extends BankSystemGenericRequest<ListBi
                 .sendRequestToServer(new InputData(providerId, player))
                 .whenComplete((response, ex) -> {
                     if (ex != null || response == null) {
-                        future.complete(new ArrayList<>());
+                        future.complete(null); // Issue #95: "could not load", not an empty list
                     } else {
                         future.complete(response.accounts != null ? response.accounts : new ArrayList<>());
                     }
@@ -85,7 +85,8 @@ public class ListBindableAccountsRequest extends BankSystemGenericRequest<ListBi
         // Prefer the authenticated sender when present; otherwise use the input UUID (slave→master
         // forwarding path where playerSender is null and the slave carries the initiating UUID).
         UUID effectivePlayer = playerSender != null ? playerSender : input.player;
-        if (effectivePlayer == null) {
+        // Both UUIDs are asserted by the slave; an untrusted slave could list any player's external accounts.
+        if (effectivePlayer == null || isFromUntrustedSlave(slaveID)) {
             return CompletableFuture.completedFuture(new OutputData(new ArrayList<>()));
         }
         ExternalCurrencyProvider provider = BankSystemMod.getAPI().getCurrencyProvider(input.providerId);

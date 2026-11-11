@@ -77,14 +77,15 @@ public class RegisterItemStacksBatchRequest extends BankSystemGenericRequest<Reg
      * (typically a netty thread) — callers must marshal any state mutation onto the server
      * thread themselves (see {@code ItemIDManager.registerItemStackServerSide_direct}).
      * <p>
-     * If serialization or the ARRS call itself fails, the future completes with an
-     * index-aligned list of {@link ItemID#INVALID_ID}s so the caller can populate the
-     * negative cache uniformly.
+     * If the request could not be sent or master never answered (timeout, transport
+     * failure), the future completes with {@code null} — NOT with INVALID_IDs, so the caller
+     * can tell "no answer, retry later" apart from a real master rejection.
      *
      * @param normalizedStacks stacks already normalized via
      *                         {@code VolatileItemComponents.normalize(...)} — the same
      *                         normalization the master uses on the received side.
-     * @return future of an index-aligned list of ItemIDs (never null; INVALID_ID on failure)
+     * @return future of an index-aligned list of ItemIDs (INVALID_ID = master rejected the
+     *         slot), or of {@code null} when master gave no answer
      */
     public static CompletableFuture<List<ItemID>> sendToMaster(List<ItemStack> normalizedStacks) {
         if (normalizedStacks == null || normalizedStacks.isEmpty())
@@ -92,13 +93,9 @@ public class RegisterItemStacksBatchRequest extends BankSystemGenericRequest<Reg
 
         RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
         if (access == null) {
-            // Registry not available on the slave — nothing we can encode. Fall through to
-            // INVALID_ID for every slot; caller populates the negative cache like a real
-            // master rejection so we don't hammer master with retries on the next lookup.
-            List<ItemID> allInvalid = new ArrayList<>(normalizedStacks.size());
-            for (int i = 0; i < normalizedStacks.size(); i++)
-                allInvalid.add(ItemID.INVALID_ID);
-            return CompletableFuture.completedFuture(allInvalid);
+            // Registry not available on the slave — nothing we can encode, request not sent.
+            // Not a master rejection: the caller retries after a backoff.
+            return CompletableFuture.completedFuture(null);
         }
 
         List<CompoundTag> encoded = new ArrayList<>(normalizedStacks.size());
@@ -123,10 +120,8 @@ public class RegisterItemStacksBatchRequest extends BankSystemGenericRequest<Reg
                 .sendRequestToMaster(new InputData(encoded))
                 .whenComplete((response, ex) -> {
                     if (ex != null || response == null || response.ids == null) {
-                        List<ItemID> allInvalid = new ArrayList<>(normalizedStacks.size());
-                        for (int i = 0; i < normalizedStacks.size(); i++)
-                            allInvalid.add(ItemID.INVALID_ID);
-                        resultFuture.complete(allInvalid);
+                        // Timeout / transport failure: no answer is not a rejection.
+                        resultFuture.complete(null);
                     } else {
                         // Pad or truncate the response to be index-aligned with the request —
                         // defensive: the master should always return the exact size, but a
@@ -166,8 +161,8 @@ public class RegisterItemStacksBatchRequest extends BankSystemGenericRequest<Reg
      * latch (Task #16) still gates the mint if the master's own load hasn't completed yet.
      *
      * @param input        request slots (per-slot NBT)
-     * @param slaveID      the requesting slave's id (unused; used only for the client-safety
-     *                     guard on the {@code playerSender} path)
+     * @param slaveID      the requesting slave's id; an untrusted slave only gets lookups,
+     *                     never new ids (Task #143)
      * @param playerSender {@code null} for slave→master calls — a non-null value indicates a
      *                     client attempted to invoke this handler directly, which is refused
      *                     with an ALL-INVALID response (defensive: clients never mint IDs).
@@ -181,6 +176,8 @@ public class RegisterItemStacksBatchRequest extends BankSystemGenericRequest<Reg
                     + "INVALID_ID for all " + slotCount + " slots.");
             return CompletableFuture.completedFuture(new OutputData(allInvalid(slotCount)));
         }
+        // Task #143: an untrusted slave may look up item ids, not create them.
+        boolean lookupOnly = isFromUntrustedSlave(slaveID);
         if (slotCount == 0)
             return CompletableFuture.completedFuture(new OutputData(new ArrayList<>()));
 
@@ -214,7 +211,7 @@ public class RegisterItemStacksBatchRequest extends BankSystemGenericRequest<Reg
             // Route through the ItemID API rather than ItemIDManager directly so the master-side
             // lookup-then-register semantics (getOrRegister...) match the slave's positive-cache
             // hit path: an already-known short comes back without re-mint.
-            ItemID id = ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
+            ItemID id = lookupOnly ? ItemIDManager.getItemID(stack) : ItemID.getOrRegisterFromItemStackServerSide_direct(stack);
             result.add(id != null ? id : ItemID.INVALID_ID);
         }
         // NOTE: the user-facing "item unknown to the master" chat notification is intentionally

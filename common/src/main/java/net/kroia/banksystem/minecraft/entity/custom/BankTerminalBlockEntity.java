@@ -15,6 +15,7 @@ import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.binding.BindingRow;
+import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
@@ -35,6 +36,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
+import net.minecraft.world.Containers;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -48,6 +50,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.LongConsumer;
+import java.util.function.LongFunction;
 
 public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvider {
     /*
@@ -538,6 +542,12 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         // Only removes items that are not damaged or enchanted
         public long removeItem(ItemID itemID, long amount)
         {
+            return removeItem(itemID, amount, null);
+        }
+
+        /** @param removed Task #145: when non-null, receives the removed stacks, so a failed deposit can put them back */
+        public long removeItem(ItemID itemID, long amount, @Nullable List<ItemStack> removed)
+        {
             long orgAmount = amount;
             for (int i = 0; i < this.getContainerSize(); i++) {
                 if(amount <= 0)
@@ -563,7 +573,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         continue;
                     // Check if the stack can fit the amount
                     int stackSize = (int)Math.min(amount, stack.getCount());
-                    stack.shrink(stackSize);
+                    ItemStack taken = stack.split(stackSize);
+                    if (removed != null)
+                        removed.add(taken);
                     amount -= stackSize;
                     if(stack.isEmpty())
                         this.setStackInSlot(i, ItemStack.EMPTY);
@@ -599,18 +611,30 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             if(!tag.contains("Slots"))
                 return false;
             ListTag inventoryTag = NbtCompat.getList(tag, "Slots", CompoundTag.TAG_COMPOUND);
+            // Issue #81: a bad entry is skipped with a warning and never stops the loop;
+            // aborting lost every later slot on the next save. Still returns true: the
+            // readable slots were loaded and callers must keep the player's data.
+            String where = "Terminal at " + blockEntity.getBlockPos().toShortString() + ": skipped slot entry ";
             for(int i = 0; i < inventoryTag.size(); i++)
             {
                 CompoundTag itemTag = NbtCompat.getCompound(inventoryTag, i);
-                if(!itemTag.contains("Slot") || !itemTag.contains("ItemStack"))
-                    return false;
+                if(!itemTag.contains("Slot") || !itemTag.contains("ItemStack")) {
+                    warn(where + i + ": missing Slot or ItemStack");
+                    continue;
+                }
                 int slot = NbtCompat.getInt(itemTag, "Slot");
+                if(slot < 0 || slot >= inventory.size()) {
+                    warn(where + i + ": slot " + slot + " is out of range 0-" + (inventory.size() - 1));
+                    continue;
+                }
                 CompoundTag stackTag = NbtCompat.getCompound(itemTag, "ItemStack");
                 ItemStack stack = ItemStackNbt.parse(pRegistries,
                                 stackTag)
                         .orElse(ItemStack.EMPTY);
-                if(stack.isEmpty())
-                    return false;
+                if(stack.isEmpty()) {
+                    warn(where + i + ": slot " + slot + " holds an unreadable item (removed mod?): " + stackTag);
+                    continue;
+                }
                 inventory.set(slot, stack);
             }
             return true;
@@ -1056,30 +1080,27 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
                         if (variantBinding != null) {
                             ItemID baseSlotId = new ItemID(variantBinding.itemIdShort());
-                            long amountToDeposit;
                             try {
-                                amountToDeposit = Math.multiplyExact(amount, variantBaseUnits);
+                                Math.multiplyExact(amount, variantBaseUnits);
                             } catch (ArithmeticException overflow) {
                                 ServerPlayerUtilities.printToClientConsole(playerID,
                                         BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
                                 continue;
                             }
-                            long finalAmountToDeposit = amountToDeposit;
-                            long finalAmount = amount;
+                            long units = variantBaseUnits; // n <= amount, so n * units cannot overflow (checked above)
                             bankAccount.getOrCreateBankAsync(baseSlotId).thenAccept(baseBank -> {
                                 if (baseBank == null) {
                                     ServerPlayerUtilities.printToClientConsole(playerID,
                                             BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
                                     return;
                                 }
-                                baseBank.depositAsync(finalAmountToDeposit).thenAccept(status -> {
-                                    if (status == BankStatus.SUCCESS) {
-                                        runOnMainThread(() -> {
-                                            inventory.removeItem(itemID, finalAmount);
-                                            setChanged();
-                                        });
-                                    }
-                                });
+                                // Task #109: tagged so a slave's request carries the row type to the master.
+                                TransferJournal.Ref journal = TransferJournal.ref("terminal");
+                                depositReserved(inventory, playerID, itemID, amount, journal,
+                                        n -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DEPOSIT, playerID,
+                                                "coin " + itemID.getName() + " x" + n, journal, () -> baseBank.depositAsync(n * units)),
+                                        n -> logTerminal(accountNr, playerID, net.kroia.banksystem.api.ledger.LedgerType.DEPOSIT, baseSlotId, n * units,
+                                                "coin " + itemID.getName() + " x" + n));
                             });
                             continue;
                         }
@@ -1119,30 +1140,15 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                 ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
                                 return;
                             }
-                            long amountToDeposit = amount * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
-                            if (isMoney) {
-                                amountToDeposit = amount * ((MoneyItem) Objects.requireNonNull(itemID.getStack()).getItem()).worth();
-                            }
-                            final long finalAmountForLog = amountToDeposit;
-                            final short finalItemIdForLog = isMoney ? MoneyItem.getItemID().getShort() : itemID.getShort();
-                            CompletableFuture<BankStatus> depositResult = bank.depositAsync(amountToDeposit);
-                            depositResult.thenAccept(deposit -> {
-                                if (deposit == BankStatus.SUCCESS) {
-                                    logDeposit(accountNr, playerID, finalItemIdForLog, finalAmountForLog);
-                                    // WHY main thread: removeItem() mutates the terminal's
-                                    // TerminalInventory, which is shared with the open menu. Vanilla
-                                    // only emits slot-sync packets from broadcastChanges(), run on the
-                                    // MAIN server thread once per tick. This callback fires from an
-                                    // async bank-op completion that, on a dedicated server, runs OFF
-                                    // the main thread, so broadcastChanges() never observes the change
-                                    // and the client GUI never updates. Hop the mutation (+ setChanged
-                                    // for persistence) onto the main thread so the next tick syncs it.
-                                    runOnMainThread(() -> {
-                                        inventory.removeItem(itemID, amount);
-                                        setChanged();
-                                    });
-                                }
-                            });
+                            final long unit = isMoney ? ((MoneyItem) Objects.requireNonNull(itemID.getStack()).getItem()).worth()
+                                    : BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                            final ItemID finalItemIdForLog = bank.getItemIDAsync();
+                            TransferJournal.Ref journal = TransferJournal.ref("terminal");
+                            depositReserved(inventory, playerID, itemID, amount, journal,
+                                    n -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DEPOSIT, playerID,
+                                            isMoney ? "banknote " + itemID.getName() + " x" + n : null, journal, () -> bank.depositAsync(n * unit)),
+                                    n -> logTerminal(accountNr, playerID, net.kroia.banksystem.api.ledger.LedgerType.DEPOSIT, finalItemIdForLog, n * unit,
+                                            isMoney ? "banknote " + itemID.getName() + " x" + n : null));
                         });
                     }
                     // mark the block entity for saving
@@ -1152,16 +1158,62 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         });
     }
 
-    private static void logDeposit(int accountNr, UUID actor, short itemIdShort, long amount) {
-        net.kroia.banksystem.data.table.TransactionLogManager mgr =
-                BankSystemModBackend.getTransactionLogManager();
-        if (mgr == null || amount <= 0) return;
-        try {
-            mgr.save(net.kroia.banksystem.data.table.record.TransactionLogRecord.simple(
-                    accountNr, actor,
-                    net.kroia.banksystem.data.table.record.TransactionLogRecord.Kind.DEPOSIT,
-                    itemIdShort, amount, System.currentTimeMillis()));
-        } catch (RuntimeException ignored) { }
+    /**
+     * Task #145 — reserve before send, like BankUploadBlockEntity: takes up to {@code amount} items out of the
+     * terminal (main thread, see {@link #runOnMainThread}), then deposits the {@code n} taken. SUCCESS keeps them out.
+     * Not applied (never sent, NOT_APPLIED from the status check, refused) puts them back, dropped at the block when
+     * it is gone or full, journal RETURNED. Unknown outcome (the master may have credited them): kept out, no refund,
+     * the slave journal shows TIMED_OUT (parked). Public as a test seam.
+     *
+     * @param deposit   sends the deposit for {@code n} items, tagged with {@code journal}
+     * @param onSuccess ledger row for {@code n} deposited items
+     */
+    public void depositReserved(TerminalInventory inventory, UUID playerID, ItemID itemID, long amount, TransferJournal.Ref journal,
+                                LongFunction<CompletableFuture<BankStatus>> deposit, LongConsumer onSuccess) {
+        runOnMainThread(() -> {
+            List<ItemStack> taken = new ArrayList<>();
+            long n = inventory.removeItem(itemID, amount, taken); // marks the block entity changed
+            if (n <= 0)
+                return; // already taken out (by the player, or by a deposit still in flight)
+            CompletableFuture<BankStatus> sent;
+            try {
+                sent = deposit.apply(n);
+            } catch (RuntimeException e) {
+                sent = CompletableFuture.failedFuture(e); // may have been applied: never refund blindly
+            }
+            sent.whenComplete((status, ex) -> {
+                if (ex != null) {
+                    error("Terminal deposit outcome unknown, " + n + " " + itemID + " of player " + playerID
+                            + " kept out of the terminal, no refund (transfer " + journal.transferId() + ")",
+                            net.kroia.banksystem.networking.multi_server.TransferStatusRequest.cause(ex));
+                    return;
+                }
+                if (status == BankStatus.SUCCESS) {
+                    onSuccess.accept(n);
+                    return;
+                }
+                runOnMainThread(() -> {
+                    for (ItemStack stack : taken) {
+                        ItemStack rest = isRemoved() ? stack
+                                : stack.copyWithCount(stack.getCount() - (int) ContainerItemInsertion.insertWithdrawnItems(inventory, stack, stack.getCount()));
+                        if (!rest.isEmpty() && level != null)
+                            Containers.dropItemStack(level, worldPosition.getX(), worldPosition.getY(), worldPosition.getZ(), rest);
+                    }
+                    setChanged();
+                    TransferJournal.step(journal.transferId(), TransferJournal.RETURNED, null, String.valueOf(status));
+                });
+            });
+        });
+    }
+
+    /**
+     * Task #44 / #109 — ledger row for a terminal deposit/withdraw on the master. Best-effort; a
+     * no-op on a slave, where the tagged bank call carries the row to the master instead.
+     */
+    private static void logTerminal(int accountNr, UUID actor, net.kroia.banksystem.api.ledger.LedgerType type, ItemID bankItem, long amount,
+                                    @Nullable String note) {
+        if (amount <= 0) return;
+        net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(accountNr, type, bankItem, amount, net.kroia.banksystem.banking.ledger.TransactionLedger.player(actor), null, note);
     }
 
     private void sendToBlock(UUID playerID, int accountNr, HashMap<ItemID, Long> items)
@@ -1240,16 +1292,25 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                             long addedAmount = inventory.addItem(itemID, itemsToDeposit);
                                             if (addedAmount > 0) {
                                                 long rawToWithdraw = addedAmount * ratio;
-                                                CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
+                                                CompletableFuture<BankStatus> withdrawResult = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, playerID, null, net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawToWithdraw));
                                                 withdrawResult.thenAccept(withdraw -> {
                                                     if (withdraw != BankStatus.SUCCESS) {
                                                         error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
                                                                 " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
                                                         // Roll back the inserted stack on the main thread so the
                                                         // client sees the reversal (slave callbacks run off-thread).
-                                                        runOnMainThread(() -> inventory.removeItem(itemID, addedAmount));
-                                                        bank.unlockAmountAsync(reducedAmount);
+                                                        // Items the player already took out were not paid for: their part stays locked.
+                                                        runOnMainThread(() -> {
+                                                            long escaped = Math.max(0L, addedAmount - inventory.removeItem(itemID, addedAmount));
+                                                            long unlock = Math.max(0L, reducedAmount - escaped * ratio);
+                                                            if (escaped > 0)
+                                                                error("Withdraw rollback: " + escaped + " " + itemID + " already taken out of the terminal by " + playerID
+                                                                        + "; " + escaped * ratio + " (raw) left locked for the admin");
+                                                            if (unlock > 0)
+                                                                bank.unlockAmountAsync(unlock);
+                                                        });
                                                     } else {
+                                                        logTerminal(accountNr, playerID, net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, itemID, rawToWithdraw, null);
                                                         // Unlock any remainder that was not withdrawn
                                                         long remainder = reducedAmount - rawToWithdraw;
                                                         if (remainder > 0)
@@ -1275,16 +1336,25 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                 long addedAmount = inventory.addItem(itemID, itemsToDeposit);
                                 if (addedAmount > 0) {
                                     long rawToWithdraw = addedAmount * ratio;
-                                    CompletableFuture<BankStatus> withdrawResult = bank.withdrawLockedPreferedAsync(rawToWithdraw);
+                                    CompletableFuture<BankStatus> withdrawResult = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, playerID, null, net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawToWithdraw));
                                     withdrawResult.thenAccept(withdraw -> {
                                         if (withdraw != BankStatus.SUCCESS) {
                                             error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
                                                     " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
                                             // Roll back the inserted stack on the main thread so the
                                             // client sees the reversal (slave callbacks run off-thread).
-                                            runOnMainThread(() -> inventory.removeItem(itemID, addedAmount));
-                                            bank.unlockAmountAsync(withdrawAmountFinal);
+                                            // Items the player already took out were not paid for: their part stays locked.
+                                            runOnMainThread(() -> {
+                                                long escaped = Math.max(0L, addedAmount - inventory.removeItem(itemID, addedAmount));
+                                                long unlock = Math.max(0L, withdrawAmountFinal - escaped * ratio);
+                                                if (escaped > 0)
+                                                    error("Withdraw rollback: " + escaped + " " + itemID + " already taken out of the terminal by " + playerID
+                                                            + "; " + escaped * ratio + " (raw) left locked for the admin");
+                                                if (unlock > 0)
+                                                    bank.unlockAmountAsync(unlock);
+                                            });
                                         } else {
+                                            logTerminal(accountNr, playerID, net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, itemID, rawToWithdraw, null);
                                             // Unlock any remainder that was not withdrawn
                                             long remainder = withdrawAmountFinal - rawToWithdraw;
                                             if (remainder > 0)
