@@ -1087,10 +1087,11 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     private static void setupMultiServerInfrastructure(MultiServerConfig config, MinecraftServer server)
     {
+        boolean created;
         if(config.isMaster)
         {
             INSTANCES.isSlaveServer = false;
-            MultiServerManager.createMaster(server, config.sharedSecret, config.masterTcpPort,
+            created = MultiServerManager.createMaster(server, config.sharedSecret, config.masterTcpPort,
                     BankSystemModBackend::onMasterServerStartupComplete,
                     BankSystemModBackend::onMasterServerStartupFailure,
                     BankSystemModBackend::onMasterServerSlaveConnected,
@@ -1101,13 +1102,25 @@ public class BankSystemModBackend implements BankSystemAPI {
         {
             INSTANCES.isSlaveServer = true;
             slaveConnectionActive.set(false);
-            MultiServerManager.createSlave(server, config.sharedSecret, config.slaveID, config.masterHost, config.masterTcpPort,
+            created = MultiServerManager.createSlave(server, config.sharedSecret, config.slaveID, config.masterHost, config.masterTcpPort,
                     BankSystemModBackend::onSlaveConnectionAccepted,
                     BankSystemModBackend::onSlaveConnectionFailed,
                     BankSystemModBackend::onSlaveConnectionLost,
                     BankSystemModBackend::onSlaveDisconnected);
             MultiServerManager.start();
         }
+        // Task #176: false = another mod created the MultiServerManager first. ModUtilities routes
+        // master-bound requests by its own role, so a role mismatch makes this slave handle them locally.
+        // We keep running in the configured role: the bank manager is already built for it and
+        // switching roles here would put a master database on a slave world.
+        if(INSTANCES.isSlaveServer != MultiServerManager.isSlave())
+            INSTANCES.LOGGER.error("[BankSystemModBackend] Multi-server misconfiguration: BankSystem is configured as "
+                    + (INSTANCES.isSlaveServer ? "slave" : "master") + " but another mod already set up this server as "
+                    + (MultiServerManager.isSlave() ? "slave" : "master")
+                    + ". Cross-server bank requests will fail or run on the wrong server. Give every mod's multi-server config the same role.");
+        else if(!created)
+            INSTANCES.LOGGER.warn("[BankSystemModBackend] Another mod already set up the multi-server connection; "
+                    + "reusing it. BankSystem's connect/disconnect callbacks will not fire.");
     }
     private static void onSlaveConnectionAccepted()
     {

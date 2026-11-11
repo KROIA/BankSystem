@@ -147,7 +147,8 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
     public CompletableFuture<OUT> handleOnServer(IN input, ServerPlayer sender) {
         if(needsRoutingToMaster())
         {
-            warn("Received packet that should have been sent to the master: "+getRequestTypeID());
+            // ModUtilities routes by role, so only a role mismatch (logged at startup) lands here.
+            warn("Slave handled a master-only request locally (multi-server role mismatch): "+getRequestTypeID());
         }
         // Task #167: a null reply cannot be encoded (encodeOutput NPEs); fail cleanly instead.
         return CompletableFuture.failedFuture(new UnsupportedOperationException(
