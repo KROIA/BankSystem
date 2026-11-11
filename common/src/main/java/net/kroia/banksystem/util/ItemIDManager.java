@@ -185,6 +185,17 @@ public class ItemIDManager implements ServerSaveable {
     private static final Set<ItemID> persistedShorts = ConcurrentHashMap.newKeySet();
 
     /**
+     * BS-194: saved entries whose ItemStack no longer decodes strictly (mod removed, or data
+     * from a removed mod), keyed by short → the raw saved pair tag. Never part of a lookup or
+     * merge; {@link #save(CompoundTag)} writes them back unchanged, so a load without the mod
+     * can never erase them. Emptied only by the confirmed CONFIRM_ITEMID_REMOVE_MISSING recovery.
+     */
+    private static final ConcurrentHashMap<ItemID, CompoundTag> unresolvedEntries = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<ItemID, CompoundTag> singlePlayerServerUnresolvedBackupOnPlayerLeave = null;
+    /** BS-195: ItemIDs removed by the last load's confirmed missing-mod recovery (empty otherwise). */
+    private static volatile Set<ItemID> lastRemovedMissing = Set.of();
+
+    /**
      * Session-scoped dedup guard for the Task #25 "unresolvable sync entry" INFO log.
      * When a slave (or remote client) receives a {@link SyncItemIDsPacket} whose NBT
      * for a given short cannot be parsed against the local registry (mod not installed
@@ -315,6 +326,8 @@ public class ItemIDManager implements ServerSaveable {
         // same JVM (which never runs load()) cannot inherit another world's evidence.
         singlePlayerServerQuarantineBackupOnPlayerLeave = new ConcurrentHashMap<>(quarantinedAliases);
         quarantinedAliases.clear();
+        singlePlayerServerUnresolvedBackupOnPlayerLeave = new ConcurrentHashMap<>(unresolvedEntries);
+        unresolvedEntries.clear();
         itemIDMap.clear();
         itemIDAliasMap.clear();
         // Reset the counter to its blank-world default. The subsequent load() either
@@ -1688,9 +1701,12 @@ public class ItemIDManager implements ServerSaveable {
         ConcurrentHashMap<ItemID, ItemStack> usedMap = itemIDMap;
         Map<ItemID, ItemID> usedAliasMap = itemIDAliasMap;
         Map<ItemID, ItemID> usedQuarantine = quarantinedAliases;
+        Map<ItemID, CompoundTag> usedUnresolved = unresolvedEntries;
         int usedCounter = nextShortCounter;
         if(usedMap.isEmpty())
         {
+            if(singlePlayerServerUnresolvedBackupOnPlayerLeave != null)
+                usedUnresolved = singlePlayerServerUnresolvedBackupOnPlayerLeave;
             if(singlePlayerServerBackupOnPlayerLeave != null)
                 usedMap = singlePlayerServerBackupOnPlayerLeave;
             if(singlePlayerServerAliasBackupOnPlayerLeave != null)
@@ -1733,6 +1749,10 @@ public class ItemIDManager implements ServerSaveable {
 
             listTag.add(pairTag);
         }
+        // BS-194: entries of missing mods go back exactly as they were read.
+        for(Map.Entry<ItemID, CompoundTag> entry : usedUnresolved.entrySet())
+            if(!usedMap.containsKey(entry.getKey()))
+                listTag.add(entry.getValue().copy());
         tag.put("itemIDs", listTag);
 
         // Persist the alias table so saved references to merged IDs keep resolving
@@ -1805,6 +1825,8 @@ public class ItemIDManager implements ServerSaveable {
         // here — after the format gate, so a refused newer-format file mutates nothing —
         // and filled by the insert loop below.
         persistedShorts.clear();
+        unresolvedEntries.clear();
+        lastRemovedMissing = Set.of();
 
         RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
         if(access == null)
@@ -1824,30 +1846,14 @@ public class ItemIDManager implements ServerSaveable {
             if(!id.load(itemIDTag))
                 continue;
 
-            Optional<ItemStack> itemStackOptional = ItemStackNbt.parse(access, itemStackTag);
+            // Strict decode (BS-195): a partial decode silently drops unknown data (e.g. an
+            // enchantment of a removed mod), so two distinct saved items could collapse into
+            // one and merge. Anything that does not decode completely stays unresolved.
+            Optional<ItemStack> itemStackOptional = ItemStackNbt.parseStrict(access, itemStackTag);
             if(itemStackOptional.isEmpty()) {
-                // Silent-drop hazard (Task #11 / ISSUES.md #56): the ItemStack no longer
-                // resolves — its host mod may have been removed, or the stored NBT is
-                // corrupt. The entry is dropped, but the short remains RESERVED — the
-                // persisted monotonic nextShortCounter has already advanced past it, so
-                // this short can never be re-issued to a different item. Logging at WARN
-                // gives admins a hint when downstream ItemID-keyed data (bank balances,
-                // StockMarket markets, plugin caches) references an ID that no longer
-                // exists in the registry.
-                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
-                    // ItemID.getName() falls back to the numeric short (as string) when the
-                    // real registry name cannot be resolved — at the load-time drop site
-                    // the registry is only partially populated, so a numeric fallback is
-                    // usual. Distinguish real names from the placeholder and report the
-                    // placeholder as "<unknown>" per Task #11 criterion 6.
-                    String cachedName = id.getName();
-                    if (cachedName == null || cachedName.isEmpty() || cachedName.equals(String.valueOf(id.getShort())))
-                        cachedName = "<unknown>";
-                    BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Dropped ItemID entry (short="
-                            + id.getShort() + ", cached-name=" + cachedName + ") — stored ItemStack "
-                            + "no longer resolves (mod possibly removed or NBT corrupt). "
-                            + "Short remains reserved (will not be reassigned).");
-                }
+                // BS-194: keep the raw entry (written back unchanged by save()); the
+                // missing-mod guard below refuses the load or, when confirmed, removes it.
+                unresolvedEntries.put(id, compoundTag.copy());
                 continue;
             }
 
@@ -1939,7 +1945,9 @@ public class ItemIDManager implements ServerSaveable {
         }
         else
         {
-            nextShortCounter = computeMigrationSeed(itemIDMap.keySet(), itemIDAliasMap.keySet());
+            List<ItemID> usedShorts = new ArrayList<>(itemIDMap.keySet());
+            usedShorts.addAll(unresolvedEntries.keySet()); // BS-194: reserved too
+            nextShortCounter = computeMigrationSeed(usedShorts, itemIDAliasMap.keySet());
             // Migration-seeded counter → persist it immediately via the one-shot re-save so
             // the seed survives a crash before the first periodic save.
             lastLoadRequiresResave = true;
@@ -1957,6 +1965,11 @@ public class ItemIDManager implements ServerSaveable {
         // rawPersistedAliases capture above). Zero cost on healthy worlds (detection exits
         // on the first missing signal). May throw ItemIDRepairRequiredException to abort
         // startup — nothing has been mutated at that point.
+        // BS-195: entries of missing mods refuse the load (ItemIDMissingModsException) unless
+        // CONFIRM_ITEMID_REMOVE_MISSING approves removing them. Runs before the merge guard,
+        // which never sees them (they are not in itemIDMap).
+        applyMissingModsGuard();
+
         LinkedHashMap<ItemID, ItemID> rawEvidenceAliases = new LinkedHashMap<>(quarantinedAliases);
         rawEvidenceAliases.putAll(rawPersistedAliases);
         applyCorruptionRepairGuard(rawEvidenceAliases);
@@ -1997,6 +2010,7 @@ public class ItemIDManager implements ServerSaveable {
         singlePlayerServerAliasBackupOnPlayerLeave = null;
         singlePlayerServerBackupCounterOnPlayerLeave = -1;
         singlePlayerServerQuarantineBackupOnPlayerLeave = null;
+        singlePlayerServerUnresolvedBackupOnPlayerLeave = null;
         // Load phase complete: release the master-side registration latch so post-load
         // default/registry registration (createDefaultItemIDs, setupDefaultItems, runtime
         // registrations) can mint fresh shorts again (Task #16).
@@ -2239,6 +2253,9 @@ public class ItemIDManager implements ServerSaveable {
                     putAlias(entry.getKey(), entry.getValue());
             }
             nextShortCounter = Math.max(counter, 1);
+            // A fixture's unresolved raw entries must never reach the live world's next save.
+            unresolvedEntries.clear();
+            lastRemovedMissing = Set.of();
         }
     }
 
@@ -3273,7 +3290,7 @@ public class ItemIDManager implements ServerSaveable {
                                 + " -> canonical " + group.canonicalId());
                 renormalizeAndMerge();
             } else {
-                requireMergeConfirmation(buildUnchangedSetMergeReport(groups, currentSet));
+                requireMergeConfirmation(buildUnchangedSetMergeReport(groups, currentSet), groups);
                 renormalizeAndMerge();
                 consumeMergeConfirmation(dataHandler);
             }
@@ -3285,7 +3302,7 @@ public class ItemIDManager implements ServerSaveable {
                             + storedSet + " -> " + currentSet + "), but no distinct ItemIDs collapse — applying the new set.");
                 renormalizeAndMerge();
             } else {
-                requireMergeConfirmation(buildMergeReport(collisions, storedSet, currentSet));
+                requireMergeConfirmation(buildMergeReport(collisions, storedSet, currentSet), collisions);
                 renormalizeAndMerge();
                 consumeMergeConfirmation(dataHandler);
             }
@@ -3302,7 +3319,7 @@ public class ItemIDManager implements ServerSaveable {
      * Throws {@link ItemIDMergeAbortedException} carrying {@code report} unless
      * {@code CONFIRM_ITEMID_MERGE} is true; when confirmed, logs the report.
      */
-    private static void requireMergeConfirmation(String report) {
+    private static void requireMergeConfirmation(String report, List<MergeCollisionGroup> groups) {
         boolean confirmed = BACKEND_INSTANCES != null
                 && BACKEND_INSTANCES.SERVER_SETTINGS != null
                 && Boolean.TRUE.equals(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_MERGE.get());
@@ -3314,12 +3331,111 @@ public class ItemIDManager implements ServerSaveable {
             // half-initialized here and the bank manager is still empty), so neither
             // the vanilla crash-save nor the shutdown save can overwrite world data —
             // that is what makes the report's "nothing saved" guarantee true.
+            List<String> summary = new ArrayList<>();
+            for (MergeCollisionGroup group : groups) {
+                StringBuilder line = new StringBuilder(String.valueOf(group.canonicalId()));
+                for (ItemID merged : group.mergedIds())
+                    line.append(" + ").append(merged);
+                summary.add(line.toString());
+            }
             throw new ItemIDMergeAbortedException(report
-                    + "\nServer startup was aborted by the BankSystem ItemID merge guard (CONFIRM_ITEMID_MERGE is false).");
+                    + "\nServer startup was aborted by the BankSystem ItemID merge guard (CONFIRM_ITEMID_MERGE is false).", summary);
         }
         if (BACKEND_INSTANCES.LOGGER != null)
             BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] CONFIRM_ITEMID_MERGE is true — applying the confirmed merge."
                     + report);
+    }
+
+    /**
+     * BS-195: refuses the load while saved entries of missing mods exist, unless
+     * {@code CONFIRM_ITEMID_REMOVE_MISSING} is set. Confirmed: backs up the BankSystem data
+     * folder, drops the entries (their shorts stay reserved by nextShortCounter; the bank
+     * load then drops their balances because the IDs no longer resolve), consumes the flag
+     * in memory (persisted by the data handler once the whole load succeeded).
+     */
+    private static void applyMissingModsGuard() {
+        if (unresolvedEntries.isEmpty())
+            return;
+        Map<String, Integer> byNamespace = countMissingNamespaces(unresolvedEntries.values(),
+                dev.architectury.platform.Platform::isModLoaded);
+        StringBuilder list = new StringBuilder();
+        byNamespace.forEach((ns, n) -> list.append("\n  ").append(ns).append(": ").append(n).append(" item(s)"));
+        boolean confirmed = BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_SETTINGS != null
+                && Boolean.TRUE.equals(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_REMOVE_MISSING.get());
+        if (!confirmed) {
+            throw new ItemIDMissingModsException("[ItemIDManager] " + unresolvedEntries.size()
+                    + " saved ItemID(s) no longer load because their mod is not installed (or they carry data of a missing mod):"
+                    + list
+                    + "\nBankSystem refused to load this world; nothing was changed or saved."
+                    + "\nTo fix it, either:"
+                    + "\n  1) install the missing mod(s) again, or"
+                    + "\n  2) remove these items once: set \"CONFIRM_ITEMID_REMOVE_MISSING\": true in the \"ServerBank\" group of"
+                    + "\n     <world>/data/BankSystem/settings.json and start again. Their balances are removed from every bank"
+                    + "\n     account (the BankSystem data folder is backed up first); the flag resets itself.", unresolvedEntries.size(), byNamespace);
+        }
+        BankSystemDataHandler dataHandler = BACKEND_INSTANCES.SERVER_DATA_HANDLER;
+        if (dataHandler != null && !dataHandler.backupDataFolder("remove-missing"))
+            throw new ItemIDMissingModsException("[ItemIDManager] CONFIRM_ITEMID_REMOVE_MISSING is true, but the backup of the "
+                    + "BankSystem data folder failed, so nothing was removed. Missing:" + list, unresolvedEntries.size(), byNamespace);
+        lastRemovedMissing = Set.copyOf(unresolvedEntries.keySet());
+        unresolvedEntries.clear();
+        BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_REMOVE_MISSING.set(false);
+        lastLoadRequiresResave = true;
+        if (BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] CONFIRM_ITEMID_REMOVE_MISSING: removed " + lastRemovedMissing.size()
+                    + " ItemID(s) of missing mods; their bank balances are dropped. Their numbers stay reserved." + list);
+    }
+
+    /** ItemIDs removed by the last load's confirmed missing-mod recovery (empty when none). */
+    public static Set<ItemID> getLastRemovedMissing() {
+        return lastRemovedMissing;
+    }
+
+    /** Saved entries currently kept unresolved (missing mod), for tests. */
+    public static Map<ItemID, CompoundTag> getUnresolvedEntries_forTesting() {
+        return Collections.unmodifiableMap(unresolvedEntries);
+    }
+
+    private static final java.util.regex.Pattern RESOURCE_ID = java.util.regex.Pattern.compile("([a-z0-9_.-]+):[a-z0-9_./-]+");
+
+    /**
+     * Counts saved entries per namespace that {@code isLoaded} does not know: every
+     * {@code namespace:path} key or string value in the raw tag is checked, so an installed
+     * item carrying data of a removed mod counts for that mod. Entries with no foreign
+     * namespace count as {@code "unknown"}. Sorted by namespace.
+     */
+    public static Map<String, Integer> countMissingNamespaces(Collection<CompoundTag> entries,
+                                                             java.util.function.Predicate<String> isLoaded) {
+        Map<String, Integer> counts = new TreeMap<>();
+        for (CompoundTag entry : entries) {
+            Set<String> found = new TreeSet<>();
+            collectForeignNamespaces(entry, isLoaded, found);
+            if (found.isEmpty())
+                found.add("unknown");
+            for (String ns : found)
+                counts.merge(ns, 1, Integer::sum);
+        }
+        return counts;
+    }
+
+    private static void collectForeignNamespaces(Tag tag, java.util.function.Predicate<String> isLoaded, Set<String> out) {
+        if (tag instanceof CompoundTag compound) {
+            for (String key : NbtCompat.keys(compound)) {
+                addIfForeign(key, isLoaded, out);
+                collectForeignNamespaces(compound.get(key), isLoaded, out);
+            }
+        } else if (tag instanceof ListTag list) {
+            for (Tag element : list)
+                collectForeignNamespaces(element, isLoaded, out);
+        } else if (tag instanceof net.minecraft.nbt.StringTag) {
+            addIfForeign(NbtCompat.asString(tag), isLoaded, out);
+        }
+    }
+
+    private static void addIfForeign(String value, java.util.function.Predicate<String> isLoaded, Set<String> out) {
+        java.util.regex.Matcher m = RESOURCE_ID.matcher(value);
+        if (m.matches() && !isLoaded.test(m.group(1)))
+            out.add(m.group(1));
     }
 
     /**
