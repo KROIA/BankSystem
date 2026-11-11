@@ -75,8 +75,6 @@ public class AuditScreen extends BankSystemGuiScreen {
 
         typeMenu = new DropDownMenu(ALL_TYPES.getString(), (i, el) -> runLater(() -> {
             typeCode = i == 0 ? -1 : LedgerType.values()[i - 1].code();
-            typeMenu.setLabelText(i == 0 ? ALL_TYPES.getString() : LedgerType.values()[i - 1].name());
-            typeMenu.collapse();
             reload(0);
         }));
         typeMenu.addOption(ALL_TYPES.getString());
@@ -85,8 +83,6 @@ public class AuditScreen extends BankSystemGuiScreen {
 
         rangeMenu = new DropDownMenu(Component.translatable(PREFIX + RANGE_KEYS[rangeIndex]).getString(), (i, el) -> runLater(() -> {
             rangeIndex = i;
-            rangeMenu.setLabelText(Component.translatable(PREFIX + RANGE_KEYS[i]).getString());
-            rangeMenu.collapse();
             reload(0);
         }));
         for (String k : RANGE_KEYS) rangeMenu.addOption(Component.translatable(PREFIX + k).getString());

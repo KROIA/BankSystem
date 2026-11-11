@@ -123,9 +123,8 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             for(BankDownloadBlockEntity.WithdrawCondition cond : BankDownloadBlockEntity.WithdrawCondition.values())
             {
                 // DropDownMenu hit-tests its open list itself (it hangs below this 20px row), so plain
-                // options get hover/tooltips. addOption() returns nothing: the new label is the last child.
-                conditionSelectionDropDown.addOption(getConditionString(cond));
-                GuiElement option = conditionSelectionDropDown.getChilds().getLast();
+                // options get hover/tooltips.
+                GuiElement option = conditionSelectionDropDown.addOption(getConditionString(cond));
                 Component tooltip = switch(cond) {
                     case NONE -> TEXT.CONDITION_NONE_TOOLTIP;
                     case HAS_MORE_THEN -> TEXT.CONDITION_MORE_THAN_TOOLTIP;
@@ -135,8 +134,6 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             }
             conditionSelectionDropDown.setOnOptionSelected((index, label) -> {
                 condition = BankDownloadBlockEntity.WithdrawCondition.values()[index];
-                conditionSelectionDropDown.setLabelText(WithdrawOrderGuiElement.getConditionString(condition));
-                conditionSelectionDropDown.collapse();
             });
 
             conditionAmountTextBox = new TextBox();
@@ -350,7 +347,6 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
                     case HAS_MORE_THEN -> element.conditionSelectionDropDown.setSelectedIndex(1);
                     case HAS_LESS_THEN -> element.conditionSelectionDropDown.setSelectedIndex(2);
                 }
-                element.conditionSelectionDropDown.setLabelText(WithdrawOrderGuiElement.getConditionString(order.condition));
                 element.conditionAmountTextBox.setText(String.valueOf(order.conditionValue));
                 spacer.setHeight(element.getDropDownExpandedHeight());
             }
