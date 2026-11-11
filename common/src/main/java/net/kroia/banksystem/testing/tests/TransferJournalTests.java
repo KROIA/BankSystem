@@ -34,9 +34,11 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
@@ -229,7 +231,11 @@ public class TransferJournalTests extends TestSuite {
             long credited = after.getOrDefault(money, 0L) - before.getOrDefault(money, 0L);
             if (credited != 300L) return fail("money bank credited " + credited + ", expected 300");
             if (cache != 0L) return fail("cache " + cache + " after commit, expected 0");
-            if (!after.keySet().equals(before.keySet())) return fail("banks changed " + before.keySet() + " -> " + after.keySet());
+            // a fresh account gets its money bank on the first deposit; any OTHER new bank (e.g. a note bank) is wrong
+            Set<ItemID> added = new HashSet<>(after.keySet());
+            added.removeAll(before.keySet());
+            added.remove(money);
+            if (!added.isEmpty()) return fail("banks added besides money: " + added);
 
             await(db.flush(), WAIT_MS);
             String json = "{\"" + money.getShort() + "\":300}";
