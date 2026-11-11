@@ -619,7 +619,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.itemView.getItemStack(), bankData, setUsers, pendingFrozen);
         accountIconChangedFlag = false;
         BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input)
-                .thenAccept(data -> runLater(() -> onSaveResult(data, setUsers)));
+                .whenComplete((data, ex) -> runLater(() -> onSaveResult(data, setUsers, ex != null)));
     }
 
     /**
@@ -629,14 +629,17 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
      * the server refused or adjusted the user change (it already told the player why).
      * Either way the screen stays open on the current account.
      */
-    private void onSaveResult(@Nullable BankAccountData data, Map<UUID, Integer> requestedUsers)
+    private void onSaveResult(@Nullable BankAccountData data, Map<UUID, Integer> requestedUsers, boolean noAnswer)
     {
         Runnable action = afterSave;
         afterSave = null;
-        if (data == null)
+        if (noAnswer || data == null)
         {
+            // Issue #95: no answer (timeout) means the save may or may not have gone through
             if (minecraft != null && minecraft.player != null)
-                net.kroia.modutilities.PlayerCompat.sendMessage(minecraft.player, AskPopupScreen.UNSAVED_SAVE_FAILED, false);
+                net.kroia.modutilities.PlayerCompat.sendMessage(minecraft.player, noAnswer
+                        ? Component.translatable("gui.banksystem.request.no_answer")
+                        : AskPopupScreen.UNSAVED_SAVE_FAILED, false);
             return;
         }
         setupGui(data);

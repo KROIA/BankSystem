@@ -39,6 +39,7 @@ public class AuditScreen extends BankSystemGuiScreen {
     private static final Component DENIED = Component.translatable(PREFIX + "denied");
     private static final Component EMPTY = Component.translatable(PREFIX + "empty");
     private static final Component HEADER = Component.translatable(PREFIX + "header");
+    private static final Component COULD_NOT_LOAD = Component.translatable("gui.banksystem.request.could_not_load");
     private static final String[] RANGE_KEYS = {"range_1h", "range_24h", "range_7d", "range_all"};
     private static final long[] RANGE_MS = {3_600_000L, 86_400_000L, 7 * 86_400_000L, 0L};
     static final int PAGE_SIZE = 100;
@@ -130,13 +131,19 @@ public class AuditScreen extends BankSystemGuiScreen {
         nextButton.setEnabled(false);
         BankSystemNetworking.AUDIT_PAGE_REQUEST.sendRequestToServer(
                         new AuditPageRequest.Query(accountNumber, typeCode, since, page * PAGE_SIZE, PAGE_SIZE))
-                .thenAccept(p -> runLater(() -> {
+                .whenComplete((p, ex) -> runLater(() -> {
                     if (gen != generation) return; // a newer filter/page is loading
                     listView.removeChilds();
+                    pageLabel.setText(String.valueOf(page + 1));
+                    if (ex != null || p == null) { // Issue #95: no answer; keep the old paging so the user can retry
+                        prevButton.setEnabled(page > 0);
+                        nextButton.setEnabled(hasMore);
+                        listView.addChild(textRow(COULD_NOT_LOAD.getString()));
+                        return;
+                    }
                     hasMore = p.hasMore();
                     prevButton.setEnabled(page > 0);
                     nextButton.setEnabled(hasMore);
-                    pageLabel.setText(String.valueOf(page + 1));
                     if (p.denied()) listView.addChild(textRow(DENIED.getString()));
                     else if (p.rows().isEmpty()) listView.addChild(textRow(EMPTY.getString()));
                     else for (AuditPageRequest.Row r : p.rows()) listView.addChild(new RowElement(r));

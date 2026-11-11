@@ -98,6 +98,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private long anchorMs = 0L;
     /** True while a balance-history fetch is in flight — prevents overlapping requests. */
     private boolean fetchInFlight = false;
+    private Label loadFailedLabel;
     /** If the pan threshold is re-crossed while a fetch is in flight, remember it and
      *  dispatch exactly one follow-up fetch when the current response arrives. */
     private boolean pendingRefetch = false;
@@ -220,9 +221,10 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     // Saved on each toggle via updateUserCustomData() ARRS request.
 
     private void loadUserSettings() {
-        getBankManager().getUserCustomData().thenAccept(customData ->
+        // Issue #95: a failed load still shows the chart; userCustomData stays null so nothing is saved over it
+        getBankManager().getUserCustomData().whenComplete((customData, ex) ->
                 Minecraft.getInstance().execute(() -> {
-                    userCustomData = customData;
+                    if (ex == null) userCustomData = customData;
                     readDisabledItems(customData);
                     readViewport(customData);
                     requestData();
@@ -245,8 +247,8 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         chart.setClampBounds(null, null); // legacy clamp-to-data mode
         getBankManager()
                 .requestBalanceHistory(accountNumber)
-                .thenAccept(records -> onFetchResponse(records,
-                        BalanceHistoryRequest.Query.ALL_HISTORY_SENTINEL, now, gen, false));
+                .whenComplete((records, ex) -> onFetchResponse(records,
+                        BalanceHistoryRequest.Query.ALL_HISTORY_SENTINEL, now, gen, false, ex != null));
     }
 
     /**
@@ -302,7 +304,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         final long reqTo = toMs;
         getBankManager()
                 .requestBalanceHistory(accountNumber, fromMs, toMs, maxPoints)
-                .thenAccept(records -> onFetchResponse(records, reqFrom, reqTo, gen, false));
+                .whenComplete((records, ex) -> onFetchResponse(records, reqFrom, reqTo, gen, false, ex != null));
     }
 
     /**
@@ -361,7 +363,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
 
         getBankManager()
                 .requestBalanceHistory(accountNumber, fromMs, toMs, 1000)
-                .thenAccept(records -> onFetchResponse(records, reqFrom, reqTo, gen, true));
+                .whenComplete((records, ex) -> onFetchResponse(records, reqFrom, reqTo, gen, true, ex != null));
     }
 
     /**
@@ -387,7 +389,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
      */
     private void onFetchResponse(List<BalanceHistoryRecord> records,
                                   long reqFromMs, long reqToMs, int gen,
-                                  boolean preserveViewport) {
+                                  boolean preserveViewport, boolean failed) {
         if (gen != fetchGeneration) return;
         Minecraft.getInstance().execute(() -> {
             // Re-check on client thread — a newer request may have been dispatched
@@ -396,6 +398,12 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             fetchInFlight = false;
             if (windowMs > 0) {
                 chart.setClampBounds(null, System.currentTimeMillis());
+            }
+            // Issue #95: no answer. Keep the chart as it is; the next pan or timescale click fetches again.
+            if (failed) {
+                if (!preserveViewport) showLoadFailed();
+                pendingRefetch = false;
+                return;
             }
 
             // Empty response for a timescale click: still snap the viewport to the
@@ -433,6 +441,17 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
 
     private void applyData(List<BalanceHistoryRecord> records) {
         applyData(records, false);
+    }
+
+    /** Issue #95: "could not load" line at the end of the item list (applyData clears it). */
+    private void showLoadFailed() {
+        if (loadFailedLabel == null) {
+            loadFailedLabel = new Label(Component.translatable("gui.banksystem.request.could_not_load").getString());
+            loadFailedLabel.setHeight(15);
+            loadFailedLabel.setTextColor(0xFFe11d48);
+        }
+        toggleListView.removeChild(loadFailedLabel);
+        toggleListView.addChild(loadFailedLabel);
     }
 
     /**
@@ -662,7 +681,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
      * then sends the full customData via updateUserCustomData() ARRS request.
      */
     private void saveUserSettings() {
-        if (userCustomData == null) userCustomData = new CompoundTag();
+        if (userCustomData == null) return; // load failed (Issue #95): saving would overwrite the other screens' settings
         CompoundTag historyTag = new CompoundTag();
         ListTag list = new ListTag();
         for (short id : disabledItems) {

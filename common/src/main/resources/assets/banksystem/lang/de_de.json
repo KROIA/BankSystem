@@ -585,6 +585,8 @@
   "gui.banksystem.pay_missed_popup.result_currency_missing": "Das Unternehmen hat nicht genügend Mittel, um diese Zahlung auszuführen.",
   "gui.banksystem.pay_missed_popup.result_failed": "Nachzahlung fehlgeschlagen.",
   "gui.banksystem.payment_unconfirmed": "Keine Antwort vom Bankserver. Die Zahlung wurde eventuell trotzdem ausgeführt; prüfe den Verlauf, bevor du erneut zahlst.",
+  "gui.banksystem.request.could_not_load": "Konnte nicht geladen werden: keine Antwort vom Bankserver. Zum erneuten Versuch neu öffnen.",
+  "gui.banksystem.request.no_answer": "Keine Antwort vom Bankserver. Die Änderung wurde eventuell übernommen oder auch nicht; zum Prüfen neu öffnen.",
   "gui.banksystem.pay_missed_popup.result_ok": "%s gezahlt.",
   "gui.banksystem.company_management_screen.tab.statistics": "Statistiken",
   "gui.banksystem.company_management_screen.tf_24h": "24h",

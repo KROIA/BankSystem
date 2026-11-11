@@ -85,9 +85,9 @@ public class ListCurrencyProvidersRequest extends BankSystemGenericRequest<ListC
      * ({@link #needsRoutingToMaster()} inherited from {@link BankSystemGenericRequest} returns
      * {@code true} on slaves).
      *
-     * @return future of the available-provider list. On transport failure the future completes
-     *         with an empty list rather than propagating the exception, matching the request
-     *         semantics ("no providers offered" is the natural degradation).
+     * @return future of the available-provider list (possibly empty). On transport failure (no
+     *         answer) the future completes with {@code null}, so the screen can show "could not
+     *         load" instead of "no providers".
      */
     public static CompletableFuture<List<ProviderInfo>> sendRequest() {
         CompletableFuture<List<ProviderInfo>> future = new CompletableFuture<>();
@@ -95,7 +95,7 @@ public class ListCurrencyProvidersRequest extends BankSystemGenericRequest<ListC
                 .sendRequestToServer(new InputData(false))
                 .whenComplete((response, ex) -> {
                     if (ex != null || response == null) {
-                        future.complete(new ArrayList<>());
+                        future.complete(null); // Issue #95: "could not load", not an empty list
                     } else {
                         future.complete(response.providers != null ? response.providers : new ArrayList<>());
                     }

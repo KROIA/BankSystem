@@ -78,7 +78,7 @@ public class ListBindingsForAccountRequest extends BankSystemGenericRequest<List
                 .sendRequestToServer(new InputData(accountId))
                 .whenComplete((response, ex) -> {
                     if (ex != null || response == null) {
-                        future.complete(new ArrayList<>());
+                        future.complete(null); // Issue #95: "could not load", not an empty list
                     } else {
                         future.complete(response.bindings != null ? response.bindings : new ArrayList<>());
                     }

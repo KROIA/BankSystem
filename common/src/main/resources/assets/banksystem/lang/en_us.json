@@ -585,6 +585,8 @@
   "gui.banksystem.pay_missed_popup.result_currency_missing": "The company has insufficient funds to execute this payment.",
   "gui.banksystem.pay_missed_popup.result_failed": "Catch-up payment failed.",
   "gui.banksystem.payment_unconfirmed": "No answer from the bank server. The payment may still have gone through; check the history before paying again.",
+  "gui.banksystem.request.could_not_load": "Could not load: no answer from the bank server. Reopen to try again.",
+  "gui.banksystem.request.no_answer": "No answer from the bank server. The change may or may not have been applied; reopen to check.",
   "gui.banksystem.pay_missed_popup.result_ok": "Paid %s.",
   "gui.banksystem.company_management_screen.tab.statistics": "Statistics",
   "gui.banksystem.company_management_screen.tf_24h": "24h",

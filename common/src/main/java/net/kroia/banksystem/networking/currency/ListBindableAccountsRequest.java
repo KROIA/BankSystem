@@ -54,7 +54,7 @@ public class ListBindableAccountsRequest extends BankSystemGenericRequest<ListBi
      *
      * @param providerId the provider whose accounts to enumerate
      * @param player     the player whose bindable accounts to list — usually the local client
-     * @return future completing with a possibly-empty list; never {@code null}
+     * @return future completing with a possibly-empty list, or {@code null} on transport failure (no answer)
      */
     public static CompletableFuture<List<ExternalAccountRef>> sendRequest(String providerId, UUID player) {
         CompletableFuture<List<ExternalAccountRef>> future = new CompletableFuture<>();
@@ -62,7 +62,7 @@ public class ListBindableAccountsRequest extends BankSystemGenericRequest<ListBi
                 .sendRequestToServer(new InputData(providerId, player))
                 .whenComplete((response, ex) -> {
                     if (ex != null || response == null) {
-                        future.complete(new ArrayList<>());
+                        future.complete(null); // Issue #95: "could not load", not an empty list
                     } else {
                         future.complete(response.accounts != null ? response.accounts : new ArrayList<>());
                     }

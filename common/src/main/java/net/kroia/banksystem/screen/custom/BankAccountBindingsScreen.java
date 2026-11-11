@@ -94,6 +94,8 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     private static final String KEY_STATUS_EXTERNAL_UNAVAILABLE = PREFIX + "status.external_unavailable";
     private static final String KEY_STATUS_NO_MASTER = PREFIX + "status.no_master";
     private static final String KEY_STATUS_GENERIC_FAILURE = PREFIX + "status.generic_failure";
+    private static final String KEY_NO_ANSWER = "gui." + BankSystemMod.MOD_ID + ".request.no_answer";
+    private static final String KEY_COULD_NOT_LOAD = "gui." + BankSystemMod.MOD_ID + ".request.could_not_load";
 
     private static final int GRAY_TEXT_COLOR = 0xFF808080;
 
@@ -113,6 +115,8 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     /** Cached provider list from the master. Populated on open + refresh. */
     private final List<ListCurrencyProvidersRequest.ProviderInfo> availableProviders = new ArrayList<>();
     private boolean canManage = false;
+    /** Issue #95: the last refresh got no answer for the account, the providers or the bindings. */
+    private boolean accountFailed, providersFailed, bindingsFailed;
     private static boolean screenIsOpen = false;
 
     // ---------------------------------------------------------------------------------------
@@ -188,7 +192,10 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     private void refreshAll() {
         BACKEND_INSTANCES.CLIENT_BANK_MANAGER
                 .getBankAccountDataAsync(accountNumber)
-                .thenAccept(this::onAccountDataReceived);
+                .whenComplete((data, ex) -> {
+                    accountFailed = ex != null;
+                    onAccountDataReceived(data);
+                });
         ListCurrencyProvidersRequest.sendRequest()
                 .thenAccept(this::onProvidersReceived);
         ListBindingsForAccountRequest.sendRequest(accountNumber)
@@ -204,6 +211,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
             canManage = false;
             rowListView.removeChilds();
             rowWidgets.clear();
+            showCouldNotLoadIfFailed();
             return;
         }
         UUID me = getThisPlayerUUID();
@@ -217,6 +225,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     private void onProvidersReceived(List<ListCurrencyProvidersRequest.ProviderInfo> providers) {
         if (!screenIsOpen) return;
         availableProviders.clear();
+        providersFailed = providers == null;
         if (providers != null) availableProviders.addAll(providers);
         // No-providers empty state visibility is decided in rebuildRows().
         rebuildRows();
@@ -226,6 +235,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
         if (!screenIsOpen) return;
         activeBindings.clear();
         suspendedBindings.clear();
+        bindingsFailed = bindings == null;
         if (bindings != null) {
             for (ListBindingsForAccountRequest.BindingEntry entry : bindings) {
                 activeBindings.put(entry.itemId(), entry.ref());
@@ -243,8 +253,9 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
     private void rebuildRows() {
         rowListView.removeChilds();
         rowWidgets.clear();
-        if (accountData == null) return;
+        if (showCouldNotLoadIfFailed() || accountData == null) return;
         boolean hasAvailableProvider = !availableProviders.isEmpty();
+        emptyLabel.setText(Component.translatable(KEY_NO_PROVIDERS).getString());
         emptyLabel.setEnabled(!hasAvailableProvider);
         for (Map.Entry<ItemID, BankData> entry : accountData.bankData.entrySet()) {
             ItemID itemId = entry.getKey();
@@ -259,6 +270,19 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
             rowListView.addChild(row);
         }
         updateLayout(getGui());
+    }
+
+    /**
+     * Issue #95: a failed load shows "could not load" instead of rows built from missing data
+     * (which would read as "not bound" / "no providers"). Refresh retries.
+     */
+    private boolean showCouldNotLoadIfFailed() {
+        if (!accountFailed && !providersFailed && !bindingsFailed) return false;
+        rowListView.removeChilds();
+        rowWidgets.clear();
+        emptyLabel.setText(Component.translatable(KEY_COULD_NOT_LOAD).getString());
+        emptyLabel.setEnabled(true);
+        return true;
     }
 
     // ---------------------------------------------------------------------------------------
@@ -402,7 +426,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
      */
     private static String mapBindStatusToMessage(BankStatus status, BindingRow row,
                                                  ListCurrencyProvidersRequest.ProviderInfo provider) {
-        if (status == null) return Component.translatable(KEY_STATUS_GENERIC_FAILURE).getString();
+        if (status == null) return Component.translatable(KEY_NO_ANSWER).getString(); // Issue #95: timeout
         return switch (status) {
             case SUCCESS -> Component.translatable(KEY_STATUS_SUCCESS).getString();
             case FAILED_NO_BANK -> Component.translatable(KEY_STATUS_INVALID_ACCOUNT).getString();
@@ -429,7 +453,7 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
      * failure modes are simpler than bind.
      */
     private static String mapUnbindStatusToMessage(BankStatus status) {
-        if (status == null) return Component.translatable(KEY_UNBIND_ERROR_GENERIC).getString();
+        if (status == null) return Component.translatable(KEY_NO_ANSWER).getString(); // Issue #95: timeout
         return switch (status) {
             case SUCCESS -> Component.translatable(KEY_STATUS_SUCCESS).getString();
             case FAILED_NO_BANK -> Component.translatable(KEY_STATUS_INVALID_ACCOUNT).getString();
@@ -800,6 +824,8 @@ public class BankAccountBindingsScreen extends BankSystemGuiScreen {
 
         private void onAccountsLoaded(List<ExternalAccountRef> refs) {
             list.removeChilds();
+            // Issue #95: null = no answer
+            emptyLabel.setText(Component.translatable(refs == null ? KEY_COULD_NOT_LOAD : KEY_NO_PROVIDERS).getString());
             int shown = 0;
             if (refs != null) {
                 for (ExternalAccountRef ref : refs) {

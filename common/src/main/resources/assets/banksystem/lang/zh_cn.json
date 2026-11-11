@@ -585,6 +585,8 @@
   "gui.banksystem.pay_missed_popup.result_currency_missing": "公司资金不足，无法执行此付款。",
   "gui.banksystem.pay_missed_popup.result_failed": "补付失败。",
   "gui.banksystem.payment_unconfirmed": "银行服务器无响应。付款可能已经完成；再次付款前请先查看历史记录。",
+  "gui.banksystem.request.could_not_load": "无法加载：银行服务器无响应。请重新打开以重试。",
+  "gui.banksystem.request.no_answer": "银行服务器无响应。更改可能已生效，也可能未生效；请重新打开以确认。",
   "gui.banksystem.pay_missed_popup.result_ok": "已支付 %s。",
   "gui.banksystem.company_management_screen.tab.statistics": "统计",
   "gui.banksystem.company_management_screen.tf_24h": "24小时",

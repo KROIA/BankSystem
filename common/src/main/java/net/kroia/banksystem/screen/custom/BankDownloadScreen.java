@@ -583,7 +583,15 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
         addElement(inventoryView);
         addElement(settingsMenu);
 
-        getBankManager().requestAllowdItems().thenAccept((allowedItems) -> {
+        getBankManager().requestAllowdItems().whenComplete((allowedItems, ex) -> {
+            // Issue #95: without the item list the orders still load (they come from the block entity),
+            // so a Save never sends an empty order list over them.
+            if (ex != null || allowedItems == null) {
+                allowedItems = List.of();
+                var player = net.minecraft.client.Minecraft.getInstance().player;
+                if (player != null) net.kroia.modutilities.PlayerCompat.sendMessage(player,
+                        Component.translatable("gui." + BankSystemMod.MOD_ID + ".request.could_not_load"), false);
+            }
             settingsMenu.setBankableItems(allowedItems);
             settingsMenu.setOrders(withdrawOrders);
             settingsMenu.setBankAccountNumber(accountNr);

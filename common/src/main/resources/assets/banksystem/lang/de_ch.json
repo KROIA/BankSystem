@@ -585,6 +585,8 @@
   "gui.banksystem.pay_missed_popup.result_currency_missing": "De Firma het nöd gnug Mittel, um die Zahlig uuszfüehre.",
   "gui.banksystem.pay_missed_popup.result_failed": "Nachzahlung fehlgeschlagen.",
   "gui.banksystem.payment_unconfirmed": "Kei Antwort vom Bankserver. D Zahlig isch villicht glich dure; lueg zersch in Verlauf, bevor du nomal zahlsch.",
+  "gui.banksystem.request.could_not_load": "Het nöd chönne glade werde: kei Antwort vom Bankserver. Nomal ufmache zum es nomal probiere.",
+  "gui.banksystem.request.no_answer": "Kei Antwort vom Bankserver. D Änderig isch villicht übernoh worde, villicht au nöd; nomal ufmache zum prüefe.",
   "gui.banksystem.pay_missed_popup.result_ok": "%s gezahlt.",
   "gui.banksystem.company_management_screen.tab.statistics": "Statistike",
   "gui.banksystem.company_management_screen.tf_24h": "24h",
