@@ -189,7 +189,8 @@ public class SlaveMasterDownTests extends TestSuite {
         tag.putInt("A", ACCOUNT);
         tag.putBoolean("P", true);
         NbtCompat.putUUID(tag, "U", UUID.randomUUID());
-        block.loadAdditional(tag, getServer().registryAccess());
+        block.loadAdditional(tag, getServer().registryAccess()); // mc<=1.21.5
+        //block.loadAdditional(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, getServer().registryAccess(), tag)); // mc>=1.21.6
         if (block.getBankAccountNumber() != ACCOUNT || !block.isBlockIsPowered())
             return fail("fixture: block not bound/powered after load");
         for (int cycle = 1; cycle <= 5; cycle++) {

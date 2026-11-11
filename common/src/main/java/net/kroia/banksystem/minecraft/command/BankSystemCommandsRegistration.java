@@ -900,7 +900,7 @@ public class BankSystemCommandsRegistration {
             } catch (NumberFormatException e) {
                 return bankManager.getPersonalBankAccountNrAsync(target);
             }
-        }).thenAccept(nr -> player.server.execute(() -> {
+        }).thenAccept(nr -> player.level().getServer().execute(() -> {
             if (nr == null || nr == -1) {
                 player.sendSystemMessage(Component.literal("This command can only be used by BankSystem admins!"));
             } else if (nr <= 0) {
@@ -930,7 +930,7 @@ public class BankSystemCommandsRegistration {
             return Command.SINGLE_SUCCESS;
         }
         boolean onMaster = BACKEND_INSTANCES.isSlaveServer;
-        handler().banksystem_auditreport_async(player.getUUID(), hours).thenAccept(path -> player.server.execute(() -> {
+        handler().banksystem_auditreport_async(player.getUUID(), hours).thenAccept(path -> player.level().getServer().execute(() -> {
             if (!path.isEmpty())
                 player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditReportWrittenMessage(path, onMaster)));
             else
