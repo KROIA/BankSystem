@@ -58,7 +58,7 @@ public class UpdateDisplayBlockConfigPacket extends BankSystemNetworkPacket {
                 || !(player.level().getBlockEntity(this.pos) instanceof BankSystemDisplayBlockEntity))
             return;
         // The display shows the account's balances to everyone nearby, so only someone who may read it can pick it.
-        mayShowAccount(player.getUUID(), this.accountNumber).thenAccept(allowed -> player.server.execute(() -> {
+        mayShowAccount(player.getUUID(), this.accountNumber).thenAccept(allowed -> player.level().getServer().execute(() -> {
             if (!allowed) {
                 warn("Player " + player.getName().getString() + " may not show account " + this.accountNumber + " on a display");
                 return;

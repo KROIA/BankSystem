@@ -3,7 +3,7 @@ package net.kroia.banksystem.screen.custom;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
-import org.lwjgl.util.tinyfd.TinyFileDialogs;
+import org.lwjgl.util.tinyfd.TinyFileDialogs; // mc<=26.2
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -52,16 +52,21 @@ public final class AuditExport {
     /** Native save dialog; blocks, so never call it on the render thread. Null = cancelled. */
     @Nullable
     public static Path askPath(String title, String defaultName) {
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            PointerBuffer filter = stack.mallocPointer(1);
-            filter.put(stack.UTF8("*.csv")).flip();
-            String p = TinyFileDialogs.tinyfd_saveFileDialog(title, defaultName, filter, "CSV");
-            if (p == null || p.isBlank()) return null;
-            return Path.of(p.toLowerCase().endsWith(".csv") ? p : p + ".csv");
-        }
+        try (MemoryStack stack = MemoryStack.stackPush()) { // mc<=26.2
+            PointerBuffer filter = stack.mallocPointer(1); // mc<=26.2
+            filter.put(stack.UTF8("*.csv")).flip(); // mc<=26.2
+            String p = TinyFileDialogs.tinyfd_saveFileDialog(title, defaultName, filter, "CSV"); // mc<=26.2
+            if (p == null || p.isBlank()) return null; // mc<=26.2
+            return Path.of(p.toLowerCase().endsWith(".csv") ? p : p + ".csv"); // mc<=26.2
+        } // mc<=26.2
+        // 26.3 ships no tinyfd: no dialog, a fixed export folder instead (write() posts the path in chat)
+        //Path dir = net.minecraft.client.Minecraft.getInstance().gameDirectory.toPath().resolve("banksystem").resolve("exports"); // mc>=26.3
+        //dir.toFile().mkdirs(); // mc>=26.3
+        //return dir.resolve("audit-" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".csv"); // mc>=26.3
     }
 
     public static void write(Path path, String csv) throws IOException {
         Files.writeString(path, csv, StandardCharsets.UTF_8);
+        //net.minecraft.client.Minecraft.getInstance().execute(() -> net.minecraft.client.Minecraft.getInstance().gui.hud.getChat().addClientSystemMessage(net.minecraft.network.chat.Component.literal(path.toAbsolutePath().toString()).withStyle(s -> s.withUnderlined(true).withClickEvent(new net.minecraft.network.chat.ClickEvent.OpenFile(path.toAbsolutePath()))))); // mc>=26.3
     }
 }
