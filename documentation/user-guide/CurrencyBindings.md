@@ -59,12 +59,13 @@ Each row shows:
 - The slot's item icon and name.
 - The slot's current balance.
 - Either **Not bound** with a **Bind…** button, or the provider label (e.g. `numismatics: Personal Account`) with an **Unbind** button.
-- A greyed-out row means the provider that owns the binding is not currently loaded on the server — the binding is preserved, but no money moves until the mod comes back.
+- A greyed-out row means the provider that owns the binding is not available: the mod is not loaded on the server, or an admin switched it off with `NUMISMATICS_ENABLED` / `LIGHTMANS_CURRENCY_ENABLED` in the Integrations settings ([Configuration](Configuration.md#integrations-section)). The binding is preserved, but no money moves until the mod is back or switched on again.
+- A row marked *"Suspended: an admin must review this link. Until then nothing can be paid in or out through it."* is a binding an admin has to check first; its **Unbind** button is disabled. See [Suspended bindings](#suspended-bindings).
 
 The **Refresh** button in the top-right re-reads the account, the binding list, and the balance from the external mod. Use it after depositing or withdrawing outside BankSystem to force the screen to catch up.
 
 > [!NOTE]
-> The **Bindings** button and every bind/unbind action require the `MANAGE` permission on the account. Non-manager users see the screen in read-only mode: buttons are disabled and hover a "Requires MANAGE permission" tooltip.
+> The **Bindings** button and every bind/unbind action require the `MANAGE` permission on the account. Non-manager users see the screen in read-only mode: buttons are disabled and hover a "Requires MANAGE permission" tooltip. On a slave server that the master does not trust yet, the screen is read-only for everyone ([Multi-Server Setup](MultiserverSetup.md#what-an-untrusted-slave-can-do)).
 
 ---
 
@@ -92,6 +93,8 @@ The **Refresh** button in the top-right re-reads the account, the binding list, 
    <div align="center">
        <img src="../images/CurrencyPickAccountShared.png" alt="Account picker opened from a shared BankSystem account, showing only co-owned external accounts with the shared badge">
    </div>
+
+   You can only bind external accounts that the currency mod lists for **you** (the player who binds); BankSystem admins are exempt. The server checks this again on every bind. A slot that is already bound cannot be bound again directly: unbind it first.
 
    If the account kind you need is missing, create the matching kind first: use `/bank create <name>` to make a shared BankSystem account, or set up a Blaze Banker / Lightman's team on the currency mod's side.
 
@@ -159,7 +162,17 @@ Press **Unbind** on a bound row. A three-way choice appears:
 | **Keep on \<provider\>** | The binding is removed but the money stays in the currency mod's account. The BankSystem slot is emptied. Any locked balance is released. A small warning reminds you that fractional amounts below one unit are discarded — this only matters when the provider stores fractional units internally. |
 | **Cancel** | Nothing happens. |
 
-Unbind can be refused if **Keep on BankSystem** would cause the BankSystem slot balance to overflow — in that case, choose **Keep on \<provider\>** or withdraw some funds first.
+Unbind can be refused:
+
+- if **Keep on BankSystem** would cause the BankSystem slot balance to overflow — in that case, choose **Keep on \<provider\>** or withdraw some funds first;
+- while the currency mod is missing or switched off **and** BankSystem still holds locked money (reserved for open orders) or fractions of a unit for the slot. That money was already taken out of the external account, so unbinding now would destroy it. Switch the mod back on (or reinstall it) and unbind then. Without locked money or fractions, the slot is simply detached and the money stays in the currency mod;
+- while the binding is [suspended](#suspended-bindings).
+
+---
+
+## Suspended bindings
+
+Bindings made before 2.2.0 were not checked for ownership. On every start, the master checks each binding once. A binding whose external account none of the bank account's owner or managers could bind today is **suspended**: it keeps its balance, but nothing can be paid in or out through it and it cannot be unbound. Admins get an alert. An admin either restores it with `/banksystem restorebinding <account> [item]` or leaves it suspended; if the bank account or slot is deleted while it is suspended, nothing is paid out for it. Details for admins: [Administration → Suspended Currency Bindings](Administration.md#suspended-currency-bindings).
 
 ---
 
@@ -197,7 +210,9 @@ Unbind can be refused if **Keep on BankSystem** would cause the BankSystem slot 
 | The **Bindings** button is missing from Bank Account Management. | You do not have `MANAGE` on the account. Ask the account owner. |
 | The Bindings screen opens but every row says *No external currency mods are installed on this server*. | The currency mod is not loaded on the master, or it failed to start. Check `logs/latest.log` on the master for `[Numismatics]` or `[Lightman's]` `WARN` lines during startup. |
 | A Blaze Banker you own is missing from the picker. | Numismatics's `GlobalBankManager` may have changed shape. Check the log for `Failed to enumerate BLAZE_BANKER accounts` — that means the reflection lookup failed and the adapter needs an update. |
-| The bound row is greyed out. | The provider is unavailable (mod removed, or its API isn't ready). Balance reads return 0 and writes are refused until the mod is back. |
+| The bound row is greyed out. | The provider is unavailable (mod removed, switched off in the Integrations settings, or its API isn't ready). Balance reads return 0 and writes are refused until the mod is back. |
+| The row says *Suspended*. | An admin must review the binding, see [Suspended bindings](#suspended-bindings). |
+| The Bindings screen shows *"Master server did not respond."* | On a multi-server network the master did not answer in time. Try again; see [Multi-Server Setup](MultiserverSetup.md#reliability-when-the-master-does-not-answer). |
 | After depositing outside BankSystem, the slot balance did not change. | Press **Refresh** on the Bindings screen — the client's cached snapshot is not push-invalidated, but server-side reads are always live. |
 | A deposit of a coin variant did not credit the bound slot. | Confirm the variant's item ID starts with the provider's prefix (`numismatics:` or `lightmanscurrency:coin_`). Custom coin add-ons that use a different namespace are not routed. |
 
@@ -207,5 +222,5 @@ Unbind can be refused if **Keep on BankSystem** would cause the BankSystem slot 
 
 - [Bank Accounts](BankAccounts.md) — personal vs shared accounts, permissions
 - [Usage](Usage.md) — Bank Terminal, ATM, bank upload/download blocks
-- [Multi-Server Setup](MultiserverSetup.md) — how bindings behave with a master / slave topology
+- [Multi-Server Setup](MultiserverSetup.md) — master / slave setup; bindings live on the master like all accounts
 - [Currency Integration developer guide](../developer-guide/CurrencyIntegration.md) — for authors of currency mods who want to expose their mod to BankSystem

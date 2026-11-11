@@ -95,6 +95,7 @@ public class ConverterDropAllPacket extends BankSystemNetworkPacket {
             return;
         }
 
+        Map<ItemID, Long> dropped = new java.util.HashMap<>();
         for (Map.Entry<ItemID, Long> entry : split.counts().entrySet()) {
             ItemStack template = entry.getKey().getStack();
             if (template.isEmpty()) continue;
@@ -111,7 +112,11 @@ public class ConverterDropAllPacket extends BankSystemNetworkPacket {
                 net.kroia.modutilities.PlayerCompat.drop(player, stack);
                 count -= drop;
             }
+            dropped.put(entry.getKey(), entry.getValue());
         }
+        // Task #124: NoteFlow converter_out (button and disconnect drop).
+        net.kroia.banksystem.data.NoteFlowLog.converter(false, uuid, dropped,
+                net.kroia.banksystem.data.DiagnosticsDatabase.at(player.level(), player.blockPosition()));
 
         if (split.leftover() > 0) {
             ConverterCacheManager.get().deposit(uuid, split.leftover());

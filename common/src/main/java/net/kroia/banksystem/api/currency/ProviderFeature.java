@@ -10,8 +10,8 @@ package net.kroia.banksystem.api.currency;
  * and to decide whether {@link ExternalAccount#canWithdraw(long)} may be relied on
  * as authoritative.
  * <p>
- * See {@code .claude/Features/CurrencyModSupport.md} for the umbrella spec and the
- * currency-unit / permission-mapping decisions each flag implies.
+ * What each flag implies for currency units and permission mapping:
+ * {@code documentation/developer-guide/CurrencyIntegration.md}, section 5.
  *
  * @since 2.0.5
  */
