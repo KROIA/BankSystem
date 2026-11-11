@@ -763,9 +763,10 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         sendNoAdminMessage(player);
         return false;
     }
+    public static final String NO_ADMIN_MESSAGE = "This command can only be used by BankSystem admins!";
     public static void sendNoAdminMessage(UUID executor)
     {
-        sendMessage(executor, "This command can only be used by BankSystem admins!");
+        sendMessage(executor, NO_ADMIN_MESSAGE);
     }
     public static void sendMessage(UUID player, String message)
     {
