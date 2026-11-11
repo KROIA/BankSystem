@@ -472,6 +472,12 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             future.complete(true);
             return future;
         }
+        // Task #169: master link down, the account cannot be checked. Deny, and keep the binding
+        // (a null answer below would otherwise unbind the block).
+        if(!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem()) {
+            future.complete(false);
+            return future;
+        }
         IAsyncBankManager asyncBankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
         CompletableFuture<IAsyncBankAccount> account = asyncBankManager.getBankAccountAsync(bankAccountNumber);
         account.thenAccept((bankAccount) ->
@@ -515,6 +521,10 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     private void receiveItemsFromBank()
     {
         if(!blockIsPowered || currentlyReceiving || playerOwner == null)
+            return;
+        // Task #169: master link down -> getBankAccountAsync answers null, which must not count
+        // as "account missing" (that unbinds the block). Skip the cycle, keep the binding.
+        if(!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem())
             return;
 
         // Held across the account lookup and the owner check so a slow (slave) round trip cannot start a second cycle.
