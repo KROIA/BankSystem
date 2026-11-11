@@ -4,6 +4,8 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
@@ -22,8 +24,16 @@ public class MultiServerUtils {
     {
         if(checkConnectionToMaster())
             return true;
-        ServerPlayerUtilities.printToClientConsole(executor, "["+BankSystemMod.getAPI().getModID()+"] This is a slave server and it is not connected to a "+BankSystemMod.getAPI().getModID()+" master server!");
+        ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
+        if(player != null)
+            player.sendSystemMessage(getNoMasterMessage());
         return false;
+    }
+
+    /** Chat line shown when a slave refuses an action because it has no connection to its master. */
+    public static Component getNoMasterMessage()
+    {
+        return Component.translatable("message."+BankSystemMod.MOD_ID+".not_connected_to_master");
     }
 
     public static boolean canInteractWithBankSystem()

@@ -51,14 +51,18 @@ public class UnbindExternalAccountRequest extends BankSystemGenericRequest<Unbin
      *                          {@code false} → return funds to external with
      *                          fractional-dust loss accepted
      * @return future completing with the {@link BankStatus} returned by the master. On transport
-     *         failure the future completes with {@link BankStatus#FAILED_NO_MASTER_CONNECTION}.
+     *         failure the future completes with {@link BankStatus#FAILED_NO_MASTER_CONNECTION} (not sent)
+     *         or {@code null} (sent, no answer: the outcome is unknown).
      */
     public static CompletableFuture<BankStatus> sendRequest(int accountId, ItemID itemId, boolean keepOnBankSystem) {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         BankSystemNetworking.UNBIND_EXTERNAL_ACCOUNT_REQUEST
                 .sendRequestToServer(new InputData(accountId, itemId, keepOnBankSystem))
                 .whenComplete((response, ex) -> {
-                    if (ex != null || response == null || response.status == null) {
+                    if (ex instanceof net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException
+                            || (ex != null && ex.getCause() instanceof net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException)) {
+                        future.complete(null); // Issue #95: sent, then no answer; the outcome is unknown
+                    } else if (ex != null || response == null || response.status == null) {
                         future.complete(BankStatus.FAILED_NO_MASTER_CONNECTION);
                     } else {
                         future.complete(response.status);

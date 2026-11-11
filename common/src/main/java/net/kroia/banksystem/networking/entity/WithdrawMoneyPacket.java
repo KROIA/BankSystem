@@ -2,7 +2,10 @@ package net.kroia.banksystem.networking.entity;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.data.table.record.TransactionLogRecord;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.AdminAudit;
+import net.kroia.banksystem.banking.ledger.SuspicionChecks;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
@@ -155,6 +158,14 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         ISyncServerBankManager bankManager = getSyncBankManager();
         if(bankManager == null)
             return;
+        // The player UUID is asserted by the slave: an untrusted slave could withdraw from any account.
+        if(slaveID != null && !slaveID.isEmpty() && !bankManager.isSlaveServerTrusted(slaveID))
+        {
+            warn("The slave server: '" + slaveID + "' tried to withdraw money, which is not allowed for an untrusted slave server!");
+            ServerPlayerUtilities.printToClientConsole(player, "[BankSystem] Your server '" + slaveID + "' is not trusted by the bank master. "
+                    + "Contact a bank admin to grant trust for cross-server bank operations.");
+            return;
+        }
         final int finalCurrentSelectedAccountNumber = currentSelectedAccountNumber;
         ISyncServerBankAccount account = bankManager.getBankAccount(finalCurrentSelectedAccountNumber);
         if(account == null)
@@ -165,6 +176,8 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
             return;
         }
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocks(finalCurrentSelectedAccountNumber, LedgerType.WITHDRAW, player)) // Task #117
+            return;
 
         ISyncServerBank moneyBank = account.getBank(MoneyItem.getItemID());
         if(moneyBank == null) {
@@ -186,6 +199,8 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
 
         Map<ItemID, Long> requestedBankNotes = new HashMap<>();
+        // Task #125: a DROP to a slave is one transfer; its debit and refund rows carry the id as ref.
+        final String transferId = slaveID == null ? null : net.kroia.banksystem.data.TransferJournal.newTransferId();
         // Ckeck if the player has enough balance to withdraw the requested amounts
         for (ItemID itemID : requestedBankNoteIDs.keySet()) {
             long requestedAmount = requestedBankNoteIDs.get(itemID);
@@ -219,7 +234,9 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 // against the base money ItemID (not the banknote denomination) so a
                 // downstream reader sees the same currency identity regardless of which
                 // denomination was chosen at the terminal. Amount is base-money units.
-                logMoneyWithdraw(finalCurrentSelectedAccountNumber, player, totalValue);
+                // Task #109: note names the denomination so banknote flows can be traced.
+                TransactionLedger.logBank(moneyBank, LedgerType.WITHDRAW, totalValue,
+                        TransactionLedger.player(player), "banknote " + itemID.getName() + " x" + requestedAmount, transferId);
             }
         }
 
@@ -228,36 +245,38 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         if(slaveID == null)
         {
             Map<ItemID, Long> notDropped = DropItemsInPlayerInventoryRequest.dropItems(UtilitiesPlatform.getServer(), player, requestedBankNotes);
-            putRemainingItemsBack(finalCurrentSelectedAccountNumber, notDropped);
+            putRemainingItemsBack(finalCurrentSelectedAccountNumber, player, notDropped, null);
         }
         else
         {
-            dropRequestToSlave(slaveID, player, finalCurrentSelectedAccountNumber, requestedBankNotes);
+            dropRequestToSlave(slaveID, player, finalCurrentSelectedAccountNumber, requestedBankNotes, transferId);
         }
     }
 
-    private static void logMoneyWithdraw(int accountNr, UUID player, long amount) {
-        net.kroia.banksystem.data.table.TransactionLogManager mgr =
-                BankSystemModBackend.getTransactionLogManager();
-        if (mgr == null || amount <= 0) return;
-        try {
-            mgr.save(TransactionLogRecord.simple(
-                    accountNr, player,
-                    TransactionLogRecord.Kind.WITHDRAW,
-                    MoneyItem.getItemID().getShort(),
-                    amount,
-                    System.currentTimeMillis()));
-        } catch (RuntimeException ignored) { }
+    private void dropRequestToSlave(String slaveID, UUID player, int bankaccountNr, Map<ItemID, Long> items, String transferId)
+    {
+        DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, player, items, false, transferId)
+                .whenComplete((notDropped, ex) -> onDropResult(slaveID, player, bankaccountNr, items, transferId, notDropped, ex));
     }
 
-    private void dropRequestToSlave(String slaveID, UUID player, int bankaccountNr, Map<ItemID, Long> items)
+    /**
+     * Task #126 (B6): a known result refunds what was not dropped. An outcome that is still unknown after the
+     * slave's status check is PARKED: no refund (the notes may be in the player's inventory), a TRANSFER_PARKED
+     * suspicion flag for the admin instead. Public for the in-game test.
+     */
+    public void onDropResult(String slaveID, UUID player, int bankaccountNr, Map<ItemID, Long> items, String transferId,
+                             @Nullable Map<ItemID, Long> notDropped, @Nullable Throwable ex)
     {
-        CompletableFuture<Map<ItemID, Long>> notDroppedItemsFuture = DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, player, items);
-        notDroppedItemsFuture.thenAccept(notDropedItems -> {
-            putRemainingItemsBack(bankaccountNr, notDropedItems);
-        });
+        if(ex == null) {
+            putRemainingItemsBack(bankaccountNr, player, notDropped, transferId);
+            return;
+        }
+        String details = "DROP to slave " + slaveID + " outcome unknown, not refunded: " + items;
+        error("WithdrawMoneyPacket: " + details + " (transfer " + transferId + ")", ex);
+        AdminAudit.raise(bankaccountNr, SuspicionChecks.TRANSFER_PARKED, 2, moneyValue(items), transferId, details);
     }
-    private void putRemainingItemsBack(int bankaccountNr, Map<ItemID, Long> items)
+
+    private void putRemainingItemsBack(int bankaccountNr, UUID player, Map<ItemID, Long> items, @Nullable String transferId)
     {
         if(items.isEmpty())
             return;
@@ -272,11 +291,20 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             return; // No money bank found for the player
         }
 
-        long toDepositMoney = 0;
+        long toDepositMoney = moneyValue(items);
+        if (toDepositMoney > 0 && redepositMoneyBank.deposit(toDepositMoney) == BankStatus.SUCCESS) {
+            // Task #109: separate refund row; the WITHDRAW row above stays as written.
+            TransactionLedger.logBank(redepositMoneyBank, LedgerType.WITHDRAW_REFUND, toDepositMoney,
+                    TransactionLedger.player(player), "banknotes not handed out: " + items, transferId);
+        }
+    }
+
+    /** Money value (raw units) of a banknote map; entries that would overflow are skipped. */
+    private static long moneyValue(Map<ItemID, Long> items)
+    {
+        long total = 0;
         for(Map.Entry<ItemID, Long> entry : items.entrySet()) {
-            ItemID  itemID = entry.getKey();
-            ItemStack itemStack = itemID.getStack();
-            if (itemStack.getItem() instanceof MoneyItem moneyItem) {
+            if (entry.getKey().getStack().getItem() instanceof MoneyItem moneyItem) {
                 long worth = moneyItem.worth();
                 long count = entry.getValue();
                 if (worth <= 0 || count <= 0)
@@ -284,12 +312,12 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 if (count > Long.MAX_VALUE / worth)
                     continue; // skip: multiplication would overflow
                 long product = worth * count;
-                if (toDepositMoney > Long.MAX_VALUE - product)
+                if (total > Long.MAX_VALUE - product)
                     continue; // skip: running sum would overflow
-                toDepositMoney += product;
+                total += product;
             }
         }
-        redepositMoneyBank.deposit(toDepositMoney);
+        return total;
     }
 
 

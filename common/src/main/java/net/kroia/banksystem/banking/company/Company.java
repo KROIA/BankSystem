@@ -17,8 +17,7 @@ import java.util.UUID;
 /**
  * Company entity — Phase 1 (Task #43) foundation for the Company Feature program.
  * <p>
- * See {@code .claude/Features/CompanyFeature.md} §1 for the full spec. Fields listed in
- * spec §1 that are populated by later phases ({@link #totalSharesIssued},
+ * Fields populated by later phases ({@link #totalSharesIssued},
  * {@link #shareVisuals}, {@link #payoutSchedules}) exist here with empty defaults so
  * future tasks (#45, #46, #47) do not need to migrate the NBT schema.
  * <p>
