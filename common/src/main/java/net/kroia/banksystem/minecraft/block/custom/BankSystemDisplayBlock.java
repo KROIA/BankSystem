@@ -4,10 +4,13 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.modutilities.RegistryCompat;
 import com.mojang.serialization.MapCodec;
 import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
+import net.kroia.banksystem.networking.entity.OpenDisplayConfigScreenPacket;
+import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.modutilities.gui.display.AbstractDisplayBlock;
 import net.kroia.modutilities.gui.display.AbstractDisplayBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -104,8 +107,12 @@ public class BankSystemDisplayBlock extends AbstractDisplayBlock {
             return InteractionResult.SUCCESS;
         }
 
-        if (level.isClientSide()) {
-            ClientScreenHelper.openConfigScreen(ctrl.getBlockPos(), ctrl.getDisplayType(), ctrl.getAccountNumber());
+        // The server opens the config screen, so a slave without master can refuse it.
+        if (!level.isClientSide()) {
+            if (!MultiServerUtils.canInteractWithBankSystem(player.getUUID()))
+                return InteractionResult.FAIL;
+            if (player instanceof ServerPlayer sPlayer)
+                OpenDisplayConfigScreenPacket.send(sPlayer, ctrl.getBlockPos());
         }
         return InteractionResult.SUCCESS;
     }
@@ -118,11 +125,6 @@ public class BankSystemDisplayBlock extends AbstractDisplayBlock {
     private static class ClientScreenHelper {
         static void openSyncedScreen(BlockPos controllerPos) {
             net.kroia.modutilities.gui.display.client.DisplayInteractionScreen.open(controllerPos);
-        }
-
-        static void openConfigScreen(BlockPos pos, BankSystemDisplayBlockEntity.DisplayType type, int account) {
-            net.kroia.modutilities.gui.client.ClientCompat.setScreen(
-                    new net.kroia.banksystem.screen.custom.DisplayConfigScreen(pos, type, account));
         }
     }
 }

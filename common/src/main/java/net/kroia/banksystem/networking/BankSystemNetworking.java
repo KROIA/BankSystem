@@ -106,6 +106,8 @@ public class BankSystemNetworking extends NetworkPacketManager {
                 net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket.STREAM_CODEC);
         // Task #47 (v2.1.0) — Share Stamper bind screen open (S2C).
         registerS2C(OpenStamperBindScreenPacket.TYPE, OpenStamperBindScreenPacket.STREAM_CODEC);
+        registerS2C(net.kroia.banksystem.networking.entity.OpenDisplayConfigScreenPacket.TYPE,
+                net.kroia.banksystem.networking.entity.OpenDisplayConfigScreenPacket.STREAM_CODEC);
         // Task #51 (v2.1.0) — Company Management screen open (S2C).
         registerS2C(net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket.TYPE,
                 net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket.STREAM_CODEC);
