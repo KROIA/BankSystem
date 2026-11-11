@@ -479,19 +479,14 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             return future;
         }
         IAsyncBankManager asyncBankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
-        CompletableFuture<IAsyncBankAccount> account = asyncBankManager.getBankAccountAsync(bankAccountNumber);
-        account.thenAccept((bankAccount) ->
+        return asyncBankManager.getBankAccountAsync(bankAccountNumber).thenCompose(bankAccount ->
         {
             if(bankAccount == null) {
                 bankAccountNumber = 0;
-                future.complete(true);
+                return CompletableFuture.completedFuture(true);
             }
-            else {
-                CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(player, BankPermission.WITHDRAW.getValue());
-                hasPermissionFuture.thenAccept(future::complete);
-            }
-        });
-        return future;
+            return bankAccount.hasPermissionAsync(player, BankPermission.WITHDRAW.getValue());
+        }).exceptionally(ex -> false); // failed request: deny, keep the binding
     }
 
     public void update()
