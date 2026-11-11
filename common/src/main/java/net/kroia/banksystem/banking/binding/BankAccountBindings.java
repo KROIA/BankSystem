@@ -228,6 +228,29 @@ public class BankAccountBindings {
         }
     }
 
+    /** Task #146: blocks every value path through the slot's binding. No-op if the slot is unbound. */
+    public void suspend(int accountId, @NotNull ItemID itemId) {
+        BindingRow row = getBinding(accountId, itemId);
+        if (row == null) return;
+        row.setFlags(true, false);
+        dirty = true;
+    }
+
+    /** Task #146: lifts a suspension and marks the binding admin-approved. No-op if the slot is unbound. */
+    public void approve(int accountId, @NotNull ItemID itemId) {
+        BindingRow row = getBinding(accountId, itemId);
+        if (row == null) return;
+        row.setFlags(false, true);
+        dirty = true;
+    }
+
+    /** Task #146: true when the slot's binding exists and is suspended (alias IDs resolve to their slot). */
+    public static boolean isSuspended(int accountId, @NotNull ItemID itemId) {
+        BankAccountBindings self = get();
+        BindingRow row = self == null ? null : self.getBinding(accountId, ItemIDManager.resolveAlias(itemId));
+        return row != null && row.suspended();
+    }
+
     /**
      * Convenience accessor: dust for the given slot, or 0 when unbound.
      */

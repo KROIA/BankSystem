@@ -1,12 +1,16 @@
 package net.kroia.banksystem.networking.general;
 
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.BankSystemGenericStream;
 import net.kroia.modutilities.networking.client_server.streaming.GenericStream;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 
@@ -38,7 +42,25 @@ public class BankAccountChangeStream extends BankSystemGenericStream<BankAccount
     @Override
     public void onStartStreamSendingOnSever() {
         InputData inputData = getContextData();
+        if (!mayRead(inputData.accountNr)) {
+            warn("Refused the change stream of account " + inputData.accountNr + " to player " + getRequestorPlayerUUID()
+                    + (getSlaveServerID() == null || getSlaveServerID().isEmpty() ? "" : " via slave '" + getSlaveServerID() + "'"));
+            stopStream();
+            return;
+        }
         getBankManager().subscribeBankChanges(inputData.accountNr, callbackRef);
+    }
+
+    /** Same rule as the account reads: members, and admins unless the requester came through an untrusted slave. */
+    private boolean mayRead(int accountNr) {
+        UUID player = getRequestorPlayerUUID();
+        IServerBankManager manager = getBankManager();
+        if (player == null || manager == null)
+            return false;
+        ISyncServerBankAccount account = manager.getBankAccount(accountNr);
+        String slaveID = getSlaveServerID();
+        boolean untrustedSlave = slaveID != null && !slaveID.isEmpty() && !manager.isSlaveServerTrusted(slaveID);
+        return account != null && BankSystemGenericRequest.isAccessAllowed(account.hasUser(player), playerIsAdmin(player), untrustedSlave);
     }
     @Override
     public void onStopStreamSendingOnServer() {

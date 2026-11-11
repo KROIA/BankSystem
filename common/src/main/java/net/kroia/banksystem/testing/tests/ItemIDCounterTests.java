@@ -1,10 +1,14 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.modutilities.NbtCompat;
+import net.kroia.banksystem.networking.general.RegisterItemIDPacket;
+import net.kroia.banksystem.networking.multi_server.RegisterItemStacksBatchRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.banksystem.util.ItemStackNbt;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -14,6 +18,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -60,6 +65,8 @@ public class ItemIDCounterTests extends TestSuite {
         addTest("dropped_short_not_reused", this::testDroppedShortNotReused);
         addTest("overflow_returns_invalid", this::testOverflowReturnsInvalid);
         addTest("overflow_caller_handling", this::testOverflowCallerHandling);
+        addTest("player_registration_budget", this::testPlayerRegistrationBudget); // Task #143
+        addTest("untrusted_slave_cannot_register_items", this::testUntrustedSlaveCannotRegister); // Task #143
     }
 
 
@@ -124,9 +131,65 @@ public class ItemIDCounterTests extends TestSuite {
         return stack;
     }
 
+    /** The stack's NBT wire form, as a client or slave sends it. */
+    private static CompoundTag wireTag(ItemStack stack) {
+        return (CompoundTag) ItemStackNbt.save(stack, UtilitiesPlatform.getRegistryAccess(), new CompoundTag());
+    }
+
+    private static boolean isRegistered(ItemStack stack) {
+        return ItemIDManager.getItemID(stack).getShort() != ItemID.INVALID_ID.getShort();
+    }
+
     // ========================================================================
     // Tests
     // ========================================================================
+
+    /**
+     * Task #143: a player may create at most {@link ItemIDManager#PLAYER_REGISTRATION_BUDGET} item ids with
+     * extra data per session; plain items and server-internal calls (null player) are not counted. A fresh
+     * random player keeps the static per-session count from earlier runs out of the way.
+     */
+    private TestResult testPlayerRegistrationBudget() {
+        UUID player = UUID.randomUUID();
+        String run = UUID.randomUUID().toString();
+        List<ItemStack> stacks = new ArrayList<>();
+        for (int i = 0; i <= ItemIDManager.PLAYER_REGISTRATION_BUDGET; i++)
+            stacks.add(paperWithCustomData("budget-" + run + "-" + i));
+        if (ItemIDManager.withinRegistrationBudget(null, stacks).size() != stacks.size())
+            return fail("Server-internal registration was limited");
+        int allowed = ItemIDManager.withinRegistrationBudget(player, stacks).size();
+        if (allowed != ItemIDManager.PLAYER_REGISTRATION_BUDGET)
+            return fail("Expected " + ItemIDManager.PLAYER_REGISTRATION_BUDGET + " allowed, got " + allowed);
+        if (ItemIDManager.withinRegistrationBudget(player, List.of(new ItemStack(Items.STONE))).size() != 1)
+            return fail("A plain item was refused after the budget ran out");
+
+        // End to end: a further item with extra data from this player is not registered.
+        ItemStack extra = paperWithCustomData("budget-extra-" + run);
+        ItemIDManager.receiveRegisterItemIDPacket(new RegisterItemIDPacket(List.of(wireTag(extra))), "", player);
+        if (isRegistered(extra))
+            return fail("Task #143: a player past the budget still created an item id");
+        return pass("Budget of " + ItemIDManager.PLAYER_REGISTRATION_BUDGET + " enforced; plain items and the server exempt");
+    }
+
+    /**
+     * Task #143: an untrusted slave cannot create item ids, neither through a forwarded
+     * {@link RegisterItemIDPacket} nor through {@link RegisterItemStacksBatchRequest} (lookups only).
+     */
+    private TestResult testUntrustedSlaveCannotRegister() {
+        String slave = "untrusted_slave_test_143";
+        ItemStack viaPacket = paperWithCustomData("untrusted-packet-" + UUID.randomUUID());
+        ItemIDManager.receiveRegisterItemIDPacket(new RegisterItemIDPacket(List.of(wireTag(viaPacket))), slave, null);
+        if (isRegistered(viaPacket))
+            return fail("Task #143: RegisterItemIDPacket from an untrusted slave created an item id");
+
+        ItemStack viaBatch = paperWithCustomData("untrusted-batch-" + UUID.randomUUID());
+        List<ItemID> ids = new RegisterItemStacksBatchRequest()
+                .handleOnMasterServer(new RegisterItemStacksBatchRequest.InputData(List.of(wireTag(viaBatch))), slave, null)
+                .join().ids();
+        if (ids.size() != 1 || ids.get(0).getShort() != ItemID.INVALID_ID.getShort() || isRegistered(viaBatch))
+            return fail("Task #143: RegisterItemStacksBatchRequest from an untrusted slave created an item id");
+        return pass("Untrusted slave refused on both registration paths");
+    }
 
     /**
      * Acceptance criterion 3 (migration): on a legacy world without the {@code nextShortCounter}

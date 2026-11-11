@@ -65,6 +65,8 @@ public final class AsyncCompanyManager {
     public static final int CODE_PER_PLAYER_COMPANY_LIMIT = 15;
     /** Task #58 (v2.1.1) — caller is at the per-player bank-account cap (company needs a slot). */
     public static final int CODE_PER_PLAYER_ACCOUNT_LIMIT = 16;
+    /** Task #117 (v2.2.0) — the company bank account is frozen by an admin. */
+    public static final int CODE_ACCOUNT_FROZEN = 17;
 
     // ------------------------------------------------------------------
     // Function enum
@@ -229,7 +231,8 @@ public final class AsyncCompanyManager {
 
     public record CompanyInfoOutput(boolean present, int companyId, String name, int bankAccountNr,
                                     long maxSupply, long totalSharesIssued, String description,
-                                    List<String> founderNames, short companyCurrency) {
+                                    List<String> founderNames, short companyCurrency,
+                                    String accountName) {
         public static final StreamCodec<RegistryFriendlyByteBuf, CompanyInfoOutput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {
                     buf.writeBoolean(v.present);
@@ -242,6 +245,7 @@ public final class AsyncCompanyManager {
                     buf.writeVarInt(v.founderNames.size());
                     for (String s : v.founderNames) buf.writeUtf(s);
                     buf.writeShort(v.companyCurrency);
+                    buf.writeUtf(v.accountName);
                 },
                 buf -> {
                     boolean present = buf.readBoolean();
@@ -255,11 +259,12 @@ public final class AsyncCompanyManager {
                     List<String> founders = new ArrayList<>(n);
                     for (int i = 0; i < n; i++) founders.add(buf.readUtf());
                     short currency = buf.readShort();
-                    return new CompanyInfoOutput(present, id, name, accNr, ms, tsi, desc, founders, currency);
+                    String accountName = buf.readUtf();
+                    return new CompanyInfoOutput(present, id, name, accNr, ms, tsi, desc, founders, currency, accountName);
                 }
         );
         public static final CompanyInfoOutput ABSENT =
-                new CompanyInfoOutput(false, 0, "", 0, 0L, 0L, "", List.of(), (short) 0);
+                new CompanyInfoOutput(false, 0, "", 0, 0L, 0L, "", List.of(), (short) 0, "");
     }
 
     /** Task #43h — list company names visible to the caller under a rights filter. */
@@ -846,6 +851,12 @@ public final class AsyncCompanyManager {
     }
     public record AccountEntry(int accountId, String accountName, int filterBits) {}
     public record ListPlayerAccountsOutput(int resultCode, List<AccountEntry> accounts) {
+        /** Task #104: copy for non-admins: account number and name only, permission bits zeroed. */
+        public ListPlayerAccountsOutput withoutPermissionBits() {
+            List<AccountEntry> stripped = new ArrayList<>(accounts.size());
+            for (AccountEntry e : accounts) stripped.add(new AccountEntry(e.accountId(), e.accountName(), 0));
+            return new ListPlayerAccountsOutput(resultCode, stripped);
+        }
         public static final StreamCodec<RegistryFriendlyByteBuf, ListPlayerAccountsOutput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {
                     buf.writeVarInt(v.resultCode);
@@ -1026,7 +1037,21 @@ public final class AsyncCompanyManager {
             int missedPayoutCount, long missedPayoutAmount,
             long currentBalance, long daysToInsolvency,
             List<CashflowBucketWire> cashflowSeries,
-            List<ShareholderWire> topShareholders) {
+            List<ShareholderWire> topShareholders,
+            boolean reduced, long sharesIssued, int holderCount) {
+        /** Task #104: what non-members see: share counts and holder count only, no account data. */
+        public static CompanyStatsPayload reducedFor(long sharesIssued, int holderCount) {
+            return new CompanyStatsPayload(0L, 0L, 0L, 0, 0L, 0L, -1L, List.of(), List.of(),
+                    true, sharesIssued, holderCount);
+        }
+        /** Task #104: copy for non-admin members: shareholder account number and name removed. */
+        public CompanyStatsPayload withAnonymousShareholders() {
+            List<ShareholderWire> anon = new ArrayList<>(topShareholders.size());
+            for (ShareholderWire s : topShareholders) anon.add(new ShareholderWire(0, "", s.shares(), s.pct()));
+            return new CompanyStatsPayload(totalEarnings, totalSpendings, netCashflow, missedPayoutCount,
+                    missedPayoutAmount, currentBalance, daysToInsolvency, cashflowSeries, anon,
+                    reduced, sharesIssued, holderCount);
+        }
         public static final StreamCodec<RegistryFriendlyByteBuf, CompanyStatsPayload> STREAM_CODEC =
                 StreamCodec.of(
                         (buf, v) -> {
@@ -1041,6 +1066,9 @@ public final class AsyncCompanyManager {
                             for (CashflowBucketWire b : v.cashflowSeries) CashflowBucketWire.write(buf, b);
                             buf.writeVarInt(v.topShareholders.size());
                             for (ShareholderWire s : v.topShareholders) ShareholderWire.write(buf, s);
+                            buf.writeBoolean(v.reduced);
+                            buf.writeVarLong(v.sharesIssued);
+                            buf.writeVarInt(v.holderCount);
                         },
                         buf -> {
                             long earn = buf.readVarLong(), spend = buf.readVarLong(), net = buf.readVarLong();
@@ -1052,10 +1080,14 @@ public final class AsyncCompanyManager {
                             int ns = buf.readVarInt();
                             List<ShareholderWire> holders = new ArrayList<>(ns);
                             for (int i = 0; i < ns; i++) holders.add(ShareholderWire.read(buf));
-                            return new CompanyStatsPayload(earn, spend, net, mpc, mpa, bal, days, buckets, holders);
+                            boolean reduced = buf.readBoolean();
+                            long sharesIssued = buf.readVarLong();
+                            int holderCount = buf.readVarInt();
+                            return new CompanyStatsPayload(earn, spend, net, mpc, mpa, bal, days, buckets, holders,
+                                    reduced, sharesIssued, holderCount);
                         });
         public static final CompanyStatsPayload EMPTY = new CompanyStatsPayload(
-                0L, 0L, 0L, 0, 0L, 0L, -1L, List.of(), List.of());
+                0L, 0L, 0L, 0, 0L, 0L, -1L, List.of(), List.of(), false, 0L, 0);
     }
 
     // ------------------------------------------------------------------
@@ -1155,6 +1187,10 @@ public final class AsyncCompanyManager {
             return Request.class.getName();
         }
 
+        /** Issue #85: stats and history read the DB; the requester never refunds, and a false failure invites a repeated dividend. */
+        @Override
+        public long getTimeoutMs() { return SLOW_READ_TIMEOUT_MS; }
+
         @Override
         public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
             String playerName = "";
@@ -1180,7 +1216,46 @@ public final class AsyncCompanyManager {
                 return CompletableFuture.completedFuture(fallbackOutput(input.function));
             }
 
+            // Task #104: company account data goes to account members and admins only.
+            boolean fullRead = isFullRead(playerSender, slaveID);
+            java.util.function.IntPredicate canReadCompany = companyId -> {
+                Company c = cm.getById(companyId);
+                return c != null && canReadAccount(playerSender, slaveID, bm.getBankAccount(c.getBankAccountNr()));
+            };
+
+            // Issue #93: DB-backed reads complete from the DB future and never block the master tick.
+            switch (input.function) {
+                case GET_HISTORY -> {
+                    GetHistoryInput in = input.decodeParams();
+                    Company owner = companyOfSchedule(in.scheduleId(), cm);
+                    return fullRead || (owner != null && canReadCompany.test(owner.getCompanyId())) ? handleGetHistory(in)
+                            : CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_HISTORY, GetHistoryOutput.EMPTY));
+                }
+                case GET_FAILURE_COUNT_24H -> {
+                    GetFailureCount24hInput in = input.decodeParams();
+                    return canReadCompany.test(in.companyId()) ? handleFailureCount24h(in)
+                            : CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_FAILURE_COUNT_24H, new GetFailureCount24hOutput(0L)));
+                }
+                case GET_COMPANY_STATS -> {
+                    GetCompanyStatsInput in = input.decodeParams();
+                    Company company = cm.getById(in.companyId());
+                    if (company == null)
+                        return CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_COMPANY_STATS, CompanyStatsPayload.EMPTY));
+                    if (!canReadCompany.test(in.companyId()))
+                        return CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_COMPANY_STATS,
+                                CompanyStatsPayload.reducedFor(company.getTotalSharesIssued(), countHolders(in.companyId(), bm))));
+                    return handleGetCompanyStats(in, bm, company).thenApply(out -> {
+                        if (fullRead) return out;
+                        CompanyStatsPayload full = out.decodeResult();
+                        return OutputData.of(FunctionType.GET_COMPANY_STATS, full.withAnonymousShareholders());
+                    });
+                }
+                default -> { }
+            }
+
             return CompletableFuture.completedFuture(switch (input.function) {
+                case GET_HISTORY, GET_FAILURE_COUNT_24H, GET_COMPANY_STATS ->
+                        throw new IllegalStateException("handled asynchronously above");
                 case CREATE_COMPANY     -> handleCreate(input.decodeParams(), bm, cm);
                 case TRANSFER_FOUNDER   -> handleTransfer(input.decodeParams(), bm, cm);
                 case DISSOLVE_COMPANY   -> handleDissolve(input.decodeParams(), cm);
@@ -1193,10 +1268,12 @@ public final class AsyncCompanyManager {
                 case UPDATE_PAYOUT      -> handleUpdatePayout(input.decodeParams(), bm, cm);
                 case PAUSE_PAYOUT       -> handlePausePayout(input.decodeParams(), bm, cm);
                 case DELETE_PAYOUT      -> handleDeletePayout(input.decodeParams(), bm, cm);
-                case LIST_SCHEDULES     -> handleListSchedules(input.decodeParams());
-                case GET_HISTORY        -> handleGetHistory(input.decodeParams());
+                case LIST_SCHEDULES     -> {
+                    ListSchedulesInput in = input.decodeParams();
+                    yield canReadCompany.test(in.companyId()) ? handleListSchedules(in)
+                            : OutputData.of(FunctionType.LIST_SCHEDULES, ListSchedulesOutput.EMPTY);
+                }
                 case GET_COMPANY_INFO_BY_ACCOUNT -> handleInfoByAccount(input.decodeParams(), bm, cm);
-                case GET_FAILURE_COUNT_24H -> handleFailureCount24h(input.decodeParams());
                 case UPDATE_SHARE_VISUALS -> handleUpdateShareVisuals(input.decodeParams(), bm, cm);
                 case GET_SHARE_VISUALS    -> handleGetShareVisuals(input.decodeParams(), cm);
                 case PAY_DIVIDEND         -> handlePayDividend(input.decodeParams(), bm, cm);
@@ -1210,11 +1287,21 @@ public final class AsyncCompanyManager {
                 case SET_MARKET_OPEN           -> handleSetMarketOpen(input.decodeParams(), bm, cm);
                 case IS_MARKET_OPEN            -> handleIsMarketOpen(input.decodeParams(), cm);
                 case UNBIND_STAMPER            -> handleUnbindStamper(input.decodeParams(), bm, cm);
-                case LIST_PLAYER_ACCOUNTS_WITH_FILTER -> handleListPlayerAccounts(input.decodeParams(), bm, cm);
+                case LIST_PLAYER_ACCOUNTS_WITH_FILTER -> {
+                    ListPlayerAccountsInput in = input.decodeParams();
+                    OutputData out = handleListPlayerAccounts(in, bm, cm);
+                    if (fullRead) yield out;
+                    ListPlayerAccountsOutput full = out.decodeResult();
+                    yield OutputData.of(FunctionType.LIST_PLAYER_ACCOUNTS_WITH_FILTER,
+                            visibleTo(full, in.callerUUID(), in.subject(), bm).withoutPermissionBits());
+                }
                 case LIST_ACCOUNT_ITEM_BALANCES -> handleListItemBalances(input.decodeParams(), bm, cm);
                 case PAY_MISSED                -> handlePayMissed(input.decodeParams(), bm, cm);
-                case LIST_DIVIDEND_HISTORY     -> handleListDividendHistory(input.decodeParams());
-                case GET_COMPANY_STATS         -> handleGetCompanyStats(input.decodeParams(), bm, cm);
+                case LIST_DIVIDEND_HISTORY     -> {
+                    ListDividendHistoryInput in = input.decodeParams();
+                    yield canReadCompany.test(in.companyId()) ? handleListDividendHistory(in)
+                            : OutputData.of(FunctionType.LIST_DIVIDEND_HISTORY, ListDividendHistoryOutput.EMPTY);
+                }
                 case SET_COMPANY_CURRENCY      -> handleSetCompanyCurrency(input.decodeParams(), bm, cm);
                 // Task #54 (v2.1.0) — symbol store (don't need bm/cm).
                 case GET_SYMBOL_MANIFEST -> handleGetSymbolManifest();
@@ -1420,6 +1507,13 @@ public final class AsyncCompanyManager {
                 new DescriptionOutput(CODE_OK, company.getCompanyId()));
     }
 
+    /** Task #103: company account name for CompanyInfoOutput, so non-members can show it without reading the account. */
+    private static String accountNameOf(IServerBankManager bm, int accountNr) {
+        IServerBankAccount account = bm.getBankAccount(accountNr);
+        String name = account == null ? null : account.getAccountName();
+        return name == null ? "" : name;
+    }
+
     private static OutputData handleInfo(String companyName, IServerBankManager bm, CompanyManager cm) {
         Company company = cm.getByName(companyName);
         if (company == null)
@@ -1435,7 +1529,8 @@ public final class AsyncCompanyManager {
                         company.getBankAccountNr(), company.getMaxSupply(),
                         company.getTotalSharesIssued(),
                         company.getDescription() == null ? "" : company.getDescription(),
-                        founderNames, company.getCompanyCurrency()));
+                        founderNames, company.getCompanyCurrency(),
+                        accountNameOf(bm, company.getBankAccountNr())));
     }
 
     private static OutputData handleListForCaller(ListInput in, CompanyManager cm) {
@@ -1870,6 +1965,22 @@ public final class AsyncCompanyManager {
                 new ListPlayerAccountsOutput(CODE_OK, entries));
     }
 
+    /**
+     * Task #144: the part of another player's account list a non-admin caller may see: the subject's personal
+     * account (the default payout target) and the accounts the caller is a member of too. The subject sees all.
+     */
+    public static ListPlayerAccountsOutput visibleTo(ListPlayerAccountsOutput full, UUID caller, UUID subject, IServerBankManager bm) {
+        if (caller.equals(subject)) return full;
+        IServerBankAccount personal = bm.getPersonalBankAccount(subject);
+        List<AccountEntry> visible = new ArrayList<>();
+        for (AccountEntry e : full.accounts()) {
+            IServerBankAccount account = bm.getBankAccount(e.accountId());
+            if (account != null && ((personal != null && e.accountId() == personal.getAccountNumber()) || account.hasUser(caller)))
+                visible.add(e);
+        }
+        return new ListPlayerAccountsOutput(full.resultCode(), visible);
+    }
+
     /** Spec B.3 — non-zero item balances on the company's bank account (money excluded). */
     private static OutputData handleListItemBalances(ListItemBalancesInput in,
                                                      IServerBankManager bm, CompanyManager cm) {
@@ -1937,13 +2048,14 @@ public final class AsyncCompanyManager {
                 case TARGET_NOT_FOUND -> CODE_MISSING_TARGET;
                 case TARGET_NO_DEPOSIT_RIGHT -> CODE_TARGET_NO_DEPOSIT;
                 case CURRENCY_ITEM_MISSING -> CODE_CURRENCY_ITEM_MISSING;
+                case ACCOUNT_FROZEN -> CODE_ACCOUNT_FROZEN;
                 default -> CODE_INTERNAL;
             };
             return OutputData.of(FunctionType.PAY_MISSED,
                     new PayMissedOutput(code, schedule.getMissedAmount(), schedule.getMissedCount()));
         }
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.TRANSACTION_LOG_MANAGER != null && !ledger.isEmpty()) {
-            BACKEND_INSTANCES.TRANSACTION_LOG_MANAGER.save(ledger);
+            net.kroia.banksystem.banking.ledger.TransactionLedger.writeAll(ledger); // Task #115: runs the ledger hooks
         }
         cm.applyCatchUpPayment(in.companyId, in.scheduleId, in.amount);
         PayoutSchedule updated = company.findSchedule(in.scheduleId);
@@ -1970,6 +2082,14 @@ public final class AsyncCompanyManager {
                 new DeletePayoutOutput(mapPayoutOp(pm.deleteSchedule(in.companyId, in.scheduleId))));
     }
 
+    /** Task #104: the company owning a payout schedule, or null (deleted schedule). */
+    private static @Nullable Company companyOfSchedule(long scheduleId, CompanyManager cm) {
+        for (Company c : cm.getAll())
+            for (PayoutSchedule s : c.getPayoutSchedules())
+                if (s.getScheduleId() == scheduleId) return c;
+        return null;
+    }
+
     private static OutputData handleListSchedules(ListSchedulesInput in) {
         IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
         if (pm == null) return OutputData.of(FunctionType.LIST_SCHEDULES, ListSchedulesOutput.EMPTY);
@@ -1980,35 +2100,38 @@ public final class AsyncCompanyManager {
                 new ListSchedulesOutput(wire, PayoutExecutor.getLastObservedTick()));
     }
 
-    private static OutputData handleGetHistory(GetHistoryInput in) {
+    /** Issue #93: completes from the DB futures; no blocking wait on the master thread. */
+    private static CompletableFuture<OutputData> handleGetHistory(GetHistoryInput in) {
+        OutputData empty = OutputData.of(FunctionType.GET_HISTORY, GetHistoryOutput.EMPTY);
         IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
-        if (pm == null) return OutputData.of(FunctionType.GET_HISTORY, GetHistoryOutput.EMPTY);
-        // Best-effort synchronous unwrap — history futures resolve on the DB worker.
-        List<PayoutHistoryRecord> rows;
-        long total;
+        if (pm == null) return CompletableFuture.completedFuture(empty);
         try {
-            rows = pm.getHistory(in.scheduleId, in.limit).get();
-            total = pm.getTotalPaidForSchedule(in.scheduleId).get();
-        } catch (Exception e) {
-            return OutputData.of(FunctionType.GET_HISTORY, GetHistoryOutput.EMPTY);
+            return pm.getHistory(in.scheduleId, in.limit)
+                    .thenCombine(pm.getTotalPaidForSchedule(in.scheduleId), (rows, total) -> {
+                        List<HistoryRowWire> wire = new ArrayList<>(rows.size());
+                        for (PayoutHistoryRecord r : rows) wire.add(HistoryRowWire.of(r));
+                        return OutputData.of(FunctionType.GET_HISTORY, new GetHistoryOutput(wire, total));
+                    })
+                    .exceptionally(e -> empty);
+        } catch (RuntimeException e) { // DB worker shut down
+            return CompletableFuture.completedFuture(empty);
         }
-        List<HistoryRowWire> wire = new ArrayList<>(rows.size());
-        for (PayoutHistoryRecord r : rows) wire.add(HistoryRowWire.of(r));
-        return OutputData.of(FunctionType.GET_HISTORY, new GetHistoryOutput(wire, total));
     }
 
-    private static OutputData handleFailureCount24h(GetFailureCount24hInput in) {
+    /** Issue #93: completes from the DB future; no blocking wait on the master thread. */
+    private static CompletableFuture<OutputData> handleFailureCount24h(GetFailureCount24hInput in) {
+        OutputData zero = OutputData.of(FunctionType.GET_FAILURE_COUNT_24H, new GetFailureCount24hOutput(0L));
         net.kroia.banksystem.data.table.PayoutHistoryManager hm =
                 BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_HISTORY_MANAGER : null;
-        if (hm == null) return OutputData.of(FunctionType.GET_FAILURE_COUNT_24H, new GetFailureCount24hOutput(0L));
+        if (hm == null) return CompletableFuture.completedFuture(zero);
         long since = System.currentTimeMillis() - 86_400_000L;
-        long count;
         try {
-            count = hm.countFailuresSinceForCompany(in.companyId, since).get();
-        } catch (Exception e) {
-            count = 0L;
+            return hm.countFailuresSinceForCompany(in.companyId, since)
+                    .thenApply(count -> OutputData.of(FunctionType.GET_FAILURE_COUNT_24H, new GetFailureCount24hOutput(count)))
+                    .exceptionally(e -> zero);
+        } catch (RuntimeException e) { // DB worker shut down
+            return CompletableFuture.completedFuture(zero);
         }
-        return OutputData.of(FunctionType.GET_FAILURE_COUNT_24H, new GetFailureCount24hOutput(count));
     }
 
     // Task #46 (v2.1.0) — by-id share visuals lookup (read-only; no permission gate).
@@ -2045,7 +2168,8 @@ public final class AsyncCompanyManager {
                         company.getBankAccountNr(), company.getMaxSupply(),
                         company.getTotalSharesIssued(),
                         company.getDescription() == null ? "" : company.getDescription(),
-                        founderNames, company.getCompanyCurrency()));
+                        founderNames, company.getCompanyCurrency(),
+                        accountNameOf(bm, company.getBankAccountNr())));
     }
 
     /** Task #52 (v2.1.0) — count of accounts holding a strictly-positive balance
@@ -2059,16 +2183,20 @@ public final class AsyncCompanyManager {
     private static OutputData handleCountHoldersForCompany(GetShareVisualsInput in, IServerBankManager bm, CompanyManager cm) {
         Company company = cm.getById(in.companyId());
         if (company == null) return OutputData.of(FunctionType.COUNT_HOLDERS_FOR_COMPANY, Integer.valueOf(0));
+        return OutputData.of(FunctionType.COUNT_HOLDERS_FOR_COMPANY, Integer.valueOf(countHolders(in.companyId(), bm)));
+    }
 
+    /** Number of accounts holding any share ItemID of the company. */
+    private static int countHolders(int companyId, IServerBankManager bm) {
         java.util.Set<Integer> holders = new java.util.HashSet<>();
         for (java.util.Map.Entry<net.kroia.banksystem.util.ItemID, net.minecraft.world.item.ItemStack> e
                 : net.kroia.banksystem.util.ItemIDManager.getItemIDMap().entrySet()) {
             Integer cid = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
                     .getCompanyIdForItemID(e.getKey());
-            if (cid == null || cid != in.companyId()) continue;
+            if (cid == null || cid != companyId) continue;
             holders.addAll(bm.listAccountsHolding(e.getKey()));
         }
-        return OutputData.of(FunctionType.COUNT_HOLDERS_FOR_COMPANY, Integer.valueOf(holders.size()));
+        return holders.size();
     }
 
     private static OutputData handleInfoByAccount(GetCompanyInfoByAccountInput in, IServerBankManager bm, CompanyManager cm) {
@@ -2085,7 +2213,8 @@ public final class AsyncCompanyManager {
                         company.getBankAccountNr(), company.getMaxSupply(),
                         company.getTotalSharesIssued(),
                         company.getDescription() == null ? "" : company.getDescription(),
-                        founderNames, company.getCompanyCurrency()));
+                        founderNames, company.getCompanyCurrency(),
+                        accountNameOf(bm, company.getBankAccountNr())));
     }
 
     // ------------------------------------------------------------------
@@ -2295,6 +2424,7 @@ public final class AsyncCompanyManager {
             case NO_SHARES -> CODE_NO_SHARES;
             case INSUFFICIENT_FUNDS, CURRENCY_ITEM_MISSING -> CODE_INSUFFICIENT_FUNDS;
             case NO_PERMISSION -> CODE_NO_PERMISSION;
+            case ACCOUNT_FROZEN -> CODE_ACCOUNT_FROZEN;
         };
         return OutputData.of(FunctionType.PAY_DIVIDEND,
                 new PayDividendOutput(code, result.totalPaid(), result.holderCount()));
@@ -2372,12 +2502,18 @@ public final class AsyncCompanyManager {
         if (server == null) {
             // Physical client connected to a dedicated server — C2S over the game
             // connection (same path AsyncBankManager uses from the client side).
-            return Request.instance.sendRequestToServer(input);
+            return nullOnFailure(input, Request.instance.sendRequestToServer(input));
         }
-        if (net.kroia.modutilities.networking.multi_server.MultiServerManager.isRunning()
-                && !net.kroia.modutilities.networking.multi_server.MultiServerManager.isMaster()) {
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer) {
+            // Task #167: the client of a singleplayer slave (spslave) also sees the integrated
+            // server here; from the render thread go C2S like any client, never S2S.
+            if (net.kroia.banksystem.client.cache.ClientThread.isCurrent())
+                return nullOnFailure(input, Request.instance.sendRequestToServer(input));
+            // Master link down: nothing can answer, and the local handler is master-only.
+            if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem())
+                return CompletableFuture.completedFuture(null);
             // True slave server — standard S2S request hop to the bank master.
-            return Request.instance.sendRequestToMaster(input);
+            return nullOnFailure(input, Request.instance.sendRequestToMaster(input));
         }
         // Local master (dedicated master or singleplayer integrated server) — the MSM
         // sendToMaster path would drop the packet, so short-circuit to the handler on
@@ -2392,6 +2528,20 @@ public final class AsyncCompanyManager {
             }
         });
         return out;
+    }
+
+    /**
+     * Issue #85: a failed remote request (timeout, lost link) completes with null like the local path,
+     * so {@link #dispatchInput} never completes exceptionally and every helper's future completes.
+     * Helpers null-check the output; for value functions null means "outcome unknown", not "not applied".
+     */
+    private static CompletableFuture<OutputData> nullOnFailure(InputData input, CompletableFuture<OutputData> sent) {
+        return sent.exceptionally(t -> {
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                BACKEND_INSTANCES.LOGGER.warn("[AsyncCompanyManager] " + input.function + " got no answer: "
+                        + net.kroia.banksystem.networking.multi_server.TransferStatusRequest.cause(t));
+            return null;
+        });
     }
 
     /** Task #1 (v2.1.0) — slave helper: request market creation. */
@@ -2482,10 +2632,11 @@ public final class AsyncCompanyManager {
         return OutputData.of(FunctionType.SET_COMPANY_CURRENCY, new SetCompanyCurrencyOutput(ok ? CODE_OK : CODE_INTERNAL));
     }
 
-    private static OutputData handleGetCompanyStats(GetCompanyStatsInput in, IServerBankManager bm, CompanyManager cm) {
-        Company company = cm.getById(in.companyId);
-        if (company == null) return OutputData.of(FunctionType.GET_COMPANY_STATS, CompanyStatsPayload.EMPTY);
-
+    /**
+     * Issue #93: bank/company state is read here on the calling thread; the SQL runs on the DB
+     * worker and completes the returned future, so a busy or paused DB never stalls the master tick.
+     */
+    private static CompletableFuture<OutputData> handleGetCompanyStats(GetCompanyStatsInput in, IServerBankManager bm, Company company) {
         long nowMs = System.currentTimeMillis();
         long fromMs = switch (in.timeframeIndex) {
             case 0  -> nowMs - 86_400_000L;
@@ -2530,36 +2681,6 @@ public final class AsyncCompanyManager {
             }
         }
 
-        // DB-backed metrics
-        net.kroia.banksystem.data.DatabaseManager dbm =
-                BACKEND_INSTANCES != null ? BACKEND_INSTANCES.DATABASE_MANAGER : null;
-        List<CashflowBucketWire> buckets = new ArrayList<>();
-        long totalEarnings = 0L, totalSpendings = 0L;
-        long daysToInsolvency = -1L;
-        if (dbm != null) {
-            try {
-                java.sql.Connection conn = dbm.getConnection();
-                int acctNr = company.getBankAccountNr();
-                List<CompanyStatsQuery.CashflowBucket> raw =
-                        CompanyStatsQuery.getCashflowSeries(conn, acctNr, filterItemIdShort, fromMs, nowMs, bucketMs);
-                for (CompanyStatsQuery.CashflowBucket b : raw)
-                    buckets.add(new CashflowBucketWire(b.bucketStart(), b.earnings(), b.spendings()));
-                CompanyStatsQuery.CompanyHeadlineMetrics metrics =
-                        CompanyStatsQuery.getHeadlineMetrics(conn, acctNr, filterItemIdShort, fromMs);
-                totalEarnings = metrics.totalEarnings();
-                totalSpendings = metrics.totalSpendings();
-                daysToInsolvency = CompanyStatsQuery.getDaysToInsolvency(conn, acctNr, company, currentBalance);
-            } catch (Exception e) {
-                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
-                    BACKEND_INSTANCES.LOGGER.warn("[CompanyStats] DB query failed: " + e);
-            }
-        } else {
-            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
-                BACKEND_INSTANCES.LOGGER.warn("[CompanyStats] dbm is null — no DB-backed metrics");
-        }
-
-        long netCashflow = totalEarnings - totalSpendings;
-
         // Top shareholders
         List<ShareholderWire> holders = new ArrayList<>();
         try {
@@ -2569,10 +2690,54 @@ public final class AsyncCompanyManager {
                 holders.add(new ShareholderWire(e.accountNr(), e.accountName(), e.shares(), e.pct()));
         } catch (Exception e) { /* fail-open */ }
 
-        return OutputData.of(FunctionType.GET_COMPANY_STATS,
-                new CompanyStatsPayload(totalEarnings, totalSpendings, netCashflow,
-                        missedPayoutCount, missedPayoutAmount,
-                        currentBalance, daysToInsolvency, buckets, holders));
+        final long balance = currentBalance;
+        final short itemFilter = filterItemIdShort;
+        final int missedCount = missedPayoutCount;
+        final long missedAmount = missedPayoutAmount;
+        final long sharesIssued = company.getTotalSharesIssued();
+        final int holderCount = countHolders(in.companyId, bm);
+        final int acctNr = company.getBankAccountNr();
+        final double scheduleObligation = CompanyStatsQuery.scheduleObligationPerDay(company);
+
+        // DB-backed metrics
+        net.kroia.banksystem.data.DatabaseManager dbm =
+                BACKEND_INSTANCES != null ? BACKEND_INSTANCES.DATABASE_MANAGER : null;
+        java.util.function.Supplier<OutputData> build = () -> {
+            List<CashflowBucketWire> buckets = new ArrayList<>();
+            long totalEarnings = 0L, totalSpendings = 0L;
+            long daysToInsolvency = -1L;
+            if (dbm != null) {
+                try {
+                    java.sql.Connection conn = dbm.getConnection();
+                    List<CompanyStatsQuery.CashflowBucket> raw =
+                            CompanyStatsQuery.getCashflowSeries(conn, acctNr, itemFilter, fromMs, nowMs, bucketMs);
+                    for (CompanyStatsQuery.CashflowBucket b : raw)
+                        buckets.add(new CashflowBucketWire(b.bucketStart(), b.earnings(), b.spendings()));
+                    CompanyStatsQuery.CompanyHeadlineMetrics metrics =
+                            CompanyStatsQuery.getHeadlineMetrics(conn, acctNr, itemFilter, fromMs);
+                    totalEarnings = metrics.totalEarnings();
+                    totalSpendings = metrics.totalSpendings();
+                    daysToInsolvency = CompanyStatsQuery.getDaysToInsolvency(conn, acctNr, scheduleObligation, balance);
+                } catch (Exception e) {
+                    if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                        BACKEND_INSTANCES.LOGGER.warn("[CompanyStats] DB query failed: " + e);
+                }
+            } else {
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.warn("[CompanyStats] dbm is null — no DB-backed metrics");
+            }
+            return OutputData.of(FunctionType.GET_COMPANY_STATS,
+                    new CompanyStatsPayload(totalEarnings, totalSpendings, totalEarnings - totalSpendings,
+                            missedCount, missedAmount,
+                            balance, daysToInsolvency, buckets, holders,
+                            false, sharesIssued, holderCount));
+        };
+        if (dbm == null) return CompletableFuture.completedFuture(build.get());
+        try {
+            return CompletableFuture.supplyAsync(build, dbm.getDatabaseThread());
+        } catch (java.util.concurrent.RejectedExecutionException e) { // DB worker shut down
+            return CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_COMPANY_STATS, CompanyStatsPayload.EMPTY));
+        }
     }
 
     /** v2.1.0 — slave helper: set the company's default payout currency (MANAGE-gated on master). */

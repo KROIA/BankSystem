@@ -56,6 +56,11 @@ public class BankSystemTestCategories {
             "banksystem", "mod_settings", "Mod settings JSON round-trip and sanitize-bounds tests",
             TestCategory.ServerType.BOTH, false);
 
+    /** Task #124 — slave-side diagnostics rows (TransferJournal). */
+    public static final TestCategory DIAGNOSTICS_SLAVE = new TestCategory(
+            "banksystem", "diagnostics_slave", "Slave TransferJournal rows in the diagnostics DB",
+            TestCategory.ServerType.SLAVE_ONLY, true);
+
     /** Task #43 (v2.1.0) — Company feature Phase 1 (POJOs, manager, persistence, invariant). */
     public static final TestCategory COMPANY = new TestCategory(
             "banksystem", "company", "Company registry, persistence, and founder invariant",

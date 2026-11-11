@@ -9,8 +9,8 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Task #45 (v2.1.0) — public payout API. Reachable via {@code BankSystemAPI.getPayoutManager()}.
- * Master-only surface — calling on a slave returns fail-closed defaults (empty lists,
- * {@link OpResult#COMPANY_MISSING}). Downstream mods and UI code use this interface — never
+ * Master-only surface — calling on a slave returns fail-closed defaults (empty lists and futures,
+ * {@link OpResult#NOT_MASTER} / {@link CreateOutcome#NOT_MASTER}). Downstream mods and UI code use this interface — never
  * the concrete manager.
  */
 public interface IPayoutManager {
