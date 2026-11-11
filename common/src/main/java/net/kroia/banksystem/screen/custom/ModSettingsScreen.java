@@ -161,6 +161,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             "ServerBank.ADDITIONAL_DEPOSIT_GATED_COMPONENTS",
             "ServerBank.CONFIRM_ITEMID_MERGE",
             "ServerBank.CONFIRM_ITEMID_REPAIR",
+            "ServerBank.CONFIRM_ITEMID_REMOVE_MISSING",
             "Integrations.PLACEHOLDERS_ENABLED",
             "Integrations.TOP_COUNT"
     );
