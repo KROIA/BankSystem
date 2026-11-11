@@ -1167,6 +1167,7 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
 
             BankAccountBindings bindings = BankAccountBindings.get();
             if (bindings == null) return fail("BankAccountBindings unavailable");
+            bindings.unbind(testAccountNr, goldSlot); // a row leaked by an earlier test's exception would refuse the bind (Task #147)
             BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, goldSlot, personalRef);
             if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
 
@@ -1257,6 +1258,7 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
 
             BankAccountBindings bindings = BankAccountBindings.get();
             if (bindings == null) return fail("BankAccountBindings unavailable");
+            bindings.unbind(testAccountNr, goldSlot); // a row leaked by an earlier test's exception would refuse the bind (Task #147)
             BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, goldSlot, personalRef);
             if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
 
@@ -1362,6 +1364,7 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
             if (personalRef == null) return fail("No personal LC account");
             BankAccountBindings bindings = BankAccountBindings.get();
             if (bindings == null) return fail("BankAccountBindings unavailable");
+            bindings.unbind(testAccountNr, goldSlot); // a row leaked by an earlier test's exception would refuse the bind (Task #147)
             BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, goldSlot, personalRef);
             if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
 

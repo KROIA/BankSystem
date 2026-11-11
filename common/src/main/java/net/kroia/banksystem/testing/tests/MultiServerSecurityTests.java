@@ -1,6 +1,7 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
@@ -8,15 +9,24 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
+import net.kroia.banksystem.minecraft.command.AsyncBankSystemCommandHandler;
+import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.networking.currency.ListBindableAccountsRequest;
+import net.kroia.banksystem.networking.entity.WithdrawMoneyPacket;
+import net.kroia.banksystem.networking.general.GetUserCustomDataRequest;
 import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
 import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
 import net.kroia.banksystem.networking.multi_server.WithdrawItemsFromBankRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
+import net.kroia.banksystem.testing.StubCurrencyProvider;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
@@ -70,6 +80,16 @@ public class MultiServerSecurityTests extends TestSuite {
         addTest("withdrawItemsFromBankRequest_rejects_untrusted_slave", this::testWithdrawRejectsUntrustedSlave);
         addTest("depositItemsInBankRequest_accepts_trusted_slave", this::testDepositAcceptsTrustedSlave);
         addTest("updateBankAccountRequest_rejects_untrusted_slave_forged_admin", this::testUpdateBankAccountRejectsUntrustedSlaveForgedAdmin);
+
+        // Untrusted slaves assert the player UUID: no commands, withdrawals or per-player reads through them
+        addTest("command_rejects_untrusted_slave_forged_admin", this::testCommandRejectsUntrustedSlaveForgedAdmin);
+        addTest("withdrawMoneyPacket_rejects_untrusted_slave", this::testWithdrawMoneyRejectsUntrustedSlave);
+        addTest("getUserCustomData_empty_for_untrusted_slave", this::testUserCustomDataEmptyForUntrustedSlave);
+        addTest("listBindableAccounts_empty_for_untrusted_slave", this::testListBindableEmptyForUntrustedSlave);
+
+        // Task #141 — bank download block: settings gate and owner recheck
+        addTest("downloadBlock_rejects_settings_without_withdraw", this::testDownloadBlockRejectsSettingsWithoutWithdraw);
+        addTest("downloadBlock_rechecks_owner_withdraw", this::testDownloadBlockRechecksOwnerWithdraw);
     }
 
     @Override
@@ -117,6 +137,66 @@ public class MultiServerSecurityTests extends TestSuite {
             LiveStateGuard.restore(stateGuard);
             stateGuard = null;
         }
+    }
+
+    // ============== Task #141: bank download block ==============
+
+    /** A block entity outside any level: no block-state updates, no packets. */
+    private static BankDownloadBlockEntity downloadBlock() {
+        return new BankDownloadBlockEntity(BlockPos.ZERO, BankSystemBlocks.BANK_DOWNLOAD_BLOCK.get().defaultBlockState());
+    }
+
+    /**
+     * Task #141: a player without WITHDRAW on the connected account can neither disconnect the
+     * block (the accountNr <= 0 path) nor rewrite its orders; the owner can.
+     */
+    private TestResult testDownloadBlockRejectsSettingsWithoutWithdraw() {
+        if (manager == null || testAccountNr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+            return fail("Test account not set up");
+        }
+        BankDownloadBlockEntity block = downloadBlock();
+        if (!block.applySettings(TEST_OWNER, testAccountNr, List.of()).join()) {
+            return fail("Owner with WITHDRAW could not connect the block");
+        }
+        if (block.applySettings(TEST_OUTSIDER, 0, List.of()).join() || block.getBankAccountNumber() != testAccountNr) {
+            return fail("Task #141: a player without WITHDRAW disconnected the block");
+        }
+        if (!block.applySettings(TEST_OWNER, 0, List.of()).join() || block.getBankAccountNumber() != 0) {
+            return fail("Owner could not disconnect the block");
+        }
+        return pass("Settings change refused without WITHDRAW on the connected account; owner allowed");
+    }
+
+    /**
+     * Task #141: every withdraw rechecks the stored owner's WITHDRAW. A block without an owner
+     * (saved before the owner was stored) does not withdraw.
+     */
+    private TestResult testDownloadBlockRechecksOwnerWithdraw() {
+        if (manager == null || testAccountNr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) {
+            return fail("Test account not set up");
+        }
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        BankDownloadBlockEntity block = downloadBlock();
+        if (block.ownerCanWithdraw(account).join()) {
+            return fail("Task #141: a block without an owner may withdraw");
+        }
+        if (!block.applySettings(TEST_OWNER, testAccountNr, List.of()).join()) {
+            return fail("Owner with WITHDRAW could not connect the block");
+        }
+        if (!block.ownerCanWithdraw(account).join()) {
+            return fail("Owner holding WITHDRAW was refused");
+        }
+        int permissions = account.getPermission(TEST_OWNER);
+        account.setPermission(TEST_OWNER, permissions & ~BankPermission.WITHDRAW.getValue());
+        try {
+            if (block.ownerCanWithdraw(account).join()) {
+                return fail("Task #141: the block still withdraws after its owner lost WITHDRAW");
+            }
+        } finally {
+            account.setPermission(TEST_OWNER, permissions);
+        }
+        return pass("Withdraw rechecks the owner's WITHDRAW; no owner, no withdraw");
     }
 
     // ============== Pure-logic invariants ==============
@@ -563,5 +643,100 @@ public class MultiServerSecurityTests extends TestSuite {
             if (adminCreated) manager.removeUser(TEST_ADMIN);
         }
         return pass("Untrusted-slave forged-admin bank-account edit was blocked — balance untouched");
+    }
+
+    // ============== Untrusted slave acting as any player ==============
+
+    /** A forged admin executor from an untrusted slave must not mint money; the same call from a trusted slave does. */
+    private TestResult testCommandRejectsUntrustedSlaveForgedAdmin() {
+        if (manager == null) return fail("Test manager not set up");
+        String untrustedSlaveID = "untrusted_slave_test";
+        String trustedSlaveID = "trusted_slave_test";
+        if (manager.isSlaveServerTrusted(untrustedSlaveID)) manager.untrustSlaveServer(untrustedSlaveID);
+        boolean wasTrusted = manager.isSlaveServerTrusted(trustedSlaveID);
+        boolean adminCreated = !manager.userExists(TEST_ADMIN);
+        if (adminCreated) manager.addUser(new User(TEST_ADMIN, TEST_ADMIN_NAME));
+        boolean accountCreated = !manager.userHasPersonalBankAccount(TEST_ADMIN);
+        manager.setBanksystemAdminMode(TEST_ADMIN, true);
+        IServerBankAccount personal = manager.getOrCreatePersonalBankAccount(TEST_ADMIN);
+        try {
+            IServerBank bank = personal == null ? null : personal.getOrCreateBank(MoneyItem.getItemID());
+            if (bank == null) return fail("no personal money bank for the test admin");
+            AsyncBankSystemCommandHandler.InputData mint = AsyncBankSystemCommandHandler.InputData.of(
+                    AsyncBankSystemCommandHandler.FunctionType.Money_add, TEST_ADMIN, 5.0f);
+            long before = bank.getBalance();
+            AsyncBankSystemCommandHandler.Request.instance.handleOnMasterServer(mint, untrustedSlaveID, null).join();
+            if (bank.getBalance() != before) return fail("an untrusted slave minted money as a forged admin");
+
+            if (!wasTrusted) manager.trustSlaveServer(trustedSlaveID);
+            AsyncBankSystemCommandHandler.Request.instance.handleOnMasterServer(mint, trustedSlaveID, null).join();
+            if (bank.getBalance() == before) return fail("control: the trusted slave's command did not run");
+            return pass("forged admin command from an untrusted slave refused, trusted slave served");
+        } finally {
+            if (!wasTrusted) manager.untrustSlaveServer(trustedSlaveID);
+            manager.setBanksystemAdminMode(TEST_ADMIN, false);
+            if (accountCreated && personal != null) manager.deleteBankAccount(personal.getAccountNumber());
+            if (adminCreated) manager.removeUser(TEST_ADMIN);
+        }
+    }
+
+    /** A forged member with WITHDRAW from an untrusted slave must not debit the account. */
+    private TestResult testWithdrawMoneyRejectsUntrustedSlave() {
+        if (manager == null || testAccountNr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) return fail("Test account not set up");
+        String untrustedSlaveID = "untrusted_slave_test";
+        if (manager.isSlaveServerTrusted(untrustedSlaveID)) manager.untrustSlaveServer(untrustedSlaveID);
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        ItemID money = MoneyItem.getItemID();
+        IServerBank bank = account.getOrCreateBank(money);
+        if (bank == null) return fail("Failed to create the money bank");
+        try {
+            bank.deposit(1000L);
+            long before = bank.getBalance();
+            HashMap<ItemID, Long> notes = new HashMap<>();
+            notes.put(money, 1L);
+            new WithdrawMoneyPacket(notes, testAccountNr).handle(TEST_OWNER, untrustedSlaveID);
+            if (bank.getBalance() != before)
+                return fail("an untrusted slave withdrew as a forged member (" + before + " -> " + bank.getBalance() + ")");
+            return pass("untrusted-slave withdrawal refused, balance untouched");
+        } finally {
+            bank.withdraw(bank.getBalance());
+            if (account.hasBank(money)) account.removeBank(money);
+        }
+    }
+
+    /** A player's custom data goes to that player directly, never through an untrusted slave. */
+    private TestResult testUserCustomDataEmptyForUntrustedSlave() {
+        if (manager == null) return fail("Test manager not set up");
+        User owner = manager.getUserByUUID(TEST_OWNER);
+        if (owner == null) return fail("Test owner missing");
+        owner.getCustomData().putString("msSecProbe", "secret");
+        try {
+            GetUserCustomDataRequest req = new GetUserCustomDataRequest();
+            if (!req.handleOnMasterServer(true, "untrusted_slave_test", TEST_OWNER).join().isEmpty())
+                return fail("an untrusted slave read a player's custom data");
+            if (!req.handleOnMasterServer(true, "", TEST_OWNER).join().contains("msSecProbe"))
+                return fail("control: the player's own direct read returned no data");
+            return pass("untrusted slave gets empty custom data, direct read served");
+        } finally {
+            owner.getCustomData().remove("msSecProbe");
+        }
+    }
+
+    /** External accounts are listed for the requesting player, never through an untrusted slave. */
+    private TestResult testListBindableEmptyForUntrustedSlave() {
+        StubCurrencyProvider.reset();
+        try {
+            StubCurrencyProvider.create("ms_sec_bindable", false, 0L);
+            ListBindableAccountsRequest req = new ListBindableAccountsRequest();
+            ListBindableAccountsRequest.InputData input = new ListBindableAccountsRequest.InputData(StubCurrencyProvider.PROVIDER_ID, TEST_OWNER);
+            if (!req.handleOnMasterServer(input, "untrusted_slave_test", null).join().accounts().isEmpty())
+                return fail("an untrusted slave listed a player's external accounts");
+            if (req.handleOnMasterServer(input, "", TEST_OWNER).join().accounts().isEmpty())
+                return fail("control: the player's own direct listing was empty");
+            return pass("untrusted slave gets no external accounts, direct listing served");
+        } finally {
+            StubCurrencyProvider.teardown();
+        }
     }
 }

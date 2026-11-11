@@ -41,6 +41,9 @@ Both checkbox states are remembered per player on that terminal, so your setup i
 
 Crafting with bank items also works on multi-server setups (player on one server, bank account on the master server), just like all other bank operations.
 
+> [!NOTE]
+> If an admin has **frozen** the selected account, the terminal refuses deposits, withdrawals and crafting with bank items, and you get a chat message. Your items stay where they are. See [Bank Accounts](BankAccounts.md#shared-bank-accounts).
+
 ### JEI Integration
 
 If [JEI](https://www.curseforge.com/minecraft/mc-mods/jei) is installed:
@@ -60,6 +63,7 @@ The **History** button in the top-right of the Bank Terminal opens a line chart 
 
 - **Timescale buttons** (`1h`, `6h`, `1d`, `7d`, `30d`, `all`) in the top-left reframe the chart in one click. The view always spans the window you picked, even when the account is younger than that.
 - **Pan and zoom** with drag and mouse wheel. On a finite timescale, older history is streamed in the background before you reach the edge of the loaded data, and zooming out stops at the selected window — pick a bigger timescale to see further back.
+- You can zoom in down to a one-minute window. Press **Space** to fit the view to the data again, or **Ctrl+Space** to jump back to the selected timescale ending at now.
 - A **search box** filters the series by item name or tag, and per-item checkboxes turn individual series on and off. Both are remembered between sessions.
 
 How often the underlying snapshots are taken, and how long they are kept, is controlled by the `BALANCE_SNAPSHOT_*` and `BALANCE_HISTORY_RETENTION_SWEEP_MINUTES` settings — see [Configuration](Configuration.md#utilities-section).
@@ -130,9 +134,14 @@ While no bank account is connected, the button is orange. If you try something t
    - **More than** — Only download items if the bank balance exceeds the specified value.
    - **Less than** — Only download items if the bank balance is below the specified value.
 
-Press the **Save** button to apply the changes. Choosing a bank account with **Connect to Bank** is also only stored when you save.
+Press the **Save** button to apply the changes; it turns amber while there are unsaved changes. Choosing a bank account with **Connect to Bank** is also only stored when you save.
 If you close the screen with unsaved changes, a popup asks whether to **Save** or **Discard** them. Press **Esc** on the popup to go back to the screen without deciding.
 Once the block is configured, a redstone signal triggers the block to work.
+
+Only players with **withdraw** permission on the connected account can change the block's settings or disconnect it. The player who connected the block is remembered, and every download checks that this player still has withdraw permission; if they lost it, the block stops.
+
+> [!NOTE]
+> **Download blocks placed before 2.2.0** do not know who connected them, so they stay idle after the update. Open the block once and press **Save** as a player with withdraw permission on the account to start it again.
 
 ---
 ## Bank Display
@@ -157,6 +166,8 @@ If you close the screen without pressing **Apply**, a popup asks whether to **Sa
 |--------------|-------------|
 | **Balance Overview** | A compact grid showing the current balances of the highest-value items in the account. Displays item icons with their amounts. Updates every second. |
 | **Balance History** | A line chart tracking balance changes over time for all items in the account. Each item is color-coded with a legend on the right. Updates every 60 seconds. |
+
+You can only pick accounts you are a member of; BankSystem admins can pick any account. On a [multi-server network](MultiserverSetup.md#what-an-untrusted-slave-can-do), displays on a slave server that the master does not trust yet show no data.
 
 > [!TIP]
 > Place displays next to each other to build a larger screen: a freshly placed display adopts the configuration of an already configured neighbour, so the whole multi-block shows one continuous image.

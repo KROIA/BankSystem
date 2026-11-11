@@ -29,6 +29,11 @@ public class PayoutArrsRoundTripTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("request_registered", this::testRequestRegistered);
         addTest("codec_map_covers_every_function", this::testCodecMapCoversEveryFunction);
@@ -174,7 +179,7 @@ public class PayoutArrsRoundTripTests extends TestSuite {
         if (in.accountNr() != ind.accountNr()) return fail("GetCompanyInfoByAccountInput mismatch: " + ind);
 
         AsyncCompanyManager.CompanyInfoOutput out = new AsyncCompanyManager.CompanyInfoOutput(
-                true, 5, "Acme", 88, 10_000L, 0L, "d", List.of("Alice"), (short) 0);
+                true, 5, "Acme", 88, 10_000L, 0L, "d", List.of("Alice"), (short) 0, "");
         AsyncCompanyManager.CompanyInfoOutput outd = roundTrip(AsyncCompanyManager.CompanyInfoOutput.STREAM_CODEC, out);
         if (!outd.name().equals("Acme")) return fail("CompanyInfoOutput name lost");
         return pass("GetCompanyInfoByAccount round-trip preserved fields.");

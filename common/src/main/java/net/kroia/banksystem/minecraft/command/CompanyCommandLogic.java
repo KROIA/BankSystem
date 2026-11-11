@@ -46,6 +46,9 @@ public final class CompanyCommandLogic {
         ServerPlayerUtilities.printToClientConsole(player, msg);
     }
 
+    /** Issue #85: a slave request that got no answer from the bank master completes with null. */
+    private static final String NO_ANSWER = "No answer from the bank server.";
+
     private static String cleanName(String raw) {
         return raw == null ? "" : raw.replace("\"", "").trim();
     }
@@ -96,6 +99,10 @@ public final class CompanyCommandLogic {
     }
 
     private static void renderCreate(ServerPlayer player, String name, long maxSupply, AsyncCompanyManager.CreateOutput out) {
+        if (out == null) {
+            send(player, NO_ANSWER + " The company may have been created; check /company info " + name + " before trying again.");
+            return;
+        }
         if (out.resultCode() == AsyncCompanyManager.CODE_OK) {
             send(player, "Created company #" + out.companyId() + " '" + name
                     + "' bound to bank account " + out.bankAccountNr()
@@ -167,6 +174,7 @@ public final class CompanyCommandLogic {
     }
 
     private static void renderInfo(ServerPlayer player, String companyName, AsyncCompanyManager.CompanyInfoOutput out) {
+        if (out == null) { send(player, NO_ANSWER); return; }
         if (!out.present()) {
             send(player, "No such company '" + companyName + "'.");
             return;
@@ -201,6 +209,7 @@ public final class CompanyCommandLogic {
         String companyName = cleanName(rawCompanyName);
         if (isSlave()) {
             AsyncCompanyManager.getCompanyInfoAsync(companyName).thenAccept(out -> {
+                if (out == null) { send(player, NO_ANSWER); return; }
                 if (!out.present()) {
                     send(player, "No such company '" + companyName + "'.");
                     return;

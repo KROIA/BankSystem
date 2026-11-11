@@ -96,6 +96,15 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
     /** Maximum placeholder cache refresh interval in milliseconds (1 day). */
     public static final int MAX_PLACEHOLDER_REFRESH_MS = 86_400_000;
 
+    /** Tasks #111/#114/#115: flag thresholds in whole money units (0 .. 1e12). */
+    public static final long MAX_FLAG_AMOUNT = 1_000_000_000_000L;
+    /** Tasks #111/#114/#115: hour windows (1 h .. 1 year); cooldown may be 0. */
+    public static final int MAX_FLAG_HOURS = 8_760;
+    /** Task #114: sweep interval in minutes (0 = off, max 1 day). */
+    public static final int MAX_WEALTH_SWEEP_MINUTES = 1_440;
+    /** Task #114: wealth-jump percent (1 .. 100000). */
+    public static final int MAX_WEALTH_JUMP_PERCENT = 100_000;
+
     /** Minimum number of {@code top_<n>} placeholder slots (0 = none). */
     public static final int MIN_PLACEHOLDER_TOP_COUNT = 0;
     /** Maximum number of {@code top_<n>} placeholder slots. */
@@ -259,11 +268,22 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         //   (DepositItemsInBankRequest etc.), and the slave's AsyncBankManager routes
         //   IsItemIDAllowedAsync to the master through the ARRS dispatch as well. So the
         //   master's live setting always gates. No propagation required.
-        // * Placeholder (refresh intervals, TOP_COUNT, MONEY_FORMAT): read by the
-        //   placeholder provider on the server where TAB / Placeholder API runs, from
-        //   that server's OWN local settings.json (slaves only query the master for
-        //   the bank data, not for these settings). TOP_COUNT is read once at
-        //   placeholder registration (restart-required). No propagation.
+        // * Audit (suspicious-activity flags, Tasks #111/#114/#115): read live by the master's
+        //   ledger hook and wealth sweep only. No propagation.
+        // * Integrations (Task #119): every server reads these from its OWN local settings.json;
+        //   only the master's file is editable in-game, so a slave keeps its file values.
+        //   - PLACEHOLDERS_ENABLED / refresh intervals / TOP_COUNT / MONEY_FORMAT: read by the
+        //     placeholder provider on the server where TAB / Placeholder API runs (slaves only
+        //     query the master for the bank data, not for these settings). PLACEHOLDERS_ENABLED
+        //     and TOP_COUNT are read once at server start (restart-required).
+        //   - SYNC_ADMIN_FLAG_WITH_PERMISSION (Task #107): read live, per server. The master
+        //     honours slave sync writes only while its own value is on; each slave reads its own
+        //     value to decide whether to forward LuckPerms changes. Turning it on here may
+        //     trigger the one-time LuckPerms migration (below).
+        //   - NUMISMATICS_ENABLED / LIGHTMANS_CURRENCY_ENABLED: read live by every provider
+        //     lookup. The master's value gates the bank operations (they run there).
+        //   - DISCORD_ENABLED: read live; the feed only posts from the master.
+        //   No propagation.
         // => No active propagation is required for any group.
 
         // Notify other online admins (on this server) about the change.
@@ -271,6 +291,7 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         info("Mod settings updated by " + getPlayerName(playerSender) + (saved ? " (persisted)" : " (PERSIST FAILED)"));
 
         boolean success = saved && applyError == null;
+        net.kroia.banksystem.util.AdminFlagSync.migrateIfNeeded(); // Task #107: setting may have just been turned on
         return CompletableFuture.completedFuture(new OutputData(success,
                 applyError == null ? "" : applyError,
                 store.toJsonString(settings.getEditableGroups())));
@@ -290,10 +311,10 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
      *   <li>{@code ServerBank.ADDITIONAL_VOLATILE_COMPONENTS} /
      *       {@code ADDITIONAL_DEPOSIT_GATED_COMPONENTS}: entries trimmed, blanks
      *       dropped, duplicates removed (order preserved); null list → empty list</li>
-     *   <li>{@code Placeholder.PLAYER_REFRESH_MS} / {@code SERVER_REFRESH_MS}
+     *   <li>{@code Integrations.PLAYER_REFRESH_MS} / {@code SERVER_REFRESH_MS}
      *       ∈ [100 ms, 86,400,000 ms] (null → default)</li>
-     *   <li>{@code Placeholder.TOP_COUNT} ∈ [0, 100] (null → default)</li>
-     *   <li>{@code Placeholder.MONEY_FORMAT}: null, blank or missing {@code %s}
+     *   <li>{@code Integrations.TOP_COUNT} ∈ [0, 100] (null → default)</li>
+     *   <li>{@code Integrations.MONEY_FORMAT}: null, blank or missing {@code %s}
      *       → the default; otherwise kept as-is (not trimmed)</li>
      * </ul>
      * Static and side-effect free apart from the settings object itself, so the
@@ -313,6 +334,7 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_WARNING);
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_ERROR);
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_DEBUG);
+        sanitizeBoolean(settings.UTILITIES.ALERTS_DEFAULT_ON);
 
         // Player
         settings.PLAYER.STARTING_BALANCE.set(
@@ -335,13 +357,62 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         sanitizeBoolean(settings.BANK.CONFIRM_ITEMID_MERGE);
         sanitizeBoolean(settings.BANK.CONFIRM_ITEMID_REPAIR);
 
-        // Placeholder
-        clampOrDefault(settings.PLACEHOLDER.PLAYER_REFRESH_MS, MIN_PLACEHOLDER_REFRESH_MS, MAX_PLACEHOLDER_REFRESH_MS);
-        clampOrDefault(settings.PLACEHOLDER.SERVER_REFRESH_MS, MIN_PLACEHOLDER_REFRESH_MS, MAX_PLACEHOLDER_REFRESH_MS);
-        clampOrDefault(settings.PLACEHOLDER.TOP_COUNT, MIN_PLACEHOLDER_TOP_COUNT, MAX_PLACEHOLDER_TOP_COUNT);
-        String moneyFormat = settings.PLACEHOLDER.MONEY_FORMAT.get();
+        // Integrations
+        sanitizeBoolean(settings.INTEGRATIONS.PLACEHOLDERS_ENABLED);
+        sanitizeBoolean(settings.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION);
+        sanitizeBoolean(settings.INTEGRATIONS.NUMISMATICS_ENABLED);
+        sanitizeBoolean(settings.INTEGRATIONS.LIGHTMANS_CURRENCY_ENABLED);
+        sanitizeBoolean(settings.INTEGRATIONS.DISCORD_ENABLED);
+        clampOrDefault(settings.INTEGRATIONS.PLAYER_REFRESH_MS, MIN_PLACEHOLDER_REFRESH_MS, MAX_PLACEHOLDER_REFRESH_MS);
+        clampOrDefault(settings.INTEGRATIONS.SERVER_REFRESH_MS, MIN_PLACEHOLDER_REFRESH_MS, MAX_PLACEHOLDER_REFRESH_MS);
+        clampOrDefault(settings.INTEGRATIONS.TOP_COUNT, MIN_PLACEHOLDER_TOP_COUNT, MAX_PLACEHOLDER_TOP_COUNT);
+        // Audit (suspicious-activity flags)
+        var a = settings.AUDIT;
+        sanitizeBoolean(a.LAUNDERING_FLAG_ENABLED);
+        sanitizeBoolean(a.LARGE_NOTE_WITHDRAWAL_FLAG_ENABLED);
+        sanitizeBoolean(a.WEALTH_JUMP_FLAG_ENABLED);
+        sanitizeBoolean(a.NEW_ACCOUNT_TRANSFER_FLAG_ENABLED);
+        clampOrDefault(a.LAUNDERING_MIN_AMOUNT, 0L, MAX_FLAG_AMOUNT);
+        clampOrDefault(a.LARGE_NOTE_WITHDRAWAL_AMOUNT, 0L, MAX_FLAG_AMOUNT);
+        clampOrDefault(a.WEALTH_JUMP_AMOUNT, 0L, MAX_FLAG_AMOUNT);
+        clampOrDefault(a.NEW_ACCOUNT_TRANSFER_AMOUNT, 0L, MAX_FLAG_AMOUNT);
+        clampOrDefault(a.LAUNDERING_WINDOW_HOURS, 1, MAX_FLAG_HOURS);
+        clampOrDefault(a.NEW_ACCOUNT_AGE_HOURS, 1, MAX_FLAG_HOURS);
+        clampOrDefault(a.WEALTH_JUMP_COOLDOWN_HOURS, 0, MAX_FLAG_HOURS);
+        clampOrDefault(a.WEALTH_SWEEP_MINUTES, 0, MAX_WEALTH_SWEEP_MINUTES);
+        clampOrDefault(a.WEALTH_JUMP_PERCENT, 1, MAX_WEALTH_JUMP_PERCENT);
+        sanitizeBoolean(a.MONEY_SUPPLY_FLAG_ENABLED);
+        clampOrDefault(a.MONEY_SUPPLY_GROWTH_PERCENT, 1, MAX_WEALTH_JUMP_PERCENT);
+        clampOrDefault(a.MONEY_SUPPLY_GROWTH_AMOUNT, 0L, MAX_FLAG_AMOUNT);
+        clampOrDefault(a.MONEY_SUPPLY_COOLDOWN_HOURS, 0, MAX_FLAG_HOURS);
+        sanitizeBoolean(a.DAILY_DIGEST_ENABLED);
+        clampOrDefault(a.DIGEST_TOP_N, 1, 100);
+
+        String moneyFormat = settings.INTEGRATIONS.MONEY_FORMAT.get();
         if (moneyFormat == null || moneyFormat.isBlank() || !moneyFormat.contains("%s"))
-            settings.PLACEHOLDER.MONEY_FORMAT.set(settings.PLACEHOLDER.MONEY_FORMAT.getDefaultValue());
+            settings.INTEGRATIONS.MONEY_FORMAT.set(settings.INTEGRATIONS.MONEY_FORMAT.getDefaultValue());
+    }
+
+    /**
+     * Runs {@link #sanitize} and lists every setting it changed as
+     * {@code "Group.KEY: old -> new"}. Used on settings.json load so hand-edited
+     * out-of-range values are clamped and can be logged one line per key.
+     */
+    public static List<String> sanitizeAndListChanges(BankSystemModSettings settings) {
+        SettingsStore store = new SettingsStore();
+        JsonObject before = store.toJson(settings.getEditableGroups()).getAsJsonObject();
+        sanitize(settings);
+        JsonObject after = store.toJson(settings.getEditableGroups()).getAsJsonObject();
+        List<String> changes = new ArrayList<>();
+        for (String group : after.keySet()) {
+            JsonObject b = before.getAsJsonObject(group);
+            JsonObject a = after.getAsJsonObject(group);
+            for (String key : a.keySet()) {
+                if (!a.get(key).equals(b.get(key)))
+                    changes.add(group + "." + key + ": " + b.get(key) + " -> " + a.get(key));
+            }
+        }
+        return changes;
     }
 
     /** Clamps a Long setting value into [min, max]; null falls back to min. */
@@ -359,6 +430,12 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
     /** Clamps an Integer setting into [min, max]; a null value falls back to the setting's default. */
     private static void clampOrDefault(Setting<Integer> setting, int min, int max) {
         Integer value = setting.get();
+        setting.set(clamp(value == null ? setting.getDefaultValue() : value, min, max));
+    }
+
+    /** Clamps a Long setting into [min, max]; a null value falls back to the setting's default. */
+    private static void clampOrDefault(Setting<Long> setting, long min, long max) {
+        Long value = setting.get();
         setting.set(clamp(value == null ? setting.getDefaultValue() : value, min, max));
     }
 
