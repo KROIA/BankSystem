@@ -1,12 +1,16 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.currency.ExternalAccount;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
@@ -14,6 +18,7 @@ import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.binding.BindingKey;
 import net.kroia.banksystem.banking.binding.BindingRow;
+import net.kroia.banksystem.networking.currency.BindExternalAccountRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.testing.StubCurrencyProvider;
@@ -26,6 +31,7 @@ import net.minecraft.world.item.Items;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * In-game tests for the Task #33 external-currency binding stack (v2.0.5).
@@ -93,6 +99,21 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         addTest("bind_overflow_leaves_local_state_untouched", this::testBindOverflowAtomicity);
         addTest("withdraw_refused_when_external_says_no", this::testWithdrawRefusedByExternal);
         addTest("membership_sync_propagates_to_external_account", this::testMembershipSyncPropagates);
+        addTest("unbind_refused_while_unavailable_with_locked", this::testUnbindRefusedWhileUnavailableWithLocked);
+        addTest("user_deletion_payout_counts_only_local_part", this::testPayoutCountsOnlyLocalPart); // Task #136
+        addTest("bind_request_refuses_foreign_external_account", this::testBindRequestRefusesForeignRef);
+        // Task #146: start-up check of bindings made before binds were checked
+        addTest("startup_check_suspends_foreign_binding_and_flags", this::testForeignBindingSuspended);
+        addTest("suspended_binding_refuses_value_paths", this::testSuspendedBindingRefusesValuePaths);
+        addTest("startup_check_keeps_valid_binding", this::testValidBindingKept);
+        addTest("startup_check_skips_unavailable_provider", this::testUnavailableProviderSkipped);
+        addTest("admin_restore_lifts_suspension_and_survives_recheck", this::testAdminRestore);
+        addTest("rebind_of_bound_slot_refused_without_moving_funds", this::testRebindOfBoundSlotRefused); // Task #147
+        // Task #148: listing answers, and deletion of suspended bindings
+        addTest("startup_check_suspends_on_empty_listing", () -> listingCase(false));
+        addTest("startup_check_skips_throwing_listing", () -> listingCase(true));
+        addTest("account_deletion_drops_suspended_binding_unpaid", this::testAccountDeletionDropsSuspendedUnpaid);
+        addTest("user_deletion_pays_nothing_for_suspended_slot", this::testUserDeletionPaysNothingForSuspended);
         // Cascade cleanup must run LAST: it deletes the shared testAccountNr, which would
         // strand any subsequent test that references it.
         addTest("cascade_cleanup_on_account_and_bank_removal", this::testCascadeCleanup);
@@ -490,6 +511,325 @@ public class ExternalCurrencyBindingTests extends TestSuite {
     }
 
     // -----------------------------------------------------------------------
+    // Bind request: a non-admin with MANAGE may only bind an external account that the
+    // provider lists as bindable for them. Binding someone else's would let them drain it.
+    // -----------------------------------------------------------------------
+    private TestResult testBindRequestRefusesForeignRef() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        User owner = manager.getUserByUUID(TEST_OWNER);
+        if (account == null || owner == null) return fail("Test account or owner missing");
+        account.addUser(owner, BankPermission.getAllPermissions());
+        try {
+            StubCurrencyProvider.create(STUB_KEY_A, true, 500L).setOwner(TEST_MEMBER); // the victim's
+            StubCurrencyProvider.create(STUB_KEY_B, true, 0L).setOwner(TEST_OWNER);
+            BindExternalAccountRequest req = new BindExternalAccountRequest();
+
+            BankStatus foreign = req.handleOnMasterServer(new BindExternalAccountRequest.InputData(testAccountNr, slotItemA,
+                    new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "victim", true)), "", TEST_OWNER).join().status();
+            if (foreign == BankStatus.SUCCESS) return fail("bound another player's external account");
+            BankAccountBindings bindings = BankAccountBindings.get();
+            if (bindings != null && bindings.hasBinding(testAccountNr, slotItemA))
+                return fail("binding row written for another player's external account");
+
+            BankStatus own = req.handleOnMasterServer(new BindExternalAccountRequest.InputData(testAccountNr, slotItemB,
+                    new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_B, "mine", true)), "", TEST_OWNER).join().status();
+            if (own != BankStatus.SUCCESS) return fail("binding the sender's own external account returned " + own);
+            return pass("foreign external account refused (" + foreign + "), own account bound");
+        } finally {
+            account.removeUser(TEST_OWNER);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Task #146: start-up check. Slot A of the shared test account (MANAGE: TEST_OWNER) is bound
+    // straight through the manager (as before #137) to an external account only TEST_MEMBER may
+    // bind. TEST_OWNER's own external account B keeps their bindable list non-empty.
+    // -----------------------------------------------------------------------
+    private static final long FOREIGN_BALANCE = 500L;
+    private static final String FOREIGN_FLAG_REF = StubCurrencyProvider.PROVIDER_ID + ":" + STUB_KEY_A;
+
+    /** @return the foreign binding row of slot A, or null if the bind failed */
+    private BindingRow bindForeign(IServerBankAccount account) {
+        account.addUser(manager.getUserByUUID(TEST_OWNER), BankPermission.getAllPermissions());
+        StubCurrencyProvider.create(STUB_KEY_A, true, FOREIGN_BALANCE).setOwner(TEST_MEMBER);
+        StubCurrencyProvider.create(STUB_KEY_B, true, 0L).setOwner(TEST_OWNER);
+        BankStatus status = manager.bindExternalAccount(testAccountNr, slotItemA,
+                new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "foreign", true));
+        BankAccountBindings bindings = BankAccountBindings.get();
+        return status == BankStatus.SUCCESS && bindings != null ? bindings.getBinding(testAccountNr, slotItemA) : null;
+    }
+
+    private TestResult testForeignBindingSuspended() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        var flags = net.kroia.banksystem.BankSystemModBackend.getInstances_forTesting().SUSPICION_FLAG_MANAGER;
+        if (account == null || flags == null) return fail("Test account or flag manager missing");
+        try {
+            BindingRow row = bindForeign(account);
+            if (row == null) return fail("bind of the foreign external account failed");
+            long since = System.currentTimeMillis();
+            if (!manager.suspendIfForeign(row) || !row.suspended()) return fail("foreign binding not suspended");
+            if (!BindingRow.fromNbt(row.toNbt()).suspended()) return fail("suspension not persisted in the row NBT");
+            for (var f : flags.getRecent(testAccountNr, since, 0).get(10, java.util.concurrent.TimeUnit.SECONDS))
+                if (f.flagType() == net.kroia.banksystem.banking.ledger.SuspicionChecks.EXTERNAL_BINDING_SUSPENDED
+                        && FOREIGN_FLAG_REF.equals(f.ref()))
+                    return f.details() != null && f.details().contains(TEST_OWNER.toString())
+                            ? pass("suspended + persisted, flag 7 ref " + f.ref())
+                            : fail("flag details miss the manager: " + f.details());
+            return fail("no EXTERNAL_BINDING_SUSPENDED flag with ref " + FOREIGN_FLAG_REF);
+        } catch (Exception e) {
+            return fail("flag query threw " + e);
+        } finally {
+            account.removeUser(TEST_OWNER);
+        }
+    }
+
+    private TestResult testSuspendedBindingRefusesValuePaths() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        try {
+            BindingRow row = bindForeign(account);
+            if (row == null || !manager.suspendIfForeign(row)) return fail("setup: foreign binding not suspended");
+            ISyncServerBank bank = account.getBank(slotItemA);
+            if (bank == null) return fail("Bank slot A missing");
+            long totalBefore = bank.getTotalBalance();
+            Map<String, BankStatus> results = new java.util.LinkedHashMap<>();
+            results.put("deposit", bank.deposit(100L));
+            results.put("withdraw", bank.withdraw(100L));
+            results.put("lock", bank.lockAmount(100L));
+            results.put("unbind-keep", manager.unbindExternalAccount(testAccountNr, slotItemA, true));
+            results.put("unbind", manager.unbindExternalAccount(testAccountNr, slotItemA, false));
+            results.put("rebind", manager.bindExternalAccount(testAccountNr, slotItemA,
+                    new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_B, "own", true)));
+            for (Map.Entry<String, BankStatus> e : results.entrySet())
+                if (e.getValue() == BankStatus.SUCCESS) return fail(e.getKey() + " went through a suspended binding");
+            long ext = StubCurrencyProvider.getAccount(STUB_KEY_A).getBalance();
+            if (ext != FOREIGN_BALANCE) return fail("external balance moved: " + ext);
+            if (bank.getTotalBalance() != totalBefore) return fail("BankSystem balance moved: " + bank.getTotalBalance());
+            if (!BankAccountBindings.isSuspended(testAccountNr, slotItemA)) return fail("suspended binding was dropped");
+            return pass("refused " + results + "; external " + ext + " unchanged");
+        } finally {
+            account.removeUser(TEST_OWNER);
+        }
+    }
+
+    private TestResult testValidBindingKept() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (account == null || bindings == null) return fail("Test account or bindings missing");
+        try {
+            bindForeign(account); // creates TEST_OWNER's account B
+            BankStatus status = manager.bindExternalAccount(testAccountNr, slotItemB,
+                    new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_B, "own", true));
+            BindingRow own = bindings.getBinding(testAccountNr, slotItemB);
+            if (status != BankStatus.SUCCESS || own == null) return fail("bind of the manager's own account returned " + status);
+            if (manager.suspendIfForeign(own) || own.suspended()) return fail("valid binding was suspended");
+            return pass("binding to the manager's own external account kept");
+        } finally {
+            account.removeUser(TEST_OWNER);
+        }
+    }
+
+    private TestResult testUnavailableProviderSkipped() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        try {
+            BindingRow row = bindForeign(account);
+            if (row == null) return fail("bind of the foreign external account failed");
+            StubCurrencyProvider.getInstance().setAvailable(false);
+            if (manager.suspendIfForeign(row) || row.suspended()) return fail("binding of an unavailable provider was suspended");
+            return pass("unavailable provider skipped");
+        } finally {
+            StubCurrencyProvider.getInstance().setAvailable(true);
+            account.removeUser(TEST_OWNER);
+        }
+    }
+
+    private TestResult testAdminRestore() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        try {
+            BindingRow row = bindForeign(account);
+            if (row == null || !manager.suspendIfForeign(row)) return fail("setup: foreign binding not suspended");
+            int restored = manager.restoreSuspendedBindings(testAccountNr, slotItemA.getName(),
+                    net.kroia.banksystem.api.ledger.LedgerActor.console());
+            if (restored != 1 || row.suspended() || !row.approved()) return fail("restore returned " + restored
+                    + ", suspended=" + row.suspended() + ", approved=" + row.approved());
+            BindingRow reloaded = BindingRow.fromNbt(row.toNbt());
+            if (reloaded == null || reloaded.suspended() || !reloaded.approved()) return fail("approval not persisted in the row NBT");
+            if (manager.suspendIfForeign(row)) return fail("re-check suspended an admin-restored binding");
+            ISyncServerBank bank = account.getBank(slotItemA);
+            BankStatus dep = bank == null ? null : bank.deposit(100L);
+            if (dep != BankStatus.SUCCESS) return fail("deposit after restore returned " + dep);
+            return pass("restored, approved + persisted, re-check keeps it, deposit works again");
+        } finally {
+            account.removeUser(TEST_OWNER);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Task #147: binding an already-bound slot must be refused. Before, the old external balance
+    // was read as the slot's free balance and deposited into the new account (duplication).
+    // -----------------------------------------------------------------------
+    private TestResult testRebindOfBoundSlotRefused() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (account == null || bindings == null) return fail("Test account or bindings missing");
+        StubCurrencyProvider.create(STUB_KEY_A, true, 300L);
+        StubCurrencyProvider.create(STUB_KEY_B, true, 0L);
+        BankStatus bind = manager.bindExternalAccount(testAccountNr, slotItemA,
+                new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "X", true));
+        ISyncServerBank bank = account.getBank(slotItemA);
+        if (bind != BankStatus.SUCCESS || bank == null) return fail("setup: bind to X returned " + bind);
+        long totalBefore = bank.getTotalBalance();
+        BankStatus rebind = manager.bindExternalAccount(testAccountNr, slotItemA,
+                new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_B, "Y", true));
+        if (rebind == BankStatus.SUCCESS) return fail("rebind of a bound slot went through");
+        long x = StubCurrencyProvider.getAccount(STUB_KEY_A).getBalance();
+        long y = StubCurrencyProvider.getAccount(STUB_KEY_B).getBalance();
+        if (x != 300L || y != 0L) return fail("external balances moved: X=" + x + ", Y=" + y);
+        if (bank.getTotalBalance() != totalBefore) return fail("BankSystem total moved: " + totalBefore + " -> " + bank.getTotalBalance());
+        BindingRow row = bindings.getBinding(testAccountNr, slotItemA);
+        if (row == null || !STUB_KEY_A.equals(row.ref().accountKey())) return fail("binding row replaced: " + row);
+        return pass("rebind refused (" + rebind + "); X=300, Y=0, total " + totalBefore + " unchanged, still bound to X");
+    }
+
+    // -----------------------------------------------------------------------
+    // Task #148: an empty listing is an answer (suspend), a throwing one is not (skip). Slot A is bound to an
+    // external account only TEST_MEMBER may bind; the manager TEST_OWNER has no external account at all.
+    // -----------------------------------------------------------------------
+    private TestResult listingCase(boolean listingThrows) {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        account.addUser(manager.getUserByUUID(TEST_OWNER), BankPermission.getAllPermissions());
+        try {
+            StubCurrencyProvider.create(STUB_KEY_A, true, FOREIGN_BALANCE).setOwner(TEST_MEMBER);
+            BankStatus status = manager.bindExternalAccount(testAccountNr, slotItemA,
+                    new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "foreign", true));
+            BankAccountBindings bindings = BankAccountBindings.get();
+            BindingRow row = status == BankStatus.SUCCESS && bindings != null ? bindings.getBinding(testAccountNr, slotItemA) : null;
+            if (row == null) return fail("bind returned " + status);
+            StubCurrencyProvider.getInstance().listingFails = listingThrows;
+            boolean suspended = manager.suspendIfForeign(row);
+            if (suspended == listingThrows || row.suspended() == listingThrows)
+                return fail((listingThrows ? "throwing" : "empty") + " listing: suspended=" + row.suspended());
+            return pass(listingThrows ? "throwing listing skipped, binding kept" : "empty listing suspended the binding");
+        } finally {
+            StubCurrencyProvider.getInstance().listingFails = false;
+            account.removeUser(TEST_OWNER);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Task #148: deleting an account or a user drops a suspended binding without paying out the locked + dust
+    // BankSystem held for it (one BANK_CLOSED row + an EXTERNAL_BINDING_SUSPENDED flag instead) and leaves the
+    // external account alone.
+    // -----------------------------------------------------------------------
+    private static final long LEFT_LOCKED = 40L, LEFT_DUST = 3L;
+
+    /** Binds slot A of {@code nr} to the foreign stub account, sets locked + dust, suspends. @return null, or why not */
+    private String bindSuspended(int nr, boolean shared) {
+        StubCurrencyProvider.create(STUB_KEY_A, shared, FOREIGN_BALANCE).setOwner(TEST_MEMBER);
+        BankStatus status = manager.bindExternalAccount(nr, slotItemA,
+                new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "foreign", shared));
+        BankAccountBindings bindings = BankAccountBindings.get();
+        BindingRow row = status == BankStatus.SUCCESS && bindings != null ? bindings.getBinding(nr, slotItemA) : null;
+        if (row == null) return "bind returned " + status;
+        bindings.setLocked(nr, slotItemA, LEFT_LOCKED);
+        bindings.setDust(nr, slotItemA, LEFT_DUST);
+        return manager.suspendIfForeign(row) ? null : "binding not suspended";
+    }
+
+    /** @return null if slot A of {@code nr} was dropped unpaid since {@code since}, else what is wrong */
+    private String droppedUnpaid(int nr, long since) throws Exception {
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings != null && bindings.hasBinding(nr, slotItemA)) return "binding row left behind";
+        long ext = StubCurrencyProvider.getAccount(STUB_KEY_A).getBalance();
+        if (ext != FOREIGN_BALANCE) return "external balance moved: " + ext;
+        long left = LEFT_LOCKED + LEFT_DUST, closed = 0;
+        int rows = 0;
+        for (var r : BankSystemModBackend.getTransactionLogManager().getByAccount(nr, 0).get(10, TimeUnit.SECONDS)) {
+            if (r.itemId() != slotItemA.getShort() || r.time() < since) continue;
+            if (r.type() == LedgerType.ACCOUNT_DELETE_PAYOUT || r.type() == LedgerType.ACCOUNT_DELETE_LOSS) return "paid out: " + r;
+            if (r.type() == LedgerType.BANK_CLOSED) { closed += r.amount(); rows++; }
+        }
+        if (rows != 1 || closed != left) return rows + " BANK_CLOSED row(s) summing " + closed + ", expected one of " + left;
+        for (var f : BankSystemModBackend.getInstances_forTesting().SUSPICION_FLAG_MANAGER.getRecent(nr, since, 0).get(10, TimeUnit.SECONDS))
+            if (f.flagType() == SuspicionChecks.EXTERNAL_BINDING_SUSPENDED && FOREIGN_FLAG_REF.equals(f.ref()) && f.amount() == left)
+                return null;
+        return "no EXTERNAL_BINDING_SUSPENDED flag of " + left;
+    }
+
+    private TestResult testAccountDeletionDropsSuspendedUnpaid() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount fresh = manager.createBankAccount(TEST_ACCOUNT_NAME + "_suspended");
+        if (fresh == null) return fail("account creation failed");
+        int nr = fresh.getAccountNumber();
+        try {
+            fresh.createBank(slotItemA, 0);
+            fresh.addUser(manager.getUserByUUID(TEST_OWNER), BankPermission.getAllPermissions());
+            String setup = bindSuspended(nr, true);
+            if (setup != null) return fail("setup: " + setup);
+            long since = System.currentTimeMillis();
+            if (!manager.deleteBankAccount(nr)) return fail("deleteBankAccount returned false");
+            String why = droppedUnpaid(nr, since);
+            return why == null ? pass("account deleted: binding dropped, one BANK_CLOSED + flag of locked + dust, external untouched")
+                    : fail(why);
+        } catch (Exception e) {
+            return fail("ledger/flag query threw " + e);
+        } finally {
+            if (manager.getBankAccount(nr) != null) manager.deleteBankAccount(nr);
+        }
+    }
+
+    private TestResult testUserDeletionPaysNothingForSuspended() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        UUID doomed = UUID.fromString("00000000-0000-0000-0000-00000000f148");
+        if (manager.userExists(doomed)) manager.removeUser(doomed);
+        manager.addUser(new User(doomed, "ExtCurrSuspendedUser"));
+        try {
+            ServerBankAccount personal = manager.createPersonalBankAccount(doomed);
+            if (personal == null) return fail("personal account not created");
+            int nr = personal.getAccountNumber();
+            personal.getAllBanks().values().forEach(b -> b.setBalance(0L)); // nothing else to hand out
+            personal.createBank(slotItemA, 0);
+            String setup = bindSuspended(nr, false);
+            if (setup != null) return fail("setup: " + setup);
+            Map<ItemID, Long> payout = new java.util.HashMap<>();
+            manager.collectAccountBalances(personal, payout);
+            if (payout.containsKey(slotItemA)) return fail("suspended slot counted for the payout: " + payout);
+            long since = System.currentTimeMillis();
+            var result = manager.removeUserWithPayout(doomed);
+            if (result == null) return fail("user not removed");
+            result.get(10, TimeUnit.SECONDS);
+            String why = droppedUnpaid(nr, since);
+            return why == null ? pass("user deleted: suspended slot paid nothing, one BANK_CLOSED + flag, external untouched")
+                    : fail(why);
+        } catch (Exception e) {
+            return fail("threw " + e);
+        } finally {
+            if (manager.userExists(doomed)) manager.removeUser(doomed);
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // 7. Cascade cleanup:
     //    (a) delete BankSystem account → all its binding rows drop
     //    (b) removeBank on a bound slot → only that row drops; unrelated bindings survive
@@ -750,6 +1090,86 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         }
         return pass("Default-slot seeding: money + provider-declared item slot added, allowlist "
                 + "updated, second call is idempotent");
+    }
+
+    /**
+     * Task #119 (D4). Unbind while the provider is unavailable (mod missing or disabled in
+     * Integrations settings) must be refused while the binding row holds locked funds: they
+     * were already taken out of the external account, so zeroing them would destroy money.
+     * Once the provider is back, the normal unbind brings them home.
+     */
+    private TestResult testUnbindRefusedWhileUnavailableWithLocked() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return fail("BankAccountBindings backend is not available");
+        ISyncServerBank bank = account.getBank(slotItemA);
+        if (bank == null) return fail("Bank slot A missing");
+
+        bank.setBalance(80L);
+        BankStatus lockStatus = bank.lockAmount(30L);
+        if (lockStatus != BankStatus.SUCCESS) return fail("lockAmount(30) returned " + lockStatus);
+        long locked = bank.getLockedBalance();
+        StubCurrencyProvider.create(STUB_KEY_A, true, 0L);
+        ExternalAccountRef ref = new ExternalAccountRef(
+                StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "UnbindGuard", true);
+        BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, slotItemA, ref);
+        if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
+
+        StubCurrencyProvider.getInstance().setAvailable(false);
+        BankStatus unbind = manager.unbindExternalAccount(testAccountNr, slotItemA, true);
+        if (unbind != BankStatus.FAILED_EXTERNAL_UNAVAILABLE) {
+            return fail("unbind while unavailable with locked=" + locked + " returned " + unbind
+                    + " (expected FAILED_EXTERNAL_UNAVAILABLE)");
+        }
+        if (bindings.getBinding(testAccountNr, slotItemA) == null) {
+            return fail("refused unbind removed the binding row");
+        }
+        if (bindings.getLocked(testAccountNr, slotItemA) != locked) {
+            return fail("refused unbind changed BindingRow.lockedBalance to "
+                    + bindings.getLocked(testAccountNr, slotItemA) + " (expected " + locked + ")");
+        }
+
+        StubCurrencyProvider.getInstance().setAvailable(true);
+        unbind = manager.unbindExternalAccount(testAccountNr, slotItemA, true);
+        if (unbind != BankStatus.SUCCESS) return fail("unbind after provider is back returned " + unbind);
+        if (bank.getLockedBalance() != locked) {
+            return fail("After unbind: locked = " + bank.getLockedBalance() + " (expected " + locked + ")");
+        }
+        bank.unlockAmount(30L); // leave the slot as perTestReset expects
+        return pass("Unbind refused while the provider is unavailable and locked=" + locked
+                + "; row kept; unbind after re-enable restored the locked funds");
+    }
+
+    /**
+     * Task #136: a deleted user's bound slot pays out only what BankSystem holds (locked L + dust D). The free
+     * balance E is in the external account, which the deletion leaves alone, so it is not counted.
+     */
+    private TestResult testPayoutCountsOnlyLocalPart() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        perTestReset();
+        if (!(manager.getBankAccount(testAccountNr) instanceof ServerBankAccount account)) return fail("Test account missing");
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return fail("BankAccountBindings backend is not available");
+        ISyncServerBank bank = account.getBank(slotItemA);
+        if (bank == null) return fail("Bank slot A missing");
+        bank.setBalance(80L);
+        if (bank.lockAmount(30L) != BankStatus.SUCCESS) return fail("lockAmount(30) failed"); // L = 30
+        StubCurrencyProvider.StubAccount stub = StubCurrencyProvider.create(STUB_KEY_A, true, 0L);
+        BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, slotItemA,
+                new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, STUB_KEY_A, "Payout", true));
+        if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
+        stub.setBalance(500L); // E = 500
+        bindings.setDust(testAccountNr, slotItemA, 7L); // D = 7
+        if (bank.getTotalBalance() != 537L) return fail("setup: total " + bank.getTotalBalance() + ", expected 537");
+        Map<ItemID, Long> balances = new java.util.HashMap<>();
+        manager.collectAccountBalances(account, balances);
+        if (!Long.valueOf(37L).equals(balances.get(slotItemA)))
+            return fail("payout balance " + balances.get(slotItemA) + ", expected L + D = 37");
+        if (stub.getBalance() != 500L) return fail("external balance changed to " + stub.getBalance());
+        return pass("bound slot E=500 L=30 D=7: payout counts 37, external untouched");
     }
 
     /**

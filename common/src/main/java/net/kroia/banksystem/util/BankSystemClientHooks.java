@@ -27,6 +27,16 @@ public class BankSystemClientHooks {
         return net.kroia.modutilities.gui.client.InputCompat.hasShiftDown();
     }
 
+    /** Opens the config screen of the display controller at {@code pos} with its current settings. */
+    public static void openDisplayConfigScreen(net.minecraft.core.BlockPos pos) {
+        Minecraft.getInstance().execute(() -> {
+            if (Minecraft.getInstance().level != null
+                    && Minecraft.getInstance().level.getBlockEntity(pos) instanceof net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity be)
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(
+                        new net.kroia.banksystem.screen.custom.DisplayConfigScreen(pos, be.getDisplayType(), be.getAccountNumber()));
+        });
+    }
+
     public static void openStamperBindScreen(net.minecraft.core.BlockPos pos,
             java.util.List<net.kroia.banksystem.networking.entity.OpenStamperBindScreenPacket.Entry> entries) {
         Minecraft.getInstance().execute(() ->
@@ -68,6 +78,17 @@ public class BankSystemClientHooks {
     {
         // Ensuring the code runs on the main thread
         Minecraft.getInstance().submit(ATMScreen::openScreen);
+    }
+
+    public static void openAuditScreen(int accountNumber) // Task #110
+    {
+        Minecraft.getInstance().submit(() -> net.kroia.banksystem.screen.custom.AuditScreen.openScreen(accountNumber));
+    }
+
+    public static void openAdminHistoryScreen(int accountNumber) // Task #116
+    {
+        Minecraft.getInstance().submit(() -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(
+                new net.kroia.banksystem.screen.custom.BalanceHistoryScreen(null, accountNumber, true)));
     }
 
     public static void openBankAccountScreen(int accountNumber, boolean isAdminMode)

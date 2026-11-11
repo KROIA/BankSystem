@@ -2,12 +2,15 @@ package net.kroia.banksystem.testing.tests;
 
 import dev.architectury.platform.Platform;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
+import net.kroia.banksystem.api.currency.ProviderFeature;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
@@ -18,6 +21,7 @@ import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -31,6 +35,7 @@ import net.minecraft.world.item.Items;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -68,6 +73,7 @@ public class NumismaticsAdapterTests extends TestSuite {
         // Task #38 — coin-variant routing through the deposit path
         addTest("numismatics_variant_deposit_credits_bound_slot", this::testVariantDepositCreditsBoundSlot);
         addTest("numismatics_no_binding_falls_back", this::testNoBindingFallsBack);
+        addTest("integrations_toggle_gates_currency_providers", this::testIntegrationsToggleGatesProviders);
     }
 
     @Override
@@ -570,6 +576,48 @@ public class NumismaticsAdapterTests extends TestSuite {
      * must NOT route into any slot as a variant — findBindingAcceptingItem returns
      * null and the bound slot's balance is unchanged.
      */
+    /**
+     * Task #119: switching NUMISMATICS_ENABLED / LIGHTMANS_CURRENCY_ENABLED off makes the provider
+     * look uninstalled (getCurrencyProvider null, missing from getCurrencyProviders); on brings it
+     * back, live. A stub is registered under the id when the real mod is absent and removed after.
+     */
+    private TestResult testIntegrationsToggleGatesProviders() {
+        BankSystemAPI api = BankSystemMod.getAPI();
+        var integrations = BankSystemModBackend.getInstances_forTesting().SERVER_SETTINGS.INTEGRATIONS;
+        TestResult r = checkProviderGate(api, "numismatics", integrations.NUMISMATICS_ENABLED);
+        if (!r.passed()) return r;
+        return checkProviderGate(api, "lightmanscurrency", integrations.LIGHTMANS_CURRENCY_ENABLED);
+    }
+
+    private TestResult checkProviderGate(BankSystemAPI api, String id, Setting<Boolean> flag) {
+        Boolean before = flag.get();
+        ExternalCurrencyProvider stub = null;
+        try {
+            flag.set(true);
+            ExternalCurrencyProvider provider = api.getCurrencyProvider(id);
+            if (provider == null) {
+                provider = stub = new ExternalCurrencyProvider() {
+                    @Override public String providerId() { return id; }
+                    @Override public boolean isAvailable() { return true; }
+                    @Override public List<ExternalAccountRef> listBindableAccounts(UUID player) { return List.of(); }
+                    @Override public net.kroia.banksystem.api.currency.ExternalAccount open(ExternalAccountRef ref) { return null; }
+                    @Override public Set<ProviderFeature> features() { return Set.of(); }
+                };
+                api.registerCurrencyProvider(stub);
+            }
+            flag.set(false);
+            if (api.getCurrencyProvider(id) != null) return fail(id + " off: getCurrencyProvider still returns it");
+            if (api.getCurrencyProviders().contains(provider)) return fail(id + " off: getCurrencyProviders still lists it");
+            flag.set(true);
+            if (api.getCurrencyProvider(id) != provider) return fail(id + " on: getCurrencyProvider does not return it");
+            if (!api.getCurrencyProviders().contains(provider)) return fail(id + " on: getCurrencyProviders does not list it");
+            return pass(id + " gated live by its Integrations toggle" + (stub != null ? " (stub)" : ""));
+        } finally {
+            flag.set(before);
+            if (stub != null) api.unregisterCurrencyProvider(id);
+        }
+    }
+
     private TestResult testNoBindingFallsBack() {
         if (!Platform.isModLoaded("numismatics")) {
             return pass("Numismatics not loaded — skipped");

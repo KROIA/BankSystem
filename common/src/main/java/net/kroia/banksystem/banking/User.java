@@ -64,6 +64,11 @@ public class User implements ServerSaveable {
         return user;
     }
 
+    /** Task #104: copy safe to send to other players: UUID and name only, no admin flag, no custom data. */
+    public User namesOnly() {
+        return new User(userUUID, userName);
+    }
+
     public UserData getUserData() {
         return new UserData(userUUID, userName, customData.copy());
     }
