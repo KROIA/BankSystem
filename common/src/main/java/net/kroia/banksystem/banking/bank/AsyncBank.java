@@ -203,13 +203,23 @@ public class AsyncBank implements IAsyncBank {
             return (InputData) AsyncFunctionInputData.of(codecs.get(functionType).inputParamsCodec, functionType, packet, InputData::new);
         }
 
-        /** Task #125: a deposit / withdraw carries the tag's journal id, else a fresh one; every other call none. */
+        /**
+         * Task #125: a deposit / withdraw carries the tag's journal id, else a fresh one; every other call none.
+         * Task #162: an account-to-account transfer always gets a fresh id (a tag's journal id may already name a deposit).
+         */
         private static @Nullable String transferIdFor(FunctionType function)
         {
+            if (Request.ledgerAllowList(function) == TransactionLedger.SLAVE_TRANSFER_CODES) return TransferJournal.newTransferId();
             if (!journaled(function)) return null;
             TransferJournal.Ref ref = TransactionLedger.currentTag().journal();
             return ref != null ? ref.transferId() : TransferJournal.newTransferId();
         }
+    }
+
+    /** Task #162: value-moving functions with a transfer_id: deposit / withdraw and account-to-account transfers. */
+    private static boolean hasTransferId(FunctionType function)
+    {
+        return journaled(function) || Request.ledgerAllowList(function) == TransactionLedger.SLAVE_TRANSFER_CODES;
     }
 
     /** Deposit / withdraw functions: the ones with slave TransferJournal rows and a transfer_id on the wire. */
@@ -282,8 +292,8 @@ public class AsyncBank implements IAsyncBank {
                 return CompletableFuture.completedFuture(OutputData.of(input.function));
 
             BankIdentifyAndDataPacket inputData = input.decodeParams();
-            // Task #126 (B6): a repeated deposit / withdraw gets the first reply; nothing is applied twice.
-            final String transferId = journaled(input.function) && slaveID != null && !slaveID.isEmpty() ? inputData.transferId : null;
+            // Task #126 (B6) / #162: a repeated deposit / withdraw / transfer gets the first reply; nothing is applied twice.
+            final String transferId = hasTransferId(input.function) && slaveID != null && !slaveID.isEmpty() ? inputData.transferId : null;
             CompletableFuture<OutputData> seen = TransferStatusRequest.replay(slaveID, transferId);
             if(seen != null)
                 return seen;
@@ -537,7 +547,7 @@ public class AsyncBank implements IAsyncBank {
 
     /**
      * Task #121: a failed or null reply fails the returned future instead of hanging it.
-     * Task #126 (B6): a slave's deposit / withdraw that was never sent or not applied (status check) completes with
+     * Task #126 (B6) / #162: a slave's deposit / withdraw / transfer that was never sent or not applied (status check) completes with
      * FAILED_NO_MASTER_CONNECTION, so callers roll back; an unknown outcome is checked with the master first and fails
      * only if it stays unknown (then nothing may be refunded).
      */
@@ -552,7 +562,7 @@ public class AsyncBank implements IAsyncBank {
 
         boolean slave = !isClientSide && BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer;
         CompletableFuture<OutputData> out;
-        if(slave && journaled(input.function)) {
+        if(slave && hasTransferId(input.function)) {
             BankIdentifyAndDataPacket<?> params = input.decodeParams();
             String transferId = params.transferId();
             out = TransferStatusRequest.resolve(tmpFuture,
@@ -622,8 +632,9 @@ public class AsyncBank implements IAsyncBank {
      *                    for raw calls); the master checks it per function
      * @param ledgerActor player who caused the call, or null (SYSTEM)
      * @param ledgerNote  free-text note for the ledger row
-     * @param transferId  Task #125: the transfer's id (deposit / withdraw only, else null); the master writes it as
-     *                    the ledger row's {@code ref}. Last field on the wire, null from an older slave.
+     * @param transferId  Task #125: the transfer's id (deposit / withdraw, and Task #162 transfers; else null); for a
+     *                    deposit / withdraw the master writes it as the ledger row's {@code ref}. Last field on the wire,
+     *                    null from an older slave.
      */
     public record BankIdentifyAndDataPacket<T>(int accountNr, ItemID itemID, T extra,
                                                int ledgerCode, @Nullable UUID ledgerActor, @Nullable String ledgerNote,
@@ -677,7 +688,7 @@ public class AsyncBank implements IAsyncBank {
         }
     }
 
-    private record ParamGroup_long_int(long longValue, int integer)
+    public record ParamGroup_long_int(long longValue, int integer) // public for tests (Task #162)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_long_int> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_LONG, p -> p.longValue,
