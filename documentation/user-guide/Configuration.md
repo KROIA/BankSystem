@@ -364,17 +364,19 @@ When the effective component sets change (edited config list, added datapack, or
 
 Because such a merge is irreversible, BankSystem distinguishes two kinds of merges at server startup:
 
-- **Healing merges** — duplicates collapsing under an **unchanged** component set (e.g. spurious IDs minted by decaying food before the volatile-component fix). These are the intended self-repair and always run **automatically and silently**, exactly as described above. The same applies to the **first load** after updating to a version with the guard (the world has no recorded set yet).
+- **Healing merges** — duplicates collapsing under an **unchanged** component set (e.g. spurious IDs minted by decaying food before the volatile-component fix). These are the intended self-repair and run **automatically** (each one is logged), exactly as described above. The same applies to the **first load** after updating to a version with the guard (the world has no recorded set yet).
 - **Collapse merges** — the effective set **changed** since the world was last normalized, and applying the new set would fuse **genuinely distinct items** (e.g. a damaged and a fresh tool that were separate bank items, each possibly with its own market). These require an explicit admin decision.
 
 To tell the two apart, BankSystem records the effective component set that was last applied in `<world>/data/BankSystem/Meta_data.nbt` and compares it at every master-server startup:
 
-1. **Set unchanged (or no record yet):** normal startup, healing merges run silently.
+1. **Set unchanged (or no record yet):** normal startup, healing merges run automatically.
 2. **Set changed, no distinct items collide:** the new set is applied and recorded; a short info message is logged. No action needed.
 3. **Set changed, distinct items would merge, `CONFIRM_ITEMID_MERGE` is `false` (default):** the **server refuses to start**. The log / crash report contains a full merge report: every merge group with its canonical ID, the IDs that would become aliases, the item names, and the component values that distinguish the items today (newly stripped components are marked `(NEW)`). Nothing is changed or saved — BankSystem suppresses **all of its data saves** for the remainder of the aborted session (including the automatic "Saving worlds" crash-save), so the world data on disk stays exactly as it was. You then have two options:
    - **Keep the items distinct:** revert the component-list change (config lists and/or datapack tags) and restart, or
    - **Approve the merge:** back up the world, set `"CONFIRM_ITEMID_MERGE": true` in the `ServerBank` section of `settings.json`, and restart.
 4. **Set changed, collisions, `CONFIRM_ITEMID_MERGE` is `true`:** the merge report is logged as info, the merge is applied, the new set is recorded — and the flag is **automatically reset to `false`** and saved. The confirmation is strictly one-shot; it can never act as a standing bypass for future changes.
+
+The guard also triggers when your component lists did not change but stored items now load as the same item, usually because a mod was updated or removed. Restore the previous mod version to keep the items separate, or set `CONFIRM_ITEMID_MERGE` to true once to merge them.
 
 A confirmed merge (and any healing merge) also **consolidates existing bank data under the canonical IDs**: bank balances and locked balances that were stored under a merged ID are added onto the canonical item's bank in every account, the allowed-items list is rewritten to the canonical IDs, and account icons referencing a merged ID are updated. No amounts are lost — the totals per merge group are identical before and after. Dependent mods (e.g. StockMarket) are notified through a post-merge event so they can consolidate their own item-keyed data the same way.
 

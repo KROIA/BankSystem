@@ -2959,16 +2959,47 @@ public class ItemIDManager implements ServerSaveable {
 
         List<MergeCollisionGroup> collisions = new ArrayList<>();
         synchronized (itemIDMap) {
-            // Normalize COPIES under the given current set — the live templates stay untouched.
-            // (stripComponentsByIds == normalize() when currentIds is the applied effective set.)
+            for (List<ItemID> group : dryRunMergeGroups(currentIds)) {
+                // Classify: how many distinct identities does this group have under the
+                // PREVIOUS set? 1 → healing (duplicates, merge silently). >1 → collapse.
+                List<ItemStack> distinctUnderPreviousSet = new ArrayList<>();
+                for (ItemID id : group) {
+                    ItemStack old = VolatileItemComponents.stripComponentsByIds(itemIDMap.get(id), previousIds);
+                    old.setCount(1);
+                    boolean found = false;
+                    for (ItemStack existing : distinctUnderPreviousSet) {
+                        if (ItemStack.isSameItemSameComponents(old, existing)) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                        distinctUnderPreviousSet.add(old);
+                }
+                if (distinctUnderPreviousSet.size() < 2)
+                    continue; // healing merge — stays automatic
+                collisions.add(toMergeGroup(group));
+            }
+        }
+        return collisions;
+    }
+
+    /**
+     * Dry run of {@link #renormalizeAndMerge(Collection)} pass 2: every group of at least two
+     * registered IDs whose templates become identical after stripping {@code strippedIds}.
+     * Works on normalized COPIES; nothing is mutated.
+     */
+    private static List<List<ItemID>> dryRunMergeGroups(Set<net.minecraft.resources.ResourceLocation> strippedIds) { // mc<=1.21.10
+    //private static List<List<ItemID>> dryRunMergeGroups(Set<net.minecraft.resources.Identifier> strippedIds) { // mc>=1.21.11
+        List<List<ItemID>> result = new ArrayList<>();
+        synchronized (itemIDMap) {
+            // (stripComponentsByIds == normalize() when strippedIds is the applied effective set.)
             Map<ItemID, ItemStack> normalized = new HashMap<>();
             for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet()) {
-                ItemStack n = VolatileItemComponents.stripComponentsByIds(entry.getValue(), currentIds);
+                ItemStack n = VolatileItemComponents.stripComponentsByIds(entry.getValue(), strippedIds);
                 n.setCount(1);
                 normalized.put(entry.getKey(), n);
             }
-
-            // Same bucketing/grouping as renormalizeAndMerge() pass 2, on the copies.
             Map<Integer, List<ItemID>> buckets = new HashMap<>();
             for (Map.Entry<ItemID, ItemStack> entry : normalized.entrySet()) {
                 int hash = ItemStack.hashItemAndComponents(entry.getValue());
@@ -2994,44 +3025,69 @@ public class ItemIDManager implements ServerSaveable {
                     match.add(id);
                 }
                 for (List<ItemID> group : groups) {
-                    if (group.size() < 2)
-                        continue;
-
-                    // Classify: how many distinct identities does this group have under the
-                    // PREVIOUS set? 1 → healing (duplicates, merge silently). >1 → collapse.
-                    List<ItemStack> distinctUnderPreviousSet = new ArrayList<>();
-                    for (ItemID id : group) {
-                        ItemStack old = VolatileItemComponents.stripComponentsByIds(itemIDMap.get(id), previousIds);
-                        old.setCount(1);
-                        boolean found = false;
-                        for (ItemStack existing : distinctUnderPreviousSet) {
-                            if (ItemStack.isSameItemSameComponents(old, existing)) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found)
-                            distinctUnderPreviousSet.add(old);
-                    }
-                    if (distinctUnderPreviousSet.size() < 2)
-                        continue; // healing merge — stays automatic
-
-                    // Collapse group: same canonical rule as renormalizeAndMerge —
-                    // persisted shorts win, then lowest short (Task #16).
-                    ItemID canonical = selectCanonical(group);
-                    List<ItemID> mergedIds = new ArrayList<>();
-                    Map<ItemID, ItemStack> templates = new HashMap<>();
-                    for (ItemID id : group) {
-                        templates.put(id, itemIDMap.get(id).copy());
-                        if (!id.equals(canonical))
-                            mergedIds.add(id);
-                    }
-                    mergedIds.sort(Comparator.comparingInt(ItemID::getShort));
-                    collisions.add(new MergeCollisionGroup(canonical, mergedIds, templates));
+                    if (group.size() >= 2)
+                        result.add(group);
                 }
             }
         }
-        return collisions;
+        return result;
+    }
+
+    /**
+     * Wraps a dry-run group as a {@link MergeCollisionGroup}: same canonical rule as
+     * renormalizeAndMerge (persisted shorts win, then lowest short — Task #16), template
+     * copies for the report. Caller holds the {@code itemIDMap} lock.
+     */
+    private static MergeCollisionGroup toMergeGroup(List<ItemID> group) {
+        ItemID canonical = selectCanonical(group);
+        List<ItemID> mergedIds = new ArrayList<>();
+        Map<ItemID, ItemStack> templates = new HashMap<>();
+        for (ItemID id : group) {
+            templates.put(id, itemIDMap.get(id).copy());
+            if (!id.equals(canonical))
+                mergedIds.add(id);
+        }
+        mergedIds.sort(Comparator.comparingInt(ItemID::getShort));
+        return new MergeCollisionGroup(canonical, mergedIds, templates);
+    }
+
+    /**
+     * Unchanged-set merges (Task #157) above this many merged IDs need
+     * {@code CONFIRM_ITEMID_MERGE}. Only reachable by session-into-persisted merges: any group
+     * with two or more persisted members needs confirmation regardless of the count.
+     */
+    static final int UNCHANGED_SET_AUTO_MERGE_LIMIT = 3;
+
+    /**
+     * Dry run for the unchanged-set branch of {@link #applyStartupMergeGuard()} (Task #157):
+     * every group {@link #renormalizeAndMerge()} would merge under {@code componentIds}.
+     */
+    public static List<MergeCollisionGroup> detectUnchangedSetMerges(Collection<String> componentIds) {
+        List<MergeCollisionGroup> groups = new ArrayList<>();
+        synchronized (itemIDMap) {
+            for (List<ItemID> group : dryRunMergeGroups(parseComponentIdStrings(componentIds)))
+                groups.add(toMergeGroup(group));
+        }
+        return groups;
+    }
+
+    /**
+     * Whether unchanged-set merges must be confirmed: a group fuses two or more IDs loaded
+     * from {@code ItemIDs.nbt} (aliasing persisted balances/markets and purging the alias's
+     * balance history), or more than {@link #UNCHANGED_SET_AUTO_MERGE_LIMIT} IDs merge in total.
+     */
+    public static boolean unchangedSetMergesNeedConfirmation(List<MergeCollisionGroup> groups) {
+        int merged = 0;
+        for (MergeCollisionGroup group : groups) {
+            merged += group.mergedIds().size();
+            int persisted = 0;
+            for (ItemID id : group.currentTemplates().keySet())
+                if (persistedShorts.contains(id))
+                    persisted++;
+            if (persisted >= 2)
+                return true;
+        }
+        return merged > UNCHANGED_SET_AUTO_MERGE_LIMIT;
     }
 
     /** Parses component id strings into resource locations, silently skipping unparsable entries. */
@@ -3066,8 +3122,6 @@ public class ItemIDManager implements ServerSaveable {
     public static String buildMergeReport(List<MergeCollisionGroup> collisions,
                                           List<String> previousSet,
                                           List<String> currentSet) {
-        Set<String> previous = previousSet == null ? Set.of() : new HashSet<>(previousSet);
-        Set<String> current = currentSet == null ? Set.of() : new HashSet<>(currentSet);
         StringBuilder sb = new StringBuilder();
         sb.append("\n==================== BankSystem ItemID merge guard ====================\n");
         sb.append("The effective volatile/deposit-gated component set changed since this world\n");
@@ -3079,6 +3133,49 @@ public class ItemIDManager implements ServerSaveable {
         sb.append("Applying the current set would IRREVERSIBLY merge the following genuinely\n");
         sb.append("distinct items (bank balances and market listings keyed by a merged ID\n");
         sb.append("would all resolve to the canonical item afterwards):\n");
+        appendMergeGroups(sb, collisions, previousSet, currentSet);
+        sb.append("\nYour options:\n");
+        sb.append("  1) Keep the items distinct: revert the component-list change (settings.json\n");
+        sb.append("     config lists and/or datapack tags) and restart the server.\n");
+        appendConfirmOptionAndFooter(sb);
+        return sb.toString();
+    }
+
+    /**
+     * Report for the unchanged-set branch (Task #157): the component set did not change, yet
+     * stored ItemIDs now load as identical items — typically a mod update or removal changed
+     * or dropped item components.
+     */
+    public static String buildUnchangedSetMergeReport(List<MergeCollisionGroup> groups, List<String> currentSet) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n==================== BankSystem ItemID merge guard ====================\n");
+        sb.append("The following stored ItemIDs now load as the same item although the\n");
+        sb.append("volatile/deposit-gated component set did not change (").append(currentSet).append(").\n");
+        sb.append("Usually a mod was updated or removed and its item components changed or vanished.\n");
+        sb.append("Merging is IRREVERSIBLE: bank balances and market listings keyed by a merged ID\n");
+        sb.append("would all resolve to the canonical item, and the merged IDs' balance history is deleted:\n");
+        appendMergeGroups(sb, groups, currentSet, currentSet);
+        sb.append("\nYour options:\n");
+        sb.append("  1) Keep the items distinct: restore the mod version that was installed when\n");
+        sb.append("     the world was last saved, and restart the server.\n");
+        appendConfirmOptionAndFooter(sb);
+        return sb.toString();
+    }
+
+    private static void appendConfirmOptionAndFooter(StringBuilder sb) {
+        sb.append("  2) Approve this merge once: set \"CONFIRM_ITEMID_MERGE\": true in the\n");
+        sb.append("     \"ServerBank\" section of <world>/data/BankSystem/settings.json and restart.\n");
+        sb.append("     The flag resets itself to false after the merge is applied.\n");
+        sb.append("Nothing has been changed or saved: BankSystem suppresses all of its data\n");
+        sb.append("saves for the remainder of this aborted session, so the world data on disk\n");
+        sb.append("stays exactly as it was. Back up your world before confirming.\n");
+        sb.append("========================================================================");
+    }
+
+    private static void appendMergeGroups(StringBuilder sb, List<MergeCollisionGroup> collisions,
+                                          List<String> previousSet, List<String> currentSet) {
+        Set<String> previous = previousSet == null ? Set.of() : new HashSet<>(previousSet);
+        Set<String> current = currentSet == null ? Set.of() : new HashSet<>(currentSet);
         int groupNr = 0;
         for (MergeCollisionGroup group : collisions) {
             groupNr++;
@@ -3091,17 +3188,6 @@ public class ItemIDManager implements ServerSaveable {
                         .append('\n');
             }
         }
-        sb.append("\nYour options:\n");
-        sb.append("  1) Keep the items distinct: revert the component-list change (settings.json\n");
-        sb.append("     config lists and/or datapack tags) and restart the server.\n");
-        sb.append("  2) Approve this merge once: set \"CONFIRM_ITEMID_MERGE\": true in the\n");
-        sb.append("     \"ServerBank\" section of <world>/data/BankSystem/settings.json and restart.\n");
-        sb.append("     The flag resets itself to false after the merge is applied.\n");
-        sb.append("Nothing has been changed or saved: BankSystem suppresses all of its data\n");
-        sb.append("saves for the remainder of this aborted session, so the world data on disk\n");
-        sb.append("stays exactly as it was. Back up your world before confirming.\n");
-        sb.append("========================================================================");
-        return sb.toString();
     }
 
     /**
@@ -3145,9 +3231,11 @@ public class ItemIDManager implements ServerSaveable {
      * Distinguishes two situations:
      * <ul>
      *   <li><b>Healing</b> (stored set equal to the current set, or no stored set yet →
-     *       first load after the mod update / migration): merges are duplicates collapsing
-     *       under an unchanged set — the intended self-repair. Merge silently, exactly like
-     *       before this guard existed.</li>
+     *       first load after the mod update / migration): up to
+     *       {@link #UNCHANGED_SET_AUTO_MERGE_LIMIT} session-minted duplicates merge into
+     *       persisted IDs automatically (each group logged). A group fusing two or more
+     *       persisted IDs (e.g. a mod update dropped the components that told them apart),
+     *       or a larger cascade, needs {@code CONFIRM_ITEMID_MERGE} like a collapse (Task #157).</li>
      *   <li><b>Potential collapse</b> (stored set differs): dry-run the merge grouping.
      *       Groups whose members are distinct under the OLD set would be fused by the
      *       admin's component-list change — that is irreversible, so it requires an explicit
@@ -3169,8 +3257,23 @@ public class ItemIDManager implements ServerSaveable {
         List<String> storedSet = dataHandler != null ? dataHandler.getStoredEffectiveComponentSet() : null;
 
         if (storedSet == null || storedSet.equals(currentSet)) {
-            // Unchanged set (or no record yet → migration): every merge is a healing merge.
-            renormalizeAndMerge();
+            // Unchanged set (or no record yet → migration). Small merges of session-minted
+            // duplicates into persisted IDs stay automatic healing; anything that fuses two
+            // persisted IDs, or a cascade above the limit, needs confirmation (Task #157).
+            List<MergeCollisionGroup> groups = detectUnchangedSetMerges(currentSet);
+            if (groups.isEmpty()) {
+                renormalizeAndMerge();
+            } else if (!unchangedSetMergesNeedConfirmation(groups)) {
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    for (MergeCollisionGroup group : groups)
+                        BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Healing merge: " + group.mergedIds()
+                                + " -> canonical " + group.canonicalId());
+                renormalizeAndMerge();
+            } else {
+                requireMergeConfirmation(buildUnchangedSetMergeReport(groups, currentSet));
+                renormalizeAndMerge();
+                consumeMergeConfirmation(dataHandler);
+            }
         } else {
             List<MergeCollisionGroup> collisions = detectCollapseCollisions(storedSet);
             if (collisions.isEmpty()) {
@@ -3179,30 +3282,9 @@ public class ItemIDManager implements ServerSaveable {
                             + storedSet + " -> " + currentSet + "), but no distinct ItemIDs collapse — applying the new set.");
                 renormalizeAndMerge();
             } else {
-                String report = buildMergeReport(collisions, storedSet, currentSet);
-                boolean confirmed = BACKEND_INSTANCES != null
-                        && BACKEND_INSTANCES.SERVER_SETTINGS != null
-                        && Boolean.TRUE.equals(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_MERGE.get());
-                if (!confirmed) {
-                    // Abort startup. Nothing has been mutated on disk; the exception message
-                    // carries the full report into the log / crash report on both loaders.
-                    // BankSystemDataHandler.load_itemIDs() catches this exception in transit
-                    // to mark the whole session save-prohibited (the ItemID registry is only
-                    // half-initialized here and the bank manager is still empty), so neither
-                    // the vanilla crash-save nor the shutdown save can overwrite world data —
-                    // that is what makes the report's "nothing saved" guarantee true.
-                    throw new ItemIDMergeAbortedException(report
-                            + "\nServer startup was aborted by the BankSystem ItemID merge guard (CONFIRM_ITEMID_MERGE is false).");
-                }
-                if (BACKEND_INSTANCES.LOGGER != null)
-                    BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] CONFIRM_ITEMID_MERGE is true — applying the confirmed merge."
-                            + report);
+                requireMergeConfirmation(buildMergeReport(collisions, storedSet, currentSet));
                 renormalizeAndMerge();
-                // One-shot confirmation: consume the flag and persist the reset immediately,
-                // so a later (unrelated) set change can never slip through unconfirmed.
-                BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_MERGE.set(false);
-                if (dataHandler != null)
-                    dataHandler.save_globalSettings();
+                consumeMergeConfirmation(dataHandler);
             }
         }
 
@@ -3211,6 +3293,40 @@ public class ItemIDManager implements ServerSaveable {
             dataHandler.setAppliedEffectiveComponentSet(currentSet);
             dataHandler.save_metadata();
         }
+    }
+
+    /**
+     * Throws {@link ItemIDMergeAbortedException} carrying {@code report} unless
+     * {@code CONFIRM_ITEMID_MERGE} is true; when confirmed, logs the report.
+     */
+    private static void requireMergeConfirmation(String report) {
+        boolean confirmed = BACKEND_INSTANCES != null
+                && BACKEND_INSTANCES.SERVER_SETTINGS != null
+                && Boolean.TRUE.equals(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_MERGE.get());
+        if (!confirmed) {
+            // Abort startup. Nothing has been mutated on disk; the exception message
+            // carries the full report into the log / crash report on both loaders.
+            // BankSystemDataHandler.load_itemIDs() catches this exception in transit
+            // to mark the whole session save-prohibited (the ItemID registry is only
+            // half-initialized here and the bank manager is still empty), so neither
+            // the vanilla crash-save nor the shutdown save can overwrite world data —
+            // that is what makes the report's "nothing saved" guarantee true.
+            throw new ItemIDMergeAbortedException(report
+                    + "\nServer startup was aborted by the BankSystem ItemID merge guard (CONFIRM_ITEMID_MERGE is false).");
+        }
+        if (BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] CONFIRM_ITEMID_MERGE is true — applying the confirmed merge."
+                    + report);
+    }
+
+    /**
+     * One-shot confirmation: consume the flag and persist the reset immediately, so a later
+     * (unrelated) merge can never slip through unconfirmed.
+     */
+    private static void consumeMergeConfirmation(BankSystemDataHandler dataHandler) {
+        BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_MERGE.set(false);
+        if (dataHandler != null)
+            dataHandler.save_globalSettings();
     }
 
 
