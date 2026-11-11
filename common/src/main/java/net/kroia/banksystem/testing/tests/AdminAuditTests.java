@@ -18,7 +18,12 @@ import net.kroia.banksystem.data.table.SuspicionFlagManager;
 import net.kroia.banksystem.data.table.TransactionLogManager;
 import net.kroia.banksystem.data.table.record.SuspicionFlagRecord;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
+import net.kroia.banksystem.minecraft.command.BankSystemCommandsRegistration;
 import net.kroia.banksystem.minecraft.command.ServerBankSystemCommandHandler;
+import net.kroia.banksystem.util.BankSystemPermissions;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.server.level.ServerPlayer;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.kroia.banksystem.networking.general.AuditPageRequest;
 import net.kroia.banksystem.networking.multi_server.ServerNetworkInfoRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
@@ -73,6 +78,58 @@ public class AdminAuditTests extends TestSuite {
         addTest("audit_page_refuses_non_admin", this::pageAccess);
         addTest("suspicion_flagged_event_once", this::flagEvent); // Task #119
         addTest("server_network_info_admin_only", this::networkInfoAccess); // Task #142
+        // BS-196: flag-gated admin commands
+        addTest("permission_nodes_fallback_levels", this::nodeFallbackLevels);
+        addTest("admin_command_non_player_uses_op_level", this::gateNonPlayer);
+        addTest("admin_command_non_op_with_flag_runs", () -> gate(true, 0, true));
+        addTest("admin_command_op_without_flag_refused", () -> gate(false, 2, false));
+        addTest("admin_command_non_op_without_flag_refused", () -> gate(false, 0, false));
+    }
+
+    /** BS-196: flag-gated nodes fall back to level 0 (the admin flag decides), every other node to op level 2. */
+    private TestResult nodeFallbackLevels() {
+        java.util.Map<String, Integer> registered = net.kroia.modutilities.PermissionCompat.getRegisteredNodes();
+        for (String node : BankSystemPermissions.ALL_NODES) {
+            int expected = BankSystemPermissions.FLAG_GATED_NODES.contains(node) ? 0 : 2;
+            TestResult r = assertEquals("fallback level of " + node, expected, registered.get(node));
+            if (!r.passed()) return r;
+        }
+        return pass(BankSystemPermissions.ALL_NODES.length + " nodes registered with their fallback level");
+    }
+
+    /** BS-196: console and other non-player sources keep the op-level check on the flag-gated commands. */
+    private TestResult gateNonPlayer() {
+        if (getServer() == null) return skip("no server");
+        CommandSourceStack console = getServer().createCommandSourceStack();
+        TestResult r = assertTrue("console (level 4) passes",
+                BankSystemPermissions.canUseFlagGatedCommand(console, BankSystemPermissions.COMMAND_RESTORE_BINDING));
+        if (!r.passed()) return r;
+        return assertFalse("level-0 non-player source is refused",
+                BankSystemPermissions.canUseFlagGatedCommand(console.withPermission(0), BankSystemPermissions.COMMAND_RESTORE_BINDING));
+    }
+
+    /** BS-196: a player's flag-gated command runs if and only if they have the BankSystem admin flag, op or not. */
+    private TestResult gate(boolean flag, int opLevel, boolean expectedRan) {
+        if (manager == null || getServer() == null) return skip("no master server");
+        List<ServerPlayer> players = getServer().getPlayerList().getPlayers();
+        if (players.isEmpty()) return skip("no online player");
+        UUID uuid = players.get(0).getUUID();
+        boolean before = manager.isBanksystemAdmin(uuid);
+        try {
+            manager.setBanksystemAdminMode(uuid, flag);
+            CommandSourceStack source = players.get(0).createCommandSourceStack().withPermission(opLevel);
+            TestResult r = assertTrue("player passes the requires check",
+                    BankSystemPermissions.canUseFlagGatedCommand(source, BankSystemPermissions.COMMAND_SYMBOLS));
+            if (!r.passed()) return r;
+            AtomicBoolean ran = new AtomicBoolean();
+            CompletableFuture<Boolean> result = BankSystemCommandsRegistration.runAsAdmin(source, () -> ran.set(true));
+            if (!pumpUntil(result::isDone, 5_000)) return fail("admin check did not complete");
+            r = assertEquals("action ran (flag=" + flag + ", level=" + opLevel + ")", expectedRan, ran.get());
+            if (!r.passed()) return r;
+            return assertEquals("result matches", expectedRan, result.join());
+        } finally {
+            manager.setBanksystemAdminMode(uuid, before);
+        }
     }
 
     @Override
