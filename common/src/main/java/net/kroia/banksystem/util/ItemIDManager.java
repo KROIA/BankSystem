@@ -1220,10 +1220,11 @@ public class ItemIDManager implements ServerSaveable {
                     Runnable populator = () -> populateSlaveCacheFromResponse(normalizedStacks, keys, response, ex);
                     net.minecraft.server.MinecraftServer server = UtilitiesPlatform.getServer();
                     if (server != null) {
-                        // tell() always queues; execute() would run inline when a refused send
+                        // tell()/schedule() always queues; execute() would run inline when a refused send
                         // completes the future synchronously on the server thread, mutating the
                         // cache before the caller's own frame has finished.
-                        server.tell(new net.minecraft.server.TickTask(server.getTickCount(), populator));
+                        server.tell(new net.minecraft.server.TickTask(server.getTickCount(), populator)); // mc<=1.21.1
+                        //server.schedule(new net.minecraft.server.TickTask(server.getTickCount(), populator)); // mc>=1.21.2
                     } else {
                         // No server (test harness / world stop race) — nothing to mutate
                         // safely. clear() has already drained the negative cache anyway.
