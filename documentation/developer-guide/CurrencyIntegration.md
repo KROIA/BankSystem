@@ -146,6 +146,11 @@ public @NotNull List<ExternalAccountRef> listBindableAccounts(@NotNull UUID play
 
 Called on demand when the player opens the binding picker. Return live results — do not cache. Order is presentation-relevant; personal-first, then shared, is the recommended convention.
 
+**An empty list is an answer, not an error** (since 2.2.0). It means the player may bind none of your accounts. BankSystem also calls this at server start-up for the managers of every bound BankSystem account: a binding whose external account none of them may bind is **suspended** (an admin restores it with `/banksystem restorebinding`). So:
+
+- Return an empty list only when the player really may bind nothing.
+- When you **cannot give the complete list** (your mod is not ready, an internal error, or only part of the list could be read), **throw** a `RuntimeException` instead of returning an empty or partial list. The bind is then refused, the picker shows nothing, and the start-up check leaves the existing bindings alone.
+
 ### 4.3 Open a live handle from a saved reference
 
 ```java
@@ -373,7 +378,7 @@ The BankSystem in-game test suite covers the Task #33 SPI end-to-end. Mirror it.
 6. **Shared/personal ref-mismatch rejection.** Try to bind a personal external account to a shared BankSystem account. Verify BankSystem rejects the bind.
 7. **Cascade cleanup on account delete / bank removal.** Delete the BankSystem account. Verify the binding row is removed from savedata (no orphan pointing at a dead account).
 
-For pre-integration smoke tests where wiring your real mod into a dev world is impractical, reuse `StubCurrencyProvider` (`common/src/main/java/net/kroia/banksystem/testing/StubCurrencyProvider.java`). It is not part of the public API surface — it lives under `testing/` — but Task #34's Numismatics adapter and future adapters may import it directly.
+For pre-integration smoke tests where wiring your real mod into a dev world is impractical, copy `StubCurrencyProvider` (`common/src/main/java/net/kroia/banksystem/testing/StubCurrencyProvider.java`) into your own test code. Do **not** import it: everything under `testing/` is stripped from BankSystem's release jars, so an adapter that references it fails to load on real servers.
 
 Run in-game tests via `/banksystem test` (BankSystem does not use Gradle-side unit tests for the SPI; the fixtures need a live server).
 
@@ -587,12 +592,17 @@ That is a complete, compilable adapter modulo the `MyMoneyApi` / `MyAccount` typ
 
 ## 16. Where to find help
 
-- **Design rationale** and locked-balance protocol: `.claude/Features/CurrencyModSupport.md` in the BankSystem repository. Read this if a behavior surprises you — the umbrella spec is the authoritative source for the "why."
+- **Design rationale** and locked-balance protocol: sections 3 (two invariants), 7 (overflow) and 8 (read-through) of this guide, plus the player view in [Currency Bindings](../user-guide/CurrencyBindings.md).
 - **Canonical shapes**:
-  - `common/src/main/java/net/kroia/banksystem/testing/StubCurrencyProvider.java` — a working provider you can imitate.
+  - `common/src/main/java/net/kroia/banksystem/testing/StubCurrencyProvider.java` — a working provider you can imitate (copy it; `testing/` is not in release jars).
   - `common/src/main/java/net/kroia/banksystem/testing/tests/ExternalCurrencyBindingTests.java` — the seven-scenario smoke suite.
 - **Persistence layout** (curious readers only — adapter authors never touch this): `common/src/main/java/net/kroia/banksystem/banking/binding/BankAccountBindings.java`.
 - **BankSystem API entry point**: `common/src/main/java/net/kroia/banksystem/api/BankSystemAPI.java`. The two methods you care about are `registerCurrencyProvider` and `getCurrencyProvider(id)`.
 - **Reference adapter (Numismatics)**: shipping in BankSystem v2.0.5 alongside the SPI (Task #34). Reading its source is the fastest way to see a real-world provider that advertises every feature bit.
+
+### Server-side switches and unbinding (since 2.2.0)
+
+- The built-in adapters (Numismatics, Lightman's Currency) can be switched off in the server's **Integrations** settings. A switched-off adapter is left out of `getCurrencyProviders()`, and `getCurrencyProvider(id)` returns `null` for it, so its bound slots behave like an unavailable provider (`FAILED_EXTERNAL_UNAVAILABLE`).
+- Unbinding is **refused** (`FAILED_EXTERNAL_UNAVAILABLE`) while the provider is unavailable or switched off and the slot still holds locked or fractional (below one unit) money that BankSystem took out of the external account — dropping the row would destroy it. It is also refused for a suspended binding until an admin restores it.
 
 Cross-reference the [BankSystem API Reference](API.md) if your adapter needs to touch other parts of BankSystem (rare — the SPI is deliberately narrow).

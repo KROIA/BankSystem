@@ -13,6 +13,9 @@ import net.minecraft.client.gui.GuiGraphics; // mc<=1.21.11
  * <p>When {@link net.kroia.banksystem.api.BankSystemAPI#getShareIconRenderer()} returns
  * {@code null} (e.g. on dedicated servers, or when the renderer has not been wired yet)
  * callers should fall back to the vanilla {@code ItemStack} renderer for the share item.
+ *
+ * <p>Call on the client render thread only. A share whose visuals are not cached yet
+ * is drawn with placeholder visuals until they arrive; keep drawing every frame.
  */
 public interface IShareIconRenderer {
 

@@ -6,7 +6,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 /**
- * Task #109 (v2.1.0) — one trade-ledger row, written by StockMarket via
+ * Task #109 — one trade-ledger row (since 2.2.0), written by StockMarket via
  * {@link ITransactionLedger#logTrade}.
  * <p>
  * A row is a <b>delta</b>: the part of an order that filled since the previous row for the

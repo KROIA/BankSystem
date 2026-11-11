@@ -5,9 +5,10 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 /**
- * Task #109 (v2.1.0) — who caused a ledger row. Persisted as {@code actor_uuid},
+ * Task #109 — who caused a ledger row. Persisted as {@code actor_uuid},
  * {@code actor_name} and {@code source_kind}.
  *
+ * @since 2.2.0
  * @param uuid   the acting player or admin, or {@code null} for console/system/StockMarket rows
  * @param name   display name at the time of the row (may be {@code null} if unknown)
  * @param source what kind of actor this is

@@ -4,7 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Task #109 (v2.1.0) — write access to the BankSystem transaction ledger, obtained via
+ * Task #109 — write access to the BankSystem transaction ledger, obtained via
  * {@code BankSystemAPI.getLedger()}.
  * <p>
  * Every call is fire-and-forget and thread-safe. Writes are best-effort: they never throw and
@@ -14,6 +14,11 @@ import org.jetbrains.annotations.Nullable;
  * <p>
  * Raw {@code IServerBank} deposit/withdraw/lock calls do <b>not</b> write ledger rows. A mod
  * that moves value through them should describe the movement here.
+ * <p>
+ * Rows written here are treated like BankSystem's own: they fire
+ * {@code IBankSystemEvents.getTransactionLoggedEvent()} and run through the admin-audit and suspicion checks.
+ *
+ * @since 2.2.0
  */
 public interface ITransactionLedger {
 

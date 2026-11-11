@@ -43,7 +43,10 @@ public interface BankSystemAPI {
      */
     IBankSystemDataHandler getDataHandler();
 
-
+    /**
+     * @return {@code true} if this server runs as a slave in a multi-server setup (bank data lives on the master;
+     *         use the async API). {@code false} on the master and on single servers.
+     */
     boolean isSlave();
 
     /**
@@ -78,7 +81,7 @@ public interface BankSystemAPI {
      * <p>
      * Adapters call this during their mod-init phase to make themselves discoverable
      * for the binding UI and for {@code ServerBank} balance delegation (see
-     * {@code .claude/Features/CurrencyModSupport.md}).
+     * {@code documentation/developer-guide/CurrencyIntegration.md}).
      * <p>
      * If a provider with the same {@link ExternalCurrencyProvider#providerId()} is
      * already registered, the previous registration is replaced — this lets
@@ -137,12 +140,12 @@ public interface BankSystemAPI {
     net.kroia.banksystem.api.payout.IPayoutManager getPayoutManager();
 
     /**
-     * Task #109 (v2.1.0) — transaction ledger. Never {@code null}. Writes are fire-and-forget,
+     * Task #109 — transaction ledger. Never {@code null}. Writes are fire-and-forget,
      * thread-safe and best-effort; see {@link net.kroia.banksystem.api.ledger.ITransactionLedger}.
      * Trade rows are deltas: per order {@code ref} they sum to the order totals.
      *
      * @return the ledger writer.
-     * @since 2.1.0
+     * @since 2.2.0
      */
     net.kroia.banksystem.api.ledger.ITransactionLedger getLedger();
 
@@ -160,8 +163,7 @@ public interface BankSystemAPI {
      * Task #49 (v2.1.0) — one-shot dividend distributor. Never {@code null}; on slaves
      * the returned instance is a fail-closed shim that returns
      * {@link net.kroia.banksystem.api.PayDividendResult.Reason#NOT_MASTER} for every
-     * call. Callers reaching this from a slave should route through the ARRS
-     * {@code AsyncCompanyManager.PAY_DIVIDEND} function instead.
+     * call. There is no public async variant: call it from code that runs on the master.
      *
      * @return the dividend payer. Downstream mods and UI callers use this interface only.
      */

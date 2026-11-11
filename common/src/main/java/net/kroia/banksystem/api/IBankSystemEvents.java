@@ -76,8 +76,17 @@ public interface IBankSystemEvents {
      */
     Signal getSettingsLoadedFromFileSignal();
 
+    /**
+     * Signal emitted on every server once BankSystem finished its per-world setup (data loaded, managers ready).
+     * Fired on the server thread. Attach work that needs BankSystem's state here.
+     */
     Signal getBanksystemSetupCompleteSignal();
 
+    /**
+     * Signal emitted on the <b>master server</b> when a slave finished its handshake (version checked, ItemID sync
+     * sent). Parameterless; see {@link #getMasterServerSlaveDisconnected()} for the counterpart with the slave id.
+     * Fired from a network callback: do not block, and hop to the server thread before touching game state.
+     */
     Signal getMasterServerSlaveConnected();
 
     /**
@@ -178,8 +187,9 @@ public interface IBankSystemEvents {
 
     /**
      * Task #45 (v2.1.0) — event emitted on the <b>master server</b> every time a recurring
-     * payout schedule ticks. Fires for both successful transfers and every documented
-     * failure mode ({@code INSUFFICIENT_FUNDS}, {@code TARGET_MISSING}). See
+     * payout schedule ticks. Fires for both successful transfers and every failure status
+     * ({@code INSUFFICIENT_FUNDS}, {@code TARGET_MISSING}, {@code TARGET_NO_DEPOSIT_RIGHT},
+     * {@code CURRENCY_ITEM_MISSING}, {@code PAUSED}, {@code UNKNOWN}, {@code ACCOUNT_FROZEN}). See
      * {@link PayoutExecutedInfo}. Dispatched on the server thread after the bank transfer
      * and SQL history write have been submitted.
      */

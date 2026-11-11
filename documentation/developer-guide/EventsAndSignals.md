@@ -1,6 +1,6 @@
 # BankSystem Events & Signals Reference
 
-This guide documents every event and signal BankSystem exposes to dependent mods (e.g. StockMarket) through its public API. Use it to react to bank-system state changes — user/account changes, ItemID merges, multi-server connection lifecycle, and slave-trust changes — without polling.
+This guide documents every event and signal BankSystem exposes to dependent mods (e.g. StockMarket) through its public API. Use it to react to bank-system state changes — user/account changes, ItemID merges, multi-server connection lifecycle, slave-trust changes, payouts, account freezes, ledger rows and suspicion flags — without polling.
 
 All events and signals are **server-side** and are reached through a single accessor.
 
@@ -46,6 +46,7 @@ Two properties matter for every subscription — **which JVM** fires it (master 
 
 - **Server-thread events** (most of them) are dispatched on the Minecraft server thread. It is safe to touch server-side game state directly from the listener.
 - **Network-callback events** (the multi-server connection lifecycle) fire on a **Netty event-loop thread**. **Listeners must not block**, and must **not** touch world/game state directly — marshal onto the server thread first (e.g. `server.execute(() -> ...)`).
+- **Writer-thread events** (`getTransactionLoggedEvent()`, `getSuspicionFlaggedEvent()`, since 2.2.0) fire on whichever thread wrote the row or raised the flag: the server thread, an ARRS/Netty handler thread (operations forwarded from a slave) or the database worker (periodic wealth and money-supply checks). Listeners must be **thread-safe and fast**, and must hop to the server thread before touching game state.
 
 Each entry below states its side and thread. When in doubt, marshal to the server thread.
 
@@ -73,6 +74,8 @@ Each entry below states its side and thread. When in doubt, marshal to the serve
 | `getPayoutExecutedEvent()` | `DataEvent<PayoutExecutedInfo>` | `{companyId, scheduleId, sourceAccount, targetUuid, amount, status, time}` | **master** | server | a company payout schedule was evaluated — success **or** failure |
 | `getDividendPaidEvent()` | `DataEvent<DividendPaidEvent>` | `{companyId, perShareAmount, totalPaid, holderCount, time}` | **master** | server | a dividend run completed successfully |
 | `getAccountFreezeChangedEvent()` | `DataEvent<AccountFreezeChangedEvent>` | `{accountNumber, frozen, actor}` | **master** | caller's thread | an account was frozen or unfrozen (once per real change; since 2.2.0) |
+| `getTransactionLoggedEvent()` | `DataEvent<TransactionLoggedEvent>` | one ledger row, see [below](#gettransactionloggedevent) | **master** | writer's thread | a transaction-ledger row was queued for saving (since 2.2.0) |
+| `getSuspicionFlaggedEvent()` | `DataEvent<SuspicionFlaggedEvent>` | one flag, see [below](#getsuspicionflaggedevent) | **master** | raising thread | a suspicion flag was raised (since 2.2.0) |
 
 ---
 
@@ -175,11 +178,70 @@ events.getPayoutExecutedEvent().addListener(info -> {
 
 `amount()` is the raw fixed-point value (scale 100) in the schedule's currency, and `sourceAccount()` is the company's bound bank account number.
 
+`status()` is a `PayoutHistoryRecord.Status`:
+
+| Status | Meaning |
+|---|---|
+| `OK` | Paid |
+| `INSUFFICIENT_FUNDS` | The company account could not cover the amount |
+| `TARGET_MISSING` | The target player or account no longer exists |
+| `TARGET_NO_DEPOSIT_RIGHT` | The target player has no DEPOSIT right on the schedule's explicit target account |
+| `CURRENCY_ITEM_MISSING` | The company account has no bank for the schedule's item |
+| `PAUSED` | The schedule is paused |
+| `UNKNOWN` | Any other failure |
+| `ACCOUNT_FROZEN` | The company account is frozen (since 2.2.0) |
+
+> `PayoutHistoryRecord.Status` lives in `net.kroia.banksystem.data.table.record`, outside `api/`. Compare by constant name, not by ordinal; new values are appended.
+
 ### `getDividendPaidEvent()`
 
 Fires **once per successful run** of `IDividendPayer.payDividend`. Refused runs (invalid input, insufficient funds, no holders) never fire it, so receiving the event means every holder was paid.
 
 `perShareAmount()` and `totalPaid()` are raw fixed-point values; `holderCount()` is the number of accounts credited.
+
+---
+
+## Ledger rows and suspicion flags (since 2.2.0)
+
+Both fire on the **master** only (a slave's rows are written by the master) and on the **writer's thread** — see [Threading](#threading--side-discipline). A throwing listener does not stop the write (a ledger-row listener's exception is logged as a warning).
+
+### `getTransactionLoggedEvent()`
+
+Fires once per [transaction-ledger](TransactionLedger.md) row, right after the row was queued for saving and before the admin-audit and suspicion checks run on it. Rows written by add-ons through `getLedger().log(...)` fire it too. Payload `TransactionLoggedEvent`:
+
+| Field | Meaning |
+|---|---|
+| `accountNumber` | Account the row belongs to |
+| `type` | `LedgerType` |
+| `itemId` | Short `ItemID` of the moved item; `0` for rows without an item (freeze, account edit) |
+| `amount` | **Signed** raw amount (TRANSFER: `-x` on the sender, `+x` on the receiver); `0` if none |
+| `actor` | `LedgerActor` who caused it |
+| `otherAccount` | Counterparty account (transfers, payouts), or `null` |
+| `companyId` | Company involved (payouts, dividends, shares), or `null` |
+| `timeMs` | Row time, epoch milliseconds |
+| `note` | Free text, or `null` |
+
+```java
+events.getTransactionLoggedEvent().addListener(row -> {
+    if (row.type() == LedgerType.TRANSFER && row.amount() > 0)
+        server.execute(() -> notifyReceiver(row.accountNumber(), row.amount())); // hop to the server thread
+});
+```
+
+### `getSuspicionFlaggedEvent()`
+
+Fires once per raised flag, after the flag row was queued and the audit line and admin alert were issued. Payload `SuspicionFlaggedEvent`:
+
+| Field | Meaning |
+|---|---|
+| `accountNumber` | Flagged account; **`0` for server-wide flags** (e.g. `MONEY_SUPPLY_GROWTH`) |
+| `flagType` | Flag code (append-only, see [Transaction Ledger](TransactionLedger.md#admin-audit-and-suspicion-flags)) |
+| `flagName` | Constant name, e.g. `"WEALTH_JUMP"`, or `"FLAG_<code>"` for an unknown code |
+| `severity` | Free-form, higher = worse |
+| `amount` | Raw amount that triggered the flag; `0` if none |
+| `ref` | Reference (e.g. a transfer id), or `null` |
+| `details` | Human-readable reason, or `null` |
+| `timeMs` | Flag time, epoch milliseconds |
 
 ---
 

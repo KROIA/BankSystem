@@ -32,7 +32,12 @@ public interface ISyncServerBankAccount {
     BankAccountData getAccountData();
 
 
+    /**
+     * Calls {@code callback} with a snapshot of this account on the server thread, at most once per tick, after the
+     * account changed. Subscribing the same instance twice has no effect. Not saved; resubscribe after a restart.
+     */
     void subscribeBankChanges(Consumer<BankAccountData> callback);
+    /** Removes a callback added with {@link #subscribeBankChanges}; pass the same instance. */
     void unsubscribeBankChanges(Consumer<BankAccountData> callback);
 
     /**

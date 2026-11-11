@@ -221,7 +221,7 @@ public final class NumismaticsProvider implements ExternalCurrencyProvider {
     }
 
     // Numismatics coin ratios sourced from CreateNumismatics-1.0.20+neoforge-mc1.21.1
-    // (see .claude/reference/numismatics/api-dump.txt) — SPUR/BEVEL/SPROCKET/COG/CROWN/SUN.
+    // (Coin enum of that jar) — SPUR/BEVEL/SPROCKET/COG/CROWN/SUN.
     // Baked into the enum's <clinit>; update if a future release adds coins or reshuffles.
     @Override
     public long baseUnitsPerItem(@NotNull ItemStack stack) {

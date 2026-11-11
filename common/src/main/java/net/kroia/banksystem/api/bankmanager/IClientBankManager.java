@@ -16,26 +16,46 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Client-side access to bank data of the server the player is connected to ({@code BankSystemAPI.getClientBankManager()}).
+ * Every {@code *Async} / {@code request*} call sends a request to that server (which may forward it to the master).
+ * The server checks access: account data goes to account members and BankSystem admins; refused reads complete
+ * with {@code null} or an empty list, refused writes with {@code false}. A request without an answer fails the
+ * future after the request's timeout (see {@code IAsyncBankManager}).
+ */
 //@Environment(EnvType.CLIENT)
 public interface IClientBankManager {
 
 
     //IAsyncBankManager getAsync();
 
+    /** Users and accounts; full data for admins, names only for other players. */
     CompletableFuture<BankManagerData> getBankManagerDataAsync();
+    /** One account's data, or {@code null} if it does not exist or the player may not read it. */
     CompletableFuture<@Nullable BankAccountData> getBankAccountDataAsync(int accountNumber);
+    /** The personal account of {@code userUUID}, or {@code null} (missing or not readable). */
     CompletableFuture<@Nullable BankAccountData> getPersonalBankAccountDataAsync(UUID userUUID);
+    /** Bank-wide info about one item (totals, holders). */
     CompletableFuture<ItemInfoData> getItemInfoDataAsync(@NotNull ItemID itemID);
+    /** Admin only: allow the item for banking. @return true if it was allowed */
     CompletableFuture<Boolean> allowItemIDAsync(ItemID itemID);
+    /** Admin only: disallow the item; every holder's balance of it is cleared (no refund). @return true on success */
     CompletableFuture<Boolean> disallowItemIDAsync(ItemID itemID);
+    /** Accounts {@code userUUID} is a member of, filtered to the ones the player may read. */
     CompletableFuture<List<BankAccountData>> getBankAccountsDataAsync(UUID userUUID);
+    /** Deletes the account (admin or MANAGE permission). @return true if it was deleted */
     CompletableFuture<Boolean> deleteBankAccountAsync(int accountNumber);
     /** True unless the server this client plays on is a slave the master does not trust (its writes are refused). */
     CompletableFuture<Boolean> isServerTrustedAsync();
+    /** Asks the server for its raw units per item ({@code ITEM_FRACTION_SCALE_FACTOR}, money: 100) and caches it. */
     CompletableFuture<Integer> getItemFractionScaleFactorAsync();
+    /** The cached raw units per item (default until the server answered). */
     int getItemFractionScaleFactor();
+    /** Decimal digits of the scale factor, e.g. 2 for 100. */
     int getItemFractionDigitsCount();
+    /** Display amount to raw units with the cached scale factor. */
     long convertToRawAmount(double realAmount);
+    /** Raw units to display amount with the cached scale factor. */
     double convertToRealAmount(long rawAmount);
 
 
@@ -146,12 +166,15 @@ public interface IClientBankManager {
     //CompletableFuture<List<Integer>> requestBankAccountNumbers(List<UUID> playerUUIDs);
 
 
+    /** Applies account edits (name, icon, members, permissions; MANAGE needed). @return the new account data, or {@code null} if refused */
     CompletableFuture<@Nullable BankAccountData> requestUpdateBankAccount(UpdateBankAccountRequest.InputData inputData);
 
 
+    /** Data for the Bank Terminal block at {@code pos} (its selected account and banks). */
     CompletableFuture<BankTerminalBlockDataRequest.Output> requestBankTerminalData(BlockPos pos);
     //CompletableFuture<BankSelectionScreenDataRequest.Output> requestBankAccounts(UUID playerUUID);
     //CompletableFuture<Boolean> requestDeleteBankAccount(int accountNumber);
+    /** Every item currently allowed for banking. */
     CompletableFuture<List<ItemID>> requestAllowdItems();
 
     /**
@@ -180,6 +203,8 @@ public interface IClientBankManager {
     CompletableFuture<List<BalanceHistoryRecord>> requestBalanceHistory(
             int accountNumber, long fromMs, long toMs, int maxPoints);
 
+    /** The player's own UI preferences stored on the server (e.g. chart series visibility). */
     CompletableFuture<CompoundTag> getUserCustomData();
+    /** Replaces the player's stored UI preferences. @return true if saved */
     CompletableFuture<Boolean> updateUserCustomData(CompoundTag data);
 }

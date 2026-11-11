@@ -8,6 +8,7 @@ import org.jetbrains.annotations.Nullable;
  *
  * <p>Called by external mods (e.g. StockMarket) from render paths. Implementations
  * must be cheap, cache-backed, thread-safe for the client thread, and non-blocking.
+ * Call from the client (render) thread.
  * On cache miss the implementation self-heals (schedules an async fetch) — the
  * caller should re-query on the next frame.
  *

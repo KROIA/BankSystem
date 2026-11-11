@@ -48,7 +48,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * goes through reflection. This provider is only registered when
  * {@code Platform.isModLoaded("lightmanscurrency")} returns {@code true} at runtime.
  * <p>
- * <b>API mapping (verified against LC 2.3.0.5 in {@code .claude/reference/lc-api-2.3.0.5/api-dump.txt}):</b>
+ * <b>API mapping (verified against the Lightman's Currency 2.3.0.5 jar):</b>
  * <ul>
  *   <li>{@code BankAPI.getApi()} — singleton accessor (static method, no {@code API} field exists).</li>
  *   <li>{@code PlayerBankReference.of(UUID)} — canonical factory for a player's personal reference.</li>
@@ -147,7 +147,7 @@ public final class LightmansCurrencyProvider implements ExternalCurrencyProvider
         }
         try {
             // Verify the LC API surface we depend on is present.
-            // All entries are in api-dump.txt for LC 2.3.0.5. TeamAPI is required for
+            // All entries exist in LC 2.3.0.5. TeamAPI is required for
             // shared-account enumeration; if it's missing the provider still degrades
             // to personal-only behavior via the catch-and-log below.
             Class.forName("io.github.lightman314.lightmanscurrency.api.money.bank.BankAPI");

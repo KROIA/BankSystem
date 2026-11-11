@@ -11,6 +11,10 @@ import java.util.UUID;
  * success or failure. Downstream mods listen to build reactive UIs, badges, or metrics.
  * The event fires on the server thread AFTER the bank transfer (if any) and the SQL
  * write have been dispatched.
+ * <p>
+ * {@code status} is {@link PayoutHistoryRecord.Status}, which lives outside {@code api/}:
+ * compare by constant, not by ordinal; values are only appended. {@code amount} is raw units
+ * of the schedule's item.
  */
 public record PayoutExecutedInfo(
         int companyId,

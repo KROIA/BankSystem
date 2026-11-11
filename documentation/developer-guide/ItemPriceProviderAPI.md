@@ -102,6 +102,8 @@ for each bank (itemId, balance, lockedBalance) in account:
 
 The wealth value is stored in the `BalanceHistory` SQL table with a sentinel `itemId = Short.MAX_VALUE (32767)`. The balance field contains the total wealth in raw money units.
 
+The same WEALTH series drives the `WEALTH_JUMP` suspicion flag (since 2.2.0): when an account's wealth grows too fast within an hour, admins get a flag. Your prices therefore feed that check, and a sudden market price spike can raise it. Without a provider the series is absent and `WEALTH_JUMP` never fires. See [Transaction Ledger — suspicion flags](TransactionLedger.md#admin-audit-and-suspicion-flags).
+
 ## What the User Sees
 
 In the Balance History chart screen (opened via the "History" button in the Bank Terminal):

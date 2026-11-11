@@ -4,14 +4,29 @@ import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 
+/**
+ * Result of a bank mutation. Every value other than {@link #SUCCESS} means nothing changed.
+ * The wire format uses the ordinal: new values are only appended.
+ */
 public enum BankStatus {
+    /** Done. */
     SUCCESS,
+    /** The free (or locked) balance does not cover the amount. */
     FAILED_NOT_ENOUGH_FUNDS,
+    /** The target balance would overflow. */
     FAILED_OVERFLOW,
+    /** A negative amount was passed. */
     FAILED_NEGATIVE_VALUE,
+    /** Internal: the target bank is not a server bank. */
     FAILED_WRONG_INSTANCE_TYPE,
+    /** The item id is not valid. */
     FAILED_INVALID_ITEM_ID,
+    /** The account (e.g. a transfer target) does not exist or has no bank for this item. */
     FAILED_NO_BANK,
+    /**
+     * Slave only: the master was not reached, or (since 2.2.0) the transfer status check says the call was not
+     * applied. Nothing changed, so rolling back is safe. An outcome that stays unknown fails the future instead.
+     */
     FAILED_NO_MASTER_CONNECTION,
     /**
      * The slot is bound to an external currency-mod account, but the provider is not

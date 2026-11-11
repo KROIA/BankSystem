@@ -3,7 +3,7 @@ package net.kroia.banksystem.api.ledger;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Task #109 (v2.1.0) — type of a transaction-ledger row. The numeric {@link #code()} is what
+ * Task #109 — type of a transaction-ledger row. The numeric {@link #code()} is what
  * gets persisted in the {@code type_code} column.
  * <p>
  * <b>The code table is append-only: never renumber or reuse a code.</b> Persisted rows and
@@ -13,6 +13,8 @@ import org.jetbrains.annotations.Nullable;
  * Amounts are unsigned except for {@link #TRANSFER}: there the amount is negative on the
  * account the value left and positive on the account it arrived at, so the two rows of one
  * transfer sum to 0.
+ *
+ * @since 2.2.0
  */
 public enum LedgerType {
     /** Legacy row whose old kind could not be mapped, or an unknown code. */
@@ -47,7 +49,7 @@ public enum LedgerType {
     SHARE_TRADE(24),
     /** Balance handed out as items when a user (and their accounts) is deleted. */
     ACCOUNT_DELETE_PAYOUT(25),
-    /** Reserved: admin freeze/unfreeze. Amount 0, note "frozen"/"unfrozen". */
+    /** Admin freeze/unfreeze of an account (Task #117). Amount 0, item 0, note "frozen"/"unfrozen". */
     ACCOUNT_FREEZE(26),
     /** Item was disallowed by an admin; every holder's balance of it is cleared (no refund). */
     ADMIN_DISALLOW_ITEM(27),

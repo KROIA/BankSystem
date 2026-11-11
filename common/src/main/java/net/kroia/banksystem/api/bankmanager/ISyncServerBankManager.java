@@ -29,7 +29,9 @@ public interface ISyncServerBankManager {
     void markPersistDirty();
 
 
+    /** {@link net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount#subscribeBankChanges} on account {@code accountNr}; no-op if it does not exist. */
     void subscribeBankChanges(int accountNr, Consumer<BankAccountData> callback);
+    /** Removes a callback added with {@link #subscribeBankChanges}; no-op if the account does not exist. */
     void unsubscribeBankChanges(int accountNr, Consumer<BankAccountData> callback);
 
     /**
@@ -149,6 +151,9 @@ public interface ISyncServerBankManager {
      * (this server first, then each slave). What cannot be delivered (also any rest below one item) is destroyed and
      * logged as ACCOUNT_DELETE_LOSS. A slot bound to an external currency pays out only what BankSystem holds (locked
      * amount and dust); the external account keeps its balance.
+     * <p>
+     * Returns <b>before delivery is known</b>: {@code true} only means the user existed and was removed. The payout
+     * and its ledger rows finish later; there is no public API that reports what was delivered.
      *
      * //@note
      * //This method will emit the CLOSE_ITEM_BANK_EVENT for all banks of the user

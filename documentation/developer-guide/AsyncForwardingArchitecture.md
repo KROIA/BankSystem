@@ -53,7 +53,7 @@ GenericRequest<IN, OUT>                          (ModUtilities — ARRS framewor
        └─ AsyncForwardingRequest<Enum, IN, OUT>  (BankSystem — generic forwarding base)
             ├─ AsyncBank.Request                  (46 forwarded bank operations)
             ├─ AsyncBankAccount.Request           (28 forwarded account operations)
-            ├─ AsyncBankManager.Request           (51 forwarded manager operations)
+            ├─ AsyncBankManager.Request           (50 forwarded manager operations)
             └─ AsyncCompanyManager.Request        (36 forwarded company operations)
 ```
 
@@ -154,9 +154,9 @@ future.thenAccept(status -> {
 Inside `depositAsync()`:
 ```java
 public CompletableFuture<BankStatus> depositAsync(long amount) {
-    // Guard: is the bank system reachable?
+    // Guard: is the bank system reachable? (nothing is sent)
     if (!MultiServerUtils.canInteractWithBankSystem())
-        return CompletableFuture.completedFuture(BankStatus.FAILED);
+        return CompletableFuture.completedFuture(BankStatus.FAILED_NO_MASTER_CONNECTION);
 
     CompletableFuture<BankStatus> future = new CompletableFuture<>();
 
@@ -166,12 +166,21 @@ public CompletableFuture<BankStatus> depositAsync(long amount) {
     // Send: client→server or slave→master
     CompletableFuture<OutputData> outputFuture = sendRequest(inputData);
 
-    // Decode result when it arrives
-    outputFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
+    // Decode the result when it arrives. relay() also fails `future` when the request fails,
+    // so the caller's future never hangs.
+    AsyncFunctionOutputData.relay(outputFuture, future);
 
     return future;
 }
 ```
+
+> Do not write `outputFuture.thenAccept(out -> future.complete(out.decodeResult()))`: when the request fails, `thenAccept` never runs and `future` hangs forever.
+
+### When the request fails
+
+Since 2.2.0 BankSystem switches on ModUtilities' JVM-wide `RequestManager.ENABLE_REQUEST_FAILURES`, so a request without an answer fails its future (default timeout 30 s, `getTimeoutMs()` overrides it per request class; BankSystem's slow reads use `SLOW_READ_TIMEOUT_MS` = 150 s). `RequestNotSentException` means nothing was sent (refund is safe); `RequestOutcomeUnknownException` means the master may have applied it (do not refund).
+
+`sendRequest` on a slave gives deposit and withdraw calls a transfer id and, when their answer is missing, asks the master with `TransferStatusRequest` before it gives up: applied → `SUCCESS`, not applied → `FAILED_NO_MASTER_CONNECTION` (nothing changed), still unknown → `RequestOutcomeUnknownException`. The master answers each transfer id at most once and replays the first answer to a repeated request. Transfers, locks and other calls get no status check. Caller rules: [API Reference — When an async call fails](API.md#when-an-async-call-fails).
 
 ### Master Side
 
@@ -203,6 +212,16 @@ public CompletableFuture<OutputData> handleOnMasterServer(InputData input, Strin
 ```
 
 ## Security Model
+
+### Read gates (since 2.2.0)
+
+Reads of account data are filtered on the master in `handleOnMasterServer`, using helpers on `BankSystemGenericRequest`:
+
+- `isAccessAllowed(isMember, isAdmin, fromUntrustedSlave)`: account members always; BankSystem admins only when the request did not come through an untrusted slave.
+- `isFullRead(playerSender, slaveID)`: may read every account — an admin or a server-internal call (`playerSender == null`), never through an untrusted slave (a slave can forge the sender UUID).
+- `isSelfOrFullRead(sender, subject, fullRead)`: data about one user goes to that user or a full reader.
+
+A refused read answers `null`, an empty list or a names-only copy (`namesOnly()`), not an error. Balance history, account change streams and the network overview use the same rules.
 
 ### Two-Tier Whitelisting
 
@@ -249,7 +268,15 @@ Used for operations like `transferAsync(long amount, int targetAccountNr)`.
 
 ### Bank Identification Packet
 
-`AsyncBank` wraps every call in a `BankIdentifyAndDataPacket<T>(int accountNr, ItemID itemID, T extra)` — this tells the master which bank account and item bank to look up before dispatching. `AsyncBankAccount` uses a simpler variant with just the account number.
+`AsyncBank` wraps every call in a
+
+```java
+BankIdentifyAndDataPacket<T>(int accountNr, ItemID itemID, T extra,
+                             int ledgerCode, @Nullable UUID ledgerActor, @Nullable String ledgerNote,
+                             @Nullable String transferId)
+```
+
+`accountNr` and `itemID` tell the master which bank to look up. `ledgerCode`, `ledgerActor` and `ledgerNote` carry the [ledger](TransactionLedger.md#multi-server) type, player and note of the movement (`ledgerCode` `-1` = no row). `transferId` is set for deposit and withdraw calls (status check, at-most-once). Build it with `BankIdentifyAndDataPacket.of(accountNr, itemID, extra, transferId)`, which picks up the ledger tag set with `TransactionLedger.tagged(...)` on this thread. `AsyncBankAccount` uses a simpler variant with just the account number.
 
 ## How to Add a New Forwarded Method
 
@@ -281,11 +308,11 @@ put(FunctionType.MyNewMethodAsync, codecPacket(ByteBufCodecs.VAR_LONG.cast(), Ba
 @Override
 public CompletableFuture<BankStatus> myNewMethodAsync(long param) {
     if (!MultiServerUtils.canInteractWithBankSystem())
-        return CompletableFuture.completedFuture(BankStatus.FAILED);
+        return CompletableFuture.completedFuture(BankStatus.FAILED_NO_MASTER_CONNECTION);
     CompletableFuture<BankStatus> future = new CompletableFuture<>();
     InputData inputData = InputData.of(FunctionType.MyNewMethodAsync, accountNr, itemID, param);
     CompletableFuture<OutputData> outputFuture = sendRequest(inputData);
-    outputFuture.thenAccept(out -> future.complete(out.decodeResult()));
+    AsyncFunctionOutputData.relay(outputFuture, future); // fails `future` when the request fails
     return future;
 }
 ```
@@ -324,7 +351,7 @@ BankStatus myNewMethod(long param);
 | `util/BankSystemGenericRequest.java` | BankSystem-specific request base (admin checks, routing) |
 | `banking/bank/AsyncBank.java` | 46 forwarded bank operations |
 | `banking/bankaccount/AsyncBankAccount.java` | 28 forwarded account operations |
-| `banking/bankmanager/AsyncBankManager.java` | 51 forwarded manager operations |
+| `banking/bankmanager/AsyncBankManager.java` | 50 forwarded manager operations |
 | `banking/company/AsyncCompanyManager.java` | 36 forwarded company operations (lifecycle, payouts, dividends, share visuals, symbols, market control, statistics) |
 | `api/bank/IAsyncBank.java` | Async bank interface |
 | `api/bankaccount/IAsyncBankAccount.java` | Async account interface |
@@ -334,7 +361,7 @@ All paths relative to `common/src/main/java/net/kroia/banksystem/`.
 
 ## Statistics
 
-- **161 total forwarded functions** across the four async classes
+- **160 total forwarded functions** across the four async classes
 - One codec pair registered per function
 - Wire format per call: enum ordinal (4 bytes) + encoded params (variable)
 - Transport: ModUtilities ARRS (Asynchronous Request-Response System) over TCP

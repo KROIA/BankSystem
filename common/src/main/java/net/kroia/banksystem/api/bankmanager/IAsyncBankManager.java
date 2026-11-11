@@ -16,6 +16,25 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Async access to the bank manager. Works on the master (runs locally) and on slaves and clients
+ * (forwarded to the master).
+ * <p>
+ * <b>Failure contract (slaves and clients; on the master every call runs locally and never fails):</b>
+ * <ul>
+ *   <li>Not connected to the master when called: the future completes at once with a fallback
+ *       ({@code BankStatus.FAILED_NO_MASTER_CONNECTION}, {@code false}, {@code 0}, an empty value or {@code null}); nothing was sent.</li>
+ *   <li>Since 2.2.0 {@code BankSystemMod.init} sets the JVM-wide ModUtilities
+ *       {@code RequestManager.ENABLE_REQUEST_FAILURES = true} (it affects every mod's ARRS requests), so a sent request
+ *       without an answer fails the future instead of hanging. Default timeout 30 s
+ *       ({@code RequestManager.DEFAULT_TIMEOUT_MS}); request classes may override {@code getTimeoutMs()}.</li>
+ *   <li>{@code RequestNotSentException}: never sent, refunding is safe. {@code RequestOutcomeUnknownException}
+ *       (timeout or connection lost): the master may have applied it, do <b>not</b> refund. Treat any other
+ *       exception like an unknown outcome.</li>
+ *   <li>A request the master refuses (not allowed for clients or untrusted slaves) usually completes with {@code null}.</li>
+ * </ul>
+ * See {@code documentation/developer-guide/API.md}, "When an async call fails".
+ */
 public interface IAsyncBankManager {
 
 
@@ -112,13 +131,15 @@ public interface IAsyncBankManager {
     void addUserAsync(@NotNull User user);
 
     /**
-     * Removes the user with the given UUID.
-     *
-     * //@note
-     * //This method will emit the CLOSE_ITEM_BANK_EVENT for all banks of the user
+     * Removes the user with the given UUID, like {@code ISyncServerBankManager.removeUser(UUID)}.
+     * Balances of the user's personal account and of accounts left without users are handed to the player as
+     * items (master first, then each slave). What cannot be delivered (player offline, outcome unknown, or a rest
+     * below one item) is destroyed and logged as {@code ACCOUNT_DELETE_LOSS}; the rest as {@code ACCOUNT_DELETE_PAYOUT}.
+     * <p>
+     * Completes <b>before delivery is known</b>: {@code true} only means the user existed and was removed.
      *
      * @param userUUID UUID of the user to remove.
-     * @return True if the user was successfully removed, false otherwise.
+     * @return true if the user existed and was removed; false if not, or if the slave is not connected.
      */
     CompletableFuture<Boolean> removeUserAsync(UUID userUUID);
 
@@ -158,7 +179,9 @@ public interface IAsyncBankManager {
     /**
      * Task #117 — async variant of {@code ISyncServerBankManager.isAccountFrozen(int)};
      * works on slaves (asks the master). Completes with false if the account does not exist
-     * or the master cannot be reached.
+     * or the slave is not connected when called. If the request was sent and the answer is
+     * missing (timeout, connection lost), the future <b>fails</b> (see the interface doc);
+     * callers that gate player actions should treat that as "frozen" (fail closed).
      *
      * @param accountNumber the bank account
      * @return true if the account is frozen

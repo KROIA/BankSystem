@@ -29,9 +29,10 @@ import java.util.UUID;
  * not required to be thread-safe, and must never assume they are invoked from a
  * client or from a mod-init thread after registration completes.
  * <p>
- * See {@code .claude/Features/CurrencyModSupport.md} for the design principle
- * ("binding, not replacement"), the locked-balance protocol, currency-unit
- * conversion rules, and the shared-account permission-mapping model.
+ * Design principle: <b>binding, not replacement</b>. The external mod owns the balance;
+ * BankSystem keeps its permissions, and the locked balance stays local (lock/unlock never
+ * touch the external account, withdrawLocked does). Adapter guide, unit conversion and
+ * shared-account permission mapping: {@code documentation/developer-guide/CurrencyIntegration.md}.
  *
  * @since 2.0.5
  * @see ExternalAccount

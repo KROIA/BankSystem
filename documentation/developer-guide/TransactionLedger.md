@@ -1,5 +1,7 @@
 # Transaction Ledger
 
+*Since 2.2.0.*
+
 BankSystem writes one row per balance change to the `TransactionLog` table in `banksystem.db` on the master server. Writes are best-effort and asynchronous. If a row cannot be written, a warning is logged and the banking operation still completes. Only the master writes rows. On a slave server `log` and `logTrade` do nothing.
 
 ## Multi-server
@@ -15,10 +17,12 @@ Every money or item change runs on the master, so the master writes the row. A s
 
 A code that is unknown or not allowed is written as UNKNOWN_LEGACY (0) with the note `rejected code <n> from slave <id>`, and a warning is logged. The operation itself still runs. Raw `AsyncBank` calls without a code (for example StockMarket settlement, which logs through `logTrade`) send the wire-only code `-1` (`TransactionLedger.NO_LOG`) and write no row. Transfers always write their TRANSFER pair.
 
+Deposit and withdraw calls from a slave also carry a **transfer id**. The master writes it into the row's `ref`, so the slave's own records (its diagnostics `TransferJournal`) can be matched to the master's rows. The master applies each transfer id **at most once**: a repeated request gets the first answer and writes no second row. When the answer to a slave is lost, the slave asks the master for the transfer's status before it refunds anything; if the outcome stays unknown, nothing is refunded (see [When an async call fails](API.md#when-an-async-call-fails)).
+
 ## Writing rows from another mod
 
 ```java
-ITransactionLedger ledger = BankSystemAPI.getLedger(); // via your BankSystemAPI instance
+ITransactionLedger ledger = BankSystemMod.getAPI().getLedger();
 
 // A generic row with an explicit type and actor:
 ledger.log(accountNumber, LedgerType.ADMIN_ADD, MoneyItem.getItemID(), rawAmount,
@@ -31,6 +35,10 @@ ledger.logTrade(new TradeLogEntry(accountNumber, playerUuid, TradeSide.BUY,
 ```
 
 Trade rows are **deltas**. The rows that share one `ref` (PERIODIC, SHUTDOWN, CLOSE) add up to the order totals.
+
+Rows you write are treated like BankSystem's own: they fire [`getTransactionLoggedEvent()`](EventsAndSignals.md#gettransactionloggedevent) and then run through the admin-audit and suspicion hooks below (an ADMIN_* row lands in the audit file, a large TRANSFER into a new account can raise a flag).
+
+To **react** to rows instead of writing them, subscribe to `api.getEvents().getTransactionLoggedEvent()` on the master (fires on the writer's thread).
 
 Actors (`LedgerActor`): `player(uuid, name)`, `admin(uuid, name)`, `console()`, `system()`, `stockmarket()`.
 
@@ -70,7 +78,7 @@ Codes are stored in `type_code` and are **append-only**: a code is never renumbe
 | 25 | ACCOUNT_DELETE_PAYOUT | Balance handed to the player as items when a user and their account were deleted |
 | 26 | ACCOUNT_FREEZE | An account was frozen or unfrozen; amount 0, item 0, note `frozen` / `unfrozen`, actor = admin, console or the API caller |
 | 27 | ADMIN_DISALLOW_ITEM | An admin disallowed an item; one row per holder with the removed (non-refunded) balance |
-| 28 | ACCOUNT_DELETE_LOSS | Balance of a deleted user's account that could not be handed out and was destroyed; note gives the reason (`player offline` or `outcome unknown, transfer <id>`) |
+| 28 | ACCOUNT_DELETE_LOSS | Balance of a deleted user's account that could not be handed out and was destroyed; the note ends with `not delivered: <reason>`, where the reason is `player offline`, `outcome unknown, transfer <id>` (a slave's DROP stayed unknown; `ref` = that transfer id) or `outcome unknown: <cause>` |
 
 Amounts are unsigned, except for TRANSFER, where the sign gives the direction.
 
@@ -91,7 +99,7 @@ Amounts are unsigned, except for TRANSFER, where the sign gives the direction.
 | `company_id` | Company (payouts, dividends, share rows) |
 | `ts` | Time in epoch milliseconds |
 | `note` | Free text (details such as `old->new`, block position, item count) |
-| `ref` | External reference (StockMarket order id) |
+| `ref` | External reference: StockMarket order id, or the slave's transfer id for slave deposits/withdrawals and user-deletion payouts |
 | `tag` | Trade row kind: `PERIODIC`, `SHUTDOWN` or `CLOSE` |
 | `money_amount` | Trade: money moved by this slice |
 | `price` | Trade: average price of this slice |
@@ -109,13 +117,9 @@ Amounts are unsigned, except for TRANSFER, where the sign gives the direction.
 
 `TransactionLedger.write` passes every master row to `AdminAudit.onLedgerRow`. Admin rows (codes 7–11, 26, 27, and 12 / 28 when the source is ADMIN) are appended to `<world>/data/BankSystem/audit/<yyyy-mm-dd>.log` and sent to BankSystem admins with alerts on (see [Administration](../user-guide/Administration.md#audit-and-admin-alerts)).
 
-Features that detect suspicious activity call:
+BankSystem's own checks raise flags internally (`banking.ledger.AdminAudit.raise`, not part of the API). Each flag writes one row to the `SuspicionFlag` table (`id, ts, account_number, flag_type, severity, amount, ref, details, acknowledged`), the audit-file line `FLAG <type> ...` and the admin alert, then fires [`getSuspicionFlaggedEvent()`](EventsAndSignals.md#getsuspicionflaggedevent). Master only; it never throws. Admins read flags with `SuspicionFlagManager.getRecent(account, sinceMs, limit)` and mark them handled with `acknowledge(id)`.
 
-```java
-AdminAudit.raise(int accountNumber, int flagType, int severity, long amount, @Nullable String ref, @Nullable String details);
-```
-
-It writes one row to the `SuspicionFlag` table (`id, ts, account_number, flag_type, severity, amount, ref, details, acknowledged`), the audit-file line `FLAG <type> ...` and the admin alert. Master only; it never throws. `flag_type` codes are append-only and owned by the raising feature. Read with `SuspicionFlagManager.getRecent(account, sinceMs, limit)`; mark handled with `acknowledge(id)`.
+> Add-ons cannot raise flags yet: there is no public call and no code range reserved for add-ons. Add-ons can **listen** to flags with `getSuspicionFlaggedEvent()`. Ask for a public call if you need one.
 
 Flag codes in use (`SuspicionChecks`, append-only):
 
@@ -126,8 +130,10 @@ Flag codes in use (`SuspicionChecks`, append-only):
 | 3 | `WEALTH_JUMP` | periodic sweep over the BalanceHistory WEALTH series (item id 32767) |
 | 4 | `TRANSFER_TO_NEW_ACCOUNT` | ledger hook on incoming TRANSFER (+), PAYOUT and DIVIDEND money rows |
 | 5 | `MONEY_SUPPLY_GROWTH` | wealth sweep tick; account 0 (server-wide), baseline from balance snapshots an hour ago |
+| 6 | `TRANSFER_PARKED` | a value DROP to a slave (banknote withdraw, user-deletion payout) whose outcome stayed unknown after the status check; not refunded, `ref` = transfer id, always on |
+| 7 | `EXTERNAL_BINDING_SUSPENDED` | start-up check: a currency binding to an external account the account's managers may not bind was suspended; `ref` = `providerId:accountKey` |
 
-The hooks run from `TransactionLedger.write` and `TransactionLedger.writeAll` (payout and dividend batches), on the master only. Bank accounts store their creation time as NBT `createdAt` (absent for accounts created before v2.2.0). Missing columns are added on start-up like for `TransactionLog`.
+The ledger hooks (codes 1, 2, 4) run from `TransactionLedger.write` and `TransactionLedger.writeAll` (payout and dividend batches), on the master only, also for rows written by add-ons. `WEALTH_JUMP` uses the WEALTH series, which is only recorded while an [item price provider](ItemPriceProviderAPI.md) is registered. Bank accounts store their creation time as NBT `createdAt` (absent for accounts created before v2.2.0). Missing columns are added on start-up like for `TransactionLog`.
 
 ## Upgrading old databases
 
