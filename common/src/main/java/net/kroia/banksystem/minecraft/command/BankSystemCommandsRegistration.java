@@ -9,6 +9,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.util.BankSystemPermissions;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
@@ -21,6 +22,7 @@ import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
+import net.kroia.modutilities.discord.DiscordWebhooks;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -79,7 +81,7 @@ public class BankSystemCommandsRegistration {
                         })
                 )
                 .then(Commands.literal("trust")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, 2)) // Admin-only
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_TRUST, BankSystemPermissions.FALLBACK_LEVEL)) // Admin-only
                         .then(Commands.argument("slaveID", StringArgumentType.string()).suggests((context, builder) -> getSlaveServerIDSuggestion(builder))
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
@@ -95,7 +97,7 @@ public class BankSystemCommandsRegistration {
                         )
                 )
                 .then(Commands.literal("untrust")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, 2)) // Admin-only
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_TRUST, BankSystemPermissions.FALLBACK_LEVEL)) // Admin-only
                         .then(Commands.argument("slaveID", StringArgumentType.string()).suggests((context, builder) -> getSlaveServerIDSuggestion(builder))
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
@@ -111,7 +113,7 @@ public class BankSystemCommandsRegistration {
                         )
                 )
                 .then(Commands.literal("op")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, 2)) // Admin-only
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_OP, BankSystemPermissions.FALLBACK_LEVEL)) // Admin-only
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -136,7 +138,7 @@ public class BankSystemCommandsRegistration {
                         )
                 )
                 .then(Commands.literal("deop")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, 2)) // Admin-only
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_OP, BankSystemPermissions.FALLBACK_LEVEL)) // Admin-only
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -197,6 +199,38 @@ public class BankSystemCommandsRegistration {
                         })
 
                 )
+                // Task #117: /banksystem freeze <account> [on|off] (no state = toggle). Admin check on the master.
+                .then(Commands.literal("freeze")
+                        .then(Commands.argument("account", IntegerArgumentType.integer(0))
+                                .executes(ctx -> freezeCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"), 2))
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> freezeCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"), 1)))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> freezeCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"), 0)))
+                        )
+                )
+                // Task #110: /banksystem audit <player|account>, /banksystem alerts on|off
+                .then(Commands.literal("audit")
+                        .then(Commands.argument("target", StringArgumentType.word()).suggests(BankSystemCommandsRegistration::getTargetSuggestion)
+                                .executes(ctx -> auditCommand(ctx.getSource(), StringArgumentType.getString(ctx, "target")))))
+                .then(Commands.literal("alerts")
+                        .then(Commands.literal("on").executes(ctx -> alertsCommand(ctx.getSource(), true)))
+                        .then(Commands.literal("off").executes(ctx -> alertsCommand(ctx.getSource(), false))))
+                // Task #113: /banksystem auditreport <hours>; Task #116: /banksystem history <player|account>
+                .then(Commands.literal("auditreport")
+                        .then(Commands.argument("hours", IntegerArgumentType.integer(1, net.kroia.banksystem.banking.ledger.AuditDigest.MAX_REPORT_HOURS))
+                                .executes(ctx -> auditReportCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "hours")))))
+                .then(Commands.literal("history")
+                        .then(Commands.argument("target", StringArgumentType.word()).suggests(BankSystemCommandsRegistration::getTargetSuggestion)
+                                .executes(ctx -> historyCommand(ctx.getSource(), StringArgumentType.getString(ctx, "target")))))
+                // Task #146: /banksystem restorebinding <account> [item] — lift suspended external bindings
+                .then(Commands.literal("restorebinding")
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_RESTORE_BINDING, BankSystemPermissions.FALLBACK_LEVEL))
+                        .then(Commands.argument("account", IntegerArgumentType.integer(0))
+                                .executes(ctx -> restoreBindingCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"), null))
+                                .then(Commands.argument("item", StringArgumentType.greedyString())
+                                        .executes(ctx -> restoreBindingCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"),
+                                                StringArgumentType.getString(ctx, "item"))))))
                 .then(Commands.literal("disallowItem")
                         .then(Commands.argument("itemID", StringArgumentType.string())
                                 .executes(context -> {
@@ -251,7 +285,7 @@ public class BankSystemCommandsRegistration {
                 )
                 // Dev-only: export all BankSystem crafting recipes as PNG images
                 .then(Commands.literal("exportrecipes")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, 2) && BankSystemMod.ENABLE_DEV_FEATURES)
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_EXPORTRECIPES, BankSystemPermissions.FALLBACK_LEVEL) && BankSystemMod.ENABLE_DEV_FEATURES)
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -265,7 +299,7 @@ public class BankSystemCommandsRegistration {
                 // /banksystem backup status                                    - Report IDLE / PAUSED (for Xs)
                 // /banksystem backup snapshot <path>                           - Write a consistent DB copy to <path>
                 .then(Commands.literal("backup")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, 2)) // op-only, matches vanilla save-off
+                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_BACKUP, BankSystemPermissions.FALLBACK_LEVEL)) // op-only, matches vanilla save-off
                         .then(Commands.literal("pause")
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
@@ -348,6 +382,8 @@ public class BankSystemCommandsRegistration {
                                 )
                         )
                 )
+                // /banksystem discord status|reload: ModUtilities' node, gated by its own permission (modutilities.command.discord, level 3)
+                .then(DiscordWebhooks.command())
         );
 
         // /money                               - Show balance
@@ -531,7 +567,7 @@ public class BankSystemCommandsRegistration {
                                                     CompletableFuture<Integer> personalBankAccountNr = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountNrAsync(username);
                                                     personalBankAccountNr.thenAccept(bankAccountNr -> {
                                                         handler().bank_manage_account_async(playerUUID, bankAccountNr);
-                                                    });
+                                                    }).exceptionally(ex -> { AsyncBankSystemCommandHandler.reportFailure(playerUUID, ex); return null; });
                                                     return Command.SINGLE_SUCCESS;
                                                 })
                                         )
@@ -663,6 +699,23 @@ public class BankSystemCommandsRegistration {
         });
         return future;
     }
+    /**
+     * Issue #165 — audit/history targets: the bank's known users (incl. offline; a slave asks the master
+     * asynchronously) plus the online players. Unquoted: the argument is a single word.
+     */
+    private static CompletableFuture<Suggestions> getTargetSuggestion(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder)
+    {
+        java.util.Set<String> names = new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        names.addAll(List.of(ctx.getSource().getServer().getPlayerNames()));
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankManagerUserMapDataAsync()
+                .completeOnTimeout(null, 2, java.util.concurrent.TimeUnit.SECONDS) // master unreachable: online players only
+                .exceptionally(ex -> null)
+                .thenCompose(data -> {
+                    if (data != null)
+                        data.userMap().values().forEach(u -> { if (u.userName() != null) names.add(u.userName()); });
+                    return net.minecraft.commands.SharedSuggestionProvider.suggest(names, builder);
+                });
+    }
     private static CompletableFuture<Suggestions> getSlaveServerIDSuggestion(SuggestionsBuilder builder)
     {
         IServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
@@ -704,7 +757,7 @@ public class BankSystemCommandsRegistration {
         dispatcher.register(
             Commands.literal("banksystem")
                 .then(Commands.literal("symbols")
-                    .requires(src -> net.kroia.modutilities.PermissionCompat.hasPermission(src, 2))
+                    .requires(src -> net.kroia.modutilities.PermissionCompat.hasPermission(src, BankSystemPermissions.COMMAND_SYMBOLS, BankSystemPermissions.FALLBACK_LEVEL))
                     // list
                     .then(Commands.literal("list")
                         .executes(ctx -> {
@@ -789,5 +842,132 @@ public class BankSystemCommandsRegistration {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Task #117 — players go through the command handler (admin check on the master); the
+     * console / command blocks act directly on the master with the console actor.
+     */
+    private static int freezeCommand(CommandSourceStack source, int accountNumber, int mode) {
+        ServerPlayer player = source.getPlayer();
+        if (player != null) {
+            handler().banksystem_freeze_async(player.getUUID(), accountNumber, mode);
+            return Command.SINGLE_SUCCESS;
+        }
+        net.kroia.banksystem.api.bankmanager.ISyncServerBankManager bankManager =
+                BACKEND_INSTANCES.SERVER_BANK_MANAGER == null ? null : BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if (bankManager == null || !net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_OP, BankSystemPermissions.FALLBACK_LEVEL)) {
+            source.sendFailure(Component.literal("[BankSystem] freeze from the console works on the master server only"));
+            return 0;
+        }
+        if (bankManager.getBankAccount(accountNumber) == null) {
+            source.sendFailure(Component.literal(BankSystemTextMessages.getAccountFreezeFailedMessage(accountNumber)));
+            return 0;
+        }
+        boolean frozen = mode == 2 ? !bankManager.isAccountFrozen(accountNumber) : mode == 1;
+        bankManager.setAccountFrozen(accountNumber, frozen, net.kroia.banksystem.api.ledger.LedgerActor.console());
+        String msg = frozen ? BankSystemTextMessages.getAccountFreezeSetMessage(accountNumber)
+                : BankSystemTextMessages.getAccountFreezeClearedMessage(accountNumber);
+        source.sendSuccess(() -> Component.literal(msg), true);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Task #110 — opens the audit screen for an account number or a player's personal account.
+     * The admin check here is a courtesy; every page is checked again on the master.
+     */
+    private static int auditCommand(CommandSourceStack source, String target) {
+        return openForTarget(source, target, "audit", SyncOpenGUIPacket::send_openAuditScreen);
+    }
+
+    /** Task #116 — balance history of any account with flag markers. Admin check as for audit. */
+    private static int historyCommand(CommandSourceStack source, String target) {
+        return openForTarget(source, target, "history", SyncOpenGUIPacket::send_openHistoryScreen);
+    }
+
+    private static int openForTarget(CommandSourceStack source, String target, String name,
+                                     java.util.function.BiConsumer<ServerPlayer, Integer> open) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("[BankSystem] " + name + " needs a player"));
+            return 0;
+        }
+        var bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
+        bankManager.isBanksystemAdminAsync(player.getUUID()).thenCompose(isAdmin -> {
+            if (!Boolean.TRUE.equals(isAdmin)) return java.util.concurrent.CompletableFuture.completedFuture(-1);
+            try {
+                return java.util.concurrent.CompletableFuture.completedFuture(Integer.parseInt(target));
+            } catch (NumberFormatException e) {
+                return bankManager.getPersonalBankAccountNrAsync(target);
+            }
+        }).thenAccept(nr -> player.server.execute(() -> {
+            if (nr == null || nr == -1) {
+                player.sendSystemMessage(Component.literal("This command can only be used by BankSystem admins!"));
+            } else if (nr <= 0) {
+                player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditTargetNotFoundMessage(target)));
+            } else {
+                open.accept(player, nr);
+            }
+        })).exceptionally(ex -> { AsyncBankSystemCommandHandler.reportFailure(player.getUUID(), ex); return null; });
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Task #113 — writes an audit digest of the last {@code hours} hours on the master and tells
+     * the admin its absolute path. From a slave the request is forwarded; the path is on the master.
+     */
+    private static int auditReportCommand(CommandSourceStack source, int hours) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            if (BACKEND_INSTANCES.isSlaveServer) {
+                source.sendFailure(Component.literal("[BankSystem] auditreport from the console works on the master server only"));
+                return 0;
+            }
+            ServerBankSystemCommandHandler.reportOnServerThread(hours).thenAccept(path -> {
+                if (path.isEmpty()) source.sendFailure(Component.literal(BankSystemTextMessages.getAuditReportFailedMessage()));
+                else source.sendSuccess(() -> Component.literal(BankSystemTextMessages.getAuditReportWrittenMessage(path, false)), false);
+            });
+            return Command.SINGLE_SUCCESS;
+        }
+        boolean onMaster = BACKEND_INSTANCES.isSlaveServer;
+        handler().banksystem_auditreport_async(player.getUUID(), hours).thenAccept(path -> player.server.execute(() -> {
+            if (!path.isEmpty())
+                player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditReportWrittenMessage(path, onMaster)));
+            else
+                player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditReportFailedMessage()));
+        }));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int alertsCommand(CommandSourceStack source, boolean enabled) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("[BankSystem] alerts needs a player"));
+            return 0;
+        }
+        handler().banksystem_alerts_async(player.getUUID(), enabled);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /** Task #146: lifts suspended external bindings of an account (one slot when {@code item} is given). Master only. */
+    private static int restoreBindingCommand(CommandSourceStack source, int account, @org.jetbrains.annotations.Nullable String item) {
+        if (BACKEND_INSTANCES.SERVER_BANK_MANAGER == null
+                || !(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof net.kroia.banksystem.banking.bankmanager.ServerBankManager bm)) {
+            source.sendFailure(Component.literal("[BankSystem] restorebinding works on the master server only"));
+            return 0;
+        }
+        ServerPlayer player = source.getPlayer();
+        net.kroia.banksystem.api.ledger.LedgerActor actor = player == null
+                ? net.kroia.banksystem.api.ledger.LedgerActor.console()
+                : net.kroia.banksystem.banking.ledger.TransactionLedger.admin(player.getUUID());
+        int restored = bm.restoreSuspendedBindings(account, item, actor);
+        if (restored == 0) {
+            source.sendFailure(Component.literal("[BankSystem] no suspended external binding on account " + account
+                    + (item != null ? " for " + item : "")));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("[BankSystem] restored " + restored
+                + " external binding(s) on account " + account), true);
+        return restored;
     }
 }

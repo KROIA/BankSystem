@@ -18,10 +18,12 @@ import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.banking.bankmanager.ClientBankManager;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.data.DatabaseManager;
+import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.data.table.BalanceHistoryManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.command.BankSystemCommands;
+import net.kroia.banksystem.minecraft.compat.BankSystemDiscord;
 import net.kroia.banksystem.minecraft.compat.BankSystemPlaceholders;
 import net.kroia.banksystem.minecraft.compat.OldBankDataLoader;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
@@ -83,9 +85,13 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         public BankSystemLogger LOGGER;
         public DatabaseManager DATABASE_MANAGER;
+        /** Task #123 — write-only diagnostics DB for the audit tool (every role; null outside a server session). */
+        public DiagnosticsDatabase DIAGNOSTICS_DB;
         public BalanceHistoryManager BALANCE_HISTORY_MANAGER;
         /** Task #44 (v2.1.0) — SQLite transaction ledger (master-only, nullable on slaves). */
         public net.kroia.banksystem.data.table.TransactionLogManager TRANSACTION_LOG_MANAGER;
+        /** Task #110 (v2.2.0) — SuspicionFlag table; master only. */
+        public net.kroia.banksystem.data.table.SuspicionFlagManager SUSPICION_FLAG_MANAGER;
         /** Task #45 (v2.1.0) — payout history SQLite writer (master-only, nullable on slaves). */
         public net.kroia.banksystem.data.table.PayoutHistoryManager PAYOUT_HISTORY_MANAGER;
         /** Task #45 (v2.1.0) — public payout API impl (always non-null; degrades to fail-closed on slave). */
@@ -121,6 +127,8 @@ public class BankSystemModBackend implements BankSystemAPI {
      * sweep runs synchronously at {@link #onServerStart(MinecraftServer)}.
      */
     private static long retentionSweepTickCounter = 0;
+    /** Task #114 (v2.2.0): tick counter for the wealth-jump sweep. */
+    private static long wealthSweepTickCounter = 0;
     /**
      * Task #45 (v2.1.0) — monotonic tick counter for the payout scheduler. Advances on every
      * master-side server tick; the scheduler evaluates due schedules every
@@ -128,6 +136,8 @@ public class BankSystemModBackend implements BankSystemAPI {
      * Reset on server start / stop.
      */
     private static long payoutTickCounter = 0;
+    /** Task #146: set on master start; the first tick runs the foreign-binding check once. */
+    private static boolean foreignBindingCheckPending = false;
     private static @Nullable ItemPriceProvider itemPriceProvider = null;
     private static short priceCurrencyItemId = 0;
 
@@ -230,6 +240,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.BANK_ACCOUNT_BINDINGS = new BankAccountBindings();
         BankAccountBindings.setBackend(INSTANCES);
         VolatileItemComponents.setBackend(INSTANCES);
+        AdminFlagSync.setBackend(INSTANCES);
         // Client-only class: touching it on a dedicated server crashes class loading.
         //if (dev.architectury.platform.Platform.getEnvironment() == dev.architectury.utils.Env.CLIENT) net.kroia.banksystem.client.render.StampedShareSpecialRenderer.setBackend(INSTANCES); // mc>=1.21.4
         MultiServerUtils.setBackend(INSTANCES);
@@ -250,6 +261,13 @@ public class BankSystemModBackend implements BankSystemAPI {
         ItemID.setBackend(INSTANCES);
 
         BankSystemNetworking.setBackend(INSTANCES);
+        net.kroia.banksystem.banking.ledger.TransactionLedger.setBackend(INSTANCES); // Task #109
+        DiagnosticsDatabase.setBackend(INSTANCES); // Task #123
+        net.kroia.banksystem.data.TransferJournal.setBackend(INSTANCES); // Task #124
+        net.kroia.banksystem.banking.ledger.AccountFreeze.setBackend(INSTANCES); // Task #117
+        net.kroia.banksystem.banking.ledger.AdminAudit.setBackend(INSTANCES); // Task #110
+        net.kroia.banksystem.banking.ledger.SuspicionChecks.setBackend(INSTANCES); // Tasks #111/#114/#115
+        net.kroia.banksystem.banking.ledger.AuditDigest.setBackend(INSTANCES); // Task #113
         BankSystemTextMessages.setBackend(INSTANCES);
 
         net.kroia.banksystem.integration.numismatics.NumismaticsProvider.setBackend(INSTANCES);
@@ -274,6 +292,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         INSTANCES.NETWORKING = new BankSystemNetworking();
         INSTANCES.SERVER_EVENTS = new BankSystemEvents();
+        BankSystemDiscord.init(INSTANCES); // Task #119: ledger/flag listeners, once per JVM
 
         // Detect datapack reloads that change the volatile/deposit-gated component tags on a
         // RUNNING server: the change is rejected (normalization keeps the world-load tag
@@ -285,6 +304,7 @@ public class BankSystemModBackend implements BankSystemAPI {
                 (ResourceManagerReloadListener) resourceManager -> VolatileItemComponents.onServerResourcesReloaded(),
                 BankSystemMod.id("volatile_components_reload"));
         TickEvent.SERVER_POST.register(server -> VolatileItemComponents.serverTick());
+        AdminFlagSync.init(); // Task #107: LuckPerms listener, no-op without LuckPerms
 
         if (BankSystemMod.ENABLE_DEV_FEATURES) {
             initDevFeatures();
@@ -358,6 +378,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.SERVER_DATA_HANDLER = new BankSystemDataHandler();
 
         ItemIDManager.clear();
+        // Task #126 (B6): transfer results are per session; transfers sent before now answer UNKNOWN.
+        net.kroia.banksystem.networking.multi_server.TransferStatusRequest.RESULTS.reset(System.currentTimeMillis());
         MultiServerConfig config = MultiServerConfig.get();
         // Determine the multi-server role BEFORE creating the bank manager or bringing up
         // MultiServerManager (Task #21). Historically INSTANCES.isSlaveServer was set inside
@@ -370,6 +392,10 @@ public class BankSystemModBackend implements BankSystemAPI {
         boolean multiServerEnabled = config.enable;
         boolean isSlave = multiServerEnabled && !config.isMaster;
         INSTANCES.isSlaveServer = isSlave;
+        // Task #123: every role. Task #175: open now on its writer thread, not inside the first write.
+        INSTANCES.DIAGNOSTICS_DB = new DiagnosticsDatabase(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
+                .resolve(DatabaseManager.DATABASE_PATH).resolve(DiagnosticsDatabase.FILE_NAME));
+        INSTANCES.DIAGNOSTICS_DB.openAsync();
 
         if(isSlave)
         {
@@ -403,6 +429,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             snapshotTickCounter = 0;
             retentionSweepTickCounter = 0;
             payoutTickCounter = 0;
+            foreignBindingCheckPending = true;
             DatabaseManager.setBackend(INSTANCES);
             INSTANCES.DATABASE_MANAGER = new DatabaseManager();
             INSTANCES.DATABASE_MANAGER.connectToDatabase(server);
@@ -410,6 +437,8 @@ public class BankSystemModBackend implements BankSystemAPI {
             // Task #44 (v2.1.0) — transaction ledger writer/reader.
             INSTANCES.TRANSACTION_LOG_MANAGER =
                     new net.kroia.banksystem.data.table.TransactionLogManager(INSTANCES.DATABASE_MANAGER);
+            INSTANCES.SUSPICION_FLAG_MANAGER =
+                    new net.kroia.banksystem.data.table.SuspicionFlagManager(INSTANCES.DATABASE_MANAGER);
             // Task #45 (v2.1.0) — payout history writer + IPayoutManager impl.
             INSTANCES.PAYOUT_HISTORY_MANAGER =
                     new net.kroia.banksystem.data.table.PayoutHistoryManager(INSTANCES.DATABASE_MANAGER);
@@ -458,6 +487,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             }
 
             TickEvent.SERVER_POST.register(ON_SERVER_TICK);
+            BankSystemDiscord.register(); // Task #119: every start, even with the feed off, so the config file exists
 
             // Save the data when the game saves the world
             LifecycleEvent.SERVER_LEVEL_SAVE.register(ON_LEVEL_SAVE);
@@ -508,7 +538,11 @@ public class BankSystemModBackend implements BankSystemAPI {
             takeBalanceSnapshot();
         }
 
-        BankSystemPlaceholders.start(INSTANCES); // TAB / Placeholder API via ModUtilities
+        AdminFlagSync.migrateIfNeeded(); // Task #107: one-time push of admins to LuckPerms (master, setting on)
+        // api.MoneyFormat is shared with StockMarketPlaceholders: apply the pattern even with placeholders off.
+        net.kroia.banksystem.api.MoneyFormat.setPattern(INSTANCES.SERVER_SETTINGS.INTEGRATIONS.MONEY_FORMAT.get());
+        if (INSTANCES.SERVER_SETTINGS.INTEGRATIONS.PLACEHOLDERS_ENABLED.get())
+            BankSystemPlaceholders.start(INSTANCES); // TAB / Placeholder API via ModUtilities
         INSTANCES.SERVER_EVENTS.BANKSYSTEM_SETUP_COMPLETED.notifyListeners();
     }
 
@@ -534,6 +568,11 @@ public class BankSystemModBackend implements BankSystemAPI {
             // stacking a fresh handler on each session (see onSlaveLatchTimeoutTick Javadoc).
             TickEvent.SERVER_POST.unregister(ON_SLAVE_LATCH_TICK);
         }
+        // Task #123: after the shutdown save above, so its bank_last_save_ms write is drained too.
+        if (INSTANCES.DIAGNOSTICS_DB != null) {
+            INSTANCES.DIAGNOSTICS_DB.close();
+        }
+        INSTANCES.DIAGNOSTICS_DB = null;
 
         if (INSTANCES.SERVER_BANK_MANAGER != null
                 && INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof net.kroia.banksystem.banking.bankmanager.ServerBankManager serverBankManager)
@@ -545,6 +584,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         INSTANCES.DATABASE_MANAGER = null;
         INSTANCES.BALANCE_HISTORY_MANAGER = null;
         INSTANCES.TRANSACTION_LOG_MANAGER = null;
+        INSTANCES.SUSPICION_FLAG_MANAGER = null;
         INSTANCES.PAYOUT_HISTORY_MANAGER = null;
         INSTANCES.PAYOUT_MANAGER = null;
         INSTANCES.DIVIDEND_PAYER = null;
@@ -666,6 +706,13 @@ public class BankSystemModBackend implements BankSystemAPI {
         if(INSTANCES.SERVER_DATA_HANDLER != null)
             INSTANCES.SERVER_DATA_HANDLER.tickUpdate();
 
+        // Task #146: once per start, after every mod's SERVER_STARTED handler (provider data loaded).
+        if (foreignBindingCheckPending && INSTANCES.SERVER_BANK_MANAGER != null
+                && INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof ServerBankManager bm) {
+            foreignBindingCheckPending = false;
+            bm.suspendForeignBindings();
+        }
+
         if (INSTANCES.BALANCE_HISTORY_MANAGER != null && INSTANCES.SERVER_SETTINGS != null) {
             snapshotTickCounter++;
             long intervalTicks = INSTANCES.SERVER_SETTINGS.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.get() * 1200L;
@@ -687,6 +734,22 @@ public class BankSystemModBackend implements BankSystemAPI {
                 retentionSweepTickCounter = 0;
                 INSTANCES.BALANCE_HISTORY_MANAGER.applyTieredRetention(System.currentTimeMillis());
             }
+
+            // Task #114 (v2.2.0): wealth-jump sweep over the WEALTH series.
+            wealthSweepTickCounter++;
+            long wealthTicks = INSTANCES.SERVER_SETTINGS.AUDIT.WEALTH_SWEEP_MINUTES.get() * 1200L;
+            if (wealthTicks > 0 && wealthSweepTickCounter >= wealthTicks) {
+                wealthSweepTickCounter = 0;
+                if (INSTANCES.SERVER_BANK_MANAGER != null && INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof ServerBankManager bm) {
+                    long now = System.currentTimeMillis();
+                    List<Integer> accounts = bm.getAllAccountNumbers();
+                    net.kroia.banksystem.banking.ledger.SuspicionChecks.sweepWealth(accounts, now);
+                    // Task #112: money-supply growth flag
+                    net.kroia.banksystem.banking.ledger.SuspicionChecks.checkMoneySupply(accounts, bm.getMoneySupplyRaw(), now);
+                }
+            }
+            // Task #113: daily digest for the previous day, first tick after the date changes
+            net.kroia.banksystem.banking.ledger.AuditDigest.tick(System.currentTimeMillis());
         }
 
         // Task #45 (v2.1.0) — recurring payout evaluator. Master-only; the executor
@@ -695,6 +758,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         if (payoutTickCounter % net.kroia.banksystem.banking.company.PayoutExecutor.PAYOUT_TICK_INTERVAL == 0) {
             net.kroia.banksystem.banking.company.PayoutExecutor.tick(payoutTickCounter, INSTANCES);
         }
+        BankSystemDiscord.flush(); // Task #119: coalesced dividend / disallow posts of this tick
     }
 
     private static void takeBalanceSnapshot() {
@@ -726,10 +790,8 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         if (!records.isEmpty()) {
             INSTANCES.BALANCE_HISTORY_MANAGER.save(records);
-            // Task #41 (v2.0.7): flat-cap pruneOldRecords has been superseded by the
-            // tiered-retention sweep, which runs on its own cadence in onServerTick above
-            // (default: every BALANCE_HISTORY_RETENTION_SWEEP_MINUTES). No per-snapshot
-            // prune call needed.
+            // Pruning is done by the tiered-retention sweep in onServerTick above
+            // (every BALANCE_HISTORY_RETENTION_SWEEP_MINUTES), not per snapshot.
         }
     }
 
@@ -901,13 +963,25 @@ public class BankSystemModBackend implements BankSystemAPI {
     public Collection<ExternalCurrencyProvider> getCurrencyProviders() {
         // Defensive snapshot — callers must not be able to mutate the registry through
         // the returned view, and iteration must be safe against concurrent registration.
-        return Collections.unmodifiableCollection(new ArrayList<>(CURRENCY_PROVIDERS.values()));
+        return CURRENCY_PROVIDERS.values().stream()
+                .filter(p -> providerEnabled(p.providerId())).toList();
     }
 
     @Override
     public @Nullable ExternalCurrencyProvider getCurrencyProvider(@Nullable String providerId) {
-        if (providerId == null || providerId.isEmpty()) return null;
+        if (providerId == null || providerId.isEmpty() || !providerEnabled(providerId)) return null;
         return CURRENCY_PROVIDERS.get(providerId);
+    }
+
+    /** Task #119: a provider switched off in Integrations behaves exactly like its mod being absent. */
+    private static boolean providerEnabled(String id) {
+        BankSystemModSettings s = INSTANCES.SERVER_SETTINGS;
+        if (s == null) return true; // before world load / client
+        return switch (id) {
+            case "numismatics" -> s.INTEGRATIONS.NUMISMATICS_ENABLED.get();
+            case "lightmanscurrency" -> s.INTEGRATIONS.LIGHTMANS_CURRENCY_ENABLED.get();
+            default -> true; // third-party API providers are not gated
+        };
     }
 
     /**
@@ -921,6 +995,18 @@ public class BankSystemModBackend implements BankSystemAPI {
             INSTANCES.PAYOUT_MANAGER = new net.kroia.banksystem.banking.company.PayoutManagerImpl(INSTANCES);
         }
         return INSTANCES.PAYOUT_MANAGER;
+    }
+
+    /** Task #109 (v2.1.0) — transaction ledger writer. Always non-null. */
+    @Override
+    public net.kroia.banksystem.api.ledger.ITransactionLedger getLedger() {
+        return net.kroia.banksystem.banking.ledger.TransactionLedger.INSTANCE;
+    }
+
+    /** Task #124 — note flow log (diagnostics DB). Always non-null. */
+    @Override
+    public net.kroia.banksystem.api.diagnostics.INoteFlowLog getNoteFlowLog() {
+        return net.kroia.banksystem.data.NoteFlowLog.INSTANCE;
     }
 
     /**
@@ -956,8 +1042,10 @@ public class BankSystemModBackend implements BankSystemAPI {
                 net.kroia.banksystem.banking.company.ShareVisuals internal =
                         net.kroia.banksystem.client.cache.ShareVisualCache.getVisualsOrPlaceholder(companyId);
                 return new net.kroia.banksystem.api.company.ShareVisuals(
-                        internal.getIconPresetId(),
-                        internal.getTint(),
+                        internal.getBgLayer().symbolId(),
+                        internal.getBgLayer().tint(),
+                        internal.getFgLayer().symbolId(),
+                        internal.getFgLayer().tint(),
                         net.minecraft.network.chat.Component.literal(internal.getDisplayName()),
                         net.minecraft.network.chat.Component.literal(internal.getDescription()),
                         net.kroia.banksystem.client.cache.ShareVisualCache.getIssued(companyId),
@@ -999,10 +1087,11 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     private static void setupMultiServerInfrastructure(MultiServerConfig config, MinecraftServer server)
     {
+        boolean created;
         if(config.isMaster)
         {
             INSTANCES.isSlaveServer = false;
-            MultiServerManager.createMaster(server, config.sharedSecret, config.masterTcpPort,
+            created = MultiServerManager.createMaster(server, config.sharedSecret, config.masterTcpPort,
                     BankSystemModBackend::onMasterServerStartupComplete,
                     BankSystemModBackend::onMasterServerStartupFailure,
                     BankSystemModBackend::onMasterServerSlaveConnected,
@@ -1013,16 +1102,32 @@ public class BankSystemModBackend implements BankSystemAPI {
         {
             INSTANCES.isSlaveServer = true;
             slaveConnectionActive.set(false);
-            MultiServerManager.createSlave(server, config.sharedSecret, config.slaveID, config.masterHost, config.masterTcpPort,
+            created = MultiServerManager.createSlave(server, config.sharedSecret, config.slaveID, config.masterHost, config.masterTcpPort,
                     BankSystemModBackend::onSlaveConnectionAccepted,
                     BankSystemModBackend::onSlaveConnectionFailed,
                     BankSystemModBackend::onSlaveConnectionLost,
                     BankSystemModBackend::onSlaveDisconnected);
             MultiServerManager.start();
         }
+        // Task #176: false = another mod created the MultiServerManager first. ModUtilities routes
+        // master-bound requests by its own role, so a role mismatch makes this slave handle them locally.
+        // We keep running in the configured role: the bank manager is already built for it and
+        // switching roles here would put a master database on a slave world.
+        if(INSTANCES.isSlaveServer != MultiServerManager.isSlave())
+            INSTANCES.LOGGER.error("[BankSystemModBackend] Multi-server misconfiguration: BankSystem is configured as "
+                    + (INSTANCES.isSlaveServer ? "slave" : "master") + " but another mod already set up this server as "
+                    + (MultiServerManager.isSlave() ? "slave" : "master")
+                    + ". Cross-server bank requests will fail or run on the wrong server. Give every mod's multi-server config the same role.");
+        else if(!created)
+            INSTANCES.LOGGER.warn("[BankSystemModBackend] Another mod already set up the multi-server connection; "
+                    + "reusing it. BankSystem's connect/disconnect callbacks will not fire.");
     }
     private static void onSlaveConnectionAccepted()
     {
+        // Task #23 / #167: drop the negative / in-flight ItemID cache on (re)connect, not on every
+        // failed reconnect attempt: the master might have a different registry now (mod update
+        // while we were away), and each unknown item gets one fresh retry per reconnect.
+        ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
         // Task #21 defense-in-depth: even with the fixed init ordering
         // (SERVER_BANK_MANAGER set before setupMultiServerInfrastructure), a reconnect race
         // can still fire this callback on a netty thread between onServerStop's
@@ -1097,12 +1202,11 @@ public class BankSystemModBackend implements BankSystemAPI {
         // usable. Fire AFTER the SERVER_BANK_MANAGER null guard above so
         // listeners never see a partially torn-down state. Fired on a Netty
         // event-loop thread — see IBankSystemEvents contract.
-        if (INSTANCES.SERVER_EVENTS != null) {
-            // Arm the loss latch (Issue #64) so the next real disconnect fires
-            // SLAVE_CONNECTION_LOST exactly once. Fires again on every reconnect.
-            slaveConnectionActive.set(true);
+        // Arm the loss latch (Issue #64) so the next real disconnect runs onSlaveLinkDown
+        // exactly once. Re-armed on every reconnect.
+        slaveConnectionActive.set(true);
+        if (INSTANCES.SERVER_EVENTS != null)
             INSTANCES.SERVER_EVENTS.SLAVE_CONNECTION_ACCEPTED.notifyListeners();
-        }
     }
     private static void onSlaveConnectionFailed(SlaveServerClient.ConnectionEstablishState state)
     {
@@ -1113,39 +1217,30 @@ public class BankSystemModBackend implements BankSystemAPI {
     }
     private static void onSlaveConnectionLost(Throwable reason)
     {
-        // Task #23: preserve the positive itemIDMap (master re-sends full sync on reconnect
-        // via SyncItemIDsPacket, and register-if-absent semantics are idempotent), but drop
-        // the negative / in-flight cache: the reconnecting master might have a different
-        // registry (mod update on master while slave was disconnected), and we want a single
-        // fresh retry per unknown item per reconnect. Idempotent on master (no-op).
-        ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
+        onSlaveLinkDown();
+    }
+    private static void onSlaveDisconnected()
+    {
+        // Clean-disconnect path (local disconnect() call): same semantics, master is unreachable.
+        onSlaveLinkDown();
+    }
+    /**
+     * Shared by the lost / disconnected callbacks. Issue #64 / Task #167: the auto-reconnect
+     * loop re-enters onSlaveConnectionLost on every failed attempt (Netty thread), so all work
+     * here runs once per link-down period, on the connected->down edge only.
+     */
+    private static void onSlaveLinkDown()
+    {
+        if (!slaveConnectionActive.compareAndSet(true, false))
+            return;
         // Task #54 (v2.1.0) — drop the slave-side company mirror so a stale snapshot
         // cannot leak across reconnects when the master might have mutated companies.
         net.kroia.banksystem.banking.company.SlaveCompanyMirror.clear();
         // Pair to onSlaveConnectionAccepted: tell dependent mods that master is no longer
         // reachable so any cache populated from the last handshake is now stale. On reconnect,
         // SLAVE_CONNECTION_ACCEPTED fires again and caches can be re-fetched.
-        // Issue #64: the auto-reconnect loop re-enters this callback on every failed
-        // attempt; the CAS ensures SLAVE_CONNECTION_LOST fires only on the first
-        // connected->disconnected transition, not once per retry.
-        if (INSTANCES.SERVER_EVENTS != null && slaveConnectionActive.compareAndSet(true, false)) {
+        if (INSTANCES.SERVER_EVENTS != null)
             INSTANCES.SERVER_EVENTS.SLAVE_CONNECTION_LOST.notifyListeners();
-        }
-    }
-    private static void onSlaveDisconnected()
-    {
-        // Same rationale as onSlaveConnectionLost above — clear the negative cache so
-        // reconnect retries formerly-INVALID lookups exactly once.
-        ItemIDManager.clearSlaveNegativeCacheOnDisconnect();
-        // Task #54 (v2.1.0) — drop the slave-side company mirror on clean disconnect.
-        net.kroia.banksystem.banking.company.SlaveCompanyMirror.clear();
-        // Clean-disconnect path (local disconnect() call). Dependent mods invalidate their
-        // caches the same way — the semantics are identical: master is unreachable.
-        // Issue #64: share the same edge-latch as onSlaveConnectionLost so a clean
-        // disconnect that follows a connection-lost storm doesn't double-fire.
-        if (INSTANCES.SERVER_EVENTS != null && slaveConnectionActive.compareAndSet(true, false)) {
-            INSTANCES.SERVER_EVENTS.SLAVE_CONNECTION_LOST.notifyListeners();
-        }
     }
 
     private static void onMasterServerStartupComplete()

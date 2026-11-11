@@ -75,6 +75,9 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
      */
     private volatile @Nullable String baseCurrencyItemId = null;
 
+    /** Task #148: {@link #listBindableAccounts} throws, like a provider that cannot answer. Cleared by {@link #reset()}. */
+    public volatile boolean listingFails = false;
+
     private StubCurrencyProvider() {}
 
     // -----------------------------------------------------------------------
@@ -130,6 +133,7 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
     public static void reset() {
         INSTANCE.accounts.clear();
         INSTANCE.available = true;
+        INSTANCE.listingFails = false;
         INSTANCE.baseCurrencyItemId = null;
         // Re-register self so BankSystemMod.getAPI() knows about the fresh
         // instance state. registerCurrencyProvider is idempotent by providerId.
@@ -194,9 +198,11 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
 
     @Override
     public @NotNull List<ExternalAccountRef> listBindableAccounts(@NotNull UUID player) {
+        if (listingFails) throw new IllegalStateException("stub listing failure (test)");
         List<ExternalAccountRef> refs = new ArrayList<>();
         for (StubAccount account : accounts.values()) {
-            refs.add(account.ref());
+            if (account.owner == null || account.owner.equals(player))
+                refs.add(account.ref());
         }
         return refs;
     }
@@ -247,6 +253,8 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
         private long balance;
         private long overflowCeiling = Long.MAX_VALUE;
         private final Set<UUID> members = new HashSet<>();
+        /** Only this player may bind the account ({@link #listBindableAccounts}); null = everyone. */
+        private @Nullable UUID owner;
 
         private StubAccount(@NotNull String accountKey, boolean shared, long initialBalance) {
             this.accountKey = accountKey;
@@ -345,6 +353,12 @@ public final class StubCurrencyProvider implements ExternalCurrencyProvider {
         /** @return the account key this stub was created with. */
         public @NotNull String getAccountKey() {
             return accountKey;
+        }
+
+        /** Restricts {@link #listBindableAccounts} for this account to {@code player}. */
+        public @NotNull StubAccount setOwner(@Nullable UUID player) {
+            this.owner = player;
+            return this;
         }
     }
 }
