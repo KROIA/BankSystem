@@ -68,6 +68,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new ItemIDIdentityTests());
         TestRegistry.register(new ItemIDMergeGuardTests());
         TestRegistry.register(new ItemIDSlaveDelegationTests());
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.ItemIDRegistrationRetryTests()); // Task #156
         TestRegistry.register(new ItemIDCounterTests());
         TestRegistry.register(new ItemIDFormatAndRepairTests());
         TestRegistry.register(new DepositGateTests());

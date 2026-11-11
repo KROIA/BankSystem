@@ -284,6 +284,19 @@ public class ItemIDManager implements ServerSaveable {
     private static final ConcurrentHashMap<NormalizedStackKey, Boolean> slaveRejectedLoggedOnce = new ConcurrentHashMap<>();
 
     /**
+     * Retry backoff for stacks whose registration request got NO answer from master (timeout,
+     * transport failure, request never sent). Such a stack is NOT negative-cached — only a real
+     * master rejection is — but lookups inside the backoff window return INVALID_ID without a
+     * new request, so a master lag spike is not hammered. Delay doubles per consecutive
+     * failure, {@link #SLAVE_RETRY_BACKOFF_BASE_MS} up to {@link #SLAVE_RETRY_BACKOFF_MAX_MS}.
+     * Cleared with the negative cache.
+     */
+    private static final ConcurrentHashMap<NormalizedStackKey, SlaveRetryBackoff> slaveRetryBackoff = new ConcurrentHashMap<>();
+    private record SlaveRetryBackoff(long retryAtMs, int failures) {}
+    private static final long SLAVE_RETRY_BACKOFF_BASE_MS = 5_000L;
+    private static final long SLAVE_RETRY_BACKOFF_MAX_MS = 300_000L;
+
+    /**
      * Counter of {@code RegisterItemStacksBatchRequest} calls fired by the slave-side
      * delegation path this session. Advanced ONCE per {@link #sendToMasterAndPopulateCache}
      * invocation (so a batch of N stacks counts as one ARRS call). Read by the in-game test
@@ -328,6 +341,7 @@ public class ItemIDManager implements ServerSaveable {
         // keeps the two branches in step and matches every other clear-on-world-stop field.
         slaveNegativeOrPendingCache.clear();
         slaveRejectedLoggedOnce.clear();
+        slaveRetryBackoff.clear();
         slaveArrsRequestsFired = 0;
     }
 
@@ -427,6 +441,7 @@ public class ItemIDManager implements ServerSaveable {
      * {@code BankSystemModBackend}. Idempotent — safe on master too (both fields stay empty).
      */
     public static void clearSlaveNegativeCacheOnDisconnect() {
+        slaveRetryBackoff.clear();
         if (slaveNegativeOrPendingCache.isEmpty() && slaveRejectedLoggedOnce.isEmpty())
             return;
         int rejectedCount = slaveNegativeOrPendingCache.size();
@@ -1141,6 +1156,13 @@ public class ItemIDManager implements ServerSaveable {
                     ids.add(ItemID.INVALID_ID);
                     continue;
                 }
+                // Rule 4b: an earlier request got no answer (timeout / not sent) — wait out
+                // the backoff window before asking master again.
+                SlaveRetryBackoff backoff = slaveRetryBackoff.get(key);
+                if (backoff != null && System.currentTimeMillis() < backoff.retryAtMs()) {
+                    ids.add(ItemID.INVALID_ID);
+                    continue;
+                }
 
                 // Rule 5: real miss → record for the batched ARRS below.
                 slaveNegativeOrPendingCache.put(key, Boolean.TRUE);
@@ -1181,8 +1203,9 @@ public class ItemIDManager implements ServerSaveable {
      * @param keys             the {@link NormalizedStackKey} entries added to
      *                         {@link #slaveNegativeOrPendingCache} for each miss slot — the
      *                         populator uses these to remove entries on a positive response
-     *                         (positive-cache lookup wins from then on) and keep them for a
-     *                         negative response
+     *                         (positive-cache lookup wins from then on), keep them for a
+     *                         real master rejection, and remove them (with a retry backoff)
+     *                         when master never answered
      */
     private static void sendToMasterAndPopulateCache(List<ItemStack> normalizedStacks,
                                                      List<NormalizedStackKey> keys) {
@@ -1195,7 +1218,10 @@ public class ItemIDManager implements ServerSaveable {
                     Runnable populator = () -> populateSlaveCacheFromResponse(normalizedStacks, keys, response, ex);
                     net.minecraft.server.MinecraftServer server = UtilitiesPlatform.getServer();
                     if (server != null) {
-                        server.execute(populator);
+                        // tell() always queues; execute() would run inline when a refused send
+                        // completes the future synchronously on the server thread, mutating the
+                        // cache before the caller's own frame has finished.
+                        server.tell(new net.minecraft.server.TickTask(server.getTickCount(), populator));
                     } else {
                         // No server (test harness / world stop race) — nothing to mutate
                         // safely. clear() has already drained the negative cache anyway.
@@ -1217,11 +1243,25 @@ public class ItemIDManager implements ServerSaveable {
                                                        @Nullable Throwable ex) {
         Map<ItemID, ItemStack> newItemIDMap = new ConcurrentHashMap<>();
         boolean transportFailure = ex != null || response == null;
+        long retryDelayMs = 0;
         synchronized (itemIDMap) {
             for (int i = 0; i < normalizedStacks.size(); i++) {
                 NormalizedStackKey key = keys.get(i);
                 ItemStack normalized = normalizedStacks.get(i);
-                ItemID responseId = transportFailure || i >= response.size()
+                if (transportFailure) {
+                    // No answer from master (timeout / never sent) is NOT a rejection: drop
+                    // the in-flight mark so the item is asked for again after the backoff.
+                    slaveNegativeOrPendingCache.remove(key);
+                    SlaveRetryBackoff prev = slaveRetryBackoff.get(key);
+                    int failures = prev == null ? 1 : prev.failures() + 1;
+                    long delay = Math.min(SLAVE_RETRY_BACKOFF_MAX_MS,
+                            SLAVE_RETRY_BACKOFF_BASE_MS << Math.min(failures - 1, 16));
+                    slaveRetryBackoff.put(key, new SlaveRetryBackoff(System.currentTimeMillis() + delay, failures));
+                    retryDelayMs = Math.max(retryDelayMs, delay);
+                    continue;
+                }
+                slaveRetryBackoff.remove(key);
+                ItemID responseId = i >= response.size()
                         ? ItemID.INVALID_ID
                         : response.get(i);
 
@@ -1251,11 +1291,11 @@ public class ItemIDManager implements ServerSaveable {
                         }
                     }
                 } else {
-                    // Negative response (or transport failure): keep the entry in the
-                    // negative cache; the next lookup returns INVALID_ID immediately without
-                    // firing another ARRS. Optionally INFO-log the first rejection per stack
-                    // per session so mixed-mod setups leave a trail.
-                    if (!transportFailure && slaveRejectedLoggedOnce.putIfAbsent(key, Boolean.TRUE) == null) {
+                    // Real master rejection: keep the entry in the negative cache; the next
+                    // lookup returns INVALID_ID immediately without firing another ARRS.
+                    // INFO-log the first rejection per stack per session so mixed-mod setups
+                    // leave a trail.
+                    if (slaveRejectedLoggedOnce.putIfAbsent(key, Boolean.TRUE) == null) {
                         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
                             String itemName = ItemUtilities.getItemIDStr(normalized.getItem());
                             BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Master rejected registration "
@@ -1267,6 +1307,12 @@ public class ItemIDManager implements ServerSaveable {
                 }
             }
         }
+        if (transportFailure && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] No answer from master for the registration of "
+                    + normalizedStacks.size() + " item(s)"
+                    + (ex != null ? " (" + ex.getClass().getSimpleName() + ")" : "")
+                    + " — not treated as a rejection; retrying on next use in "
+                    + (retryDelayMs / 1000) + "s or later.");
         // Fire the same broadcast as the master-branch when new items landed — clients
         // connected to this slave still need to know about the newly-populated shorts.
         if (!newItemIDMap.isEmpty())
@@ -1308,6 +1354,7 @@ public class ItemIDManager implements ServerSaveable {
     public static void clearSlaveNegativeCache_forTesting() {
         slaveNegativeOrPendingCache.clear();
         slaveRejectedLoggedOnce.clear();
+        slaveRetryBackoff.clear();
     }
 
     /**
