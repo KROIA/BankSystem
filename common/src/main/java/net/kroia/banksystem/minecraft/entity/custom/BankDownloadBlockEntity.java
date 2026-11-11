@@ -635,9 +635,17 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             CompletableFuture<BankStatus> lockStatusFuture = itemBank.lockAmountAsync(amountToReserve);
             final int amountToFillFinal = amountToFill;
             final long amountToReserveFinal = amountToReserve;
-            // Failed lock: nothing inserted; no unlock, the lock may have applied (Task #126: left for the admin).
-            lockStatusFuture.exceptionally(ex -> { result.complete(0); return null; });
-            lockStatusFuture.thenAccept((lockStatus) -> {
+            // Issue #87: whenComplete, so a failed lock still completes the block's result.
+            lockStatusFuture.whenComplete((lockStatus, lockError) -> {
+                if (lockError != null) {
+                    // Nothing inserted. No unlock: the master may have applied the lock, and the lock is one
+                    // counter (a blind unlock could free other holders' locks). Left for the admin.
+                    BACKEND_INSTANCES.LOGGER.error("[BankDownloadBlockEntity] Lock of " + amountToReserveFinal + " (raw) " + item
+                            + " at " + worldPosition.toShortString() + " has an unknown outcome; nothing withdrawn,"
+                            + " any applied lock is left for the admin", lockError);
+                    result.complete(0);
+                    return;
+                }
                 if(lockStatus != BankStatus.SUCCESS) // Lock the amount to prevent other transactions from interfering
                 {
                     result.complete(0);

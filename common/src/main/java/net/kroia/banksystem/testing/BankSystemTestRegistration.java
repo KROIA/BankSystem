@@ -118,6 +118,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.SaveDirtyFlagTests());
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TerminalInventoryLoadTests()); // Issue #81
         TestRegistry.register(new net.kroia.banksystem.testing.tests.UploadRestoreTests()); // Issue #82
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.DownloadLockFailureTests()); // Issue #87
         TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyReadAsyncTests()); // Issue #93
         // Task #108 — admin flag sync against a real LuckPerms, then "LuckPerms removed" phase 1/2.
         // Last: the removed-suite's phase 1 leaves the sync setting on (autotest runs only).
