@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.multi_server;
 
+import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
@@ -12,14 +13,17 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -50,6 +54,8 @@ public class TransferStatusRequest extends BankSystemGenericRequest<TransferStat
 
     public record OutputData(byte state, Map<ItemID, Long> remainder) {
         public static final OutputData UNKNOWN_RESULT = new OutputData(UNKNOWN, Map.of());
+        /** Task #158: {@link #ask} got no answer (not sent, timeout). Equal to UNKNOWN_RESULT; told apart by identity. */
+        public static final OutputData NO_ANSWER = new OutputData(UNKNOWN, Map.of());
         public static final StreamCodec<RegistryFriendlyByteBuf, OutputData> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.BYTE, o -> o.state,
                 ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap<ItemID, Long>::new), OutputData::remainder,
@@ -145,9 +151,9 @@ public class TransferStatusRequest extends BankSystemGenericRequest<TransferStat
             CompletableFuture<OutputData> f = slaveID == null
                     ? BankSystemNetworking.TRANSFER_STATUS_REQUEST.sendRequestToMaster(in)
                     : BankSystemNetworking.TRANSFER_STATUS_REQUEST.sendRequestToSlave(slaveID, in);
-            return f.handle((o, ex) -> ex == null && o != null ? o : OutputData.UNKNOWN_RESULT);
+            return f.handle((o, ex) -> ex == null && o != null ? o : OutputData.NO_ANSWER);
         } catch (RuntimeException e) {
-            return CompletableFuture.completedFuture(OutputData.UNKNOWN_RESULT);
+            return CompletableFuture.completedFuture(OutputData.NO_ANSWER);
         }
     }
 
@@ -157,6 +163,8 @@ public class TransferStatusRequest extends BankSystemGenericRequest<TransferStat
      *     <li>reply → the reply; null reply or {@link RequestNotSentException} (never sent) → {@code notApplied}</li>
      *     <li>any other failure → asks {@code askStatus}: APPLIED → {@code onApplied(remainder)}, NOT_APPLIED → {@code notApplied},
      *         UNKNOWN (or no id: {@code askStatus} null) → fails with {@link RequestOutcomeUnknownException}: do not refund</li>
+     *     <li>Task #158: no answer ({@link OutputData#NO_ANSWER}, link down) → asked again every {@link #RETRY_TICKS} server
+     *         ticks until {@link Results#TTL_MS} after the call, then UNKNOWN</li>
      * </ul>
      * While {@code RequestManager.ENABLE_REQUEST_FAILURES} is off a sent request never fails, so only the first line applies.
      */
@@ -164,6 +172,7 @@ public class TransferStatusRequest extends BankSystemGenericRequest<TransferStat
                                                    Function<Map<ItemID, Long>, T> onApplied,
                                                    @Nullable Supplier<CompletableFuture<OutputData>> askStatus) {
         CompletableFuture<T> out = new CompletableFuture<>();
+        final long startMs = System.currentTimeMillis();
         sent.whenComplete((reply, ex) -> {
             try {
                 if (ex == null) {
@@ -179,21 +188,71 @@ public class TransferStatusRequest extends BankSystemGenericRequest<TransferStat
                     out.completeExceptionally(unknown(cause));
                     return;
                 }
-                askStatus.get().whenComplete((st, ex2) -> {
+                check(new Retry(askStatus, startMs + Results.TTL_MS, st -> {
                     try {
-                        byte state = ex2 == null && st != null ? st.state() : UNKNOWN;
+                        byte state = st != null ? st.state() : UNKNOWN;
                         if (state == APPLIED) out.complete(onApplied.apply(st.remainder()));
                         else if (state == NOT_APPLIED) out.complete(notApplied.get());
                         else out.completeExceptionally(unknown(cause));
                     } catch (Throwable t) {
                         out.completeExceptionally(t);
                     }
-                });
+                }));
             } catch (Throwable t) {
                 out.completeExceptionally(t);
             }
         });
         return out;
+    }
+
+    // ---- Task #158: status asks without an answer, retried on server tick ----------------------------------------
+
+    /** Ask every 5 s while the link is down. MU has no reconnect hook yet (MU #136), so this polls. */
+    public static final int RETRY_TICKS = 100;
+    /** {@code done} gets the answer, or null (failed ask) / NO_ANSWER (deadline passed): both mean UNKNOWN. */
+    private record Retry(Supplier<CompletableFuture<OutputData>> ask, long deadlineMs, Consumer<OutputData> done) {}
+    private static final List<Retry> RETRIES = new ArrayList<>();
+    private static int retryTicks;
+
+    static {
+        TickEvent.SERVER_POST.register(server -> {
+            if (++retryTicks % RETRY_TICKS == 0) retryTick(System.currentTimeMillis());
+        });
+    }
+
+    private static void check(Retry r) {
+        try {
+            r.ask().get().whenComplete((st, ex) -> {
+                if (ex == null && st == OutputData.NO_ANSWER) {
+                    synchronized (RETRIES) { RETRIES.add(r); }
+                } else r.done().accept(ex == null ? st : null);
+            });
+        } catch (RuntimeException e) {
+            r.done().accept(null);
+        }
+    }
+
+    /** Asks every waiting transfer again; one past its deadline gives up (UNKNOWN: parked as before). Public for tests. */
+    public static void retryTick(long now) {
+        List<Retry> due;
+        synchronized (RETRIES) {
+            if (RETRIES.isEmpty()) return;
+            due = new ArrayList<>(RETRIES);
+            RETRIES.clear();
+        }
+        for (Retry r : due) {
+            if (now < r.deadlineMs()) {
+                check(r);
+                continue;
+            }
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                BACKEND_INSTANCES.LOGGER.warn("[TransferStatusRequest] no status answer within " + Results.TTL_MS / 60_000 + " min; transfer outcome stays unknown");
+            r.done().accept(OutputData.NO_ANSWER);
+        }
+    }
+
+    public static int waitingRetries() {
+        synchronized (RETRIES) { return RETRIES.size(); }
     }
 
     /** Unwraps CompletionException / ExecutionException. */
