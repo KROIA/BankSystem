@@ -7,6 +7,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
 
 /**
@@ -73,5 +74,23 @@ public class AsyncFunctionOutputData <FuncEnumType extends Enum<FuncEnumType>> {
         } finally {
             resultBuf.release();
         }
+    }
+
+    /**
+     * Completes {@code dst} with the decoded result of {@code src}. A failed {@code src} or a
+     * decode error fails {@code dst}, so the caller's future never hangs (Task #121).
+     */
+    public static <T> void relay(CompletableFuture<? extends AsyncFunctionOutputData<?>> src, CompletableFuture<T> dst) {
+        src.whenComplete((out, ex) -> {
+            if (ex != null) {
+                dst.completeExceptionally(ex);
+                return;
+            }
+            try {
+                dst.complete(out.<T>decodeResult());
+            } catch (Throwable t) {
+                dst.completeExceptionally(t);
+            }
+        });
     }
 }

@@ -730,6 +730,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         // settings change must not split one craft's bank operations (permission
         // check, locks, withdrawals) across two different accounts.
         final IAsyncBankAccount account = this.craftingAccount;
+        final int craftAccountNr = this.craftingAccountNumber;
         final boolean needsWithdraw = match.usesBankItems();
         final boolean needsDeposit = depositOutputToBank;
         if ((needsWithdraw || needsDeposit) && account == null)
@@ -768,10 +769,19 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                         onCraftPermissionRevoked(account, canWithdraw, canDeposit);
                         return;
                     }
-                    if (rawNeeds.isEmpty())
-                        runOnMainThread(() -> guardedApplyCraftResults(match, craftCount, gridSnapshot, new ArrayList<>()));
-                    else
-                        lockSequentially(account, new ArrayList<>(rawNeeds.entrySet()), 0, new ArrayList<>(), match, craftCount, gridSnapshot);
+                    // Task #117: a frozen account refuses CRAFT_CONSUME / CRAFT_OUTPUT. Check before
+                    // locking: the withdraw runs after the output was delivered.
+                    craftStep(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isAccountFrozenAsync(craftAccountNr), List.of(), frozen -> {
+                        if (Boolean.TRUE.equals(frozen)) {
+                            ServerPlayerUtilities.printToClientConsole(playerUUID, BankSystemTextMessages.getAccountFrozenMessage(craftAccountNr));
+                            runOnMainThread(() -> craftInProgress = false);
+                            return;
+                        }
+                        if (rawNeeds.isEmpty())
+                            runOnMainThread(() -> guardedApplyCraftResults(match, craftCount, gridSnapshot, new ArrayList<>()));
+                        else
+                            lockSequentially(account, new ArrayList<>(rawNeeds.entrySet()), 0, new ArrayList<>(), match, craftCount, gridSnapshot);
+                    });
                 }));
     }
 
@@ -1020,12 +1030,19 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         // withdrawn locks if a later step (delivery/stats) throws.
         List<Map.Entry<IAsyncBank, Long>> locksToWithdraw = new ArrayList<>(acquiredLocks);
         acquiredLocks.clear();
+        final int ledgerAccount = craftingAccountNumber;
+        final java.util.UUID ledgerPlayer = player.getUUID();
+        final String ledgerNote = "craft " + match.result().getItem() + " x" + (match.result().getCount() * craftCount);
         for (Map.Entry<IAsyncBank, Long> lock : locksToWithdraw) {
             final IAsyncBank bank = lock.getKey();
             final long rawAmount = lock.getValue();
-            bank.withdrawLockedPreferedAsync(rawAmount).whenComplete((status, throwable) -> {
-                if (throwable == null && status == BankStatus.SUCCESS)
+            net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, ledgerPlayer, ledgerNote,
+                    net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawAmount)).whenComplete((status, throwable) -> {
+                if (throwable == null && status == BankStatus.SUCCESS) {
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, bank.getItemIDAsync(), rawAmount,
+                            net.kroia.banksystem.banking.ledger.TransactionLedger.player(ledgerPlayer), null, ledgerNote);
                     return;
+                }
                 // Un-debited craft: the output has already been delivered and may
                 // already be in use, so there is nothing safe to roll back here
                 // (unlike sendToBlock, which can simply remove the inserted stack).
@@ -1038,6 +1055,10 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                         + " — the crafted output was already delivered; the bank was not debited.");
                 if (throwable != null)
                     return; // request died mid-flight: lock state unknown, leave it untouched
+                // Task #126: never sent / not applied on a slave. The output is already delivered, so keep the
+                // ingredients locked (frozen for the admin) instead of releasing a free craft.
+                if (status == BankStatus.FAILED_NO_MASTER_CONNECTION)
+                    return;
                 // Release only what is verifiably still locked, never more than our
                 // own contribution. Residual (documented): the lock ledger is a
                 // single counter without per-owner tracking, so if the admin edit
@@ -1118,7 +1139,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
             } else {
                 bankFuture = account.getOrCreateBankAsync(itemID);
             }
-            bankFuture.thenAccept(bank -> {
+            // Issue #79: a failed bank lookup sent no deposit yet, so it falls back like "not created" (null)
+            bankFuture.exceptionally(ex -> null).thenAccept(bank -> {
                 if (bank == null) {
                     ServerPlayerUtilities.printToClientConsole(player.getUUID(),
                             BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
@@ -1130,9 +1152,18 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                     amountToDeposit = output.getCount() * ((MoneyItem) output.getItem()).worth();
                 else
                     amountToDeposit = BankManager.convertToRawAmountStatic(output.getCount());
-                bank.depositAsync(amountToDeposit).thenAccept(status -> {
+                final long finalAmountToDeposit = amountToDeposit;
+                final int ledgerAccount = craftingAccountNumber;
+                final net.kroia.banksystem.data.TransferJournal.Ref journal = net.kroia.banksystem.data.TransferJournal.ref("terminal");
+                net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, player.getUUID(),
+                        "craft output " + output.getItem() + " x" + output.getCount(), journal,
+                        () -> bank.depositAsync(finalAmountToDeposit)).thenAccept(status -> {
                     if (status != BankStatus.SUCCESS)
-                        deliverDepositFallback(output, "deposit failed: " + status);
+                        deliverDepositFallback(output, "deposit failed: " + status, journal);
+                    else
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, bank.getItemIDAsync(),
+                                finalAmountToDeposit, net.kroia.banksystem.banking.ledger.TransactionLedger.player(player.getUUID()), null,
+                                "craft output " + output.getItem() + " x" + output.getCount());
                 });
             });
         });
@@ -1144,12 +1175,21 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * warning — never block the craft, never silently drop the item.
      */
     private void deliverDepositFallback(ItemStack output, String reason) {
+        deliverDepositFallback(output, reason, null);
+    }
+
+    /** @param journal Task #124: the failed deposit's journal ref; RETURNED is written once the output is handed back */
+    private void deliverDepositFallback(ItemStack output, String reason, @Nullable net.kroia.banksystem.data.TransferJournal.Ref journal) {
         warn("Auto-deposit of crafted output " + output + " for player " + player.getUUID()
                 + " fell back to the player inventory: " + reason);
         ServerPlayerUtilities.printToClientConsole(player.getUUID(),
                 BankSystemTextMessages.getCraftingDepositFallbackMessage(output.getHoverName().getString()));
-        runOnMainThread(() -> player.getInventory().placeItemBackInInventory(output)); // mc<=26.2
-        //runOnMainThread(() -> player.getInventory().placeItemBackInInventory(output, net.minecraft.util.Prediction.SERVER_ONLY)); // mc>=26.3
+        runOnMainThread(() -> {
+            player.getInventory().placeItemBackInInventory(output); // mc<=26.2
+            //player.getInventory().placeItemBackInInventory(output, net.minecraft.util.Prediction.SERVER_ONLY); // mc>=26.3
+            if (journal != null)
+                net.kroia.banksystem.data.TransferJournal.step(journal.transferId(), net.kroia.banksystem.data.TransferJournal.RETURNED, null, reason);
+        });
     }
 
     /**

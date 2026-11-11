@@ -103,4 +103,29 @@ public final class ContainerItemInsertion {
         // stays in the bank — items are never silently voided.
         return amount - remaining;
     }
+
+    /**
+     * Removes up to {@code amount} items component-equal to {@code withdrawalStack} from the
+     * container — the rollback of {@link #insertWithdrawnItems(Container, ItemStack, long)}
+     * when the bank debit that should back those items failed. Pass the same stack that was
+     * inserted: a fresh {@link ItemID#getStack()} copy may carry different volatile state.
+     *
+     * @return the number of items actually removed (less than {@code amount} when something,
+     *         e.g. a hopper, already took items out)
+     */
+    public static long removeItems(@NotNull Container container, @NotNull ItemStack withdrawalStack, long amount) {
+        if (amount <= 0 || withdrawalStack.isEmpty())
+            return 0;
+        long remaining = amount;
+        for (int i = container.getContainerSize() - 1; i >= 0 && remaining > 0; i--) {
+            ItemStack slotStack = container.getItem(i);
+            if (slotStack.isEmpty() || !ItemStack.isSameItemSameComponents(slotStack, withdrawalStack))
+                continue;
+            int take = (int) Math.min(remaining, slotStack.getCount());
+            slotStack.shrink(take);
+            container.setItem(i, slotStack.isEmpty() ? ItemStack.EMPTY : slotStack);
+            remaining -= take;
+        }
+        return amount - remaining;
+    }
 }

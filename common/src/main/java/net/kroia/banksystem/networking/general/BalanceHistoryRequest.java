@@ -1,5 +1,7 @@
 package net.kroia.banksystem.networking.general;
 
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
@@ -38,6 +40,9 @@ public class BalanceHistoryRequest extends BankSystemGenericRequest<BalanceHisto
         /** Sentinel {@code fromMs} value meaning "resolve from MIN(time) on the server". */
         public static final long ALL_HISTORY_SENTINEL = Long.MIN_VALUE;
 
+        /** Task #112: {@code accountNumber} value for the whole-server sum (admin only). */
+        public static final int SERVER_WIDE_ACCOUNT = net.kroia.banksystem.data.table.BalanceHistoryManager.SERVER_WIDE_ACCOUNT;
+
         public boolean isAllHistory() { return fromMs == ALL_HISTORY_SENTINEL; }
     }
 
@@ -45,6 +50,10 @@ public class BalanceHistoryRequest extends BankSystemGenericRequest<BalanceHisto
     public String getRequestTypeID() {
         return BalanceHistoryRequest.class.getSimpleName();
     }
+
+    /** Issue #85: history queries queue on the DB worker. */
+    @Override
+    public long getTimeoutMs() { return SLOW_READ_TIMEOUT_MS; }
 
     @Override
     public CompletableFuture<List<BalanceHistoryRecord>> handleOnServer(Query input, ServerPlayer sender) {
@@ -54,6 +63,29 @@ public class BalanceHistoryRequest extends BankSystemGenericRequest<BalanceHisto
     @Override
     public CompletableFuture<List<BalanceHistoryRecord>> handleOnMasterServer(Query input, String slaveID, UUID sender) {
         if (BACKEND_INSTANCES.BALANCE_HISTORY_MANAGER == null) {
+            return CompletableFuture.completedFuture(List.of());
+        }
+        // Task #100: only account members and BankSystem admins may read an account's history.
+        // On a slave, needsRoutingToMaster() forwards the request, so this master-side gate covers
+        // both direct and slave-forwarded requests.
+        // An untrusted slave can forge the sender UUID (see isBlockedForUntrustedSlave), so its
+        // requests get no admin shortcut; only membership counts. Same rule as the account-data
+        // reads in AsyncBankManager (Task #103).
+        ISyncServerBankManager manager = getServerBankManager();
+        boolean untrustedSlave = isFromUntrustedSlave(slaveID);
+        // Task #112: whole-server sum, BankSystem admins only; untrusted slaves are refused.
+        if (input.accountNumber() == Query.SERVER_WIDE_ACCOUNT) {
+            if (untrustedSlave || !playerIsAdmin(sender)) {
+                debug("Denied whole-server balance history to " + sender + (untrustedSlave ? " (untrusted slave " + slaveID + ")" : ""));
+                return CompletableFuture.completedFuture(List.of());
+            }
+            return BACKEND_INSTANCES.BALANCE_HISTORY_MANAGER.getServerHistoryBucketed(input.fromMs(), input.toMs(), input.maxPoints());
+        }
+        IServerBankAccount account = manager == null ? null : manager.getBankAccount(input.accountNumber());
+        boolean isMember = account != null && account.hasUser(sender);
+        if (!isAccessAllowed(isMember, playerIsAdmin(sender), untrustedSlave)) {
+            debug("Denied balance history of account " + input.accountNumber() + " to " + sender
+                    + (untrustedSlave ? " (untrusted slave " + slaveID + ")" : ""));
             return CompletableFuture.completedFuture(List.of());
         }
         int maxPoints = input.maxPoints() <= 0 ? 0 : input.maxPoints();
