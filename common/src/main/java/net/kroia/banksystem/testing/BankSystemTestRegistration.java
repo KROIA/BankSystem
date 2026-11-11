@@ -70,6 +70,8 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new ItemIDSlaveDelegationTests());
         TestRegistry.register(new net.kroia.banksystem.testing.tests.ItemIDRegistrationRetryTests()); // Task #156
         TestRegistry.register(new net.kroia.banksystem.testing.tests.ItemIDUnchangedSetMergeTests()); // Task #157
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.ItemIDMissingModTests()); // BS-194/195
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.ItemIDMissingNamespaceTests()); // BS-195, offline
         TestRegistry.register(new ItemIDCounterTests());
         TestRegistry.register(new ItemIDFormatAndRepairTests());
         TestRegistry.register(new DepositGateTests());
