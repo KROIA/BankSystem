@@ -211,7 +211,7 @@ public class BankSystemCommandsRegistration {
                 )
                 // Task #110: /banksystem audit <player|account>, /banksystem alerts on|off
                 .then(Commands.literal("audit")
-                        .then(Commands.argument("target", StringArgumentType.word())
+                        .then(Commands.argument("target", StringArgumentType.word()).suggests(BankSystemCommandsRegistration::getTargetSuggestion)
                                 .executes(ctx -> auditCommand(ctx.getSource(), StringArgumentType.getString(ctx, "target")))))
                 .then(Commands.literal("alerts")
                         .then(Commands.literal("on").executes(ctx -> alertsCommand(ctx.getSource(), true)))
@@ -221,7 +221,7 @@ public class BankSystemCommandsRegistration {
                         .then(Commands.argument("hours", IntegerArgumentType.integer(1, net.kroia.banksystem.banking.ledger.AuditDigest.MAX_REPORT_HOURS))
                                 .executes(ctx -> auditReportCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "hours")))))
                 .then(Commands.literal("history")
-                        .then(Commands.argument("target", StringArgumentType.word())
+                        .then(Commands.argument("target", StringArgumentType.word()).suggests(BankSystemCommandsRegistration::getTargetSuggestion)
                                 .executes(ctx -> historyCommand(ctx.getSource(), StringArgumentType.getString(ctx, "target")))))
                 // Task #146: /banksystem restorebinding <account> [item] — lift suspended external bindings
                 .then(Commands.literal("restorebinding")
@@ -698,6 +698,23 @@ public class BankSystemCommandsRegistration {
             future.complete(builder.build());
         });
         return future;
+    }
+    /**
+     * Issue #165 — audit/history targets: the bank's known users (incl. offline; a slave asks the master
+     * asynchronously) plus the online players. Unquoted: the argument is a single word.
+     */
+    private static CompletableFuture<Suggestions> getTargetSuggestion(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder)
+    {
+        java.util.Set<String> names = new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        names.addAll(List.of(ctx.getSource().getServer().getPlayerNames()));
+        return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankManagerUserMapDataAsync()
+                .completeOnTimeout(null, 2, java.util.concurrent.TimeUnit.SECONDS) // master unreachable: online players only
+                .exceptionally(ex -> null)
+                .thenCompose(data -> {
+                    if (data != null)
+                        data.userMap().values().forEach(u -> { if (u.userName() != null) names.add(u.userName()); });
+                    return net.minecraft.commands.SharedSuggestionProvider.suggest(names, builder);
+                });
     }
     private static CompletableFuture<Suggestions> getSlaveServerIDSuggestion(SuggestionsBuilder builder)
     {
