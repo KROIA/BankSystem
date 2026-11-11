@@ -225,12 +225,12 @@ public class BankSystemCommandsRegistration {
                                 .executes(ctx -> historyCommand(ctx.getSource(), StringArgumentType.getString(ctx, "target")))))
                 // Task #146: /banksystem restorebinding <account> [item] — lift suspended external bindings
                 .then(Commands.literal("restorebinding")
-                        .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_RESTORE_BINDING, BankSystemPermissions.FALLBACK_LEVEL))
+                        .requires(source -> BankSystemPermissions.canUseFlagGatedCommand(source, BankSystemPermissions.COMMAND_RESTORE_BINDING)) // BS-196: admin flag checked in runAsAdmin
                         .then(Commands.argument("account", IntegerArgumentType.integer(0))
-                                .executes(ctx -> restoreBindingCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"), null))
+                                .executes(ctx -> adminOnly(ctx.getSource(), () -> restoreBindingCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"), null)))
                                 .then(Commands.argument("item", StringArgumentType.greedyString())
-                                        .executes(ctx -> restoreBindingCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"),
-                                                StringArgumentType.getString(ctx, "item"))))))
+                                        .executes(ctx -> adminOnly(ctx.getSource(), () -> restoreBindingCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"),
+                                                StringArgumentType.getString(ctx, "item")))))))
                 .then(Commands.literal("disallowItem")
                         .then(Commands.argument("itemID", StringArgumentType.string())
                                 .executes(context -> {
@@ -757,10 +757,10 @@ public class BankSystemCommandsRegistration {
         dispatcher.register(
             Commands.literal("banksystem")
                 .then(Commands.literal("symbols")
-                    .requires(src -> net.kroia.modutilities.PermissionCompat.hasPermission(src, BankSystemPermissions.COMMAND_SYMBOLS, BankSystemPermissions.FALLBACK_LEVEL))
+                    .requires(src -> BankSystemPermissions.canUseFlagGatedCommand(src, BankSystemPermissions.COMMAND_SYMBOLS)) // BS-196: admin flag checked in adminOnly
                     // list
                     .then(Commands.literal("list")
-                        .executes(ctx -> {
+                        .executes(ctx -> adminOnly(ctx.getSource(), () -> {
                             if (!isMasterSymbols(ctx.getSource())) return 0;
                             net.kroia.banksystem.banking.company.ShareSymbolStore store =
                                     BACKEND_INSTANCES.SHARE_SYMBOL_STORE;
@@ -775,12 +775,12 @@ public class BankSystemCommandsRegistration {
                                         + "  sha256=" + hex8 + "…  " + e.size() + "b"), false);
                             }
                             return Command.SINGLE_SUCCESS;
-                        })
+                        }))
                     )
                     // add <id>
                     .then(Commands.literal("add")
                         .then(Commands.argument("id", StringArgumentType.word())
-                            .executes(ctx -> {
+                            .executes(ctx -> adminOnly(ctx.getSource(), () -> {
                                 if (!isMasterSymbols(ctx.getSource())) return 0;
                                 String id = StringArgumentType.getString(ctx, "id");
                                 String err = BACKEND_INSTANCES.SHARE_SYMBOL_STORE.adminAdd(id);
@@ -791,7 +791,7 @@ public class BankSystemCommandsRegistration {
                                 ctx.getSource().sendSuccess(() -> Component.literal(
                                         "[symbols] Added symbol '" + id + "'."), true);
                                 return Command.SINGLE_SUCCESS;
-                            })
+                            }))
                         )
                     )
                     // remove <id>
@@ -804,7 +804,7 @@ public class BankSystemCommandsRegistration {
                                         .forEach(e -> builder.suggest(e.id()));
                                 return builder.buildFuture();
                             })
-                            .executes(ctx -> {
+                            .executes(ctx -> adminOnly(ctx.getSource(), () -> {
                                 if (!isMasterSymbols(ctx.getSource())) return 0;
                                 String id = StringArgumentType.getString(ctx, "id");
                                 String err = BACKEND_INSTANCES.SHARE_SYMBOL_STORE.adminRemove(id);
@@ -815,18 +815,18 @@ public class BankSystemCommandsRegistration {
                                 ctx.getSource().sendSuccess(() -> Component.literal(
                                         "[symbols] Removed symbol '" + id + "'. Ordinals compacted."), true);
                                 return Command.SINGLE_SUCCESS;
-                            })
+                            }))
                         )
                     )
                     // reload
                     .then(Commands.literal("reload")
-                        .executes(ctx -> {
+                        .executes(ctx -> adminOnly(ctx.getSource(), () -> {
                             if (!isMasterSymbols(ctx.getSource())) return 0;
                             String result = BACKEND_INSTANCES.SHARE_SYMBOL_STORE.adminReload();
                             String msg = result != null ? result : "Reloaded — no changes.";
                             ctx.getSource().sendSuccess(() -> Component.literal("[symbols] " + msg), true);
                             return Command.SINGLE_SUCCESS;
-                        })
+                        }))
                     )
                 )
         );
@@ -842,6 +842,58 @@ public class BankSystemCommandsRegistration {
             return false;
         }
         return true;
+    }
+
+    /**
+     * BS-196: the single BankSystem-admin gate of the flag-gated commands ({@code symbols}, {@code restorebinding};
+     * see {@link BankSystemPermissions#FLAG_GATED_NODES}).
+     * <ul>
+     *   <li>Non-player sources (console, command blocks) already passed the op-level {@code requires} check and run
+     *       {@code action} right away.</li>
+     *   <li>A player runs {@code action} only with the BankSystem admin flag ({@code /banksystem op}), server op or not.
+     *       The flag lives on the master, so a slave asks it ({@code isBanksystemAdminAsync}); a slave without a master
+     *       connection fails fast with the "not connected" message. Without the flag the player gets the admin-only
+     *       message; if the master gives no answer, the "request failed or timed out" message.</li>
+     * </ul>
+     *
+     * @param action the command's work; always runs on the server main thread
+     * @return future resolving to {@code true} if {@code action} ran
+     */
+    public static CompletableFuture<Boolean> runAsAdmin(CommandSourceStack source, Runnable action) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            action.run();
+            return CompletableFuture.completedFuture(true);
+        }
+        UUID uuid = player.getUUID();
+        if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem(uuid))
+            return CompletableFuture.completedFuture(false);
+        MinecraftServer server = source.getServer();
+        CompletableFuture<Boolean> ran = new CompletableFuture<>();
+        // On the master the future is already complete and server.execute runs inline on the main thread.
+        BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(uuid)
+                .whenComplete((isAdmin, failure) -> server.execute(() -> {
+                    if (failure != null) {
+                        AsyncBankSystemCommandHandler.reportFailure(uuid, failure); // logs + tells the player
+                        ran.complete(false);
+                    } else if (player.hasDisconnected()) {
+                        ran.complete(false); // logged off while waiting for the master
+                    } else if (!Boolean.TRUE.equals(isAdmin)) {
+                        source.sendFailure(Component.literal(ServerBankSystemCommandHandler.NO_ADMIN_MESSAGE));
+                        ran.complete(false);
+                    } else {
+                        action.run();
+                        ran.complete(true);
+                    }
+                }));
+        return ran;
+    }
+
+    /** {@link #runAsAdmin} for a Brigadier {@code executes}: the action's result when it ran inline, else 1. */
+    private static int adminOnly(CommandSourceStack source, java.util.function.IntSupplier action) {
+        int[] result = {Command.SINGLE_SUCCESS};
+        runAsAdmin(source, () -> result[0] = action.getAsInt());
+        return result[0];
     }
 
     /**
@@ -902,7 +954,7 @@ public class BankSystemCommandsRegistration {
             }
         }).thenAccept(nr -> player.level().getServer().execute(() -> {
             if (nr == null || nr == -1) {
-                player.sendSystemMessage(Component.literal("This command can only be used by BankSystem admins!"));
+                player.sendSystemMessage(Component.literal(ServerBankSystemCommandHandler.NO_ADMIN_MESSAGE));
             } else if (nr <= 0) {
                 player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditTargetNotFoundMessage(target)));
             } else {
