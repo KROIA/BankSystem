@@ -100,6 +100,9 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransferJournalTests(true)); // Task #124, SLAVE_ONLY
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransferJournalTests(false)); // Task #124, MASTER_ONLY
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransferStatusTests()); // Task #126, offline
+        // SM T-236 audit join: rows left in the live ledger / journal (autotest only)
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AuditJoinRowsTests(false)); // MASTER_ONLY
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AuditJoinRowsTests(true)); // SLAVE_ONLY
         // Task #45 (v2.1.0) — recurring payouts (schedule mutation, NBT roundtrip, cascade-strip).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.PayoutManagerTests());
         // Task #48 (v2.1.0) — share ItemID volatility guard (distinct companies, distinct ItemIDs).
