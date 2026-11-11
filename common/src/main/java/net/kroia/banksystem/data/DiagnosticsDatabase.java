@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * connection and its own daemon thread ({@value #THREAD_NAME} for the BankSystem file), never the server
  * thread or the {@code banksystem-db-worker}. Calls enqueue and return at once; a full queue drops the write
  * (counted, one warning per session). The worker commits once per drained batch. The file is opened on the
- * first write: a corrupt file is renamed {@code .corrupt-<ms>} and recreated empty; any other open failure,
+ * first queued job ({@link #openAsync()} at server start, else the first write): a corrupt file is renamed {@code .corrupt-<ms>} and recreated empty; any other open failure,
  * or a failed recreate, disables the instance for the session. Nothing here throws to callers.
  * <p>
  * Every open writes Meta {@code created_ms} (first open only) and {@code schema_version}. Any other Meta row,
@@ -160,6 +160,14 @@ public final class DiagnosticsDatabase {
                 writeFailed(e);
             }
         });
+    }
+
+    /**
+     * Task #175 — queues the open, so creating the files (slow on Windows under antivirus scanning) happens
+     * on the writer thread at server start instead of inside the first write or flush. No-op when already open.
+     */
+    public void openAsync() {
+        enqueue(this::open);
     }
 
     /** Upserts one Meta row. */

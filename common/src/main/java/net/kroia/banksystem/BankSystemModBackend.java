@@ -392,9 +392,10 @@ public class BankSystemModBackend implements BankSystemAPI {
         boolean multiServerEnabled = config.enable;
         boolean isSlave = multiServerEnabled && !config.isMaster;
         INSTANCES.isSlaveServer = isSlave;
-        // Task #123: every role; the file is only created by the first write.
+        // Task #123: every role. Task #175: open now on its writer thread, not inside the first write.
         INSTANCES.DIAGNOSTICS_DB = new DiagnosticsDatabase(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
                 .resolve(DatabaseManager.DATABASE_PATH).resolve(DiagnosticsDatabase.FILE_NAME));
+        INSTANCES.DIAGNOSTICS_DB.openAsync();
 
         if(isSlave)
         {

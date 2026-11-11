@@ -33,6 +33,40 @@ public class DiagnosticsWalTests extends TestSuite {
     @Override
     public void registerTests() {
         addTest("wal_busy_timeout_and_checkpoint_on_close", this::walAndCheckpoint);
+        addTest("open_async_creates_file_without_writes", this::openAsyncCreatesFile);
+    }
+
+    /** Task #175: the server-start open creates the file before any write; a second call is harmless. */
+    private TestResult openAsyncCreatesFile() {
+        Path dir = null;
+        try {
+            dir = Files.createTempDirectory("banksystem-diag-open");
+            Path f = dir.resolve("sub").resolve(DiagnosticsDatabase.FILE_NAME);
+            DiagnosticsDatabase db = new DiagnosticsDatabase(f);
+            db.openAsync();
+            db.openAsync();
+            db.flush().get(10, java.util.concurrent.TimeUnit.SECONDS);
+            boolean exists = Files.exists(f);
+            String schema;
+            try (Connection c = DiagnosticsDatabase.connect(f); Statement st = c.createStatement()) {
+                schema = scalar(st, "SELECT value FROM Meta WHERE key = 'schema_version'");
+            }
+            db.close();
+            if (!exists) return fail("no file after openAsync + flush");
+            if (db.isDisabled()) return fail("disabled after openAsync");
+            if (!DiagnosticsDatabase.SCHEMA_VERSION.equals(schema)) return fail("schema_version " + schema);
+            return pass("file and Meta created by openAsync alone");
+        } catch (Exception e) {
+            return fail(e.toString());
+        } finally {
+            if (dir != null) {
+                try (Stream<Path> walk = Files.walk(dir)) {
+                    walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+                } catch (Exception ignored) {
+                    // best effort
+                }
+            }
+        }
     }
 
     private TestResult walAndCheckpoint() {
