@@ -345,6 +345,10 @@ public class BankSystemModBackend implements BankSystemAPI {
 
         ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(BankSystemModBackend::onPlayerLeaveClientSide);
         ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(BankSystemModBackend::onPlayerJoinClientSide);
+        // BS-195: explanation screen after a refused singleplayer world load.
+        net.kroia.banksystem.client.StartupRefusalClient.setBackend(INSTANCES);
+        dev.architectury.event.events.client.ClientTickEvent.CLIENT_POST.register(
+                net.kroia.banksystem.client.StartupRefusalClient::onClientTick);
     }
 
     // Called from the server side
@@ -502,7 +506,13 @@ public class BankSystemModBackend implements BankSystemAPI {
         {
             setupMultiServerInfrastructure(config, server);
         }
-        loadDataFromFiles(server);
+        singleplayerRefusal = null;
+        try {
+            loadDataFromFiles(server);
+        } catch (BankSystemStartupAbortException e) {
+            refuseStartup(server, e);
+            return; // BANKSYSTEM_SETUP_COMPLETED is not fired: dependent mods stay down too
+        }
 
         // Refresh the cached money ItemID AFTER the world's saved data is fully loaded.
         //
@@ -544,6 +554,64 @@ public class BankSystemModBackend implements BankSystemAPI {
         if (INSTANCES.SERVER_SETTINGS.INTEGRATIONS.PLACEHOLDERS_ENABLED.get())
             BankSystemPlaceholders.start(INSTANCES); // TAB / Placeholder API via ModUtilities
         INSTANCES.SERVER_EVENTS.BANKSYSTEM_SETUP_COMPLETED.notifyListeners();
+        // BS-195: after setup-complete, so dependent mods have registered and loaded their data.
+        if (!INSTANCES.isSlaveServer && !ItemIDManager.getLastRemovedMissing().isEmpty())
+            INSTANCES.SERVER_EVENTS.ITEM_IDS_REMOVED.notifyListeners(ItemIDManager.getLastRemovedMissing());
+    }
+
+    /**
+     * What the singleplayer client shows after BankSystem refused to load the world (BS-195).
+     * {@code lines}: missing namespaces with counts, or merge groups. {@code worldDir}: the
+     * world folder, for the screen's one-shot confirm button and for reopening the world.
+     */
+    public record StartupRefusal(Kind kind, int count, List<String> lines, Path worldDir) {
+        public enum Kind { MISSING_MODS, MERGE, OTHER }
+    }
+
+    /** Set on the integrated server's thread, consumed by the client tick (same JVM). */
+    private static volatile StartupRefusal singleplayerRefusal = null;
+
+    public static @Nullable StartupRefusal getSingleplayerRefusal() {
+        return singleplayerRefusal;
+    }
+
+    public static void clearSingleplayerRefusal() {
+        singleplayerRefusal = null;
+    }
+
+    /**
+     * BS-195: a load guard refused this world. Instead of letting the exception crash the
+     * server (crash report; in singleplayer the whole game closes), log the report and stop
+     * the server cleanly. Saves stay prohibited (set by the data handler). Dedicated: halt
+     * right away. Integrated: halt on the first tick — the client waits in its loading loop
+     * until the server has ticked once, so halting earlier would hang it — and hand the
+     * client a {@link StartupRefusal}; its tick shows the explanation screen once the server
+     * thread has ended.
+     */
+    private static void refuseStartup(MinecraftServer server, BankSystemStartupAbortException e) {
+        INSTANCES.LOGGER.error("BankSystem refused to load this world. Stopping the server; nothing was saved.\n"
+                + e.getMessage());
+        TickEvent.SERVER_POST.unregister(ON_SERVER_TICK);
+        LifecycleEvent.SERVER_LEVEL_SAVE.unregister(ON_LEVEL_SAVE);
+        if (server.isDedicatedServer()) {
+            server.halt(false);
+            return;
+        }
+        StartupRefusal.Kind kind = StartupRefusal.Kind.OTHER;
+        int count = 0;
+        List<String> lines = new ArrayList<>();
+        if (e instanceof ItemIDMissingModsException missing) {
+            kind = StartupRefusal.Kind.MISSING_MODS;
+            count = missing.missingCount;
+            missing.missingNamespaces.forEach((ns, n) -> lines.add(ns + " (" + n + ")"));
+        } else if (e instanceof ItemIDMergeAbortedException merge) {
+            kind = StartupRefusal.Kind.MERGE;
+            count = merge.summary.size();
+            lines.addAll(merge.summary);
+        }
+        singleplayerRefusal = new StartupRefusal(kind, count, List.copyOf(lines),
+                server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize());
+        server.tell(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false)));
     }
 
     // Called from the server side

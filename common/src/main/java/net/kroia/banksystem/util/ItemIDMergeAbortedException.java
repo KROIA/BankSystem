@@ -29,7 +29,15 @@ public class ItemIDMergeAbortedException extends BankSystemStartupAbortException
     /**
      * @param report the human-readable merge report (becomes the exception/crash message)
      */
+    /** One short line per merge group ("A + B"), for the singleplayer refusal screen. */
+    public final java.util.List<String> summary;
+
     public ItemIDMergeAbortedException(String report) {
+        this(report, java.util.List.of());
+    }
+
+    public ItemIDMergeAbortedException(String report, java.util.List<String> summary) {
         super(report);
+        this.summary = java.util.List.copyOf(summary);
     }
 }

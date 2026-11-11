@@ -12,6 +12,7 @@ import net.kroia.modutilities.event.DataEvent;
 import net.kroia.modutilities.event.Signal;
 
 import java.util.Map;
+import java.util.Set;
 
 public class BankSystemEvents implements IBankSystemEvents {
 
@@ -34,6 +35,9 @@ public class BankSystemEvents implements IBankSystemEvents {
      * Always dispatched on the server thread, master side only.
      */
     public final DataEvent<Map<ItemID, ItemID>> ITEM_IDS_MERGED = new DataEvent<>();
+
+    /** BS-195: see {@link IBankSystemEvents#getItemIDsRemovedEvent()}. Master-only. */
+    public final DataEvent<Set<ItemID>> ITEM_IDS_REMOVED = new DataEvent<>();
 
 
 
@@ -105,6 +109,7 @@ public class BankSystemEvents implements IBankSystemEvents {
         BANK_ACCOUNT_CREATED.removeListeners();
         BANK_ACCOUNT_DELETED.removeListeners();
         ITEM_IDS_MERGED.removeListeners();
+        ITEM_IDS_REMOVED.removeListeners();
         BANK_DATA_SAVED_TO_FILE.removeListeners();
         BANK_DATA_LOADED_FROM_FILE.removeListeners();
         SETTINGS_SAVED_TO_FILE.removeListeners();
@@ -152,6 +157,12 @@ public class BankSystemEvents implements IBankSystemEvents {
     public DataEvent<Map<ItemID, ItemID>> getItemIDsMergedEvent()
     {
         return ITEM_IDS_MERGED;
+    }
+
+    @Override
+    public DataEvent<Set<ItemID>> getItemIDsRemovedEvent()
+    {
+        return ITEM_IDS_REMOVED;
     }
 
     @Override

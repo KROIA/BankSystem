@@ -48,6 +48,14 @@ public final class ItemStackNbt {
         return ItemStack.CODEC.parse(ops(registries), tag).resultOrPartial(error -> { });
     }
 
+    /**
+     * Like {@link #parse} but refuses a partial decode: empty when any part of the tag failed
+     * (e.g. an enchantment or component from a removed mod), instead of silently dropping it.
+     */
+    public static Optional<ItemStack> parseStrict(HolderLookup.Provider registries, Tag tag) {
+        return ItemStack.CODEC.parse(ops(registries), tag).result();
+    }
+
     /** Like 1.21.1 {@code ItemStack.parseOptional(registries, tag)}. */
     public static ItemStack parseOptional(HolderLookup.Provider registries, CompoundTag tag) {
         return tag.isEmpty() ? ItemStack.EMPTY : parse(registries, tag).orElse(ItemStack.EMPTY);

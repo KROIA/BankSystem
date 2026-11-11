@@ -19,9 +19,13 @@ package net.kroia.banksystem.util;
  * {@code BankSystemDataHandler.load_itemIDs()} / {@code load_metadata()}: the affected
  * subsystem is marked NOT_LOADED, the whole session is marked <b>save-prohibited</b>
  * (the vanilla crash-save and the shutdown save are suppressed), and the exception is
- * rethrown so it propagates out of {@code loadAll()} through the {@code SERVER_STARTED}
- * lifecycle handler, aborting startup with a crash report on all loaders. The exception
- * message carries the full human-readable report into the log / crash report.
+ * rethrown so it propagates out of {@code loadAll()} to {@code BankSystemModBackend.onServerStart},
+ * which logs the report and stops the server cleanly (BS-195: no crash report; singleplayer
+ * shows an explanation screen). The exception message carries the full human-readable report.
+ * <ul>
+ *   <li>{@link ItemIDMissingModsException} — saved ItemIDs of missing mods
+ *       ({@code CONFIRM_ITEMID_REMOVE_MISSING}).</li>
+ * </ul>
  * <p>
  * It is intentionally a {@link RuntimeException} so it can traverse the loader lifecycle
  * call chain without checked-exception plumbing.

@@ -295,6 +295,19 @@ public final class BankSystemModSettings extends ModSettings {
         public final Setting<Boolean> CONFIRM_ITEMID_REPAIR = registerSetting(
                 "CONFIRM_ITEMID_REPAIR", false, Boolean.class);
 
+        /**
+         * <b>One-shot recovery flag for ItemIDs whose mod is missing.</b>
+         * <p>
+         * When saved ItemIDs no longer load (their mod was removed, or they carry data from a
+         * removed mod), the master refuses to start and names the missing mods. Setting this
+         * flag to {@code true} removes those items on the next start: the BankSystem data
+         * folder is backed up first, then their balances are dropped from every bank account
+         * and the ItemIDs are deleted (their numbers stay reserved). Reset to {@code false}
+         * after use, same one-shot contract as {@link #CONFIRM_ITEMID_MERGE}.
+         */
+        public final Setting<Boolean> CONFIRM_ITEMID_REMOVE_MISSING = registerSetting(
+                "CONFIRM_ITEMID_REMOVE_MISSING", false, Boolean.class);
+
 
         public final List<ItemStack> INITIAL_ALLOWED_ITEMS = createInitialAllowedItems();
 

@@ -356,6 +356,7 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         sanitizeBoolean(settings.BANK.ALLOW_ALL_ITEMS);
         sanitizeBoolean(settings.BANK.CONFIRM_ITEMID_MERGE);
         sanitizeBoolean(settings.BANK.CONFIRM_ITEMID_REPAIR);
+        sanitizeBoolean(settings.BANK.CONFIRM_ITEMID_REMOVE_MISSING);
 
         // Integrations
         sanitizeBoolean(settings.INTEGRATIONS.PLACEHOLDERS_ENABLED);
