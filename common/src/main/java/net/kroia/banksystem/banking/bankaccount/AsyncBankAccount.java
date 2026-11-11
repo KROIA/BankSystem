@@ -15,6 +15,7 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.banking.clientdata.UserData;
+import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
@@ -252,6 +253,10 @@ public class AsyncBankAccount implements IAsyncBankAccount {
             if(bankAccount == null)
                 return CompletableFuture.completedFuture(OutputData.of(input.function));
 
+            // Task #104: account reads go to members and admins only (rule in BankSystemGenericRequest).
+            if(isAccountRead(input.function) && !canReadAccount(playerSender, slaveID, bankAccount))
+                return CompletableFuture.completedFuture(deniedRead(input.function));
+
 
             return CompletableFuture.completedFuture(switch (input.function) {
                 case FunctionType.GetAccountDataAsync_1 ->              OutputData.of(input.function, bankAccount.getAccountData());
@@ -325,6 +330,29 @@ public class AsyncBankAccount implements IAsyncBankAccount {
 
             });
         }
+        /** Task #104: functions that return account data. */
+        private static boolean isAccountRead(FunctionType function) {
+            return switch (function) {
+                case GetAccountDataAsync_1, GetAccountDataAsync_2,
+                     GetBankDataAsync_1, GetBankDataAsync_2,
+                     GetUserDataAsync_1, GetUserDataAsync_2,
+                     GetPersonalBankOwnerDataAsync, GetAccountNameAsync, GetAccountIconAsync,
+                     GetPermissionAsync, HasPermissionAsync, HasAnyUserAsync, HasUserAsync,
+                     GetPersonalBankOwnerAsync, HasAnyBankAsync, HasBankAsync,
+                     ToJsonAsync, ToJsonStringAsync -> true;
+                default -> false;
+            };
+        }
+
+        /** Task #104: denied reads answer false/0 for primitives, else an empty result that decodes as null. */
+        private static OutputData deniedRead(FunctionType function) {
+            return switch (function) {
+                case GetPermissionAsync -> OutputData.of(function, 0);
+                case HasPermissionAsync, HasAnyUserAsync, HasUserAsync, HasAnyBankAsync, HasBankAsync -> OutputData.of(function, false);
+                default -> OutputData.of(function);
+            };
+        }
+
         @Override
         protected boolean isAllowedToCallByClient(InputData input)
         {
@@ -390,21 +418,29 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         Request instance = Request.instance;
     }
 
+    /**
+     * Issue #79: a failed request (timeout, disconnect) or a null reply (master answered, outcome unknown) fails the
+     * future instead of leaving it pending forever. Failures are logged here, which is all fire-and-forget calls get.
+     */
     private CompletableFuture<OutputData> sendRequest(InputData input)
     {
-        CompletableFuture<OutputData> future = new CompletableFuture<>();
         CompletableFuture<OutputData> tmpFuture;
         if(isClientSide)
             tmpFuture = Request.instance.sendRequestToServer(input);
         else
             tmpFuture = Request.instance.sendRequestToMaster(input);
 
-        tmpFuture.thenAccept(outputData ->{
+        CompletableFuture<OutputData> future = tmpFuture.thenApply(outputData ->{
+            if(outputData == null)
+                throw new IllegalStateException("null ARRS reply: " + input.function);
             if(BankSystemMod.ENABLE_DEV_FEATURES && AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Response received for request: "+ input.function.toString());
-            future.complete(outputData);
+            return outputData;
         });
-
+        future.whenComplete((o, ex) -> {
+            if(ex != null)
+                warn("Request " + input.function + " failed: " + TransferStatusRequest.cause(ex));
+        });
         return future;
     }
 
@@ -502,7 +538,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<BankAccountData> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetAccountDataAsync_1, accountNr);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -513,7 +549,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<BankAccountData> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetAccountDataAsync_2, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -524,7 +560,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<@Nullable BankData> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetBankDataAsync_1, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -535,7 +571,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<List<BankData>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetBankDataAsync_2, accountNr);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -546,7 +582,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<@Nullable BankUserData> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetUserDataAsync_1, accountNr, userUUID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -557,7 +593,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<List<BankUserData>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetUserDataAsync_2, accountNr);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -568,7 +604,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<@Nullable UserData> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetPersonalBankOwnerDataAsync, accountNr);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -592,7 +628,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetAccountNameAsync, accountNr);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -611,7 +647,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<@Nullable ItemID> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetAccountIconAsync, accountNr);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -622,7 +658,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<Integer> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetPermissionAsync, accountNr, userUUID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -634,7 +670,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         try {
             InputData inputData = InputData.of(FunctionType.HasPermissionAsync, accountNr, new ParamGroup_UUID_int(userUUID, permission));
             CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-            outputDataFuture.thenAccept((outputData) -> future.complete(outputData.decodeResult()));
+            AsyncFunctionOutputData.relay(outputDataFuture, future);
         }catch(Exception e) {
             future.completeExceptionally(e);
         }
@@ -680,7 +716,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.HasAnyUserAsync, accountNr);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -691,7 +727,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.HasUserAsync, accountNr, userUUID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -702,7 +738,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<@Nullable User> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetPersonalBankOwnerAsync, accountNr);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -712,24 +748,14 @@ public class AsyncBankAccount implements IAsyncBankAccount {
             return CompletableFuture.completedFuture(null);
 
         // Returns bool!
-        CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
+        CompletableFuture<Boolean> created = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.CreateBankAsync, accountNr, new ParamGroup_ItemID_long(itemID, startBalance));
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        AsyncFunctionOutputData.relay(sendRequest(inputData), created);
         // Task #30: the master can answer with an empty/rejection response (e.g. a trust or
-        // unknown-item refusal), for which decodeResult() returns a null Boolean. Auto-unboxing
-        // that in an `if` threw an NPE inside this callback, so the future never completed and
-        // the whole chain silently stalled — the caller's fallback ("item not allowed") message
-        // never fired. Handle transport failure / null result as a normal "bank not created"
-        // outcome so the future always completes with the documented null sentinel.
-        outputDataFuture.whenComplete((outputData, ex)->
-        {
-            Boolean created = (ex != null || outputData == null) ? null : outputData.decodeResult();
-            if(Boolean.TRUE.equals(created))
-                future.complete(createBank(itemID));
-            else
-                future.complete(null);
-        });
-        return future;
+        // unknown-item refusal), for which decodeResult() returns a null Boolean: "bank not created" (null).
+        // Issue #79: a failed request (timeout, not sent, null reply, decode error) fails the future; callers that
+        // hold items fall back on it like on null (no deposit was sent yet).
+        return created.thenApply(c -> Boolean.TRUE.equals(c) ? createBank(itemID) : null);
     }
 
     @Override
@@ -747,7 +773,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.RemoveEmptyBanksAsync, accountNr);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -766,7 +792,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.HasAnyBankAsync, accountNr);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -777,7 +803,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.HasBankAsync, accountNr, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -785,14 +811,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
     public CompletableFuture<@Nullable IAsyncBank> getBankAsync(ItemID itemID) {
         if(!MultiServerUtils.canInteractWithBankSystem())
             return CompletableFuture.completedFuture(null);
-        CompletableFuture<@Nullable IAsyncBank> future = new CompletableFuture<>();
-        hasBankAsync(itemID).thenAccept((hasItem) ->{
-            if(hasItem)
-                future.complete(createBank(itemID));
-            else
-                future.complete(null);
-        });
-        return future;
+        return hasBankAsync(itemID).thenApply(hasItem -> Boolean.TRUE.equals(hasItem) ? createBank(itemID) : null);
     }
 
     @Override
@@ -804,16 +823,14 @@ public class AsyncBankAccount implements IAsyncBankAccount {
     public CompletableFuture<Map<ItemID, IAsyncBank>> getAllBanksAsync() {
         if(!MultiServerUtils.canInteractWithBankSystem())
             return CompletableFuture.completedFuture(Map.of());
-        CompletableFuture<Map<ItemID, IAsyncBank>> future = new CompletableFuture<>();
-        getBankDataAsync().thenAccept((bankData) -> {
+        return getBankDataAsync().thenApply((bankData) -> {
             Map<ItemID, IAsyncBank>  map = new HashMap<>();
             for(BankData data : bankData)
             {
                 map.put(data.itemID(), createBank(data.itemID()));
             }
-            future.complete(map);
+            return map;
         });
-        return future;
     }
 
     @Override
@@ -823,7 +840,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<JsonElement> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ToJsonAsync, accountNr);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 
@@ -834,7 +851,7 @@ public class AsyncBankAccount implements IAsyncBankAccount {
         CompletableFuture<String> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ToJsonStringAsync, accountNr);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        AsyncFunctionOutputData.relay(outputDataFuture, future);
         return future;
     }
 

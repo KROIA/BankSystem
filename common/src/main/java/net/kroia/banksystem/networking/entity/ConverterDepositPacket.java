@@ -62,6 +62,7 @@ public class ConverterDepositPacket extends BankSystemNetworkPacket {
         if (sender == null || requested == null || requested.isEmpty()) return;
 
         long depositTotal = 0L;
+        Map<ItemID, Long> destroyed = new HashMap<>(); // Task #124: NoteFlow converter_in
         Inventory inv = sender.getInventory();
         int size = inv.getContainerSize();
 
@@ -100,6 +101,7 @@ public class ConverterDepositPacket extends BankSystemNetworkPacket {
             try {
                 value = Math.multiplyExact(removedCount, worth);
                 depositTotal = Math.addExact(depositTotal, value);
+                destroyed.put(itemID, removedCount);
             } catch (ArithmeticException overflow) {
                 // A single denomination's value alone exceeds the running Long range.
                 // Refuse this denomination line and try to unwind by putting the just-removed
@@ -127,6 +129,8 @@ public class ConverterDepositPacket extends BankSystemNetworkPacket {
 
         if (depositTotal > 0) {
             long resulting = ConverterCacheManager.get().deposit(sender.getUUID(), depositTotal);
+            net.kroia.banksystem.data.NoteFlowLog.converter(true, sender.getUUID(), destroyed,
+                    net.kroia.banksystem.data.DiagnosticsDatabase.at(sender.level(), sender.blockPosition()));
             debug("ConverterDepositPacket: player " + sender.getUUID() + " deposited "
                     + depositTotal + " cents into converter cache; new balance = " + resulting);
         }

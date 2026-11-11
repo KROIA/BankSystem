@@ -31,6 +31,11 @@ public class CompanyFounderInvariantTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("founder_manage_removal_refused", this::testFounderManageRemovalRefused);
         addTest("founder_dropped_from_set_refused", this::testFounderDroppedFromSetRefused);

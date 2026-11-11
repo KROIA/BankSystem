@@ -57,6 +57,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
     private static final Component RESULT_INVALID = Component.translatable(PREFIX + "result_invalid");
     private static final Component RESULT_INTERNAL = Component.translatable(PREFIX + "result_internal");
     private static final Component RESULT_NOT_FOUND = Component.translatable(PREFIX + "result_not_found");
+    private static final Component RESULT_UNCONFIRMED = Component.translatable("gui.banksystem.payment_unconfirmed");
 
     private static final int COLOR_OK = 0xFF10b981;
     private static final int COLOR_ERR = 0xFFe11d48;
@@ -184,9 +185,9 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         // has been removed from the UI and the server enforces exclusion in DividendPayer.
         AsyncCompanyManager.payDividendAsync(companyId, amount, false, caller, currencyItem).thenAccept(out -> {
             if (out == null) {
-                statusLabel.setText(RESULT_INTERNAL.getString());
+                // Issue #85: no answer (timeout, lost link): the dividend may have been paid, so no retry button.
+                statusLabel.setText(RESULT_UNCONFIRMED.getString());
                 statusLabel.setTextColor(COLOR_ERR);
-                payButton.setEnabled(true);
                 return;
             }
             switch (out.resultCode()) {
@@ -214,6 +215,10 @@ public class PayDividendScreen extends BankSystemGuiScreen {
                     statusLabel.setText(RESULT_INVALID.getString());
                     statusLabel.setTextColor(COLOR_ERR);
                     payButton.setEnabled(true);
+                }
+                case AsyncCompanyManager.CODE_ACCOUNT_FROZEN -> {
+                    statusLabel.setText(Component.translatable("gui.banksystem.company_account_frozen").getString());
+                    statusLabel.setTextColor(COLOR_ERR);
                 }
                 case AsyncCompanyManager.CODE_NOT_FOUND -> {
                     statusLabel.setText(RESULT_NOT_FOUND.getString());

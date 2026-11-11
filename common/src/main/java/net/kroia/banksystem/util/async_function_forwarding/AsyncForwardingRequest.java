@@ -137,6 +137,11 @@ public abstract class AsyncForwardingRequest<
 
     @Override
     public CompletableFuture<OUT> handleOnServer(IN input, ServerPlayer sender) {
+        // Backstop (Task #167/#176): ModUtilities routes by role, not link state, so a slave only
+        // gets here on a role mismatch (BankSystem slave, ModUtilities not; logged at startup).
+        // Never run master handlers on slave state: answer at once with an empty reply (decodes to null).
+        if (needsRoutingToMaster())
+            return CompletableFuture.completedFuture(outputConstructor.apply(input.function, new byte[0]));
         return handleOnMasterServer(input, "", sender.getUUID());
     }
 

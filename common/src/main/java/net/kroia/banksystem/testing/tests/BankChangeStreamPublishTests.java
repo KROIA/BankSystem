@@ -6,11 +6,14 @@ import net.kroia.banksystem.api.bank.ISyncServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.banking.binding.BankAccountBindings;
+import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.general.BankAccountChangeStream;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.testing.StubCurrencyProvider;
@@ -19,8 +22,12 @@ import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import io.netty.buffer.Unpooled;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.item.Items;
 
+import java.lang.reflect.Field;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -70,6 +77,7 @@ public class BankChangeStreamPublishTests extends TestSuite {
         addTest("bound_setBalance_flips_change_flag", this::boundSetBalanceFlipsChangeFlag);
         addTest("external_drift_flips_change_flag_via_watchdog", this::externalDriftFlipsChangeFlagViaWatchdog);
         addTest("no_drift_no_flag_flip", this::noDriftNoFlagFlip);
+        addTest("change_stream_refuses_non_member", this::changeStreamRefusesNonMember);
     }
 
     @Override
@@ -334,5 +342,57 @@ public class BankChangeStreamPublishTests extends TestSuite {
             return fail("Second consecutive no-drift poll flipped changeFlag");
         }
         return pass("Two consecutive no-drift polls leave changeFlag clear");
+    }
+
+    /**
+     * The account change stream carries the full account data, so starting it must pass the same
+     * member-or-admin read rule as the account reads, for direct and slave-forwarded requesters.
+     */
+    private TestResult changeStreamRefusesNonMember() {
+        if (manager == null) return fail("ServerBankManager is null — cannot run on slave server");
+        if (BankSystemNetworking.BANKSYSTEM_ACCOUNT_CHANGE_STREAM.getManager() == null) return fail("stream manager not set up");
+        String untrustedSlave = "stream_access_test_untrusted_slave";
+        if (manager.isSlaveServerTrusted(untrustedSlave)) return fail("test slave id is trusted");
+        ServerBankAccount account = (ServerBankAccount) manager.getBankAccount(testAccountNr);
+        User user = manager.getUserByUUID(TEST_OWNER);
+        if (account == null || user == null) return fail("Test account or user missing");
+        try {
+            int before = listenerCount(account);
+            startStream(TEST_OWNER, null);
+            startStream(TEST_OWNER, untrustedSlave);
+            if (listenerCount(account) != before) return fail("a non-member was subscribed to the account change stream");
+
+            account.addUser(user, BankPermission.getAllPermissions());
+            BankAccountChangeStream memberStream = startStream(TEST_OWNER, untrustedSlave);
+            boolean subscribed = listenerCount(account) == before + 1;
+            memberStream.onStopStreamSendingOnServer();
+            if (!subscribed) return fail("a member was refused the account change stream");
+            return pass("non-member refused (direct and via slave), member subscribed");
+        } catch (ReflectiveOperationException e) {
+            return fail("ServerBankAccount.changeListeners not readable: " + e);
+        } finally {
+            account.removeUser(TEST_OWNER);
+        }
+    }
+
+    /** Runs the master-side stream start the way StreamManager does for a client or slave requester. */
+    private BankAccountChangeStream startStream(UUID requester, String slaveID) {
+        BankAccountChangeStream proto = BankSystemNetworking.BANKSYSTEM_ACCOUNT_CHANGE_STREAM;
+        BankAccountChangeStream stream = (BankAccountChangeStream) proto.copy();
+        stream.copyFrom(proto);
+        stream.setStreamID(UUID.randomUUID());
+        stream.setRequestorPlayerUUID(requester);
+        stream.setSlaveServerID(slaveID);
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
+        BankAccountChangeStream.InputData.STREAM_CODEC.encode(buf, new BankAccountChangeStream.InputData(testAccountNr));
+        stream.setContextData(buf);
+        stream.onStartStreamSendingOnSever();
+        return stream;
+    }
+
+    private static int listenerCount(ServerBankAccount account) throws ReflectiveOperationException {
+        Field field = ServerBankAccount.class.getDeclaredField("changeListeners");
+        field.setAccessible(true);
+        return ((List<?>) field.get(account)).size();
     }
 }
