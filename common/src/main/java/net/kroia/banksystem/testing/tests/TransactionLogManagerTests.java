@@ -51,6 +51,14 @@ public class TransactionLogManagerTests extends TestSuite {
         addTest("null_actor_and_note_roundtrip", this::null_actor_and_note_roundtrip);
         addTest("newest_first_ordering", this::newest_first_ordering);
         addTest("close_drains_queued_writes", this::close_drains_queued_writes);
+        addTest("audit_csv_export_escaping", this::audit_csv_export_escaping);
+    }
+
+    /** Issue #166: audit CSV — BOM, quoting, doubled quotes, formula defusing, negative amounts stay numbers. */
+    private TestResult audit_csv_export_escaping() {
+        String csv = net.kroia.banksystem.screen.custom.AuditExport.csv(new String[]{"a", "b"},
+                List.of(new String[]{"x,y", "say \"hi\""}, new String[]{"=1+2", "-12.50"}, new String[]{"line\nbreak", null}));
+        return assertEquals("csv", "﻿a,b\r\n\"x,y\",\"say \"\"hi\"\"\"\r\n'=1+2,-12.50\r\n\"line\nbreak\",\r\n", csv);
     }
 
     @Override

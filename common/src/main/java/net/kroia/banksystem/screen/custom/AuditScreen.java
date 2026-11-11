@@ -19,10 +19,17 @@ import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Task #110 (v2.2.0) — admin audit screen: an account's ledger rows, newest first, one server
@@ -38,13 +45,20 @@ public class AuditScreen extends BankSystemGuiScreen {
     private static final Component NEXT = Component.translatable(PREFIX + "next");
     private static final Component DENIED = Component.translatable(PREFIX + "denied");
     private static final Component EMPTY = Component.translatable(PREFIX + "empty");
-    private static final Component HEADER = Component.translatable(PREFIX + "header");
+    private static final Component EXPORT = Component.translatable(PREFIX + "export");
     private static final Component COULD_NOT_LOAD = Component.translatable("gui.banksystem.request.could_not_load");
     private static final String[] RANGE_KEYS = {"range_1h", "range_24h", "range_7d", "range_all"};
     private static final long[] RANGE_MS = {3_600_000L, 86_400_000L, 7 * 86_400_000L, 0L};
     static final int PAGE_SIZE = 100;
-    /** Column widths in percent: time, type, item, amount, counterparty, actor, note, ref. */
-    private static final int[] COLS = {14, 13, 13, 11, 7, 12, 20, 10};
+    /** Issue #166: the export fetches every page of the filter, up to this many rows. */
+    static final int MAX_EXPORT_ROWS = 10_000;
+    /** Columns: time, type, item, amount, counterparty, actor, note, ref. Header, rows and CSV share this order. */
+    private static final String[] COL_KEYS = {"col_time", "col_type", "col_item", "col_amount", "col_counterparty",
+            "col_actor", "col_note", "col_ref"};
+    /** Weight of a flexible column in the width the fixed ones leave; 0 = fixed, sized to its widest value. */
+    private static final int[] FLEX = {0, 0, 3, 2, 0, 2, 4, 0};
+    private static final String SAMPLE_ACCOUNT = "#0000000";
+    private static final String SAMPLE_REF = "00000000-0000-0000-0000-000000000000"; // transfer ids are UUIDs
 
     /** Types whose stored (unsigned) amount leaves the account; shown with a minus. */
     private static final Set<LedgerType> OUTFLOW = EnumSet.of(LedgerType.WITHDRAW, LedgerType.ADMIN_REMOVE,
@@ -58,6 +72,9 @@ public class AuditScreen extends BankSystemGuiScreen {
     private int page = 0;
     private boolean hasMore = false;
     private int generation = 0;
+    private long since = 0;
+    private final int[] colX = new int[COL_KEYS.length];
+    private final int[] colW = new int[COL_KEYS.length];
 
     private final Label titleLabel;
     private DropDownMenu typeMenu;
@@ -65,8 +82,10 @@ public class AuditScreen extends BankSystemGuiScreen {
     private final Button prevButton;
     private final Button nextButton;
     private final Button historyButton;
+    private final Button exportButton;
     private final Label pageLabel;
-    private final Label headerLabel;
+    private final Label[] headerCells = new Label[COL_KEYS.length];
+    private final Label statusLabel;
     private final ListView listView;
 
     public AuditScreen(int accountNumber) {
@@ -93,8 +112,11 @@ public class AuditScreen extends BankSystemGuiScreen {
         // Task #116: the account's balance history with its suspicion flags as markers
         historyButton = new Button(Component.translatable(PREFIX + "history").getString(), () ->
                 net.kroia.modutilities.gui.client.ClientCompat.setScreen(new BalanceHistoryScreen(this, accountNumber, true)));
+        exportButton = new Button(EXPORT.getString(), this::export);
         pageLabel = new Label("");
-        headerLabel = new Label(HEADER.getString());
+        statusLabel = new Label("");
+        String[] header = headerTexts();
+        for (int i = 0; i < header.length; i++) headerCells[i] = new Label(header[i]);
 
         listView = new VerticalListView();
         LayoutGrid layout = new LayoutGrid();
@@ -111,8 +133,10 @@ public class AuditScreen extends BankSystemGuiScreen {
         addElement(pageLabel);
         addElement(nextButton);
         addElement(historyButton);
-        addElement(headerLabel);
+        addElement(exportButton);
+        for (Label l : headerCells) addElement(l);
         addElement(listView);
+        addElement(statusLabel);
         addElement(typeMenu);  // added last: the expanded menus overlay the list
         addElement(rangeMenu);
         reload(0);
@@ -126,7 +150,7 @@ public class AuditScreen extends BankSystemGuiScreen {
         if (newPage < 0) return;
         page = newPage;
         int gen = ++generation;
-        long since = RANGE_MS[rangeIndex] == 0 ? 0 : System.currentTimeMillis() - RANGE_MS[rangeIndex];
+        since = RANGE_MS[rangeIndex] == 0 ? 0 : System.currentTimeMillis() - RANGE_MS[rangeIndex];
         prevButton.setEnabled(false);
         nextButton.setEnabled(false);
         BankSystemNetworking.AUDIT_PAGE_REQUEST.sendRequestToServer(
@@ -148,6 +172,111 @@ public class AuditScreen extends BankSystemGuiScreen {
                     else if (p.rows().isEmpty()) listView.addChild(textRow(EMPTY.getString()));
                     else for (AuditPageRequest.Row r : p.rows()) listView.addChild(new RowElement(r));
                 }));
+    }
+
+    /**
+     * Issue #166: CSV of every row of the current filter. The dialog blocks, so it runs on its own
+     * thread; requests and formatting run on the render thread, the file write on a pool thread.
+     */
+    private void export() {
+        exportButton.setEnabled(false);
+        statusLabel.setText(Component.translatable(PREFIX + "exporting").getString());
+        int account = accountNumber, type = typeCode;
+        long from = since;
+        String title = EXPORT.getString();
+        Thread t = new Thread(() -> {
+            Path path;
+            try {
+                path = AuditExport.askPath(title, "audit_" + account + ".csv");
+            } catch (Throwable e) { // e.g. no dialog tool on a Linux desktop
+                runLater(() -> exportDone(failed(e)));
+                return;
+            }
+            if (path == null) {
+                runLater(() -> exportDone(""));
+                return;
+            }
+            runLater(() -> fetchAll(account, type, from, 0, new LinkedHashMap<>()).whenComplete((rows, ex) -> runLater(() -> {
+                if (ex != null) {
+                    exportDone(failed(ex));
+                    return;
+                }
+                List<String[]> lines = new ArrayList<>(rows.size());
+                for (AuditPageRequest.Row r : rows.values()) lines.add(cells(r));
+                String csv = AuditExport.csv(headerTexts(), lines);
+                String done = Component.translatable(PREFIX + (rows.size() >= MAX_EXPORT_ROWS ? "export_truncated" : "export_saved"),
+                        rows.size(), path.toString()).getString();
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        AuditExport.write(path, csv);
+                    } catch (java.io.IOException e) {
+                        throw new java.io.UncheckedIOException(e);
+                    }
+                }).whenComplete((v, wex) -> runLater(() -> exportDone(wex == null ? done : failed(wex))));
+            })));
+        }, "BankSystem-AuditExport");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void exportDone(String status) {
+        exportButton.setEnabled(true);
+        statusLabel.setText(status);
+    }
+
+    private static String failed(Throwable e) {
+        Throwable c = e instanceof java.util.concurrent.CompletionException && e.getCause() != null ? e.getCause() : e;
+        BACKEND_INSTANCES.LOGGER.warn("[AuditScreen] CSV export failed: " + c);
+        return Component.translatable(PREFIX + "export_failed", String.valueOf(c.getMessage())).getString();
+    }
+
+    /** Pages through the filter; rows logged meanwhile shift the offsets, the id map drops the repeats. */
+    private static CompletableFuture<Map<Long, AuditPageRequest.Row>> fetchAll(int account, int type, long from, int offset,
+                                                                             Map<Long, AuditPageRequest.Row> into) {
+        return BankSystemNetworking.AUDIT_PAGE_REQUEST.sendRequestToServer(new AuditPageRequest.Query(account, type, from, offset, PAGE_SIZE))
+                .thenCompose(p -> {
+                    if (p == null || p.denied()) throw new IllegalStateException(DENIED.getString());
+                    for (AuditPageRequest.Row r : p.rows()) {
+                        if (into.size() >= MAX_EXPORT_ROWS) break;
+                        into.putIfAbsent(r.id(), r);
+                    }
+                    if (!p.hasMore() || p.rows().isEmpty() || into.size() >= MAX_EXPORT_ROWS)
+                        return CompletableFuture.completedFuture(into);
+                    return fetchAll(account, type, from, offset + p.rows().size(), into);
+                });
+    }
+
+    private static String[] headerTexts() {
+        String[] h = new String[COL_KEYS.length];
+        for (int i = 0; i < h.length; i++) h[i] = Component.translatable(PREFIX + COL_KEYS[i]).getString();
+        return h;
+    }
+
+    /** One row's cell texts, in {@link #COL_KEYS} order. */
+    private static String[] cells(AuditPageRequest.Row r) {
+        LedgerType type = LedgerType.fromCode(r.typeCode());
+        return new String[]{TimeFormat.formatTimestamp(r.time()), type.name(), itemName(r.itemId()),
+                formatAmount(type, r.itemId(), r.amount()), r.otherAccount() == null ? "" : "#" + r.otherAccount(),
+                r.actor(), r.note() == null ? "" : r.note(), r.ref() == null ? "" : r.ref()};
+    }
+
+    /**
+     * Issue #166: fixed columns get their own width (shrunk if they would take more than 60 %),
+     * the flexible ones share the rest by weight.
+     */
+    static void layoutColumns(int total, int[] fixed, int[] flex, int[] x, int[] w) {
+        int fixedSum = 0, flexSum = 0;
+        for (int i = 0; i < fixed.length; i++) { fixedSum += fixed[i]; flexSum += flex[i]; }
+        int maxFixed = total * 3 / 5;
+        double shrink = fixedSum > maxFixed ? maxFixed / (double) fixedSum : 1;
+        int rest = total;
+        for (int i = 0; i < fixed.length; i++) if (flex[i] == 0) rest -= (int) (fixed[i] * shrink);
+        int pos = 0;
+        for (int i = 0; i < fixed.length; i++) {
+            w[i] = flex[i] == 0 ? (int) (fixed[i] * shrink) : rest * flex[i] / Math.max(1, flexSum);
+            x[i] = pos;
+            pos += w[i];
+        }
     }
 
     private static GuiElement textRow(String text) {
@@ -174,15 +303,13 @@ public class AuditScreen extends BankSystemGuiScreen {
         }
     }
 
-    private static final class RowElement extends GuiElement {
+    private final class RowElement extends GuiElement {
         private final Label[] cells;
+        private final String[] text;
 
         RowElement(AuditPageRequest.Row r) {
             setHeight(12);
-            LedgerType type = LedgerType.fromCode(r.typeCode());
-            String[] text = {TimeFormat.formatTimestamp(r.time()), type.name(), itemName(r.itemId()),
-                    formatAmount(type, r.itemId(), r.amount()), r.otherAccount() == null ? "" : "#" + r.otherAccount(),
-                    r.actor(), r.note() == null ? "" : r.note(), r.ref() == null ? "" : r.ref()};
+            text = cells(r);
             cells = new Label[text.length];
             for (int i = 0; i < text.length; i++) {
                 cells[i] = new Label(text[i]);
@@ -195,14 +322,18 @@ public class AuditScreen extends BankSystemGuiScreen {
         @Override
         protected void render() {}
 
+        /** Issue #166: a click copies the row, tab-separated, in column order. */
+        @Override
+        protected boolean mouseClickedOverElement(int button) {
+            if (button != 0) return false;
+            Minecraft.getInstance().keyboardHandler.setClipboard(String.join("\t", text));
+            statusLabel.setText(Component.translatable(PREFIX + "copied").getString());
+            return true;
+        }
+
         @Override
         protected void layoutChanged() {
-            int x = 0;
-            for (int i = 0; i < cells.length; i++) {
-                int w = getWidth() * COLS[i] / 100;
-                cells[i].setBounds(x, 0, w - 2, getHeight());
-                x += w;
-            }
+            for (int i = 0; i < cells.length; i++) cells[i].setBounds(colX[i], 0, colW[i] - 2, getHeight());
         }
     }
 
@@ -211,8 +342,8 @@ public class AuditScreen extends BankSystemGuiScreen {
         int p = 5, h = 20, s = 4;
         int w = getWidth() - 2 * p;
         int x = p;
-        titleLabel.setBounds(x, p, w / 4, h);
-        x += w / 4 + s;
+        titleLabel.setBounds(x, p, w / 6, h);
+        x += w / 6 + s;
         typeMenu.setBounds(x, p, w / 4, h);
         x += w / 4 + s;
         rangeMenu.setBounds(x, p, w / 6, h);
@@ -221,8 +352,24 @@ public class AuditScreen extends BankSystemGuiScreen {
         pageLabel.setBounds(x + 30 + s, p, 30, h);
         nextButton.setBounds(x + 60 + 2 * s, p, 30, h);
         historyButton.setBounds(x + 90 + 3 * s, p, 60, h);
+        exportButton.setBounds(x + 150 + 4 * s, p, 60, h);
         int y = p + h + s;
-        headerLabel.setBounds(p, y, w, 12);
-        listView.setBounds(p, y + 14, w, getHeight() - y - 14 - p);
+
+        // Issue #166: a fixed column fits its widest value or its header, whichever is wider.
+        Label m = headerCells[0];
+        String widestType = "";
+        for (LedgerType t : LedgerType.values())
+            if (m.getTextWidth(t.name()) > m.getTextWidth(widestType)) widestType = t.name();
+        String[] samples = {TimeFormat.formatTimestamp(System.currentTimeMillis()), widestType, null, null,
+                SAMPLE_ACCOUNT, null, null, SAMPLE_REF};
+        int[] fixed = new int[COL_KEYS.length];
+        for (int i = 0; i < fixed.length; i++)
+            if (FLEX[i] == 0) fixed[i] = Math.max(m.getTextWidth(samples[i]), m.getTextWidth(headerCells[i].getText())) + 6;
+        layoutColumns(w, fixed, FLEX, colX, colW);
+        for (int i = 0; i < headerCells.length; i++) headerCells[i].setBounds(p + colX[i], y, colW[i] - 2, 12);
+
+        int listH = getHeight() - y - 14 - p - 14;
+        listView.setBounds(p, y + 14, w, listH);
+        statusLabel.setBounds(p, y + 14 + listH + 2, w, 12);
     }
 }
