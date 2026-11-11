@@ -59,7 +59,8 @@ dependencies {
 // ModUtilities is modCompileOnly: the tests compile against it via compileOnly and run with Loom's remapped jar
 // (modCompileClasspathMainMapped is Loom-internal and created in afterEvaluate; Loom 1.7 has no modTest* configurations).
 configurations.testCompileOnly.extendsFrom configurations.compileOnly
-afterEvaluate { configurations.testRuntimeClasspath.extendsFrom configurations.modCompileClasspathMainMapped } // Loom creates it late
+afterEvaluate { configurations.testRuntimeClasspath.extendsFrom configurations.modCompileClasspathMainMapped } // Loom creates it late // mc<=1.21.11
+//configurations.testRuntimeClasspath.extendsFrom configurations.compileOnly // mc>=26.1 (no remapping: ModUtilities is plain compileOnly)
 // Release mode (enable_dev_features=false) keeps testing/** out of main (root build.gradle), so the test source set
 // compiles it itself; the include pattern also covers src/test/java, whose classes therefore live in the testing package.
 if (!(rootProject.findProperty('enable_dev_features') ?: 'false').toBoolean()) {
