@@ -116,6 +116,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.SlaveCompanyMirrorTests());
         // Task #55 (v2.1.1) — persistence dirty-flag contract (timer-gated save safety).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.SaveDirtyFlagTests());
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.CompatItemIDsRecoveryTests()); // Issue #60
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TerminalInventoryLoadTests()); // Issue #81
         TestRegistry.register(new net.kroia.banksystem.testing.tests.UploadRestoreTests()); // Issue #82
         TestRegistry.register(new net.kroia.banksystem.testing.tests.DownloadLockFailureTests()); // Issue #87

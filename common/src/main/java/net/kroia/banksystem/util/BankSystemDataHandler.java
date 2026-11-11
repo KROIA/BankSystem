@@ -339,7 +339,10 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
 
             if (loadInCompatibilityMode) {
-                success = true;
+                // Issue #60: the compat branch restarts success (the missing metadata already
+                // failed it), but must not mask an unreadable ItemIDs.nbt: this branch returns
+                // early, so the caller's recovery would never run and the latch would stay armed.
+                success = recoverUnreadableItemIDsForCompatMode();
                 // load in compatibility mode
                 info("Loading BankSystem Mod data in compatibility mode. This is only needed if you updated the mod to a newer version and the old data is not compatible with the new version.");
 
@@ -715,6 +718,27 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         boolean success = mgr.load(data);
         companiesLoadState = success ? LoadState.LOADED : LoadState.NOT_LOADED;
         return success;
+    }
+
+    /**
+     * Compatibility-mode counterpart of the {@link #backupFailedSubsystemData()} recovery for
+     * the ItemIDs subsystem (Issue #60): when ItemIDs.nbt was present but unreadable, move it
+     * aside, release the registration latch and register the default items, so the compat
+     * migration runs against a usable registry.
+     *
+     * @return {@code false} only when the unreadable file could not be moved aside (the
+     *         subsystem then stays save-prohibited and the latch armed)
+     */
+    public boolean recoverUnreadableItemIDsForCompatMode()
+    {
+        if (itemIDsLoadState != LoadState.NOT_LOADED)
+            return true;
+        if (!backupPath(getAbsoluteSavePath(ITEM_IDS_FILE_NAME), ".corrupt-" + System.currentTimeMillis()))
+            return false;
+        itemIDsLoadState = LoadState.FRESH;
+        ItemIDManager.markRegistryReady();
+        BACKEND_INSTANCES.ITEM_ID_MANAGER.createDefaultItemIDs();
+        return true;
     }
 
     public boolean load_bank_compatibilityMode()
