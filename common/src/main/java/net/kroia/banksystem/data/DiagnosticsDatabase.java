@@ -42,6 +42,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * Every open writes Meta {@code created_ms} (first open only) and {@code schema_version}. Any other Meta row,
  * such as a last-save time, is the caller's job through {@link #setMeta(String, String)}; BankSystem writes
  * {@value #META_BANK_LAST_SAVE_MS} after each bank save.
+ * <p>
+ * Task #164 — WAL journal, synchronous=NORMAL, busy_timeout {@value #BUSY_TIMEOUT_MS} ms, so an external
+ * reader never makes a commit fail. The file is three files on disk ({@code .db}, {@code -wal}, {@code -shm});
+ * close checkpoints the WAL into the {@code .db} and truncates it.
  */
 public final class DiagnosticsDatabase {
     public static final String FILE_NAME = "banksystem_diagnostics.db";
@@ -54,6 +58,7 @@ public final class DiagnosticsDatabase {
     private static final int MAX_BATCH = 500;
     private static final long CLOSE_DRAIN_MS = 2_000L;
     private static final String TAG = "[DiagnosticsDatabase] ";
+    static final int BUSY_TIMEOUT_MS = 10_000;
 
     /** Every file's first statement, before its own schema. */
     private static final String META_TABLE = "CREATE TABLE IF NOT EXISTS Meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)";
@@ -205,7 +210,8 @@ public final class DiagnosticsDatabase {
     /**
      * Plain connection (auto-commit on) to {@code file}. Loads the driver like {@link DatabaseManager} and
      * calls it directly, so it also works on slaves where nothing registered the driver. The tests use it
-     * to read the file.
+     * to read the file. Opens with journal_mode=WAL, synchronous=NORMAL and busy_timeout
+     * {@value #BUSY_TIMEOUT_MS} ms (sqlite-jdbc applies them at open, before any transaction).
      */
     public static Connection connect(Path file) throws SQLException {
         Driver driver;
@@ -220,7 +226,11 @@ public final class DiagnosticsDatabase {
         } catch (ReflectiveOperationException e) {
             throw new SQLException("SQLite JDBC driver not found", e);
         }
-        Connection c = driver.connect("jdbc:sqlite:" + file.toAbsolutePath(), new Properties());
+        Properties props = new Properties(); // sqlite-jdbc SQLiteConfig keys
+        props.setProperty("journal_mode", "WAL");
+        props.setProperty("synchronous", "NORMAL");
+        props.setProperty("busy_timeout", Integer.toString(BUSY_TIMEOUT_MS));
+        Connection c = driver.connect("jdbc:sqlite:" + file.toAbsolutePath(), props);
         if (c == null) throw new SQLException("SQLite JDBC driver rejected " + file);
         return c;
     }
@@ -258,6 +268,10 @@ public final class DiagnosticsDatabase {
             Path moved = file.resolveSibling(file.getFileName() + ".corrupt-" + System.currentTimeMillis());
             try {
                 Files.move(file, moved);
+                for (String suffix : new String[]{"-wal", "-shm"}) { // a stale WAL must not replay into the new file
+                    Path side = file.resolveSibling(file.getFileName() + suffix);
+                    if (Files.exists(side)) Files.move(side, moved.resolveSibling(moved.getFileName() + suffix));
+                }
                 connection = connectAndInit();
             } catch (Exception e2) {
                 return disable(file + " is corrupt and could not be recreated: " + e2.getMessage());
@@ -324,13 +338,14 @@ public final class DiagnosticsDatabase {
     }
 
     private void commit() {
+        int rows = uncommitted;
         uncommitted = 0;
         Connection c = connection;
         if (c == null) return;
         try {
             c.commit();
         } catch (SQLException e) {
-            writeFailed(e);
+            commitFailed(e, rows);
             try {
                 c.rollback();
             } catch (SQLException ignored) {
@@ -345,7 +360,13 @@ public final class DiagnosticsDatabase {
         try {
             c.commit();
         } catch (SQLException e) {
-            writeFailed(e);
+            commitFailed(e, uncommitted);
+        }
+        try (Statement st = c.createStatement()) {
+            c.setAutoCommit(true); // the checkpoint must run outside a transaction
+            st.execute("PRAGMA wal_checkpoint(TRUNCATE)"); // a copied .db alone is then complete
+        } catch (SQLException e) {
+            warn(TAG + "WAL checkpoint of " + file.getFileName() + " at close failed: " + e.getMessage());
         }
         try {
             c.close();
@@ -358,6 +379,13 @@ public final class DiagnosticsDatabase {
         writeFailWarned = true;
         warn(TAG + "write to " + file.getFileName() + " failed (further failures this session are not logged): "
                 + e.getMessage());
+    }
+
+    /** Every failed commit loses its whole batch, so each one is logged at error level. */
+    private void commitFailed(SQLException e, int rows) {
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.error(TAG + "commit to " + file.getFileName() + " failed; rolled back and dropped "
+                    + rows + " uncommitted statement(s): " + e.getMessage());
     }
 
     private static void warn(String msg) {

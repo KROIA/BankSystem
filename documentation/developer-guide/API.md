@@ -414,6 +414,7 @@ db.close(); // on server stop: drains the queue for up to 2 s
 - The file gets a `Meta (key, value)` table (`created_ms`, `schema_version`), then your `schema` statements, run in order on every open (use `CREATE ... IF NOT EXISTS`). It never gets BankSystem's tables.
 - `execute` and `setMeta` queue the write and return at once. A full queue (10 000 writes) drops the write; `dropped()` counts them. `flush()` completes once every earlier write is committed.
 - Opened on the first write. A corrupt file is renamed `.corrupt-<ms>` and recreated; any other open failure disables the instance for the session (`isDisabled()`). Nothing throws to callers.
+- The file runs in SQLite WAL mode (`synchronous=NORMAL`, 10 s busy timeout), so readers never block the writer. On disk it is three files (`.db`, `-wal`, `-shm`); `close()` merges the WAL into the `.db`. Delete or copy them only together, or after the server has stopped.
 
 ## Company Payouts and Dividends
 

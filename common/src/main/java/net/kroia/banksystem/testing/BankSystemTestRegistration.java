@@ -96,6 +96,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.AuditDigestTests()); // Tasks #112/#113/#116
         TestRegistry.register(new net.kroia.banksystem.testing.tests.DiscordFeedTests()); // Task #119
         TestRegistry.register(new net.kroia.banksystem.testing.tests.DiagnosticsDatabaseTests()); // Task #123
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.DiagnosticsWalTests()); // Task #164, offline
         TestRegistry.register(new net.kroia.banksystem.testing.tests.NoteFlowLogTests()); // Task #124, BOTH
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransferJournalTests(true)); // Task #124, SLAVE_ONLY
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransferJournalTests(false)); // Task #124, MASTER_ONLY
