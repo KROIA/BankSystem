@@ -9,6 +9,8 @@ import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 
 import java.lang.reflect.Constructor;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 
 /**
  * Audit test suite that verifies every *Async() method on ServerBank
@@ -25,6 +27,11 @@ public class AsyncMethodAuditTests extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return BankSystemTestCategories.ITEM_BANK;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -47,6 +54,8 @@ public class AsyncMethodAuditTests extends TestSuite {
 
     @Override
     public void setup() {
+        SharedConstants.tryDetectVersion(); // offline JUnit run: registries for ItemID/ItemStack; no-op in game
+        Bootstrap.bootStrap();
         // Nothing to set up globally; each test creates its own bank instances.
     }
 

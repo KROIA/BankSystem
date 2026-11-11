@@ -10,6 +10,8 @@ import java.math.RoundingMode;
  * so all money values look the same. Amounts are raw bank units
  * ({@link BankSystemModSettings#ITEM_FRACTION_SCALE_FACTOR} units = 1 money).
  * Thread-safe; may be called from placeholder threads.
+ *
+ * @since 2.2.0
  */
 public final class MoneyFormat {
 
@@ -18,7 +20,7 @@ public final class MoneyFormat {
     private MoneyFormat() {
     }
 
-    /** Formatted with the server's MONEY_FORMAT setting, e.g. 123456 -> "$1'234.56". */
+    /** Formatted with the server's MONEY_FORMAT setting, e.g. 123456 -> "$1'234.56"; negative: -123456 -> "$-1'234.56". */
     public static String formatMoney(long rawUnits) {
         return formatMoney(rawUnits, pattern);
     }

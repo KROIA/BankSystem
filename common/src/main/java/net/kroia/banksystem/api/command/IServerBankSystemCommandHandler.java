@@ -13,6 +13,12 @@ public interface IServerBankSystemCommandHandler {
     boolean banksystem_setSlaveServerTrusted(@NotNull UUID executor, String slaveID, boolean isTrusted);
     boolean banksystem_allowItem(@NotNull UUID executor, ItemID itemID);
     boolean banksystem_disallowItem(@NotNull UUID executor, ItemID itemID);
+    /** Task #117 — freeze an account; mode 0 = off, 1 = on, 2 = toggle. @since 2.2.0 */
+    boolean banksystem_freeze(@NotNull UUID executor, int accountNumber, int mode);
+    /** Task #110 — per-admin chat alerts toggle. @since 2.2.0 */
+    boolean banksystem_alerts(@NotNull UUID executor, boolean enabled);
+    /** Task #113 — audit digest of the last {@code hours} hours; completes on the server thread. @return absolute path, "" on failure. @since 2.2.0 */
+    java.util.concurrent.CompletableFuture<String> banksystem_auditreport(@NotNull UUID executor, int hours);
 
     boolean money(@NotNull UUID executor);
     boolean money_add(@NotNull UUID executor, float amount);

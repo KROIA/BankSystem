@@ -124,6 +124,8 @@ public final class DividendPayer implements IDividendPayer {
 
         IServerBankAccount sourceAccount = bm.getBankAccount(companyAccountNr);
         if (sourceAccount == null) return PayDividendResult.of(PayDividendResult.Reason.INTERNAL);
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.isFrozen(companyAccountNr)) // Task #117
+            return PayDividendResult.of(PayDividendResult.Reason.ACCOUNT_FROZEN);
 
         // Task #57b — "unset" currency (its item was blacklisted while money was also banned):
         // refuse to pay with a clear reason instead of constructing an invalid ItemID.
@@ -178,7 +180,9 @@ public final class DividendPayer implements IDividendPayer {
                 targetBank = targetAccount.getOrCreateBank(payoutId);
                 if (targetBank == null) continue;
             }
-            BankStatus status = sourceMoneyBank.transfer(payAmount, targetBank);
+            final ISyncServerBank finalTargetBank = targetBank;
+            final long finalPayAmount = payAmount;
+            BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutTransferLog(() -> sourceMoneyBank.transfer(finalPayAmount, finalTargetBank));
             if (status != BankStatus.SUCCESS) {
                 // Precheck should have guaranteed sufficient funds; log and skip.
                 if (instances.LOGGER != null) {
@@ -196,15 +200,15 @@ public final class DividendPayer implements IDividendPayer {
             }
             // Outbound row on company account, inbound row on holder.
             ledger.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    companyAccountNr, actor, TransactionLogRecord.Kind.DIVIDEND, payoutShort,
+                    companyAccountNr, actor, net.kroia.banksystem.api.ledger.LedgerType.DIVIDEND, payoutShort,
                     payAmount, snap.accountNr, companyId, nowMs, null));
             ledger.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    snap.accountNr, actor, TransactionLogRecord.Kind.DIVIDEND, payoutShort,
+                    snap.accountNr, actor, net.kroia.banksystem.api.ledger.LedgerType.DIVIDEND, payoutShort,
                     payAmount, companyAccountNr, companyId, nowMs, null));
         }
 
         if (instances.TRANSACTION_LOG_MANAGER != null && !ledger.isEmpty()) {
-            instances.TRANSACTION_LOG_MANAGER.save(ledger);
+            net.kroia.banksystem.banking.ledger.TransactionLedger.writeAll(ledger); // Task #115: runs the ledger hooks
         }
 
         if (instances.SERVER_EVENTS instanceof BankSystemEvents bse) {

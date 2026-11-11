@@ -43,7 +43,10 @@ public interface BankSystemAPI {
      */
     IBankSystemDataHandler getDataHandler();
 
-
+    /**
+     * @return {@code true} if this server runs as a slave in a multi-server setup (bank data lives on the master;
+     *         use the async API). {@code false} on the master and on single servers.
+     */
     boolean isSlave();
 
     /**
@@ -78,7 +81,7 @@ public interface BankSystemAPI {
      * <p>
      * Adapters call this during their mod-init phase to make themselves discoverable
      * for the binding UI and for {@code ServerBank} balance delegation (see
-     * {@code .claude/Features/CurrencyModSupport.md}).
+     * {@code documentation/developer-guide/CurrencyIntegration.md}).
      * <p>
      * If a provider with the same {@link ExternalCurrencyProvider#providerId()} is
      * already registered, the previous registration is replaced — this lets
@@ -109,7 +112,8 @@ public interface BankSystemAPI {
 
     /**
      * @return an immutable snapshot of every currently-registered
-     *         {@link ExternalCurrencyProvider}. Iteration order is unspecified.
+     *         {@link ExternalCurrencyProvider}, minus the built-in adapters switched off in
+     *         BankSystem's Integrations settings. Iteration order is unspecified.
      *         Never {@code null}; may be empty when no adapter has registered.
      * @since 2.0.5
      */
@@ -121,7 +125,7 @@ public interface BankSystemAPI {
      * @param providerId the {@link ExternalCurrencyProvider#providerId()} to find.
      *                   May be {@code null}, in which case {@code null} is returned.
      * @return the matching provider, or {@code null} if none is registered under
-     *         that id.
+     *         that id or it is switched off in BankSystem's Integrations settings.
      * @since 2.0.5
      */
     @Nullable ExternalCurrencyProvider getCurrencyProvider(@Nullable String providerId);
@@ -136,11 +140,30 @@ public interface BankSystemAPI {
     net.kroia.banksystem.api.payout.IPayoutManager getPayoutManager();
 
     /**
+     * Task #109 — transaction ledger. Never {@code null}. Writes are fire-and-forget,
+     * thread-safe and best-effort; see {@link net.kroia.banksystem.api.ledger.ITransactionLedger}.
+     * Trade rows are deltas: per order {@code ref} they sum to the order totals.
+     *
+     * @return the ledger writer.
+     * @since 2.2.0
+     */
+    net.kroia.banksystem.api.ledger.ITransactionLedger getLedger();
+
+    /**
+     * Task #124 (v2.2.0) — money items created or destroyed outside the bank, written to this
+     * server's diagnostics DB (every role, slaves included). Never {@code null}; a no-op when the
+     * DB is missing or disabled. See {@link net.kroia.banksystem.api.diagnostics.INoteFlowLog}.
+     *
+     * @return the note flow log.
+     * @since 2.2.0
+     */
+    net.kroia.banksystem.api.diagnostics.INoteFlowLog getNoteFlowLog();
+
+    /**
      * Task #49 (v2.1.0) — one-shot dividend distributor. Never {@code null}; on slaves
      * the returned instance is a fail-closed shim that returns
      * {@link net.kroia.banksystem.api.PayDividendResult.Reason#NOT_MASTER} for every
-     * call. Callers reaching this from a slave should route through the ARRS
-     * {@code AsyncCompanyManager.PAY_DIVIDEND} function instead.
+     * call. There is no public async variant: call it from code that runs on the master.
      *
      * @return the dividend payer. Downstream mods and UI callers use this interface only.
      */

@@ -56,6 +56,8 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
      * {@code ModSettingsRequest}.
      */
     private final Button modSettingsButton;
+    /** Task #112: whole-server balance history (admin check on the master). */
+    private final Button serverHistoryButton;
     private final ItemSelectionView currentBankingItemsView;
     private final ItemView currentBankingItemView;
 
@@ -133,7 +135,12 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         }
 
 
+        serverHistoryButton = new Button(Component.translatable("gui." + BankSystemMod.MOD_ID + ".balance_history.server_button").getString(), () ->
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(new BalanceHistoryScreen(this,
+                        net.kroia.banksystem.networking.general.BalanceHistoryRequest.Query.SERVER_WIDE_ACCOUNT, true)));
+
         addElement(closeButton);
+        addElement(serverHistoryButton);
         addElement(newBankingItemButton);
         addElement(removeBankingItemButton);
         if (modSettingsButton != null)
@@ -169,6 +176,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         newBankingItemButton.setBounds(currentBankingItemsView.getRight()+spacing, padding, 150, 20);
         removeBankingItemButton.setBounds(newBankingItemButton.getLeft(), newBankingItemButton.getBottom()+spacing, newBankingItemButton.getWidth(), newBankingItemButton.getHeight());
         currentBankingItemView.setBounds(newBankingItemButton.getRight()+spacing, padding, 20, 20);
+        serverHistoryButton.setBounds(currentBankingItemView.getRight()+spacing, padding, 120, 20);
 
         int itemInfoTop = removeBankingItemButton.getBottom();
         if (modSettingsButton != null) {

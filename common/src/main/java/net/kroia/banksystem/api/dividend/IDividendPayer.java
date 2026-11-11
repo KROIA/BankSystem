@@ -30,9 +30,13 @@ public interface IDividendPayer {
      *                               {@code false}: treasury floats do not
      *                               self-pay.
      * @param actor                  Player who initiated the run; recorded on the
-     *                               resulting {@code TransactionLog.DIVIDEND}
-     *                               rows. May be {@code null} for system-initiated
+     *                               resulting {@link net.kroia.banksystem.api.ledger.LedgerType#DIVIDEND}
+     *                               ledger rows. May be {@code null} for system-initiated
      *                               runs.
+     * @param currencyItem           Short ItemID of the paid item; {@code 0} = money.
+     *                               {@code amountPerShare} is in raw units of this item.
+     *                               {@link PayDividendResult.Reason#CURRENCY_ITEM_MISSING}
+     *                               if the company account has no bank for it.
      * @return the outcome; see {@link PayDividendResult.Reason}.
      */
     PayDividendResult payDividend(int companyId, long amountPerShare,
