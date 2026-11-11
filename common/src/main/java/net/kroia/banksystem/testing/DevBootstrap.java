@@ -5,6 +5,7 @@ import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.modutilities.testing.autotest.AutoTest;
 import net.kroia.modutilities.testing.TestCommandRegistration;
 import net.kroia.modutilities.testing.TestRegistry;
@@ -26,6 +27,7 @@ public final class DevBootstrap {
 
     /** Called once from {@code BankSystemModBackend} during mod setup when dev features are enabled. */
     public static void init() {
+        AsynchronousRequestResponseSystem.register(LedgerByRefRequest.INSTANCE); // Task #177: test-only master ledger read
         if (TestRegistry.ENABLE_TESTS) {
             BankSystemTestRegistration.register();
         }

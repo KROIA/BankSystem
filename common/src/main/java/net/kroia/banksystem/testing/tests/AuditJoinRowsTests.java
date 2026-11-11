@@ -1,6 +1,8 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IAsyncBank;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
@@ -21,6 +23,7 @@ import net.kroia.banksystem.networking.entity.ConverterCommitToBankPacket;
 import net.kroia.banksystem.networking.multi_server.ServerInfoRequest;
 import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
+import net.kroia.banksystem.testing.LedgerByRefRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
@@ -28,6 +31,7 @@ import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.modutilities.testing.autotest.AutoTest;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -68,7 +72,10 @@ public class AuditJoinRowsTests extends TestSuite {
 
     @Override
     public void registerTests() {
-        if (slave) addTest("converter_deposit_rows_left", () -> threw(this::converterRowsLeft));
+        if (slave) {
+            addTest("converter_deposit_rows_left", () -> threw(this::converterRowsLeft));
+            addTest("async_bank_ledger_ref_is_journal_id", () -> threw(this::asyncBankLedgerRef)); // Task #177
+        }
         else addTest("user_deletion_payout_leg_on_slave", () -> threw(this::payoutLegOnSlave));
     }
 
@@ -180,13 +187,69 @@ public class AuditJoinRowsTests extends TestSuite {
             if (TransferJournalTests.query(db.getFile(), "SELECT * FROM TransferJournal WHERE transfer_id = ? AND step = ?",
                     tid, TransferJournal.CONFIRMED).size() != 1) return fail("no CONFIRMED row for " + tid);
             // the master's per-transfer store, written where it logs the CONVERTER_DEPOSIT row with ref = tid
-            // (a slave cannot read the master ledger: AuditPageRequest serves BankSystem admins only)
+            // and the ledger row itself, read through the test-only LedgerByRefRequest (Task #177)
             TransferStatusRequest.OutputData st = await(TransferStatusRequest.ask(null, tid, sentMs), WAIT_MS);
             if (st.state() != TransferStatusRequest.APPLIED || !st.remainder().isEmpty()) return fail("master status " + st);
+            String bad = ledgerMatchesJournal(db, tid, LedgerType.CONVERTER_DEPOSIT);
+            if (bad != null) return fail(bad);
             return pass("journal CONVERTER_DEPOSIT REQUESTED " + json + " + CONFIRMED, master APPLIED, account " + nr + ", transfer_id " + tid);
         } finally {
             ConverterCacheManager.get().clear(CONVERTER_PLAYER);
         }
+    }
+
+    /**
+     * Task #177: an AsyncBank deposit and withdraw from this slave; the master ledger row of each has ref = the slave
+     * journal transfer_id, and its account / item / raw amount equal the journal REQUESTED row (amounts are positive,
+     * the type gives the direction; one row per transfer).
+     */
+    private TestResult asyncBankLedgerRef() throws Exception {
+        if (!AutoTest.isEnabled()) return skip("autotest runs only: leaves a test account and its rows behind");
+        if (!MultiServerUtils.canInteractWithBankSystem()) return skip("slave not connected to its master");
+        IAsyncBankManager mgr = BankSystemModBackend.getInstances_forTesting().SERVER_BANK_MANAGER.getAsync();
+        if (!Boolean.TRUE.equals(await(mgr.isSlaveServerTrustedAsync(""), WAIT_MS)))
+            return skip("master does not trust this slave: it refuses the transfer before any ledger row");
+        DiagnosticsDatabase db = DiagnosticsDatabase.live();
+        if (db == null || db.isDisabled()) return fail("no live diagnostics DB");
+
+        Integer nr = await(mgr.createBankAccountGetAccountNrAsync("__test_ledger_ref"), WAIT_MS);
+        if (nr == null || nr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) return fail("test account not created: " + nr);
+        IAsyncBankAccount account = await(mgr.getBankAccountAsync(nr), WAIT_MS);
+        if (account == null) return fail("test account " + nr + " not found");
+        IAsyncBank bank = await(account.getOrCreateBankAsync(MoneyItem.getItemID()), WAIT_MS);
+        if (bank == null) return fail("no money bank on " + nr);
+
+        TransferJournal.Ref dep = TransferJournal.ref("ledger_ref_test");
+        BankStatus s = await(TransactionLedger.tagged(LedgerType.DEPOSIT, null, null, dep, () -> bank.depositAsync(400L)), WAIT_MS);
+        if (s != BankStatus.SUCCESS) return fail("deposit " + s);
+        TransferJournal.Ref wd = TransferJournal.ref("ledger_ref_test");
+        s = await(TransactionLedger.tagged(LedgerType.WITHDRAW, null, null, wd, () -> bank.withdrawAsync(150L)), WAIT_MS);
+        if (s != BankStatus.SUCCESS) return fail("withdraw " + s);
+
+        String bad = ledgerMatchesJournal(db, dep.transferId(), LedgerType.DEPOSIT);
+        if (bad == null) bad = ledgerMatchesJournal(db, wd.transferId(), LedgerType.WITHDRAW);
+        if (bad != null) return fail(bad);
+        return pass("DEPOSIT " + dep.transferId() + " + WITHDRAW " + wd.transferId() + " on account " + nr + ": master ref = journal id");
+    }
+
+    /**
+     * Null when the master has exactly one ledger row with ref = {@code tid}, of {@code type}, whose account and
+     * {item: raw amount} equal this slave's REQUESTED journal row for {@code tid}; else what differs.
+     */
+    private @Nullable String ledgerMatchesJournal(DiagnosticsDatabase db, String tid, LedgerType type) throws Exception {
+        await(db.flush(), WAIT_MS);
+        List<Map<String, Object>> j = TransferJournalTests.query(db.getFile(),
+                "SELECT * FROM TransferJournal WHERE transfer_id = ? AND step = ?", tid, TransferJournal.REQUESTED);
+        if (j.size() != 1) return "journal REQUESTED rows for " + tid + ": " + j;
+        List<LedgerByRefRequest.Row> rows = await(LedgerByRefRequest.INSTANCE.sendRequestToMaster(tid), WAIT_MS);
+        if (rows == null || rows.size() != 1) return "master ledger rows for ref " + tid + ": " + rows;
+        LedgerByRefRequest.Row r = rows.get(0);
+        String json = "{\"" + r.itemId() + "\":" + r.amount() + "}";
+        Object acc = j.get(0).get("account_number");
+        if (!tid.equals(r.ref()) || r.type() != type || !(acc instanceof Number n) || n.intValue() != r.account()
+                || !json.equals(j.get(0).get("items_json")))
+            return "ledger " + r + " != journal " + j.get(0);
+        return null;
     }
 
     // ------------------------------------------------------------------ helpers
