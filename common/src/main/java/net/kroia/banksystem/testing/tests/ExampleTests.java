@@ -23,6 +23,11 @@ public class ExampleTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("example_pass", this::testExamplePass);
         addTest("example_assertEquals", this::testExampleAssertEquals);

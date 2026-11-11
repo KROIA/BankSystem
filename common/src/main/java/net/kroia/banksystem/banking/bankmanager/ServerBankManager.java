@@ -21,6 +21,8 @@ import net.kroia.banksystem.api.currency.ExternalAccount;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
+import net.kroia.banksystem.api.ledger.LedgerActor;
+import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
@@ -30,11 +32,15 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.banking.clientdata.UserData;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
+import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRequest;
+import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.banksystem.util.MoneyDenominationOptimizer;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
@@ -354,6 +360,29 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             return false;
         return user.isBanksystemAdmin();
     }
+    /** Task #114 — snapshot of every account number (wealth-jump sweep). Call on the server thread. */
+    public List<Integer> getAllAccountNumbers() {
+        return new ArrayList<>(bankAccounts.keySet());
+    }
+
+    /** Task #112 — raw money supply (money item, free + locked) over all accounts. Call on the server thread. */
+    public long getMoneySupplyRaw() {
+        long total = 0;
+        ItemID moneyItemID = MoneyItem.getItemID();
+        for (ServerBankAccount account : bankAccounts.values()) {
+            ISyncServerBank moneyBank = account.getBank(moneyItemID);
+            if (moneyBank != null) total += moneyBank.getTotalBalance();
+        }
+        return total;
+    }
+
+    /** Task #110 — snapshot of every user with the BankSystem admin flag (alert recipients). */
+    public List<User> getAdminUsers() {
+        List<User> admins = new ArrayList<>();
+        for (User u : new ArrayList<>(userMap.values()))
+            if (u.isBanksystemAdmin()) admins.add(u);
+        return admins;
+    }
     @Override
     public CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID) {
         User user = userMap.get(playerUUID);
@@ -529,6 +558,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         markPersistDirty(); // Task #55
         info("Added new user: " + user.getName() + " with UUID: " + userUUID);
         BACKEND_INSTANCES.SERVER_EVENTS.USER_ADDED.notifyListeners(user);
+        net.kroia.banksystem.util.AdminFlagSync.onUserAdded(userUUID); // Task #107: LuckPerms grant of a new user
     }
 
     @Override
@@ -538,12 +568,40 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public boolean removeUser(UUID userUUID) {
+        return removeUserWithPayout(userUUID) != null;
+    }
+
+    /**
+     * Task #127: what a user-deletion payout could not hand out, and why ({@code reason} null when all of it arrived).
+     * Task #136: raw units per bank item, like the balances. {@code delivered}: slave transfer_id → what that slave handed
+     * out, in chain order (the master's own drop is the rest of the payout). {@code unknownTransferId}: the DROP whose
+     * outcome stayed unknown; its items are in {@code undelivered}.
+     */
+    public record PayoutResult(Map<ItemID, Long> undelivered, @Nullable String reason,
+                               Map<String, Map<ItemID, Long>> delivered, @Nullable String unknownTransferId) {
+        public PayoutResult(Map<ItemID, Long> undelivered, @Nullable String reason) {
+            this(undelivered, reason, Map.of(), null);
+        }
+    }
+
+    /** Task #136: one physical item of a payout is {@code raw} units of the balance in {@code bank}. */
+    public record PayoutUnit(ItemID bank, long raw) {}
+
+    /**
+     * {@link #removeUser}, plus the payout. The future completes once delivery is known and the ledger rows are
+     * written: inline on a single server, after the slave chain on a multi-server master. Never fails.
+     *
+     * @return null if there is no such user
+     */
+    public @Nullable CompletableFuture<PayoutResult> removeUserWithPayout(UUID userUUID) {
         if (userMap.containsKey(userUUID)) {
             User user = userMap.remove(userUUID);
             markPersistDirty(); // Task #55 (also cascades account removals below)
+            // Task #127: the rows are written when delivery is known; the caller's withActor scope is gone by then
+            LedgerActor actor = TransactionLedger.currentActor();
 
             // Collect non-zero balances from accounts that will be deleted or are personal accounts of the removed user
-            Map<ItemID, Long> itemsToDrop = new HashMap<>();
+            Map<Integer, Map<ItemID, Long>> balances = new LinkedHashMap<>(); // Task #127: per account, for the ledger
             List<Integer> emptyAccounts = new ArrayList<>();
             List<Integer> personalAccountsToDrop = new ArrayList<>();
 
@@ -553,7 +611,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 // Check if this is the user's personal bank account
                 User personalOwner = account.getPersonalBankOwner();
                 if (personalOwner != null && personalOwner.getUUID().equals(userUUID)) {
-                    collectAccountBalances(account, itemsToDrop);
+                    collectAccountBalances(account, balances.computeIfAbsent(entry.getKey(), k -> new HashMap<>()));
                     personalAccountsToDrop.add(entry.getKey());
                     continue;
                 }
@@ -561,20 +619,35 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 if (account.hasUser(userUUID)) {
                     account.removeUser(userUUID);
                     if (!account.hasAnyUser()) {
-                        collectAccountBalances(account, itemsToDrop);
+                        // Task #127: an account deleteBankAccount refuses (company) stays, with its balance: no payout
+                        String refusal = deleteRefusal(entry.getKey(), account);
+                        if (refusal != null) {
+                            info("Bank account " + entry.getKey() + " has no users left and is kept: " + refusal);
+                            continue;
+                        }
+                        collectAccountBalances(account, balances.computeIfAbsent(entry.getKey(), k -> new HashMap<>()));
                         emptyAccounts.add(entry.getKey());
                     }
                 }
             }
 
+            // Task #136: raw balances to item counts, with the slot ratio (read before the binding rows are dropped below).
+            // What is below one item cannot be handed out.
+            Map<ItemID, Long> itemsToDrop = new HashMap<>(), fractions = new HashMap<>();
+            Map<ItemID, PayoutUnit> units = new HashMap<>();
+            balances.forEach((nr, items) -> items.forEach((id, raw) -> {
+                long rest = toItems(id, raw, BankAccountBindings.getRawUnitsPerItem(nr, id), itemsToDrop, units);
+                if (rest > 0) fractions.merge(id, rest, Long::sum);
+            }));
+
             // Drop collected items to the player before deleting accounts
-            if (!itemsToDrop.isEmpty()) {
-                dropItemsToPlayer(userUUID, itemsToDrop);
-            }
+            CompletableFuture<PayoutResult> delivery = itemsToDrop.isEmpty()
+                    ? CompletableFuture.completedFuture(new PayoutResult(Map.of(), null))
+                    : dropItemsToPlayer(userUUID, itemsToDrop);
 
             // Delete empty non-personal accounts
             for (int accountNr : emptyAccounts) {
-                deleteBankAccount(accountNr);
+                deleteBankAccount(accountNr, false); // balances logged as ACCOUNT_DELETE_PAYOUT / _LOSS below
                 info("Removed empty bank account with number: " + accountNr);
             }
 
@@ -585,6 +658,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 if (removed != null) {
                     // Task #33 (v2.0.5): cascade-drop external-currency binding rows for
                     // the departing personal account. Idempotent when no rows exist.
+                    auditSuspendedDrop(removed, null, "personal account of deleted user " + userUUID); // Task #148
                     if (cascadeBindings != null) cascadeBindings.removeAllForAccount(accountNr);
                     BACKEND_INSTANCES.SERVER_EVENTS.BANK_ACCOUNT_DELETED.notifyListeners(removed);
                 }
@@ -593,22 +667,87 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
             BACKEND_INSTANCES.SERVER_EVENTS.USER_REMOVED.notifyListeners(user);
             info("Removed user with UUID: " + userUUID);
-            return true;
+            return delivery.thenApply(counts -> {
+                PayoutResult r = inRawUnits(counts, units, fractions);
+                logDeletePayout(balances, r, userUUID, actor);
+                return r;
+            });
         } else {
             warn("No user found with UUID: " + userUUID);
-            return false;
+            return null;
         }
     }
 
     /**
-     * Collects all non-zero balances (free + locked) from the given bank account into the target map.
+     * Task #109 / #127: ledger rows for the balances of a deleted user's accounts. Per item, the undelivered amount is
+     * taken from that item's account rows in order: that part is an ACCOUNT_DELETE_LOSS row (value destroyed, note gives
+     * the reason), the rest an ACCOUNT_DELETE_PAYOUT row. Public for the in-game test.
+     * <p>
+     * Task #136: the LOSS rows carry {@code unknownTransferId} as ref. Per item the payout is drained from a queue: the
+     * master's own drop first (ref null), then each slave's leg (ref = its transfer_id); one PAYOUT row per ref.
      */
-    private void collectAccountBalances(ServerBankAccount account, Map<ItemID, Long> target) {
+    public void logDeletePayout(Map<Integer, Map<ItemID, Long>> balances, PayoutResult result, UUID deletedUser, LedgerActor actor) {
+        Map<ItemID, Long> lost = new HashMap<>(result.undelivered());
+        String note = "user deleted: " + deletedUser;
+        String unknown = result.unknownTransferId();
+        Map<ItemID, Long> total = new HashMap<>();
+        balances.values().forEach(b -> b.forEach((id, n) -> total.merge(id, n, Long::sum)));
+        Map<ItemID, Deque<AbstractMap.SimpleEntry<String, Long>>> sources = new HashMap<>();
+        total.forEach((id, sum) -> {
+            Deque<AbstractMap.SimpleEntry<String, Long>> q = new ArrayDeque<>();
+            long legs = 0;
+            for (Map.Entry<String, Map<ItemID, Long>> leg : result.delivered().entrySet()) {
+                long n = leg.getValue().getOrDefault(id, 0L);
+                if (n > 0) { q.add(new AbstractMap.SimpleEntry<>(leg.getKey(), n)); legs += n; }
+            }
+            long paid = sum - Math.min(sum, lost.getOrDefault(id, 0L));
+            q.addFirst(new AbstractMap.SimpleEntry<>(null, Math.max(0L, paid - legs))); // the queue holds >= paid
+            sources.put(id, q);
+        });
+        for (Map.Entry<Integer, Map<ItemID, Long>> account : balances.entrySet()) {
+            for (Map.Entry<ItemID, Long> e : account.getValue().entrySet()) {
+                long loss = Math.min(e.getValue(), lost.getOrDefault(e.getKey(), 0L));
+                lost.merge(e.getKey(), -loss, Long::sum);
+                if (loss > 0) {
+                    TransactionLedger.logRow(account.getKey(), LedgerType.ACCOUNT_DELETE_LOSS, e.getKey(), loss, actor, null,
+                            note + "; not delivered: " + result.reason(), unknown);
+                    if (unknown != null) // the items may have arrived after all: flag it, like a parked withdraw DROP
+                        net.kroia.banksystem.banking.ledger.AdminAudit.raise(account.getKey(),
+                                net.kroia.banksystem.banking.ledger.SuspicionChecks.TRANSFER_PARKED, 2, loss, unknown,
+                                "user deletion DROP outcome unknown, logged as lost: " + e.getKey().getName() + " " + loss);
+                }
+                Deque<AbstractMap.SimpleEntry<String, Long>> q = sources.get(e.getKey());
+                for (long pay = e.getValue() - loss; pay > 0; ) {
+                    AbstractMap.SimpleEntry<String, Long> head = q.peekFirst();
+                    long n = Math.min(pay, head.getValue());
+                    if (n > 0)
+                        TransactionLedger.logRow(account.getKey(), LedgerType.ACCOUNT_DELETE_PAYOUT, e.getKey(), n, actor, null, note, head.getKey());
+                    pay -= n;
+                    if (n == head.getValue()) q.pollFirst();
+                    else head.setValue(head.getValue() - n);
+                }
+            }
+        }
+        if (!result.undelivered().isEmpty())
+            warn("Deleted user " + deletedUser + ": could not deliver " + result.undelivered() + " (" + result.reason()
+                    + "). The value is destroyed; see the ledger rows ACCOUNT_DELETE_LOSS.");
+    }
+
+    /**
+     * Collects all non-zero balances (free + locked) from the given bank account into the target map.
+     * Task #136 (user-deletion payout only): a bound slot counts only what BankSystem itself holds, its locked amount
+     * and dust (as unbind sees them). Its free balance is in the external mod's account, which the deletion leaves
+     * alone. Public for the in-game test.
+     */
+    public void collectAccountBalances(ServerBankAccount account, Map<ItemID, Long> target) {
+        BankAccountBindings bindings = BankAccountBindings.get();
         for (Map.Entry<ItemID, IServerBank> bankEntry : account.getAllBanks().entrySet()) {
             ItemID itemID = bankEntry.getKey();
             ISyncServerBank bank = bankEntry.getValue();
             if (bank == null) continue;
-            long totalBalance = bank.getTotalBalance();
+            BindingRow row = bindings == null ? null : bindings.getBinding(account.getAccountNumber(), itemID);
+            if (row != null && row.suspended()) continue; // Task #148: never paid out, see auditSuspendedDrop
+            long totalBalance = row != null ? row.lockedBalance() + row.dustBalance() : bank.getTotalBalance();
             if (totalBalance > 0) {
                 target.merge(itemID, totalBalance, Long::sum);
             }
@@ -709,37 +848,104 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
 
     /**
-     * Drops items to the player using DropItemsInPlayerInventoryRequest with forceDrop=true.
-     * Tries locally first, then sends to all connected slave servers for remaining items.
+     * Task #127: drops items to the player (forceDrop): on this server first, then on a multi-server master on each
+     * connected slave in turn with what is left. Completes with what was not delivered; never fails.
+     * Task #136: in item counts (the result's maps too); {@link #inRawUnits} turns it into raw units.
      */
-    private void dropItemsToPlayer(UUID playerUUID, Map<ItemID, Long> items) {
-        // Try to drop locally first (player might be on the master server)
-        MinecraftServer server = UtilitiesPlatform.getServer();
-        Map<ItemID, Long> remaining = DropItemsInPlayerInventoryRequest.dropItems(server, playerUUID, items, true);
+    private static CompletableFuture<PayoutResult> dropItemsToPlayer(UUID playerUUID, Map<ItemID, Long> items) {
+        Map<ItemID, Long> remaining = new HashMap<>(DropItemsInPlayerInventoryRequest.dropItems(UtilitiesPlatform.getServer(), playerUUID, items, true));
+        remaining.values().removeIf(v -> v <= 0);
+        List<String> slaves = MultiServerManager.isRunning() && MultiServerManager.isMaster()
+                ? new ArrayList<>(MultiServerManager.getConnectedSlaveIDs()) : List.of();
+        Map<String, Map<ItemID, Long>> legs = new LinkedHashMap<>(); // Task #136: filled by the chain, one slave at a time
+        // never fails: any throw reports the rest as unknown, so the ledger rows still get written
+        return CompletableFuture.completedFuture(slaves.iterator())
+                .thenCompose(it -> dropOnSlaves(playerUUID, remaining, it, legs))
+                .exceptionally(ex -> {
+                    Map<ItemID, Long> left = new HashMap<>(remaining);
+                    legs.values().forEach(leg -> leg.forEach((id, n) -> left.merge(id, -n, Long::sum)));
+                    left.values().removeIf(v -> v <= 0);
+                    return new PayoutResult(left, "outcome unknown: " + TransferStatusRequest.cause(ex), legs, null);
+                });
+    }
 
-        // Remove zero-amount entries
-        remaining.entrySet().removeIf(e -> e.getValue() <= 0);
+    /**
+     * One slave per step, each with its own transfer id. sendToSlave (#126) resolves "not sent" and NOT_APPLIED to the
+     * full map and APPLIED to the slave's remainder; it fails only when the outcome stays unknown: the chain stops there.
+     * Task #136: what a slave delivered goes to {@code legs} under its transfer id.
+     */
+    private static CompletableFuture<PayoutResult> dropOnSlaves(UUID playerUUID, Map<ItemID, Long> remaining, Iterator<String> slaves,
+                                                                Map<String, Map<ItemID, Long>> legs) {
+        if (remaining.isEmpty()) return CompletableFuture.completedFuture(new PayoutResult(Map.of(), null, legs, null));
+        if (!slaves.hasNext()) return CompletableFuture.completedFuture(new PayoutResult(remaining, "player offline", legs, null));
+        String slaveID = slaves.next();
+        String transferId = TransferJournal.newTransferId();
+        // thenCompose: a synchronous throw from sendToSlave also ends up in handle, as unknown under this transfer id
+        return CompletableFuture.completedFuture(slaveID)
+                .thenCompose(s -> DropItemsInPlayerInventoryRequest.sendToSlave(s, playerUUID, new HashMap<>(remaining), true, transferId))
+                .handle((notDropped, ex) -> {
+                    if (ex != null)
+                        return CompletableFuture.completedFuture(new PayoutResult(remaining, "outcome unknown, transfer " + transferId, legs, transferId));
+                    Map<ItemID, Long> left = notDroppedOf(remaining, notDropped), leg = new HashMap<>();
+                    remaining.forEach((id, n) -> { if (n > left.getOrDefault(id, 0L)) leg.put(id, n - left.getOrDefault(id, 0L)); });
+                    if (!leg.isEmpty()) legs.put(transferId, leg);
+                    return dropOnSlaves(playerUUID, left, slaves, legs);
+                })
+                .thenCompose(f -> f);
+    }
 
-        if (remaining.isEmpty()) {
-            return;
+    /**
+     * Task #136: the physical items a raw balance pays out. Money (cents) is split into notes, any other item gives
+     * raw / ratio items. Adds them to {@code counts} and what one of them is worth to {@code units}; returns the raw rest
+     * below one item, which cannot be handed out. Public for the in-game test.
+     */
+    public static long toItems(ItemID bank, long raw, long ratio, Map<ItemID, Long> counts, Map<ItemID, PayoutUnit> units) {
+        // ponytail: one unit per physical item (first wins); the same item in two accounts with different binding ratios
+        // gets the first ratio, so only the LOSS/PAYOUT split of that item can be off (the rows still sum to the balances)
+        if (MoneyItem.isMoney(bank)) {
+            MoneyDenominationOptimizer.SplitResult split = MoneyDenominationOptimizer.split(raw);
+            split.counts().forEach((note, n) -> {
+                counts.merge(note, n, Long::sum);
+                units.putIfAbsent(note, new PayoutUnit(bank, note.getStack().getItem() instanceof MoneyItem m ? m.worth() : 0L));
+            });
+            return split.leftover();
         }
-
-        // Player not on master server; try all connected slave servers
-        if (MultiServerManager.isRunning() && MultiServerManager.isMaster()) {
-            List<String> slaves = MultiServerManager.getConnectedSlaveIDs();
-            for (String slaveID : slaves) {
-                final Map<ItemID, Long> itemsToSend = new HashMap<>(remaining);
-                DropItemsInPlayerInventoryRequest.sendToSlave(slaveID, playerUUID, itemsToSend, true)
-                        .whenComplete((notDropped, ex) -> {
-                            if (ex != null) {
-                                warn("Failed to drop items to player " + playerUUID + " on slave " + slaveID + ": " + ex.getMessage());
-                            }
-                        });
-            }
-        } else {
-            // Not in multi-server mode and player not on this server — items are lost
-            warn("Could not drop items to offline player " + playerUUID + " during account deletion. Lost items: " + remaining);
+        if (raw >= ratio) {
+            counts.merge(bank, raw / ratio, Long::sum);
+            units.putIfAbsent(bank, new PayoutUnit(bank, ratio));
         }
+        return raw % ratio;
+    }
+
+    /** Task #136: a {@link #dropItemsToPlayer} result back in raw units per bank item; the {@code fractions} are undelivered too. */
+    private static PayoutResult inRawUnits(PayoutResult counts, Map<ItemID, PayoutUnit> units, Map<ItemID, Long> fractions) {
+        Map<ItemID, Long> undelivered = toRaw(counts.undelivered(), units);
+        fractions.forEach((id, n) -> undelivered.merge(id, n, Long::sum));
+        String reason = fractions.isEmpty() ? counts.reason()
+                : (counts.reason() == null ? "" : counts.reason() + "; ") + "less than one item";
+        Map<String, Map<ItemID, Long>> delivered = new LinkedHashMap<>();
+        counts.delivered().forEach((transferId, leg) -> delivered.put(transferId, toRaw(leg, units)));
+        return new PayoutResult(undelivered, reason, delivered, counts.unknownTransferId());
+    }
+
+    private static Map<ItemID, Long> toRaw(Map<ItemID, Long> counts, Map<ItemID, PayoutUnit> units) {
+        Map<ItemID, Long> raw = new HashMap<>();
+        counts.forEach((id, n) -> {
+            PayoutUnit u = units.get(id);
+            if (u != null) raw.merge(u.bank(), n * u.raw(), Long::sum);
+        });
+        return raw;
+    }
+
+    /** The slave's not-dropped map, capped at what was sent (the reply comes from another server); null = nothing dropped. */
+    private static Map<ItemID, Long> notDroppedOf(Map<ItemID, Long> sent, @Nullable Map<ItemID, Long> notDropped) {
+        if (notDropped == null) return new HashMap<>(sent);
+        Map<ItemID, Long> left = new HashMap<>();
+        sent.forEach((id, n) -> {
+            long rest = Math.min(n, notDropped.getOrDefault(id, 0L));
+            if (rest > 0) left.put(id, rest);
+        });
+        return left;
     }
 
     @Override
@@ -802,6 +1008,36 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean bankAccountExists(int accountNumber) {
         return bankAccounts.containsKey(accountNumber);
+    }
+
+    @Override
+    public boolean isAccountFrozen(int accountNumber) {
+        ServerBankAccount account = bankAccounts.get(accountNumber);
+        return account != null && account.isFrozen();
+    }
+
+    @Override
+    public CompletableFuture<Boolean> isAccountFrozenAsync(int accountNumber) {
+        return CompletableFuture.completedFuture(isAccountFrozen(accountNumber));
+    }
+
+    @Override
+    public boolean setAccountFrozen(int accountNumber, boolean frozen, net.kroia.banksystem.api.ledger.LedgerActor actor) {
+        ServerBankAccount account = bankAccounts.get(accountNumber);
+        if (account == null)
+            return false;
+        if (account.isFrozen() == frozen)
+            return true; // no change: no ledger row, no event
+        account.setFrozen(frozen);
+        markPersistDirty();
+        net.kroia.banksystem.api.ledger.LedgerActor who = actor == null ? net.kroia.banksystem.api.ledger.LedgerActor.system() : actor;
+        net.kroia.banksystem.banking.ledger.TransactionLedger.INSTANCE.log(accountNumber,
+                net.kroia.banksystem.api.ledger.LedgerType.ACCOUNT_FREEZE, ItemID.INVALID_ID, 0L, who, null,
+                frozen ? "frozen" : "unfrozen");
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_EVENTS != null)
+            BACKEND_INSTANCES.SERVER_EVENTS.ACCOUNT_FREEZE_CHANGED.notifyListeners(
+                    new net.kroia.banksystem.api.event.AccountFreezeChangedEvent(accountNumber, frozen, who));
+        return true;
     }
 
     @Override
@@ -1342,17 +1578,42 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean deleteBankAccount(int accountNumber)
     {
+        return deleteBankAccount(accountNumber, true);
+    }
+
+    /** @return why {@link #deleteBankAccount} refuses the account (personal, or bound to a company), or null if it may be deleted. */
+    private static @Nullable String deleteRefusal(int accountNumber, ServerBankAccount account) {
+        if (account.getPersonalBankOwner() != null)
+            return "Cannot delete personal bank account with number: " + accountNumber + ".";
+        net.kroia.banksystem.banking.company.CompanyManager cm =
+                net.kroia.banksystem.banking.company.CompanyManager.get();
+        if (cm != null && cm.getByBankAccount(accountNumber) != null)
+            return "Cannot delete bank account " + accountNumber + ": it still belongs to a company.";
+        return null;
+    }
+
+    /**
+     * @param logClosure Task #109: write a BANK_CLOSED ledger row per non-empty bank (actor from
+     *                   {@code TransactionLedger.currentActor()}); false when the caller already
+     *                   logged the balances (user deletion payout)
+     */
+    private boolean deleteBankAccount(int accountNumber, boolean logClosure)
+    {
         if(bankAccounts.containsKey(accountNumber)) {
             ServerBankAccount account = bankAccounts.get(accountNumber);
-            if(account.getPersonalBankOwner() != null){
-                error("Cannot delete personal bank account with number: " + accountNumber + ".");
-                return false; // Cannot delete personal bank accounts
-            }
-            net.kroia.banksystem.banking.company.CompanyManager cm =
-                    net.kroia.banksystem.banking.company.CompanyManager.get();
-            if (cm != null && cm.getByBankAccount(accountNumber) != null) {
-                error("Cannot delete bank account " + accountNumber + ": it still belongs to a company.");
+            String refusal = deleteRefusal(accountNumber, account);
+            if (refusal != null) {
+                error(refusal);
                 return false;
+            }
+            Set<ItemID> suspended = auditSuspendedDrop(account, null, "account deleted"); // Task #148
+            if (logClosure) {
+                for (Map.Entry<ItemID, IServerBank> e : account.getAllBanks().entrySet()) {
+                    ISyncServerBank bank = e.getValue();
+                    if (bank == null || bank.getTotalBalance() == 0 || suspended.contains(e.getKey())) continue;
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(accountNumber, net.kroia.banksystem.api.ledger.LedgerType.BANK_CLOSED, e.getKey(), bank.getTotalBalance(),
+                            net.kroia.banksystem.banking.ledger.TransactionLedger.currentActor(), null, "account deleted");
+                }
             }
             bankAccounts.remove(accountNumber);
             markPersistDirty(); // Task #55 (removed account is no longer iterated by update())
@@ -1623,8 +1884,14 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         // 2) Remove the slot from every holder.
         for(DisallowedHolder holder : cleared) {
             ServerBankAccount account = bankAccounts.get(holder.accountNr());
-            if(account != null)
+            if(account != null) {
+                boolean suspended = BankAccountBindings.isSuspended(holder.accountNr(), finalItemID); // removeBank logs it (Task #148)
                 account.removeBank(finalItemID);
+                long cleared_ = holder.free() + holder.locked();
+                if (cleared_ != 0 && !suspended)
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(holder.accountNr(), net.kroia.banksystem.api.ledger.LedgerType.ADMIN_DISALLOW_ITEM, finalItemID, cleared_,
+                            net.kroia.banksystem.banking.ledger.TransactionLedger.currentActor(), null, "item disallowed, no refund");
+            }
         }
 
         // 3) Drop from the allowed set and add to the runtime blacklist so the disallow sticks
@@ -1705,6 +1972,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
 
 
+    // Task #104: the circulation getters below (money, item, locked, JSON) are aggregate public
+    // statistics and stay readable by every client. If an item has only one holder, its
+    // circulation equals that holder's balance (accepted 2026-11-07).
     @Override
     public double getRealMoneyCirculation()
     {
@@ -2298,6 +2568,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         }
         bankAccounts.put(accountNumber, account);
         markPersistDirty(); // Task #55 (new personal account + advanced nextAccountNumber)
+        if (startBalance > 0) {
+            ServerBank startBank = account.getBank(MoneyItem.getItemID());
+            if (startBank != null)
+                net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(startBank, net.kroia.banksystem.api.ledger.LedgerType.STARTING_BALANCE, startBalance,
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.player(user), null);
+        }
         // Seed the default slots (money + each available external-currency provider) through
         // the allow/blacklist gate. Idempotent with createPersonal's own gated money seed, and
         // the single source of truth for what a fresh account starts with (Task #57).
@@ -2426,6 +2702,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      *       the existing status enum for a bind-precondition violation.)</li>
      *   <li>The referenced provider is registered and available
      *       ({@link BankStatus#FAILED_EXTERNAL_UNAVAILABLE} otherwise).</li>
+     *   <li>The slot has no binding yet, suspended or not (unbind first;
+     *       {@link BankStatus#FAILED_INVALID_ITEM_ID} otherwise).</li>
      *   <li>The ref resolves ({@code provider.open(ref) != null},
      *       {@link BankStatus#FAILED_EXTERNAL_UNAVAILABLE} otherwise).</li>
      *   <li>{@code ref.shared()} matches the account's shared state (personal →
@@ -2458,6 +2736,14 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             warn("bindExternalAccount refused: no bank slot for item " + itemId
                     + " on account " + accountId);
             return BankStatus.FAILED_NO_BANK;
+        }
+        BankAccountBindings existingBindings = BankAccountBindings.get();
+        if (existingBindings != null && existingBindings.hasBinding(accountId, itemId)) {
+            // Task #147: rebinding a bound slot read the OLD external balance as "local free" and
+            // deposited it into the new account without debiting the old one (duplication).
+            // Also keeps a suspended row's (Task #146) locked funds out of a new binding. Unbind first.
+            warn("bindExternalAccount refused: slot " + accountId + "/" + itemId + " is already bound; unbind it first");
+            return BankStatus.FAILED_INVALID_ITEM_ID;
         }
         // Auto-transfer local balance to external (Task #33 v2.0.5 refinement).
         // Free balance is deposited to external (split into whole-native + dust); locked
@@ -2601,8 +2887,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      * <p>
      * On success:
      * <ul>
-     *   <li>If the provider is unavailable: the local {@code balance} and
-     *       {@code lockedBalance} are set to 0. The player has not lost money
+     *   <li>If the provider is unavailable (mod missing or disabled in Integrations
+     *       settings) and the row still holds locked funds or dust: refused with
+     *       FAILED_EXTERNAL_UNAVAILABLE. Both were already taken out of the external
+     *       account, so zeroing them would destroy money (Task #119).</li>
+     *   <li>If the provider is unavailable and locked = dust = 0: the local
+     *       {@code balance} is set to 0. The player has not lost money
      *       on the external side — they simply detached from it. The binding
      *       row is removed. {@code keepOnBankSystem} is ignored in this case
      *       because no safe transfer can be performed.</li>
@@ -2626,7 +2916,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      *                          fractional-dust loss accepted
      * @return SUCCESS in every reachable case when external is available or
      *         unavailable; FAILED_OVERFLOW when {@code keepOnBankSystem=false}
-     *         and the deposit-back would overflow external
+     *         and the deposit-back would overflow external; FAILED_EXTERNAL_UNAVAILABLE
+     *         when the provider is unavailable and locked/dust funds would be lost
      */
     public BankStatus unbindExternalAccount(int accountId, ItemID itemId, boolean keepOnBankSystem) {
         if (itemId == null || !itemId.isValid()) {
@@ -2644,19 +2935,34 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             // Idempotent no-op — the slot was not bound.
             return BankStatus.SUCCESS;
         }
+        if (row.suspended()) {
+            // Task #146: either choice moves value or drops the row; an admin restores it first.
+            warn("unbindExternalAccount on " + accountId + "/" + itemId + " refused: the binding to "
+                    + row.ref() + " is suspended until an admin restores it");
+            return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+        }
         ServerBankAccount account = bankAccounts.get(accountId);
         IServerBank bank = account != null ? account.getBank(itemId) : null;
 
         ExternalCurrencyProvider provider = BankSystemMod.getAPI().getCurrencyProvider(row.ref().providerId());
         ExternalAccount external = (provider != null && provider.isAvailable()) ? provider.open(row.ref()) : null;
 
+        if (external == null && (row.lockedBalance() > 0 || row.dustBalance() > 0)) {
+            // Task #119: locked funds and dust were already withdrawn from the external
+            // account; zeroing them here would destroy them. Refuse until the provider is back.
+            warn("unbindExternalAccount on " + accountId + "/" + itemId + " refused: provider '"
+                    + row.ref().providerId() + "' is unavailable (mod missing or disabled in "
+                    + "Integrations settings) and the slot holds locked=" + row.lockedBalance()
+                    + " / dust=" + row.dustBalance() + ".");
+            return BankStatus.FAILED_EXTERNAL_UNAVAILABLE;
+        }
         if (external == null) {
             // Provider unavailable — detach without access to funds. The user will
-            // need to reinstall the mod and re-bind to regain access.
+            // need to install or enable the mod and re-bind to regain access.
             warn("unbindExternalAccount on " + accountId + "/" + itemId + ": provider '"
-                    + row.ref().providerId() + "' is unavailable. Local balance will be set "
-                    + "to 0. External funds are not lost — reinstall the mod and re-bind to "
-                    + "regain access.");
+                    + row.ref().providerId() + "' is unavailable (mod missing or disabled in "
+                    + "Integrations settings). Local balance will be set to 0. External funds "
+                    + "are not lost — install or enable the mod and re-bind to regain access.");
             if (bank instanceof ServerBank serverBank) {
                 serverBank.writeLocalFieldsForUnbind_internal(0L, 0L);
             }
@@ -2747,6 +3053,140 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             }
             return BankStatus.SUCCESS;
         }
+    }
+
+    /**
+     * Task #146: runs {@link #suspendIfForeign} over every binding. Called once per master start,
+     * on the first server tick (every mod's SERVER_STARTED handler has run by then).
+     *
+     * @return the number of bindings suspended
+     */
+    public int suspendForeignBindings() {
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return 0;
+        int suspended = 0;
+        // ponytail: one pass in one tick (bindings x managers provider lookups); spread over ticks if a
+        // server ever has thousands of bindings.
+        for (BindingRow row : bindings.snapshot().values())
+            if (suspendIfForeign(row)) suspended++;
+        if (suspended > 0)
+            warn("Suspended " + suspended + " external-currency binding(s) to accounts the BankSystem account's "
+                    + "managers may not bind. Admins were alerted; /banksystem restorebinding lifts a suspension.");
+        return suspended;
+    }
+
+    /**
+     * Task #146: suspends {@code row} and raises an EXTERNAL_BINDING_SUSPENDED flag when its external
+     * account is not one the BankSystem account's managers may bind (the rule BindExternalAccountRequest
+     * enforces since #137): the owner for a personal account, at least one user with MANAGE for a shared
+     * one. Does nothing for an admin-approved or already suspended row, a missing or unavailable provider,
+     * or when a lookup throws: per the {@link ExternalCurrencyProvider#listBindableAccounts} contract a
+     * provider that cannot answer throws, and no answer never suspends. An empty list is an answer (Task #148).
+     *
+     * @return true if the row was suspended
+     */
+    public boolean suspendIfForeign(BindingRow row) {
+        if (row.suspended() || row.approved()) return false;
+        ExternalAccountRef ref = row.ref();
+        ExternalCurrencyProvider provider = BankSystemMod.getAPI().getCurrencyProvider(ref.providerId());
+        ServerBankAccount account = bankAccounts.get(row.bankAccountId());
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (provider == null || !provider.isAvailable() || account == null || bindings == null) return false;
+        User owner = account.getPersonalBankOwner();
+        List<UUID> managers = owner != null ? List.of(owner.getUUID()) : account.getUserData().stream()
+                .filter(u -> net.kroia.banksystem.banking.BankPermission.hasPermission(u.permissions,
+                        net.kroia.banksystem.banking.BankPermission.MANAGE))
+                .map(u -> u.userUUID).toList();
+        if (managers.isEmpty()) return false;
+        for (UUID manager : managers) {
+            List<ExternalAccountRef> bindable;
+            try {
+                bindable = provider.listBindableAccounts(manager);
+            } catch (Throwable t) {
+                warn("binding check of account " + row.bankAccountId() + " skipped: provider '" + ref.providerId()
+                        + "' threw while listing the accounts of " + manager + ": " + t);
+                return false;
+            }
+            for (ExternalAccountRef own : bindable)
+                if (own.providerId().equals(ref.providerId()) && own.accountKey().equals(ref.accountKey()))
+                    return false;
+        }
+        ItemID item = new ItemID(row.itemIdShort());
+        bindings.suspend(row.bankAccountId(), item);
+        net.kroia.banksystem.banking.ledger.AdminAudit.raise(row.bankAccountId(),
+                net.kroia.banksystem.banking.ledger.SuspicionChecks.EXTERNAL_BINDING_SUSPENDED, 3, 0L,
+                ref.providerId() + ":" + ref.accountKey(),
+                "external binding suspended: slot " + item.getName() + " is bound to " + ref.providerId()
+                        + " account " + ref.accountKey() + " (\"" + ref.label() + "\"), which "
+                        + managerNames(account) + " may not bind. Restore with "
+                        + "/banksystem restorebinding " + row.bankAccountId() + " " + item.getName());
+        return true;
+    }
+
+    /** Task #146/#148: who may bind for {@code account}: its owner if personal, else its users with MANAGE. */
+    private static String managerNames(ServerBankAccount account) {
+        User owner = account.getPersonalBankOwner();
+        if (owner != null) return "owner " + owner.getName() + " (" + owner.getUUID() + ")";
+        List<String> names = account.getUserData().stream()
+                .filter(u -> net.kroia.banksystem.banking.BankPermission.hasPermission(u.permissions,
+                        net.kroia.banksystem.banking.BankPermission.MANAGE))
+                .map(u -> u.userName + " (" + u.userUUID + ")").toList();
+        return names.isEmpty() ? "no managers left" : "managers " + String.join(", ", names);
+    }
+
+    /**
+     * Task #148: a suspended binding feeds no value path, deletion included. Call it before the binding rows of
+     * {@code account} (only {@code item}'s when given) are dropped. Per suspended row, the locked + dust BankSystem
+     * held for it are logged as BANK_CLOSED (not paid out, no other closure row) and an EXTERNAL_BINDING_SUSPENDED
+     * flag tells the admins what was left behind. The external account is not touched; the caller drops the rows.
+     *
+     * @return the slots of the suspended rows, which the caller must not pay out or log again
+     */
+    public static Set<ItemID> auditSuspendedDrop(ServerBankAccount account, @Nullable ItemID item, String why) {
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return Set.of();
+        int nr = account.getAccountNumber();
+        Set<ItemID> slots = new HashSet<>();
+        for (BindingRow row : bindings.listBindingsFor(nr)) {
+            ItemID slot = new ItemID(row.itemIdShort());
+            if (!row.suspended() || (item != null && !item.equals(slot))) continue;
+            slots.add(slot);
+            long left = row.lockedBalance() + row.dustBalance();
+            ExternalAccountRef ref = row.ref();
+            if (left > 0)
+                TransactionLedger.logRow(nr, LedgerType.BANK_CLOSED, slot, left, TransactionLedger.currentActor(), null,
+                        why + "; suspended external binding, not paid out");
+            net.kroia.banksystem.banking.ledger.AdminAudit.raise(nr,
+                    net.kroia.banksystem.banking.ledger.SuspicionChecks.EXTERNAL_BINDING_SUSPENDED, 3, left,
+                    ref.providerId() + ":" + ref.accountKey(),
+                    "suspended external binding dropped (" + why + "): slot " + slot.getName() + " was bound to "
+                            + ref.providerId() + " account " + ref.accountKey() + " (\"" + ref.label() + "\"), "
+                            + managerNames(account) + ". BankSystem held locked " + row.lockedBalance() + " + dust "
+                            + row.dustBalance() + " for it; NOT paid out. The external account was not touched.");
+        }
+        return slots;
+    }
+
+    /**
+     * Task #146: lifts the suspension of {@code accountId}'s suspended bindings (only the slot of
+     * {@code itemName} when given) and marks them admin-approved, so the start-up check skips them.
+     * Each restore writes an ADMIN_ACCOUNT_EDIT ledger row (audit file + admin alert).
+     *
+     * @return the number of bindings restored
+     */
+    public int restoreSuspendedBindings(int accountId, @Nullable String itemName, LedgerActor actor) {
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (bindings == null) return 0;
+        int restored = 0;
+        for (BindingRow row : bindings.listBindingsFor(accountId)) {
+            ItemID item = new ItemID(row.itemIdShort());
+            if (!row.suspended() || (itemName != null && !itemName.equals(item.getName()))) continue;
+            bindings.approve(accountId, item);
+            TransactionLedger.logRow(accountId, LedgerType.ADMIN_ACCOUNT_EDIT, item, 0L, actor, null,
+                    "external binding restored: " + row.ref().providerId() + ":" + row.ref().accountKey());
+            restored++;
+        }
+        return restored;
     }
 
 

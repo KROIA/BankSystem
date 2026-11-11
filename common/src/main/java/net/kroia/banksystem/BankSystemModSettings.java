@@ -4,16 +4,20 @@ package net.kroia.banksystem;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
+import net.kroia.modutilities.setting.SettingsStore;
 import net.kroia.modutilities.setting.parser.CustomJsonParser;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -56,7 +60,8 @@ public final class BankSystemModSettings extends ModSettings {
     public final Utilities UTILITIES = createGroup(new Utilities());
     public final Player PLAYER = createGroup(new Player());
     public final Bank BANK = createGroup(new Bank());
-    public final Placeholder PLACEHOLDER = createGroup(new Placeholder());
+    public final Audit AUDIT = createGroup(new Audit());
+    public final Integrations INTEGRATIONS = createGroup(new Integrations());
 
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
@@ -101,6 +106,8 @@ public final class BankSystemModSettings extends ModSettings {
         public final Setting<Boolean> LOGGING_ENABLE_WARNING = registerSetting("LOGGING_ENABLE_WARNING",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_ERROR = registerSetting("LOGGING_ENABLE_ERROR",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_DEBUG = registerSetting("LOGGING_ENABLE_DEBUG",false, Boolean.class);
+        /** Task #110: chat alerts for admin actions / suspicion flags, for admins that never ran /banksystem alerts. */
+        public final Setting<Boolean> ALERTS_DEFAULT_ON = registerSetting("ALERTS_DEFAULT_ON", true, Boolean.class);
         //public final Setting<Integer> ADMIN_PERMISSION_LEVEL = registerSetting("ADMIN_PERMISSION_LEVEL",2, Integer.class);
 
         public Utilities() { super("Utilities"); }
@@ -401,16 +408,63 @@ public final class BankSystemModSettings extends ModSettings {
     }
 
 
-    public static final class Placeholder extends SettingsGroup
+    /**
+     * Task #119 (v2.2.0): optional integrations with other mods / services. Replaces the old
+     * {@code Placeholder} group and takes {@code SYNC_ADMIN_FLAG_WITH_PERMISSION} from
+     * {@code Utilities}; old files are migrated once by {@link #migrateIntegrations(Path)}.
+     * Only PLACEHOLDERS_ENABLED and TOP_COUNT need a restart; everything else is read live.
+     */
+    public static final class Integrations extends SettingsGroup
     {
+        /** Off: {@code BankSystemPlaceholders.start} is skipped at server start (restart required). */
+        public final Setting<Boolean> PLACEHOLDERS_ENABLED = registerSetting("PLACEHOLDERS_ENABLED", true, Boolean.class);
         // Placeholder names are fixed (see BankSystemPlaceholders); only refresh and formatting are configurable.
         public final Setting<Integer> PLAYER_REFRESH_MS = registerSetting("PLAYER_REFRESH_MS", 1000, Integer.class);
         public final Setting<Integer> SERVER_REFRESH_MS = registerSetting("SERVER_REFRESH_MS", 30000, Integer.class);
         public final Setting<Integer> TOP_COUNT = registerSetting("TOP_COUNT", 10, Integer.class);
         /** Money display pattern; {@code %s} is replaced by the formatted number, e.g. "$%s" or "%s €". */
         public final Setting<String> MONEY_FORMAT = registerSetting("MONEY_FORMAT", "$%s", String.class);
+        /** Task #107: keep the BankSystem admin flag in sync with the permission node banksystem.admin (see AdminFlagSync). */
+        public final Setting<Boolean> SYNC_ADMIN_FLAG_WITH_PERMISSION = registerSetting("SYNC_ADMIN_FLAG_WITH_PERMISSION", false, Boolean.class);
+        /** Off: the Numismatics provider behaves exactly like an uninstalled mod (see BankSystemModBackend.providerEnabled). */
+        public final Setting<Boolean> NUMISMATICS_ENABLED = registerSetting("NUMISMATICS_ENABLED", true, Boolean.class);
+        /** Off: the Lightman's Currency provider behaves exactly like an uninstalled mod. */
+        public final Setting<Boolean> LIGHTMANS_CURRENCY_ENABLED = registerSetting("LIGHTMANS_CURRENCY_ENABLED", true, Boolean.class);
+        /** Discord webhook feed of bank events (master / standalone only). */
+        public final Setting<Boolean> DISCORD_ENABLED = registerSetting("DISCORD_ENABLED", false, Boolean.class);
 
-        public Placeholder() { super("Placeholder"); }
+        public Integrations() { super("Integrations"); }
+    }
+
+    /**
+     * Tasks #111 / #114 / #115 (v2.2.0) — suspicious-activity flags (see {@code SuspicionChecks}).
+     * Read live on the master. Money amounts are whole money units (dollars), not cents.
+     */
+    public static final class Audit extends SettingsGroup
+    {
+        public final Setting<Boolean> LAUNDERING_FLAG_ENABLED = registerSetting("LAUNDERING_FLAG_ENABLED", true, Boolean.class);
+        public final Setting<Long> LAUNDERING_MIN_AMOUNT = registerSetting("LAUNDERING_MIN_AMOUNT", 1_000_000L, Long.class);
+        public final Setting<Integer> LAUNDERING_WINDOW_HOURS = registerSetting("LAUNDERING_WINDOW_HOURS", 24, Integer.class);
+        public final Setting<Boolean> LARGE_NOTE_WITHDRAWAL_FLAG_ENABLED = registerSetting("LARGE_NOTE_WITHDRAWAL_FLAG_ENABLED", true, Boolean.class);
+        public final Setting<Long> LARGE_NOTE_WITHDRAWAL_AMOUNT = registerSetting("LARGE_NOTE_WITHDRAWAL_AMOUNT", 10_000_000L, Long.class);
+        public final Setting<Boolean> WEALTH_JUMP_FLAG_ENABLED = registerSetting("WEALTH_JUMP_FLAG_ENABLED", true, Boolean.class);
+        public final Setting<Integer> WEALTH_SWEEP_MINUTES = registerSetting("WEALTH_SWEEP_MINUTES", 10, Integer.class);
+        public final Setting<Integer> WEALTH_JUMP_PERCENT = registerSetting("WEALTH_JUMP_PERCENT", 100, Integer.class);
+        public final Setting<Long> WEALTH_JUMP_AMOUNT = registerSetting("WEALTH_JUMP_AMOUNT", 1_000_000L, Long.class);
+        public final Setting<Integer> WEALTH_JUMP_COOLDOWN_HOURS = registerSetting("WEALTH_JUMP_COOLDOWN_HOURS", 6, Integer.class);
+        public final Setting<Boolean> NEW_ACCOUNT_TRANSFER_FLAG_ENABLED = registerSetting("NEW_ACCOUNT_TRANSFER_FLAG_ENABLED", true, Boolean.class);
+        public final Setting<Long> NEW_ACCOUNT_TRANSFER_AMOUNT = registerSetting("NEW_ACCOUNT_TRANSFER_AMOUNT", 1_000_000L, Long.class);
+        public final Setting<Integer> NEW_ACCOUNT_AGE_HOURS = registerSetting("NEW_ACCOUNT_AGE_HOURS", 24, Integer.class);
+        // Task #112: money-supply growth flag (checked in the wealth sweep)
+        public final Setting<Boolean> MONEY_SUPPLY_FLAG_ENABLED = registerSetting("MONEY_SUPPLY_FLAG_ENABLED", true, Boolean.class);
+        public final Setting<Integer> MONEY_SUPPLY_GROWTH_PERCENT = registerSetting("MONEY_SUPPLY_GROWTH_PERCENT", 10, Integer.class);
+        public final Setting<Long> MONEY_SUPPLY_GROWTH_AMOUNT = registerSetting("MONEY_SUPPLY_GROWTH_AMOUNT", 10_000_000L, Long.class);
+        public final Setting<Integer> MONEY_SUPPLY_COOLDOWN_HOURS = registerSetting("MONEY_SUPPLY_COOLDOWN_HOURS", 6, Integer.class);
+        // Task #113: daily audit digest
+        public final Setting<Boolean> DAILY_DIGEST_ENABLED = registerSetting("DAILY_DIGEST_ENABLED", true, Boolean.class);
+        public final Setting<Integer> DIGEST_TOP_N = registerSetting("DIGEST_TOP_N", 10, Integer.class);
+
+        public Audit() { super("Audit"); }
     }
 
 
@@ -421,7 +475,7 @@ public final class BankSystemModSettings extends ModSettings {
      * "Mod Settings" screen and the {@code ModSettingsRequest} GET/SET payloads.
      * <p>
      * This is exactly the set of groups registered via {@code createGroup(...)}:
-     * Utilities, Player, ServerBank and Placeholder — unlike StockMarket, BankSystem
+     * Utilities, Player, ServerBank, Audit and Integrations — unlike StockMarket, BankSystem
      * has no dead (never-registered) group, so ALL groups are listed here. If a
      * group is ever added without being registered through {@code createGroup},
      * it must NOT be added to this list (it would not be part of settings.json).
@@ -430,7 +484,32 @@ public final class BankSystemModSettings extends ModSettings {
      */
     public List<SettingsGroup> getEditableGroups()
     {
-        return List.of(UTILITIES, PLAYER, BANK, PLACEHOLDER);
+        return List.of(UTILITIES, PLAYER, BANK, AUDIT, INTEGRATIONS);
+    }
+
+    /**
+     * Task #119: one-time move of the pre-2.2.0 keys (group {@code Placeholder} and
+     * {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION}) into {@link #INTEGRATIONS}.
+     * Reads the raw file because the old keys are no longer registered. Idempotent: a file
+     * that already has an {@code Integrations} group is left alone. The caller re-saves the
+     * file when this returns true, which drops the old keys.
+     *
+     * @return true if old values were copied into INTEGRATIONS
+     */
+    public boolean migrateIntegrations(Path file) {
+        try {
+            JsonObject root = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+            if (root.has(INTEGRATIONS.getName())) return false;
+            JsonObject moved = root.has("Placeholder") ? root.getAsJsonObject("Placeholder").deepCopy() : new JsonObject();
+            JsonObject utilities = root.getAsJsonObject("Utilities");
+            if (utilities != null && utilities.has("SYNC_ADMIN_FLAG_WITH_PERMISSION"))
+                moved.add("SYNC_ADMIN_FLAG_WITH_PERMISSION", utilities.get("SYNC_ADMIN_FLAG_WITH_PERMISSION"));
+            if (moved.size() == 0) return false;
+            new SettingsStore().fromJson(INTEGRATIONS, moved);
+            return true;
+        } catch (Exception e) {
+            return false; // unreadable file: the load gate already refused it
+        }
     }
 
     /**
