@@ -397,6 +397,10 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             // IDs and fire the ITEM_IDS_MERGED event for dependent mods (no-op when nothing
             // was merged).
             ItemIDManager.consolidatePendingMerges();
+            // BS-195: a confirmed missing-mod recovery removed ItemIDs; load_bank() dropped
+            // their balances (they no longer resolve) — persist that right away.
+            if (!ItemIDManager.getLastRemovedMissing().isEmpty())
+                save_bank();
             // Renumbering tripwire (Task #16): the load — including default registration,
             // merges and consolidation — is complete; diff the live registry against last
             // session's short→item-name digest and ERROR-report every persisted short that
@@ -468,6 +472,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
                     // confirmation would not be burned without the repair persisting.
                     save_globalSettings();
                 }
+                // BS-195: same deferred persist for the consumed CONFIRM_ITEMID_REMOVE_MISSING.
+                if (!ItemIDManager.getLastRemovedMissing().isEmpty())
+                    save_globalSettings();
                 // One-shot durability: persist the post-load state immediately when either
                 // the alias-table repair pass touched entries (Task #13 Fix D) or the load
                 // requires a format-conversion re-save (legacy version-less file,
@@ -1259,6 +1266,36 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
      *         subsystem is genuinely fresh) or when the move succeeded; {@code false}
      *         when the move failed (the caller must keep the subsystem save-prohibited)
      */
+    /**
+     * BS-195: copies the whole BankSystem data folder to a sibling
+     * {@code BankSystem_backup-<label>-<timestamp>} before a confirmed destructive recovery.
+     * The open SQLite {@code Database} folder is skipped (the recovery does not touch it).
+     *
+     * @return {@code true} when the copy succeeded or there is nothing to copy
+     */
+    public boolean backupDataFolder(String label) {
+        Path folder = getAbsoluteSavePath(ITEM_IDS_FILE_NAME).getParent();
+        if (folder == null || !Files.isDirectory(folder))
+            return true;
+        Path target = folder.resolveSibling(folder.getFileName() + "_backup-" + label + "-" + System.currentTimeMillis());
+        try (java.util.stream.Stream<Path> entries = Files.list(folder)) {
+            Files.createDirectories(target);
+            for (Path entry : (Iterable<Path>) entries::iterator) {
+                if (entry.getFileName().toString().equals("Database"))
+                    continue;
+                if (Files.isDirectory(entry))
+                    copyFolder(entry, target.resolve(entry.getFileName().toString()));
+                else
+                    Files.copy(entry, target.resolve(entry.getFileName().toString()));
+            }
+            warn("Backed up the BankSystem data folder to " + target + " before " + label + ".");
+            return true;
+        } catch (IOException e) {
+            error("Failed to back up the BankSystem data folder to " + target, e);
+            return false;
+        }
+    }
+
     private boolean backupPath(Path path, String suffix) {
         if (!Files.exists(path))
             return true; // nothing on disk — genuinely fresh
