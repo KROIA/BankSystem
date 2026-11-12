@@ -768,8 +768,13 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     {
         sendMessage(executor, NO_ADMIN_MESSAGE);
     }
+    /** Test hook (dev suites only, null otherwise): sees every executor message; the packet itself cannot be read back. */
+    public static @Nullable java.util.function.BiConsumer<UUID, String> messageListener_forTesting = null;
     public static void sendMessage(UUID player, String message)
     {
+        java.util.function.BiConsumer<UUID, String> listener = messageListener_forTesting;
+        if (listener != null)
+            listener.accept(player, message);
         ClientConsoleMessagePacket.sendMessageFromMaster(player, message);
     }
 
