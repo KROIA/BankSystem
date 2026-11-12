@@ -1,7 +1,20 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IAsyncBank;
+import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.banking.clientdata.BankData;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
+import net.kroia.banksystem.data.DiagnosticsDatabase;
+import net.kroia.banksystem.data.TransferJournal;
+import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.banking.bankmanager.AsyncBankManager;
 import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.banking.company.SlaveCompanyMirror;
@@ -22,6 +35,8 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.modutilities.testing.autotest.AutoTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.lang.reflect.Field;
 import java.util.LinkedHashMap;
@@ -64,6 +79,7 @@ public class SlaveMasterDownTests extends TestSuite {
         addTest("link_down_download_block_keeps_binding", () -> withMasterDown(this::downloadBlockKeepsBinding));
         addTest("link_down_failed_lookup_backs_off", () -> withMasterDown(this::lookupBacksOff));
         addTest("link_down_cleanup_runs_once", this::cleanupRunsOnce);
+        addTest("link_cut_after_terminal_deposit_credited_once", this::terminalDepositLinkCut); // BS-207
 
         addTest("masterdown_tick_stats", () -> masterDownCell(this::tickStats));
         addTest("masterdown_requests_fail_fast", () -> masterDownCell(this::requestsFailFast));
@@ -254,6 +270,85 @@ public class SlaveMasterDownTests extends TestSuite {
         } finally {
             events.SLAVE_CONNECTION_LOST.removeListener(listener);
             SlaveCompanyMirror.remove(COMPANY);
+        }
+    }
+
+    private static final long BS207_ITEMS = 10, BS207_UNIT = 100; // raw money per terminal item
+
+    /**
+     * BS-207: a real terminal deposit (AsyncBank.depositAsync to the master), link cut right after the send, then
+     * back. The master normally applies the queued write, so: items out of the terminal, the account credited exactly
+     * once, no RETURNED (refund) journal row. Needs a trusted slave (an untrusted one is refused before the send).
+     * Leaves nothing: the test account is deleted after.
+     */
+    private TestResult terminalDepositLinkCut() {
+        if (!AutoTest.isEnabled()) return skip("autotest runs only: cuts the master link");
+        if (!MultiServerManager.isSlave()) return skip("not a slave");
+        if (!MultiServerManager.isRunning()) return skip("master link not up");
+        IAsyncBankManager mgr = bankManager();
+        if (!Boolean.TRUE.equals(await(mgr.isSlaveServerTrustedAsync(""), 10_000)))
+            return skip("master does not trust this slave: it refuses the deposit");
+        ItemID paper = ItemIDManager.getItemID(new ItemStack(Items.PAPER));
+        if (!paper.isValid()) return skip("plain paper has no ItemID on this slave");
+        DiagnosticsDatabase db = DiagnosticsDatabase.live();
+        if (db == null || db.isDisabled()) return fail("no live diagnostics DB");
+
+        Integer nr = await(mgr.createBankAccountGetAccountNrAsync("__test_bs207_link_cut"), 10_000);
+        if (nr == null || nr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) return fail("test account not created: " + nr);
+        try {
+            IAsyncBankAccount account = await(mgr.getBankAccountAsync(nr), 10_000);
+            IAsyncBank bank = account == null ? null : await(account.getOrCreateBankAsync(MoneyItem.getItemID()), 10_000);
+            if (bank == null) return fail("no money bank on test account " + nr);
+
+            // Detached terminal (no level): depositReserved runs inline on this thread.
+            BankTerminalBlockEntity terminal = new BankTerminalBlockEntity(
+                    BlockPos.ZERO, BankSystemBlocks.BANK_TERMINAL_BLOCK.get().defaultBlockState());
+            BankTerminalBlockEntity.TerminalInventory inventory = new BankTerminalBlockEntity.TerminalInventory(terminal, 9);
+            inventory.setStackInSlot(0, new ItemStack(Items.PAPER, (int) BS207_ITEMS));
+            TransferJournal.Ref journal = TransferJournal.ref("bs207_test");
+            List<CompletableFuture<BankStatus>> sent = new java.util.ArrayList<>();
+            AtomicInteger credited = new AtomicInteger();
+            boolean cut;
+            try {
+                terminal.depositReserved(inventory, UUID.randomUUID(), paper, BS207_ITEMS, journal, n -> {
+                    CompletableFuture<BankStatus> f = TransactionLedger.tagged(LedgerType.DEPOSIT, null, null, journal,
+                            () -> bank.depositAsync(n * BS207_UNIT));
+                    sent.add(f);
+                    MultiServerManager.setSimulatedMasterDown(true); // cut right after the send
+                    return f;
+                }, n -> credited.incrementAndGet());
+                cut = MultiServerManager.isSimulatedMasterDown();
+                if (sent.size() != 1) return fail("deposit sent " + sent.size() + "x");
+                if (inventory.getItemCount_direct(paper) != 0) return fail("items still in the terminal after the send");
+                if (cut) pumpUntil(() -> !MultiServerManager.isRunning(), 5_000);
+            } finally {
+                MultiServerManager.setSimulatedMasterDown(false);
+            }
+            if (!cut) return skip("simulated master down unavailable (dev features off)");
+            if (!pumpUntil(MultiServerManager::isRunning, 15_000)) return fail("link must reconnect after setSimulatedMasterDown(false)");
+            String back = requestAnsweredAfterReconnect();
+            if (back != null) return fail("after reconnect: " + back);
+            if (!pumpUntil(sent.get(0)::isDone, 90_000)) return fail("deposit outcome still pending 90 s after the reconnect");
+            pump(1_000); // a refund would hop to the main thread
+
+            long items = inventory.getItemCount_direct(paper);
+            long balance = 0;
+            for (BankData d : await(account.getBankDataAsync(), 10_000))
+                if (MoneyItem.isMoney(d.itemID())) balance += d.balance();
+            await(db.flush(), 10_000);
+            int returned = TransferJournalTests.query(db.getFile(), "SELECT * FROM TransferJournal WHERE transfer_id = ? AND step = ?",
+                    journal.transferId(), TransferJournal.RETURNED).size();
+            Throwable cause = causeOf(sent.get(0));
+            String state = "outcome " + (cause != null ? "unknown (" + cause.getClass().getSimpleName() + ")" : sent.get(0).join())
+                    + ", terminal " + items + ", balance " + balance + ", RETURNED rows " + returned + ", ledger callbacks " + credited.get();
+            if (items != 0) return fail("items came back into the terminal: " + state);
+            if (balance != BS207_ITEMS * BS207_UNIT) return fail("expected balance " + BS207_ITEMS * BS207_UNIT + " (credited once): " + state);
+            if (returned != 0) return fail("refund row written: " + state);
+            return pass(state);
+        } catch (java.sql.SQLException e) {
+            return fail("journal query: " + e);
+        } finally {
+            mgr.deleteBankAccountAsync(nr);
         }
     }
 
