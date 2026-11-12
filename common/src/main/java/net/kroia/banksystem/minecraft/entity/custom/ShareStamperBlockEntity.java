@@ -412,8 +412,9 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
     @Override public void clearContent() { items.clear(); }
 
-    // Task #47 (v2.1.0) — release viewer lock when the container menu closes and when
-    // the BE unloads. AbstractContainerMenu#removed calls Container#stopOpen(Player).
+    // Task #47 (v2.1.0) — release viewer lock if a caller runs Container#stopOpen.
+    // AbstractContainerMenu#removed does NOT call stopOpen, so the menu close is handled
+    // by ShareStamperContainerMenu#removed; setRemoved clears the lock on BE unload.
     @Override
     public void stopOpen(Player p) { // mc<=1.21.8
     //public void stopOpen(net.minecraft.world.entity.ContainerUser p) { // mc>=1.21.9

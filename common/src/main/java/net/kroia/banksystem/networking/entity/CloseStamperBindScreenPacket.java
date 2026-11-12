@@ -17,7 +17,7 @@ import org.jetbrains.annotations.NotNull;
 /**
  * Task #47 (v2.1.0) — C2S packet: release the Share Stamper viewer lock when the
  * {@link net.kroia.banksystem.screen.custom.StamperBindScreen} closes. Container-menu
- * closes hit {@link ShareStamperBlockEntity#stopOpen} instead; this packet exists
+ * closes release it in ShareStamperContainerMenu#removed instead; this packet exists
  * because the bind screen is not a container menu.
  */
 public class CloseStamperBindScreenPacket extends BankSystemNetworkPacket {

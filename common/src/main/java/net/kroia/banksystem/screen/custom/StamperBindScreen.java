@@ -20,7 +20,7 @@ import java.util.List;
  * Follow-up (v2.1.0) — after a successful bind the server auto-opens the main
  * {@link ShareStamperScreen}, which naturally replaces this screen and fires
  * {@link #removed()}. To keep the viewer lock across that transition (the
- * container-menu path re-acquires the same lock via {@code stopOpen}), we set
+ * container-menu path re-acquires the same lock), we set
  * {@link #suppressCloseRelease} before dispatching the bind request; the
  * override in {@code removed()} then skips the C2S release packet.
  */
@@ -63,7 +63,7 @@ public class StamperBindScreen extends CompanySelectionScreen {
         // Suppress the CloseStamperBindScreenPacket that removed() would otherwise
         // fire when this screen tears down after onClose(). The server keeps the
         // same viewer lock through the auto-open handoff (ShareStamperContainerMenu
-        // releases via stopOpen when the main GUI eventually closes). The flag is
+        // releases in removed() when the main GUI eventually closes). The flag is
         // reset when ShareStamperScreen or a fresh StamperBindScreen opens.
         suppressCloseRelease = true;
         SetStamperBindingRequest.send(pos, companyId);

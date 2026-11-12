@@ -100,7 +100,7 @@ public class SetStamperBindingRequest extends BankSystemNetworkPacket {
         // second time. Only on the bind path (companyId != 0); the unbind path
         // above returns early. The viewer lock stays with this player through the
         // handoff — the incoming ShareStamperContainerMenu takes over ownership
-        // via tryAcquireViewer's same-UUID equals branch, and stopOpen releases
+        // via tryAcquireViewer's same-UUID equals branch, and the menu's removed() releases
         // it when the container menu eventually closes. The client-side
         // StamperBindScreen suppresses its CloseStamperBindScreenPacket so it
         // doesn't clobber the lock mid-handoff.
