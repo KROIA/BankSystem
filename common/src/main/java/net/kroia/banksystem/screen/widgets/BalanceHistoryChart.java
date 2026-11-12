@@ -386,12 +386,15 @@ public class BalanceHistoryChart extends GuiElement {
         return sb.length() == 0 ? null : sb.toString();
     }
 
+    private static final int MARKER_HEAD = 5;
+
     private void renderMarkers() {
         for (Marker m : markers) {
             int x = toCanvasSpaceX(m.time());
             if (x < canvasRect.x || x > canvasRect.x + canvasRect.width) continue;
-            drawRect(x, canvasRect.y, 1, canvasRect.height, COLOR_MARKER);
-            drawRect(x - 2, canvasRect.y, 5, 5, COLOR_MARKER);
+            // BS-245: line starts below the head square; the colour is translucent, so they must not overlap.
+            drawRect(x - MARKER_HEAD / 2, canvasRect.y, MARKER_HEAD, MARKER_HEAD, COLOR_MARKER);
+            drawRect(x, canvasRect.y + MARKER_HEAD, 1, canvasRect.height - MARKER_HEAD, COLOR_MARKER);
         }
     }
 
