@@ -170,6 +170,7 @@ public class DatabaseManager {
         wanted.put("actor_name", "TEXT");
         wanted.put("balance_after", "INTEGER");
         wanted.put("virtual_qty", "INTEGER");
+        wanted.put("origin_server", "TEXT"); // BS-256: slave id of the request's server, NULL = master
         java.util.List<String> added = new java.util.ArrayList<>();
         try (Statement stmt = c.createStatement()) {
             java.util.Set<String> existing = new java.util.HashSet<>();

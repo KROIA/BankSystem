@@ -41,11 +41,11 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
 
     public static final String INSERT = "INSERT INTO TransactionLog " +
             "(account_number, actor_uuid, kind, item_id, amount, other_account, company_id, ts, note, " +
-            "source_kind, tag, type_code, ref, money_amount, price, currency_item, actor_name, balance_after, virtual_qty) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            "source_kind, tag, type_code, ref, money_amount, price, currency_item, actor_name, balance_after, virtual_qty, origin_server) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     public static final String SELECT_COLS =
             "id, account_number, actor_uuid, kind, item_id, amount, other_account, company_id, ts, note, " +
-            "source_kind, tag, type_code, ref, money_amount, price, currency_item, actor_name, balance_after, virtual_qty";
+            "source_kind, tag, type_code, ref, money_amount, price, currency_item, actor_name, balance_after, virtual_qty, origin_server";
 
     public TransactionLogManager(DatabaseManager databaseManager) {
         this.databaseManager = databaseManager;
@@ -103,6 +103,7 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
             setNullable(stmt, 17, data.actorName());
             setNullable(stmt, 18, data.balanceAfter());
             setNullable(stmt, 19, data.virtualQty());
+            setNullable(stmt, 20, data.originServer()); // BS-256
             stmt.addBatch();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to queue transaction-log record", e);
@@ -289,7 +290,7 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
         Long virtualQty = nullableLong(rs, 20);
         return new TransactionLogRecord(id, account, actor, actorName, source, type, itemId, amount,
                 otherAccount, companyId, ts, note, ref, moneyAmount, price,
-                currency == null ? null : (short) (int) currency, balanceAfter, virtualQty, tag);
+                currency == null ? null : (short) (int) currency, balanceAfter, virtualQty, tag, rs.getString(21));
     }
 
     private static @Nullable Integer nullableInt(ResultSet rs, int col) throws SQLException {

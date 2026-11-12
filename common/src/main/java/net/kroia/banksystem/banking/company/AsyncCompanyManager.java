@@ -1769,8 +1769,9 @@ public final class AsyncCompanyManager {
         if (srv == null || Thread.currentThread() == srv.getRunningThread()) {
             try { return s.get(); } catch (Throwable t) { return null; }
         }
+        String origin = net.kroia.banksystem.banking.ledger.TransactionLedger.currentOrigin(); // BS-256
         try {
-            return srv.submit(s::get).get();
+            return srv.submit(() -> net.kroia.banksystem.banking.ledger.TransactionLedger.withOrigin(origin, s)).get();
         } catch (Throwable t) {
             return null;
         }

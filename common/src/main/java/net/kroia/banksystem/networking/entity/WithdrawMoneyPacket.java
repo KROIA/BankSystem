@@ -151,7 +151,10 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
     @Override
     protected void handleOnMaster(ForwardPacketContext context) {
-        handle(context.senderPlayerUUID, context.senderServerID);
+        TransactionLedger.withOrigin(context.senderServerID, () -> { // BS-256
+            handle(context.senderPlayerUUID, context.senderServerID);
+            return null;
+        });
     }
     public void handle(UUID player, @Nullable String slaveID)
     {
@@ -268,7 +271,10 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                              @Nullable Map<ItemID, Long> notDropped, @Nullable Throwable ex)
     {
         if(ex == null) {
-            putRemainingItemsBack(bankaccountNr, player, notDropped, transferId);
+            TransactionLedger.withOrigin(slaveID, () -> { // BS-256: the refund row belongs to the slave's request
+                putRemainingItemsBack(bankaccountNr, player, notDropped, transferId);
+                return null;
+            });
             return;
         }
         String details = "DROP to slave " + slaveID + " outcome unknown, not refunded: " + items;

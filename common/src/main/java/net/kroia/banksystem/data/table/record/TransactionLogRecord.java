@@ -18,6 +18,7 @@ import java.util.UUID;
  * {@code itemId}/{@code amount} for the item slice and {@code moneyAmount}/{@code price}/
  * {@code currencyItem} for the money side. {@code tag} holds the trade row kind.
  * {@code balanceAfter} is the bank balance of {@code itemId} after the operation, when known.
+ * {@code originServer} (BS-256) is the slave id of the server whose request caused the row; null means the master.
  */
 public record TransactionLogRecord(
         long id,
@@ -38,7 +39,8 @@ public record TransactionLogRecord(
         @Nullable Short currencyItem,
         @Nullable Long balanceAfter,
         @Nullable Long virtualQty,
-        @Nullable String tag
+        @Nullable String tag,
+        @Nullable String originServer
 ) {
     /** Sentinel used when the row's DB id is not yet known (pre-insert construction). */
     public static final long UNSAVED_ID = -1L;
@@ -50,7 +52,7 @@ public record TransactionLogRecord(
         this(id, accountNumber, actorUuid, null,
                 actorUuid == null ? LedgerActor.Source.SYSTEM : LedgerActor.Source.PLAYER,
                 type, itemId, amount, otherAccount, companyId, time, note,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
     }
 
     /** Non-trade row with a full actor. */
@@ -60,7 +62,7 @@ public record TransactionLogRecord(
                                           @Nullable String note, @Nullable Long balanceAfter) {
         return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor.uuid(), actor.name(), actor.source(),
                 type, itemId, amount, otherAccount, companyId, System.currentTimeMillis(), note,
-                ref, null, null, null, balanceAfter, null, null);
+                ref, null, null, null, balanceAfter, null, null, null);
     }
 
     /** Like {@link #of} but with an explicit time (payout / dividend legs share the run's timestamp). */
@@ -70,7 +72,7 @@ public record TransactionLogRecord(
                                             @Nullable String note, @Nullable Long balanceAfter) {
         return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor.uuid(), actor.name(), actor.source(),
                 type, itemId, amount, otherAccount, companyId, time, note,
-                ref, null, null, null, balanceAfter, null, null);
+                ref, null, null, null, balanceAfter, null, null, null);
     }
 
     /** Convenience factory for a plain row (no counterparty, no company). */
@@ -92,6 +94,13 @@ public record TransactionLogRecord(
     public TransactionLogRecord withActor(LedgerActor actor) {
         return new TransactionLogRecord(id, accountNumber, actor.uuid(), actor.name(), actor.source(), type,
                 itemId, amount, otherAccount, companyId, time, note, ref, moneyAmount, price,
-                currencyItem, balanceAfter, virtualQty, tag);
+                currencyItem, balanceAfter, virtualQty, tag, originServer);
+    }
+
+    /** BS-256: copy with the origin server (slave id, null = master). */
+    public TransactionLogRecord withOrigin(@Nullable String origin) {
+        return new TransactionLogRecord(id, accountNumber, actorUuid, actorName, source, type, itemId, amount,
+                otherAccount, companyId, time, note, ref, moneyAmount, price, currencyItem, balanceAfter, virtualQty,
+                tag, origin);
     }
 }

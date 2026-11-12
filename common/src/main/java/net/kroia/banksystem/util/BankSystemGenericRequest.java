@@ -188,4 +188,16 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
         BACKEND_INSTANCES.LOGGER.debug("["+getRequestTypeID()+"] "+ message);
     }
 
+    /**
+     * BS-256: every ledger row a slave's request writes while it is handled carries the slave id as its origin
+     * server. The slave id is the one ModUtilities bound to the slave's connection at the handshake.
+     */
+    @Override
+    public CompletableFuture<net.minecraft.network.RegistryFriendlyByteBuf> decodeHandleEncodeOnMasterServer(
+            net.minecraft.network.RegistryFriendlyByteBuf inputBuf, net.minecraft.network.RegistryFriendlyByteBuf outputBuf,
+            String slaveID, @Nullable UUID playerSender) {
+        return net.kroia.banksystem.banking.ledger.TransactionLedger.withOrigin(slaveID,
+                () -> super.decodeHandleEncodeOnMasterServer(inputBuf, outputBuf, slaveID, playerSender));
+    }
+
 }

@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS TransactionLog (
     currency_item INTEGER,
     actor_name TEXT,
     balance_after INTEGER,
-    virtual_qty INTEGER
+    virtual_qty INTEGER,
+    origin_server TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_tx_log_account_ts ON TransactionLog (account_number, ts DESC);

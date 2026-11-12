@@ -6,7 +6,7 @@ BankSystem writes one row per balance change to the `TransactionLog` table in `b
 
 ## Multi-server
 
-Every money or item change runs on the master, so the master writes the row. A slave's request to the master carries the ledger type code with the amount, plus the player when the master cannot tell who caused it. The master checks the code against an allow-list for that request kind:
+Every money or item change runs on the master, so the master writes the row, with the slave's id in `origin_server`. A slave's request to the master carries the ledger type code with the amount, plus the player when the master cannot tell who caused it. The master checks the code against an allow-list for that request kind:
 
 | Request | Allowed codes |
 |---|---|
@@ -102,7 +102,6 @@ Codes are stored in `type_code` and are **append-only**: a code is never renumbe
 | 26 | ACCOUNT_FREEZE | An account was frozen or unfrozen; amount 0, item 0, note `frozen` / `unfrozen`, actor = admin, console or the API caller |
 | 27 | ADMIN_DISALLOW_ITEM | An admin disallowed an item; one row per holder with the removed (non-refunded) balance |
 | 28 | ACCOUNT_DELETE_LOSS | Balance of a deleted user's account that could not be handed out and was destroyed; the note ends with `not delivered: <reason>`, where the reason is `player offline`, `outcome unknown, transfer <id>` (a slave's DROP stayed unknown; `ref` = that transfer id) or `outcome unknown: <cause>` |
-
 | 29 | RAW_CHANGE | Change of a slot's total balance that no other row covers: raw bank calls of other mods or slave requests, a slot created with a start balance, a slot removed with a balance. Signed; the note names the call (`deposit`, `setBalance`, `bank created`, `bank removed`, ...) |
 | 30 | EXTERNAL_BIND | A slot was bound to an external currency account; signed change of the slot's total (the external balance joining), note `bound to <provider>:<account>` |
 | 31 | EXTERNAL_UNBIND | A slot was unbound; signed change of the slot's total, note says whether the funds were kept on BankSystem or left on the external account |
@@ -133,6 +132,7 @@ Amounts are unsigned, except for TRANSFER, RAW_CHANGE, EXTERNAL_BIND and EXTERNA
 | `currency_item` | Trade: currency item id |
 | `virtual_qty` | Trade: quantity filled against virtual (bot) liquidity, with no counterparty account |
 | `balance_after` | Bank total (free + locked) right after the change; null for trade rows |
+| `origin_server` | Server whose request caused the row: the slave id the master authenticated the slave's connection with (the `slave_id` in the slave's `server_identity.json`). Null for rows caused on the master, and for rows written before 2.2.0 |
 
 ## Reads (master)
 

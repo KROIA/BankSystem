@@ -47,6 +47,7 @@ public final class TransactionLedger implements ITransactionLedger {
     private static final ThreadLocal<SlaveTag> TAG = new ThreadLocal<>();
     private static final ThreadLocal<Resolved> TRANSFER_TYPE = new ThreadLocal<>();
     private static final ThreadLocal<Boolean> CALLER_LOGS = new ThreadLocal<>();
+    private static final ThreadLocal<String> ORIGIN = new ThreadLocal<>();
 
     /**
      * Wire-only code: the request moves value but writes no row. Used by the raw async bank
@@ -93,7 +94,7 @@ public final class TransactionLedger implements ITransactionLedger {
             write(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID, e.accountNumber(), e.actorUuid(), name,
                     LedgerActor.Source.STOCKMARKET, e.side().type(), e.item().getShort(), e.qtyRaw(),
                     null, null, e.timeMs(), e.note(), e.ref(), e.moneyRaw(), e.avgPriceRaw(),
-                    e.currency().getShort(), null, e.virtualQty(), e.rowKind().name()));
+                    e.currency().getShort(), null, e.virtualQty(), e.rowKind().name(), null));
         } catch (RuntimeException ignored) {
             // best-effort
         }
@@ -196,12 +197,38 @@ public final class TransactionLedger implements ITransactionLedger {
         }
     }
 
+    /**
+     * BS-256: runs {@code body} with {@code slaveId} as the origin server of every row written on this thread
+     * (set when a slave's request is handled on the master). Null or empty means the master.
+     */
+    public static <T> T withOrigin(@Nullable String slaveId, Supplier<T> body) {
+        String previous = ORIGIN.get();
+        ORIGIN.set(slaveId == null || slaveId.isEmpty() ? null : slaveId);
+        try {
+            return body.get();
+        } finally {
+            if (previous == null) ORIGIN.remove();
+            else ORIGIN.set(previous);
+        }
+    }
+
+    /** @return the origin server set with {@link #withOrigin} on this thread, null for the master. */
+    public static @Nullable String currentOrigin() {
+        return ORIGIN.get();
+    }
+
+    private static TransactionLogRecord stampOrigin(TransactionLogRecord row) {
+        String origin = ORIGIN.get();
+        return origin == null || row.originServer() != null ? row : row.withOrigin(origin);
+    }
+
     /** Persists a ready row on the master; no-op on a slave or without a DB. Never throws. */
     public static void write(TransactionLogRecord row) {
         try {
             if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer) return;
             TransactionLogManager mgr = BankSystemModBackend.getTransactionLogManager();
             if (mgr != null) {
+                row = stampOrigin(row); // BS-256
                 mgr.save(row).exceptionally(t -> {
                     warn("Ledger write failed: " + t.getMessage());
                     return null;
@@ -222,6 +249,7 @@ public final class TransactionLedger implements ITransactionLedger {
             if (rows.isEmpty() || (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer)) return;
             TransactionLogManager mgr = BankSystemModBackend.getTransactionLogManager();
             if (mgr == null) return;
+            rows = rows.stream().map(TransactionLedger::stampOrigin).toList(); // BS-256
             mgr.save(rows).exceptionally(t -> {
                 warn("Ledger write failed: " + t.getMessage());
                 return null;

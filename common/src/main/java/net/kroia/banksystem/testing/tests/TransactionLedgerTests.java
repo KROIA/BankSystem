@@ -138,6 +138,8 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("transfer_id_applies_once", () -> threw(this::transferIdAppliesOnce));
         addTest("drop_unknown_outcome_parks", () -> threw(this::dropUnknownParks));
         addTest("drop_not_sent_refunds_with_switch_on", this::dropNotSentRefundsWithSwitchOn);
+        // BS-256 — origin server of slave rows
+        addTest("origin_server_on_slave_rows_null_on_master", () -> threw(this::originServer));
     }
 
     @Override
@@ -235,6 +237,8 @@ public class TransactionLedgerTests extends TestSuite {
             List<TransactionLogRecord> rows = mgr.getByAccount(5, 0).get(10, TimeUnit.SECONDS);
             TestResult r = assertEquals("all legacy rows load", 6, rows.size());
             if (!r.passed()) return r;
+            for (TransactionLogRecord row : rows)
+                if (row.originServer() != null) return fail("legacy row got an origin server: " + row); // BS-256
             // newest first: SOMETHING_OLD, SHARE_TRADE, PAYOUT, TRANSFER_IN, TRANSFER_OUT, DEPOSIT
             LedgerType[] types = {LedgerType.UNKNOWN_LEGACY, LedgerType.SHARE_TRADE, LedgerType.PAYOUT,
                     LedgerType.TRANSFER, LedgerType.TRANSFER, LedgerType.DEPOSIT};
@@ -826,6 +830,81 @@ public class TransactionLedgerTests extends TestSuite {
     // ------------------------------------------------------------------ Task #126 (B6) transfer status
 
     private static final String FAKE_SLAVE = "b126-test-slave";
+    private static final String ORIGIN_SLAVE = "b256-test-slave";
+
+    /**
+     * BS-256: requests that enter through the ARRS master entry point with a slave id write rows whose
+     * origin_server is that slave id (typed and raw AsyncBank calls, both transfer legs, item requests); the
+     * same calls made on the master write NULL.
+     */
+    private TestResult originServer() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        ItemID moneyId = MoneyItem.getItemID();
+        ItemID diamond = allow(Items.DIAMOND.getDefaultInstance());
+        IServerBank money = manager.getBankAccount(accountNr).getOrCreateBank(moneyId);
+        if (money == null || manager.getBankAccount(otherAccountNr).getOrCreateBank(moneyId) == null) return fail("no money bank");
+        boolean wasTrusted = manager.isSlaveServerTrusted(ORIGIN_SLAVE);
+        manager.trustSlaveServer(ORIGIN_SLAVE);
+        try {
+            long last = lastRowId(accountNr), lastOther = lastRowId(otherAccountNr);
+            AsyncBank.Request bankReq = AsyncBank.Request.instance;
+            viaMaster(bankReq, TransactionLedger.tagged(LedgerType.UPLOAD_DEPOSIT, PLAYER, null,
+                    () -> AsyncBank.InputData.of(AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 40L)));
+            viaMaster(bankReq, AsyncBank.InputData.of(AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 5L));
+            viaMaster(bankReq, AsyncBank.InputData.of(AsyncBank.FunctionType.TransferAsync, accountNr, moneyId,
+                    new AsyncBank.ParamGroup_long_int(3L, otherAccountNr)));
+            Map<ItemID, Long> items = new HashMap<>(Map.of(diamond, 2L));
+            viaMaster(new DepositItemsInBankRequest(),
+                    new DepositItemsInBankRequest.InputData(accountNr, PLAYER, items, LedgerType.DEPOSIT.code()));
+            viaMaster(new WithdrawItemsFromBankRequest(),
+                    new WithdrawItemsFromBankRequest.InputData(accountNr, PLAYER, items, LedgerType.DOWNLOAD_WITHDRAW.code()));
+            List<TransactionLogRecord> slaveRows = new ArrayList<>(since(accountNr, last));
+            slaveRows.addAll(since(otherAccountNr, lastOther));
+            List<LedgerType> want = List.of(LedgerType.UPLOAD_DEPOSIT, LedgerType.RAW_CHANGE, LedgerType.TRANSFER,
+                    LedgerType.DEPOSIT, LedgerType.DOWNLOAD_WITHDRAW);
+            for (LedgerType t : want)
+                if (find(slaveRows, t) == null) return fail("no " + t + " row from the slave requests: " + slaveRows);
+            if (slaveRows.stream().filter(x -> x.type() == LedgerType.TRANSFER).count() != 2) return fail("transfer legs " + slaveRows);
+            for (TransactionLogRecord row : slaveRows)
+                if (!ORIGIN_SLAVE.equals(row.originServer())) return fail("slave row without origin: " + row);
+
+            last = lastRowId(accountNr);
+            bankReq.handleOnMasterServer(TransactionLedger.tagged(LedgerType.UPLOAD_DEPOSIT, PLAYER, null,
+                    () -> AsyncBank.InputData.of(AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 6L)), "", null).join();
+            money.deposit(1L);
+            List<TransactionLogRecord> masterRows = since(accountNr, last);
+            if (masterRows.size() != 2) return fail("master rows " + masterRows);
+            for (TransactionLogRecord row : masterRows)
+                if (row.originServer() != null) return fail("master row with origin: " + row);
+            return pass("slave rows carry " + ORIGIN_SLAVE + " (" + slaveRows.size() + " rows), master rows NULL");
+        } finally {
+            if (!wasTrusted) manager.untrustSlaveServer(ORIGIN_SLAVE);
+        }
+    }
+
+    /** Runs {@code input} through the ARRS master entry point as if {@link #ORIGIN_SLAVE} had forwarded it. */
+    private static <I, O> void viaMaster(net.kroia.modutilities.networking.client_server.arrs.GenericRequest<I, O> req, I input)
+            throws Exception {
+        RegistryFriendlyByteBuf in = UtilitiesPlatform.createRegistryFriendlyByteBufServerSide();
+        RegistryFriendlyByteBuf out = UtilitiesPlatform.createRegistryFriendlyByteBufServerSide();
+        if (in == null || out == null) throw new IllegalStateException("no server registry access");
+        try {
+            req.encodeInput(in, input);
+            req.decodeHandleEncodeOnMasterServer(in, out, ORIGIN_SLAVE, null).get(10, TimeUnit.SECONDS);
+        } finally {
+            if (in.refCnt() > 0) in.release();
+            if (out.refCnt() > 0) out.release();
+        }
+    }
+
+    private long lastRowId(int account) {
+        List<TransactionLogRecord> rows = rows(account);
+        return rows.isEmpty() ? 0L : rows.get(0).id();
+    }
+
+    private List<TransactionLogRecord> since(int account, long lastId) {
+        return rows(account).stream().filter(x -> x.id() > lastId).toList();
+    }
 
     @FunctionalInterface
     private interface Body { TestResult run() throws Exception; }
