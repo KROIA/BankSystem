@@ -184,7 +184,7 @@ If the binding is legitimate (for example a shared account whose external accoun
 /banksystem restorebinding <account> [item]
 ```
 
-`<account>` is the bank account number; `[item]` (the item name exactly as the flag's restore command shows it) limits it to one slot, otherwise every suspended binding of the account is restored. A restored binding is marked as approved by an admin and is not checked again. Each restore is written to the ledger as an admin account edit (audit file and alert). The command needs the permission `banksystem.admin.command.restorebinding` (operator level 2 without a permission mod) and also works from the master console.
+`<account>` is the bank account number; `[item]` (the item name exactly as the flag's restore command shows it) limits it to one slot, otherwise every suspended binding of the account is restored. A restored binding is marked as approved by an admin and is not checked again. Each restore is written to the ledger as an admin account edit (audit file and alert). The command needs the BankSystem admin flag (`/banksystem op`); without a permission mod the node lets every player through and the admin flag decides (node `banksystem.admin.command.restorebinding`). It also works from the master console.
 
 If the binding is not legitimate, leave it suspended, or delete the bank slot or account: the held amount is then logged and not paid out.
 

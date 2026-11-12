@@ -2,7 +2,7 @@
 
 What the columns mean:
 
-- **Admin only** — the command needs a permission node (listed in the description). Without a permission mod such as LuckPerms, each node falls back to operator level 2; `/banksystem discord` needs level 3. The server console always passes. All nodes are listed in the [main README](../../README.md#permissions-luckperms).
+- **Admin only** — the command needs a permission node (listed in the description). Without a permission mod such as LuckPerms, each node falls back to operator level 2; `/banksystem discord` needs level 3. Exception: `symbols`, `restorebinding` and `shares` are decided by the BankSystem admin flag (`/banksystem op`), not by operator level. The server console always passes. All nodes are listed in the [main README](../../README.md#permissions-luckperms).
 - **BS Admin only** — the command needs the [BankSystem admin flag](Administration.md#banksystem-admin-role), set with `/banksystem op`. Minecraft operator status alone is not enough.
 
 On a slave server that the master does not trust, only `/money` and `/money circulation` work; see [Multi-Server Setup](MultiserverSetup.md#what-an-untrusted-slave-can-do).

@@ -294,7 +294,7 @@ For the full command reference, see [Commands](documentation/user-guide/Commands
 
 ### Permissions (LuckPerms)
 
-Admin functions check these permission nodes, so a permission mod such as LuckPerms can grant or deny them per player. Without a permission mod, each node requires operator level 2 (same as before). `banksystem.admin.*` grants all of them.
+Admin functions check these permission nodes, so a permission mod such as LuckPerms can grant or deny them per player. Without a permission mod, each node requires operator level 2 (same as before), except the `symbols`, `restorebinding` and `shares` command nodes: they let every player through and the BankSystem admin flag (`/banksystem op`) decides. `banksystem.admin.*` grants all of them.
 
 | Node | Grants |
 |------|--------|

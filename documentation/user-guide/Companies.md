@@ -356,7 +356,7 @@ The finished item tooltip shows the company name, `Supply: <issued> / <max>`, an
 
 ### Share symbols (server admins)
 
-Symbols are PNG textures stored per world. BankSystem ships **45** of them; admins can add their own. All symbol commands need permission level 2 **and must be run on the master server**.
+Symbols are PNG textures stored per world. BankSystem ships **45** of them; admins can add their own. All symbol commands need the BankSystem admin flag (`/banksystem op`; with a permission mod, node `banksystem.admin.command.symbols`) **and must be run on the master server**.
 
 | Command | What it does |
 |---|---|
@@ -398,7 +398,7 @@ On a master/slave setup ([Multi-Server Setup](MultiserverSetup.md)):
 | `/company create "<name>" <maxSupply>` | Found a company and its bank account | Any player |
 | `/company info "<companyName>"` | Print company details to chat | Any player |
 | `/company manage "<companyName>"` | Open the Company Management screen | `MANAGE` on the bound account, or BankSystem admin |
-| `/banksystem symbols list\|add <id>\|remove <id>\|reload` | Manage share symbol textures (master only) | Permission level 2 |
+| `/banksystem symbols list\|add <id>\|remove <id>\|reload` | Manage share symbol textures (master only) | BankSystem admin flag |
 | `/banksystem shares acknowledge <companyId>` | Accept a [share excess](#share-integrity) and resume the company's dividends (master only) | BankSystem admin |
 
 The full command list for the rest of the mod is in [Commands](Commands.md).
