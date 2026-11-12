@@ -104,6 +104,7 @@ public class ItemIDMergeGuardTests extends TestSuite {
         addTest("putAlias_succeeds_when_source_not_in_map", this::testPutAliasSucceedsWhenSourceNotInMap);
         addTest("putAlias_rejects_when_source_in_map", this::testPutAliasRejectsWhenSourceInMap);
         addTest("renormalize_still_produces_aliases_via_guarded_path", this::testRenormalizeStillProducesAliasesViaGuardedPath);
+        addTest("receiver_follows_master_merge", this::testReceiverFollowsMasterMerge);
         // Task #16 — registration latch, persisted-wins merges, stale-key replacement
         addTest("master_registration_latched_before_load", this::testMasterRegistrationLatchedBeforeLoad);
         addTest("persisted_short_wins_merge_canonicality", this::testPersistedShortWinsMergeCanonicality);
@@ -962,6 +963,31 @@ public class ItemIDMergeGuardTests extends TestSuite {
         } finally {
             // Belt-and-suspenders: if the guard somehow accepted the insert, clean up.
             ItemIDManager.removeAliasEntries_forTesting(List.of(a));
+        }
+    }
+
+    /**
+     * BS-253: a receiver that still holds source short S as a live item gets the alias S→T
+     * from the master and follows it: alias installed (so the guard did not reject it),
+     * S gone from the item table, T untouched. Calls the receive-path helper directly —
+     * {@code receiveSyncPacket} on the master would also capture the tag snapshot and
+     * re-adopt the component lists, which a test must not touch on a live server.
+     */
+    private TestResult testReceiverFollowsMasterMerge() {
+        ItemID s = registerScratch(paperWithCustomData("receiver-merge-source"));
+        ItemID t = registerScratch(paperWithCustomData("receiver-merge-target"));
+        if (!s.isValid() || !t.isValid()) return fail("Could not register scratch templates");
+        try {
+            ItemIDManager.applyAliasesFromMaster(Map.of(s, t));
+            TestResult r = assertEquals("alias S -> T installed", t, ItemIDManager.getItemIDAliasMap().get(s));
+            if (!r.passed()) return r;
+            r = assertFalse("S dropped from itemIDMap", ItemIDManager.getItemIDMap().containsKey(s));
+            if (!r.passed()) return r;
+            r = assertTrue("T stays in itemIDMap", ItemIDManager.getItemIDMap().containsKey(t));
+            if (!r.passed()) return r;
+            return pass("receiver follows the master's merge without a guard rejection");
+        } finally {
+            ItemIDManager.removeAliasEntries_forTesting(List.of(s));
         }
     }
 

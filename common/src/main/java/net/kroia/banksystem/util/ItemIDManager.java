@@ -696,8 +696,8 @@ public class ItemIDManager implements ServerSaveable {
     }
 
     /**
-     * Adopts alias entries received from the master/server sync.
-     * Existing local aliases are kept and updated; entries are never removed here
+     * Adopts the given alias entries through the {@link #putAlias} guard. The sync receive
+     * path uses {@link #applyAliasesFromMaster(Map)} instead (BS-253). Existing local aliases are kept and updated; entries are never removed here
      * (a full re-sync happens on every player join / slave connect).
      * <p>
      * Every entry is inserted via {@link #putAlias(ItemID, ItemID)} so the write-side
@@ -715,6 +715,37 @@ public class ItemIDManager implements ServerSaveable {
         for(Map.Entry<ItemID, ItemID> entry : aliases.entrySet())
         {
             putAlias(entry.getKey(), entry.getValue());
+        }
+    }
+
+    /**
+     * Receive-path variant of {@link #applyAliases(Map)} for clients and slave servers
+     * (BS-253): they follow the master's merges. A merged-away source short that this side
+     * still holds as a live item (it was synced before the master merged it) is dropped from
+     * {@link #itemIDMap} first, so the alias goes in without tripping the {@link #putAlias}
+     * invariant guard. Entries already known with the same target are skipped.
+     * Never call on the master or in singleplayer (shared maps) — local write paths keep
+     * the guard's ERROR, where a violation means a real broken invariant.
+     *
+     * @param aliases alias entries (merged ID → canonical ID) from a sync packet
+     */
+    public static void applyAliasesFromMaster(Map<ItemID, ItemID> aliases)
+    {
+        if(aliases == null || aliases.isEmpty())
+            return;
+        synchronized (itemIDMap) {
+            for(Map.Entry<ItemID, ItemID> entry : aliases.entrySet())
+            {
+                ItemID source = entry.getKey();
+                ItemID target = entry.getValue();
+                if(target.equals(itemIDAliasMap.get(source)))
+                    continue;
+                if(itemIDMap.remove(source) != null && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.debug("[ItemIDManager] Following the master's merge: #"
+                            + source.getShort() + " (" + safeItemIDName(source) + ") is now an alias of #"
+                            + target.getShort() + " (" + safeItemIDName(target) + ")");
+                putAlias(source, target);
+            }
         }
     }
 
@@ -1505,7 +1536,7 @@ public class ItemIDManager implements ServerSaveable {
         // swapped in its fixture state). The server is the only writer of the shared maps.
         boolean ownsRegistryMaps = adoptComponentLists;
         if(ownsRegistryMaps)
-            applyAliases(packet.getAliases());
+            applyAliasesFromMaster(packet.getAliases());
         // Task #25: the wire format is now Map<ItemID, CompoundTag> — inflate each entry
         // via ItemStack.parseOptional against THIS side's RegistryAccess. Encoding by
         // resource key means entries whose host mod is missing on this side surface
