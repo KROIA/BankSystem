@@ -350,23 +350,31 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         // Task #45a / Spec A.3 (v2.1.0) — Payouts entry on its own second row (the
         // "Share Visuals" button was removed; those settings live in the Company
         // screen's Shares tab). Visibility gated on company presence via async lookup.
+        // BS-244: companyIdForPayouts survives a reload of the same account (switchAccount clears it),
+        // so the first layout after Save already has the Payouts row and nothing jumps.
         payoutsButton = new Button(PAYOUTS_BUTTON.getString(), this::onPayoutsButtonClicked);
-        payoutsButton.setEnabled(false);
         addElement(payoutsButton);
-        companyIdForPayouts = null;
+        applyCompanyState();
 
+        Button payouts = payoutsButton;
+        int lookupAccount = accountNumber;
         net.kroia.banksystem.banking.company.AsyncCompanyManager
-                .getCompanyInfoByAccountAsync(accountNumber)
-                .thenAccept(info -> {
-                    if (!screenIsOpen || info == null || !info.present()) return;
-                    companyIdForPayouts = info.companyId();
-                    boolean visible = canManage || isAdminMode;
-                    payoutsButton.setEnabled(visible);
-                    // ServerBankManager.deleteBankAccount() rejects accounts still owned by a
-                    // company, so grey the button out here rather than letting the click fail silently.
-                    if (deleteBankAccountButton != null)
-                        deleteBankAccountButton.setEnabled(false);
-                });
+                .getCompanyInfoByAccountAsync(lookupAccount)
+                .thenAccept(info -> runLater(() -> {
+                    // BS-244: client thread; skip if closed, rebuilt by a newer setupGui or switched away.
+                    if (!screenIsOpen || payouts != payoutsButton || lookupAccount != accountNumber || info == null) return;
+                    companyIdForPayouts = info.present() ? info.companyId() : null;
+                    applyCompanyState();
+                    updateLayout(getGui());
+                }));
+    }
+
+    private void applyCompanyState() {
+        payoutsButton.setEnabled(companyIdForPayouts != null && (canManage || isAdminMode));
+        // ServerBankManager.deleteBankAccount() rejects accounts still owned by a
+        // company, so grey the button out here rather than letting the click fail silently.
+        if (companyIdForPayouts != null && deleteBankAccountButton != null)
+            deleteBankAccountButton.setEnabled(false);
     }
     private void setupAdminWindow()
     {
@@ -533,6 +541,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     /** Loads another account into this screen; unsaved edits are dropped by the reload. */
     private void switchAccount(int accountNumber) {
         this.accountNumber = accountNumber;
+        companyIdForPayouts = null;
         setupGui(accountNumber);
     }
 
