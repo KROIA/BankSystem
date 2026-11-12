@@ -1,6 +1,14 @@
 package net.kroia.banksystem.testing.tests;
 
+import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IAsyncBank;
+import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
+import net.kroia.banksystem.api.bankmanager.IBankManager;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
+import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
+import net.kroia.banksystem.util.BankSystemLogger;
 import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
@@ -22,10 +30,16 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * In-game tests for component-aware physical stack placement when bank credits materialize
@@ -65,6 +79,8 @@ public class WithdrawMergeTests extends TestSuite {
         addTest("terminal_inventory_keeps_mismatched_stack_untouched", this::testTerminalInventoryKeepsMismatchedStack);
         addTest("failed_debit_rollback_removes_inserted_items", this::testRollbackRemovesInsertedItems);
         addTest("terminal_deposit_reserves_before_send", this::testTerminalDepositReservesBeforeSend); // Task #145
+        addTest("download_rollback_unlocks_only_returned_part", this::testDownloadRollbackWithEscape); // BS-201
+        addTest("terminal_rollback_unlocks_only_returned_part", this::testTerminalRollbackWithEscape); // BS-201
     }
 
     @Override
@@ -288,6 +304,171 @@ public class WithdrawMergeTests extends TestSuite {
         r = assertFalse("withdrawn items are clean", slot1.has(DataComponents.CUSTOM_DATA));
         if (!r.passed()) return r;
         return pass("terminal inventory withdrawal keeps component-mismatched stacks intact");
+    }
+
+    // ------------------------------------------------------------------ BS-201: rollback with escaped items
+
+    private static final int FILL = 10;
+    private static final int ESCAPED = 3;
+
+    /**
+     * A bank with plenty of balance whose locked withdraw fails. {@code beforeFail} runs inside the withdraw call,
+     * i.e. after the items were inserted and before the rollback: it stands in for a hopper / the player taking
+     * part of them out. Every unlock amount is recorded.
+     */
+    private static IAsyncBank failingWithdrawBank(Runnable beforeFail, List<Long> unlocked) {
+        return (IAsyncBank) Proxy.newProxyInstance(IAsyncBank.class.getClassLoader(), new Class<?>[]{IAsyncBank.class},
+                (proxy, m, args) -> switch (m.getName()) {
+                    case "getBalanceAsync" -> CompletableFuture.completedFuture(1_000_000L);
+                    case "lockAmountAsync" -> CompletableFuture.completedFuture(BankStatus.SUCCESS);
+                    case "withdrawLockedPreferedAsync" -> {
+                        beforeFail.run();
+                        yield CompletableFuture.completedFuture(BankStatus.FAILED_NOT_ENOUGH_FUNDS);
+                    }
+                    case "unlockAmountAsync" -> {
+                        unlocked.add((Long) args[0]);
+                        yield CompletableFuture.completedFuture(BankStatus.SUCCESS);
+                    }
+                    case "toString" -> "FailingWithdrawBank";
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException(m.getName());
+                });
+    }
+
+    /** Proxy of {@code iface} that answers {@code override} where it returns non-null, else forwards to {@code target}. */
+    @SuppressWarnings("unchecked")
+    private static <T> T delegating(Class<T> iface, T target, java.util.function.BiFunction<Method, Object[], Object> override) {
+        return (T) Proxy.newProxyInstance(iface.getClassLoader(), new Class<?>[]{iface}, (proxy, m, args) -> {
+            Object answer = override.apply(m, args);
+            if (answer != null)
+                return answer;
+            try {
+                return m.invoke(target, args);
+            } catch (InvocationTargetException e) {
+                throw e.getCause();
+            }
+        });
+    }
+
+    /** Runs {@code body} with error lines captured; the real logger still gets them. */
+    private static void withErrorCapture(List<String> errors, Runnable body) {
+        BankSystemModBackend.Instances instances = BankSystemModBackend.getInstances_forTesting();
+        BankSystemLogger original = instances.LOGGER;
+        instances.LOGGER = new BankSystemLogger(instances) {
+            @Override
+            public void error(String message) {
+                errors.add(message);
+                original.error(message);
+            }
+        };
+        try {
+            body.run();
+        } finally {
+            instances.LOGGER = original;
+        }
+    }
+
+    /**
+     * BS-201, download block: the debit fails after a hopper already pulled {@link #ESCAPED} of the {@link #FILL}
+     * inserted items. Only the part taken back is unlocked; the escaped part stays locked and is logged.
+     */
+    private TestResult testDownloadRollbackWithEscape() {
+        ItemID paperId = ItemIDManager.getItemID(new ItemStack(Items.PAPER));
+        if (!paperId.isValid())
+            return fail("Plain paper is not registered — default ItemIDs missing on this server?");
+        // Detached block entity: its own 27-slot inventory is the container a hopper below would pull from.
+        BankDownloadBlockEntity block = new BankDownloadBlockEntity(BlockPos.ZERO,
+                BankSystemBlocks.BANK_DOWNLOAD_BLOCK.get().defaultBlockState());
+        long ratio = BankAccountBindings.getRawUnitsPerItem(0, paperId); // the block's account is 0 (unset)
+        List<Long> unlocked = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        int[] pulled = {0};
+        IAsyncBank bank = failingWithdrawBank(() -> pulled[0] = block.removeItem(0, ESCAPED).getCount(), unlocked);
+        Object[] filled = {null};
+        withErrorCapture(errors, () -> {
+            try {
+                Method fill = BankDownloadBlockEntity.class.getDeclaredMethod("withdrawAndFillInventory",
+                        ItemID.class, int.class, IAsyncBank.class);
+                fill.setAccessible(true);
+                filled[0] = ((CompletableFuture<?>) fill.invoke(block, paperId, FILL, bank)).get(2, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                filled[0] = e;
+            }
+        });
+        TestResult r = assertEquals("hopper stand-in pulled " + ESCAPED + " items", ESCAPED, pulled[0]);
+        if (!r.passed()) return r;
+        r = assertEquals("failed withdraw reports 0 filled", 0, filled[0]);
+        if (!r.passed()) return r;
+        r = assertTrue("block empty again (the rest was taken back)", block.isEmpty());
+        if (!r.passed()) return r;
+        r = assertEquals("only the returned part is unlocked", List.of((long) (FILL - ESCAPED) * ratio), unlocked);
+        if (!r.passed()) return r;
+        return assertTrue("escaped part logged as left locked, got " + errors, errors.stream().anyMatch(e ->
+                e.contains("only " + (FILL - ESCAPED) + " item(s)") && e.contains(ESCAPED * ratio + " (raw) left locked")));
+    }
+
+    /**
+     * BS-201, bank terminal: same escape case through the real {@code sendToBlock} path; the player takes
+     * {@link #ESCAPED} items out of their terminal inventory before the rollback. The bank manager is swapped for a
+     * delegating proxy that hands out a fake account (only its account number is overridden) for the call.
+     */
+    private TestResult testTerminalRollbackWithEscape() {
+        ItemID paperId = ItemIDManager.getItemID(new ItemStack(Items.PAPER));
+        if (!paperId.isValid())
+            return fail("Plain paper is not registered — default ItemIDs missing on this server?");
+        BankSystemModBackend.Instances instances = BankSystemModBackend.getInstances_forTesting();
+        IBankManager realManager = instances.SERVER_BANK_MANAGER;
+        if (realManager == null)
+            return skip("no bank manager on this side");
+        // Detached block entity (no level): runOnMainThread runs inline, so the whole flow is synchronous.
+        BankTerminalBlockEntity terminal = new BankTerminalBlockEntity(
+                BlockPos.ZERO, BankSystemBlocks.BANK_TERMINAL_BLOCK.get().defaultBlockState());
+        UUID player = UUID.randomUUID();
+        BankTerminalBlockEntity.TerminalInventory inventory = terminal.getInventory(player);
+        final int accountNr = Integer.MAX_VALUE - 201; // never a real account
+        long ratio = BankAccountBindings.getRawUnitsPerItem(accountNr, paperId);
+        List<Long> unlocked = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        long[] taken = {0};
+        IAsyncBank bank = failingWithdrawBank(() -> taken[0] = inventory.removeItem(paperId, ESCAPED), unlocked);
+        IAsyncBankAccount account = (IAsyncBankAccount) Proxy.newProxyInstance(IAsyncBankAccount.class.getClassLoader(),
+                new Class<?>[]{IAsyncBankAccount.class}, (proxy, m, args) -> switch (m.getName()) {
+                    case "hasPermissionAsync" -> CompletableFuture.completedFuture(true);
+                    case "getAccountNumberAsync" -> accountNr;
+                    case "getOrCreateBankAsync" -> CompletableFuture.completedFuture(bank);
+                    case "toString" -> "FakeAccount";
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException(m.getName());
+                });
+        IAsyncBankManager asyncManager = delegating(IAsyncBankManager.class, realManager.getAsync(), (m, args) ->
+                m.getName().equals("getBankAccountAsync") && args != null && Integer.valueOf(accountNr).equals(args[0])
+                        ? CompletableFuture.completedFuture(account) : null);
+        Exception[] failure = {null};
+        withErrorCapture(errors, () -> {
+            instances.SERVER_BANK_MANAGER = delegating(IBankManager.class, realManager,
+                    (m, args) -> m.getName().equals("getAsync") ? asyncManager : null);
+            try {
+                Method send = BankTerminalBlockEntity.class.getDeclaredMethod("sendToBlock", UUID.class, int.class, HashMap.class);
+                send.setAccessible(true);
+                send.invoke(terminal, player, accountNr, new HashMap<>(Map.of(paperId, (long) FILL)));
+            } catch (Exception e) {
+                failure[0] = e;
+            } finally {
+                instances.SERVER_BANK_MANAGER = realManager;
+            }
+        });
+        if (failure[0] != null)
+            return fail("sendToBlock threw " + failure[0]);
+        TestResult r = assertEquals("player took " + ESCAPED + " items out", (long) ESCAPED, taken[0]);
+        if (!r.passed()) return r;
+        r = assertEquals("rest taken back out of the terminal", 0L, inventory.getItemCount_direct(paperId));
+        if (!r.passed()) return r;
+        r = assertEquals("only the returned part is unlocked", List.of((long) (FILL - ESCAPED) * ratio), unlocked);
+        if (!r.passed()) return r;
+        return assertTrue("escaped part logged as left locked, got " + errors, errors.stream().anyMatch(e ->
+                e.contains("Withdraw rollback: " + ESCAPED + " ") && e.contains(ESCAPED * ratio + " (raw) left locked")));
     }
 
     /** A slave deposit whose reply was lost, resolved by the status check the way AsyncBank does it. */
