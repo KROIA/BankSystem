@@ -61,6 +61,11 @@ public class BankSystemTestCategories {
             "banksystem", "diagnostics_slave", "Slave TransferJournal rows in the diagnostics DB",
             TestCategory.ServerType.SLAVE_ONLY, true);
 
+    /** BS-210 — checks a Minecraft/loader port tends to break: blocks, drops, block entity data, recipes, menus. */
+    public static final TestCategory PORT_CHECK = new TestCategory(
+            "banksystem", "port_check", "Registration, drops, block entity save/load, recipes, menus, redstone",
+            TestCategory.ServerType.MASTER_ONLY, true);
+
     /** Task #43 (v2.1.0) — Company feature Phase 1 (POJOs, manager, persistence, invariant). */
     public static final TestCategory COMPANY = new TestCategory(
             "banksystem", "company", "Company registry, persistence, and founder invariant",
