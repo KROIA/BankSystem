@@ -24,7 +24,6 @@ On a slave server that the master does not trust, only `/money` and `/money circ
 | `/banksystem history <player\|account>` | Opens the balance history of a player's personal account or of an account number, with suspicion flags as chart markers. Needs a player | | X |
 | `/banksystem alerts on\|off` | Turns your chat alerts for admin actions and suspicion flags on or off; the audit files are written either way. Needs a player | | X |
 | `/banksystem restorebinding <account> [item]` | Lifts the suspension of a [suspended currency binding](Administration.md#suspended-currency-bindings) on that account (one slot when `item` is given). Master server or its console only. Node `banksystem.admin.command.restorebinding` | X | |
-| `/banksystem shares acknowledge <companyId>` | Accepts a [share excess](Administration.md#share-integrity) of that company and resumes its dividends. Master server or its console only. Node `banksystem.admin.command.shares` | X | |
 | `/banksystem trust <slaveID>` | Adds a slave server to the trusted list (master only). Node `banksystem.admin.command.trust` | X | |
 | `/banksystem untrust <slaveID>` | Removes a slave server from the trusted list (master only). Node `banksystem.admin.command.trust` | X | |
 | `/banksystem serverInfo` | Shows information about this server | | |
@@ -74,8 +73,9 @@ On a slave server that the master does not trust, only `/money` and `/money circ
 | `/company create <name> <maxSupply>` | Founds a company with a bound bank account, with you as founder. `maxSupply` is the share cap, between 1 and 1,000,000,000. Limited by `MAX_COMPANIES_PER_PLAYER` and needs a free bank-account slot ([details](Companies.md#founding-a-company)) | | |
 | `/company info <companyName>` | Prints company metadata to chat — founders, max supply, issued shares and description | | |
 | `/company manage <companyName>` | Opens the Company Management screen (requires MANAGE on the company's account) | | |
+| `/company shares acknowledge <companyName>` | Accepts a [share excess](Administration.md#share-integrity) of that company and resumes its dividends. Needs MANAGE on the company's account, the founder role or the BankSystem admin flag; also works from the master's console | | |
 
-Company names are case-insensitive, and tab-completion is scoped to your rights: `info` suggests every company on the server, `manage` only those where you hold MANAGE.
+Company names are case-insensitive, and tab-completion is scoped to your rights: `info` suggests every company on the server, `manage` and `shares acknowledge` only those where you hold MANAGE or are a founder (BankSystem admins get every company for `shares acknowledge`).
 
 Everything else is done in the game world rather than in chat:
 

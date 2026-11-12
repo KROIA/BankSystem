@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * BS-235 — share integrity, master only. A company's banked shares (free + locked over all its share
  * ItemIDs) must not exceed {@link Company#getTotalSharesIssued()} (stamped). More banked than stamped
  * raises one {@link SuspicionChecks#SHARE_EXCESS} flag per company and pauses dividends until an admin
- * runs {@code /banksystem shares acknowledge}; it is raised again only when the excess grows past the
+ * or a company admin runs {@code /company shares acknowledge}; it is raised again only when the excess grows past the
  * raised / acknowledged level. Nothing is ever removed or refused.
  * <p>
  * Checked after a ledger row that can raise a share balance, once a day, and on acknowledge. Rows that
@@ -176,7 +176,7 @@ public final class ShareIntegrity {
         int account = c.getBankAccountNr();
         int cid = c.getCompanyId();
         String head = "Company " + c.getName() + " (#" + cid + "): stamped " + stamped + ", banked " + banked
-                + ", excess " + excess + ".\nDividends paused until /banksystem shares acknowledge " + cid;
+                + ", excess " + excess + ".\nDividends paused until /company shares acknowledge \"" + c.getName() + "\"";
         short[] items = shortIds(cid);
         DatabaseManager db = BankSystemModBackend.getDatabaseManager();
         if (db == null) {

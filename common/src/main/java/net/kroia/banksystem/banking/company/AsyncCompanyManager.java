@@ -135,7 +135,10 @@ public final class AsyncCompanyManager {
         PULL_SYMBOL_BYTES,
         // BS-240 (v2.2.0) — slave→master: shares created by /give or the creative inventory on a slave.
         // Trusted slaves only (in neither whitelist).
-        REPORT_SHARE_CREATED
+        REPORT_SHARE_CREATED,
+        // BS-235 (v2.2.0) — /company shares acknowledge from a slave. Company admins (gateManage)
+        // only; server command path, never callable by a client or an untrusted slave.
+        ACKNOWLEDGE_SHARE_EXCESS
     }
 
     /** Task #1 (v2.1.0) — SM bridge result codes for OPEN_SHARE_MARKET output. */
@@ -159,6 +162,8 @@ public final class AsyncCompanyManager {
     public static final byte FILTER_ALL      = 0;
     public static final byte FILTER_FOUNDER  = 1;
     public static final byte FILTER_MANAGE   = 2;
+    /** BS-235: like {@link #FILTER_MANAGE}, but every company for a BankSystem admin (not via an untrusted slave). */
+    public static final byte FILTER_ADMIN    = 3;
 
     // ------------------------------------------------------------------
     // Param records + codecs
@@ -218,6 +223,14 @@ public final class AsyncCompanyManager {
                 ByteBufCodecs.STRING_UTF8, p -> p.companyName,
                 ByteBufCodecs.VAR_INT, p -> p.bankAccountNr,
                 DissolveOutput::new);
+    }
+    /** BS-235: result of {@link FunctionType#ACKNOWLEDGE_SHARE_EXCESS}; input is a {@link DissolveInput}. */
+    public record ShareAcknowledgeOutput(int resultCode, String companyName, long excess) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ShareAcknowledgeOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.resultCode,
+                ByteBufCodecs.STRING_UTF8, p -> p.companyName,
+                ByteBufCodecs.VAR_LONG, p -> p.excess,
+                ShareAcknowledgeOutput::new);
     }
 
     public record DescriptionInput(String companyName, UUID callerUUID, String text) implements HasCallerUUID {
@@ -1158,6 +1171,7 @@ public final class AsyncCompanyManager {
         put(FunctionType.GET_SYMBOL_MANIFEST,       new AsyncFunctionDataCodecs(EmptyInput.STREAM_CODEC,            SymbolManifestOutput.STREAM_CODEC));
         put(FunctionType.PULL_SYMBOL_BYTES,         new AsyncFunctionDataCodecs(PullSymbolBytesInput.STREAM_CODEC,  EmptyInput.STREAM_CODEC));
         put(FunctionType.REPORT_SHARE_CREATED,      new AsyncFunctionDataCodecs(ShareCreatedInput.STREAM_CODEC,     EmptyInput.STREAM_CODEC));
+        put(FunctionType.ACKNOWLEDGE_SHARE_EXCESS,  new AsyncFunctionDataCodecs(DissolveInput.STREAM_CODEC,         ShareAcknowledgeOutput.STREAM_CODEC));
     }};
 
     // ------------------------------------------------------------------
@@ -1274,7 +1288,11 @@ public final class AsyncCompanyManager {
                 case GET_COMPANY_INFO   -> handleInfo((String) input.decodeParams(), bm, cm);
                 case IS_NAME_TAKEN      -> OutputData.of(FunctionType.IS_NAME_TAKEN,
                                              cm.isNameTaken((String) input.decodeParams()));
-                case LIST_COMPANIES_FOR_CALLER -> handleListForCaller(input.decodeParams(), cm);
+                case LIST_COMPANIES_FOR_CALLER -> {
+                    ListInput in = input.decodeParams();
+                    yield handleListForCaller(in, cm,
+                            bm.isBanksystemAdmin(in.callerUUID) && !isFromUntrustedSlave(slaveID));
+                }
                 case CREATE_PAYOUT      -> handleCreatePayout(input.decodeParams(), bm, cm);
                 case UPDATE_PAYOUT      -> handleUpdatePayout(input.decodeParams(), bm, cm);
                 case PAUSE_PAYOUT       -> handlePausePayout(input.decodeParams(), bm, cm);
@@ -1322,6 +1340,11 @@ public final class AsyncCompanyManager {
                     ShareIntegrity.reportCreated(in.who(), in.companyId(), in.count(),
                             in.how() + (slaveID == null || slaveID.isEmpty() ? "" : " on server " + slaveID));
                     yield OutputData.of(FunctionType.REPORT_SHARE_CREATED, new EmptyInput());
+                }
+                case ACKNOWLEDGE_SHARE_EXCESS -> {
+                    DissolveInput in = input.decodeParams();
+                    yield OutputData.of(FunctionType.ACKNOWLEDGE_SHARE_EXCESS,
+                            acknowledgeShareExcess(in.companyName(), in.callerUUID(), bm, cm));
                 }
             });
         }
@@ -1550,10 +1573,11 @@ public final class AsyncCompanyManager {
                         accountNameOf(bm, company.getBankAccountNr())));
     }
 
-    private static OutputData handleListForCaller(ListInput in, CompanyManager cm) {
+    private static OutputData handleListForCaller(ListInput in, CompanyManager cm, boolean trustedAdmin) {
         Set<Company> set = switch (in.filterKind) {
             case FILTER_FOUNDER -> cm.listCompaniesFounderedBy(in.callerUUID);
             case FILTER_MANAGE  -> cm.listCompaniesManagedBy(in.callerUUID);
+            case FILTER_ADMIN   -> cm.listCompaniesAdministeredBy(in.callerUUID, trustedAdmin);
             default             -> cm.listAllCompanies();
         };
         List<String> names = new ArrayList<>(set.size());
@@ -1601,6 +1625,7 @@ public final class AsyncCompanyManager {
             case GET_SYMBOL_MANIFEST -> OutputData.of(function, SymbolManifestOutput.EMPTY);
             case PULL_SYMBOL_BYTES   -> OutputData.of(function, new EmptyInput());
             case REPORT_SHARE_CREATED -> OutputData.of(function, new EmptyInput());
+            case ACKNOWLEDGE_SHARE_EXCESS -> OutputData.of(function, new ShareAcknowledgeOutput(CODE_INTERNAL, "", 0L));
         };
     }
 
@@ -1887,7 +1912,11 @@ public final class AsyncCompanyManager {
         return net.kroia.banksystem.client.company.SharePresetRegistry.isValidPresetId(id);
     }
 
-    private static int gateManage(int companyId, UUID callerUUID, IServerBankManager bm, CompanyManager cm) {
+    /**
+     * Company admin check of every MANAGE-gated company action (payouts, dividends, visuals, BS-235
+     * share acknowledge): MANAGE on the company's bank account, a founder, or a BankSystem admin.
+     */
+    public static int gateManage(int companyId, UUID callerUUID, IServerBankManager bm, CompanyManager cm) {
         Company company = cm.getById(companyId);
         if (company == null) return CODE_NOT_FOUND;
         IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
@@ -2259,6 +2288,34 @@ public final class AsyncCompanyManager {
     public static CompletableFuture<TransferOutput> transferFounderAsync(String companyName, UUID caller, String targetName) {
         InputData input = InputData.of(FunctionType.TRANSFER_FOUNDER, new TransferInput(companyName, caller, targetName));
         CompletableFuture<TransferOutput> future = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(out -> future.complete(out == null ? null : out.decodeResult()));
+        return future;
+    }
+
+    /**
+     * BS-235 — master: a company admin ({@link #gateManage}) accepts the company's share excess and
+     * resumes its dividends. {@code caller} null = master console (op level checked by the command).
+     */
+    public static ShareAcknowledgeOutput acknowledgeShareExcess(String companyName, @Nullable UUID caller,
+                                                                IServerBankManager bm, CompanyManager cm) {
+        Company company = cm.getByName(companyName);
+        if (company == null) return new ShareAcknowledgeOutput(CODE_NOT_FOUND, companyName, 0L);
+        if (caller != null) {
+            int gate = gateManage(company.getCompanyId(), caller, bm, cm);
+            if (gate != CODE_OK) return new ShareAcknowledgeOutput(gate, company.getName(), 0L);
+        }
+        long excess = ShareIntegrity.acknowledge(company.getCompanyId());
+        if (excess < 0) return new ShareAcknowledgeOutput(CODE_INTERNAL, company.getName(), 0L);
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.info("[ShareIntegrity] " + (caller == null ? "console" : AsyncForwardingRequest.tryGetPlayerName(caller))
+                    + " acknowledged a share excess of " + excess + " for company " + company.getName()
+                    + " (#" + company.getCompanyId() + ")");
+        return new ShareAcknowledgeOutput(CODE_OK, company.getName(), excess);
+    }
+
+    public static CompletableFuture<ShareAcknowledgeOutput> acknowledgeShareExcessAsync(String companyName, UUID caller) {
+        InputData input = InputData.of(FunctionType.ACKNOWLEDGE_SHARE_EXCESS, new DissolveInput(companyName, caller));
+        CompletableFuture<ShareAcknowledgeOutput> future = new CompletableFuture<>();
         dispatchInput(input).thenAccept(out -> future.complete(out == null ? null : out.decodeResult()));
         return future;
     }

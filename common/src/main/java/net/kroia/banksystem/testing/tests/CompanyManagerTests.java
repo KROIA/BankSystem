@@ -5,7 +5,10 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
 import net.kroia.banksystem.banking.company.ShareVisuals;
+import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.banking.company.PayoutExecutor;
 import net.kroia.banksystem.banking.company.PayoutFailureReason;
 import net.kroia.banksystem.banking.company.PayoutSchedule;
@@ -24,6 +27,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -62,6 +66,7 @@ public class CompanyManagerTests extends TestSuite {
         addTest("share_dividends_paused_until_acknowledge", this::testShareDividendsPaused);
         addTest("share_destroy_lowers_issued", this::testShareDestroyLowersIssued);
         addTest("share_excess_refuses_dividend_schedules", this::testShareExcessRefusesDividendSchedules); // BS-241
+        addTest("share_acknowledge_rights_and_suggestions", this::testShareAcknowledgeRights);
         // BS-238 — dividends count every share variant
         addTest("dividend_holdings_sum_all_share_variants", this::testDividendHoldingsSumAllVariants);
     }
@@ -424,6 +429,49 @@ public class CompanyManagerTests extends TestSuite {
         cm.destroyShares(SHARE_TEST_ID, 50);
         if (c.getTotalSharesIssued() != 0) return fail("issued not floored at 0: " + c.getTotalSharesIssued());
         return pass("10 - 3 = 7, then floored at 0");
+    }
+
+    /**
+     * BS-235: /company shares acknowledge uses the company admin gate (MANAGE, founder or BankSystem
+     * admin) on the master, and its suggestions list only administered companies (all for an admin
+     * not coming through an untrusted slave). Synthetic admin user, removed afterwards.
+     */
+    private TestResult testShareAcknowledgeRights() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        IServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        if (bm == null) return fail("no master bank manager");
+        CompanyManager cm = fresh();
+        Company alpha = cm.createCompany("ShareAckAlpha", 987_654_321, FOUNDER_A, 100L).company;
+        Company beta = cm.createCompany("ShareAckBeta", 987_654_322, FOUNDER_B, 100L).company;
+        if (alpha == null || beta == null) return fail("test companies not created");
+        UUID outsider = UUID.fromString("00000000-0000-0000-0000-0000AAAA0003");
+        UUID admin = UUID.fromString("00000000-0000-0000-0000-0000AAAA0004");
+        boolean added = !bm.userExists(admin);
+        if (added) bm.addUser(new User(admin, "ShareAckTestAdmin"));
+        try {
+            bm.setBanksystemAdminMode(admin, true);
+            int id = alpha.getCompanyId();
+            if (AsyncCompanyManager.gateManage(id, FOUNDER_A, bm, cm) != AsyncCompanyManager.CODE_OK)
+                return fail("company admin (founder) refused");
+            if (AsyncCompanyManager.gateManage(id, outsider, bm, cm) != AsyncCompanyManager.CODE_NO_PERMISSION)
+                return fail("unrelated player allowed");
+            if (AsyncCompanyManager.gateManage(id, FOUNDER_B, bm, cm) != AsyncCompanyManager.CODE_NO_PERMISSION)
+                return fail("admin of another company allowed");
+            if (AsyncCompanyManager.gateManage(id, admin, bm, cm) != AsyncCompanyManager.CODE_OK)
+                return fail("BankSystem admin refused");
+            if (!cm.listCompaniesAdministeredBy(FOUNDER_A, false).equals(Set.of(alpha)))
+                return fail("company admin suggestions: " + cm.listCompaniesAdministeredBy(FOUNDER_A, false));
+            if (!cm.listCompaniesAdministeredBy(outsider, false).isEmpty())
+                return fail("unrelated player got suggestions");
+            if (!cm.listCompaniesAdministeredBy(admin, true).equals(Set.of(alpha, beta)))
+                return fail("BankSystem admin did not get every company");
+            if (!cm.listCompaniesAdministeredBy(admin, false).isEmpty())
+                return fail("admin flag counted without trust");
+            return pass("founder + BS admin allowed, outsider + other founder refused; suggestions filtered");
+        } finally {
+            if (added) bm.removeUser(admin);
+            else bm.setBanksystemAdminMode(admin, false);
+        }
     }
 
     /**

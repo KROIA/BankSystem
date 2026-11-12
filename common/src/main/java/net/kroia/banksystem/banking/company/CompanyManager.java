@@ -799,6 +799,14 @@ public final class CompanyManager implements ServerSaveableChunked {
         return out;
     }
 
+    /**
+     * BS-235: companies {@code uuid} administers (MANAGE or founder, see {@link #listCompaniesManagedBy});
+     * every company when {@code trustedAdmin} (BankSystem admin flag, not via an untrusted slave).
+     */
+    public Set<Company> listCompaniesAdministeredBy(UUID uuid, boolean trustedAdmin) {
+        return trustedAdmin ? listAllCompanies() : listCompaniesManagedBy(uuid);
+    }
+
     // ------------------------------------------------------------------
     // Task #51 (v2.1.0) — Share Stamper binding reverse index (runtime-only)
     // ------------------------------------------------------------------

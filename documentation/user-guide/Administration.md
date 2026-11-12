@@ -153,7 +153,7 @@ Hovering a row shows it in full; clicking a row copies it to the clipboard. Only
   Account #4 "Acme"
   Amount: 2 shares
   Company Acme (#1): stamped 10, banked 12, excess 2.
-  Dividends paused until /banksystem shares acknowledge 1
+  Dividends paused until /company shares acknowledge "Acme"
   Share deposits since 05-14 18:02:
   05-14 18:10 Steve +2 deposit -> account 7
   ... more: /banksystem audit 4
@@ -211,13 +211,13 @@ Every company knows how many shares it has stamped. The master compares that num
 - The company's **dividends are paused**: *Pay Dividend* and dividend schedules are skipped with the status *Paused* and the message *"Dividends are paused: more shares are banked than were stamped. An admin must review it first."* The schedules stay; fixed payouts keep running.
 - There is only one open alert per company. A new one comes only if the excess grows further.
 
-The check runs after every deposit of shares, once a day, and when an admin acknowledges the alert. After looking into it, acknowledge it on the master server:
+The check runs after every deposit of shares, once a day, and when the alert is acknowledged. After looking into it, acknowledge it:
 
 ```
-/banksystem shares acknowledge <companyId>
+/company shares acknowledge "<companyName>"
 ```
 
-This accepts the current excess, marks the flag as reviewed and resumes the dividends. Destroying the extra shares is optional: if the banked number falls back to the stamped number, the alert closes and dividends resume by themselves. The command needs the BankSystem admin flag (node `banksystem.admin.command.shares`) and also works from the master console.
+This accepts the current excess, marks the flag as reviewed and resumes the dividends. Destroying the extra shares is optional: if the banked number falls back to the stamped number, the alert closes and dividends resume by themselves. Company admins (`MANAGE` on the company's bank account, or a founder) can run it for their own companies, BankSystem admins for every company. It works on slave servers too (the rights are checked on the master, and an untrusted slave can't run it) and from the master's console.
 
 Shares that disappear for good lower the stamped number, so they cannot hide a copy later: shares lost when an account is deleted, a bank or account closed, or the share item disallowed, and shares an admin destroys in the account management screen.
 

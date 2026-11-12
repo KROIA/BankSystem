@@ -9,8 +9,12 @@ import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
+import net.kroia.banksystem.util.BankSystemPermissions;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.modutilities.PermissionCompat;
 import net.kroia.modutilities.ServerPlayerUtilities;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
@@ -238,6 +242,47 @@ public final class CompanyCommandLogic {
         }
         net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket
                 .send(player, company.getCompanyId(), company.getName());
+    }
+
+    // ------------------------------------------------------------------
+    // /company shares acknowledge <companyName>  (BS-235)
+    // ------------------------------------------------------------------
+    /**
+     * Accepts the company's share excess and resumes its dividends. The company admin check
+     * ({@link AsyncCompanyManager#gateManage}) runs on the master; slaves forward. The master
+     * console / a command block (op level) acts as a BankSystem admin.
+     */
+    public static void sharesAcknowledge(CommandSourceStack source, String rawCompanyName) {
+        String companyName = cleanName(rawCompanyName);
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            if (isSlave() || !PermissionCompat.hasPermission(source, BankSystemPermissions.FALLBACK_LEVEL)) {
+                source.sendFailure(Component.literal("[BankSystem] From the console this works on the master server only."));
+                return;
+            }
+            source.sendSystemMessage(Component.literal(sharesAcknowledgeText(companyName,
+                    AsyncCompanyManager.acknowledgeShareExcess(companyName, null, sync(), CompanyManager.get()))));
+            return;
+        }
+        if (isSlave()) {
+            AsyncCompanyManager.acknowledgeShareExcessAsync(companyName, player.getUUID())
+                    .thenAccept(out -> send(player, sharesAcknowledgeText(companyName, out)));
+            return;
+        }
+        send(player, sharesAcknowledgeText(companyName,
+                AsyncCompanyManager.acknowledgeShareExcess(companyName, player.getUUID(), sync(), CompanyManager.get())));
+    }
+
+    private static String sharesAcknowledgeText(String companyName, AsyncCompanyManager.ShareAcknowledgeOutput out) {
+        if (out == null) return NO_ANSWER;
+        return switch (out.resultCode()) {
+            case AsyncCompanyManager.CODE_OK -> "Company '" + out.companyName() + "': share excess of " + out.excess()
+                    + " acknowledged, dividends resume. A new alert comes only if the excess grows.";
+            case AsyncCompanyManager.CODE_NOT_FOUND -> "No such company '" + companyName + "'.";
+            case AsyncCompanyManager.CODE_NO_PERMISSION ->
+                    "You need MANAGE on the company's bank account to acknowledge its shares.";
+            default -> "Failed to acknowledge the shares of '" + companyName + "': " + describeCode(out.resultCode());
+        };
     }
 
     // ------------------------------------------------------------------

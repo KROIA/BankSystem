@@ -376,7 +376,7 @@ Failures are reported inline, e.g. *"PNG validation failed: Must be square (got 
 
 ## Share integrity
 
-The number of stamped shares is the company's share supply. If more of its shares turn up in bank accounts than were ever stamped (for example copied with a duplication bug), the server admins get an alert and the company's dividends pause until an admin has reviewed it. Fixed payouts keep running, and nothing is taken from anyone. While dividends are paused, new payouts that are split among the shareholders cannot be created and existing ones cannot be changed; payouts to a player or account still can. Shares that are lost for good (deleted accounts, closed banks, destroyed by an admin) lower the stamped number. Details for admins are in [Administration](Administration.md#share-integrity).
+The number of stamped shares is the company's share supply. If more of its shares turn up in bank accounts than were ever stamped (for example copied with a duplication bug), the server admins get an alert and the company's dividends pause until it has been reviewed: a company admin (`MANAGE` on the bound account or a founder) or a BankSystem admin accepts it with `/company shares acknowledge "<companyName>"`. Fixed payouts keep running, and nothing is taken from anyone. While dividends are paused, new payouts that are split among the shareholders cannot be created and existing ones cannot be changed; payouts to a player or account still can. Shares that are lost for good (deleted accounts, closed banks, destroyed by an admin) lower the stamped number. Details for admins are in [Administration](Administration.md#share-integrity).
 
 ## Multi-server notes
 
@@ -397,8 +397,8 @@ On a master/slave setup ([Multi-Server Setup](MultiserverSetup.md)):
 | `/company create "<name>" <maxSupply>` | Found a company and its bank account | Any player |
 | `/company info "<companyName>"` | Print company details to chat | Any player |
 | `/company manage "<companyName>"` | Open the Company Management screen | `MANAGE` on the bound account, or BankSystem admin |
+| `/company shares acknowledge "<companyName>"` | Accept a [share excess](#share-integrity) and resume the company's dividends | `MANAGE` on the bound account, a founder, or BankSystem admin |
 | `/banksystem symbols list\|add <id>\|remove <id>\|reload` | Manage share symbol textures (master only) | BankSystem admin flag |
-| `/banksystem shares acknowledge <companyId>` | Accept a [share excess](#share-integrity) and resume the company's dividends (master only) | BankSystem admin |
 
 The full command list for the rest of the mod is in [Commands](Commands.md).
 

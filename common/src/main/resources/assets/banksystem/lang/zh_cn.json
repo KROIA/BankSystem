@@ -654,7 +654,7 @@
   "gui.banksystem.bank_account_management_screen.frozen_tooltip": "此账户已被管理员冻结。存款、取款和转账均被禁止。\n管理员：更改在保存后生效。",
   "gui.banksystem.payout_edit_screen.status_account_frozen": "账户已冻结",
   "gui.banksystem.company_account_frozen": "公司账户已冻结",
-  "gui.banksystem.company_shares_under_review": "分红已暂停：银行中的股份多于已盖章的股份，需要管理员先进行审核。",
+  "gui.banksystem.company_shares_under_review": "分红已暂停：银行中的股份多于已盖章的股份，需要公司管理员先进行审核（/company shares acknowledge）。",
   "gui.banksystem.mod_settings_screen.setting.Utilities.ALERTS_DEFAULT_ON": "默认开启管理员提醒",
   "gui.banksystem.mod_settings_screen.setting.Utilities.ALERTS_DEFAULT_ON.tooltip": "管理员操作和可疑标记的聊天提醒，\n适用于从未使用 /banksystem alerts on|off 的管理员。\n审计文件始终会写入。",
   "message.banksystem.audit_alert": "[BankSystem 审计] {message}",

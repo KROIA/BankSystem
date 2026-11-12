@@ -83,8 +83,8 @@ public final class SuspicionChecks {
     /**
      * BS-235: a company has more shares in bank accounts (free + locked, all its share items) than it
      * has stamped. On the company account; amount = the excess (raw, x scale). Raised by
-     * ShareIntegrity once per growth of the excess; dividends pause until an admin runs
-     * /banksystem shares acknowledge.
+     * ShareIntegrity once per growth of the excess; dividends pause until a company admin runs
+     * /company shares acknowledge.
      */
     public static final int SHARE_EXCESS = 8;
     /** BS-235: share items created by /give or the creative inventory. On the company account; amount = raw count. */

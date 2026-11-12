@@ -288,6 +288,7 @@ Key commands for players and admins:
 | `/company create <name> <maxSupply>` | Found a company and its bank account |
 | `/company info <name>` | Print a company's details to chat |
 | `/company manage <name>` | Open the Company Management screen |
+| `/company shares acknowledge <name>` | Accept a share excess and resume the company's dividends (company admins) |
 | `/banksystem symbols list\|add\|remove\|reload` | Manage the share symbol library (admin only) |
 
 For the full command reference, see [Commands](documentation/user-guide/Commands.md).
@@ -303,7 +304,6 @@ Admin functions check these permission nodes, so a permission mod such as LuckPe
 | `banksystem.admin.command.backup` | `/banksystem backup ...` |
 | `banksystem.admin.command.symbols` | `/banksystem symbols ...` |
 | `banksystem.admin.command.restorebinding` | `/banksystem restorebinding <account> [item]` (lift a suspended currency-mod binding) |
-| `banksystem.admin.command.shares` | `/banksystem shares acknowledge <companyId>` (accept a share excess, resume dividends) |
 | `banksystem.admin.command.exportrecipes` | `/banksystem exportrecipes` (dev builds only) |
 | `banksystem.admin.adminmode` | Setting the BankSystem admin mode of a player |
 | `banksystem.admin.software` | Using the Banking Software on another player in creative mode (the player also needs the BankSystem admin flag) |

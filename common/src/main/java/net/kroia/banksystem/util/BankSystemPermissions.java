@@ -29,17 +29,16 @@ public final class BankSystemPermissions {
     public static final String COMMAND_SYMBOLS = "banksystem.admin.command.symbols";           // flag-gated (BS-196)
     public static final String COMMAND_EXPORTRECIPES = "banksystem.admin.command.exportrecipes";
     public static final String COMMAND_RESTORE_BINDING = "banksystem.admin.command.restorebinding"; // Task #146, flag-gated (BS-196)
-    public static final String COMMAND_SHARES = "banksystem.admin.command.shares"; // BS-235, flag-gated
     public static final String ADMIN_MODE = "banksystem.admin.adminmode";
     public static final String SOFTWARE = "banksystem.admin.software";
     /** Task #107: source of the BankSystem admin flag while Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION is on. */
     public static final String ADMIN = "banksystem.admin";
 
     public static final String[] ALL_NODES = {COMMAND_TRUST, COMMAND_OP, COMMAND_BACKUP, COMMAND_SYMBOLS,
-            COMMAND_EXPORTRECIPES, COMMAND_RESTORE_BINDING, COMMAND_SHARES, ADMIN_MODE, SOFTWARE, ADMIN};
+            COMMAND_EXPORTRECIPES, COMMAND_RESTORE_BINDING, ADMIN_MODE, SOFTWARE, ADMIN};
 
     /** Nodes of the commands guarded by the BankSystem admin flag instead of server op (BS-196). */
-    public static final Set<String> FLAG_GATED_NODES = Set.of(COMMAND_SYMBOLS, COMMAND_RESTORE_BINDING, COMMAND_SHARES);
+    public static final Set<String> FLAG_GATED_NODES = Set.of(COMMAND_SYMBOLS, COMMAND_RESTORE_BINDING);
 
     /** @return the vanilla op level {@code node} falls back to without a permission mod */
     public static int fallbackLevel(String node) {

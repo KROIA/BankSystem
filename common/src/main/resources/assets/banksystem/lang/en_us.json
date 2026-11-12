@@ -654,7 +654,7 @@
   "gui.banksystem.bank_account_management_screen.frozen_tooltip": "This account is frozen by an admin. Deposits, withdrawals and transfers are blocked.\nAdmins: the change is applied on Save.",
   "gui.banksystem.payout_edit_screen.status_account_frozen": "Account frozen",
   "gui.banksystem.company_account_frozen": "The company account is frozen",
-  "gui.banksystem.company_shares_under_review": "Dividends are paused: more shares are banked than were stamped. An admin must review it first.",
+  "gui.banksystem.company_shares_under_review": "Dividends are paused: more shares are banked than were stamped. A company admin must review it first (/company shares acknowledge).",
   "gui.banksystem.mod_settings_screen.setting.Utilities.ALERTS_DEFAULT_ON": "Admin alerts on by default",
   "gui.banksystem.mod_settings_screen.setting.Utilities.ALERTS_DEFAULT_ON.tooltip": "Chat alerts for admin actions and suspicion flags,\nfor admins that never ran /banksystem alerts on|off.\nThe audit files are written regardless.",
   "message.banksystem.audit_alert": "[BankSystem audit] {message}",
