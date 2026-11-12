@@ -61,6 +61,8 @@ public class CompanyManagerTests extends TestSuite {
         addTest("share_excess_raised_once_per_level", this::testShareExcessRaisedOnce);
         addTest("share_dividends_paused_until_acknowledge", this::testShareDividendsPaused);
         addTest("share_destroy_lowers_issued", this::testShareDestroyLowersIssued);
+        // BS-238 — dividends count every share variant
+        addTest("dividend_holdings_sum_all_share_variants", this::testDividendHoldingsSumAllVariants);
     }
 
     @Nullable
@@ -403,5 +405,66 @@ public class CompanyManagerTests extends TestSuite {
         cm.destroyShares(SHARE_TEST_ID, 50);
         if (c.getTotalSharesIssued() != 0) return fail("issued not floored at 0: " + c.getTotalSharesIssued());
         return pass("10 - 3 = 7, then floored at 0");
+    }
+
+    /**
+     * BS-238: the per-account holdings both dividend paths use count every share ItemID of the
+     * company (an anvil-renamed share is its own ItemID), free + locked. Account A holds only the
+     * renamed variant and must still be counted. Registry and item filters are restored afterwards.
+     */
+    private TestResult testDividendHoldingsSumAllVariants() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        ISyncServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        if (bm == null) return fail("no master bank manager");
+        if (net.kroia.banksystem.minecraft.item.BankSystemItems.STAMPED_SHARE.get() == null)
+            return fail("STAMPED_SHARE not registered");
+        final int companyId = 900_238;
+        net.kroia.banksystem.testing.LiveStateGuard guard = net.kroia.banksystem.testing.LiveStateGuard.capture(bm);
+        List<Integer> accounts = new ArrayList<>();
+        try {
+            net.minecraft.world.item.ItemStack base = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                    .ofCompany(net.kroia.banksystem.minecraft.item.BankSystemItems.STAMPED_SHARE.get(), companyId);
+            net.minecraft.world.item.ItemStack renamed = base.copy();
+            renamed.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
+                    net.minecraft.network.chat.Component.literal("Renamed share"));
+            net.kroia.banksystem.util.ItemID baseId = net.kroia.banksystem.util.ItemIDManager.registerItemStackServerSide_direct(base);
+            net.kroia.banksystem.util.ItemID variantId = net.kroia.banksystem.util.ItemIDManager.registerItemStackServerSide_direct(renamed);
+            if (!baseId.isValid() || !variantId.isValid() || baseId.equals(variantId))
+                return fail("renamed share did not get its own ItemID: " + baseId + " / " + variantId);
+            List<net.kroia.banksystem.util.ItemID> ids = net.kroia.banksystem.banking.company.CompanyStatsQuery.shareItemIds(companyId);
+            if (!ids.contains(baseId) || !ids.contains(variantId)) return fail("shareItemIds misses a variant: " + ids);
+            bm.allowItemID(baseId);
+            bm.allowItemID(variantId);
+
+            net.kroia.banksystem.api.bankaccount.IServerBankAccount a = bm.createBankAccount("__bs238_variant_only");
+            net.kroia.banksystem.api.bankaccount.IServerBankAccount b = bm.createBankAccount("__bs238_mixed");
+            if (a == null || b == null) return fail("could not create test accounts");
+            accounts.add(a.getAccountNumber());
+            accounts.add(b.getAccountNumber());
+            if (a.createBank(variantId, 300L) == null || b.createBank(baseId, 200L) == null)
+                return fail("could not create share banks");
+            net.kroia.banksystem.api.bank.IServerBank bVariant = b.createBank(variantId, 100L);
+            if (bVariant == null) return fail("could not create variant bank on mixed account");
+            bVariant.lockAmount(40L); // locked shares still earn dividends
+
+            Map<Integer, Long> held = net.kroia.banksystem.banking.company.CompanyStatsQuery.sharesRawPerAccount(bm, companyId);
+            long heldA = held.getOrDefault(a.getAccountNumber(), 0L);
+            long heldB = held.getOrDefault(b.getAccountNumber(), 0L);
+            if (heldA != 300L) return fail("variant-only account counted " + heldA + ", expected 300");
+            if (heldB != 300L) return fail("mixed account counted " + heldB + ", expected 300 (200 base + 100 variant incl. 40 locked)");
+            return pass("variant-only account 300, mixed account 300 (base + variant, locked included)");
+        } finally {
+            for (int nr : accounts) {
+                net.kroia.banksystem.api.bankaccount.IServerBankAccount acct = bm.getBankAccount(nr);
+                if (acct != null) {
+                    for (net.kroia.banksystem.util.ItemID id : net.kroia.banksystem.banking.company.CompanyStatsQuery.shareItemIds(companyId)) {
+                        net.kroia.banksystem.api.bank.IServerBank bank = acct.getBank(id);
+                        if (bank != null) { bank.unlockAll(); bank.setBalance(0L); }
+                    }
+                }
+                bm.deleteBankAccount(nr);
+            }
+            net.kroia.banksystem.testing.LiveStateGuard.restore(guard);
+        }
     }
 }

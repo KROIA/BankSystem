@@ -287,22 +287,14 @@ public final class PayoutExecutor {
         String dividendName = "Shareholders";
         // BS-235: more shares banked than stamped -> skip until an admin acknowledges; schedule stays
         if (company.isShareExcessOpen()) return new Outcome(PayoutFailureReason.SHARES_UNDER_REVIEW, dividendName, "");
-        ItemID shareItemId = resolveShareItemID(company.getCompanyId());
-        if (shareItemId == null) {
-            return new Outcome(PayoutFailureReason.TARGET_NOT_FOUND, dividendName, "");
-        }
         int companyAccountNr = company.getBankAccountNr();
-        Set<Integer> holderAccounts = bm.listAccountsHolding(shareItemId);
+        // BS-238: every share variant counts; one entry per account (free + locked, raw units).
         List<long[]> snapshots = new ArrayList<>(); // {accountNr, shares}
         long totalShares = 0L;
-        for (int accountNr : holderAccounts) {
-            if (accountNr == companyAccountNr) continue;
-            IServerBankAccount account = bm.getBankAccount(accountNr);
-            if (account == null) continue;
-            ISyncServerBank shareBank = account.getBank(shareItemId);
-            if (shareBank == null) continue;
-            long shares = shareBank.getTotalBalance();
-            if (shares <= 0L) continue;
+        for (java.util.Map.Entry<Integer, Long> e : CompanyStatsQuery.sharesRawPerAccount(bm, company.getCompanyId()).entrySet()) {
+            int accountNr = e.getKey();
+            long shares = e.getValue();
+            if (accountNr == companyAccountNr || shares <= 0L) continue;
             snapshots.add(new long[]{accountNr, shares});
             totalShares += shares;
         }
@@ -401,20 +393,5 @@ public final class PayoutExecutor {
             logWarn("Failed to record dividend history: " + t.getMessage());
         }
         return new Outcome(null, dividendName, "");
-    }
-
-    /**
-     * Resolve the stamped-share ItemID bound to {@code companyId}. BUG 4 unification —
-     * uses the same direct template lookup as the (working) manual
-     * {@link net.kroia.banksystem.banking.share.DividendPayer} instead of reverse-iterating
-     * the ItemID registry.
-     */
-    private static @Nullable ItemID resolveShareItemID(int companyId) {
-        net.minecraft.world.item.ItemStack template =
-                net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem.ofCompany(
-                        net.kroia.banksystem.minecraft.item.BankSystemItems.STAMPED_SHARE.get(), companyId);
-        ItemID shareItemId = net.kroia.banksystem.util.ItemIDManager.getItemID(template);
-        if (shareItemId == null || !shareItemId.isValid()) return null;
-        return shareItemId;
     }
 }

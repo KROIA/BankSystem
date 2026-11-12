@@ -128,6 +128,24 @@ public final class CompanyStatsQuery {
         return ids;
     }
 
+    /** BS-238: free + locked raw share balance per account, summed over every share ItemID (variant) of the company. */
+    public static Map<Integer, Long> sharesRawPerAccount(net.kroia.banksystem.api.bankmanager.ISyncServerBankManager bm, int companyId) {
+        return sharesRawPerAccount(bm, shareItemIds(companyId));
+    }
+
+    /** Same as {@link #sharesRawPerAccount(net.kroia.banksystem.api.bankmanager.ISyncServerBankManager, int)} for the given ItemIDs. */
+    public static Map<Integer, Long> sharesRawPerAccount(net.kroia.banksystem.api.bankmanager.ISyncServerBankManager bm, List<ItemID> shareIds) {
+        Map<Integer, Long> perAccount = new LinkedHashMap<>();
+        for (ItemID shareItemId : shareIds) {
+            for (int accountNr : bm.listAccountsHolding(shareItemId)) {
+                IServerBankAccount acct = bm.getBankAccount(accountNr);
+                net.kroia.banksystem.api.bank.IServerBank bank = acct == null ? null : acct.getBank(shareItemId);
+                if (bank != null) perAccount.merge(accountNr, bank.getTotalBalance(), Long::sum);
+            }
+        }
+        return perAccount;
+    }
+
     /**
      * Returns top N shareholders sorted by shares descending.
      */
@@ -137,14 +155,7 @@ public final class CompanyStatsQuery {
         if (bm == null) return result;
 
         // BS-230: every share ItemID of the company (variants), free + locked, summed per account.
-        Map<Integer, Long> perAccount = new LinkedHashMap<>();
-        for (ItemID shareItemId : shareItemIds(companyId)) {
-            for (int accountNr : bm.listAccountsHolding(shareItemId)) {
-                IServerBankAccount acct = bm.getBankAccount(accountNr);
-                net.kroia.banksystem.api.bank.IServerBank bank = acct == null ? null : acct.getBank(shareItemId);
-                if (bank != null) perAccount.merge(accountNr, bank.getTotalBalance(), Long::sum);
-            }
-        }
+        Map<Integer, Long> perAccount = sharesRawPerAccount(bm, companyId);
         List<long[]> entries = new ArrayList<>();
         for (Map.Entry<Integer, Long> e : perAccount.entrySet())
             if (e.getValue() > 0L) entries.add(new long[]{e.getKey(), e.getValue()});
