@@ -253,6 +253,9 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
         // master doesn't yet know about) mint fresh slave-local shorts. Idempotent —
         // subsequent incremental sync packets find the latch already released and return.
         ItemIDManager.finalizeSlaveSync();
+        // BS-237: relay to this slave's own players, else a company created at runtime stays
+        // unresolvable on their clients until they rejoin.
+        broadcastToClients();
     }
 
     @Override
