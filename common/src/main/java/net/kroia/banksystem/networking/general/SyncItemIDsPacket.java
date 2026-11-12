@@ -62,6 +62,7 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
             ExtraCodecUtils.listStreamCodec(ByteBufCodecs.STRING_UTF8), p -> p.volatileComponentIds,
             ExtraCodecUtils.listStreamCodec(ByteBufCodecs.STRING_UTF8), p -> p.depositGatedComponentIds,
             ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ItemID.STREAM_CODEC, HashMap<ItemID, ItemID>::new), p -> p.aliases,
+            ByteBufCodecs.BOOL, p -> p.fullSync,
             SyncItemIDsPacket::new
     );
 
@@ -100,6 +101,13 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
      */
     private final Map<ItemID, ItemID> aliases;
 
+    /**
+     * BS-260: {@code true} when {@link #items} is the sender's WHOLE table (player join,
+     * slave connect). Only then may a receiver drop shorts the packet does not carry; an
+     * incremental "new item" broadcast never removes anything.
+     */
+    private final boolean fullSync;
+
 
     /**
      * Creates a sync packet from live {@link ItemStack} entries — converts each stack
@@ -108,21 +116,23 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
      * Automatically attaches the sender's current config-sourced volatile + deposit-gated
      * component lists and ItemID alias table.
      */
-    public SyncItemIDsPacket(Map<ItemID, ItemStack> itemStacks)
+    public SyncItemIDsPacket(Map<ItemID, ItemStack> itemStacks, boolean fullSync)
     {
         this(toItemTagMap(itemStacks),
                 VolatileItemComponents.getConfigComponentIdStrings(),
                 VolatileItemComponents.getGatedConfigComponentIdStrings(),
-                ItemIDManager.getItemIDAliasMap());
+                ItemIDManager.getItemIDAliasMap(),
+                fullSync);
     }
 
     /** Codec constructor. */
-    public SyncItemIDsPacket(Map<ItemID, CompoundTag> items, List<String> volatileComponentIds, List<String> depositGatedComponentIds, Map<ItemID, ItemID> aliases)
+    public SyncItemIDsPacket(Map<ItemID, CompoundTag> items, List<String> volatileComponentIds, List<String> depositGatedComponentIds, Map<ItemID, ItemID> aliases, boolean fullSync)
     {
         this.items = items;
         this.volatileComponentIds = volatileComponentIds;
         this.depositGatedComponentIds = depositGatedComponentIds;
         this.aliases = aliases;
+        this.fullSync = fullSync;
     }
 
     /**
@@ -197,6 +207,12 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
         return aliases;
     }
 
+    /** @return {@code true} if this packet carries the sender's whole table (see {@link #fullSync}). */
+    public boolean isFullSync()
+    {
+        return fullSync;
+    }
+
 
     public void broadcastToClients()
     {
@@ -209,17 +225,17 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
 
     public static void broadcastToSlaves(Map<ItemID, ItemStack> items)
     {
-        SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(items, false);
         packet.broadcastToSlaves();
     }
     public static void sendToSlave(String slaveID, Map<ItemID, ItemStack> items)
     {
-        SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(items, false);
         packet.sendToSlave(slaveID);
     }
     public static void sendAllItemsToSlave(String slaveID)
     {
-        sendToSlave(slaveID, ItemIDManager.getItemIDMap());
+        new SyncItemIDsPacket(ItemIDManager.getItemIDMap(), true).sendToSlave(slaveID);
     }
 
 

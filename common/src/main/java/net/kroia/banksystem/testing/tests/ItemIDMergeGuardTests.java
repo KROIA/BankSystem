@@ -12,6 +12,7 @@ import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.filter.EqualityFilter;
 import net.kroia.banksystem.data.table.BalanceHistoryManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
+import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
@@ -106,6 +107,7 @@ public class ItemIDMergeGuardTests extends TestSuite {
         addTest("renormalize_still_produces_aliases_via_guarded_path", this::testRenormalizeStillProducesAliasesViaGuardedPath);
         addTest("receiver_follows_master_merge", this::testReceiverFollowsMasterMerge);
         addTest("receiver_takes_master_item_on_short_clash", this::testReceiverTakesMasterItemOnShortClash);
+        addTest("receiver_full_sync_drops_stale_short", this::testReceiverFullSyncDropsStaleShort);
         // Task #16 — registration latch, persisted-wins merges, stale-key replacement
         addTest("master_registration_latched_before_load", this::testMasterRegistrationLatchedBeforeLoad);
         addTest("persisted_short_wins_merge_canonicality", this::testPersistedShortWinsMergeCanonicality);
@@ -1011,6 +1013,42 @@ public class ItemIDMergeGuardTests extends TestSuite {
         r = assertFalse("same item again is a no-op", ItemIDManager.adoptMasterItem(n, b.copy()));
         if (!r.passed()) return r;
         return pass("receiver takes the master's item on a short clash");
+    }
+
+    /**
+     * BS-260: a receiver holds K and N for item B; a sync carrying every other short but not K
+     * drops K only when it is a FULL sync. Calls the prune step directly (see
+     * {@link #testReceiverFollowsMasterMerge()}); only the packet's keys matter to it, so the
+     * item tags are empty. The packet carries every live short except K so nothing else is
+     * dropped; the suite's state guard restores the registry in teardown.
+     */
+    private TestResult testReceiverFullSyncDropsStaleShort() {
+        ItemStack b = paperWithCustomData("receiver-full-sync");
+        ItemID n = registerScratch(b);
+        short base = pickUnusedShortBase(1);
+        if (!n.isValid() || base < 0) return fail("Could not set up N and K");
+        ItemID k = new ItemID(base, null);
+        ItemIDManager.adoptMasterItem(k, b.copy());
+        Map<ItemID, CompoundTag> items = new HashMap<>();
+        for (ItemID id : ItemIDManager.getItemIDMap().keySet())
+            if (!id.equals(k)) items.put(id, new CompoundTag());
+        List<String> vol = VolatileItemComponents.getConfigComponentIdStrings();
+        List<String> gated = VolatileItemComponents.getGatedConfigComponentIdStrings();
+        Map<ItemID, ItemID> aliases = ItemIDManager.getItemIDAliasMap();
+
+        TestResult r = assertEquals("incremental sync drops nothing", 0,
+                ItemIDManager.dropShortsMissingFromFullSync(new SyncItemIDsPacket(items, vol, gated, aliases, false)));
+        if (!r.passed()) return r;
+        r = assertTrue("K stays after an incremental sync", ItemIDManager.getItemIDMap().containsKey(k));
+        if (!r.passed()) return r;
+        r = assertEquals("full sync drops only K", 1,
+                ItemIDManager.dropShortsMissingFromFullSync(new SyncItemIDsPacket(items, vol, gated, aliases, true)));
+        if (!r.passed()) return r;
+        r = assertFalse("K gone after the full sync", ItemIDManager.getItemIDMap().containsKey(k));
+        if (!r.passed()) return r;
+        r = assertEquals("B resolves to N", n, ItemIDManager.getItemID(b));
+        if (!r.passed()) return r;
+        return pass("a full sync drops the stale short, an incremental one does not");
     }
 
     /**

@@ -1472,7 +1472,7 @@ public class ItemIDManager implements ServerSaveable {
     private static void onNewItemAdded(Map<ItemID, ItemStack> newItems)
     {
         // Broadcast update to players
-        SyncItemIDsPacket packet = new SyncItemIDsPacket(newItems);
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(newItems, false);
         if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
         {
             packet.broadcastToSlaves();
@@ -1482,7 +1482,7 @@ public class ItemIDManager implements ServerSaveable {
     public static void onPlayerJoined(@NotNull ServerPlayer player)
     {
         Map<ItemID, ItemStack> items = new HashMap<>(itemIDMap);
-        SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(items, true);
         packet.sendToClient(player);
     }
     /**
@@ -1513,6 +1513,39 @@ public class ItemIDManager implements ServerSaveable {
             itemIDMap.put(id, template);
             return true;
         }
+    }
+
+    /**
+     * BS-260: on a FULL sync (player join, slave connect) drops every plain local short the
+     * sender no longer has — neither in the packet's items nor an alias source there — so a
+     * stale duplicate cannot shadow the master's short in {@link #getItemID(ItemStack)}.
+     * Incremental packets never drop anything: a short missing from them is not evidence.
+     * Never call on the master or in singleplayer (shared maps).
+     *
+     * @return the number of dropped shorts
+     */
+    public static int dropShortsMissingFromFullSync(SyncItemIDsPacket packet)
+    {
+        if (!packet.isFullSync())
+            return 0;
+        int dropped = 0;
+        synchronized (itemIDMap) {
+            for (ItemID id : new ArrayList<>(itemIDMap.keySet())) {
+                if (packet.getItems().containsKey(id) || packet.getAliases().containsKey(id))
+                    continue;
+                ItemStack old = itemIDMap.remove(id);
+                if (old == null)
+                    continue;
+                dropped++;
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.debug("[ItemIDManager] Full sync: dropped item ID #" + id.getShort()
+                            + " ('" + ItemUtilities.getItemIDStr(old.getItem()) + "'), the master no longer has it");
+            }
+        }
+        if (dropped > 0 && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] Full sync: dropped " + dropped
+                    + " outdated item ID(s) the master no longer has");
+        return dropped;
     }
 
     public static void receiveSyncPacket(SyncItemIDsPacket packet)
@@ -1643,6 +1676,8 @@ public class ItemIDManager implements ServerSaveable {
                 adoptMasterItem(id, cpy);
             id.tryUpdateNameCache();
         }
+        if (ownsRegistryMaps)
+            dropShortsMissingFromFullSync(packet);
         MoneyItem.resetItemID();
         List<Pair<List<ItemStack>, CompletableFuture<List<ItemID>>>> cpyList = new ArrayList<>(pendingItemIDGroups);
         for(Pair<List<ItemStack>, CompletableFuture<List<ItemID>>> pair : cpyList)
