@@ -216,7 +216,7 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                                 continue;
                             }
                             IServerBank baseBank = account.getOrCreateBank(new ItemID(row.itemIdShort()));
-                            if (baseBank != null && baseBank.deposit(amount) == BankStatus.SUCCESS) {
+                            if (baseBank != null && TransactionLedger.withoutRawLog(() -> baseBank.deposit(amount)) == BankStatus.SUCCESS) { // BS-254: row below
                                 String coin = "coin " + itemID.getName() + " x" + toDeposit;
                                 TransactionLedger.logBank(baseBank, ledger.type(), amount, ledgerActor(input),
                                         ledger.note() == null ? coin : ledger.note() + "; " + coin, input.transferId());
@@ -232,7 +232,8 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
             IServerBank itemBank = account.getOrCreateBank(itemID);
             if(itemBank != null)
             {
-                if(itemBank.deposit(toDeposit) == BankStatus.SUCCESS)
+                final long depositNow = toDeposit;
+                if(TransactionLedger.withoutRawLog(() -> itemBank.deposit(depositNow)) == BankStatus.SUCCESS) // BS-254: row below
                 {
                     logDeposit(input, ledger, itemBank, toDeposit);
                     toDeposit = 0;

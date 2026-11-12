@@ -437,6 +437,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     // Weak-lock semantics — lockedBalance is advisory; callers verify before withdrawing locked funds
     @Override
     public boolean setBalance(long balance) {
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) return rawLogged("setBalance", () -> setBalance(balance)); // BS-254
         // Task #33: bound branch. Set the free pool (external + dust) to `balance`
         // — locked stays untouched (it's a separate axis under the transactional
         // model). Unbound path below is byte-for-byte unchanged.
@@ -496,6 +497,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus deposit(long amount) {
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) return rawLogged("deposit", () -> deposit(amount)); // BS-254
         if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Dust-aware add to the free pool. The whole-native
         // portion goes through external.deposit; sub-native remainder is persisted
@@ -564,6 +566,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdraw(long amount) {
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) return rawLogged("withdraw", () -> withdraw(amount)); // BS-254
         if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Dust-aware subtract from the free pool.
         // Unbound path unchanged.
@@ -617,6 +620,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdrawLocked(long amount) {
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) return rawLogged("withdrawLocked", () -> withdrawLocked(amount)); // BS-254
         if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. External balance was already decremented on lock —
         // just decrement local locked. Unbound path unchanged.
@@ -667,6 +671,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdrawLockedPrefered(long amount) {
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) { final long a = amount; return rawLogged("withdrawLockedPrefered", () -> withdrawLockedPrefered(a)); } // BS-254
         if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Discount from locked first (no external op — the
         // funds were already deducted at lock time), then fall back to the free
@@ -736,6 +741,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus transfer(long amount, @NotNull ISyncServerBank other) {
+        // BS-254: the TRANSFER pair covers both banks; the inner deposit / withdraw write no RAW_CHANGE row
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) return net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> transfer(amount, other));
         if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Decompose into primitives (withdraw + deposit) so we
         // never have to special-case bound-source-to-bound-target. Unbound path unchanged.
@@ -770,6 +777,18 @@ public class ServerBank implements ServerSaveable, IServerBank {
         }
         addBalanceInternal(amount);
         return otherBankStatus;
+    }
+
+    /**
+     * BS-254: runs one of this bank's own value-moving calls (re-entered inside {@code withoutRawLog}) and writes a
+     * RAW_CHANGE row for the change of the total balance, so a caller that logs nothing still leaves a row.
+     */
+    private <T> T rawLogged(String op, java.util.function.Supplier<T> body) {
+        long before = getTotalBalance();
+        T result = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(body);
+        long after = getTotalBalance();
+        net.kroia.banksystem.banking.ledger.TransactionLedger.logDelta(accountId, net.kroia.banksystem.api.ledger.LedgerType.RAW_CHANGE, itemID, after - before, after, op);
+        return result;
     }
 
     /**
@@ -849,6 +868,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus transferFromLocked(long amount, @NotNull ISyncServerBank other) {
+        // BS-254: the TRANSFER pair covers both banks; the inner deposit / withdraw write no RAW_CHANGE row
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) return net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> transferFromLocked(amount, other));
         if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Decompose into withdrawLocked + deposit primitives.
         // Unbound path unchanged.
@@ -858,7 +879,10 @@ public class ServerBank implements ServerSaveable, IServerBank {
             BankStatus w = this.withdrawLocked(amount);
             if (w != BankStatus.SUCCESS) return w;
             BankStatus d = other.deposit(amount);
-            if (d == BankStatus.SUCCESS) return BankStatus.SUCCESS;
+            if (d == BankStatus.SUCCESS) {
+                logTransferLedger(other, amount); // BS-254
+                return BankStatus.SUCCESS;
+            }
             // Rollback: put the funds back on the external side and re-lock them.
             if (!this.deposit(amount).equals(BankStatus.SUCCESS)) {
                 if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
@@ -885,6 +909,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         BankStatus otherBankStatus = other.deposit(amount);
         if(otherBankStatus == BankStatus.SUCCESS) {
             changeFlag = true;
+            logTransferLedger(other, amount); // BS-254
             return BankStatus.SUCCESS;
         }
         lockedBalance += amount;
@@ -935,6 +960,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus transferFromLockedPrefered(long amount, @NotNull ISyncServerBank other) {
+        // BS-254: the TRANSFER pair covers both banks; the inner deposit / withdraw write no RAW_CHANGE row
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) { final long a = amount; return net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> transferFromLockedPrefered(a, other)); }
         if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Decompose into withdrawLockedPrefered + deposit.
         // Unbound path unchanged.
@@ -945,7 +972,10 @@ public class ServerBank implements ServerSaveable, IServerBank {
             BankStatus w = this.withdrawLockedPrefered(amount);
             if (w != BankStatus.SUCCESS) return w;
             BankStatus d = other.deposit(amount);
-            if (d == BankStatus.SUCCESS) return BankStatus.SUCCESS;
+            if (d == BankStatus.SUCCESS) {
+                logTransferLedger(other, amount); // BS-254
+                return BankStatus.SUCCESS;
+            }
             // Rollback: deposit back into the external side and restore the pre-op lock.
             if (!this.deposit(amount).equals(BankStatus.SUCCESS)) {
                 if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
@@ -973,6 +1003,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
             BankStatus otherBankStatus = other.deposit(origAmount);
             if(otherBankStatus == BankStatus.SUCCESS) {
                 addBalanceInternal(-amount);
+                logTransferLedger(other, origAmount); // BS-254
                 return BankStatus.SUCCESS;
             }
             lockedBalance = lastLocked;
@@ -983,6 +1014,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         BankStatus otherBankStatus = other.deposit(amount);
         if(otherBankStatus == BankStatus.SUCCESS) {
             changeFlag = true;
+            logTransferLedger(other, amount); // BS-254
             return BankStatus.SUCCESS;
         }
         lockedBalance = lastLocked;
@@ -1556,11 +1588,15 @@ public class ServerBank implements ServerSaveable, IServerBank {
             boolean origTo1ChangeFlag = castedTo1.changeFlag;
             boolean origTo2ChangeFlag = castedTo2.changeFlag;
 
-            // Try to transfer from locked balance
-            BankStatus BankStatus1 = from1.transferFromLockedPrefered(amount1, to1);
-            BankStatus BankStatus2 = from2.transferFromLockedPrefered(amount2, to2);
+            // Try to transfer from locked balance; BS-254: the TRANSFER pairs are written once both legs stay
+            BankStatus[] legs = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutTransferLog(() -> new BankStatus[]{
+                    from1.transferFromLockedPrefered(amount1, to1), from2.transferFromLockedPrefered(amount2, to2)});
+            BankStatus BankStatus1 = legs[0];
+            BankStatus BankStatus2 = legs[1];
             if(BankStatus1 == BankStatus.SUCCESS && BankStatus2 == BankStatus.SUCCESS)
             {
+                castedFrom1.logTransferLedger(to1, amount1);
+                castedFrom2.logTransferLedger(to2, amount2);
                 return BankStatus.SUCCESS;
             }
             // If not possible, revert changes

@@ -16,7 +16,9 @@ import java.util.UUID;
 public record LedgerActor(@Nullable UUID uuid, @Nullable String name, Source source) {
 
     /** Persisted in {@code source_kind} by name. Append-only. */
-    public enum Source { PLAYER, ADMIN, CONSOLE, SYSTEM, STOCKMARKET }
+    public enum Source { PLAYER, ADMIN, CONSOLE, SYSTEM, STOCKMARKET,
+        /** BS-254: a balance change whose caller gave no actor (another mod, a raw slave request). */
+        UNKNOWN }
 
     public static LedgerActor player(@Nullable UUID uuid, @Nullable String name) {
         return new LedgerActor(uuid, name, Source.PLAYER);
@@ -32,6 +34,11 @@ public record LedgerActor(@Nullable UUID uuid, @Nullable String name, Source sou
 
     public static LedgerActor system() {
         return new LedgerActor(null, null, Source.SYSTEM);
+    }
+
+    /** BS-254: actor of a {@link LedgerType#RAW_CHANGE} row whose caller is not known. */
+    public static LedgerActor unknown() {
+        return new LedgerActor(null, null, Source.UNKNOWN);
     }
 
     public static LedgerActor stockmarket() {

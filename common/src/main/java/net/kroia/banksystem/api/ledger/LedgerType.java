@@ -10,9 +10,9 @@ import org.jetbrains.annotations.Nullable;
  * downstream tools (audit commands, external readers) depend on the numbers staying stable.
  * New row types get the next free number at the end of the list.
  * <p>
- * Amounts are unsigned except for {@link #TRANSFER}: there the amount is negative on the
- * account the value left and positive on the account it arrived at, so the two rows of one
- * transfer sum to 0.
+ * Amounts are unsigned except for {@link #TRANSFER}, {@link #RAW_CHANGE}, {@link #EXTERNAL_BIND} and
+ * {@link #EXTERNAL_UNBIND}: there the amount is negative when value left the account and positive when
+ * it arrived, so the two rows of one transfer sum to 0.
  *
  * @since 2.2.0
  */
@@ -54,7 +54,17 @@ public enum LedgerType {
     /** Item was disallowed by an admin; every holder's balance of it is cleared (no refund). */
     ADMIN_DISALLOW_ITEM(27),
     /** Balance of a deleted user's account that could not be handed out (player offline / outcome unknown); destroyed. Note gives the reason. */
-    ACCOUNT_DELETE_LOSS(28);
+    ACCOUNT_DELETE_LOSS(28),
+    /**
+     * BS-254: change of the total balance (free + locked) that came without a ledger type: another mod's
+     * direct bank call, a raw request from a slave, a bank slot created with a start balance or removed
+     * outside BankSystem's own flows. Signed amount; the note names the operation.
+     */
+    RAW_CHANGE(29),
+    /** BS-254: change of the slot's total balance when an external currency account is bound to it. Signed amount. */
+    EXTERNAL_BIND(30),
+    /** BS-254: change of the slot's total balance when its external currency account is unbound. Signed amount. */
+    EXTERNAL_UNBIND(31);
 
     private final int code;
 

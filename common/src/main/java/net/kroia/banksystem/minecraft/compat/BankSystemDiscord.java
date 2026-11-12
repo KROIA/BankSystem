@@ -131,6 +131,7 @@ public final class BankSystemDiscord {
             case WITHDRAW, CONVERTER_WITHDRAW, DOWNLOAD_WITHDRAW, ACCOUNT_DELETE_PAYOUT -> "bank-withdraw";
             case TRANSFER -> e.amount() < 0 ? "bank-transfer-out" : "bank-transfer-in";
             case TRADE_BUY, TRADE_SELL -> null; // StockMarket's own feed covers trades
+            case RAW_CHANGE -> null; // BS-254: low-level rows of other mods' bank calls, for the audit only
             case PAYOUT -> companyLeg(e) ? null : "bank-payout";
             case DIVIDEND -> companyLeg(e) ? null : "bank-dividend";
             case SHARE_STAMP, SHARE_REDEEM, SHARE_TRADE -> "bank-share";

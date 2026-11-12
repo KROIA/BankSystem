@@ -177,7 +177,8 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
             if(itemBank != null)
             {
                 toWithdraw = Math.min(toWithdraw, itemBank.getBalance());
-                if(itemBank.withdraw(toWithdraw) == BankStatus.SUCCESS)
+                final long withdrawNow = toWithdraw;
+                if(TransactionLedger.withoutRawLog(() -> itemBank.withdraw(withdrawNow)) == BankStatus.SUCCESS) // BS-254: row below
                 {
                     withdrawnItems.put(entry.getKey(), toWithdraw);
                     logWithdrawal(input, ledger, itemBank, toWithdraw);

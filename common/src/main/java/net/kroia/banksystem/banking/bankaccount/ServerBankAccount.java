@@ -19,6 +19,8 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.banking.clientdata.UserData;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
@@ -910,6 +912,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             bank.attachToAccount(this.accountNumber); // Task #33: attach for bindings lookup
             banks.put(itemID, bank); // Add new bank to the account
             hasChanges = true;
+            logRawSlot(bank, bank.getTotalBalance(), "bank created"); // BS-254
             return bank;
         }
         return null; // Failed to create bank
@@ -929,6 +932,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             bank.attachToAccount(this.accountNumber); // Task #33: attach for bindings lookup
             banks.put(itemID, bank); // Add new bank to the account
             hasChanges = true;
+            logRawSlot(bank, bank.getTotalBalance(), "bank created"); // BS-254
             return CompletableFuture.completedFuture(bank);
         }
         return CompletableFuture.completedFuture(null); // Failed to create bank
@@ -944,6 +948,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             return; // Invalid item ID
         }
         itemID = ItemIDManager.resolveAlias(itemID); // alias safety net (see getAccountData)
+        ServerBank closing = banks.get(itemID);
+        if (closing != null) logRawSlot(closing, -closing.getTotalBalance(), "bank removed"); // BS-254
         boolean removed = banks.remove(itemID) != null;
         hasChanges |= removed;
         // Task #33 (v2.0.5): cascade-drop any external-currency binding row for the
@@ -957,6 +963,17 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             }
         }
     }
+    /**
+     * BS-254: RAW_CHANGE row for a slot created with a start balance or removed with a balance, unless the caller
+     * logs it itself. A suspended binding's removal is logged by {@code ServerBankManager.auditSuspendedDrop}.
+     */
+    private void logRawSlot(ServerBank bank, long delta, String note) {
+        if (delta == 0 || !TransactionLedger.rawLogDue(accountNumber)
+                || BankAccountBindings.isSuspended(accountNumber, bank.getItemID())) return;
+        TransactionLedger.logDelta(accountNumber, LedgerType.RAW_CHANGE, bank.getItemID(), delta,
+                delta < 0 ? 0L : bank.getTotalBalance(), note);
+    }
+
     @Override
     public void removeBankAsync(ItemID itemID) {
         removeBank(itemID);
@@ -998,6 +1015,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public void removeAllBanks() {
         hasChanges |= !banks.isEmpty();
+        for (ServerBank bank : banks.values()) logRawSlot(bank, -bank.getTotalBalance(), "bank removed"); // BS-254
         // Task #33 (v2.0.5): every slot the account owned is going away — cascade-drop
         // the whole account's bindings in one pass.
         BankAccountBindings bindings = BankAccountBindings.get();

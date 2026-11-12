@@ -191,6 +191,7 @@ public class TransactionLedgerTests extends TestSuite {
                 {LedgerType.DIVIDEND, 21}, {LedgerType.SHARE_STAMP, 22}, {LedgerType.SHARE_REDEEM, 23},
                 {LedgerType.SHARE_TRADE, 24}, {LedgerType.ACCOUNT_DELETE_PAYOUT, 25}, {LedgerType.ACCOUNT_FREEZE, 26},
                 {LedgerType.ADMIN_DISALLOW_ITEM, 27}, {LedgerType.ACCOUNT_DELETE_LOSS, 28},
+                {LedgerType.RAW_CHANGE, 29}, {LedgerType.EXTERNAL_BIND, 30}, {LedgerType.EXTERNAL_UNBIND, 31},
         };
         if (expected.length != LedgerType.values().length)
             return fail("LedgerType has " + LedgerType.values().length + " constants, table lists " + expected.length
@@ -725,11 +726,14 @@ public class TransactionLedgerTests extends TestSuite {
         if (up == null || up.amount() != 77L || !PLAYER.equals(up.actorUuid()) || !"upload test".equals(up.note()))
             return fail("tagged deposit row " + up);
 
-        // Raw call (StockMarket settlement): NO_LOG, no row.
+        // Raw call (NO_LOG): BS-254, ServerBank writes one RAW_CHANGE row with source UNKNOWN.
         int before = rows(accountNr).size();
         handler.handleOnMasterServer(net.kroia.banksystem.banking.bank.AsyncBank.InputData.of(
                 net.kroia.banksystem.banking.bank.AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 5L), "", null).join();
-        if (rows(accountNr).size() != before) return fail("raw deposit wrote a row");
+        List<TransactionLogRecord> afterRaw = rows(accountNr);
+        TransactionLogRecord raw = afterRaw.isEmpty() ? null : afterRaw.get(0);
+        if (afterRaw.size() != before + 1 || raw.type() != LedgerType.RAW_CHANGE || raw.amount() != 5L
+                || raw.source() != LedgerActor.Source.UNKNOWN) return fail("raw deposit row " + raw);
 
         // Disallowed code on a withdraw: operation runs, row is UNKNOWN_LEGACY with the note.
         long balance = money.getBalance();
@@ -741,7 +745,7 @@ public class TransactionLedgerTests extends TestSuite {
         TransactionLogRecord rejected = find(rows(accountNr), LedgerType.UNKNOWN_LEGACY);
         if (rejected == null || rejected.amount() != 10L || rejected.note() == null
                 || !rejected.note().startsWith("rejected code 8")) return fail("rejected row " + rejected);
-        return pass("tagged call logged, raw call silent, disallowed code logged as 0");
+        return pass("tagged call logged, raw call as RAW_CHANGE, disallowed code logged as 0");
     }
 
     private TestResult itemRequestRejectsDisallowedCode() {

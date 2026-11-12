@@ -29,6 +29,10 @@ import java.util.function.Supplier;
  * async DB worker). On a slave every write is a no-op: the slave's request to the master
  * carries the ledger type code (see {@link #tagged}) and the master writes the row.
  * <p>
+ * BS-254: a balance change no caller logs writes a RAW_CHANGE row where it happens ({@code ServerBank},
+ * {@code ServerBankAccount}); callers that log themselves run the bank call in {@link #withoutRawLog}
+ * or {@link #tagged}.
+ * <p>
  * Call sites that only know the actor further up the stack (the {@code ServerBank.transfer}
  * auto-log, account deletion) read it from {@link #currentActor()}, set with
  * {@link #withActor(LedgerActor, Supplier)}.
@@ -42,6 +46,7 @@ public final class TransactionLedger implements ITransactionLedger {
     private static final ThreadLocal<Boolean> SUPPRESS_TRANSFER_LOG = new ThreadLocal<>();
     private static final ThreadLocal<SlaveTag> TAG = new ThreadLocal<>();
     private static final ThreadLocal<Resolved> TRANSFER_TYPE = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> CALLER_LOGS = new ThreadLocal<>();
 
     /**
      * Wire-only code: the request moves value but writes no row. Used by the raw async bank
@@ -104,6 +109,52 @@ public final class TransactionLedger implements ITransactionLedger {
         } catch (RuntimeException ignored) {
             // best-effort
         }
+    }
+
+    @Override
+    public <T> T callerLogs(Supplier<T> body) {
+        return withoutRawLog(body);
+    }
+
+    // ------------------------------------------------------------------
+    // BS-254: a row wherever a balance changes
+    // ------------------------------------------------------------------
+
+    /**
+     * BS-254: runs {@code body} without the automatic RAW_CHANGE rows on this thread. For callers that write
+     * their own typed rows for the bank calls in {@code body}; {@link #tagged} has the same effect.
+     */
+    public static <T> T withoutRawLog(Supplier<T> body) {
+        Boolean previous = CALLER_LOGS.get();
+        CALLER_LOGS.set(Boolean.TRUE);
+        try {
+            return body.get();
+        } finally {
+            if (previous == null) CALLER_LOGS.remove();
+            else CALLER_LOGS.set(previous);
+        }
+    }
+
+    /**
+     * BS-254: true when a balance change on {@code accountNumber} has to write its own RAW_CHANGE row:
+     * master, attached account, and no caller on this thread logs it ({@link #withoutRawLog} / {@link #tagged}).
+     */
+    public static boolean rawLogDue(int accountNumber) {
+        SlaveTag tag = TAG.get();
+        return accountNumber != 0 && BACKEND_INSTANCES != null && !BACKEND_INSTANCES.isSlaveServer
+                && CALLER_LOGS.get() == null && (tag == null || tag.code() == NO_LOG);
+    }
+
+    /**
+     * BS-254: row for a measured change of a slot's total balance (signed {@code delta}, nothing for 0). The actor
+     * is the one set with {@link #withActor}, else UNKNOWN.
+     */
+    public static void logDelta(int accountNumber, LedgerType type, ItemID item, long delta, long balanceAfter,
+                                @Nullable String note) {
+        if (delta == 0 || item == null) return;
+        LedgerActor actor = ACTOR.get();
+        write(TransactionLogRecord.of(accountNumber, type, item.getShort(), delta,
+                actor != null ? actor : LedgerActor.unknown(), null, null, null, note, balanceAfter));
     }
 
     // ------------------------------------------------------------------

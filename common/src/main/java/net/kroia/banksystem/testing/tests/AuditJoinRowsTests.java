@@ -100,7 +100,7 @@ public class AuditJoinRowsTests extends TestSuite {
             return fail("no personal money bank");
         }
         int nr = sbm.getPersonalBankAccount(player.uuid()).getAccountNumber();
-        bank.deposit(PAYOUT_CENTS); // raw call writes no row: log the funding so the account's rows balance
+        TransactionLedger.withoutRawLog(() -> bank.deposit(PAYOUT_CENTS)); // no RAW_CHANGE row: the ADMIN_ADD row below logs the funding
         TransactionLedger.logRow(nr, LedgerType.ADMIN_ADD, money, PAYOUT_CENTS, LedgerActor.system(), null, "audit join test funding");
 
         long sentMs = System.currentTimeMillis();

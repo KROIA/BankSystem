@@ -24,7 +24,7 @@ The `BankSystemAPI` interface provides access to all subsystems:
 | `getDataHandler()` | `IBankSystemDataHandler` | Save/load operations |
 | `isSlave()` | `boolean` | Whether this server is a slave in multi-server mode |
 | `setItemPriceProvider(ItemPriceProvider)` / `getItemPriceProvider()` | `void` / `ItemPriceProvider` *(nullable)* | Supply market prices for total-wealth tracking — see [Item Price Provider API](ItemPriceProviderAPI.md) |
-| `getLedger()` | `ITransactionLedger` | Write transaction-ledger rows (generic `log` and StockMarket `logTrade`); master only, a no-op on slave servers — see [Transaction Ledger](TransactionLedger.md) (since 2.2.0) |
+| `getLedger()` | `ITransactionLedger` | Write transaction-ledger rows (generic `log` and StockMarket `logTrade`; `callerLogs` for bank calls you log yourself); master only, a no-op on slave servers — see [Transaction Ledger](TransactionLedger.md) (since 2.2.0) |
 | `getNoteFlowLog()` | `INoteFlowLog` | Record money items created or destroyed outside the bank; works on every server, slaves included — see [Note Flow Log](#note-flow-log-inoteflowlog) (since 2.2.0) |
 | `setPriceCurrencyItem(short)` / `getPriceCurrencyItem()` | `void` / `short` | The item prices are denominated in |
 | `registerCurrencyProvider(ExternalCurrencyProvider)` | `void` | Register a currency-mod adapter — see [Currency Integration](CurrencyIntegration.md) |

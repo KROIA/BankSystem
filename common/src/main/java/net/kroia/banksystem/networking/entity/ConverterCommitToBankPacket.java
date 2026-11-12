@@ -132,7 +132,7 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
             debug("ConverterCommitToBankPacket: race — cache changed under commit for " + playerUUID);
             return;
         }
-        BankStatus status = moneyBank.deposit(amount);
+        BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> moneyBank.deposit(amount)); // BS-254: row below
         if (status == BankStatus.SUCCESS) {
             net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(moneyBank, net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT, amount,
                     net.kroia.banksystem.banking.ledger.TransactionLedger.player(playerUUID), null);

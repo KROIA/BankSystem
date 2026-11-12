@@ -227,7 +227,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             }
 
             // Withdraw the requested amount of banknotes
-            if(moneyBank.withdraw(totalValue) == BankStatus.SUCCESS)
+            if(TransactionLedger.withoutRawLog(() -> moneyBank.withdraw(totalValue)) == BankStatus.SUCCESS) // BS-254: row below
             {
                 requestedBankNotes.put(itemID, requestedAmount);
                 // Task #44 (v2.1.0) — Transaction Ledger. Money withdrawals are logged
@@ -292,7 +292,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         }
 
         long toDepositMoney = moneyValue(items);
-        if (toDepositMoney > 0 && redepositMoneyBank.deposit(toDepositMoney) == BankStatus.SUCCESS) {
+        if (toDepositMoney > 0 && TransactionLedger.withoutRawLog(() -> redepositMoneyBank.deposit(toDepositMoney)) == BankStatus.SUCCESS) {
             // Task #109: separate refund row; the WITHDRAW row above stays as written.
             TransactionLedger.logBank(redepositMoneyBank, LedgerType.WITHDRAW_REFUND, toDepositMoney,
                     TransactionLedger.player(player), "banknotes not handed out: " + items, transferId);

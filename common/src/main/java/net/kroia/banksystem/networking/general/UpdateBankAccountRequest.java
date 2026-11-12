@@ -254,7 +254,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                             continue;
                     }
                     long destroyed = closing == null ? 0L : closing.getTotalBalance();
-                    TransactionLedger.withActor(actor, () -> { account.removeBank(data.itemID); return null; });
+                    TransactionLedger.withActor(actor, () -> TransactionLedger.withoutRawLog(() -> { account.removeBank(data.itemID); return null; })); // BS-254: row below
                     if (closing != null && !suspended) // Task #148: removeBank logs a suspended binding's closure + flag
                         TransactionLedger.logRow(input.accountNumber, LedgerType.BANK_CLOSED, data.itemID, destroyed,
                                 actor, null, "bank closed");
@@ -285,7 +285,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                                     data.shareRemoval, sender, true, adminActor);
                     } else if (data.setBalance) {
                         long oldBalance = bank.getBalance();
-                        bank.setBalance(data.balance);
+                        TransactionLedger.withoutRawLog(() -> bank.setBalance(data.balance)); // BS-254: row below
                         long newBalance = bank.getBalance();
                         if (newBalance != oldBalance)
                             TransactionLedger.logBank(bank, LedgerType.ADMIN_SET, Math.abs(newBalance - oldBalance),
@@ -298,7 +298,8 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                             notifySender(sender, SHARE_KEY + "increase_refused");
                             startBalance = 0;
                         }
-                        ISyncServerBank created = account.createBank(data.itemID, startBalance);
+                        long finalStart = startBalance;
+                        ISyncServerBank created = TransactionLedger.withoutRawLog(() -> account.createBank(data.itemID, finalStart)); // BS-254: row below
                         if (created != null && startBalance != 0)
                             TransactionLedger.logBank(created, LedgerType.ADMIN_SET, Math.abs(created.getBalance()),
                                     adminActor, "bank created: 0->" + created.getBalance());
@@ -470,7 +471,7 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                 notifySender(sender, SHARE_KEY + "give_offline");
                 return false;
             }
-            if (bank.withdraw(amount) != BankStatus.SUCCESS) {
+            if (TransactionLedger.withoutRawLog(() -> bank.withdraw(amount)) != BankStatus.SUCCESS) { // BS-254: row below
                 notifySender(sender, SHARE_KEY + "choice_refused");
                 return false;
             }
@@ -478,14 +479,14 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                     Map.of(itemID, amount / scale), true);
             long notGiven = left.getOrDefault(itemID, 0L) * scale;
             if (notGiven > 0)
-                bank.deposit(notGiven);
+                TransactionLedger.withoutRawLog(() -> bank.deposit(notGiven)); // the row below holds the net amount
             if (amount > notGiven)
                 TransactionLedger.write(TransactionLogRecord.of(accountNr, isAdmin ? LedgerType.ADMIN_REMOVE : LedgerType.WITHDRAW,
                         itemID.getShort(), amount - notGiven, actor, null, companyId, null, "shares given to editor", bank.getTotalBalance()));
             return notGiven == 0;
         }
         // SHARE_DESTROY
-        if (bank.withdraw(amount) != BankStatus.SUCCESS) {
+        if (TransactionLedger.withoutRawLog(() -> bank.withdraw(amount)) != BankStatus.SUCCESS) { // BS-254: row below
             notifySender(sender, SHARE_KEY + "choice_refused");
             return false;
         }

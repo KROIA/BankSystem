@@ -401,16 +401,18 @@ public class AsyncBank implements IAsyncBank {
         /**
          * Task #109 — runs the bank call and writes the ledger row on the master from the type
          * code the slave sent with it. Reads write nothing. Value-moving calls check the code
-         * against the function's allow-list: NO_LOG writes nothing (raw calls, e.g. StockMarket
-         * settlement), an allowed code is written as sent, anything else is written as
-         * UNKNOWN_LEGACY with a "rejected code" note. Transfers always keep the TRANSFER pair
-         * written by {@code ServerBank.transfer}; the code only picks type and actor.
+         * against the function's allow-list: an allowed code is written as sent, anything else is
+         * written as UNKNOWN_LEGACY with a "rejected code" note. BS-254: a raw call (NO_LOG, and every
+         * setBalance / lock / unlock, whose code is ignored) leaves the row to {@code ServerBank}, which
+         * writes a RAW_CHANGE row for any change of the total balance. Transfers always keep the
+         * TRANSFER pair written by {@code ServerBank}; the code only picks type and actor.
          */
         private static OutputData executeWithLedger(FunctionType function, BankIdentifyAndDataPacket<?> params,
                                                     ISyncServerBank bank, String slaveID, Supplier<OutputData> execute) {
             Set<LedgerType> allowed = ledgerAllowList(function);
             if (allowed == null) return execute.get();
-            TransactionLedger.Resolved resolved = TransactionLedger.resolveSlaveCode(params.ledgerCode(), allowed,
+            TransactionLedger.Resolved resolved = allowed.isEmpty() ? null
+                    : TransactionLedger.resolveSlaveCode(params.ledgerCode(), allowed,
                     true, params.ledgerNote(), slaveID, "AsyncBank." + function.name());
             LedgerActor actor = TransactionLedger.slaveActor(params.ledgerActor());
             // Task #117: the tag lets ServerBank refuse player movements on frozen accounts.
@@ -418,13 +420,13 @@ public class AsyncBank implements IAsyncBank {
                     : () -> TransactionLedger.tagged(resolved.type(), params.ledgerActor(), null, execute);
             if (allowed == TransactionLedger.SLAVE_TRANSFER_CODES)
                 return TransactionLedger.withActor(actor, () -> TransactionLedger.withTransferType(resolved, run));
+            if (resolved == null) // BS-254: raw call, ServerBank writes the RAW_CHANGE row (actor UNKNOWN without a player)
+                return params.ledgerActor() == null ? run.get() : TransactionLedger.withActor(actor, run);
             OutputData out = run.get();
-            if (resolved != null) {
-                Object result = out.decodeResult();
-                if (result == null || result == BankStatus.SUCCESS || Boolean.TRUE.equals(result))
-                    TransactionLedger.logBank(bank, resolved.type(), rawAmount(params.extra(), bank), actor, resolved.note(),
-                            params.transferId()); // Task #125: ref = the slave's transfer_id
-            }
+            Object result = out.decodeResult();
+            if (result == null || result == BankStatus.SUCCESS || Boolean.TRUE.equals(result))
+                TransactionLedger.logBank(bank, resolved.type(), rawAmount(params.extra(), bank), actor, resolved.note(),
+                        params.transferId()); // Task #125: ref = the slave's transfer_id
             return out;
         }
 
@@ -436,7 +438,7 @@ public class AsyncBank implements IAsyncBank {
                      WithdrawLockedPreferedAsync, WithdrawLockedPreferedRealAsync -> TransactionLedger.SLAVE_WITHDRAW_CODES;
                 case TransferAsync, TransferRealAsync, TransferFromLockedAsync, TransferFromLockedRealAsync,
                      TransferFromLockedPreferedAsync, TransferFromLockedPreferedRealAsync -> TransactionLedger.SLAVE_TRANSFER_CODES;
-                // Raw only (NO_LOG): total balance unchanged, or StockMarket / admin raw writes.
+                // Raw only (code ignored): ServerBank writes a RAW_CHANGE row if the total balance changes (BS-254).
                 case SetBalanceAsync, SetRealBalanceAsync, LockAmountAsync, LockAmountRealAsync,
                      UnlockAmountAsync, UnlockAmountRealAsync, UnlockAllAsync -> Set.of();
                 default -> null;

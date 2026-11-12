@@ -106,7 +106,8 @@ public class UnbindExternalAccountRequest extends BankSystemGenericRequest<Unbin
         if (!(bankManager instanceof ServerBankManager sbm)) {
             return CompletableFuture.completedFuture(new OutputData(BankStatus.FAILED_EXTERNAL_UNAVAILABLE));
         }
-        BankStatus status = sbm.unbindExternalAccount(input.accountId, input.itemId, input.keepOnBankSystem);
+        BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.slaveActor(sender), // BS-254: actor of the EXTERNAL_UNBIND row
+                () -> sbm.unbindExternalAccount(input.accountId, input.itemId, input.keepOnBankSystem));
         return CompletableFuture.completedFuture(new OutputData(status != null ? status : BankStatus.FAILED_EXTERNAL_UNAVAILABLE));
     }
 

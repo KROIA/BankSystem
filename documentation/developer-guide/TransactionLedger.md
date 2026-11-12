@@ -13,9 +13,9 @@ Every money or item change runs on the master, so the master writes the row. A s
 | `DepositItemsInBankRequest`, `AsyncBank` deposit calls | DEPOSIT, CONVERTER_DEPOSIT, UPLOAD_DEPOSIT, CRAFT_OUTPUT, WITHDRAW_REFUND |
 | `WithdrawItemsFromBankRequest`, `AsyncBank` withdraw calls (incl. locked) | WITHDRAW, CONVERTER_WITHDRAW, DOWNLOAD_WITHDRAW, CRAFT_CONSUME |
 | `AsyncBank` transfer calls | TRANSFER |
-| `AsyncBank` set-balance, lock and unlock calls | none (no-log only) |
+| `AsyncBank` set-balance, lock and unlock calls | none (the code is ignored; a change of the total balance writes RAW_CHANGE) |
 
-A code that is unknown or not allowed is written as UNKNOWN_LEGACY (0) with the note `rejected code <n> from slave <id>`, and a warning is logged. The operation itself still runs. Raw `AsyncBank` calls without a code (for example StockMarket settlement, which logs through `logTrade`) send the wire-only code `-1` (`TransactionLedger.NO_LOG`) and write no row. Transfers always write their TRANSFER pair.
+A code that is unknown or not allowed is written as UNKNOWN_LEGACY (0) with the note `rejected code <n> from slave <id>`, and a warning is logged. The operation itself still runs. Raw `AsyncBank` calls without a code (for example StockMarket settlement, which logs through `logTrade`) send the wire-only code `-1` (`TransactionLedger.NO_LOG`); the master writes a RAW_CHANGE row for them (see [Changes nobody logs](#changes-nobody-logs)). Transfers always write their TRANSFER pair.
 
 Deposit and withdraw calls from a slave also carry a **transfer id**. The master writes it into the row's `ref`, so the slave's own records (its diagnostics `TransferJournal`) can be matched to the master's rows. The master applies each transfer id **at most once**: a repeated request gets the first answer and writes no second row. When the answer to a slave is lost, the slave asks the master for the transfer's status before it refunds anything; if the outcome stays unknown, nothing is refunded (see [When an async call fails](API.md#when-an-async-call-fails)).
 
@@ -40,7 +40,30 @@ Rows you write are treated like BankSystem's own: they fire [`getTransactionLogg
 
 To **react** to rows instead of writing them, subscribe to `api.getEvents().getTransactionLoggedEvent()` on the master (fires on the writer's thread).
 
-Actors (`LedgerActor`): `player(uuid, name)`, `admin(uuid, name)`, `console()`, `system()`, `stockmarket()`.
+Actors (`LedgerActor`): `player(uuid, name)`, `admin(uuid, name)`, `console()`, `system()`, `stockmarket()`, `unknown()`.
+
+### Changes nobody logs
+
+Every change of a bank's total balance (free + locked) writes a row where it happens, so a caller cannot skip it:
+
+- A raw bank call (`deposit`, `withdraw`, `setBalance`, `withdrawLocked*` and their async/`Real` variants) that no typed row covers writes a RAW_CHANGE row with the signed change, source `UNKNOWN` (or the player of a slave request) and `balance_after`.
+- Creating a bank slot with a start balance, removing a slot and removing all slots of an account write RAW_CHANGE rows.
+- Binding a slot to an external currency account, or unbinding it, writes EXTERNAL_BIND / EXTERNAL_UNBIND with the change it caused.
+- Lock and unlock only move value between free and locked and write nothing. `transferFromLocked*` writes its TRANSFER pair like `transfer`.
+
+So for every account and item: closing total − opening total = signed sum of the rows in between.
+
+A mod that writes its own rows for its bank calls (for example trade settlement logged with `logTrade`) makes those calls inside `callerLogs`, so they are not logged twice:
+
+```java
+ledger.callerLogs(() -> {
+    itemBank.deposit(qty);
+    return moneyBank.withdrawLockedPrefered(cost);
+});
+ledger.logTrade(...);
+```
+
+`callerLogs` covers the current thread only and does not stop the TRANSFER pair of a transfer.
 
 Package: `net.kroia.banksystem.api.ledger` (`ITransactionLedger`, `LedgerType`, `LedgerActor`, `TradeLogEntry`, `TradeSide`, `TradeRowKind`).
 
@@ -80,7 +103,11 @@ Codes are stored in `type_code` and are **append-only**: a code is never renumbe
 | 27 | ADMIN_DISALLOW_ITEM | An admin disallowed an item; one row per holder with the removed (non-refunded) balance |
 | 28 | ACCOUNT_DELETE_LOSS | Balance of a deleted user's account that could not be handed out and was destroyed; the note ends with `not delivered: <reason>`, where the reason is `player offline`, `outcome unknown, transfer <id>` (a slave's DROP stayed unknown; `ref` = that transfer id) or `outcome unknown: <cause>` |
 
-Amounts are unsigned, except for TRANSFER, where the sign gives the direction.
+| 29 | RAW_CHANGE | Change of a slot's total balance that no other row covers: raw bank calls of other mods or slave requests, a slot created with a start balance, a slot removed with a balance. Signed; the note names the call (`deposit`, `setBalance`, `bank created`, `bank removed`, ...) |
+| 30 | EXTERNAL_BIND | A slot was bound to an external currency account; signed change of the slot's total (the external balance joining), note `bound to <provider>:<account>` |
+| 31 | EXTERNAL_UNBIND | A slot was unbound; signed change of the slot's total, note says whether the funds were kept on BankSystem or left on the external account |
+
+Amounts are unsigned, except for TRANSFER, RAW_CHANGE, EXTERNAL_BIND and EXTERNAL_UNBIND, where the sign gives the direction.
 
 ## Columns
 
@@ -90,7 +117,7 @@ Amounts are unsigned, except for TRANSFER, where the sign gives the direction.
 | `account_number` | Account the row belongs to |
 | `actor_uuid` | Player or admin who caused the change; null for console/system |
 | `actor_name` | Actor name at the time of the change |
-| `source_kind` | `PLAYER`, `ADMIN`, `CONSOLE`, `SYSTEM` or `STOCKMARKET`; `UNKNOWN` on old rows |
+| `source_kind` | `PLAYER`, `ADMIN`, `CONSOLE`, `SYSTEM`, `STOCKMARKET` or `UNKNOWN` (old rows, and raw changes whose caller is not known) |
 | `type_code` | Type code (table above) |
 | `kind` | Type name (kept for older readers) |
 | `item_id` | Item of the bank that changed |

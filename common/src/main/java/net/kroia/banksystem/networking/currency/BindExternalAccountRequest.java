@@ -129,7 +129,8 @@ public class BindExternalAccountRequest extends BankSystemGenericRequest<BindExt
             warn("BindExternalAccountRequest refused: player " + sender + " may not bind external account " + input.ref);
             return CompletableFuture.completedFuture(new OutputData(BankStatus.FAILED_INVALID_ITEM_ID));
         }
-        BankStatus status = sbm.bindExternalAccount(input.accountId, input.itemId, ref);
+        BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.slaveActor(sender), // BS-254: actor of the EXTERNAL_BIND row
+                () -> sbm.bindExternalAccount(input.accountId, input.itemId, ref));
         // Task #146: record admin-made bindings so the start-up check never suspends them.
         BankAccountBindings bindings = BankAccountBindings.get();
         if (isAdmin && status == BankStatus.SUCCESS && bindings != null)

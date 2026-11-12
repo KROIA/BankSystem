@@ -1890,7 +1890,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             ServerBankAccount account = bankAccounts.get(holder.accountNr());
             if(account != null) {
                 boolean suspended = BankAccountBindings.isSuspended(holder.accountNr(), finalItemID); // removeBank logs it (Task #148)
-                account.removeBank(finalItemID);
+                TransactionLedger.withoutRawLog(() -> { account.removeBank(finalItemID); return null; }); // BS-254: row below
                 long cleared_ = holder.free() + holder.locked();
                 if (cleared_ != 0 && !suspended)
                     net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(holder.accountNr(), net.kroia.banksystem.api.ledger.LedgerType.ADMIN_DISALLOW_ITEM, finalItemID, cleared_,
@@ -2724,6 +2724,29 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      *         violation (WARN-logged with a human-readable reason)
      */
     public BankStatus bindExternalAccount(int accountId, ItemID itemId, ExternalAccountRef ref) {
+        return withSlotDelta(accountId, itemId, LedgerType.EXTERNAL_BIND,
+                "bound to " + (ref == null ? "?" : ref.providerId() + ":" + ref.accountKey()),
+                () -> bindExternalAccountUnlogged(accountId, itemId, ref));
+    }
+
+    /**
+     * BS-254: runs a bind / unbind of the slot and writes one {@code type} row for the change of the slot's total
+     * balance it caused (the external balance joining or staying behind, unit conversion, discarded dust).
+     */
+    private BankStatus withSlotDelta(int accountId, @Nullable ItemID itemId, LedgerType type, String note,
+                                     java.util.function.Supplier<BankStatus> body) {
+        ServerBankAccount account = bankAccounts.get(accountId);
+        ServerBank bank = account == null ? null : account.getBank(itemId);
+        long before = bank == null ? 0L : bank.getTotalBalance();
+        BankStatus status = TransactionLedger.withoutRawLog(body); // the inner moves are this one row
+        if (bank != null) {
+            long after = bank.getTotalBalance();
+            TransactionLedger.logDelta(accountId, type, bank.getItemID(), after - before, after, note);
+        }
+        return status;
+    }
+
+    private BankStatus bindExternalAccountUnlogged(int accountId, ItemID itemId, ExternalAccountRef ref) {
         if (itemId == null || !itemId.isValid() || ref == null) {
             warn("bindExternalAccount refused: invalid arguments (accountId=" + accountId
                     + ", itemId=" + itemId + ", ref=" + ref + ")");
@@ -2924,6 +2947,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      *         when the provider is unavailable and locked/dust funds would be lost
      */
     public BankStatus unbindExternalAccount(int accountId, ItemID itemId, boolean keepOnBankSystem) {
+        return withSlotDelta(accountId, itemId, LedgerType.EXTERNAL_UNBIND,
+                keepOnBankSystem ? "unbound, funds kept on BankSystem" : "unbound, funds left on the external account",
+                () -> unbindExternalAccountUnlogged(accountId, itemId, keepOnBankSystem));
+    }
+
+    private BankStatus unbindExternalAccountUnlogged(int accountId, ItemID itemId, boolean keepOnBankSystem) {
         if (itemId == null || !itemId.isValid()) {
             warn("unbindExternalAccount refused: invalid itemId (" + itemId + ")");
             return BankStatus.FAILED_INVALID_ITEM_ID;

@@ -369,7 +369,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
 
-        BankStatus status = bank.depositReal(amount);
+        BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> bank.depositReal(amount)); // BS-254: ADMIN_ADD row below
         if(status == BankStatus.SUCCESS)
             net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(bank, net.kroia.banksystem.api.ledger.LedgerType.ADMIN_ADD, bank.convertToRawAmount(amount),
                     net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), "money add " + userName);
@@ -418,7 +418,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
         long oldBalance = bank.getBalance();
-        bank.setRealBalance(amount);
+        net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> bank.setRealBalance(amount)); // BS-254: ADMIN_SET row below
         net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(bank, net.kroia.banksystem.api.ledger.LedgerType.ADMIN_SET, Math.abs(bank.getBalance() - oldBalance),
                 net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), "money set " + userName + ": " + oldBalance + "->" + bank.getBalance());
         User owner = bankManager.getUserByName(userName);
@@ -466,7 +466,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
         if(bank.getRealBalance() >= amount) {
-            if(bank.withdrawReal(amount) == BankStatus.SUCCESS)
+            if(net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> bank.withdrawReal(amount)) == BankStatus.SUCCESS) // BS-254: row below
                 net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(bank, net.kroia.banksystem.api.ledger.LedgerType.ADMIN_REMOVE, bank.convertToRawAmount(amount),
                         net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), "money remove " + userName);
         }
