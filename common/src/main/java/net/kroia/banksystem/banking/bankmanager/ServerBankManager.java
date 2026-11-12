@@ -711,10 +711,14 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 if (loss > 0) {
                     TransactionLedger.logRow(account.getKey(), LedgerType.ACCOUNT_DELETE_LOSS, e.getKey(), loss, actor, null,
                             note + "; not delivered: " + result.reason(), unknown);
-                    if (unknown != null) // the items may have arrived after all: flag it, like a parked withdraw DROP
+                    if (unknown != null) { // the items may have arrived after all: flag it, like a parked withdraw DROP
+                        // BS-242: the flag amount is money; other items go into the details, scaled and named
+                        boolean money = e.getKey().getShort() == MoneyItem.getItemID().getShort();
                         net.kroia.banksystem.banking.ledger.AdminAudit.raise(account.getKey(),
-                                net.kroia.banksystem.banking.ledger.SuspicionChecks.TRANSFER_PARKED, 2, loss, unknown,
-                                "user deletion DROP outcome unknown, logged as lost: " + e.getKey().getName() + " " + loss);
+                                net.kroia.banksystem.banking.ledger.SuspicionChecks.TRANSFER_PARKED, 2, money ? loss : 0, unknown,
+                                "user deletion DROP outcome unknown, logged as lost: " + (money ? e.getKey().getName() + " " + loss
+                                        : net.kroia.banksystem.banking.ledger.AdminAudit.itemAmount(e.getKey().getShort(), loss)));
+                    }
                 }
                 Deque<AbstractMap.SimpleEntry<String, Long>> q = sources.get(e.getKey());
                 for (long pay = e.getValue() - loss; pay > 0; ) {

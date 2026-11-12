@@ -19,6 +19,7 @@ import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
+import net.kroia.banksystem.banking.ledger.AdminAudit;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.DriverShim;
@@ -116,6 +117,7 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("share_balance_admin_edit", this::shareBalanceAdminEdit); // BS-234
         addTest("user_deletion_payout_rows_per_transfer", this::userDeletionPayoutLegs); // Task #136
         addTest("user_deletion_unknown_outcome_loss_ref", () -> threw(this::userDeletionUnknownOutcome)); // Task #136
+        addTest("user_deletion_unknown_outcome_item_flag", () -> threw(this::userDeletionUnknownOutcomeItem)); // BS-242
         addTest("user_deletion_raw_to_items", this::payoutRawToItems); // Task #136
         addTest("slave_code_allow_list", this::slaveCodeAllowList);
         addTest("async_bank_code_logged_on_master", this::asyncBankCodeLoggedOnMaster);
@@ -538,6 +540,29 @@ public class TransactionLedgerTests extends TestSuite {
         for (SuspicionFlagRecord f : flags.getRecent(otherAccountNr, 0, 0).get(10, TimeUnit.SECONDS))
             if (f.flagType() == SuspicionChecks.TRANSFER_PARKED && tid.equals(f.ref()))
                 return f.amount() == 30L ? pass("LOSS 30 ref = transfer id, PAYOUT 70 ref null, flag 6 raised") : fail("flag " + f);
+        return fail("no TRANSFER_PARKED flag for " + tid);
+    }
+
+    /** BS-242: a parked non-money item: flag amount 0, the alert names the scaled item amount, no money sign. */
+    private TestResult userDeletionUnknownOutcomeItem() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        if (!(manager instanceof ServerBankManager sbm)) return fail("live manager is not a ServerBankManager");
+        var flags = BankSystemModBackend.getInstances_forTesting().SUSPICION_FLAG_MANAGER;
+        if (flags == null) return fail("no flag manager");
+        ItemID diamond = allow(Items.DIAMOND.getDefaultInstance());
+        String tid = TransferJournal.newTransferId();
+        sbm.logDeletePayout(Map.of(otherAccountNr, Map.of(diamond, 250L)),
+                new ServerBankManager.PayoutResult(Map.of(diamond, 250L), "outcome unknown, transfer " + tid, Map.of(), tid),
+                UUID.randomUUID(), LedgerActor.system());
+        for (SuspicionFlagRecord f : flags.getRecent(otherAccountNr, 0, 0).get(10, TimeUnit.SECONDS)) {
+            if (f.flagType() != SuspicionChecks.TRANSFER_PARKED || !tid.equals(f.ref())) continue;
+            if (f.amount() != 0) return fail("flag amount " + f.amount() + ", expected 0");
+            String chat = AdminAudit.flagChat(otherAccountNr, f.flagType(), f.severity(), f.amount(), f.details());
+            String want = "2.50 " + Items.DIAMOND.getDefaultInstance().getHoverName().getString();
+            if (!chat.contains(want) || chat.contains(net.kroia.banksystem.api.MoneyFormat.formatMoney(250L)) || chat.contains(" 250"))
+                return fail("expected '" + want + "' without money or raw count:\n" + chat);
+            return pass("flag amount 0, alert shows " + want);
+        }
         return fail("no TRANSFER_PARKED flag for " + tid);
     }
 

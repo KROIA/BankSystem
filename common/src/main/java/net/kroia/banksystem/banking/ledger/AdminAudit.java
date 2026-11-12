@@ -249,7 +249,7 @@ public final class AdminAudit {
     }
 
     /** Real amount with its item: money with the currency, shares as a count, other items with their name. */
-    private static String itemAmount(short itemId, long raw) {
+    public static String itemAmount(short itemId, long raw) {
         if (itemId == 0) return MoneyFormat.format(raw);
         try {
             if (itemId == net.kroia.banksystem.minecraft.item.custom.money.MoneyItem.getItemID().getShort())
