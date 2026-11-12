@@ -265,6 +265,8 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             dirty = false;
             onClose();
         }
+        // BS-243: amber Apply while there are unsaved edits (cleared by a successful save/reload).
+        setButtonColor(applyButton, applyButton.isClickable() && dirty ? UNSAVED_COLOR : 0);
     }
 
     @Override
