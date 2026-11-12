@@ -137,6 +137,19 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
         return isAccessAllowed(false, playerSender == null || playerIsAdmin(playerSender), isFromUntrustedSlave(slaveID));
     }
 
+    /**
+     * BS-246: true for an operator (permission level 2) who is online on THIS server and sent the
+     * request here directly. Slave-forwarded requests return false: a slave's op list can't be
+     * checked from here.
+     */
+    protected boolean isLocalOperator(@Nullable UUID playerSender, String slaveID)
+    {
+        if (playerSender == null || (slaveID != null && !slaveID.isEmpty()))
+            return false;
+        ServerPlayer p = net.kroia.modutilities.ServerPlayerUtilities.getOnlinePlayer(playerSender);
+        return p != null && net.kroia.modutilities.PermissionCompat.hasPermission(p, 2);
+    }
+
     /** Task #104: {@link #isAccessAllowed} applied to one account. False if the account is null. */
     protected boolean canReadAccount(@Nullable UUID playerSender, String slaveID, @Nullable ISyncServerBankAccount account)
     {

@@ -1059,14 +1059,6 @@ public final class AsyncCompanyManager {
             return new CompanyStatsPayload(0L, 0L, 0L, 0, 0L, 0L, -1L, List.of(), List.of(),
                     true, sharesIssued, holderCount);
         }
-        /** Task #104: copy for non-admin members: shareholder account number and name removed. */
-        public CompanyStatsPayload withAnonymousShareholders() {
-            List<ShareholderWire> anon = new ArrayList<>(topShareholders.size());
-            for (ShareholderWire s : topShareholders) anon.add(new ShareholderWire(0, "", s.shares(), s.pct()));
-            return new CompanyStatsPayload(totalEarnings, totalSpendings, netCashflow, missedPayoutCount,
-                    missedPayoutAmount, currentBalance, daysToInsolvency, cashflowSeries, anon,
-                    reduced, sharesIssued, holderCount);
-        }
         public static final StreamCodec<RegistryFriendlyByteBuf, CompanyStatsPayload> STREAM_CODEC =
                 StreamCodec.of(
                         (buf, v) -> {
@@ -1257,9 +1249,9 @@ public final class AsyncCompanyManager {
                     Company company = cm.getById(in.companyId());
                     if (company == null)
                         return CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_COMPANY_STATS, CompanyStatsPayload.EMPTY));
-                    if (!canReadCompany.test(in.companyId())) {
-                        // BS-230: a shareholder (any account the player is a user of holds the share)
-                        // sees what a non-admin member sees; everyone else gets the reduced view.
+                    // BS-246: members, BankSystem admins, shareholders and operators of this server
+                    // see everything, shareholder names included; everyone else gets the reduced view.
+                    if (!canReadCompany.test(in.companyId()) && !isLocalOperator(playerSender, slaveID)) {
                         Set<Integer> holders = holderAccounts(in.companyId(), bm);
                         boolean holder = playerSender != null
                                 && bm.getBankAccountNumbers(playerSender).stream().anyMatch(holders::contains);
@@ -1267,11 +1259,7 @@ public final class AsyncCompanyManager {
                             return CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_COMPANY_STATS,
                                     CompanyStatsPayload.reducedFor(company.getTotalSharesIssued(), holders.size())));
                     }
-                    return handleGetCompanyStats(in, bm, company).thenApply(out -> {
-                        if (fullRead) return out;
-                        CompanyStatsPayload full = out.decodeResult();
-                        return OutputData.of(FunctionType.GET_COMPANY_STATS, full.withAnonymousShareholders());
-                    });
+                    return handleGetCompanyStats(in, bm, company);
                 }
                 default -> { }
             }

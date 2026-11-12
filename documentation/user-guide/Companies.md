@@ -253,9 +253,8 @@ What you see depends on who you are:
 
 | Viewer | Sees |
 |---|---|
-| Shareholder who is not a member of the company account | Only the number of shares issued and the number of holders. |
-| Member of the company account (worker, manager, founder) | Balance, cashflow, solvency, payouts and the chart. The Top Shareholders table shows only share amounts, not which accounts hold them. |
-| BankSystem admin | Everything, including the accounts of the shareholders. |
+| Member of the company account (worker, manager, founder), shareholder, BankSystem admin or operator of the bank master server | Everything: balance, cashflow, solvency, payouts, the chart and the Top Shareholders table with the account names. |
+| Anyone else | Only the number of shares issued and the number of holders. |
 
 ---
 
