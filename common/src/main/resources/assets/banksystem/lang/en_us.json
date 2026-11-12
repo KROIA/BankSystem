@@ -423,6 +423,7 @@
   "gui.banksystem.load_refused.title": "BankSystem did not load this world",
   "gui.banksystem.load_refused.missing": "%s saved bank items belong to mods that are not installed:",
   "gui.banksystem.load_refused.missing_hint": "Install these mods again, or remove the items. Removing deletes their balances from every bank account. A backup of the BankSystem data is made first.",
+  "gui.banksystem.load_refused.missing_merges": "Once the world loads, these saved items would also be merged (merged ID -> kept ID):",
   "gui.banksystem.load_refused.merge": "These different items would become the same item:",
   "gui.banksystem.load_refused.merge_hint": "Undo the change that caused this (mod or config), or confirm the merge. Confirming adds their balances together.",
   "gui.banksystem.load_refused.other": "The reason is in the log file (logs/latest.log). The world data was not changed.",

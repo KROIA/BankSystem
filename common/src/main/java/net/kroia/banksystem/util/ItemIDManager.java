@@ -3363,20 +3363,39 @@ public class ItemIDManager implements ServerSaveable {
         boolean confirmed = BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_SETTINGS != null
                 && Boolean.TRUE.equals(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_REMOVE_MISSING.get());
         if (!confirmed) {
+            // BS-250: also name the merges the merge guard would apply next (pure dry run over
+            // the entries that did resolve). A failing dry run must never block the refusal.
+            List<String> merges;
+            try {
+                merges = describePendingMerges();
+            } catch (RuntimeException e) {
+                merges = List.of();
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Could not list the pending ItemID merges: " + e);
+            }
+            StringBuilder mergeList = new StringBuilder();
+            if (!merges.isEmpty()) {
+                mergeList.append("\nOnce the world loads, these saved ItemIDs would also be merged (merged -> kept;"
+                        + " the merge guard may still ask to confirm):");
+                for (String line : capLines(merges, 20))
+                    mergeList.append("\n  ").append(line);
+            }
             throw new ItemIDMissingModsException("[ItemIDManager] " + unresolvedEntries.size()
                     + " saved ItemID(s) no longer load because their mod is not installed (or they carry data of a missing mod):"
                     + list
+                    + mergeList
                     + "\nBankSystem refused to load this world; nothing was changed or saved."
                     + "\nTo fix it, either:"
                     + "\n  1) install the missing mod(s) again, or"
                     + "\n  2) remove these items once: set \"CONFIRM_ITEMID_REMOVE_MISSING\": true in the \"ServerBank\" group of"
                     + "\n     <world>/data/BankSystem/settings.json and start again. Their balances are removed from every bank"
-                    + "\n     account (the BankSystem data folder is backed up first); the flag resets itself.", unresolvedEntries.size(), byNamespace);
+                    + "\n     account (the BankSystem data folder is backed up first); the flag resets itself.",
+                    unresolvedEntries.size(), byNamespace, merges);
         }
         BankSystemDataHandler dataHandler = BACKEND_INSTANCES.SERVER_DATA_HANDLER;
         if (dataHandler != null && !dataHandler.backupDataFolder("remove-missing"))
             throw new ItemIDMissingModsException("[ItemIDManager] CONFIRM_ITEMID_REMOVE_MISSING is true, but the backup of the "
-                    + "BankSystem data folder failed, so nothing was removed. Missing:" + list, unresolvedEntries.size(), byNamespace);
+                    + "BankSystem data folder failed, so nothing was removed. Missing:" + list, unresolvedEntries.size(), byNamespace, List.of());
         lastRemovedMissing = Set.copyOf(unresolvedEntries.keySet());
         unresolvedEntries.clear();
         BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_REMOVE_MISSING.set(false);
@@ -3384,6 +3403,36 @@ public class ItemIDManager implements ServerSaveable {
         if (BACKEND_INSTANCES.LOGGER != null)
             BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] CONFIRM_ITEMID_REMOVE_MISSING: removed " + lastRemovedMissing.size()
                     + " ItemID(s) of missing mods; their bank balances are dropped. Their numbers stay reserved." + list);
+    }
+
+    /**
+     * BS-250, dry run: one line per group {@link #renormalizeAndMerge()} would merge now, sorted
+     * by kept ID, e.g. {@code "#15, #18 -> #12 (minecraft:paper)"}. Reads {@code itemIDMap} through
+     * {@link #detectUnchangedSetMerges(Collection)} (normalized copies); mutates nothing.
+     */
+    public static List<String> describePendingMerges() {
+        List<MergeCollisionGroup> groups = detectUnchangedSetMerges(VolatileItemComponents.getEffectiveComponentIds());
+        groups.sort(Comparator.comparingInt(g -> g.canonicalId().getShort()));
+        List<String> lines = new ArrayList<>();
+        for (MergeCollisionGroup group : groups) {
+            StringBuilder line = new StringBuilder();
+            for (ItemID merged : group.mergedIds())
+                line.append(line.isEmpty() ? "#" : ", #").append(merged.getShort());
+            ItemStack kept = group.currentTemplates().get(group.canonicalId());
+            line.append(" -> #").append(group.canonicalId().getShort()).append(" (")
+                    .append(kept == null || kept.isEmpty() ? "?" : ItemUtilities.getItemIDStr(kept.getItem())).append(')');
+            lines.add(line.toString());
+        }
+        return lines;
+    }
+
+    /** The first {@code max} lines, then {@code "... and N more"} when longer. */
+    public static List<String> capLines(List<String> lines, int max) {
+        if (lines.size() <= max)
+            return lines;
+        List<String> capped = new ArrayList<>(lines.subList(0, max));
+        capped.add("... and " + (lines.size() - max) + " more");
+        return capped;
     }
 
     /** ItemIDs removed by the last load's confirmed missing-mod recovery (empty when none). */

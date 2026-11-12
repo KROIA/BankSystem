@@ -184,13 +184,15 @@ public class ItemIDMissingModTests extends TestSuite {
             for (Map.Entry<ItemID, ItemID> e : savedAliasMap.entrySet())
                 max = Math.max(max, Math.max(e.getKey().getShort(), e.getValue().getShort()));
             int base = max + 600;
-            if (base + 6 >= Short.MAX_VALUE)
+            if (base + 7 >= Short.MAX_VALUE)
                 return fail("No free short range available");
-            int missingItem = base + 1, bookA = base + 2, bookB = base + 3, otherItem = base + 4;
+            int missingItem = base + 1, bookA = base + 2, bookB = base + 3, otherItem = base + 4, dupPaper = base + 5;
 
             Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
             fixture.put(new ItemID((short) base), new ItemStack(Items.PAPER));
-            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), base + 5);
+            if (mode == Mode.REFUSE_MESSAGE) // BS-250: a second saved paper, a pending merge into base
+                fixture.put(new ItemID((short) dupPaper), new ItemStack(Items.PAPER));
+            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), base + 6);
             CompoundTag file = new CompoundTag();
             if (!new ItemIDManager().save(file))
                 return fail("Could not serialize the fixture");
@@ -232,13 +234,28 @@ public class ItemIDMissingModTests extends TestSuite {
                     if (!r.passed()) return r;
                     r = assertTrue("message lists '" + NS2 + ": 1 item(s)': " + msg, msg.contains(NS2 + ": 1 item(s)"));
                     if (!r.passed()) return r;
-                    return pass("refusal names every missing namespace with its count");
+                    // BS-250: the refusal also names the merge the next successful load would apply.
+                    String merge = "#" + dupPaper + " -> #" + base + " (" + net.kroia.modutilities.ItemUtilities.getItemIDStr(Items.PAPER) + ")";
+                    r = assertEquals("pending merges", List.of(merge), refused.pendingMerges);
+                    if (!r.passed()) return r;
+                    r = assertTrue("message lists the pending merge '" + merge + "': " + msg, msg.contains(merge));
+                    if (!r.passed()) return r;
+                    r = assertTrue("dry run left both papers registered and unaliased",
+                            ItemIDManager.getItemIDMap().containsKey(new ItemID((short) base))
+                                    && ItemIDManager.getItemIDMap().containsKey(new ItemID((short) dupPaper))
+                                    && !ItemIDManager.getItemIDAliasMap().containsKey(new ItemID((short) dupPaper)));
+                    if (!r.passed()) return r;
+                    return pass("refusal names every missing namespace with its count and the pending merge");
                 }
                 r = assertEquals("all three entries counted under the missing namespace",
                         3, refused.missingNamespaces.getOrDefault(NS, 0));
                 if (!r.passed()) return r;
                 r = assertTrue("report names CONFIRM_ITEMID_REMOVE_MISSING",
                         refused.getMessage().contains("CONFIRM_ITEMID_REMOVE_MISSING"));
+                if (!r.passed()) return r;
+                r = assertEquals("no pending merges listed without a merge", List.of(), refused.pendingMerges);
+                if (!r.passed()) return r;
+                r = assertFalse("message has no merge section", refused.getMessage().contains("would also be merged"));
                 if (!r.passed()) return r;
                 Map<ItemID, CompoundTag> unresolved = ItemIDManager.getUnresolvedEntries_forTesting();
                 r = assertEquals("three unresolved entries kept", 3, unresolved.size());

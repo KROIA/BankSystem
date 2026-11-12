@@ -424,6 +424,7 @@
   "gui.banksystem.load_refused.title": "BankSystem 未加载此世界",
   "gui.banksystem.load_refused.missing": "%s 个已保存的银行物品属于未安装的模组：",
   "gui.banksystem.load_refused.missing_hint": "请重新安装这些模组，或移除这些物品。移除会从所有银行账户中删除它们的余额。移除前会先备份 BankSystem 数据。",
+  "gui.banksystem.load_refused.missing_merges": "世界加载时，以下已保存的物品还会被合并（被合并的 ID -> 保留的 ID）：",
   "gui.banksystem.load_refused.merge": "这些不同的物品将会变成同一个物品：",
   "gui.banksystem.load_refused.merge_hint": "请撤销导致此问题的更改（模组或配置），或确认合并。确认后它们的余额会相加。",
   "gui.banksystem.load_refused.other": "原因请查看日志文件（logs/latest.log）。世界数据未被更改。",

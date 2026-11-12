@@ -563,10 +563,11 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     /**
      * What the singleplayer client shows after BankSystem refused to load the world (BS-195).
-     * {@code lines}: missing namespaces with counts, or merge groups. {@code worldDir}: the
+     * {@code lines}: missing namespaces with counts, or merge groups. {@code pendingMerges}: for
+     * missing mods, the merges the next successful load would apply (BS-250). {@code worldDir}: the
      * world folder, for the screen's one-shot confirm button and for reopening the world.
      */
-    public record StartupRefusal(Kind kind, int count, List<String> lines, Path worldDir) {
+    public record StartupRefusal(Kind kind, int count, List<String> lines, List<String> pendingMerges, Path worldDir) {
         public enum Kind { MISSING_MODS, MERGE, OTHER }
     }
 
@@ -602,16 +603,18 @@ public class BankSystemModBackend implements BankSystemAPI {
         StartupRefusal.Kind kind = StartupRefusal.Kind.OTHER;
         int count = 0;
         List<String> lines = new ArrayList<>();
+        List<String> pendingMerges = List.of();
         if (e instanceof ItemIDMissingModsException missing) {
             kind = StartupRefusal.Kind.MISSING_MODS;
             count = missing.missingCount;
             missing.missingNamespaces.forEach((ns, n) -> lines.add(ns + " (" + n + ")"));
+            pendingMerges = missing.pendingMerges;
         } else if (e instanceof ItemIDMergeAbortedException merge) {
             kind = StartupRefusal.Kind.MERGE;
             count = merge.summary.size();
             lines.addAll(merge.summary);
         }
-        singleplayerRefusal = new StartupRefusal(kind, count, List.copyOf(lines),
+        singleplayerRefusal = new StartupRefusal(kind, count, List.copyOf(lines), pendingMerges,
                 server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize());
         server.tell(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc<=1.21.1
         //server.schedule(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc>=1.21.2

@@ -424,6 +424,7 @@
   "gui.banksystem.load_refused.title": "BankSystem hat diese Welt nicht geladen",
   "gui.banksystem.load_refused.missing": "%s gespeicherte Bank-Items gehören zu Mods, die nicht installiert sind:",
   "gui.banksystem.load_refused.missing_hint": "Installiere diese Mods wieder oder entferne die Items. Beim Entfernen werden ihre Guthaben aus allen Bankkonten gelöscht. Vorher wird eine Sicherung der BankSystem-Daten erstellt.",
+  "gui.banksystem.load_refused.missing_merges": "Beim Laden der Welt würden ausserdem diese gespeicherten Items zusammengeführt (zusammengeführte ID -> bleibende ID):",
   "gui.banksystem.load_refused.merge": "Diese unterschiedlichen Items würden zum selben Item werden:",
   "gui.banksystem.load_refused.merge_hint": "Mache die Änderung rückgängig (Mod oder Konfiguration) oder bestätige das Zusammenführen. Dabei werden ihre Guthaben addiert.",
   "gui.banksystem.load_refused.other": "Der Grund steht in der Logdatei (logs/latest.log). Die Weltdaten wurden nicht verändert.",
