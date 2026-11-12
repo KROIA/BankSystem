@@ -1176,7 +1176,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         account.setAccountIcon(ItemIDManager.registerItemStackServerSide_direct(Items.CHEST.getDefaultInstance()));
         bankAccounts.put(accountNumber, account);
         markPersistDirty(); // Task #55 (new account + advanced nextAccountNumber)
-        info("Created new bank account with number: " + accountNumber + " and name: " + accountName);
+        info("Created new bank account with number: " + accountNumber + " and name: " + account.getAccountName());
         return account;
     }
     @Override
@@ -1204,7 +1204,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         account.setAccountIcon(ItemIDManager.registerItemStackServerSide_direct(Items.CHEST.getDefaultInstance()));
         bankAccounts.put(accountNumber, account);
         markPersistDirty(); // Task #55 (new account + advanced nextAccountNumber)
-        info("Created new bank account with number: " + accountNumber + " and name: " + accountName);
+        info("Created new bank account with number: " + accountNumber + " and name: " + account.getAccountName());
         return CompletableFuture.completedFuture(account);
     }
     @Override

@@ -67,6 +67,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         return founderChecker;
     }
     public static final int INVALID_ACCOUNT_NUMBER = 0;
+    /** BS-228: longest account name; setAccountName cuts longer names, the client text box stops there. */
+    public static final int MAX_ACCOUNT_NAME_LENGTH = 50;
 
     public record BankAccountSQL_Data(int bankAccountNr, String accountName, @Nullable ItemID accountIcon, @Nullable UUID personalBankOwner)
     {
@@ -506,6 +508,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (accountName == null) {
             accountName = "";
         }
+        if (accountName.length() > MAX_ACCOUNT_NAME_LENGTH) // BS-228: trust boundary for every rename/create path
+            accountName = accountName.substring(0, MAX_ACCOUNT_NAME_LENGTH);
         hasChanges |= !this.accountName.equals(accountName);
         this.accountName = accountName;
     }

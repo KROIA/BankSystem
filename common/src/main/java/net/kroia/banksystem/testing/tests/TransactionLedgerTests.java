@@ -30,6 +30,7 @@ import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.minecraft.command.ServerBankSystemCommandHandler;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.kroia.banksystem.networking.entity.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
 import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
@@ -112,6 +113,7 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("user_deletion_offline_writes_loss_rows", () -> threw(this::userDeletionOfflineLoss)); // Task #127
         addTest("user_deletion_splits_payout_and_loss", this::userDeletionSplit); // Task #127
         addTest("user_deletion_keeps_company_account", this::userDeletionKeepsCompanyAccount); // Task #127
+        addTest("share_balance_admin_edit", this::shareBalanceAdminEdit); // BS-234
         addTest("user_deletion_payout_rows_per_transfer", this::userDeletionPayoutLegs); // Task #136
         addTest("user_deletion_unknown_outcome_loss_ref", () -> threw(this::userDeletionUnknownOutcome)); // Task #136
         addTest("user_deletion_raw_to_items", this::payoutRawToItems); // Task #136
@@ -597,6 +599,63 @@ public class TransactionLedgerTests extends TestSuite {
             if (nr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) manager.deleteBankAccount(nr);
             if (manager.userExists(member)) manager.removeUser(member);
         }
+    }
+
+    /** BS-234: a share balance can't be raised; lowering it returns shares to the company or destroys them. */
+    private TestResult shareBalanceAdminEdit() {
+        if (!ready()) return fail("live setup missing");
+        CompanyManager cm = CompanyManager.get();
+        if (cm == null) return fail("no CompanyManager");
+        int companyNr = newAccount("LedgerTestShareCo", PLAYER);
+        Company company = companyNr == ServerBankAccount.INVALID_ACCOUNT_NUMBER ? null
+                : cm.createCompany("LedgerTestShares" + companyNr, companyNr, null, 100L).company;
+        ItemID share = null;
+        try {
+            if (company == null) return fail("company not created");
+            int id = company.getCompanyId();
+            share = allow(StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), id));
+            for (int i = 0; i < 10; i++) cm.stampShare(id);
+            IServerBank holder = manager.getBankAccount(accountNr).getOrCreateBank(share);
+            IServerBank own = manager.getBankAccount(companyNr).getOrCreateBank(share);
+            if (holder == null || own == null) return fail("no share bank");
+            holder.deposit(500L); // 5 shares
+            own.deposit(500L);
+
+            editShare(accountNr, share, 900L, UpdateBankAccountRequest.SHARE_RETURN_TO_COMPANY);
+            if (holder.getTotalBalance() != 500L) return fail("share increase applied: " + holder.getTotalBalance());
+            editShare(accountNr, share, 0L, UpdateBankAccountRequest.SHARE_NONE);
+            if (holder.getTotalBalance() != 500L) return fail("decrease without a choice applied");
+
+            editShare(accountNr, share, 300L, UpdateBankAccountRequest.SHARE_RETURN_TO_COMPANY);
+            if (holder.getTotalBalance() != 300L || own.getTotalBalance() != 700L)
+                return fail("return to company: holder " + holder.getTotalBalance() + ", company " + own.getTotalBalance());
+            TransactionLogRecord out = find(rows(accountNr), LedgerType.TRANSFER, share);
+            TransactionLogRecord in = find(rows(companyNr), LedgerType.TRANSFER, share);
+            if (out == null || in == null || out.amount() != -200L || in.amount() != 200L
+                    || !Integer.valueOf(id).equals(out.companyId()) || !ADMIN.equals(out.actorUuid()))
+                return fail("return rows " + out + " / " + in);
+
+            editShare(companyNr, share, 0L, UpdateBankAccountRequest.SHARE_RETURN_TO_COMPANY);
+            if (own.getTotalBalance() != 700L) return fail("company account returned shares to itself");
+            editShare(companyNr, share, 400L, UpdateBankAccountRequest.SHARE_DESTROY);
+            if (own.getTotalBalance() != 400L || company.getTotalSharesIssued() != 7L)
+                return fail("destroy: balance " + own.getTotalBalance() + ", issued " + company.getTotalSharesIssued());
+            TransactionLogRecord destroyed = find(rows(companyNr), LedgerType.ADMIN_REMOVE, share);
+            if (destroyed == null || destroyed.amount() != 300L || !Integer.valueOf(id).equals(destroyed.companyId()))
+                return fail("destroy row " + destroyed);
+            return pass("increase refused, return moves shares with TRANSFER rows, destroy lowers totalSharesIssued");
+        } finally {
+            if (share != null) manager.getBankAccount(accountNr).removeBank(share);
+            if (company != null) cm.deleteCompany(company.getCompanyId());
+            if (companyNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) manager.deleteBankAccount(companyNr);
+        }
+    }
+
+    private void editShare(int account, ItemID share, long balance, int choice) {
+        List<UpdateBankAccountRequest.InputData.BankData> data = new ArrayList<>();
+        data.add(new UpdateBankAccountRequest.InputData.BankData(share, balance, true, false, false, false, choice));
+        new UpdateBankAccountRequest().handleOnMasterServer(
+                new UpdateBankAccountRequest.InputData(account, "", null, data, null), "", ADMIN).join();
     }
 
     // ------------------------------------------------------------------ slave type codes

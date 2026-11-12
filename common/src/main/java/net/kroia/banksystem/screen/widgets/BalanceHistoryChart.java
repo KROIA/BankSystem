@@ -148,6 +148,9 @@ public class BalanceHistoryChart extends GuiElement {
     public BalanceHistoryChart() {
         setTextFontScale(0.8f);
         setHoverTooltipSupplier(this::markerTooltipAtMouse);
+        HoverTooltipData tooltipData = getHoverTooltipData();
+        tooltipData.autoSide = true; // flag details can be long: keep the tooltip narrow and on the free side
+        tooltipData.maxWidthFraction = 0.35f;
         buildTimescaleButtons();
         highlightTimescaleButton(currentTimescaleIndex);
     }
