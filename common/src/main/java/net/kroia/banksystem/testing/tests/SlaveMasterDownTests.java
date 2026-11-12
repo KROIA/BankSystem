@@ -26,6 +26,7 @@ import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.general.AuditPageRequest;
 import net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket;
+import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.modutilities.NbtCompat;
 import net.kroia.modutilities.networking.client_server.arrs.RequestNotSentException;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
@@ -278,7 +279,9 @@ public class SlaveMasterDownTests extends TestSuite {
     /**
      * BS-207: a real terminal deposit (AsyncBank.depositAsync to the master), link cut right after the send, then
      * back. The master normally applies the queued write, so: items out of the terminal, the account credited exactly
-     * once, no RETURNED (refund) journal row. Needs a trusted slave (an untrusted one is refused before the send).
+     * once, no RETURNED (refund) journal row. If the master never got it,
+     * the status check answers NOT_APPLIED: items refunded exactly once, account untouched, one RETURNED row; passes too.
+     * Needs a trusted slave (an untrusted one is refused before the send).
      * Leaves nothing: the test account is deleted after.
      */
     private TestResult terminalDepositLinkCut() {
@@ -328,7 +331,16 @@ public class SlaveMasterDownTests extends TestSuite {
             if (!pumpUntil(MultiServerManager::isRunning, 15_000)) return fail("link must reconnect after setSimulatedMasterDown(false)");
             String back = requestAnsweredAfterReconnect();
             if (back != null) return fail("after reconnect: " + back);
-            if (!pumpUntil(sent.get(0)::isDone, 90_000)) return fail("deposit outcome still pending 90 s after the reconnect");
+            // pumpUntil runs no server ticks, so the tick-driven status re-ask never fires: re-ask by hand, once a second.
+            long[] lastAsk = {0};
+            if (!pumpUntil(() -> {
+                long now = System.currentTimeMillis();
+                if (now - lastAsk[0] >= 1_000) {
+                    lastAsk[0] = now;
+                    TransferStatusRequest.retryTick(now);
+                }
+                return sent.get(0).isDone();
+            }, 90_000)) return fail("deposit outcome still pending 90 s after the reconnect");
             pump(1_000); // a refund would hop to the main thread
 
             long items = inventory.getItemCount_direct(paper);
@@ -341,6 +353,12 @@ public class SlaveMasterDownTests extends TestSuite {
             Throwable cause = causeOf(sent.get(0));
             String state = "outcome " + (cause != null ? "unknown (" + cause.getClass().getSimpleName() + ")" : sent.get(0).join())
                     + ", terminal " + items + ", balance " + balance + ", RETURNED rows " + returned + ", ledger callbacks " + credited.get();
+            if (cause == null && sent.get(0).join() == BankStatus.FAILED_NO_MASTER_CONNECTION) { // status check: NOT_APPLIED
+                if (items != BS207_ITEMS) return fail("not applied, expected " + BS207_ITEMS + " items refunded once: " + state);
+                if (balance != 0) return fail("not applied, but the account was credited: " + state);
+                if (returned != 1 || credited.get() != 0) return fail("not applied, expected 1 RETURNED row and no ledger callback: " + state);
+                return pass("not applied, refunded once: " + state);
+            }
             if (items != 0) return fail("items came back into the terminal: " + state);
             if (balance != BS207_ITEMS * BS207_UNIT) return fail("expected balance " + BS207_ITEMS * BS207_UNIT + " (credited once): " + state);
             if (returned != 0) return fail("refund row written: " + state);
