@@ -144,6 +144,18 @@ Amounts are unsigned, except for TRANSFER, RAW_CHANGE, EXTERNAL_BIND and EXTERNA
 
 `TransactionLedger.write` passes every master row to `AdminAudit.onLedgerRow`. Admin rows (codes 7–11, 26, 27, and 12 / 28 when the source is ADMIN) are appended to `<world>/data/BankSystem/audit/<yyyy-mm-dd>.log` and sent to BankSystem admins with alerts on (see [Administration](../user-guide/Administration.md#audit-and-admin-alerts)).
 
+Admin changes that write no ledger row get one line each in the same file (master only, no chat alert), written where the state changes and only when it changed. Every line starts with `yyyy-MM-dd HH:mm:ss` (server time zone); names are in double quotes, with inner double quotes replaced by single ones; the actor is a player name with ` (<uuid>)`, `Console`, `LuckPerms`, `LuckPerms via slave <id>`, or `SYSTEM` when the caller set no actor:
+
+| Line | Written when |
+|---|---|
+| `ADMIN RIGHTS_OP player <uuid> "<name>" state admin by <actor>` | the BankSystem admin flag is turned on (command, API request, LuckPerms sync) |
+| `ADMIN RIGHTS_DEOP player <uuid> "<name>" state not_admin by <actor>` | the flag is turned off |
+| `ADMIN SLAVE_TRUST slave "<id>" state trusted by <actor>` | a slave becomes trusted |
+| `ADMIN SLAVE_UNTRUST slave "<id>" state untrusted by <actor>` | a slave is no longer trusted |
+| `ADMIN ITEM_ALLOW item <itemId> "<item name>" state allowed by <actor>` | an admin (or the console) allows an item that was not allowed; automatic allows are not written |
+| `ADMIN ITEM_DISALLOW item <itemId> "<item name>" state disallowed by <actor>` | an item is disallowed; the cleared balances stay as one `ADMIN_DISALLOW_ITEM` line per account |
+| `ADMIN FLAG_ACK company <companyId> "<name>" account <account> flag SHARE_EXCESS excess <shares> state acknowledged by <actor>` | an open share-excess alert is acknowledged |
+
 BankSystem's own checks raise flags internally (`banking.ledger.AdminAudit.raise`, not part of the API). Each flag writes one row to the `SuspicionFlag` table (`id, ts, account_number, flag_type, severity, amount, ref, details, acknowledged`), the audit-file line `FLAG <type> ...` and the admin alert, then fires [`getSuspicionFlaggedEvent()`](EventsAndSignals.md#getsuspicionflaggedevent). Master only; it never throws. Admins read flags with `SuspicionFlagManager.getRecent(account, sinceMs, limit)` and mark them handled with `acknowledge(id)`.
 
 > Add-ons cannot raise flags yet: there is no public call and no code range reserved for add-ons. Add-ons can **listen** to flags with `getSuspicionFlaggedEvent()`. Ask for a public call if you need one.

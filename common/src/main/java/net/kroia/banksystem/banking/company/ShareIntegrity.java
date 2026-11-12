@@ -158,8 +158,7 @@ public final class ShareIntegrity {
     }
 
     /** Command entry (server thread, master). @return the acknowledged excess, or -1 if the company is unknown */
-    public static long acknowledge(int companyId) {
-        CompanyManager cm = CompanyManager.get();
+    public static long acknowledge(CompanyManager cm, int companyId) {
         ISyncServerBankManager bm = bankManager();
         Company c = cm == null ? null : cm.getById(companyId);
         if (c == null || bm == null) return -1L;

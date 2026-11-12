@@ -343,7 +343,8 @@ public class AsyncBankManager implements IAsyncBankManager {
                     ParamGroup_UUID_bool param = input.decodeParams();
                     ServerPlayer serverPlayer = playerSender != null ? ServerPlayerUtilities.getOnlinePlayer(playerSender) : null;
                     if(serverPlayer != null && net.kroia.modutilities.PermissionCompat.hasPermission(serverPlayer, net.kroia.banksystem.util.BankSystemPermissions.ADMIN_MODE, net.kroia.banksystem.util.BankSystemPermissions.FALLBACK_LEVEL)) {
-                        yield OutputData.of(input.function, bankManager.setBanksystemAdminMode(param.uuid, param.bool));
+                        yield OutputData.of(input.function, net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(playerSender), // BS-257
+                                () -> bankManager.setBanksystemAdminMode(param.uuid, param.bool)));
                     }
                     // Task #107: permission sync from a slave. Server-internal (null sender), only from a
                     // TRUSTED slave (untrusted ones are already refused by isRequestAllowed; checked again
@@ -351,7 +352,8 @@ public class AsyncBankManager implements IAsyncBankManager {
                     if(playerSender == null && !slaveID.isEmpty() && !isFromUntrustedSlave(slaveID)
                             && net.kroia.banksystem.util.AdminFlagSync.isEnabled()) {
                         boolean changed = bankManager.isBanksystemAdmin(param.uuid) != param.bool;
-                        boolean ok = bankManager.setBanksystemAdminMode(param.uuid, param.bool);
+                        boolean ok = net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(new net.kroia.banksystem.api.ledger.LedgerActor(null, "LuckPerms via slave " + slaveID,
+                                net.kroia.banksystem.api.ledger.LedgerActor.Source.SYSTEM), () -> bankManager.setBanksystemAdminMode(param.uuid, param.bool)); // BS-257
                         if(ok && changed)
                             info("[AdminFlagSync] BankSystem admin flag of " + tryGetPlayerName(param.uuid) + " set to "
                                     + param.bool + " (permission sync from slave '" + slaveID + "')");
@@ -478,7 +480,9 @@ public class AsyncBankManager implements IAsyncBankManager {
                         if(!bankManager.isBanksystemAdmin(playerSender))
                             yield OutputData.of(input.function);
                     }
-                    yield OutputData.of(input.function, bankManager.allowItemID(input.decodeParams()) );
+                    ItemID allowed = input.decodeParams();
+                    yield OutputData.of(input.function, net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(ledgerActor(playerSender), // BS-257
+                            () -> bankManager.allowItemID(allowed)));
                 }
                 case FunctionType.DisallowItemIDAsync -> {
                     if(playerSender != null)

@@ -9,6 +9,17 @@ import net.kroia.banksystem.api.event.SuspicionFlaggedEvent;
 import net.kroia.banksystem.api.ledger.LedgerActor;
 import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.company.AsyncCompanyManager;
+import net.kroia.banksystem.banking.company.Company;
+import net.kroia.banksystem.banking.company.CompanyManager;
+import net.kroia.banksystem.banking.company.ShareIntegrity;
+import net.kroia.banksystem.util.ItemID;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.ledger.AdminAudit;
 import net.kroia.banksystem.banking.ledger.SuspicionChecks;
@@ -46,6 +57,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -64,6 +77,9 @@ public class AdminAuditTests extends TestSuite {
     private static final UUID PLAYER = UUID.fromString("00000000-0000-0000-0000-00000000f110");
     private static final UUID ADMIN = UUID.fromString("00000000-0000-0000-0000-00000000f111");
     private static final String MARKER = "audit-test-marker-f110";
+    /** BS-257: lines naming the synthetic users (actor or subject) are this suite's too. */
+    private static final String TEST_UUID_PREFIX = "00000000-0000-0000-0000-00000000f11";
+    private static final String SYNTHETIC_KEY = "banksystem_audit_test";
     private static final long WAIT_MS = 10_000;
     /** BS-209: the slave half of the admin-flag gate (flag lives on the master). */
     private static final TestCategory SLAVE_ADMIN = new TestCategory(
@@ -111,6 +127,7 @@ public class AdminAuditTests extends TestSuite {
         addTest("admin_command_op_without_flag_refused", () -> gate(false, 2, false));
         addTest("admin_command_non_op_without_flag_refused", () -> gate(false, 0, false));
         addTest("symbols_list_runs_for_flagged_non_op", this::symbolsListMaster); // BS-209
+        addTest("admin_changes_write_audit_lines", this::adminChangeLines); // BS-257
     }
 
     /** BS-209: collects what a command sends to its source (success and failure lines). */
@@ -274,7 +291,7 @@ public class AdminAuditTests extends TestSuite {
         if (bm == null || bm.getSync() == null) return;
         manager = bm.getSync();
         ledger = BankSystemModBackend.getTransactionLogManager();
-        stateGuard = LiveStateGuard.capture(manager);
+        stateGuard = LiveStateGuard.capture(manager).withSyntheticMarker(SYNTHETIC_KEY);
         for (UUID u : List.of(PLAYER, ADMIN))
             if (!manager.userExists(u)) manager.addUser(new User(u, u.equals(ADMIN) ? "AuditTestAdmin" : "AuditTestPlayer"));
         manager.setBanksystemAdminMode(ADMIN, true);
@@ -532,6 +549,87 @@ public class AdminAuditTests extends TestSuite {
      * Polls up to 5 s (returns at once when the test itself runs on the server thread, where
      * dispatch is inline), then lets one more tick pass so a wrong extra alert would show.
      */
+    /**
+     * BS-257: op/deop, trust/untrust, allow/disallow through the master command handler and a share-excess
+     * acknowledge each write exactly one {@code ADMIN <type> ...} line; repeats (no change) and an automatic
+     * allow (no admin actor) write none.
+     */
+    private TestResult adminChangeLines() {
+        if (!ready()) return fail("live setup missing");
+        ServerBankSystemCommandHandler h = new ServerBankSystemCommandHandler();
+        String by = " by AuditTestAdmin (" + ADMIN + ")";
+        String player = "player " + PLAYER + " \"AuditTestPlayer\" state ";
+        String slaveId = MARKER + "-slave";
+        boolean playerWasAdmin = manager.isBanksystemAdmin(PLAYER);
+        try {
+            if (playerWasAdmin) manager.setBanksystemAdminMode(PLAYER, false);
+            h.banksystem_setBankSystemAdminMode_user(ADMIN, "AuditTestPlayer", true);
+            h.banksystem_setBankSystemAdminMode_user(ADMIN, "AuditTestPlayer", true); // no change
+            h.banksystem_setBankSystemAdminMode_user(ADMIN, "AuditTestPlayer", false);
+            h.banksystem_setSlaveServerTrusted(ADMIN, slaveId, true);
+            h.banksystem_setSlaveServerTrusted(ADMIN, slaveId, false);
+
+            ItemStack paper = new ItemStack(Items.PAPER);
+            CompoundTag tag = new CompoundTag();
+            tag.putString(SYNTHETIC_KEY, "audit-item");
+            paper.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+            ItemID item = stateGuard.register(paper);
+            if (!item.isValid()) return fail("could not register the test item");
+            String it = "item " + item.getShort() + " " + AdminAudit.quote(item.getName()) + " state ";
+            h.banksystem_allowItem(ADMIN, item);
+            h.banksystem_allowItem(ADMIN, item); // no change
+            h.banksystem_disallowItem(ADMIN, item);
+            manager.allowItemID(item); // automatic allow, no admin actor: no line
+
+            CompanyManager cm = new CompanyManager();
+            cm.detachBankManager();
+            Map<String, ListTag> data = new HashMap<>();
+            ListTag meta = new ListTag();
+            CompoundTag metaTag = new CompoundTag();
+            metaTag.putInt("nextCompanyId", 900_258);
+            meta.add(metaTag);
+            data.put("meta", meta);
+            ListTag companies = new ListTag();
+            CompoundTag ct = new CompoundTag();
+            ct.putInt("companyId", 900_257);
+            ct.putString("name", MARKER + "-company");
+            ct.putInt("bankAccountNr", accountNr);
+            ct.putLong("maxSupply", 1000);
+            ct.putLong("createdAt", 1L);
+            ct.putLong("totalSharesIssued", 5);
+            companies.add(ct);
+            data.put("companies", companies);
+            cm.load(data);
+            Company c = cm.getById(900_257);
+            if (c == null) return fail("test company did not load");
+            ShareIntegrity.apply(cm, c, 7, 100L); // opens the share-excess alert
+            // caller null = console: no rights gate, so no bank manager needed
+            AsyncCompanyManager.acknowledgeShareExcess(MARKER + "-company", null, null, cm);
+            AsyncCompanyManager.acknowledgeShareExcess(MARKER + "-company", null, null, cm); // nothing open: no line
+
+            String[] expected = {
+                    "ADMIN RIGHTS_OP " + player + "admin" + by,
+                    "ADMIN RIGHTS_DEOP " + player + "not_admin" + by,
+                    "ADMIN SLAVE_TRUST slave \"" + slaveId + "\" state trusted" + by,
+                    "ADMIN SLAVE_UNTRUST slave \"" + slaveId + "\" state untrusted" + by,
+                    "ADMIN ITEM_ALLOW " + it + "allowed" + by,
+                    "ADMIN ITEM_DISALLOW " + it + "disallowed" + by,
+                    "ADMIN FLAG_ACK company 900257 \"" + MARKER + "-company\" account " + accountNr
+                            + " flag SHARE_EXCESS excess 0 state acknowledged by Console"};
+            List<String> lines = auditLines("ADMIN ");
+            for (String e : expected) {
+                long n = lines.stream().filter(l -> l.endsWith(e)).count();
+                if (n != 1) return fail(n + " lines for '" + e + "'; file lines: " + lines);
+            }
+            long items = lines.stream().filter(l -> l.contains(" " + it)).count();
+            if (items != 2) return fail("expected 2 item lines (no repeat, no automatic allow), got " + items);
+            return pass(expected.length + " admin-change lines, none for repeats or the automatic allow");
+        } finally {
+            manager.setBanksystemAdminMode(PLAYER, playerWasAdmin);
+            if (manager.isSlaveServerTrusted(slaveId)) manager.untrustSlaveServer(slaveId);
+        }
+    }
+
     private static void awaitAlerts(List<String> captured, int n) {
         net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
         if (srv == null || srv.isSameThread()) return;
@@ -560,7 +658,8 @@ public class AdminAuditTests extends TestSuite {
             try {
                 if (file == null || !Files.exists(file)) continue;
                 List<String> keep = new ArrayList<>();
-                for (String l : Files.readAllLines(file, StandardCharsets.UTF_8)) if (!l.contains(MARKER)) keep.add(l);
+                for (String l : Files.readAllLines(file, StandardCharsets.UTF_8))
+                    if (!l.contains(MARKER) && !l.contains(TEST_UUID_PREFIX)) keep.add(l);
                 if (keep.isEmpty()) Files.delete(file);
                 else Files.write(file, keep, StandardCharsets.UTF_8);
             } catch (Exception ignored) {}

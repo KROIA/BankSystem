@@ -44,6 +44,8 @@ public final class AdminFlagSync {
     public static void setBackend(BankSystemModBackend.Instances backend) { BACKEND_INSTANCES = backend; }
 
     private static volatile boolean migrating = false;
+    private static final net.kroia.banksystem.api.ledger.LedgerActor LUCKPERMS =
+            new net.kroia.banksystem.api.ledger.LedgerActor(null, "LuckPerms", net.kroia.banksystem.api.ledger.LedgerActor.Source.SYSTEM);
 
     // ---- pure decisions ----
 
@@ -134,7 +136,8 @@ public final class AdminFlagSync {
         IServerBankManager manager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if (manager == null || manager.isBanksystemAdmin(uuid) == admin)
             return; // also the echo of our own setNode: already equal, loop-safe
-        if (manager.setBanksystemAdminMode(uuid, admin))
+        // BS-257: the audit line names LuckPerms as the actor
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(LUCKPERMS, () -> manager.setBanksystemAdminMode(uuid, admin)))
             BACKEND_INSTANCES.LOGGER.info("[AdminFlagSync] BankSystem admin flag of "
                     + AsyncForwardingRequest.tryGetPlayerName(uuid) + " set to " + admin + " (" + reason + ")");
     }

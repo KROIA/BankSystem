@@ -88,6 +88,27 @@ public final class AdminAudit {
     }
 
     /**
+     * BS-257: one audit-file line for an admin change that writes no ledger row (admin rights, slave
+     * trust, allowed items, flag acknowledge): {@code ADMIN <type> <subject> state <state> by <actor>[ (<uuid>)]}.
+     * Called where the state changes, only when it changed. Master only (no-op elsewhere), no chat alert. Never throws.
+     */
+    public static void adminChange(String type, String subject, String state, LedgerActor actor) {
+        try {
+            if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.isSlaveServer) return;
+            appendLine(System.currentTimeMillis(), "ADMIN " + type + " " + subject + " state " + state + " by "
+                    + (actor.name() != null ? actor.name() : actor.source().name())
+                    + (actor.uuid() != null ? " (" + actor.uuid() + ")" : ""));
+        } catch (RuntimeException ignored) {
+            // best-effort
+        }
+    }
+
+    /** @return {@code s} in double quotes (inner double quotes become single ones), for names in audit lines. */
+    public static String quote(@Nullable String s) {
+        return "\"" + (s == null ? "" : s.replace('"', '\'')) + "\"";
+    }
+
+    /**
      * Raises a suspicion flag: one SuspicionFlag row, one audit-file line and an alert to the
      * admins with alerts on. Master only (no-op elsewhere). Never throws.
      *

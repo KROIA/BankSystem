@@ -72,7 +72,8 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             sendMessage(executor, "No UUID found for Player: "+userName);
             return false;
         }
-        if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().setBanksystemAdminMode(playerUUID, isAdmin))
+        if(net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), // BS-257: actor of the audit line
+                () -> BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().setBanksystemAdminMode(playerUUID, isAdmin)))
         {
             sendMessage(executor, "Banksystem admin mode set to: "+(isAdmin?"ON":"OFF") + " for player: "+userName);
             if(!executor.equals(playerUUID))
@@ -102,7 +103,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
                 sendMessage(executor, "The slave '"+slaveID+"' is already trusted");
                 return true;
             }
-            manager.trustSlaveServer(slaveID);
+            net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), () -> { manager.trustSlaveServer(slaveID); return null; }); // BS-257
             sendMessage(executor, "The slave '"+slaveID+"' is now trusted");
         }
         else
@@ -112,7 +113,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
                 sendMessage(executor, "The slave '"+slaveID+"' was not trusted");
                 return true;
             }
-            manager.untrustSlaveServer(slaveID);
+            net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), () -> { manager.untrustSlaveServer(slaveID); return null; }); // BS-257
             sendMessage(executor, "The slave '"+slaveID+"' is no longer trusted");
         }
         return true;
@@ -141,7 +142,8 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
 
-        if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().allowItemID(itemID)) {
+        if(net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), // BS-257: actor of the audit line
+                () -> BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().allowItemID(itemID))) {
             sendMessage(executor, BankSystemTextMessages.getItemNowAllowedMessage(itemID.getName(), ServerBank.getFormattedAmountStatic(1)));
             return true;
         }

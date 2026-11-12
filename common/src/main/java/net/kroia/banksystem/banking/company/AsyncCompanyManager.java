@@ -2321,8 +2321,14 @@ public final class AsyncCompanyManager {
             int gate = gateManage(company.getCompanyId(), caller, bm, cm);
             if (gate != CODE_OK) return new ShareAcknowledgeOutput(gate, company.getName(), 0L);
         }
-        long excess = ShareIntegrity.acknowledge(company.getCompanyId());
+        boolean wasOpen = company.isShareExcessOpen();
+        long excess = ShareIntegrity.acknowledge(cm, company.getCompanyId());
         if (excess < 0) return new ShareAcknowledgeOutput(CODE_INTERNAL, company.getName(), 0L);
+        if (wasOpen) // BS-257: only an open alert changes state
+            net.kroia.banksystem.banking.ledger.AdminAudit.adminChange("FLAG_ACK", "company " + company.getCompanyId() + " "
+                            + net.kroia.banksystem.banking.ledger.AdminAudit.quote(company.getName()) + " account " + company.getBankAccountNr()
+                            + " flag SHARE_EXCESS excess " + excess, "acknowledged",
+                    caller == null ? net.kroia.banksystem.api.ledger.LedgerActor.console() : net.kroia.banksystem.banking.ledger.TransactionLedger.player(caller));
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
             BACKEND_INSTANCES.LOGGER.info("[ShareIntegrity] " + (caller == null ? "console" : AsyncForwardingRequest.tryGetPlayerName(caller))
                     + " acknowledged a share excess of " + excess + " for company " + company.getName()
