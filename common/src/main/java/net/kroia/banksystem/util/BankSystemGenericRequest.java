@@ -24,6 +24,18 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
     // ponytail: outlasts a backup pause; a routed client→slave→master read waits the full 150 s if the master link drops (the client timer is the only timer)
     public static final long SLOW_READ_TIMEOUT_MS = DatabaseManager.DEFAULT_PAUSE_SAFETY_TIMEOUT_MS + RequestManager.DEFAULT_TIMEOUT_MS;
 
+    /**
+     * Test only (BS-200, dev builds): above 0, replaces the default timeout of every request that does not override
+     * {@link #getTimeoutMs()}, so master-hang tests stay short. Tests reset it to 0.
+     */
+    public static volatile long testTimeoutMs = 0;
+
+    @Override
+    public long getTimeoutMs() {
+        long t = testTimeoutMs;
+        return t > 0 && net.kroia.banksystem.BankSystemMod.ENABLE_DEV_FEATURES ? t : super.getTimeoutMs();
+    }
+
     protected static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;

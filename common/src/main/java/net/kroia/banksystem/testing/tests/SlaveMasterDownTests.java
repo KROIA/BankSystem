@@ -25,10 +25,20 @@ import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.general.AuditPageRequest;
+import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
+import net.kroia.banksystem.networking.currency.BindExternalAccountRequest;
+import net.kroia.banksystem.networking.currency.UnbindExternalAccountRequest;
+import net.kroia.banksystem.api.currency.ExternalAccountRef;
+import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket;
 import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.modutilities.NbtCompat;
+import net.kroia.modutilities.ModUtilitiesMod;
+import net.kroia.modutilities.networking.client_server.arrs.RequestManager;
 import net.kroia.modutilities.networking.client_server.arrs.RequestNotSentException;
+import net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException;
+import net.kroia.modutilities.testing.SimulatedMasterHang;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -55,6 +65,7 @@ import java.util.function.Supplier;
  *   <li>{@code link_down_*}: normal slave / spslave cells, link taken down with
  *       {@link MultiServerManager#setSimulatedMasterDown}; each test brings it back and checks a request works.</li>
  *   <li>{@code masterdown_*}: only the slave-masterdown cell ({@link AutoTest#isMasterDown()}), master killed.</li>
+ *   <li>{@code hang_*} (BS-200): normal slave / spslave cells, link up but the master hangs ({@link SimulatedMasterHang}).</li>
  * </ul>
  * In the slave-masterdown cell the link_down tests skip (link not up); elsewhere the masterdown tests skip.
  */
@@ -81,6 +92,17 @@ public class SlaveMasterDownTests extends TestSuite {
         addTest("link_down_failed_lookup_backs_off", () -> withMasterDown(this::lookupBacksOff));
         addTest("link_down_cleanup_runs_once", this::cleanupRunsOnce);
         addTest("link_cut_after_terminal_deposit_credited_once", this::terminalDepositLinkCut); // BS-207
+
+        // BS-200: the request never reaches the master, so ACCOUNT need not exist and trust does not matter.
+        addTest("hang_bind_external_outcome_unknown", () -> hangWrite(() -> BankSystemNetworking.BIND_EXTERNAL_ACCOUNT_REQUEST.sendRequestToMaster(
+                new BindExternalAccountRequest.InputData(ACCOUNT, MoneyItem.getItemID(), new ExternalAccountRef("bs200", "bs200", "bs200", false)))));
+        addTest("hang_unbind_external_outcome_unknown", () -> hangWrite(() -> BankSystemNetworking.UNBIND_EXTERNAL_ACCOUNT_REQUEST.sendRequestToMaster(
+                new UnbindExternalAccountRequest.InputData(ACCOUNT, MoneyItem.getItemID(), true))));
+        addTest("hang_account_save_outcome_unknown", () -> hangWrite(() -> BankSystemNetworking.UPDATE_BANK_ACCOUNT_REQUEST.sendRequestToMaster(
+                new UpdateBankAccountRequest.InputData(ACCOUNT, "bs200", null, List.of(), Map.of()))));
+        // Workers tab save: same request, roster change only
+        addTest("hang_worker_permission_outcome_unknown", () -> hangWrite(() -> BankSystemNetworking.UPDATE_BANK_ACCOUNT_REQUEST.sendRequestToMaster(
+                new UpdateBankAccountRequest.InputData(COMPANY, "", null, List.of(), Map.of(UUID.randomUUID(), BankPermission.DEPOSIT.getValue())))));
 
         addTest("masterdown_tick_stats", () -> masterDownCell(this::tickStats));
         addTest("masterdown_requests_fail_fast", () -> masterDownCell(this::requestsFailFast));
@@ -368,6 +390,47 @@ public class SlaveMasterDownTests extends TestSuite {
         } finally {
             mgr.deleteBankAccountAsync(nr);
         }
+    }
+
+    private static final long HANG_TIMEOUT_MS = 2_000;
+
+    /**
+     * BS-200: link up, master hangs. The write must look sent, then fail with RequestOutcomeUnknownException once its
+     * timeout (shortened to HANG_TIMEOUT_MS) passes: not an answer (success or refusal), no hang. Hang and timeout are
+     * always reset; afterwards the master answers again.
+     */
+    private TestResult hangWrite(Supplier<CompletableFuture<?>> send) {
+        if (!MultiServerManager.isSlave()) return skip("not a slave");
+        if (!MultiServerManager.isRunning()) return skip("master link not up");
+        if (!ModUtilitiesMod.ENABLE_DEV_FEATURES) return skip("simulated master hang unavailable (MU dev features off)");
+        RequestManager m = BankSystemNetworking.UPDATE_BANK_ACCOUNT_REQUEST.getManager();
+        if (m == null) return skip("ARRS not set up");
+        CompletableFuture<?> f;
+        try {
+            BankSystemGenericRequest.testTimeoutMs = HANG_TIMEOUT_MS;
+            SimulatedMasterHang.set(true);
+            f = send.get();
+            if (f.isDone()) return fail("write must look sent while the master hangs, got " + outcome(f));
+            // pump runs queued tasks, not ticks: sweep once past the timeout like the 20-tick cleanup does
+            pump(HANG_TIMEOUT_MS + 500);
+            if (f.isDone()) return fail("write answered before its timeout while the master hangs: " + outcome(f));
+            m.cleanupExpiredRequests(false);
+        } finally {
+            SimulatedMasterHang.set(false);
+            BankSystemGenericRequest.testTimeoutMs = 0;
+        }
+        if (!(causeOf(f) instanceof RequestOutcomeUnknownException))
+            return fail("write must fail with RequestOutcomeUnknownException, got " + outcome(f));
+        if (!MultiServerManager.isRunning()) return fail("master link must stay up while the master hangs");
+        String back = requestAnsweredAfterReconnect();
+        if (back != null) return fail("after the hang: " + back);
+        return pass("RequestOutcomeUnknownException after " + HANG_TIMEOUT_MS + " ms");
+    }
+
+    private static String outcome(CompletableFuture<?> f) {
+        if (!f.isDone()) return "still pending";
+        Throwable cause = causeOf(f);
+        return cause != null ? cause.toString() : "answer " + f.join();
     }
 
     /** B1: server ticks sampled from the master kill until the suites started. */
