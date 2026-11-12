@@ -531,6 +531,10 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
                     // (refresh) and swapping screens. Off-thread refresh races GUI init.
                     .thenAccept(out -> Minecraft.getInstance().tell(() -> { // mc<=1.21.1
                     //.thenAccept(out -> Minecraft.getInstance().schedule(() -> { // mc>=1.21.2
+                        if (out != null && out.resultCode() == AsyncCompanyManager.CODE_SHARES_UNDER_REVIEW) {
+                            showSharesUnderReview();
+                            return;
+                        }
                         if (out != null && out.resultCode() == AsyncCompanyManager.CODE_OK
                                 && paused && out.scheduleId() != 0L) {
                             AsyncCompanyManager.pausePayoutAsync(companyId, out.scheduleId(), true, caller);
@@ -544,6 +548,10 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
                     caller, target, accountNr, mode, currencyItem)
                     .thenAccept(out -> Minecraft.getInstance().tell(() -> { // mc<=1.21.1
                     //.thenAccept(out -> Minecraft.getInstance().schedule(() -> { // mc>=1.21.2
+                        if (out != null && out.resultCode() == AsyncCompanyManager.CODE_SHARES_UNDER_REVIEW) {
+                            showSharesUnderReview();
+                            return;
+                        }
                         if (finalPaused != original.isPaused()) {
                             AsyncCompanyManager.pausePayoutAsync(companyId, original.getScheduleId(), finalPaused, caller);
                         }
@@ -551,6 +559,15 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
                         closeToParent();
                     }));
         }
+    }
+
+    /** BS-241: the server refused a shareholder schedule while dividends are paused; the editor stays open. */
+    private void showSharesUnderReview() {
+        net.kroia.banksystem.screen.uiElements.InfoPopupScreen popup = new net.kroia.banksystem.screen.uiElements.InfoPopupScreen(this,
+                net.kroia.banksystem.screen.uiElements.InfoPopupScreen.TITLE.getString(),
+                Component.translatable("gui.banksystem.company_shares_under_review").getString());
+        popup.setSize(300, 100);
+        switchScreen(popup);
     }
 
     private void onDeleteClicked() {

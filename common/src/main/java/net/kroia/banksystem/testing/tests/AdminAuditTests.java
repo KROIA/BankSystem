@@ -77,6 +77,7 @@ public class AdminAuditTests extends TestSuite {
         addTest("suspicion_flag_migration_idempotent", this::flagMigration);
         addTest("audit_page_refuses_non_admin", this::pageAccess);
         addTest("suspicion_flagged_event_once", this::flagEvent); // Task #119
+        addTest("alert_chat_readable", this::alertChatReadable); // BS-241
         addTest("server_network_info_admin_only", this::networkInfoAccess); // Task #142
         // BS-196: flag-gated admin commands
         addTest("permission_nodes_fallback_levels", this::nodeFallbackLevels);
@@ -219,7 +220,9 @@ public class AdminAuditTests extends TestSuite {
                 if (captured.size() != 1) return fail("expected 1 alert, got " + captured);
                 alert = captured.get(0);
             }
-            if (!alert.contains("ADMIN_SET") || !alert.contains(MARKER + "-admin")) return fail("alert text: " + alert);
+            // BS-241: readable chat line: actor and note, no ledger type code, no UUID
+            if (alert.contains("ADMIN_SET") || !alert.contains("AuditTestAdmin") || !alert.contains(MARKER + "-admin")
+                    || alert.contains(ADMIN.toString())) return fail("alert text: " + alert);
             List<String> lines = auditLines(MARKER);
             if (lines.size() != 1 || !lines.get(0).contains("ADMIN_SET")) return fail("audit file lines: " + lines);
             return pass("admin row -> 1 file line + 1 alert; player row ignored");
@@ -271,7 +274,8 @@ public class AdminAuditTests extends TestSuite {
             if (!flags.getRecent(accountNr, 0, 10).get(10, TimeUnit.SECONDS).get(0).acknowledged()) return fail("acknowledge");
             awaitAlerts(captured, 1);
             synchronized (captured) {
-                if (captured.size() != 1 || !captured.get(0).startsWith("FLAG 9999")) return fail("alert " + captured);
+                if (captured.size() != 1 || !captured.get(0).contains("Flag 9999") || captured.get(0).contains("ref-"))
+                    return fail("alert " + captured);
             }
             if (auditLines(MARKER + "-flag").size() != 1) return fail("audit file line missing");
             return pass("raise -> row + file line + alert; acknowledge");
@@ -335,6 +339,24 @@ public class AdminAuditTests extends TestSuite {
     private static boolean refused(CompletableFuture<ServerNetworkInfoRequest.OutputData> reply) {
         ServerNetworkInfoRequest.OutputData out = reply.getNow(null);
         return out != null && out.servers().isEmpty();
+    }
+
+    /** BS-241: the chat text names the flag, says the severity, scales the amount and hides UUIDs / refs / codes. */
+    private TestResult alertChatReadable() {
+        String uuid = "00000000-0000-0000-0000-00000000b241";
+        String chat = AdminAudit.flagChat(4, SuspicionChecks.SHARE_CREATED, 2, 600L,
+                "Tester (" + uuid + ") created 6 share(s)\nline 2\nline 3 " + uuid + "\nline 4\nline 5");
+        if (!chat.contains("MEDIUM") || !chat.contains(AdminAudit.flagTitle(SuspicionChecks.SHARE_CREATED)))
+            return fail("severity / title missing:\n" + chat);
+        if (chat.contains("FLAG ") || chat.contains("severity") || chat.contains(uuid) || chat.contains("600"))
+            return fail("raw code, UUID or raw amount in chat:\n" + chat);
+        if (!chat.contains("6") || !chat.contains("Tester created 6 share(s)") || chat.contains("line 5")
+                || !chat.contains("/banksystem audit 4")) return fail("amount, details or cap wrong:\n" + chat);
+        String money = AdminAudit.flagChat(0, SuspicionChecks.MONEY_SUPPLY_GROWTH, 1, 123_456L, null);
+        if (!money.contains("LOW") || !money.contains(net.kroia.banksystem.api.MoneyFormat.formatMoney(123_456L)))
+            return fail("money flag:\n" + money);
+        if (!AdminAudit.flagChat(4, 9999, 3, 0L, null).contains("Flag 9999")) return fail("unknown type fallback");
+        return pass("readable title, severity, scaled amounts, UUIDs stripped, 4 detail lines then a pointer");
     }
 
     /** Task #119: SUSPICION_FLAGGED fires once per raise, with the flag's constant name. */

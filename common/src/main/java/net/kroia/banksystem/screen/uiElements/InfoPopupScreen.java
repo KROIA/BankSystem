@@ -47,7 +47,7 @@ public class InfoPopupScreen extends BankSystemGuiScreen {
 
         titleLabel = new Label(title);
         titleLabel.setAlignment(Label.Alignment.LEFT);
-        msgLabel = new Label(message);
+        msgLabel = new WrappedLabel(message); // BS-241: long messages wrap
         msgLabel.setAlignment(Label.Alignment.TOP_LEFT);
 
         addElement(frame);

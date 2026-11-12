@@ -176,7 +176,7 @@ public final class ShareIntegrity {
         int account = c.getBankAccountNr();
         int cid = c.getCompanyId();
         String head = "Company " + c.getName() + " (#" + cid + "): stamped " + stamped + ", banked " + banked
-                + ", excess " + excess + ". Dividends paused until /banksystem shares acknowledge " + cid;
+                + ", excess " + excess + ".\nDividends paused until /banksystem shares acknowledge " + cid;
         short[] items = shortIds(cid);
         DatabaseManager db = BankSystemModBackend.getDatabaseManager();
         if (db == null) {
@@ -215,7 +215,7 @@ public final class ShareIntegrity {
         for (short s : shareItems) in.append(in.isEmpty() ? "" : ",").append(s);
         StringBuilder sb = new StringBuilder("Share deposits since " + time(sinceMs) + ":");
         int n = 0;
-        try (PreparedStatement ps = conn.prepareStatement("SELECT ts, COALESCE(actor_name, actor_uuid, 'system'), amount, "
+        try (PreparedStatement ps = conn.prepareStatement("SELECT ts, COALESCE(actor_name, 'system'), amount, "
                 + "type_code, account_number FROM TransactionLog WHERE item_id IN (" + in + ") AND type_code IN ("
                 + INTO_BANK + ") AND amount > 0 AND ts >= ? ORDER BY ts DESC, id DESC LIMIT 8")) {
             ps.setLong(1, Math.max(0L, sinceMs));
@@ -223,7 +223,8 @@ public final class ShareIntegrity {
                 while (rs.next()) {
                     n++;
                     sb.append("\n  ").append(time(rs.getLong(1))).append(' ').append(rs.getString(2)).append(" +")
-                            .append(rs.getLong(3) / SCALE).append(' ').append(LedgerType.fromCode(rs.getInt(4)))
+                            .append(rs.getLong(3) / SCALE).append(' ')
+                            .append(LedgerType.fromCode(rs.getInt(4)).name().toLowerCase(java.util.Locale.ROOT).replace('_', ' '))
                             .append(" -> account ").append(rs.getInt(5));
                 }
             }
@@ -236,7 +237,7 @@ public final class ShareIntegrity {
                 + " WHEN type_code IN (" + OUT_OF_BANK + ") OR (type_code = " + LedgerType.ADMIN_REMOVE.code()
                 + " AND note = ?) THEN ABS(amount) ELSE 0 END)";
         List<String> plus = new ArrayList<>(), minus = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement("SELECT COALESCE(actor_name, actor_uuid), " + net
+        try (PreparedStatement ps = conn.prepareStatement("SELECT COALESCE(actor_name, 'unknown player'), " + net
                 + " AS n FROM TransactionLog WHERE actor_uuid IS NOT NULL AND ts >= ? AND (item_id IN (" + in
                 + ") OR (item_id = 0 AND company_id = ? AND type_code IN (" + LedgerType.SHARE_STAMP.code() + ","
                 + LedgerType.SHARE_REDEEM.code() + "))) GROUP BY actor_uuid HAVING n <> 0 ORDER BY n DESC")) {
@@ -271,9 +272,14 @@ public final class ShareIntegrity {
             Company c = cm == null ? null : cm.getById(companyId);
             String text = who + " created " + count + " share(s) of company "
                     + (c != null ? c.getName() + " " : "") + "#" + companyId + " via " + how + " (not stamped)";
-            if (master() && c != null)
-                AdminAudit.raise(c.getBankAccountNr(), SuspicionChecks.SHARE_CREATED, 2, count * SCALE, null, text);
-            else warn(text);
+            if (master()) {
+                if (c != null) AdminAudit.raise(c.getBankAccountNr(), SuspicionChecks.SHARE_CREATED, 2, count * SCALE, null, text);
+                else warn(text);
+                return;
+            }
+            warn(text); // BS-240: the slave keeps its log line and forwards the report to the master
+            AsyncCompanyManager.reportShareCreatedAsync(who, companyId, count, how)
+                    .exceptionally(t -> null);
         } catch (RuntimeException ignored) {
             // diagnostics never affect gameplay
         }

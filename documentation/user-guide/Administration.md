@@ -146,7 +146,22 @@ Hovering a row shows it in full; clicking a row copies it to the clipboard. Only
 
 **Audit files.** The master server writes every admin action to `<world>/data/BankSystem/audit/<yyyy-mm-dd>.log`, one line per action: balance set/add/remove, unlocks, account edits, account freezes, disallowed items, and banks closed or balances lost (`ACCOUNT_DELETE_LOSS`) when an admin closed or deleted them. Each line has the time, the action, the account, item and amount, the admin (name and UUID) and the note. Suspicion flags are written to the same file. The files are plain text and are never pruned by BankSystem.
 
-**Chat alerts.** The same lines are sent in chat to every BankSystem admin who is online, on the master or on any slave server. Each admin can turn this off with `/banksystem alerts off` (and back on with `on`); the choice is saved per admin. Admins who never used the command follow the `ALERTS_DEFAULT_ON` setting ([Configuration](Configuration.md#utilities-section)). Turning alerts off only mutes chat; files and flags are still written. Disallowing an item writes one entry per account that held it, so it can produce many alert lines at once.
+**Chat alerts.** Every action and flag is also sent in chat to every BankSystem admin who is online, on the master or on any slave server. The chat version is written for people: the flag's name and a severity (LOW, MEDIUM or HIGH), the account number and name, the amount in real units (money with its currency sign, shares as a count, other items with their name) and up to four lines of details. Longer details end with a pointer to `/banksystem audit <account>`; the full text stays in the audit file and the database. Player and transaction IDs appear only in the file. For example:
+
+```
+[BankSystem audit] HIGH: More shares than stamped
+  Account #4 "Acme"
+  Amount: 2 shares
+  Company Acme (#1): stamped 10, banked 12, excess 2.
+  Dividends paused until /banksystem shares acknowledge 1
+  Share deposits since 05-14 18:02:
+  05-14 18:10 Steve +2 deposit -> account 7
+  ... more: /banksystem audit 4
+
+[BankSystem audit] AdminName added $500.00 to Account #7 "Steve"
+```
+
+ Each admin can turn this off with `/banksystem alerts off` (and back on with `on`); the choice is saved per admin. Admins who never used the command follow the `ALERTS_DEFAULT_ON` setting ([Configuration](Configuration.md#utilities-section)). Turning alerts off only mutes chat; files and flags are still written. Disallowing an item writes one entry per account that held it, so it can produce many alert lines at once.
 
 ---
 ## Suspicious-activity Flags
@@ -206,7 +221,7 @@ This accepts the current excess, marks the flag as reviewed and resumes the divi
 
 Shares that disappear for good lower the stamped number, so they cannot hide a copy later: shares lost when an account is deleted, a bank or account closed, or the share item disallowed, and shares an admin destroys in the account management screen.
 
-Stamped shares handed out with `/give` or taken from the creative inventory raise a **flag 9 (share created)** right away, with the player's name. On a slave server this is only written to the server log.
+Stamped shares handed out with `/give` or taken from the creative inventory raise a **flag 9 (share created)** right away, with the player's name. A slave server writes it to its own server log and passes it on to the master, which raises the flag with the name of the slave server; if the master cannot be reached, only the log line remains.
 
 ## Audit Digest
 

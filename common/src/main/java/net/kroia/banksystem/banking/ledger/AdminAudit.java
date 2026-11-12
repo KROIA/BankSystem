@@ -9,7 +9,11 @@ import net.kroia.banksystem.data.table.SuspicionFlagManager;
 import net.kroia.banksystem.data.table.record.SuspicionFlagRecord;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.MoneyFormat;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -22,8 +26,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 /**
  * Task #110 (v2.2.0) — admin audit trail, master only.
@@ -40,7 +49,7 @@ public final class AdminAudit {
     /** User customData key of the per-admin chat alert toggle. */
     public static final String ALERTS_KEY = "alertsEnabled";
 
-    /** Test hook: when set, alerts go here instead of chat. */
+    /** Test hook: when set, the alert chat text (without the prefix) goes here instead of chat. */
     public static volatile @Nullable Consumer<String> alertCapture;
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -72,7 +81,7 @@ public final class AdminAudit {
                     + " by " + actor + (r.actorUuid() != null ? " (" + r.actorUuid() + ")" : "")
                     + (r.note() != null ? " note \"" + r.note() + "\"" : "");
             appendLine(r.time(), line);
-            alert(line);
+            alert(() -> adminChat(r)); // BS-241: readable chat text; the file line above stays machine-readable
         } catch (RuntimeException ignored) {
             // best-effort
         }
@@ -102,7 +111,7 @@ public final class AdminAudit {
                     + (amount != 0 ? " amount " + amount : "") + (ref != null ? " ref " + ref : "")
                     + (details != null ? " \"" + details + "\"" : "");
             appendLine(now, line);
-            alert(line);
+            alert(() -> flagChat(accountNumber, flagType, severity, amount, details)); // BS-241
             // Task #119: last, so a throwing listener cannot skip the file line or the alert
             if (BACKEND_INSTANCES.SERVER_EVENTS != null)
                 BACKEND_INSTANCES.SERVER_EVENTS.SUSPICION_FLAGGED.notifyListeners(new SuspicionFlaggedEvent(accountNumber,
@@ -138,29 +147,134 @@ public final class AdminAudit {
     }
 
     /**
-     * Sends {@code line} to every BankSystem admin with alerts on, wherever they are online.
-     * Ledger rows arrive on DB / network threads; the user map and the chat broadcast are only
-     * touched on the server main thread (deferred via {@code execute} when called elsewhere).
+     * Sends the chat text built by {@code chat} to every BankSystem admin with alerts on, wherever they
+     * are online. Ledger rows arrive on DB / network threads; the text is built and the user map and chat
+     * broadcast are only touched on the server main thread (deferred via {@code execute} when called elsewhere).
      */
-    public static void alert(String line) {
+    public static void alert(Supplier<String> chat) {
         net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
         if (srv != null && !srv.isSameThread()) {
             srv.execute(() -> {
-                try { alert(line); } catch (RuntimeException ignored) { /* best-effort */ }
+                try { alert(chat); } catch (RuntimeException ignored) { /* best-effort */ }
             });
             return;
         }
+        String text = chat.get();
         Consumer<String> capture = alertCapture;
         if (capture != null) {
-            capture.accept(line);
+            capture.accept(text);
             return;
         }
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_BANK_MANAGER == null
                 || !(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof ServerBankManager manager)) return;
-        String msg = BankSystemTextMessages.getAuditAlertMessage(line);
+        String msg = BankSystemTextMessages.getAuditAlertMessage(text);
         for (User admin : manager.getAdminUsers())
             if (alertsEnabled(admin))
                 ClientConsoleMessagePacket.sendMessageFromMaster(admin.getUUID(), msg);
+    }
+
+    // ------------------------------------------------------------------
+    // BS-241 — chat text of an alert: readable names, real amounts, no codes / UUIDs / refs
+    // ------------------------------------------------------------------
+
+    private static final String KEY = "message.banksystem.";
+    private static final int MAX_DETAIL_LINES = 4;
+    private static final Pattern UUID_TEXT = Pattern.compile(
+            "\\s*\\(?\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\b\\)?");
+
+    /** Flag alert: severity + flag name, account, amount (scaled), up to 4 detail lines. */
+    public static String flagChat(int account, int flagType, int severity, long amount, @Nullable String details) {
+        StringBuilder sb = new StringBuilder(severityText(severity)).append("\u00a7r: ").append(flagTitle(flagType))
+                .append("\n  ").append(accountText(account));
+        String amt = flagAmount(flagType, amount);
+        if (amt != null) sb.append("\n  ").append(text("alert_amount").replace("{amount}", amt));
+        if (details != null) {
+            List<String> lines = new ArrayList<>();
+            for (String l : clean(details).split("\n")) if (!l.isBlank()) lines.add(l.strip());
+            for (int i = 0; i < lines.size() && i < MAX_DETAIL_LINES; i++) sb.append("\n  \u00a77").append(lines.get(i));
+            if (lines.size() > MAX_DETAIL_LINES)
+                sb.append("\n  \u00a77").append(text("alert_more").replace("{account_number}", String.valueOf(account)));
+        }
+        return sb.toString();
+    }
+
+    /** Admin action alert: one readable line (who did what on which account), the note below it. */
+    public static String adminChat(TransactionLogRecord r) {
+        String actor = r.actorName() != null ? r.actorName()
+                : r.source().name().charAt(0) + r.source().name().substring(1).toLowerCase(Locale.ROOT);
+        String key = r.type() == net.kroia.banksystem.api.ledger.LedgerType.ACCOUNT_FREEZE && "unfrozen".equals(r.note())
+                ? "account_unfreeze" : r.type().name().toLowerCase(Locale.ROOT);
+        String line = text("admin_action." + key);
+        if (line.equals(KEY + "admin_action." + key)) line = "{actor}: " + key.replace('_', ' ') + ", {account}";
+        line = line.replace("{actor}", actor).replace("{account}", accountText(r.accountNumber()))
+                .replace("{amount}", itemAmount(r.itemId(), Math.abs(r.amount())));
+        boolean freeze = r.type() == net.kroia.banksystem.api.ledger.LedgerType.ACCOUNT_FREEZE;
+        if (r.note() != null && !r.note().isBlank() && !freeze) line += "\n  \u00a77" + clean(r.note()).strip();
+        return line;
+    }
+
+    /** @return the readable name of a flag type ("Flag N" for an unknown one). */
+    public static String flagTitle(int flagType) {
+        String key = KEY + "flag_type." + flagType;
+        String t = Component.translatable(key).getString();
+        return t.equals(key) ? "Flag " + flagType : t;
+    }
+
+    private static String severityText(int severity) {
+        if (severity >= 3) return "\u00a7cHIGH";
+        return severity == 2 ? "\u00a76MEDIUM" : "\u00a7eLOW";
+    }
+
+    private static @Nullable String flagAmount(int flagType, long amount) {
+        if (amount == 0) return null;
+        if (flagType == SuspicionChecks.SHARE_EXCESS || flagType == SuspicionChecks.SHARE_CREATED)
+            return text("alert_shares").replace("{count}", String.valueOf(amount / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR));
+        if (flagType == SuspicionChecks.EXTERNAL_BINDING_SUSPENDED) return MoneyFormat.format(amount); // units of the bound slot
+        return net.kroia.banksystem.api.MoneyFormat.formatMoney(amount);
+    }
+
+    /** "Account #4 "Name"", or the whole server for account 0. Server thread. */
+    private static String accountText(int nr) {
+        if (nr == 0) return text("alert_server");
+        String name = null;
+        try {
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_BANK_MANAGER != null
+                    && BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof ServerBankManager bm) {
+                var acct = bm.getBankAccount(nr);
+                if (acct != null) name = acct.getAccountName();
+            }
+        } catch (RuntimeException ignored) { /* name is optional */ }
+        return text("alert_account").replace("{account}",
+                "#" + nr + (name == null || name.isBlank() ? "" : " \"" + clean(name).strip() + "\""));
+    }
+
+    /** Real amount with its item: money with the currency, shares as a count, other items with their name. */
+    private static String itemAmount(short itemId, long raw) {
+        if (itemId == 0) return MoneyFormat.format(raw);
+        try {
+            if (itemId == net.kroia.banksystem.minecraft.item.custom.money.MoneyItem.getItemID().getShort())
+                return net.kroia.banksystem.api.MoneyFormat.formatMoney(raw);
+            ItemID id = new ItemID(itemId);
+            Integer cid = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem.getCompanyIdForItemID(id);
+            if (cid != null) {
+                var cm = net.kroia.banksystem.banking.company.CompanyManager.get();
+                var c = cm == null ? null : cm.getById(cid);
+                return text("alert_shares_of").replace("{count}", String.valueOf(raw / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR))
+                        .replace("{company}", c != null ? c.getName() : "#" + cid);
+            }
+            return MoneyFormat.format(raw) + " " + id.getStack().getHoverName().getString();
+        } catch (RuntimeException e) {
+            return MoneyFormat.format(raw);
+        }
+    }
+
+    /** Drops UUIDs (and their brackets) from text meant for chat. */
+    static String clean(String s) {
+        return UUID_TEXT.matcher(s).replaceAll("");
+    }
+
+    private static String text(String key) {
+        return Component.translatable(KEY + key).getString();
     }
 
     /** @return the admin's toggle, or the config default {@code Utilities.ALERTS_DEFAULT_ON}. */

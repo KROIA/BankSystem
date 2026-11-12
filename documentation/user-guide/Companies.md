@@ -377,7 +377,7 @@ Failures are reported inline, e.g. *"PNG validation failed: Must be square (got 
 
 ## Share integrity
 
-The number of stamped shares is the company's share supply. If more of its shares turn up in bank accounts than were ever stamped (for example copied with a duplication bug), the server admins get an alert and the company's dividends pause until an admin has reviewed it. Fixed payouts keep running, and nothing is taken from anyone. Shares that are lost for good (deleted accounts, closed banks, destroyed by an admin) lower the stamped number. Details for admins are in [Administration](Administration.md#share-integrity).
+The number of stamped shares is the company's share supply. If more of its shares turn up in bank accounts than were ever stamped (for example copied with a duplication bug), the server admins get an alert and the company's dividends pause until an admin has reviewed it. Fixed payouts keep running, and nothing is taken from anyone. While dividends are paused, new payouts that are split among the shareholders cannot be created and existing ones cannot be changed; payouts to a player or account still can. Shares that are lost for good (deleted accounts, closed banks, destroyed by an admin) lower the stamped number. Details for admins are in [Administration](Administration.md#share-integrity).
 
 ## Multi-server notes
 

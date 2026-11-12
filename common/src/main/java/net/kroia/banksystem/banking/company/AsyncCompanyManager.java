@@ -132,7 +132,10 @@ public final class AsyncCompanyManager {
         // Task #54 (v2.1.0) — slave→master: fetch current share symbol manifest.
         GET_SYMBOL_MANIFEST,
         // Task #54 (v2.1.0) — slave→master: request byte push for specific symbol hashes.
-        PULL_SYMBOL_BYTES
+        PULL_SYMBOL_BYTES,
+        // BS-240 (v2.2.0) — slave→master: shares created by /give or the creative inventory on a slave.
+        // Trusted slaves only (in neither whitelist).
+        REPORT_SHARE_CREATED
     }
 
     /** Task #1 (v2.1.0) — SM bridge result codes for OPEN_SHARE_MARKET output. */
@@ -687,6 +690,16 @@ public final class AsyncCompanyManager {
     }
 
     // Task #54 (v2.1.0) — bulk visuals+info list.
+    /** BS-240: one SHARE_CREATED report from a slave. */
+    public record ShareCreatedInput(String who, int companyId, long count, String how) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ShareCreatedInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.STRING_UTF8, ShareCreatedInput::who,
+                ByteBufCodecs.VAR_INT, ShareCreatedInput::companyId,
+                ByteBufCodecs.VAR_LONG, ShareCreatedInput::count,
+                ByteBufCodecs.STRING_UTF8, ShareCreatedInput::how,
+                ShareCreatedInput::new);
+    }
+
     public record EmptyInput() {
         public static final StreamCodec<RegistryFriendlyByteBuf, EmptyInput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {},
@@ -1152,6 +1165,7 @@ public final class AsyncCompanyManager {
         // Task #54 (v2.1.0) — symbol store ARRS.
         put(FunctionType.GET_SYMBOL_MANIFEST,       new AsyncFunctionDataCodecs(EmptyInput.STREAM_CODEC,            SymbolManifestOutput.STREAM_CODEC));
         put(FunctionType.PULL_SYMBOL_BYTES,         new AsyncFunctionDataCodecs(PullSymbolBytesInput.STREAM_CODEC,  EmptyInput.STREAM_CODEC));
+        put(FunctionType.REPORT_SHARE_CREATED,      new AsyncFunctionDataCodecs(ShareCreatedInput.STREAM_CODEC,     EmptyInput.STREAM_CODEC));
     }};
 
     // ------------------------------------------------------------------
@@ -1315,6 +1329,12 @@ public final class AsyncCompanyManager {
                 // Task #54 (v2.1.0) — symbol store (don't need bm/cm).
                 case GET_SYMBOL_MANIFEST -> handleGetSymbolManifest();
                 case PULL_SYMBOL_BYTES   -> handlePullSymbolBytes(input.decodeParams(), slaveID);
+                case REPORT_SHARE_CREATED -> {
+                    ShareCreatedInput in = input.decodeParams();
+                    ShareIntegrity.reportCreated(in.who(), in.companyId(), in.count(),
+                            in.how() + (slaveID == null || slaveID.isEmpty() ? "" : " on server " + slaveID));
+                    yield OutputData.of(FunctionType.REPORT_SHARE_CREATED, new EmptyInput());
+                }
             });
         }
 
@@ -1592,6 +1612,7 @@ public final class AsyncCompanyManager {
             // Task #54 (v2.1.0)
             case GET_SYMBOL_MANIFEST -> OutputData.of(function, SymbolManifestOutput.EMPTY);
             case PULL_SYMBOL_BYTES   -> OutputData.of(function, new EmptyInput());
+            case REPORT_SHARE_CREATED -> OutputData.of(function, new EmptyInput());
         };
     }
 
@@ -1911,9 +1932,17 @@ public final class AsyncCompanyManager {
                 ? PayoutSchedule.Mode.values()[b] : PayoutSchedule.Mode.FIXED_PAYOUT;
     }
 
+    /** BS-241: no new or edited shareholder (dividend) schedules while a share excess is open. */
+    public static boolean dividendUnderReview(int companyId, byte mode, CompanyManager cm) {
+        Company c = cm.getById(companyId);
+        return c != null && c.isShareExcessOpen() && modeFromByte(mode) == PayoutSchedule.Mode.DIVIDEND;
+    }
+
     private static OutputData handleCreatePayout(CreatePayoutInput in, IServerBankManager bm, CompanyManager cm) {
         int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
         if (gate != CODE_OK) return OutputData.of(FunctionType.CREATE_PAYOUT, new CreatePayoutOutput(gate, 0L));
+        if (dividendUnderReview(in.companyId, in.mode, cm))
+            return OutputData.of(FunctionType.CREATE_PAYOUT, new CreatePayoutOutput(CODE_SHARES_UNDER_REVIEW, 0L));
         IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
         if (pm == null) return OutputData.of(FunctionType.CREATE_PAYOUT, new CreatePayoutOutput(CODE_INTERNAL, 0L));
         long nowTick = PayoutExecutor.getLastObservedTick() > 0L
@@ -1929,6 +1958,8 @@ public final class AsyncCompanyManager {
     private static OutputData handleUpdatePayout(UpdatePayoutInput in, IServerBankManager bm, CompanyManager cm) {
         int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
         if (gate != CODE_OK) return OutputData.of(FunctionType.UPDATE_PAYOUT, new UpdatePayoutOutput(gate));
+        if (dividendUnderReview(in.companyId, in.newMode, cm))
+            return OutputData.of(FunctionType.UPDATE_PAYOUT, new UpdatePayoutOutput(CODE_SHARES_UNDER_REVIEW));
         IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
         if (pm == null) return OutputData.of(FunctionType.UPDATE_PAYOUT, new UpdatePayoutOutput(CODE_INTERNAL));
         long nowTick = PayoutExecutor.getLastObservedTick() > 0L ? PayoutExecutor.getLastObservedTick() : 0L;
@@ -2439,6 +2470,11 @@ public final class AsyncCompanyManager {
         };
         return OutputData.of(FunctionType.PAY_DIVIDEND,
                 new PayDividendOutput(code, result.totalPaid(), result.holderCount()));
+    }
+
+    /** BS-240: slave → master SHARE_CREATED report; fire and forget (null on failure). */
+    public static CompletableFuture<OutputData> reportShareCreatedAsync(String who, int companyId, long count, String how) {
+        return dispatchInput(InputData.of(FunctionType.REPORT_SHARE_CREATED, new ShareCreatedInput(who, companyId, count, how)));
     }
 
     /** Task #49 (v2.1.0) — slave helper: forward a dividend distribution request to master. */

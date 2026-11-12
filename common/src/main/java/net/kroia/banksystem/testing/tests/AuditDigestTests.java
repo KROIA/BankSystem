@@ -369,7 +369,7 @@ public class AuditDigestTests extends TestSuite {
             new TransactionLogManager(mem).save(rows).get(10, TimeUnit.SECONDS);
             String d = mem.getDatabaseThread().submit(() -> net.kroia.banksystem.banking.company.ShareIntegrity.details(
                     mem.getConnection(), 9, new short[]{share}, since)).get(10, TimeUnit.SECONDS);
-            if (!d.contains("DupeTester +5 DEPOSIT -> account 11") || d.contains("+9 ")) return fail("deposit list wrong:\n" + d);
+            if (!d.contains("DupeTester +5 deposit -> account 11") || d.contains("+9 ")) return fail("deposit list wrong:\n" + d);
             if (!d.contains("Hint only, not proof") || !d.contains("Withdrawer +6") || !d.contains("DupeTester -4"))
                 return fail("hint wrong:\n" + d);
             return pass("deposits since the consistent time, hint +6 / -4");

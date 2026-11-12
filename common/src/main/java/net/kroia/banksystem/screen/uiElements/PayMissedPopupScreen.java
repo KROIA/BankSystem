@@ -85,7 +85,7 @@ public class PayMissedPopupScreen extends BankSystemGuiScreen {
         amountBox.setHoverTooltipSupplier(() ->
                 (money ? AMOUNT_TOOLTIP_MONEY : AMOUNT_TOOLTIP_ITEM).getString());
 
-        statusLabel = new Label("");
+        statusLabel = new WrappedLabel(""); // BS-241: long reasons wrap
         payButton = new Button(PAY.getString(), this::onPay);
         cancelButton = new Button(CANCEL.getString(), () -> switchScreen(parent));
 
@@ -181,7 +181,7 @@ public class PayMissedPopupScreen extends BankSystemGuiScreen {
         summaryLabel.setBounds(p, titleLabel.getBottom() + 4, w, 15);
         amountLabel.setBounds(p, summaryLabel.getBottom() + 6, 120, 20);
         amountBox.setBounds(p + 125, summaryLabel.getBottom() + 6, w - 125, 20);
-        statusLabel.setBounds(p, amountBox.getBottom() + 4, w, 15);
+        statusLabel.setBounds(p, amountBox.getBottom() + 4, w, 30);
         cancelButton.setBounds(frame.getWidth() - p - 80, frame.getHeight() - p - 20, 80, 20);
         payButton.setBounds(cancelButton.getLeft() - 5 - 80, frame.getHeight() - p - 20, 80, 20);
     }

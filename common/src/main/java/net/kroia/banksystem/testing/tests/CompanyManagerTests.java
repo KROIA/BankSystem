@@ -61,6 +61,7 @@ public class CompanyManagerTests extends TestSuite {
         addTest("share_excess_raised_once_per_level", this::testShareExcessRaisedOnce);
         addTest("share_dividends_paused_until_acknowledge", this::testShareDividendsPaused);
         addTest("share_destroy_lowers_issued", this::testShareDestroyLowersIssued);
+        addTest("share_excess_refuses_dividend_schedules", this::testShareExcessRefusesDividendSchedules); // BS-241
         // BS-238 — dividends count every share variant
         addTest("dividend_holdings_sum_all_share_variants", this::testDividendHoldingsSumAllVariants);
     }
@@ -395,6 +396,24 @@ public class CompanyManagerTests extends TestSuite {
         if (after.reason == PayoutFailureReason.SHARES_UNDER_REVIEW) return fail("still paused after acknowledge");
         if (!rows.isEmpty()) return fail("test moved value: " + rows.size() + " ledger rows");
         return pass("dividend paused while open, fixed payout not, resumed after acknowledge (" + after.reason + ")");
+    }
+
+    private TestResult testShareExcessRefusesDividendSchedules() {
+        CompanyManager cm = freshWithIssued(5);
+        Company c = cm.getById(SHARE_TEST_ID);
+        if (c == null) return fail("test company did not load");
+        byte dividend = (byte) PayoutSchedule.Mode.DIVIDEND.ordinal(), fixed = (byte) PayoutSchedule.Mode.FIXED_PAYOUT.ordinal();
+        if (net.kroia.banksystem.banking.company.AsyncCompanyManager.dividendUnderReview(SHARE_TEST_ID, dividend, cm))
+            return fail("refused without an open excess");
+        ShareIntegrity.apply(cm, c, 7, 100L);
+        if (!net.kroia.banksystem.banking.company.AsyncCompanyManager.dividendUnderReview(SHARE_TEST_ID, dividend, cm))
+            return fail("dividend schedule allowed while the excess is open");
+        if (net.kroia.banksystem.banking.company.AsyncCompanyManager.dividendUnderReview(SHARE_TEST_ID, fixed, cm))
+            return fail("fixed payout refused");
+        ShareIntegrity.acknowledge(cm, c, 7, 200L);
+        if (net.kroia.banksystem.banking.company.AsyncCompanyManager.dividendUnderReview(SHARE_TEST_ID, dividend, cm))
+            return fail("still refused after acknowledge");
+        return pass("dividend schedules refused only while the excess is open; fixed payouts allowed");
     }
 
     private TestResult testShareDestroyLowersIssued() {

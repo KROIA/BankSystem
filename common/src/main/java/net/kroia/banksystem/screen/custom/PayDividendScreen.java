@@ -121,7 +121,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
 
         payButton = new Button(PAY.getString(), this::onPayClicked);
         cancelButton = new Button(CANCEL.getString(), this::onClose);
-        statusLabel = new Label("");
+        statusLabel = new net.kroia.banksystem.screen.uiElements.WrappedLabel(""); // BS-241: long reasons wrap
 
         historyHeader = new Label(HISTORY_HEADER.getString());
         historyEmpty = new Label(HISTORY_EMPTY.getString());
@@ -264,7 +264,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         amountBox.setBounds(p + col, y, col, 20);
         y += 26;
 
-        statusLabel.setBounds(p, y, fw, 16);
+        statusLabel.setBounds(p, y, fw, 40);
 
         int btnW = (fw - spacing) / 2;
         int btnY = frame.getHeight() - p - 20;

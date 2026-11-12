@@ -266,7 +266,8 @@ public class SuspicionFlagTests extends TestSuite {
         if (count(acct[0], SuspicionChecks.TRANSFER_TO_NEW_ACCOUNT, null) != 1) return fail("young account: expected exactly 1 flag");
         if (count(acct[1], SuspicionChecks.TRANSFER_TO_NEW_ACCOUNT, null) != 0) return fail("old account flagged");
         synchronized (alerts) {
-            if (alerts.stream().noneMatch(l -> l.startsWith("FLAG " + SuspicionChecks.TRANSFER_TO_NEW_ACCOUNT)))
+            String title = net.kroia.banksystem.banking.ledger.AdminAudit.flagTitle(SuspicionChecks.TRANSFER_TO_NEW_ACCOUNT);
+            if (alerts.stream().noneMatch(l -> l.contains(title))) // BS-241: chat names the flag
                 return fail("no alert: " + alerts);
         }
         return pass("incoming $1000 into a 1h-old account flagged; below, outgoing and 48h-old not");
