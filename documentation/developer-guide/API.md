@@ -397,6 +397,16 @@ flow.record("mymod:burn", player.getUUID(), moneyItemId, -count, null); // no vi
 | `villager` | The trading villager, or `null`. BankSystem stores its UUID, dimension id and block position (`villager_uuid`, `dimension`, `x`, `y`, `z` columns) |
 | `context` | Other free text, or `null` |
 
+BankSystem itself writes these sources (constants in `net.kroia.banksystem.data.NoteFlowLog`):
+
+| Source | When |
+|---|---|
+| `banksystem:converter_in` / `banksystem:converter_out` | Notes put into (negative) or taken out of (positive) the ATM converter |
+| `banksystem:give` | `/give` of a money item: positive, one row per target player, context = command source name |
+| `banksystem:creative_create` / `banksystem:creative_destroy` | Net notes a creative player took from (positive) or deleted in (negative) the creative inventory; summed per player and money item, written after 10 s without a creative inventory change, on logout and on server stop |
+
+`/clear`, `/item`, `/loot` and `/summon` are not tracked.
+
 ### Your own diagnostics file (`DiagnosticsDatabase`)
 
 An add-on can reuse BankSystem's write-only SQLite writer for its own file (since 2.2.0). The class is `net.kroia.banksystem.data.DiagnosticsDatabase`, outside `api/`, so it may change in a later version.

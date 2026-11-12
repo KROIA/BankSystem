@@ -26,6 +26,11 @@ Lifecycle:
 >
 > The **Mod Settings** button is only shown on the master server. On a slave server the button is hidden — configure settings on the master; slaves receive the relevant values (component lists, etc.) through the master's sync.
 
+<div align="center">
+    <img src="../images/settingsGUI.png" > 
+</div>
+<br>
+
 > [!WARNING]
 > Because the server rewrites `settings.json` on its save interval, **only edit the file directly while the world/server is stopped**. Edits made through the raw file while the server is running are silently overwritten. Use `/banksystem manage` → **Mod Settings** instead when the server is live.
 > Also make sure your edits are valid JSON and keep a backup — if the file cannot be loaded, BankSystem writes a fresh file, and your manual changes are lost.
@@ -146,6 +151,11 @@ A freshly created `settings.json` looks like this:
 
 Shown as **Suspicious activity** in the Mod Settings screen. Suspicious-activity flags ([Administration](Administration.md#suspicious-activity-flags)) and the [audit digest](Administration.md#audit-digest). Flags 6 and 7 are always on and have no settings here. Read live on the master server; slaves ignore this section. Money amounts are **whole dollars** (not cents).
 
+<div align="center">
+    <img src="../images/ModSettingsAudit.png" > 
+</div>
+<br>
+
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `LAUNDERING_FLAG_ENABLED` | boolean | `true` | Flag banknote deposits of money the depositor did not withdraw themselves. |
@@ -172,6 +182,11 @@ Shown as **Suspicious activity** in the Mod Settings screen. Suspicious-activity
 ## Integrations Section
 
 On/off switches for the optional integrations with other mods and services, plus the placeholder settings. In the **Mod Settings** screen every integration is a collapsible section: the check box in its header is the switch, a click on the header shows its settings. While a switch is off, the settings below it are greyed out.
+
+<div align="center">
+    <img src="../images/ModSettingsIntegrations.png" > 
+</div>
+<br>
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

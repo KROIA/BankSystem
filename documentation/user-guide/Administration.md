@@ -9,11 +9,6 @@ By default a new world can bank money, iron ingots, gold ingots, diamonds, emera
 /banksystem manage
 ```
 
-<div align="center">
-    <img src="../images/settingsGUI.png" > 
-</div>
-<br>
-
 In this window you can add/remove items which can be stored in the bank.
 
 - **Left side**: A list of all items that can be stored inside a bank. Click on an item to see details.
@@ -48,7 +43,7 @@ To manage a specific player's bank account, use one of the following methods:
 </div>
 <br>
 
-The window shows all items currently stored in the player's bank account.
+The window shows all items currently stored in the player's bank account. The **Audit** button (admins only) opens the [audit screen](#audit-and-admin-alerts) of the shown account.
 
 <details>
 <summary><b>Add new item</b></summary>
@@ -73,6 +68,11 @@ Click the <b>Save changes</b> button to apply your changes.
 Click <b>Freeze</b> in the header row (it reads <b>Unfreeze</b> while the account is frozen; a <b>*</b> marks an unsaved change), then <b>Save changes</b>. The same works with <code>/banksystem freeze &lt;account&gt; [on|off]</code> (BankSystem admins, or the master server console).<br>
 A frozen account refuses every player action that moves money or items in or out: terminal deposits and withdrawals, bank notes, the converter, Bank Upload/Download blocks, crafting with bank items, money transfers to or from it, and payouts/dividends paid from it (the payout history shows <i>Account frozen</i>). The player gets a chat message and keeps their items. Members still see the account (a grey <b>Frozen</b> marker), but only admins can close its banks.<br>
 Admin edits keep working, and so does StockMarket's settlement (unlocking and paying out existing orders). Every freeze and unfreeze is recorded in the <a href="#transaction-ledger">transaction ledger</a> (code 26) with the admin or console as actor. On an untrusted slave server the button is greyed out like the other admin edits.
+<br><br>
+<div align="center">
+    <img src="../images/BankManagementFrozen.png" > 
+</div>
+<br>
 </details>
 
 <details>
@@ -120,7 +120,7 @@ BankSystem keeps its balance history and transaction ledger in a SQLite database
 
 Bank accounts, the item registry and `settings.json` are ordinary NBT/JSON files under `<world>/data/BankSystem/` and are written on the auto-save interval — copy them with the rest of the world folder as usual.
 
-`<world>/data/BankSystem/Database/banksystem_diagnostics.db` (on the master, slaves and single servers) holds diagnostics for an external audit tool. BankSystem only writes it and never reads it back. On disk it is three files: `banksystem_diagnostics.db`, `banksystem_diagnostics.db-wal` and `banksystem_diagnostics.db-shm`. Deleting them is safe, but only while the server is stopped, and always all three together: they are recreated empty on the next write, and a damaged copy is renamed to `.corrupt-<time>` and replaced. To back it up, copy all three files, or copy the `.db` alone after the server has stopped (a clean stop merges the other two into it). Its `TransferJournal` table is written on slave servers only: one row per step of each transfer of value between the slave world and the master bank (requested, confirmed, delivered, returned, timed out or failed; the path column says whether it was a bank request, a converter deposit or bank notes dropped into a player's inventory). Its `NoteFlow` table is written on every server: money notes that leave or enter the world outside the bank, for example notes put into or taken out of the ATM converter. Each row has the time, the source, the player, the money item, the amount (negative when notes were destroyed) and free-text context; rows from a villager trade also store the villager's UUID (`villager_uuid`), its dimension (`dimension`) and its block position (`x`, `y`, `z`), which are empty for every other source.
+`<world>/data/BankSystem/Database/banksystem_diagnostics.db` (on the master, slaves and single servers) holds diagnostics for an external audit tool. BankSystem only writes it and never reads it back. On disk it is three files: `banksystem_diagnostics.db`, `banksystem_diagnostics.db-wal` and `banksystem_diagnostics.db-shm`. Deleting them is safe, but only while the server is stopped, and always all three together: they are recreated empty on the next write, and a damaged copy is renamed to `.corrupt-<time>` and replaced. To back it up, copy all three files, or copy the `.db` alone after the server has stopped (a clean stop merges the other two into it). Its `TransferJournal` table is written on slave servers only: one row per step of each transfer of value between the slave world and the master bank (requested, confirmed, delivered, returned, timed out or failed; the path column says whether it was a bank request, a converter deposit or bank notes dropped into a player's inventory). Its `NoteFlow` table is written on every server: money notes that leave or enter the world outside the bank, for example notes put into or taken out of the ATM converter. Notes given with `/give` are logged at once, one row per target player (source `banksystem:give`, context = who ran the command). Notes taken from or deleted in the creative inventory are summed per player and money item: moving a note between slots cancels out, and only the net amount is written as `banksystem:creative_create` (positive) or `banksystem:creative_destroy` (negative), once the player has made no creative inventory change for 10 seconds, when the player logs out, or when the server stops. Notes created or removed by `/clear`, `/item`, `/loot` or `/summon` are not logged. Each row has the time, the source, the player, the money item, the amount (negative when notes were destroyed) and free-text context; rows from a villager trade also store the villager's UUID (`villager_uuid`), its dimension (`dimension`) and its block position (`x`, `y`, `z`), which are empty for every other source.
 
 ---
 ## Transaction Ledger
@@ -130,7 +130,19 @@ Every balance change is recorded in the database: deposits and withdrawals (term
 ---
 ## Audit and Admin Alerts
 
-**Audit screen.** `/banksystem audit <player|account>` opens the ledger of a player's personal account (by name) or of any account (by number). Columns: time, type, item, amount (negative when it left the account), counterparty account, actor (player name, or the source such as console or system), note and reference. Filter by entry type and by time range (last hour, 24 hours, 7 days or all time); entries load 100 at a time with the **<** and **>** buttons. Hovering a row shows it in full. Only BankSystem admins can open it, and every page is checked again on the master server. On an untrusted slave server the screen shows "Access denied" until the slave is trusted with `/banksystem trust`.
+**Audit screen.** `/banksystem audit <player|account>` opens the ledger of a player's personal account (by name) or of any account (by number); the **Audit** button in the [account management screen](#managing-player-bank-accounts) opens it for the shown account. Newest entries come first. Columns: time, type, item, amount (negative when it left the account), counterparty account, actor (player name, or the source such as console or system), note and transaction ID. The top row holds:
+
+- filters for the entry type and the time range (last hour, last 24 hours, last 7 days or all time),
+- the **<** and **>** buttons with the page number between them; each page shows 100 entries,
+- **History**, which opens the account's [balance history](#balance-history-for-admins) with its suspicion flags,
+- **Export**, which saves every entry that matches the current filters (the newest 10,000 at most) as a CSV file on your computer; a file dialog asks where.
+
+Hovering a row shows it in full; clicking a row copies it to the clipboard. Only BankSystem admins can open it, and every page is checked again on the master server. On an untrusted slave server the screen shows "Access denied" until the slave is trusted with `/banksystem trust`.
+
+<div align="center">
+    <img src="../images/AuditScreen.png" > 
+</div>
+<br>
 
 **Audit files.** The master server writes every admin action to `<world>/data/BankSystem/audit/<yyyy-mm-dd>.log`, one line per action: balance set/add/remove, unlocks, account edits, account freezes, disallowed items, and banks closed or balances lost (`ACCOUNT_DELETE_LOSS`) when an admin closed or deleted them. Each line has the time, the action, the account, item and amount, the admin (name and UUID) and the note. Suspicion flags are written to the same file. The files are plain text and are never pruned by BankSystem.
 
@@ -139,7 +151,7 @@ Every balance change is recorded in the database: deposits and withdrawals (term
 ---
 ## Suspicious-activity Flags
 
-The master server watches for patterns that often mean money changed hands outside the normal game. A hit raises a **flag**: it is stored in the database, written to the [audit file](#audit-and-admin-alerts) as a `FLAG <code> ...` line and sent to admins as an alert. A flag is a hint for an admin to look at the account in `/banksystem audit`, not proof and not an automatic action. Checks 1 to 5 can be turned off and tuned in the [Audit section](Configuration.md#audit-section) of the settings (amounts in whole dollars); in the Mod Settings screen that section is called *Suspicious activity*. Flags 6 and 7 are always on and have no settings.
+The master server watches for patterns that often mean money changed hands outside the normal game. A hit raises a **flag**: it is stored in the database, written to the [audit file](#audit-and-admin-alerts) as a `FLAG <code> ...` line and sent to admins as an alert. A flag is a hint for an admin to look at the account in `/banksystem audit`, not proof and not an automatic action. Checks 1 to 5 can be turned off and tuned in the [Audit section](Configuration.md#audit-section) of the settings (amounts in whole dollars); in the Mod Settings screen that section is called *Suspicious activity*. Flags 6 to 9 are always on and have no settings.
 
 | Code | Flag | Raised when | Settings (default) |
 |---:|---|---|---|
@@ -150,8 +162,10 @@ The master server watches for patterns that often mean money changed hands outsi
 | 5 | Money-supply growth | The total money of all accounts (free and locked) grows by more than the percent **and** more than the amount within the last hour. Checked together with the wealth jump; the flag is server-wide (account 0) and at most one is raised per cooldown. The value an hour ago comes from the balance snapshots, so the check needs snapshots that are at least an hour old (it stays quiet for the first hour of a new world). Money in accounts opened within the hour counts as growth. | `MONEY_SUPPLY_FLAG_ENABLED` (on), `MONEY_SUPPLY_GROWTH_PERCENT` (10), `MONEY_SUPPLY_GROWTH_AMOUNT` ($10,000,000), `MONEY_SUPPLY_COOLDOWN_HOURS` (6) |
 | 6 | Transfer parked | Value was taken from an account and sent to a slave server, but neither the transfer nor the status check afterwards got an answer, so nobody knows whether it arrived. Raised for bank notes withdrawn at an ATM on a slave, and for the payout of a deleted player's accounts. Nothing is refunded, because the player may already have the items. The flag carries the transfer ID and the amount. **Reconcile it by hand:** ask the player, check the slave's transfer journal for that ID (see [Backups](#backups)), and correct the balance with `/money` or the account management screen if the items never arrived. | Always on, no settings |
 | 7 | External binding suspended | A [currency-mod binding](#suspended-currency-bindings) links a bank slot to an external account that the account's owner or managers may not bind. Also raised when such a suspended binding is dropped because the account, the player or the bank slot is deleted; the flag then says how much BankSystem held for it. | Always on, no settings |
+| 8 | Share excess | More shares of a company are in bank accounts than the company ever stamped. See [Share integrity](#share-integrity). | Always on, no settings |
+| 9 | Share created | Someone got stamped shares of a company from `/give` or the creative inventory instead of a Share Stamper. See [Share integrity](#share-integrity). | Always on, no settings |
 
-Only money (not other items) is checked. On a multi-server network all checks run on the master, which sees every deposit, withdrawal and transfer.
+Checks 1 to 5 look at money only (not other items). On a multi-server network all checks run on the master, which sees every deposit, withdrawal and transfer.
 
 ### Suspended Currency Bindings
 
@@ -174,6 +188,26 @@ If the binding is legitimate (for example a shared account whose external accoun
 
 If the binding is not legitimate, leave it suspended, or delete the bank slot or account: the held amount is then logged and not paid out.
 
+### Share integrity
+
+Every company knows how many shares it has stamped. The master compares that number with the shares of the company held in all bank accounts (free and locked). More shares in the banks than were ever stamped means shares were copied somewhere. Nothing is removed or refused; instead:
+
+- A **flag 8 (share excess)** is raised on the company's bank account. It shows the stamped and banked numbers, the share deposits since the numbers last matched (who, how many, which account, when) and a per-player hint: shares a player got out of banks or from a stamper bound by them (+) and shares they deposited (−). The hint is only a pointer, not proof: shares can change hands as items without any record.
+- The company's **dividends are paused**: *Pay Dividend* and dividend schedules are skipped with the status *Paused* and the message *"Dividends are paused: more shares are banked than were stamped. An admin must review it first."* The schedules stay; fixed payouts keep running.
+- There is only one open alert per company. A new one comes only if the excess grows further.
+
+The check runs after every deposit of shares, once a day, and when an admin acknowledges the alert. After looking into it, acknowledge it on the master server:
+
+```
+/banksystem shares acknowledge <companyId>
+```
+
+This accepts the current excess, marks the flag as reviewed and resumes the dividends. Destroying the extra shares is optional: if the banked number falls back to the stamped number, the alert closes and dividends resume by themselves. The command needs the BankSystem admin flag (node `banksystem.admin.command.shares`) and also works from the master console.
+
+Shares that disappear for good lower the stamped number, so they cannot hide a copy later: shares lost when an account is deleted, a bank or account closed, or the share item disallowed, and shares an admin destroys in the account management screen.
+
+Stamped shares handed out with `/give` or taken from the creative inventory raise a **flag 9 (share created)** right away, with the player's name. On a slave server this is only written to the server log.
+
 ## Audit Digest
 
 The master writes a short summary of the previous day to `<world>/data/BankSystem/audit/digest-<yyyy-mm-dd>.md` on the first server tick after midnight (server time). It is a markdown file with:
@@ -190,7 +224,18 @@ A digest that already exists is never rewritten, so restarting the server does n
 ## Balance History for Admins
 
 - **Whole server.** The **Server history** button at the top of `/banksystem manage` opens the balance history chart summed over every account, per item. Each account's last value is carried forward until its next snapshot, so accounts that save snapshots at different times still add up correctly; an account counts from its first snapshot on. Money-supply flags appear as markers.
+
+<div align="center">
+    <img src="../images/ServerHistory.png" > 
+</div>
+<br>
+
 - **Any account.** `/banksystem history <player|account>` or the **History** button in the audit screen opens the balance history of any account, including its total wealth line. The account's suspicion flags are shown as red markers on the chart; hover a marker to see the flag type and details.
+
+<div align="center">
+    <img src="../images/BalanceHistoryFlags.png" > 
+</div>
+<br>
 
 Both are for BankSystem admins only and are checked on the master; untrusted slave servers get no data.
 

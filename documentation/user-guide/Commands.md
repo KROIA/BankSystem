@@ -24,6 +24,7 @@ On a slave server that the master does not trust, only `/money` and `/money circ
 | `/banksystem history <player\|account>` | Opens the balance history of a player's personal account or of an account number, with suspicion flags as chart markers. Needs a player | | X |
 | `/banksystem alerts on\|off` | Turns your chat alerts for admin actions and suspicion flags on or off; the audit files are written either way. Needs a player | | X |
 | `/banksystem restorebinding <account> [item]` | Lifts the suspension of a [suspended currency binding](Administration.md#suspended-currency-bindings) on that account (one slot when `item` is given). Master server or its console only. Node `banksystem.admin.command.restorebinding` | X | |
+| `/banksystem shares acknowledge <companyId>` | Accepts a [share excess](Administration.md#share-integrity) of that company and resumes its dividends. Master server or its console only. Node `banksystem.admin.command.shares` | X | |
 | `/banksystem trust <slaveID>` | Adds a slave server to the trusted list (master only). Node `banksystem.admin.command.trust` | X | |
 | `/banksystem untrust <slaveID>` | Removes a slave server from the trusted list (master only). Node `banksystem.admin.command.trust` | X | |
 | `/banksystem serverInfo` | Shows information about this server | | |

@@ -183,7 +183,7 @@ Closing the payout editor with unsaved changes asks whether to **Save** or **Dis
 | **Target not found** | The target player or account no longer exists. |
 | **No deposit right** | The target account does not accept deposits from this payout. |
 | **Insufficient item balance** | An item-currency payout, and the company does not hold enough of that item. |
-| **Paused** | The schedule is paused. |
+| **Paused** | The schedule is paused, or (dividend schedules) dividends are paused because more shares are banked than were stamped. See [Share integrity](#share-integrity). |
 | **Account frozen** | An admin froze the company account, so nothing can be paid from it. See [Administration](Administration.md#managing-player-bank-accounts). |
 
 A failed run does not retry immediately — the schedule advances to its next slot and the missed amount is added to its counter. Use **Pay Missed** to settle the backlog once the account has funds again; if it still cannot pay you get *"The company has insufficient funds to execute this payment."*
@@ -209,6 +209,7 @@ Rules worth knowing:
 - The company's **own** account is always excluded — a company does not pay a dividend to itself.
 - If a holder has no bank slot for the payout item yet, one is created for them.
 - The screen keeps a **Dividend History** list; press **Refresh** to reload it.
+- While a share excess is open (see [Share integrity](#share-integrity)) no dividend is paid and you get *"Dividends are paused: more shares are banked than were stamped. An admin must review it first."*
 
 ---
 
@@ -374,6 +375,10 @@ Failures are reported inline, e.g. *"PNG validation failed: Must be square (got 
 
 ---
 
+## Share integrity
+
+The number of stamped shares is the company's share supply. If more of its shares turn up in bank accounts than were ever stamped (for example copied with a duplication bug), the server admins get an alert and the company's dividends pause until an admin has reviewed it. Fixed payouts keep running, and nothing is taken from anyone. Shares that are lost for good (deleted accounts, closed banks, destroyed by an admin) lower the stamped number. Details for admins are in [Administration](Administration.md#share-integrity).
+
 ## Multi-server notes
 
 On a master/slave setup ([Multi-Server Setup](MultiserverSetup.md)):
@@ -394,6 +399,7 @@ On a master/slave setup ([Multi-Server Setup](MultiserverSetup.md)):
 | `/company info "<companyName>"` | Print company details to chat | Any player |
 | `/company manage "<companyName>"` | Open the Company Management screen | `MANAGE` on the bound account, or BankSystem admin |
 | `/banksystem symbols list\|add <id>\|remove <id>\|reload` | Manage share symbol textures (master only) | Permission level 2 |
+| `/banksystem shares acknowledge <companyId>` | Accept a [share excess](#share-integrity) and resume the company's dividends (master only) | BankSystem admin |
 
 The full command list for the rest of the mod is in [Commands](Commands.md).
 
