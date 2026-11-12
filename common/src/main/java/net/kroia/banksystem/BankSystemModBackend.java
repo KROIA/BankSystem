@@ -263,6 +263,8 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemNetworking.setBackend(INSTANCES);
         net.kroia.banksystem.banking.ledger.TransactionLedger.setBackend(INSTANCES); // Task #109
         DiagnosticsDatabase.setBackend(INSTANCES); // Task #123
+        net.kroia.banksystem.data.AuditExporter.setBackend(INSTANCES); // BS-255
+        net.kroia.banksystem.api.audit.AuditExport.register(BankSystemMod.MOD_ID, net.kroia.banksystem.data.AuditExporter::contributeBankSystem);
         net.kroia.banksystem.data.TransferJournal.setBackend(INSTANCES); // Task #124
         net.kroia.banksystem.banking.ledger.AccountFreeze.setBackend(INSTANCES); // Task #117
         net.kroia.banksystem.banking.ledger.AdminAudit.setBackend(INSTANCES); // Task #110

@@ -493,17 +493,7 @@ public class DatabaseManager {
                     result.complete(false);
                     return;
                 }
-                String escaped = abs.toString().replace("'", "''");
-                boolean wasInTransaction = !c.getAutoCommit();
-                if (wasInTransaction) {
-                    c.commit();
-                    c.setAutoCommit(true);
-                }
-                try (Statement stmt = c.createStatement()) {
-                    stmt.execute("VACUUM INTO '" + escaped + "'");
-                } finally {
-                    if (wasInTransaction) c.setAutoCommit(false);
-                }
+                vacuumInto(c, abs);
                 logInfo("[BankSystem] snapshot written to " + abs);
                 result.complete(true);
             } catch (SQLException | IOException e) {
@@ -515,6 +505,26 @@ public class DatabaseManager {
             }
         });
         return result;
+    }
+
+    /**
+     * Writes a consistent copy of {@code c}'s database to {@code target} with {@code VACUUM INTO}.
+     * Call it on the thread that owns {@code c}. A connection with auto-commit off has its pending
+     * work committed first (SQLite refuses VACUUM inside a transaction) and gets auto-commit off back
+     * afterwards. The target must not exist yet; single quotes in the path are doubled.
+     */
+    public static void vacuumInto(Connection c, Path target) throws SQLException {
+        String escaped = target.toAbsolutePath().toString().replace("'", "''");
+        boolean wasInTransaction = !c.getAutoCommit();
+        if (wasInTransaction) {
+            c.commit();
+            c.setAutoCommit(true);
+        }
+        try (Statement stmt = c.createStatement()) {
+            stmt.execute("VACUUM INTO '" + escaped + "'");
+        } finally {
+            if (wasInTransaction) c.setAutoCommit(false);
+        }
     }
 
     // ========================================================================

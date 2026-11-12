@@ -16,6 +16,7 @@ import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
 import net.kroia.banksystem.api.command.IServerBankSystemCommandHandler;
 import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.banking.company.CompanyManager;
+import net.kroia.banksystem.data.AuditExporter;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.networking.ui.SyncOpenGUIPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -298,6 +299,7 @@ public class BankSystemCommandsRegistration {
                 // /banksystem backup resume                                    - Release the db-worker
                 // /banksystem backup status                                    - Report IDLE / PAUSED (for Xs)
                 // /banksystem backup snapshot <path>                           - Write a consistent DB copy to <path>
+                // /banksystem backup export [name]                             - BS-255: audit package in <world>/audit_exports/
                 .then(Commands.literal("backup")
                         .requires(source -> net.kroia.modutilities.PermissionCompat.hasPermission(source, BankSystemPermissions.COMMAND_BACKUP, BankSystemPermissions.FALLBACK_LEVEL)) // op-only, matches vanilla save-off
                         .then(Commands.literal("pause")
@@ -379,6 +381,12 @@ public class BankSystemCommandsRegistration {
                                             });
                                             return Command.SINGLE_SUCCESS;
                                         })
+                                )
+                        )
+                        .then(Commands.literal("export")
+                                .executes(context -> auditExport(context.getSource(), null))
+                                .then(Commands.argument("name", StringArgumentType.word())
+                                        .executes(context -> auditExport(context.getSource(), StringArgumentType.getString(context, "name")))
                                 )
                         )
                 )
@@ -946,6 +954,27 @@ public class BankSystemCommandsRegistration {
      */
     private static int auditCommand(CommandSourceStack source, String target) {
         return openForTarget(source, target, "audit", SyncOpenGUIPacket::send_openAuditScreen);
+    }
+
+    /** BS-255: starts the audit export and reports the result to the source once the database copies are done. */
+    private static int auditExport(CommandSourceStack source, String name) {
+        MinecraftServer server = source.getServer();
+        CompletableFuture<AuditExporter.Result> export = AuditExporter.export(server, name);
+        if (!export.isDone())
+            source.sendSuccess(() -> Component.literal("[BankSystem] audit export started; waiting for the database copies"), true);
+        export.whenComplete((r, err) -> server.execute(() -> {
+            if (err != null) {
+                Throwable t = err instanceof java.util.concurrent.CompletionException && err.getCause() != null ? err.getCause() : err;
+                source.sendFailure(Component.literal("[BankSystem] audit export failed: " + t.getMessage()));
+                return;
+            }
+            String where = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().normalize()
+                    .relativize(r.zip()).toString().replace('\\', '/');
+            source.sendSuccess(() -> Component.literal("[BankSystem] audit export written: " + where + " (" + r.files()
+                    + " files, " + (r.bytes() / 1024) + " KB; the folder next to it has the same content)"
+                    + (r.warnings().isEmpty() ? "" : ". Warnings: " + String.join("; ", r.warnings()))), true);
+        }));
+        return Command.SINGLE_SUCCESS;
     }
 
     /** Task #116 — balance history of any account with flag markers. Admin check as for audit. */

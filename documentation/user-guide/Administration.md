@@ -109,7 +109,7 @@ See the [Configuration guide](Configuration.md) for the full annotated reference
 ---
 ## Backups
 
-BankSystem keeps its balance history and transaction ledger in a SQLite database (`banksystem.db`) written by a background worker, so a plain file copy taken while the server runs can catch it mid-write. Four op-only commands make an external backup safe (master server only):
+BankSystem keeps its balance history and transaction ledger in a SQLite database (`banksystem.db`) written by a background worker, so a plain file copy taken while the server runs can catch it mid-write. These op-only commands make an external backup safe (all except `export` run on the master server only):
 
 | Command | What it does |
 |---------|--------------|
@@ -117,10 +117,25 @@ BankSystem keeps its balance history and transaction ledger in a SQLite database
 | `/banksystem backup pause` | Blocks the database worker so an external archiver (`tar`, `rsync`, …) sees a quiet file. Logs `[BankSystem] db-worker paused for backup`, which a backup script can grep for as an acknowledgement. |
 | `/banksystem backup resume` | Releases the worker again. A safety timer auto-resumes after 120 seconds, so a forgotten pause can never soft-lock the server. |
 | `/banksystem backup status` | Reports whether the worker is currently paused. |
+| `/banksystem backup export [name]` | Writes one support package: see [Export package](#export-package) below. Works on every server, including slaves. |
 
 Bank accounts, the item registry and `settings.json` are ordinary NBT/JSON files under `<world>/data/BankSystem/` and are written on the auto-save interval — copy them with the rest of the world folder as usual.
 
 `<world>/data/BankSystem/Database/banksystem_diagnostics.db` (on the master, slaves and single servers) holds diagnostics for an external audit tool. BankSystem only writes it and never reads it back. On disk it is three files: `banksystem_diagnostics.db`, `banksystem_diagnostics.db-wal` and `banksystem_diagnostics.db-shm`. Deleting them is safe, but only while the server is stopped, and always all three together: they are recreated empty on the next write, and a damaged copy is renamed to `.corrupt-<time>` and replaced. To back it up, copy all three files, or copy the `.db` alone after the server has stopped (a clean stop merges the other two into it). Its `TransferJournal` table is written on slave servers only: one row per step of each transfer of value between the slave world and the master bank (requested, confirmed, delivered, returned, timed out or failed; the path column says whether it was a bank request, a converter deposit or bank notes dropped into a player's inventory). Its `NoteFlow` table is written on every server: money notes that leave or enter the world outside the bank, for example notes put into or taken out of the ATM converter. Notes given with `/give` are logged at once, one row per target player (source `banksystem:give`, context = who ran the command). Notes taken from or deleted in the creative inventory are summed per player and money item: moving a note between slots cancels out, and only the net amount is written as `banksystem:creative_create` (positive) or `banksystem:creative_destroy` (negative), once the player has made no creative inventory change for 10 seconds, when the player logs out, or when the server stops. Notes created or removed by `/clear`, `/item`, `/loot` or `/summon` are not logged. Each row has the time, the source, the player, the money item, the amount (negative when notes were destroyed) and free-text context; rows from a villager trade also store the villager's UUID (`villager_uuid`), its dimension (`dimension`) and its block position (`x`, `y`, `z`), which are empty for every other source.
+
+### Export package
+
+`/banksystem backup export [name]` collects everything needed to check the bank's records in one place, for example when you report a problem. It writes a folder `<world>/audit_exports/<date>-<time>[-name]/` and a `.zip` file with the same content next to it. The optional name may contain letters, digits, `_` and `-`. The command replies when the package is complete, with its location and the number of files; the databases are copied in the background, so this can take a moment on a large server. The server keeps running normally meanwhile.
+
+Inside, the files are laid out like the world's `data/` folder:
+
+- `data/BankSystem/Database/banksystem.db`, `data/BankSystem/Database/banksystem_diagnostics.db` and `data/BankSystem/dividend_history.db`, each as a consistent copy taken while the server runs (no pause needed)
+- `data/BankSystem/Bank_data/`, `Companies/`, `ItemIDs.nbt`, `Meta_data.nbt`, `BankAccountBindings.nbt`, `audit/` and `settings.json`
+- `data/ModUtilities/server_identity.json`
+- files of other mods that add themselves to the package (for example StockMarket)
+- `manifest.json`: when and where the package was made (server ID, master/slave/single role, Minecraft version, loader, mod versions) and, for every file, its size and SHA-256 checksum. A file that did not exist on this server is listed as `missing`.
+
+On a slave server the package holds only what a slave stores: the diagnostics database, `Meta_data.nbt`, `audit/`, `settings.json` and the server identity. Player data and region files are not included; add the world folder yourself if it is needed. Old packages are never deleted automatically.
 
 ---
 ## Transaction Ledger

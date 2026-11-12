@@ -32,6 +32,7 @@ On a slave server that the master does not trust, only `/money` and `/money circ
 | `/banksystem backup resume` | Resumes database writes after a pause (master only). Node `banksystem.admin.command.backup` | X | |
 | `/banksystem backup status` | Shows whether database writes are currently paused (master only). Node `banksystem.admin.command.backup` | X | |
 | `/banksystem backup snapshot <path>` | Writes a consistent database snapshot to the given path (master only). Node `banksystem.admin.command.backup` | X | |
+| `/banksystem backup export [name]` | Writes a support package (BankSystem data, consistent database copies and a file list) to `<world>/audit_exports/`, as a folder and a `.zip`. Node `banksystem.admin.command.backup` | X | |
 | `/banksystem symbols list` | Lists every share symbol in the server's symbol library (master only). Node `banksystem.admin.command.symbols` (all `symbols` commands) | X | |
 | `/banksystem symbols add <id>` | Imports a PNG from the server inbox folder as a new share symbol (master only) | X | |
 | `/banksystem symbols remove <id>` | Deletes a share symbol; remaining ids are compacted automatically (master only) | X | |

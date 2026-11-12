@@ -97,6 +97,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransactionLogManagerTests());
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransactionLedgerTests());
         TestRegistry.register(new net.kroia.banksystem.testing.tests.LedgerCompletenessTests()); // BS-254
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AuditExportTests()); // BS-255
         TestRegistry.register(new net.kroia.banksystem.testing.tests.AdminAuditTests(false)); // Task #110
         TestRegistry.register(new net.kroia.banksystem.testing.tests.AdminAuditTests(true)); // BS-209, SLAVE_ONLY
         TestRegistry.register(new net.kroia.banksystem.testing.tests.SuspicionFlagTests()); // Tasks #111/#114/#115

@@ -189,6 +189,29 @@ public final class DiagnosticsDatabase {
         return done;
     }
 
+    /**
+     * BS-255 — writes a consistent copy of the file to {@code target} with {@code VACUUM INTO} on the writer thread,
+     * after every earlier write. The target must not exist yet.
+     *
+     * @return completes once the copy is written; fails when the write cannot be queued (disabled, closed, full)
+     *         or the copy fails
+     */
+    public CompletableFuture<Void> snapshotTo(Path target) {
+        CompletableFuture<Void> done = new CompletableFuture<>();
+        if (!enqueue(() -> {
+            try {
+                Connection c = open();
+                if (c == null) throw new SQLException("diagnostics database is disabled");
+                DatabaseManager.vacuumInto(c, target);
+                done.complete(null);
+            } catch (Exception e) {
+                done.completeExceptionally(e);
+            }
+        }))
+            done.completeExceptionally(new IllegalStateException("diagnostics database is disabled, closed or its queue is full"));
+        return done;
+    }
+
     /** Drains the queue for up to {@value #CLOSE_DRAIN_MS} ms, then the connection is committed and closed. */
     public void close() {
         executor.shutdown();
