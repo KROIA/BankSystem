@@ -18,8 +18,13 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +37,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ItemIDMissingModTests extends TestSuite {
 
     private static final String NS = "bs_missing_test";
+    private static final String NS2 = "bs_missing_other";
+
+    private enum Mode { REFUSE, REFUSE_MESSAGE, RECOVER }
 
     @Override
     public TestCategory getCategory() {
@@ -40,8 +48,11 @@ public class ItemIDMissingModTests extends TestSuite {
 
     @Override
     public void registerTests() {
-        addTest("missing_mod_entries_refuse_load_and_survive_save", () -> run(false));
-        addTest("missing_mod_recovery_removes_entries_and_balances", () -> run(true));
+        // BS-208: first, before any fixture touches the ItemID state.
+        addTest("healthy_startup_reports_no_missing_mods", this::healthyStartup);
+        addTest("missing_mod_entries_refuse_load_and_survive_save", () -> run(Mode.REFUSE));
+        addTest("missing_mod_refusal_lists_namespaces_with_counts", () -> run(Mode.REFUSE_MESSAGE));
+        addTest("missing_mod_recovery_removes_entries_and_balances", () -> run(Mode.RECOVER));
     }
 
     private static CompoundTag pair(int s, CompoundTag stack) {
@@ -82,7 +93,77 @@ public class ItemIDMissingModTests extends TestSuite {
         return out;
     }
 
-    private TestResult run(boolean confirmRemoval) {
+    /**
+     * BS-208: a normal start of this world kept nothing unresolved, removed nothing, refused nothing, and every
+     * entry of the ItemIDs.nbt on disk (and every live template) decodes strictly, so the next start will not
+     * refuse either.
+     */
+    private TestResult healthyStartup() {
+        var reg = UtilitiesPlatform.getRegistryAccessServerSide();
+        if (reg == null)
+            return pass("skipped: no server-side RegistryAccess");
+        BankSystemModBackend.Instances instances = BankSystemModBackend.getInstances_forTesting();
+        if (instances == null || instances.isSlaveServer)
+            return pass("skipped: not a master server — slaves never load ItemIDs from disk");
+        TestResult r = assertEquals("unresolved (missing-mod) entries after startup",
+                Map.of(), ItemIDManager.getUnresolvedEntries_forTesting());
+        if (!r.passed()) return r;
+        r = assertEquals("ItemIDs removed as missing at startup", Set.of(), ItemIDManager.getLastRemovedMissing());
+        if (!r.passed()) return r;
+        r = assertNull("startup refusal recorded", BankSystemModBackend.getSingleplayerRefusal());
+        if (!r.passed()) return r;
+        List<String> bad = new ArrayList<>();
+        for (Map.Entry<ItemID, ItemStack> e : ItemIDManager.getItemIDMap().entrySet()) {
+            if (e.getValue().isEmpty()) continue;
+            if (ItemStackNbt.parseStrict(reg, ItemStackNbt.save(e.getValue(), reg)).isEmpty())
+                bad.add(e.getKey().getShort() + "=" + e.getValue());
+        }
+        r = assertTrue("live templates that do not decode strictly: " + bad, bad.isEmpty());
+        if (!r.passed()) return r;
+        if (instances.SERVER_DATA_HANDLER == null)
+            return pass("no data handler; live state checked only");
+        Path onDisk = instances.SERVER_DATA_HANDLER.getMetaDataFilePath().resolveSibling("ItemIDs.nbt");
+        if (!Files.isRegularFile(onDisk))
+            return pass("ItemIDs.nbt not written yet; live state checked only");
+        CompoundTag file = instances.SERVER_DATA_HANDLER.readDataCompound(onDisk);
+        if (file == null)
+            return fail("ItemIDs.nbt exists but does not read");
+        List<CompoundTag> undecodable = new ArrayList<>();
+        int n = 0;
+        for (Tag t : NbtCompat.getList(file, "itemIDs", Tag.TAG_COMPOUND)) {
+            n++;
+            if (ItemStackNbt.parseStrict(reg, NbtCompat.getCompound((CompoundTag) t, "itemStack")).isEmpty())
+                undecodable.add((CompoundTag) t);
+        }
+        r = assertTrue("ItemIDs.nbt entries that would refuse the next start: "
+                        + ItemIDManager.countMissingNamespaces(undecodable, dev.architectury.platform.Platform::isModLoaded),
+                undecodable.isEmpty());
+        if (!r.passed()) return r;
+        return pass(n + " saved ItemIDs decode; no missing mods, no refusal");
+    }
+
+    private static List<Path> backupsOf(Path folder) throws IOException {
+        String prefix = folder.getFileName() + "_backup-remove-missing-";
+        try (var s = Files.list(folder.getParent())) {
+            return s.filter(p -> p.getFileName().toString().startsWith(prefix)).toList();
+        }
+    }
+
+    private static void deleteTree(Path root) {
+        try (var s = Files.walk(root)) {
+            s.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException ignored) {
+                }
+            });
+        } catch (IOException ignored) {
+        }
+    }
+
+    private TestResult run(Mode mode) {
+        boolean confirmRemoval = mode == Mode.RECOVER;
+        List<Path> newBackups = new ArrayList<>();
         if (UtilitiesPlatform.getRegistryAccessServerSide() == null)
             return pass("skipped: no server-side RegistryAccess");
         BankSystemModBackend.Instances instances = BankSystemModBackend.getInstances_forTesting();
@@ -103,13 +184,13 @@ public class ItemIDMissingModTests extends TestSuite {
             for (Map.Entry<ItemID, ItemID> e : savedAliasMap.entrySet())
                 max = Math.max(max, Math.max(e.getKey().getShort(), e.getValue().getShort()));
             int base = max + 600;
-            if (base + 5 >= Short.MAX_VALUE)
+            if (base + 6 >= Short.MAX_VALUE)
                 return fail("No free short range available");
-            int missingItem = base + 1, bookA = base + 2, bookB = base + 3;
+            int missingItem = base + 1, bookA = base + 2, bookB = base + 3, otherItem = base + 4;
 
             Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
             fixture.put(new ItemID((short) base), new ItemStack(Items.PAPER));
-            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), base + 4);
+            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), base + 5);
             CompoundTag file = new CompoundTag();
             if (!new ItemIDManager().save(file))
                 return fail("Could not serialize the fixture");
@@ -120,6 +201,8 @@ public class ItemIDMissingModTests extends TestSuite {
             list.add(rawMissing.copy());
             list.add(rawBookA.copy());
             list.add(rawBookB.copy());
+            if (mode == Mode.REFUSE_MESSAGE)
+                list.add(pair(otherItem, stack(NS2 + ":gone")));
             file.put("itemIDs", list);
 
             TestResult r = assertTrue("strict decode refuses a book with an unknown enchantment",
@@ -139,6 +222,18 @@ public class ItemIDMissingModTests extends TestSuite {
                 }
                 r = assertNotNull("load refused while entries of a missing mod exist", refused);
                 if (!r.passed()) return r;
+                if (mode == Mode.REFUSE_MESSAGE) {
+                    String msg = refused.getMessage();
+                    r = assertEquals("missing count", 4, refused.missingCount);
+                    if (!r.passed()) return r;
+                    r = assertEquals("count per namespace", Map.of(NS, 3, NS2, 1), refused.missingNamespaces);
+                    if (!r.passed()) return r;
+                    r = assertTrue("message lists '" + NS + ": 3 item(s)': " + msg, msg.contains(NS + ": 3 item(s)"));
+                    if (!r.passed()) return r;
+                    r = assertTrue("message lists '" + NS2 + ": 1 item(s)': " + msg, msg.contains(NS2 + ": 1 item(s)"));
+                    if (!r.passed()) return r;
+                    return pass("refusal names every missing namespace with its count");
+                }
                 r = assertEquals("all three entries counted under the missing namespace",
                         3, refused.missingNamespaces.getOrDefault(NS, 0));
                 if (!r.passed()) return r;
@@ -168,8 +263,35 @@ public class ItemIDMissingModTests extends TestSuite {
                 return pass("missing-mod entries refuse the load and survive a save byte-identical");
             }
 
+            // BS-208: the confirmed recovery backs up the data folder before it removes anything.
+            if (instances.SERVER_DATA_HANDLER == null)
+                return fail("no data handler; the recovery backup cannot be checked");
+            Path folder = instances.SERVER_DATA_HANDLER.getMetaDataFilePath().getParent();
+            Path itemIdsFile = folder.resolve("ItemIDs.nbt");
+            List<Path> backupsBefore = backupsOf(folder);
+            List<String> filesBefore;
+            try (var s = Files.list(folder)) {
+                filesBefore = s.filter(Files::isRegularFile).map(p -> p.getFileName().toString()).toList();
+            }
+            byte[] itemIdsBefore = Files.isRegularFile(itemIdsFile) ? Files.readAllBytes(itemIdsFile) : null;
+
             r = assertTrue("confirmed load() succeeds", new ItemIDManager().load(file));
             if (!r.passed()) return r;
+            for (Path p : backupsOf(folder))
+                if (!backupsBefore.contains(p)) newBackups.add(p);
+            r = assertEquals("one backup folder created next to the bank data", 1, newBackups.size());
+            if (!r.passed()) return r;
+            Path backup = newBackups.get(0);
+            List<String> notCopied = new ArrayList<>();
+            for (String name : filesBefore)
+                if (!Files.isRegularFile(backup.resolve(name))) notCopied.add(name);
+            r = assertTrue("files missing from the backup: " + notCopied, notCopied.isEmpty());
+            if (!r.passed()) return r;
+            if (itemIdsBefore != null) {
+                r = assertTrue("backup holds the old ItemIDs.nbt byte for byte",
+                        java.util.Arrays.equals(itemIdsBefore, Files.readAllBytes(backup.resolve("ItemIDs.nbt"))));
+                if (!r.passed()) return r;
+            }
             r = assertTrue("no unresolved entries left", ItemIDManager.getUnresolvedEntries_forTesting().isEmpty());
             if (!r.passed()) return r;
             r = assertEquals("removed IDs reported", Set.of(new ItemID((short) missingItem),
@@ -202,6 +324,7 @@ public class ItemIDMissingModTests extends TestSuite {
         } catch (Throwable t) {
             return fail("missing-mod test threw: " + t.getClass().getSimpleName() + " — " + t.getMessage());
         } finally {
+            newBackups.forEach(ItemIDMissingModTests::deleteTree); // test-made backups only
             ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
             ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
             ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
