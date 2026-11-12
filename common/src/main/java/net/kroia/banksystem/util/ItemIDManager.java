@@ -1316,11 +1316,10 @@ public class ItemIDManager implements ServerSaveable {
                         && responseId.getShort() != ItemID.INVALID_ID.getShort();
                 if (masterAccepted) {
                     // Positive response: master minted / already had a short. Remove the
-                    // in-flight marker so subsequent lookups hit the positive map. Insert the
-                    // template under the master-authoritative short via putIfAbsent — if the
-                    // sync packet arrived first with a different short mapping (shouldn't
-                    // happen but defensive), keep it. Otherwise install so the second lookup
-                    // succeeds (Acceptance Criterion D).
+                    // in-flight marker so subsequent lookups hit the positive map. Install the
+                    // template under the master-authoritative short so the second lookup
+                    // succeeds (Acceptance Criterion D); a stale different item under that
+                    // short is replaced (BS-259, see adoptMasterItem).
                     slaveNegativeOrPendingCache.remove(key);
                     // Aliased shorts should never come back from master (its own registry has
                     // resolved them internally); but guard anyway — never install an alias
@@ -1328,8 +1327,7 @@ public class ItemIDManager implements ServerSaveable {
                     if (!itemIDAliasMap.containsKey(responseId)) {
                         ItemStack templateCopy = normalized.copy();
                         templateCopy.setCount(1);
-                        ItemStack prev = itemIDMap.putIfAbsent(responseId, templateCopy);
-                        if (prev == null) {
+                        if (adoptMasterItem(responseId, templateCopy)) {
                             // Update the name cache on the master-supplied short. Not strictly
                             // required — resolveAlias / getItemStackTemplate work by short
                             // regardless of name_cache — but keeps log lines readable.
@@ -1487,6 +1485,36 @@ public class ItemIDManager implements ServerSaveable {
         SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
         packet.sendToClient(player);
     }
+    /**
+     * Receive-path insert for clients and slave servers (BS-259): the master's short → item
+     * mapping wins. A new short is inserted; the same item under that short is a no-op; a
+     * DIFFERENT item under that short (the master re-issued it, e.g. after being restored
+     * from an older backup) is replaced with a WARN. Lookups for the old item stop resolving
+     * to this short, since {@link #getItemID(ItemStack)} scans {@link #itemIDMap}.
+     * Never call on the master or in singleplayer (shared maps).
+     *
+     * @return {@code true} if the entry was inserted or replaced
+     */
+    public static boolean adoptMasterItem(@NotNull ItemID id, @NotNull ItemStack template)
+    {
+        synchronized (itemIDMap) {
+            ItemStack old = itemIDMap.get(id);
+            if (old != null) {
+                if (ItemStack.isSameItemSameComponents(old, template))
+                    return false;
+                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Item ID #" + id.getShort()
+                            + " is now '" + ItemUtilities.getItemIDStr(template.getItem())
+                            + "' on the master; replacing the outdated local item '"
+                            + ItemUtilities.getItemIDStr(old.getItem()) + "'");
+                // remove + put: also drops the old key object, whose cached name is the old item's
+                itemIDMap.remove(id);
+            }
+            itemIDMap.put(id, template);
+            return true;
+        }
+    }
+
     public static void receiveSyncPacket(SyncItemIDsPacket packet)
     {
         receiveSyncPacket(packet, true);
@@ -1603,8 +1631,8 @@ public class ItemIDManager implements ServerSaveable {
             }
 
 
-            // putIfAbsent: in singleplayer the server and client share the same static map.
-            // The server registers ItemStacks with correct server-registry Holders;
+            // ownsRegistryMaps: in singleplayer the server and client share the same static
+            // map. The server registers ItemStacks with correct server-registry Holders;
             // the client sync must not overwrite them with client-decoded copies that
             // have cross-registry Holder references (causes save failures).
             // Alias guard: never resurrect an ID that was merged away. Sync packets can sit
@@ -1612,7 +1640,7 @@ public class ItemIDManager implements ServerSaveable {
             // one — re-inserting it here would leave the ID both aliased AND registered
             // (an inconsistent registry that would even be saved to disk in singleplayer).
             if (ownsRegistryMaps && !itemIDAliasMap.containsKey(id))
-                itemIDMap.putIfAbsent(id, cpy);
+                adoptMasterItem(id, cpy);
             id.tryUpdateNameCache();
         }
         MoneyItem.resetItemID();

@@ -105,6 +105,7 @@ public class ItemIDMergeGuardTests extends TestSuite {
         addTest("putAlias_rejects_when_source_in_map", this::testPutAliasRejectsWhenSourceInMap);
         addTest("renormalize_still_produces_aliases_via_guarded_path", this::testRenormalizeStillProducesAliasesViaGuardedPath);
         addTest("receiver_follows_master_merge", this::testReceiverFollowsMasterMerge);
+        addTest("receiver_takes_master_item_on_short_clash", this::testReceiverTakesMasterItemOnShortClash);
         // Task #16 — registration latch, persisted-wins merges, stale-key replacement
         addTest("master_registration_latched_before_load", this::testMasterRegistrationLatchedBeforeLoad);
         addTest("persisted_short_wins_merge_canonicality", this::testPersistedShortWinsMergeCanonicality);
@@ -989,6 +990,27 @@ public class ItemIDMergeGuardTests extends TestSuite {
         } finally {
             ItemIDManager.removeAliasEntries_forTesting(List.of(s));
         }
+    }
+
+    /**
+     * BS-259: a receiver that holds short N for item A gets N = item B from the master and
+     * ends with N → B; A no longer resolves to N. Same direct-helper reason as
+     * {@link #testReceiverFollowsMasterMerge()}. The suite's state guard restores N in teardown.
+     */
+    private TestResult testReceiverTakesMasterItemOnShortClash() {
+        ItemStack a = paperWithCustomData("receiver-clash-old");
+        ItemStack b = paperWithCustomData("receiver-clash-new");
+        ItemID n = registerScratch(a);
+        if (!n.isValid()) return fail("Could not register scratch template A");
+        TestResult r = assertTrue("different item under N is replaced", ItemIDManager.adoptMasterItem(n, b.copy()));
+        if (!r.passed()) return r;
+        r = assertEquals("B resolves to N", n, ItemIDManager.getItemID(b));
+        if (!r.passed()) return r;
+        r = assertFalse("A no longer resolves to N", n.equals(ItemIDManager.getItemID(a)));
+        if (!r.passed()) return r;
+        r = assertFalse("same item again is a no-op", ItemIDManager.adoptMasterItem(n, b.copy()));
+        if (!r.passed()) return r;
+        return pass("receiver takes the master's item on a short clash");
     }
 
     /**
