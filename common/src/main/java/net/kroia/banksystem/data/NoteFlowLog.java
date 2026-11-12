@@ -17,6 +17,12 @@ public final class NoteFlowLog implements INoteFlowLog {
     public static final String CONVERTER_IN = "banksystem:converter_in";
     /** Notes come out of the converter cache (created, positive). */
     public static final String CONVERTER_OUT = "banksystem:converter_out";
+    /** Net notes a creative player took from the creative inventory (positive); see {@link CreativeNoteFlow}. */
+    public static final String CREATIVE_CREATE = "banksystem:creative_create";
+    /** Net notes a creative player deleted through the creative inventory (negative); see {@link CreativeNoteFlow}. */
+    public static final String CREATIVE_DESTROY = "banksystem:creative_destroy";
+    /** Notes handed out by {@code /give} (positive), one row per target player. */
+    public static final String GIVE = "banksystem:give";
 
     private NoteFlowLog() {}
 

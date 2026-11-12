@@ -40,5 +40,5 @@
       }
     ]
   },
-  "mixin": []
+  "mixin": "banksystem.mixins.json"
 }

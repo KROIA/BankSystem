@@ -1,6 +1,7 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.data.CreativeNoteFlow;
 import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.data.NoteFlowLog;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
@@ -50,6 +51,7 @@ public class NoteFlowLogTests extends TestSuite {
         addTest("converter_rows_have_sign", () -> TransferJournalTests.withTempDb(dir, "converter.db", this::converter, this::fail));
         addTest("villager_row_has_position", () -> TransferJournalTests.withTempDb(dir, "villager.db", this::villager, this::fail));
         addTest("old_table_gains_villager_columns", () -> TransferJournalTests.withTempDb(dir, "migrate.db", this::migrate, this::fail));
+        addTest("creative_changes_are_netted", () -> TransferJournalTests.withTempDb(dir, "creative.db", this::creative, this::fail));
     }
 
     @Override
@@ -143,6 +145,34 @@ public class NoteFlowLogTests extends TestSuite {
                 || c.get("z") != null)
             return fail("converter row " + c);
         return pass("villager row " + r + "; converter row has null villager columns");
+    }
+
+    /** BS-227: a slot move (-5 then +5) writes nothing; +3 writes one create row after the idle time; logout flushes at once. */
+    private TestResult creative(DiagnosticsDatabase db, Path f) throws Exception {
+        ItemID money = new ItemID((short) 91);
+        UUID p = UUID.fromString("00000000-0000-0000-0000-000000000227");
+        long t = System.currentTimeMillis();
+        NoteFlowLog.INSTANCE.record("test:init", null, money, 0L, null); // the DB creates its tables on the first write
+        CreativeNoteFlow.add(p, money, -5, t);
+        CreativeNoteFlow.add(p, money, 5, t + 1);
+        CreativeNoteFlow.tick(t + 1 + CreativeNoteFlow.IDLE_MS);
+        CreativeNoteFlow.add(p, money, 3, t + 2);
+        CreativeNoteFlow.tick(t + 2 + CreativeNoteFlow.IDLE_MS - 1); // not idle long enough yet
+        await(db.flush(), WAIT_MS);
+        if (!query(f, "SELECT * FROM NoteFlow WHERE player_uuid = ?", p.toString()).isEmpty())
+            return fail("rows before the idle time");
+        CreativeNoteFlow.tick(t + 2 + CreativeNoteFlow.IDLE_MS);
+        CreativeNoteFlow.add(p, money, -2, t + 3);
+        CreativeNoteFlow.flush(p); // logout
+        await(db.flush(), WAIT_MS);
+        List<Map<String, Object>> rows = query(f, "SELECT source, item_id, amount FROM NoteFlow WHERE player_uuid = ? ORDER BY id", p.toString());
+        if (rows.size() != 2) return fail("rows " + rows);
+        if (!NoteFlowLog.CREATIVE_CREATE.equals(rows.get(0).get("source")) || num(rows.get(0).get("amount")) != 3
+                || num(rows.get(0).get("item_id")) != 91)
+            return fail("create row " + rows.get(0));
+        if (!NoteFlowLog.CREATIVE_DESTROY.equals(rows.get(1).get("source")) || num(rows.get(1).get("amount")) != -2)
+            return fail("destroy row " + rows.get(1));
+        return pass("move netted to nothing, +3 after idle, -2 on logout");
     }
 
     private TestResult migrate(DiagnosticsDatabase db, Path f) throws Exception {

@@ -305,6 +305,7 @@ public class BankSystemModBackend implements BankSystemAPI {
                 (ResourceManagerReloadListener) resourceManager -> VolatileItemComponents.onServerResourcesReloaded(),
                 BankSystemMod.id("volatile_components_reload"));
         TickEvent.SERVER_POST.register(server -> VolatileItemComponents.serverTick());
+        TickEvent.SERVER_POST.register(server -> net.kroia.banksystem.data.CreativeNoteFlow.tick()); // BS-227: every role
         AdminFlagSync.init(); // Task #107: LuckPerms listener, no-op without LuckPerms
 
         if (BankSystemMod.ENABLE_DEV_FEATURES) {
@@ -638,6 +639,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             // stacking a fresh handler on each session (see onSlaveLatchTimeoutTick Javadoc).
             TickEvent.SERVER_POST.unregister(ON_SLAVE_LATCH_TICK);
         }
+        net.kroia.banksystem.data.CreativeNoteFlow.flushAll(); // BS-227: before the diagnostics DB closes
         // Task #123: after the shutdown save above, so its bank_last_save_ms write is drained too.
         if (INSTANCES.DIAGNOSTICS_DB != null) {
             INSTANCES.DIAGNOSTICS_DB.close();
@@ -709,6 +711,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         // never send the ConverterDropAll packet on GUI close. Cache is per-server;
         // this hook runs on whichever server the player was connected to.
         if (player != null) {
+            net.kroia.banksystem.data.CreativeNoteFlow.flush(player.getUUID()); // BS-227
             try {
                 net.kroia.banksystem.networking.entity.ConverterDropAllPacket.dropAllForPlayer(player);
             } catch (Throwable t) {
