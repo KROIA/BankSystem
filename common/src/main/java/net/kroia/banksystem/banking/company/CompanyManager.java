@@ -4,7 +4,6 @@ import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.minecraft.core.BlockPos;
@@ -292,46 +291,36 @@ public final class CompanyManager implements ServerSaveableChunked {
     }
 
     /** Result of {@link #transferFounder}. */
-    public enum TransferResult { OK, COMPANY_MISSING, NOT_A_FOUNDER, ALREADY_A_FOUNDER }
+    public enum TransferResult { OK, COMPANY_MISSING, NOT_A_FOUNDER, ALREADY_A_FOUNDER, NOT_A_WORKER }
 
     /**
      * Removes {@code from} from the founder set, adds {@code to}, and mirrors the change
-     * on the bound bank account's MANAGE bit. Bank-account update is best-effort — if the
-     * bank manager is unavailable (test harness), only the founder set is mutated.
+     * on the bound bank account's MANAGE bit. {@code to} must already be a worker (a user
+     * of the company's bank account, the Workers tab list), else {@link TransferResult#NOT_A_WORKER}.
+     * Bank-account checks and updates are best-effort — if the bank manager is unavailable
+     * (test harness), only the founder set is mutated.
      */
     public TransferResult transferFounder(int companyId, UUID from, UUID to) {
         Company company = byId.get(companyId);
         if (company == null) return TransferResult.COMPANY_MISSING;
         if (from == null || !company.isFounder(from)) return TransferResult.NOT_A_FOUNDER;
         if (to != null && company.isFounder(to)) return TransferResult.ALREADY_A_FOUNDER;
+        IServerBankManager bankManager = getBankManager();
+        IServerBankAccount account = bankManager == null ? null : bankManager.getBankAccount(company.getBankAccountNr());
+        if (to != null && account != null && !account.hasUser(to)) return TransferResult.NOT_A_WORKER;
 
         company.removeFounder(from);
         if (to != null) company.addFounder(to);
         markPersistDirty(); // Task #55
 
-        IServerBankManager bankManager = getBankManager();
-        if (bankManager != null) {
-            IServerBankAccount account = bankManager.getBankAccount(company.getBankAccountNr());
-            if (account != null) {
-                // Grant MANAGE to the new founder (if any) on the bank account.
-                if (to != null) {
-                    User toUser = bankManager.getUserByUUID(to);
-                    if (toUser != null) {
-                        int existing = account.hasUser(to) ? account.getPermission(to) : 0;
-                        int newMask = existing | BankPermission.MANAGE.getValue();
-                        if (account.hasUser(to)) {
-                            account.setPermission(to, newMask);
-                        } else {
-                            account.addUser(toUser, newMask);
-                        }
-                    }
-                }
-                // Strip MANAGE from the departing founder (leave other bits if any).
-                if (account.hasUser(from)) {
-                    int mask = account.getPermission(from);
-                    int stripped = mask & ~BankPermission.MANAGE.getValue();
-                    account.setPermission(from, stripped);
-                }
+        if (account != null) {
+            // Grant MANAGE to the new founder (if any) on the bank account.
+            if (to != null) account.setPermission(to, account.getPermission(to) | BankPermission.MANAGE.getValue());
+            // Strip MANAGE from the departing founder (leave other bits if any).
+            if (account.hasUser(from)) {
+                int mask = account.getPermission(from);
+                int stripped = mask & ~BankPermission.MANAGE.getValue();
+                account.setPermission(from, stripped);
             }
         }
         info("Transferred founder of company #" + companyId + " from " + from + " to " + to);

@@ -297,6 +297,7 @@ public final class CompanyCommandLogic {
             case AsyncCompanyManager.CODE_NOT_FOUNDER -> "NOT_FOUNDER";
             case AsyncCompanyManager.CODE_ALREADY_FOUNDER -> "ALREADY_FOUNDER";
             case AsyncCompanyManager.CODE_MISSING_TARGET -> "MISSING_TARGET";
+            case AsyncCompanyManager.CODE_NOT_A_WORKER -> "NOT_A_WORKER";
             case AsyncCompanyManager.CODE_NO_PERMISSION -> "NO_PERMISSION";
             case AsyncCompanyManager.CODE_BANK_ACCOUNT_ERROR -> "BANK_ACCOUNT_ERROR";
             case AsyncCompanyManager.CODE_INTERNAL -> "INTERNAL";

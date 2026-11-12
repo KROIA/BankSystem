@@ -197,6 +197,7 @@ public class CompanyArrsRoundTripTests extends TestSuite {
                 AsyncCompanyManager.CODE_NOT_FOUNDER,
                 AsyncCompanyManager.CODE_ALREADY_FOUNDER,
                 AsyncCompanyManager.CODE_MISSING_TARGET,
+                AsyncCompanyManager.CODE_NOT_A_WORKER,
                 AsyncCompanyManager.CODE_NO_PERMISSION,
                 AsyncCompanyManager.CODE_BANK_ACCOUNT_ERROR,
                 AsyncCompanyManager.CODE_INTERNAL,

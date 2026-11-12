@@ -540,6 +540,7 @@
   "gui.banksystem.company_management_screen.choose_target": "Choose player",
   "gui.banksystem.company_management_screen.transfer_confirm_title": "Transfer founder role?",
   "gui.banksystem.company_management_screen.transfer_confirm_msg": "Transfer the founder role of %company% to %target%?\nYou will lose founder privileges.",
+  "gui.banksystem.company_management_screen.transfer_not_worker": "%target% is not a worker of this company. Add them in the Workers tab first.",
   "gui.banksystem.company_management_screen.workers_list_title": "Users with access to the company bank account:",
   "gui.banksystem.company_management_screen.workers_no_users": "No users found.",
   "gui.banksystem.company_management_screen.add_worker": "Add Worker",

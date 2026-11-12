@@ -69,6 +69,8 @@ public final class AsyncCompanyManager {
     public static final int CODE_ACCOUNT_FROZEN = 17;
     /** BS-235 (v2.2.0) — dividends paused: more shares banked than stamped, waiting for an admin. */
     public static final int CODE_SHARES_UNDER_REVIEW = 18;
+    /** BS-251 (v2.2.0) — founder transfer target is not a worker (user of the company bank account). */
+    public static final int CODE_NOT_A_WORKER = 19;
 
     // ------------------------------------------------------------------
     // Function enum
@@ -1475,6 +1477,7 @@ public final class AsyncCompanyManager {
             case COMPANY_MISSING -> CODE_NOT_FOUND;
             case NOT_A_FOUNDER -> CODE_NOT_FOUNDER;
             case ALREADY_A_FOUNDER -> CODE_ALREADY_FOUNDER;
+            case NOT_A_WORKER -> CODE_NOT_A_WORKER;
         };
         User from = bm.getUserByUUID(in.callerUUID);
         String fromName = from != null ? from.getName() : in.callerUUID.toString();

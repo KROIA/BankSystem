@@ -540,6 +540,7 @@
   "gui.banksystem.company_management_screen.choose_target": "Spieler wählen",
   "gui.banksystem.company_management_screen.transfer_confirm_title": "Gründerrolle übertragen?",
   "gui.banksystem.company_management_screen.transfer_confirm_msg": "Die Gründerrolle von %company% an %target% übertragen?\nDu verlierst deine Gründerrechte.",
+  "gui.banksystem.company_management_screen.transfer_not_worker": "%target% isch kein Mitarbeiter vo dere Firma. Füeg d Person zerscht im Tab Mitarbeiter hinzue.",
   "gui.banksystem.company_management_screen.workers_list_title": "Benutzer mit Zugriff auf das Unternehmens-Bankkonto:",
   "gui.banksystem.company_management_screen.workers_no_users": "Keine Benutzer gefunden.",
   "gui.banksystem.company_management_screen.add_worker": "Mitarbeiter hinzuefüege",

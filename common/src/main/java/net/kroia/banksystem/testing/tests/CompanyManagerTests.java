@@ -53,6 +53,7 @@ public class CompanyManagerTests extends TestSuite {
         addTest("nbt_load_tolerates_missing_optional_fields", this::testNbtLoadTolerantMissingFields);
         addTest("load_drops_duplicate_name_keeping_older", this::testLoadDropsDuplicateNameKeepingOlder);
         addTest("transfer_founder_moves_uuid", this::testTransferFounderMovesUuid);
+        addTest("transfer_founder_requires_worker", this::testTransferFounderRequiresWorker); // BS-251
         addTest("is_founder_of_accounts", this::testIsFounderOfAccounts);
         addTest("delete_company_removes_from_indices", this::testDeleteCompanyRemovesFromIndices);
         addTest("get_by_name_case_insensitive", this::testGetByNameCaseInsensitive);
@@ -246,6 +247,49 @@ public class CompanyManagerTests extends TestSuite {
         if (c.isFounder(FOUNDER_A)) return fail("Old founder should have been removed");
         if (!c.isFounder(FOUNDER_B)) return fail("New founder should have been added");
         return pass("Founder transfer moved UUID correctly.");
+    }
+
+    /**
+     * BS-251: the founder role only goes to a worker (a user of the company bank account).
+     * A non-worker is refused without any change; a worker is accepted and gets MANAGE.
+     * Live bank manager; the test account and synthetic users are removed afterwards.
+     */
+    private TestResult testTransferFounderRequiresWorker() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        IServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        if (bm == null) return fail("no master bank manager");
+        UUID worker = UUID.fromString("00000000-0000-0000-0000-0000AAAA0005");
+        UUID outsider = UUID.fromString("00000000-0000-0000-0000-0000AAAA0006");
+        List<UUID> addedUsers = new ArrayList<>();
+        for (UUID u : List.of(FOUNDER_A, worker, outsider)) {
+            if (bm.userExists(u)) continue;
+            bm.addUser(new User(u, "Bs251User" + u.toString().substring(32)));
+            addedUsers.add(u);
+        }
+        net.kroia.banksystem.api.bankaccount.IServerBankAccount account = bm.createBankAccount("__bs251_transfer");
+        try {
+            if (account == null) return fail("could not create test account");
+            int manage = net.kroia.banksystem.banking.BankPermission.MANAGE.getValue();
+            account.addUser(bm.getUserByUUID(FOUNDER_A), manage);
+            account.addUser(bm.getUserByUUID(worker), net.kroia.banksystem.banking.BankPermission.DEPOSIT.getValue());
+            CompanyManager cm = new CompanyManager(); // not detached: the worker check needs the live account
+            Company c = cm.createCompany("Bs251Transfer", account.getAccountNumber(), FOUNDER_A, 100L).company;
+            if (c == null) return fail("test company not created");
+
+            CompanyManager.TransferResult r = cm.transferFounder(c.getCompanyId(), FOUNDER_A, outsider);
+            if (r != CompanyManager.TransferResult.NOT_A_WORKER) return fail("non-worker target: expected NOT_A_WORKER, got " + r);
+            if (!c.isFounder(FOUNDER_A) || c.isFounder(outsider) || account.hasUser(outsider))
+                return fail("refused transfer changed founders or account users");
+
+            r = cm.transferFounder(c.getCompanyId(), FOUNDER_A, worker);
+            if (r != CompanyManager.TransferResult.OK) return fail("worker target: expected OK, got " + r);
+            if (!c.isFounder(worker) || c.isFounder(FOUNDER_A)) return fail("founder not moved to the worker");
+            if ((account.getPermission(worker) & manage) == 0) return fail("new founder has no MANAGE on the account");
+            return pass("non-worker refused, worker became founder with MANAGE");
+        } finally {
+            if (account != null) bm.deleteBankAccount(account.getAccountNumber());
+            for (UUID u : addedUsers) bm.removeUser(u);
+        }
     }
 
     private TestResult testIsFounderOfAccounts() {

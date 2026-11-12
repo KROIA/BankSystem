@@ -540,6 +540,7 @@
   "gui.banksystem.company_management_screen.choose_target": "选择玩家",
   "gui.banksystem.company_management_screen.transfer_confirm_title": "转让创始人身份？",
   "gui.banksystem.company_management_screen.transfer_confirm_msg": "将 %company% 的创始人身份转让给 %target%？你将失去创始人权限。",
+  "gui.banksystem.company_management_screen.transfer_not_worker": "%target% 不是该公司的员工。请先在“员工”标签页中添加。",
   "gui.banksystem.company_management_screen.workers_list_title": "可访问公司银行账户的用户：",
   "gui.banksystem.company_management_screen.workers_no_users": "未找到用户。",
   "gui.banksystem.company_management_screen.add_worker": "添加员工",
