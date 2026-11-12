@@ -28,6 +28,7 @@ public final class DevBootstrap {
     /** Called once from {@code BankSystemModBackend} during mod setup when dev features are enabled. */
     public static void init() {
         AsynchronousRequestResponseSystem.register(LedgerByRefRequest.INSTANCE); // Task #177: test-only master ledger read
+        AsynchronousRequestResponseSystem.register(AdminFlagTestRequest.INSTANCE); // BS-209: test-only admin flag from a trusted slave
         if (TestRegistry.ENABLE_TESTS) {
             BankSystemTestRegistration.register();
         }

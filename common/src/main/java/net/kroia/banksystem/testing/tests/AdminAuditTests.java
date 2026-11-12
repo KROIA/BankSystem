@@ -31,6 +31,7 @@ import net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket;
 import net.kroia.banksystem.networking.multi_server.ServerNetworkInfoRequest;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.util.MultiServerUtils;
+import net.kroia.banksystem.testing.AdminFlagTestRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.modutilities.testing.TestCategory;
@@ -151,7 +152,8 @@ public class AdminAuditTests extends TestSuite {
 
     /**
      * Runs {@code body} on a connected slave with its online player. A trusted slave sets the player's admin flag on
-     * the master for the body (cleared after); an untrusted slave can't, so its player stays unflagged.
+     * the master for the body (cleared after) through the test-only {@link AdminFlagTestRequest}; an untrusted slave
+     * can't, so its player stays unflagged.
      */
     private TestResult onSlave(SlaveBody body) {
         if (getServer() == null || !BankSystemModBackend.getInstances_forTesting().isSlaveServer) return skip("not a slave");
@@ -163,13 +165,17 @@ public class AdminAuditTests extends TestSuite {
         boolean trusted = Boolean.TRUE.equals(await(mgr.isSlaveServerTrustedAsync(""), WAIT_MS));
         if (Boolean.TRUE.equals(await(mgr.isBanksystemAdminAsync(player.getUUID()), WAIT_MS)))
             return skip("player already has the admin flag on the master");
-        boolean set = trusted && Boolean.TRUE.equals(await(mgr.setBanksystemAdminModeAsync(player.getUUID(), true), WAIT_MS));
+        boolean set = trusted && Boolean.TRUE.equals(await(setFlagFromSlave(player.getUUID(), true), WAIT_MS));
         try {
             if (trusted && !set) return fail("trusted slave could not set the player's admin flag on the master");
             return body.run(player, trusted);
         } finally {
-            if (set) await(mgr.setBanksystemAdminModeAsync(player.getUUID(), false), WAIT_MS);
+            if (set) await(setFlagFromSlave(player.getUUID(), false), WAIT_MS);
         }
+    }
+
+    private static CompletableFuture<Boolean> setFlagFromSlave(UUID player, boolean admin) {
+        return AdminFlagTestRequest.INSTANCE.sendRequestToMaster(new AdminFlagTestRequest.Input(player, admin));
     }
 
     /** The gate asks the master: flagged non-op runs (trusted cell), unflagged non-op gets the admin-only message. */
