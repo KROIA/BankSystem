@@ -243,7 +243,28 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         addElement(reloadButton);
         addElement(applyButton);
 
-        loadFromServer();
+        if (canOpen())
+            loadFromServer(); // otherwise tick() closes the screen
+    }
+
+    /**
+     * BS-221: Mod Settings need the master server and vanilla operator level
+     * {@link ModSettingsRequest#REQUIRED_OP_LEVEL}. The BankSystem admin flag is implied: the
+     * parent BankSystemSettingScreen only opens for admins. UI gate only; the server enforces both.
+     */
+    public static boolean canOpen() {
+        var player = Minecraft.getInstance().player;
+        return isMasterServer() && player != null
+                && net.kroia.modutilities.PermissionCompat.hasPermission(player, ModSettingsRequest.REQUIRED_OP_LEVEL);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (!canOpen()) { // opened without rights, or op removed while open
+            dirty = false;
+            onClose();
+        }
     }
 
     @Override

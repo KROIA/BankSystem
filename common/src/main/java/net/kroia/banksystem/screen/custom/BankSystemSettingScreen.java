@@ -126,7 +126,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         // Master-only "Mod Settings" button (see field javadoc). On slave servers the
         // button is not created at all — editing settings is only possible against
         // the master's settings.json.
-        if (isMasterServer()) {
+        if (ModSettingsScreen.canOpen()) { // BS-221: master + op level 2 (this screen only opens for admins)
             modSettingsButton = new Button(TEXT.MOD_SETTINGS_BUTTON.getString(), () ->
                     net.kroia.modutilities.gui.client.ClientCompat.setScreen(new ModSettingsScreen(this)));
             modSettingsButton.setHoverTooltipSupplier(TEXT.MOD_SETTINGS_BUTTON_TOOLTIP::getString);

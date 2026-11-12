@@ -48,6 +48,41 @@ public class ModSettingsTests extends TestSuite {
         addTest("migrate_integrations_already_migrated", this::test_migrateIntegrationsAlreadyMigrated);
         addTest("migrate_integrations_no_old_keys", this::test_migrateIntegrationsNoOldKeys);
         addTest("load_clamps_hand_edited_values", this::test_loadClampsHandEditedValues);
+        addTest("request_needs_admin_and_op", this::test_requestNeedsAdminAndOp);
+    }
+
+    /**
+     * BS-221: a GET needs the BankSystem admin flag AND operator level 2 on this server. Uses the
+     * first online player: without the flag it is refused; with the flag it passes exactly when the
+     * player has op level 2 (the harness cannot change a real player's op level, so a non-op player
+     * cell covers the "admin flag without op" case and an op cell the positive case).
+     */
+    private TestResult test_requestNeedsAdminAndOp() {
+        if (getServer() == null) return skip("no server");
+        net.kroia.banksystem.api.bankmanager.IBankManager bm = net.kroia.banksystem.BankSystemMod.getAPI().getServerBankManager();
+        if (bm == null || bm.getSync() == null || net.kroia.banksystem.BankSystemModBackend.getInstances_forTesting().isSlaveServer)
+            return skip("no master server");
+        List<net.minecraft.server.level.ServerPlayer> players = getServer().getPlayerList().getPlayers();
+        if (players.isEmpty()) return skip("no online player");
+        net.minecraft.server.level.ServerPlayer player = players.get(0);
+        java.util.UUID uuid = player.getUUID();
+        ModSettingsRequest.InputData get = new ModSettingsRequest.InputData(ModSettingsRequest.Action.GET, "");
+        boolean before = bm.getSync().isBanksystemAdmin(uuid);
+        try {
+            bm.getSync().setBanksystemAdminMode(uuid, false);
+            ModSettingsRequest.OutputData out = net.kroia.banksystem.networking.BankSystemNetworking.MOD_SETTINGS_REQUEST.handleOnMasterServer(get, "", uuid).join();
+            TestResult r = assertFalse("no admin flag: refused", out.success());
+            if (!r.passed()) return r;
+            r = assertTrue("refusal names both requirements", out.message().contains("operator level 2"));
+            if (!r.passed()) return r;
+
+            bm.getSync().setBanksystemAdminMode(uuid, true);
+            boolean op = net.kroia.modutilities.PermissionCompat.hasPermission(player, ModSettingsRequest.REQUIRED_OP_LEVEL);
+            out = net.kroia.banksystem.networking.BankSystemNetworking.MOD_SETTINGS_REQUEST.handleOnMasterServer(get, "", uuid).join();
+            return assertEquals("admin flag: allowed iff op level 2 (op=" + op + ")", op, out.success());
+        } finally {
+            bm.getSync().setBanksystemAdminMode(uuid, before);
+        }
     }
 
     /**
