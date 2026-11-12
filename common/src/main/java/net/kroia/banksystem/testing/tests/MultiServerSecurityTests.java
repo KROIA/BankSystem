@@ -668,10 +668,16 @@ public class MultiServerSecurityTests extends TestSuite {
             AsyncBankSystemCommandHandler.Request.instance.handleOnMasterServer(mint, untrustedSlaveID, null).join();
             if (bank.getBalance() != before) return fail("an untrusted slave minted money as a forged admin");
 
+            // BS-206: /money (own balance) is whitelisted for untrusted slaves and must still run.
+            Boolean moneyOk = AsyncBankSystemCommandHandler.Request.instance.handleOnMasterServer(
+                    AsyncBankSystemCommandHandler.InputData.of(AsyncBankSystemCommandHandler.FunctionType.Money, TEST_ADMIN),
+                    untrustedSlaveID, null).join().decodeResult();
+            if (!Boolean.TRUE.equals(moneyOk)) return fail("/money from an untrusted slave was refused (got " + moneyOk + ")");
+
             if (!wasTrusted) manager.trustSlaveServer(trustedSlaveID);
             AsyncBankSystemCommandHandler.Request.instance.handleOnMasterServer(mint, trustedSlaveID, null).join();
             if (bank.getBalance() == before) return fail("control: the trusted slave's command did not run");
-            return pass("forged admin command from an untrusted slave refused, trusted slave served");
+            return pass("forged admin command from an untrusted slave refused, /money served, trusted slave served");
         } finally {
             if (!wasTrusted) manager.untrustSlaveServer(trustedSlaveID);
             manager.setBanksystemAdminMode(TEST_ADMIN, false);
