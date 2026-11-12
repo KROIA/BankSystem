@@ -86,7 +86,8 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new MoneyDenominationOptimizerTests());
         TestRegistry.register(new ConverterCacheTests());
         // Task #43 (v2.1.0) — Company feature Phase 1 (POJO + manager + founder invariant).
-        TestRegistry.register(new CompanyManagerTests());
+        TestRegistry.register(new CompanyManagerTests(false));
+        TestRegistry.register(new CompanyManagerTests(true)); // BS-205, SLAVE_ONLY
         TestRegistry.register(new CompanyFounderInvariantTests());
         // Task #43g (v2.1.0) — slave-side ARRS forwarding for /company subcommands.
         TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyArrsRoundTripTests());

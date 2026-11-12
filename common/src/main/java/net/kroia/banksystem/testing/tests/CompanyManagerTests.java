@@ -39,13 +39,28 @@ public class CompanyManagerTests extends TestSuite {
     private static final UUID FOUNDER_A = UUID.fromString("00000000-0000-0000-0000-0000AAAA0001");
     private static final UUID FOUNDER_B = UUID.fromString("00000000-0000-0000-0000-0000AAAA0002");
 
+    /** BS-205: slave half, the founder transfer forwarded to the master. */
+    private static final TestCategory COMPANY_SLAVE = new TestCategory(
+            "banksystem", "company_slave", "Company requests forwarded from a slave to the master",
+            TestCategory.ServerType.SLAVE_ONLY, true);
+
+    private final boolean slave;
+
+    public CompanyManagerTests(boolean slave) {
+        this.slave = slave;
+    }
+
     @Override
     public TestCategory getCategory() {
-        return BankSystemTestCategories.COMPANY;
+        return slave ? COMPANY_SLAVE : BankSystemTestCategories.COMPANY;
     }
 
     @Override
     public void registerTests() {
+        if (slave) {
+            addTest("transfer_founder_forwarded_from_slave", this::testTransferFounderFromSlave); // BS-205
+            return;
+        }
         addTest("case_insensitive_name_uniqueness", this::testCaseInsensitiveNameUniqueness);
         addTest("max_supply_validation", this::testMaxSupplyValidation);
         addTest("monotonic_ids", this::testMonotonicIds);
@@ -54,6 +69,7 @@ public class CompanyManagerTests extends TestSuite {
         addTest("load_drops_duplicate_name_keeping_older", this::testLoadDropsDuplicateNameKeepingOlder);
         addTest("transfer_founder_moves_uuid", this::testTransferFounderMovesUuid);
         addTest("transfer_founder_requires_worker", this::testTransferFounderRequiresWorker); // BS-251
+        addTest("transfer_founder_request_path", this::testTransferFounderRequestPath); // BS-205
         addTest("is_founder_of_accounts", this::testIsFounderOfAccounts);
         addTest("delete_company_removes_from_indices", this::testDeleteCompanyRemovesFromIndices);
         addTest("get_by_name_case_insensitive", this::testGetByNameCaseInsensitive);
@@ -290,6 +306,87 @@ public class CompanyManagerTests extends TestSuite {
             if (account != null) bm.deleteBankAccount(account.getAccountNumber());
             for (UUID u : addedUsers) bm.removeUser(u);
         }
+    }
+
+    /** One TRANSFER_FOUNDER request as the Danger tab sends it: a client packet from {@code sender}. */
+    private static AsyncCompanyManager.TransferOutput transferRequest(String company, UUID sender, UUID caller, String target) {
+        return AsyncCompanyManager.Request.instance.handleOnMasterServer(
+                AsyncCompanyManager.InputData.of(AsyncCompanyManager.FunctionType.TRANSFER_FOUNDER,
+                        new AsyncCompanyManager.TransferInput(company, caller, target)), "", sender).join().decodeResult();
+    }
+
+    /**
+     * BS-205: the founder transfer through the master request handler (Danger tab path): spoofed caller, non-founder
+     * sender and non-worker target are refused without changes; founder to worker succeeds and the new founder can
+     * manage and hand the role back through the same request.
+     */
+    private TestResult testTransferFounderRequestPath() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        IServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        CompanyManager cm = CompanyManager.get();
+        if (bm == null || cm == null) return fail("no master bank or company manager");
+        UUID founder = UUID.fromString("00000000-0000-0000-0000-0000AAAA0205");
+        UUID worker = UUID.fromString("00000000-0000-0000-0000-0000AAAA0206");
+        UUID outsider = UUID.fromString("00000000-0000-0000-0000-0000AAAA0207");
+        Map<UUID, String> names = Map.of(founder, "Bs205Founder", worker, "Bs205Worker", outsider, "Bs205Outsider");
+        List<UUID> addedUsers = new ArrayList<>();
+        for (UUID u : names.keySet()) {
+            if (bm.userExists(u)) continue;
+            bm.addUser(new User(u, names.get(u)));
+            addedUsers.add(u);
+        }
+        net.kroia.banksystem.api.bankaccount.IServerBankAccount account = bm.createBankAccount("__bs205_transfer");
+        Company c = null;
+        try {
+            if (account == null) return fail("could not create test account");
+            account.addUser(bm.getUserByUUID(founder), net.kroia.banksystem.banking.BankPermission.MANAGE.getValue());
+            account.addUser(bm.getUserByUUID(worker), net.kroia.banksystem.banking.BankPermission.DEPOSIT.getValue());
+            c = cm.createCompany("Bs205Transfer" + account.getAccountNumber(), account.getAccountNumber(), founder, 100L).company;
+            if (c == null) return fail("test company not created");
+            String company = c.getName();
+
+            int code = transferRequest(company, worker, founder, names.get(worker)).resultCode();
+            if (code != AsyncCompanyManager.CODE_INTERNAL) return fail("spoofed caller UUID: expected CODE_INTERNAL, got " + code);
+            code = transferRequest(company, worker, worker, names.get(worker)).resultCode();
+            if (code != AsyncCompanyManager.CODE_NOT_FOUNDER) return fail("non-founder sender: expected CODE_NOT_FOUNDER, got " + code);
+            code = transferRequest(company, founder, founder, names.get(outsider)).resultCode();
+            if (code != AsyncCompanyManager.CODE_NOT_A_WORKER) return fail("non-worker target: expected CODE_NOT_A_WORKER, got " + code);
+            if (!c.isFounder(founder) || c.isFounder(worker) || c.isFounder(outsider))
+                return fail("a refused request changed the founders");
+
+            code = transferRequest(company, founder, founder, names.get(worker)).resultCode();
+            if (code != AsyncCompanyManager.CODE_OK) return fail("founder to worker: expected CODE_OK, got " + code);
+            if (!c.isFounder(worker) || c.isFounder(founder)) return fail("founder role not moved to the worker");
+            code = AsyncCompanyManager.gateManage(c.getCompanyId(), worker, bm, cm);
+            if (code != AsyncCompanyManager.CODE_OK) return fail("new founder can't manage: " + code);
+            code = transferRequest(company, worker, worker, names.get(founder)).resultCode();
+            if (code != AsyncCompanyManager.CODE_OK || !c.isFounder(founder))
+                return fail("new founder could not hand the role back: " + code);
+            return pass("spoofed caller, non-founder and non-worker refused; founder to worker OK, new founder manages");
+        } finally {
+            if (c != null) cm.deleteCompany(c.getCompanyId());
+            if (account != null) bm.deleteBankAccount(account.getAccountNumber());
+            for (UUID u : addedUsers) bm.removeUser(u);
+        }
+    }
+
+    /**
+     * BS-205: on a slave the founder transfer goes to the master. A trusted slave reaches the master's handler
+     * (unknown company: CODE_NOT_FOUND); an untrusted slave gets the master's refusal (CODE_INTERNAL).
+     */
+    private TestResult testTransferFounderFromSlave() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        if (i == null || !i.isSlaveServer) return skip("not a slave");
+        if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem()) return skip("slave not connected to its master");
+        boolean trusted = Boolean.TRUE.equals(await(i.SERVER_BANK_MANAGER.getAsync().isSlaveServerTrustedAsync(""), 10_000));
+        AsyncCompanyManager.TransferOutput out = await(AsyncCompanyManager.transferFounderAsync(
+                "__bs205_no_such_company", FOUNDER_A, "Bs205Nobody"), 30_000);
+        if (out == null) return fail("no answer from the master");
+        int expected = trusted ? AsyncCompanyManager.CODE_NOT_FOUND : AsyncCompanyManager.CODE_INTERNAL;
+        if (out.resultCode() != expected)
+            return fail((trusted ? "trusted" : "untrusted") + " slave: expected code " + expected + ", got " + out.resultCode());
+        return pass((trusted ? "trusted slave reached the master's handler (CODE_NOT_FOUND)"
+                : "untrusted slave refused by the master (CODE_INTERNAL)"));
     }
 
     private TestResult testIsFounderOfAccounts() {
