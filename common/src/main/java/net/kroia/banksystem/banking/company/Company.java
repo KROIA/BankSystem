@@ -57,6 +57,10 @@ public final class Company {
 
     /** v2.1.0 — ItemID short of the company's default currency (0 = money; {@link #CURRENCY_UNSET} = none). */
     private short companyCurrency = 0;
+    /** BS-235: share integrity state (see the getters). */
+    private long shareConsistentTs = 0L;
+    private long shareExcessLevel = 0L;
+    private boolean shareExcessOpen = false;
     /** Persisted set of BlockPos positions of Share Stamper blocks bound to this company. */
     private final Set<BlockPos> boundStampers = new HashSet<>();
 
@@ -89,6 +93,12 @@ public final class Company {
     public int getStatisticsTimeframe() { return statisticsTimeframe; }
     public void setStatisticsTimeframe(int tf) { this.statisticsTimeframe = (tf >= 0 && tf <= 4) ? tf : 1; }
     public short getCompanyCurrency() { return companyCurrency; }
+    /** BS-235: last check that found no more shares in banks than stamped (0 = never). */
+    public long getShareConsistentTs() { return shareConsistentTs; }
+    /** BS-235: excess last raised or acknowledged; only a larger excess raises the alert again. */
+    public long getShareExcessLevel() { return shareExcessLevel; }
+    /** BS-235: share-excess alert raised and not yet acknowledged; dividends are paused. */
+    public boolean isShareExcessOpen() { return shareExcessOpen; }
     public void setCompanyCurrency(short c) { this.companyCurrency = c; }
     public ShareVisuals getShareVisuals() { return shareVisuals; }
     public List<PayoutSchedule> getPayoutSchedules() { return java.util.Collections.unmodifiableList(payoutSchedules); }
@@ -120,6 +130,15 @@ public final class Company {
 
     void setTotalSharesIssued(long value) {
         this.totalSharesIssued = value;
+    }
+
+    /** BS-235: share integrity state, see {@link ShareIntegrity}. @return true when something changed. */
+    boolean setShareState(long consistentTs, long excessLevel, boolean excessOpen) {
+        boolean changed = consistentTs != shareConsistentTs || excessLevel != shareExcessLevel || excessOpen != shareExcessOpen;
+        shareConsistentTs = consistentTs;
+        shareExcessLevel = excessLevel;
+        shareExcessOpen = excessOpen;
+        return changed;
     }
 
     // ------------------------------------------------------------------
@@ -225,6 +244,9 @@ public final class Company {
         tag.putLong("nextScheduleId", nextScheduleId);
         tag.putInt("statisticsTimeframe", statisticsTimeframe);
         tag.putShort("companyCurrency", companyCurrency);
+        tag.putLong("shareConsistentTs", shareConsistentTs);
+        tag.putLong("shareExcessLevel", shareExcessLevel);
+        tag.putBoolean("shareExcessOpen", shareExcessOpen);
 
         ListTag foundersTag = new ListTag();
         for (UUID founder : founders) {
@@ -309,6 +331,9 @@ public final class Company {
         loaded.nextScheduleId = nextSchedId;
         if (tag.contains("statisticsTimeframe")) loaded.statisticsTimeframe = NbtCompat.getInt(tag, "statisticsTimeframe");
         if (tag.contains("companyCurrency")) loaded.companyCurrency = NbtCompat.getShort(tag, "companyCurrency");
+        if (tag.contains("shareConsistentTs")) loaded.shareConsistentTs = NbtCompat.getLong(tag, "shareConsistentTs");
+        if (tag.contains("shareExcessLevel")) loaded.shareExcessLevel = NbtCompat.getLong(tag, "shareExcessLevel");
+        if (tag.contains("shareExcessOpen")) loaded.shareExcessOpen = NbtCompat.getBoolean(tag, "shareExcessOpen");
         if (NbtCompat.contains(tag, "boundStampers", Tag.TAG_LIST)) {
             ListTag sl = NbtCompat.getList(tag, "boundStampers", Tag.TAG_COMPOUND);
             for (int i = 0; i < sl.size(); i++) {

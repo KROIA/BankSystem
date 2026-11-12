@@ -60,6 +60,11 @@ public final class DividendPayer implements IDividendPayer {
         if (cm == null) return PayDividendResult.of(PayDividendResult.Reason.NOT_MASTER);
         Company company = cm.getById(companyId);
         if (company == null) return PayDividendResult.of(PayDividendResult.Reason.COMPANY_MISSING);
+        if (company.isShareExcessOpen()) { // BS-235
+            if (instances.LOGGER != null) instances.LOGGER.warn("[DividendPayer] dividend of company " + companyId
+                    + " skipped: more shares banked than stamped, waiting for an admin to acknowledge");
+            return PayDividendResult.of(PayDividendResult.Reason.SHARES_UNDER_REVIEW);
+        }
 
         ISyncServerBankManager bm = instances.SERVER_BANK_MANAGER != null
                 ? instances.SERVER_BANK_MANAGER.getSync() : null;
@@ -161,6 +166,12 @@ public final class DividendPayer implements IDividendPayer {
         long nowMs = System.currentTimeMillis();
         short payoutShort = payoutId.getShort();
         List<TransactionLogRecord> ledger = new ArrayList<>(snapshots.size() * 2);
+        // BS-233: the triggering player when known, else the company (API / system calls); one ref per run.
+        net.kroia.banksystem.banking.User actorUser = actor != null ? bm.getUserByUUID(actor) : null;
+        net.kroia.banksystem.api.ledger.LedgerActor ledgerActor = actor != null
+                ? net.kroia.banksystem.api.ledger.LedgerActor.player(actor, actorUser != null ? actorUser.getName() : null)
+                : net.kroia.banksystem.banking.company.PayoutExecutor.companyActor(company);
+        String runRef = UUID.randomUUID().toString();
         long paid = 0L;
         int paidHolders = 0;
 
@@ -199,12 +210,9 @@ public final class DividendPayer implements IDividendPayer {
                         + " payAmountRaw=" + payAmount);
             }
             // Outbound row on company account, inbound row on holder.
-            ledger.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    companyAccountNr, actor, net.kroia.banksystem.api.ledger.LedgerType.DIVIDEND, payoutShort,
-                    payAmount, snap.accountNr, companyId, nowMs, null));
-            ledger.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    snap.accountNr, actor, net.kroia.banksystem.api.ledger.LedgerType.DIVIDEND, payoutShort,
-                    payAmount, companyAccountNr, companyId, nowMs, null));
+            net.kroia.banksystem.banking.company.PayoutExecutor.addLegs(ledger,
+                    net.kroia.banksystem.api.ledger.LedgerType.DIVIDEND, payoutShort, payAmount, ledgerActor, companyId,
+                    nowMs, runRef, null, companyAccountNr, sourceMoneyBank, snap.accountNr, finalTargetBank);
         }
 
         if (instances.TRANSACTION_LOG_MANAGER != null && !ledger.isEmpty()) {

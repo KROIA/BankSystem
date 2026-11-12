@@ -2,13 +2,17 @@ package net.kroia.banksystem.banking.company;
 
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.util.ItemID;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * v2.1.0 — Static SQL helpers for the Statistics tab of CompanyManagementScreen.
@@ -20,6 +24,24 @@ import java.util.List;
 public final class CompanyStatsQuery {
 
     private CompanyStatsQuery() {}
+
+    /**
+     * BS-230: SQL condition for a row that takes value out of the account. Signed rows (TRANSFER,
+     * and PAYOUT / DIVIDEND since BS-233) go by their sign; types stored unsigned that always leave
+     * the account count by type; legacy unsigned PAYOUT / DIVIDEND rows (no balance_after) count as
+     * paid out, as before. Legacy TRANSFER_OUT rows were migrated to negative TRANSFER rows.
+     */
+    static final String IS_OUT = "(amount < 0 OR type_code IN (" + codes(LedgerType.WITHDRAW, LedgerType.ADMIN_REMOVE,
+            LedgerType.BANK_CLOSED, LedgerType.CONVERTER_WITHDRAW, LedgerType.DOWNLOAD_WITHDRAW, LedgerType.CRAFT_CONSUME,
+            LedgerType.SHARE_STAMP, LedgerType.ACCOUNT_DELETE_PAYOUT, LedgerType.ADMIN_DISALLOW_ITEM,
+            LedgerType.ACCOUNT_DELETE_LOSS) + ") OR (type_code IN (" + codes(LedgerType.PAYOUT, LedgerType.DIVIDEND)
+            + ") AND balance_after IS NULL))";
+
+    private static String codes(LedgerType... types) {
+        StringBuilder sb = new StringBuilder();
+        for (LedgerType t : types) sb.append(sb.isEmpty() ? "" : ",").append(t.code());
+        return sb.toString();
+    }
 
     public record CashflowBucket(long bucketStart, long earnings, long spendings) {}
 
@@ -41,8 +63,8 @@ public final class CompanyStatsQuery {
         // Earnings = anything NOT classified as a spending kind.
         // This catches all deposit paths regardless of which exact kind they use.
         String sql = "SELECT CAST((ts - ?) / ? AS INTEGER) AS bucket, " +
-                "SUM(CASE WHEN kind IN ('PAYOUT','DIVIDEND','WITHDRAW','TRANSFER_OUT','SHARE_STAMP') THEN 0 ELSE ABS(amount) END) AS earnings, " +
-                "SUM(CASE WHEN kind IN ('PAYOUT','DIVIDEND','WITHDRAW','TRANSFER_OUT','SHARE_STAMP') THEN ABS(amount) ELSE 0 END) AS spendings " +
+                "SUM(CASE WHEN " + IS_OUT + " THEN 0 ELSE ABS(amount) END) AS earnings, " +
+                "SUM(CASE WHEN " + IS_OUT + " THEN ABS(amount) ELSE 0 END) AS spendings " +
                 "FROM TransactionLog " +
                 "WHERE account_number = ? AND item_id = ? AND ts >= ? AND ts <= ? " +
                 "GROUP BY bucket ORDER BY bucket ASC";
@@ -76,8 +98,8 @@ public final class CompanyStatsQuery {
             Connection conn, int accountNr, short itemIdShort, long fromMs) {
         if (conn == null) return new CompanyHeadlineMetrics(0L, 0L, 0L, 0, 0L);
         String sql = "SELECT " +
-                "SUM(CASE WHEN kind IN ('PAYOUT','DIVIDEND','WITHDRAW','TRANSFER_OUT','SHARE_STAMP') THEN 0 ELSE ABS(amount) END) AS earn, " +
-                "SUM(CASE WHEN kind IN ('PAYOUT','DIVIDEND','WITHDRAW','TRANSFER_OUT','SHARE_STAMP') THEN ABS(amount) ELSE 0 END) AS spend " +
+                "SUM(CASE WHEN " + IS_OUT + " THEN 0 ELSE ABS(amount) END) AS earn, " +
+                "SUM(CASE WHEN " + IS_OUT + " THEN ABS(amount) ELSE 0 END) AS spend " +
                 "FROM TransactionLog WHERE account_number = ? AND item_id = ? AND ts >= ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, accountNr);
@@ -96,6 +118,16 @@ public final class CompanyStatsQuery {
         return new CompanyHeadlineMetrics(0L, 0L, 0L, 0, 0L);
     }
 
+    /** Every registered stamped-share ItemID that belongs to {@code companyId} (reverse lookup). */
+    public static List<ItemID> shareItemIds(int companyId) {
+        List<ItemID> ids = new ArrayList<>();
+        for (ItemID id : net.kroia.banksystem.util.ItemIDManager.getItemIDMap().keySet()) {
+            Integer cid = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem.getCompanyIdForItemID(id);
+            if (cid != null && cid == companyId) ids.add(id);
+        }
+        return ids;
+    }
+
     /**
      * Returns top N shareholders sorted by shares descending.
      */
@@ -104,30 +136,18 @@ public final class CompanyStatsQuery {
         List<ShareholderEntry> result = new ArrayList<>();
         if (bm == null) return result;
 
-        net.kroia.banksystem.util.ItemID shareItemId = null;
-        for (var e : net.kroia.banksystem.util.ItemIDManager.getItemIDMap().entrySet()) {
-            Integer cid = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
-                    .getCompanyIdForItemID(e.getKey());
-            if (cid != null && cid == companyId) {
-                shareItemId = e.getKey();
-                break;
+        // BS-230: every share ItemID of the company (variants), free + locked, summed per account.
+        Map<Integer, Long> perAccount = new LinkedHashMap<>();
+        for (ItemID shareItemId : shareItemIds(companyId)) {
+            for (int accountNr : bm.listAccountsHolding(shareItemId)) {
+                IServerBankAccount acct = bm.getBankAccount(accountNr);
+                net.kroia.banksystem.api.bank.IServerBank bank = acct == null ? null : acct.getBank(shareItemId);
+                if (bank != null) perAccount.merge(accountNr, bank.getTotalBalance(), Long::sum);
             }
         }
-        if (shareItemId == null) return result;
-
-        java.util.Set<Integer> accountNrs = bm.listAccountsHolding(shareItemId);
-        if (accountNrs == null || accountNrs.isEmpty()) return result;
-
         List<long[]> entries = new ArrayList<>();
-        for (int accountNr : accountNrs) {
-            IServerBankAccount acct = bm.getBankAccount(accountNr);
-            if (acct == null) continue;
-            net.kroia.banksystem.api.bank.IServerBank bank = acct.getBank(shareItemId);
-            if (bank == null) continue;
-            long shares = bank.getBalance();
-            if (shares <= 0L) continue;
-            entries.add(new long[]{accountNr, shares});
-        }
+        for (Map.Entry<Integer, Long> e : perAccount.entrySet())
+            if (e.getValue() > 0L) entries.add(new long[]{e.getKey(), e.getValue()});
 
         entries.sort((a, b) -> Long.compare(b[1], a[1]));
 
@@ -148,20 +168,22 @@ public final class CompanyStatsQuery {
      * Estimates days until the company account runs out of money.
      *
      * @param accountNr the company's linked bank account number
+     * @param itemIdShort the company currency; only its rows count as outflow
      * @param scheduleObligationPerDay snapshot from {@link #scheduleObligationPerDay}, taken on the
      *        master thread so the DB worker never reads live Company state (Issue #93)
      * @return days to insolvency (floored), or -1 if outflow is zero (safe)
      */
-    public static long getDaysToInsolvency(Connection conn, int accountNr, double scheduleObligationPerDay, long currentBalance) {
+    public static long getDaysToInsolvency(Connection conn, int accountNr, short itemIdShort, double scheduleObligationPerDay, long currentBalance) {
         double avgDailyOutflow = 0.0;
         if (conn != null) {
             long thirtyDaysMs = 30L * 86_400_000L;
             long fromMs = System.currentTimeMillis() - thirtyDaysMs;
-            String sql = "SELECT SUM(CASE WHEN kind IN ('PAYOUT','DIVIDEND','WITHDRAW','TRANSFER_OUT','SHARE_STAMP') THEN ABS(amount) ELSE 0 END) AS total " +
-                    "FROM TransactionLog WHERE account_number = ? AND ts >= ?";
+            String sql = "SELECT SUM(CASE WHEN " + IS_OUT + " THEN ABS(amount) ELSE 0 END) AS total " +
+                    "FROM TransactionLog WHERE account_number = ? AND item_id = ? AND ts >= ?";
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setInt(1, accountNr);
-                ps.setLong(2, fromMs);
+                ps.setShort(2, itemIdShort);
+                ps.setLong(3, fromMs);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         long total = rs.getLong("total");

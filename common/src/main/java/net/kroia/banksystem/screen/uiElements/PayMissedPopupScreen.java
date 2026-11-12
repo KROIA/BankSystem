@@ -146,6 +146,10 @@ public class PayMissedPopupScreen extends BankSystemGuiScreen {
                             statusLabel.setText(Component.translatable("gui.banksystem.company_account_frozen").getString());
                             statusLabel.setTextColor(COLOR_ERR);
                         }
+                        case AsyncCompanyManager.CODE_SHARES_UNDER_REVIEW -> {
+                            statusLabel.setText(Component.translatable("gui.banksystem.company_shares_under_review").getString());
+                            statusLabel.setTextColor(COLOR_ERR);
+                        }
                         case AsyncCompanyManager.CODE_INVALID_INPUT -> {
                             statusLabel.setText(RESULT_INVALID.getString());
                             statusLabel.setTextColor(COLOR_ERR);

@@ -63,6 +63,16 @@ public record TransactionLogRecord(
                 ref, null, null, null, balanceAfter, null, null);
     }
 
+    /** Like {@link #of} but with an explicit time (payout / dividend legs share the run's timestamp). */
+    public static TransactionLogRecord ofAt(int accountNumber, LedgerType type, short itemId, long amount,
+                                            LedgerActor actor, @Nullable Integer otherAccount,
+                                            @Nullable Integer companyId, long time, @Nullable String ref,
+                                            @Nullable String note, @Nullable Long balanceAfter) {
+        return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor.uuid(), actor.name(), actor.source(),
+                type, itemId, amount, otherAccount, companyId, time, note,
+                ref, null, null, null, balanceAfter, null, null);
+    }
+
     /** Convenience factory for a plain row (no counterparty, no company). */
     public static TransactionLogRecord simple(int accountNumber, @Nullable UUID actor,
                                               LedgerType type, short itemId, long amount, long time) {

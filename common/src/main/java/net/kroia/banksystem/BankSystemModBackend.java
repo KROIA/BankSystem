@@ -268,6 +268,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         net.kroia.banksystem.banking.ledger.AdminAudit.setBackend(INSTANCES); // Task #110
         net.kroia.banksystem.banking.ledger.SuspicionChecks.setBackend(INSTANCES); // Tasks #111/#114/#115
         net.kroia.banksystem.banking.ledger.AuditDigest.setBackend(INSTANCES); // Task #113
+        net.kroia.banksystem.banking.company.ShareIntegrity.setBackend(INSTANCES); // BS-235
         BankSystemTextMessages.setBackend(INSTANCES);
 
         net.kroia.banksystem.integration.numismatics.NumismaticsProvider.setBackend(INSTANCES);

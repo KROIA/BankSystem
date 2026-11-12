@@ -231,6 +231,13 @@ public class BankSystemCommandsRegistration {
                                 .then(Commands.argument("item", StringArgumentType.greedyString())
                                         .executes(ctx -> adminOnly(ctx.getSource(), () -> restoreBindingCommand(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "account"),
                                                 StringArgumentType.getString(ctx, "item")))))))
+                // BS-235: /banksystem shares acknowledge <companyId> — accept a share excess, resume dividends
+                .then(Commands.literal("shares")
+                        .requires(source -> BankSystemPermissions.canUseFlagGatedCommand(source, BankSystemPermissions.COMMAND_SHARES))
+                        .then(Commands.literal("acknowledge")
+                                .then(Commands.argument("companyId", IntegerArgumentType.integer(0))
+                                        .executes(ctx -> adminOnly(ctx.getSource(), () -> sharesAcknowledgeCommand(ctx.getSource(),
+                                                IntegerArgumentType.getInteger(ctx, "companyId")))))))
                 .then(Commands.literal("disallowItem")
                         .then(Commands.argument("itemID", StringArgumentType.string())
                                 .executes(context -> {
@@ -845,7 +852,7 @@ public class BankSystemCommandsRegistration {
     }
 
     /**
-     * BS-196: the single BankSystem-admin gate of the flag-gated commands ({@code symbols}, {@code restorebinding};
+     * BS-196: the single BankSystem-admin gate of the flag-gated commands ({@code symbols}, {@code restorebinding}, {@code shares};
      * see {@link BankSystemPermissions#FLAG_GATED_NODES}).
      * <ul>
      *   <li>Non-player sources (console, command blocks) already passed the op-level {@code requires} check and run
@@ -1002,6 +1009,23 @@ public class BankSystemCommandsRegistration {
     }
 
     /** Task #146: lifts suspended external bindings of an account (one slot when {@code item} is given). Master only. */
+    /** BS-235: master only; acknowledges the company's share excess alert and resumes its dividends. */
+    private static int sharesAcknowledgeCommand(CommandSourceStack source, int companyId) {
+        if (BACKEND_INSTANCES.SERVER_BANK_MANAGER == null
+                || !(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof net.kroia.banksystem.banking.bankmanager.ServerBankManager)) {
+            source.sendFailure(Component.literal("[BankSystem] shares acknowledge works on the master server only"));
+            return 0;
+        }
+        long excess = net.kroia.banksystem.banking.company.ShareIntegrity.acknowledge(companyId);
+        if (excess < 0) {
+            source.sendFailure(Component.literal("[BankSystem] no company with id " + companyId));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("[BankSystem] company " + companyId + ": share excess of " + excess
+                + " acknowledged, dividends resume. A new alert comes only if the excess grows."), true);
+        return Command.SINGLE_SUCCESS;
+    }
+
     private static int restoreBindingCommand(CommandSourceStack source, int account, @org.jetbrains.annotations.Nullable String item) {
         if (BACKEND_INSTANCES.SERVER_BANK_MANAGER == null
                 || !(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync() instanceof net.kroia.banksystem.banking.bankmanager.ServerBankManager bm)) {

@@ -80,6 +80,15 @@ public final class SuspicionChecks {
      * Raised by ServerBankManager.suspendIfForeign; an admin lifts it with /banksystem restorebinding.
      */
     public static final int EXTERNAL_BINDING_SUSPENDED = 7;
+    /**
+     * BS-235: a company has more shares in bank accounts (free + locked, all its share items) than it
+     * has stamped. On the company account; amount = the excess (raw, x scale). Raised by
+     * ShareIntegrity once per growth of the excess; dividends pause until an admin runs
+     * /banksystem shares acknowledge.
+     */
+    public static final int SHARE_EXCESS = 8;
+    /** BS-235: share items created by /give or the creative inventory. On the company account; amount = raw count. */
+    public static final int SHARE_CREATED = 9;
 
     /** @return the constant name of a flag type code, or "FLAG_&lt;code&gt;". */
     public static String typeName(int flagType) {
@@ -91,6 +100,8 @@ public final class SuspicionChecks {
             case MONEY_SUPPLY_GROWTH -> "MONEY_SUPPLY_GROWTH";
             case TRANSFER_PARKED -> "TRANSFER_PARKED";
             case EXTERNAL_BINDING_SUSPENDED -> "EXTERNAL_BINDING_SUSPENDED";
+            case SHARE_EXCESS -> "SHARE_EXCESS";
+            case SHARE_CREATED -> "SHARE_CREATED";
             default -> "FLAG_" + flagType;
         };
     }

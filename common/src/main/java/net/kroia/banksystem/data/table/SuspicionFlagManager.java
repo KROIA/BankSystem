@@ -74,6 +74,21 @@ public class SuspicionFlagManager {
         }, databaseManager.getDatabaseThread());
     }
 
+    /** BS-235: acknowledges every open flag of {@code flagType} on {@code accountNumber}. */
+    public CompletableFuture<Void> acknowledgeAll(int accountNumber, int flagType) {
+        return CompletableFuture.runAsync(() -> {
+            try (PreparedStatement ps = databaseManager.getConnection().prepareStatement(
+                    "UPDATE SuspicionFlag SET acknowledged = 1 WHERE account_number = ? AND flag_type = ? AND acknowledged = 0")) {
+                ps.setInt(1, accountNumber);
+                ps.setInt(2, flagType);
+                ps.execute();
+                databaseManager.commitTransaction();
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }, databaseManager.getDatabaseThread());
+    }
+
     public CompletableFuture<Void> acknowledge(long id) {
         return CompletableFuture.runAsync(() -> {
             try (PreparedStatement ps = databaseManager.getConnection().prepareStatement(

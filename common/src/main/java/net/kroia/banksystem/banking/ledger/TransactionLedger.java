@@ -196,6 +196,7 @@ public final class TransactionLedger implements ITransactionLedger {
         }
         AdminAudit.onLedgerRow(row);      // Task #110: audit file + admin alerts
         SuspicionChecks.onLedgerRow(row); // Tasks #111 / #115: suspicion flags
+        net.kroia.banksystem.banking.company.ShareIntegrity.onLedgerRow(row); // BS-235
     }
 
     // ------------------------------------------------------------------

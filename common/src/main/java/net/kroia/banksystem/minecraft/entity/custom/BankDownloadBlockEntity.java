@@ -665,15 +665,16 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                     long amountToWithdraw = (long) filledAmount * ratio;
                     final net.kroia.banksystem.data.TransferJournal.Ref journal =
                             net.kroia.banksystem.data.TransferJournal.ref("download_block " + net.kroia.banksystem.data.DiagnosticsDatabase.at(level, worldPosition));
-                    CompletableFuture<BankStatus> withdrawStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DOWNLOAD_WITHDRAW, null,
+                    CompletableFuture<BankStatus> withdrawStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DOWNLOAD_WITHDRAW, playerOwner,
                             "download block " + worldPosition.toShortString(), journal,
                             () -> itemBank.withdrawLockedPreferedAsync(amountToWithdraw));
                     // whenComplete, not thenAccept: an exceptional withdraw must also roll back.
                     withdrawStatusFuture.whenComplete((withdrawStatus, withdrawError) -> {
                         if(withdrawStatus == BankStatus.SUCCESS) {
-                            // Task #109: no player drives a download block; actor SYSTEM, position in the note.
+                            // Task #109 / BS-235: actor = the block's owner (SYSTEM without one), position in the note.
                             net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(bankAccountNumber, net.kroia.banksystem.api.ledger.LedgerType.DOWNLOAD_WITHDRAW, item,
-                                    amountToWithdraw, net.kroia.banksystem.api.ledger.LedgerActor.system(), null,
+                                    amountToWithdraw, playerOwner != null ? net.kroia.banksystem.banking.ledger.TransactionLedger.player(playerOwner)
+                                            : net.kroia.banksystem.api.ledger.LedgerActor.system(), null,
                                     "download block " + worldPosition.toShortString());
                             if(filledAmount != amountToFillFinal)
                             {

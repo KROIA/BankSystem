@@ -67,6 +67,8 @@ public final class AsyncCompanyManager {
     public static final int CODE_PER_PLAYER_ACCOUNT_LIMIT = 16;
     /** Task #117 (v2.2.0) — the company bank account is frozen by an admin. */
     public static final int CODE_ACCOUNT_FROZEN = 17;
+    /** BS-235 (v2.2.0) — dividends paused: more shares banked than stamped, waiting for an admin. */
+    public static final int CODE_SHARES_UNDER_REVIEW = 18;
 
     // ------------------------------------------------------------------
     // Function enum
@@ -1241,9 +1243,16 @@ public final class AsyncCompanyManager {
                     Company company = cm.getById(in.companyId());
                     if (company == null)
                         return CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_COMPANY_STATS, CompanyStatsPayload.EMPTY));
-                    if (!canReadCompany.test(in.companyId()))
-                        return CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_COMPANY_STATS,
-                                CompanyStatsPayload.reducedFor(company.getTotalSharesIssued(), countHolders(in.companyId(), bm))));
+                    if (!canReadCompany.test(in.companyId())) {
+                        // BS-230: a shareholder (any account the player is a user of holds the share)
+                        // sees what a non-admin member sees; everyone else gets the reduced view.
+                        Set<Integer> holders = holderAccounts(in.companyId(), bm);
+                        boolean holder = playerSender != null
+                                && bm.getBankAccountNumbers(playerSender).stream().anyMatch(holders::contains);
+                        if (!holder)
+                            return CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_COMPANY_STATS,
+                                    CompanyStatsPayload.reducedFor(company.getTotalSharesIssued(), holders.size())));
+                    }
                     return handleGetCompanyStats(in, bm, company).thenApply(out -> {
                         if (fullRead) return out;
                         CompanyStatsPayload full = out.decodeResult();
@@ -2049,6 +2058,7 @@ public final class AsyncCompanyManager {
                 case TARGET_NO_DEPOSIT_RIGHT -> CODE_TARGET_NO_DEPOSIT;
                 case CURRENCY_ITEM_MISSING -> CODE_CURRENCY_ITEM_MISSING;
                 case ACCOUNT_FROZEN -> CODE_ACCOUNT_FROZEN;
+                case SHARES_UNDER_REVIEW -> CODE_SHARES_UNDER_REVIEW;
                 default -> CODE_INTERNAL;
             };
             return OutputData.of(FunctionType.PAY_MISSED,
@@ -2188,15 +2198,15 @@ public final class AsyncCompanyManager {
 
     /** Number of accounts holding any share ItemID of the company. */
     private static int countHolders(int companyId, IServerBankManager bm) {
-        java.util.Set<Integer> holders = new java.util.HashSet<>();
-        for (java.util.Map.Entry<net.kroia.banksystem.util.ItemID, net.minecraft.world.item.ItemStack> e
-                : net.kroia.banksystem.util.ItemIDManager.getItemIDMap().entrySet()) {
-            Integer cid = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
-                    .getCompanyIdForItemID(e.getKey());
-            if (cid == null || cid != companyId) continue;
-            holders.addAll(bm.listAccountsHolding(e.getKey()));
-        }
-        return holders.size();
+        return holderAccounts(companyId, bm).size();
+    }
+
+    /** Accounts holding (free + locked &gt; 0) any share ItemID of the company. */
+    private static Set<Integer> holderAccounts(int companyId, IServerBankManager bm) {
+        Set<Integer> holders = new java.util.HashSet<>();
+        for (net.kroia.banksystem.util.ItemID id : CompanyStatsQuery.shareItemIds(companyId))
+            holders.addAll(bm.listAccountsHolding(id));
+        return holders;
     }
 
     private static OutputData handleInfoByAccount(GetCompanyInfoByAccountInput in, IServerBankManager bm, CompanyManager cm) {
@@ -2425,6 +2435,7 @@ public final class AsyncCompanyManager {
             case INSUFFICIENT_FUNDS, CURRENCY_ITEM_MISSING -> CODE_INSUFFICIENT_FUNDS;
             case NO_PERMISSION -> CODE_NO_PERMISSION;
             case ACCOUNT_FROZEN -> CODE_ACCOUNT_FROZEN;
+            case SHARES_UNDER_REVIEW -> CODE_SHARES_UNDER_REVIEW;
         };
         return OutputData.of(FunctionType.PAY_DIVIDEND,
                 new PayDividendOutput(code, result.totalPaid(), result.holderCount()));
@@ -2717,7 +2728,7 @@ public final class AsyncCompanyManager {
                             CompanyStatsQuery.getHeadlineMetrics(conn, acctNr, itemFilter, fromMs);
                     totalEarnings = metrics.totalEarnings();
                     totalSpendings = metrics.totalSpendings();
-                    daysToInsolvency = CompanyStatsQuery.getDaysToInsolvency(conn, acctNr, scheduleObligation, balance);
+                    daysToInsolvency = CompanyStatsQuery.getDaysToInsolvency(conn, acctNr, itemFilter, scheduleObligation, balance);
                 } catch (Exception e) {
                     if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
                         BACKEND_INSTANCES.LOGGER.warn("[CompanyStats] DB query failed: " + e);

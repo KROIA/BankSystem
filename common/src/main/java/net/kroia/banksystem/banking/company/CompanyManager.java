@@ -387,6 +387,27 @@ public final class CompanyManager implements ServerSaveableChunked {
         return true;
     }
 
+    /** BS-235: stores the share integrity state of a company (see {@link ShareIntegrity}). Master-only. */
+    public void setShareState(int companyId, long consistentTs, long excessLevel, boolean excessOpen) {
+        Company company = byId.get(companyId);
+        if (company != null && company.setShareState(consistentTs, excessLevel, excessOpen)) markPersistDirty();
+    }
+
+    /**
+     * BS-234 — an admin destroyed {@code count} shares held by the company's own account:
+     * lower {@link Company#getTotalSharesIssued()} by that count, floored at zero.
+     * Master-only; broadcasts a supply update. Returns {@code false} if the company is missing.
+     */
+    public boolean destroyShares(int companyId, long count) {
+        Company company = byId.get(companyId);
+        if (company == null || count <= 0) return false;
+        long next = Math.max(0L, company.getTotalSharesIssued() - count);
+        company.setTotalSharesIssued(next);
+        markPersistDirty();
+        broadcastSupply(companyId, next);
+        return true;
+    }
+
     private static void broadcastSupply(int companyId, long total) {
         net.minecraft.server.MinecraftServer server = dev.architectury.utils.GameInstance.getServer();
         if (server == null) return;

@@ -5,6 +5,13 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
 import net.kroia.banksystem.banking.company.ShareVisuals;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.banking.company.PayoutExecutor;
+import net.kroia.banksystem.banking.company.PayoutFailureReason;
+import net.kroia.banksystem.banking.company.PayoutSchedule;
+import net.kroia.banksystem.banking.company.ShareIntegrity;
+import net.kroia.banksystem.data.table.record.PayoutHistoryRecord;
+import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -13,7 +20,9 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -48,6 +57,10 @@ public class CompanyManagerTests extends TestSuite {
         addTest("list_companies_managed_by_falls_back_to_founder", this::testListCompaniesManagedByFallsBackToFounder);
         // Task #58 — per-player company cap
         addTest("per_player_company_cap_at_over_unlimited", this::testPerPlayerCompanyCap);
+        // BS-235 — share integrity
+        addTest("share_excess_raised_once_per_level", this::testShareExcessRaisedOnce);
+        addTest("share_dividends_paused_until_acknowledge", this::testShareDividendsPaused);
+        addTest("share_destroy_lowers_issued", this::testShareDestroyLowersIssued);
     }
 
     @Nullable
@@ -303,5 +316,92 @@ public class CompanyManagerTests extends TestSuite {
         if (cm.getByName("Del") != null) return fail("byNameLower not cleared");
         if (cm.isNameTaken("del")) return fail("isNameTaken still true after delete");
         return pass("deleteCompany cleared all indices.");
+    }
+
+    // ------------------------------------------------------------------
+    // BS-235 — share integrity (pure state transitions; no flags, no DB)
+    // ------------------------------------------------------------------
+
+    /** Company id far above live ones, so supply broadcasts of these tests touch no real company. */
+    private static final int SHARE_TEST_ID = 900_001;
+
+    /** Fresh manager holding one company with {@code issued} stamped shares and no bank account. */
+    private CompanyManager freshWithIssued(long issued) {
+        CompanyManager cm = fresh();
+        Map<String, ListTag> data = new HashMap<>();
+        ListTag meta = new ListTag();
+        CompoundTag metaTag = new CompoundTag();
+        metaTag.putInt("nextCompanyId", SHARE_TEST_ID + 1);
+        meta.add(metaTag);
+        data.put("meta", meta);
+        ListTag companies = new ListTag();
+        CompoundTag c = new CompoundTag();
+        c.putInt("companyId", SHARE_TEST_ID);
+        c.putString("name", "ShareIntegrityTest");
+        c.putInt("bankAccountNr", 987_654_321);
+        c.putLong("maxSupply", 1000);
+        c.putLong("createdAt", 1L);
+        c.putLong("totalSharesIssued", issued);
+        companies.add(c);
+        data.put("companies", companies);
+        cm.load(data);
+        return cm;
+    }
+
+    private TestResult testShareExcessRaisedOnce() {
+        CompanyManager cm = freshWithIssued(10);
+        Company c = cm.getById(SHARE_TEST_ID);
+        if (c == null) return fail("test company did not load");
+        if (ShareIntegrity.apply(cm, c, 10, 100L) || c.isShareExcessOpen())
+            return fail("banked == stamped must not raise");
+        if (c.getShareConsistentTs() != 100L) return fail("consistent time not stored at equality");
+        if (!ShareIntegrity.apply(cm, c, 12, 200L) || !c.isShareExcessOpen() || c.getShareExcessLevel() != 2)
+            return fail("excess 2 must raise once and open the alert");
+        if (ShareIntegrity.apply(cm, c, 12, 300L)) return fail("same excess raised twice");
+        if (!ShareIntegrity.apply(cm, c, 13, 400L) || c.getShareExcessLevel() != 3)
+            return fail("growing excess must raise again");
+        if (c.getShareConsistentTs() != 100L) return fail("consistent time moved while in excess");
+        if (ShareIntegrity.acknowledge(cm, c, 13, 500L) != 3 || c.isShareExcessOpen())
+            return fail("acknowledge must close the alert at excess 3");
+        if (ShareIntegrity.apply(cm, c, 13, 600L)) return fail("acknowledged excess raised again");
+        if (!ShareIntegrity.apply(cm, c, 14, 700L)) return fail("excess past the acknowledged level must raise");
+        if (ShareIntegrity.apply(cm, c, 9, 800L) || c.isShareExcessOpen() || c.getShareExcessLevel() != 0)
+            return fail("back under stamped must close and reset");
+        return pass("raised at 2 and 3, not repeated, acknowledged at 3, reset when consistent");
+    }
+
+    private TestResult testShareDividendsPaused() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        ISyncServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        if (bm == null) return fail("no master bank manager");
+        CompanyManager cm = freshWithIssued(5);
+        Company c = cm.getById(SHARE_TEST_ID);
+        if (c == null) return fail("test company did not load");
+        PayoutSchedule dividend = new PayoutSchedule(1L, FOUNDER_A, 100L, 1000L, 0L, false, 1L, FOUNDER_A,
+                PayoutSchedule.NO_TARGET_ACCOUNT, "", "", PayoutSchedule.Mode.DIVIDEND, PayoutSchedule.MONEY_CURRENCY, 0L, 0);
+        PayoutSchedule fixed = new PayoutSchedule(2L, FOUNDER_A, 100L, 1000L, 0L, false, 1L, FOUNDER_A);
+        ShareIntegrity.apply(cm, c, 7, 100L);
+        List<TransactionLogRecord> rows = new ArrayList<>();
+        PayoutExecutor.Outcome paused = PayoutExecutor.executeOne(c, dividend, 100L, bm, 200L, rows);
+        if (paused.reason != PayoutFailureReason.SHARES_UNDER_REVIEW)
+            return fail("open excess: dividend reason " + paused.reason);
+        if (paused.reason.toStatus() != PayoutHistoryRecord.Status.PAUSED) return fail("history status not PAUSED");
+        if (PayoutExecutor.executeOne(c, fixed, 100L, bm, 200L, rows).reason == PayoutFailureReason.SHARES_UNDER_REVIEW)
+            return fail("fixed payout must not be paused");
+        ShareIntegrity.acknowledge(cm, c, 7, 300L);
+        PayoutExecutor.Outcome after = PayoutExecutor.executeOne(c, dividend, 100L, bm, 400L, rows);
+        if (after.reason == PayoutFailureReason.SHARES_UNDER_REVIEW) return fail("still paused after acknowledge");
+        if (!rows.isEmpty()) return fail("test moved value: " + rows.size() + " ledger rows");
+        return pass("dividend paused while open, fixed payout not, resumed after acknowledge (" + after.reason + ")");
+    }
+
+    private TestResult testShareDestroyLowersIssued() {
+        CompanyManager cm = freshWithIssued(10);
+        if (!cm.destroyShares(SHARE_TEST_ID, 3)) return fail("destroyShares refused");
+        Company c = cm.getById(SHARE_TEST_ID);
+        if (c == null || c.getTotalSharesIssued() != 7) return fail("issued not 7 after destroying 3");
+        cm.destroyShares(SHARE_TEST_ID, 50);
+        if (c.getTotalSharesIssued() != 0) return fail("issued not floored at 0: " + c.getTotalSharesIssued());
+        return pass("10 - 3 = 7, then floored at 0");
     }
 }

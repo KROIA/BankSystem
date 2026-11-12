@@ -81,6 +81,7 @@ public class AuditDigestTests extends TestSuite {
         addTest("money_supply_flag_threshold_and_cooldown", this::moneySupply);
         addTest("digest_sections_order_and_flags", this::digestContent);
         addTest("digest_daily_written_once", this::digestOnce);
+        addTest("share_excess_details", this::shareExcessDetails); // BS-235
         addTest("auditreport_path_and_hours_bounds", this::reportPath);
         addTest("flag_markers_admin_only", this::markerAccess);
     }
@@ -241,7 +242,24 @@ public class AuditDigestTests extends TestSuite {
                 return fail("flags wrong:\n" + md);
             if (!md.contains("| ADMIN_ADD | 2 |") || !md.contains("| ADMIN_SET | 1 |") || md.contains("BANK_CLOSED"))
                 return fail("admin counts wrong:\n" + md);
-            return pass("sections, top-N order, flags and admin counts present");
+            // BS-226: gainers carry the account name (escaped), "#nr" when the map lacks it.
+            String named = mem.getDatabaseThread().submit(() -> AuditDigest.build(mem, from, to, 2, MONEY,
+                    java.util.Map.of(12, "Corner|Shop", 20, "DigestCo"), java.util.Map.of(7, 20))).get(10, TimeUnit.SECONDS);
+            if (!named.contains("| 1 | 12 | Corner\\|Shop |") || !named.contains("| 2 | 11 | #11 |"))
+                return fail("gainer names wrong:\n" + named);
+            // BS-233: paying legs only; the legacy pair needs the company map, the signed run does not.
+            if (!md.contains("## Payouts & dividends (1)") || !md.contains("| 20 | #20 | DIVIDEND | money | 5.00 | 1 | 2 |"))
+                return fail("payout section (no company map) wrong:\n" + md);
+            if (!named.contains("## Payouts & dividends (2)") || !named.contains("| 20 | DigestCo | DIVIDEND | money | 5.00 | 1 | 2 |")
+                    || !named.contains("| 20 | DigestCo | PAYOUT | money | 0.50 | 1 | 1 |") || named.contains("| 11 | #11 | DIVIDEND"))
+                return fail("payout section wrong:\n" + named);
+            // BS-230: company stats classify by type + sign: -300, -200 and the legacy +50 payout are out, +100 is in.
+            net.kroia.banksystem.banking.company.CompanyStatsQuery.CompanyHeadlineMetrics m = mem.getDatabaseThread().submit(() ->
+                    net.kroia.banksystem.banking.company.CompanyStatsQuery.getHeadlineMetrics(mem.getConnection(), 20, MONEY, 0L))
+                    .get(10, TimeUnit.SECONDS);
+            if (m.totalEarnings() != 100 || m.totalSpendings() != 550)
+                return fail("company stats in/out wrong: earn " + m.totalEarnings() + " spend " + m.totalSpendings());
+            return pass("sections, top-N order, gainer names, payouts, flags and admin counts present");
         } catch (Exception e) {
             return fail("threw: " + e);
         } finally {
@@ -329,6 +347,39 @@ public class AuditDigestTests extends TestSuite {
      * Fills a private database: cash snapshots of accounts 11..14 around the period
      * [1e12, 1e12 + 1 day), three flags (one outside) and five ledger rows (3 admin actions).
      */
+    /** BS-235: alert body lists deposits since the last consistent time and a signed per-player hint. */
+    private TestResult shareExcessDetails() {
+        Connection c = null;
+        try {
+            c = TransactionLedgerTests.openMemoryDb();
+            schema(c, "TransactionLog");
+            TransactionLedgerTests.MemoryDb mem = new TransactionLedgerTests.MemoryDb(c);
+            short share = 4242;
+            long since = 1_000_000_000_000L;
+            net.kroia.banksystem.api.ledger.LedgerActor dup = net.kroia.banksystem.api.ledger.LedgerActor.player(PLAYER, "DupeTester");
+            net.kroia.banksystem.api.ledger.LedgerActor adm = net.kroia.banksystem.api.ledger.LedgerActor.admin(ADMIN, "Withdrawer");
+            List<TransactionLogRecord> rows = List.of(
+                    TransactionLogRecord.ofAt(11, LedgerType.DEPOSIT, share, 900, dup, null, null, since - 10, null, null, null), // before since
+                    TransactionLogRecord.ofAt(11, LedgerType.DEPOSIT, share, 500, dup, null, null, since + 1, null, null, null),
+                    TransactionLogRecord.ofAt(20, LedgerType.SHARE_STAMP, (short) 0, 1, dup, null, 9, since + 2, null, null, null),
+                    TransactionLogRecord.ofAt(20, LedgerType.WITHDRAW, share, 300, adm, null, 9, since + 3, null, null, null),
+                    TransactionLogRecord.ofAt(20, LedgerType.ADMIN_REMOVE, share, 100, adm, null, 9, since + 4, null, "shares given to editor", null),
+                    TransactionLogRecord.ofAt(20, LedgerType.ADMIN_REMOVE, share, 100, adm, null, 9, since + 5, null, "shares destroyed; issued 5->4", null),
+                    TransactionLogRecord.ofAt(12, LedgerType.SHARE_TRADE, share, -200, adm, null, 9, since + 6, null, null, null));
+            new TransactionLogManager(mem).save(rows).get(10, TimeUnit.SECONDS);
+            String d = mem.getDatabaseThread().submit(() -> net.kroia.banksystem.banking.company.ShareIntegrity.details(
+                    mem.getConnection(), 9, new short[]{share}, since)).get(10, TimeUnit.SECONDS);
+            if (!d.contains("DupeTester +5 DEPOSIT -> account 11") || d.contains("+9 ")) return fail("deposit list wrong:\n" + d);
+            if (!d.contains("Hint only, not proof") || !d.contains("Withdrawer +6") || !d.contains("DupeTester -4"))
+                return fail("hint wrong:\n" + d);
+            return pass("deposits since the consistent time, hint +6 / -4");
+        } catch (Exception e) {
+            return fail("threw: " + e);
+        } finally {
+            try { if (c != null) c.close(); } catch (SQLException ignored) {}
+        }
+    }
+
     private static TransactionLedgerTests.MemoryDb digestDb(Connection c) throws Exception {
         for (String t : List.of("BalanceHistory", "SuspicionFlag", "TransactionLog")) schema(c, t);
         TransactionLedgerTests.MemoryDb mem = new TransactionLedgerTests.MemoryDb(c);
@@ -347,6 +398,16 @@ public class AuditDigestTests extends TestSuite {
         LedgerType[] types = {LedgerType.ADMIN_ADD, LedgerType.ADMIN_ADD, LedgerType.ADMIN_SET, LedgerType.DEPOSIT, LedgerType.BANK_CLOSED};
         for (int i = 0; i < types.length; i++)
             rows.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID, 11, null, types[i], MONEY, 10 + i, null, null, mid + i, "digest-test"));
+        // BS-233: company 7 pays from account 20. Signed dividend run (2 recipients) + one legacy unsigned payout pair.
+        net.kroia.banksystem.api.ledger.LedgerActor co = new net.kroia.banksystem.api.ledger.LedgerActor(null, "DigestCo",
+                net.kroia.banksystem.api.ledger.LedgerActor.Source.SYSTEM);
+        rows.add(TransactionLogRecord.ofAt(20, LedgerType.DIVIDEND, MONEY, -300, co, 11, 7, mid, "run-a", null, 700L));
+        rows.add(TransactionLogRecord.ofAt(11, LedgerType.DIVIDEND, MONEY, 300, co, 20, 7, mid, "run-a", null, 800L));
+        rows.add(TransactionLogRecord.ofAt(20, LedgerType.DIVIDEND, MONEY, -200, co, 12, 7, mid, "run-a", null, 500L));
+        rows.add(TransactionLogRecord.ofAt(12, LedgerType.DIVIDEND, MONEY, 200, co, 20, 7, mid, "run-a", null, 1200L));
+        rows.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID, 20, null, LedgerType.PAYOUT, MONEY, 50, 13, 7, mid + 10, null));
+        rows.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID, 13, null, LedgerType.PAYOUT, MONEY, 50, 20, 7, mid + 10, null));
+        rows.add(TransactionLogRecord.transfer(20, null, MONEY, 100, 11, mid + 20)); // BS-230: inflow for the stats check
         new TransactionLogManager(mem).save(rows).get(10, TimeUnit.SECONDS);
         return mem;
     }
