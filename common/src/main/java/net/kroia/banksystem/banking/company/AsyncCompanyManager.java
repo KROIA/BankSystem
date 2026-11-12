@@ -843,6 +843,19 @@ public final class AsyncCompanyManager {
                 UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
                 CloseShareMarketInput::new);
     }
+    /**
+     * MARKET_EXISTS_FOR_COMPANY reply: {@code MARKET_EXISTS_*} code plus the share ItemID the
+     * server resolved for the market ({@link net.kroia.banksystem.util.ItemID#INVALID_ID} when
+     * none). BS-178: clients use exactly this ID for StockMarket, never their own lookup.
+     */
+    public record MarketExistsOutput(int code, net.kroia.banksystem.util.ItemID shareItemId) {
+        public static final MarketExistsOutput UNAVAILABLE =
+                new MarketExistsOutput(MARKET_EXISTS_UNAV, net.kroia.banksystem.util.ItemID.INVALID_ID);
+        public static final StreamCodec<RegistryFriendlyByteBuf, MarketExistsOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, MarketExistsOutput::code,
+                net.kroia.banksystem.util.ItemID.STREAM_CODEC, MarketExistsOutput::shareItemId,
+                MarketExistsOutput::new);
+    }
     public record CloseShareMarketOutput(int status) {
         public static final StreamCodec<RegistryFriendlyByteBuf, CloseShareMarketOutput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, p -> p.status,
@@ -1159,7 +1172,7 @@ public final class AsyncCompanyManager {
         put(FunctionType.LIST_ALL_COMPANY_VISUALS, new AsyncFunctionDataCodecs(EmptyInput.STREAM_CODEC, ListAllVisualsOutput.STREAM_CODEC));
         put(FunctionType.OPEN_SHARE_MARKET,         new AsyncFunctionDataCodecs(OpenShareMarketInput.STREAM_CODEC,  OpenShareMarketOutput.STREAM_CODEC));
         put(FunctionType.CLOSE_SHARE_MARKET,        new AsyncFunctionDataCodecs(CloseShareMarketInput.STREAM_CODEC, CloseShareMarketOutput.STREAM_CODEC));
-        put(FunctionType.MARKET_EXISTS_FOR_COMPANY, new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC,   ByteBufCodecs.VAR_INT.cast()));
+        put(FunctionType.MARKET_EXISTS_FOR_COMPANY, new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC,   MarketExistsOutput.STREAM_CODEC));
         put(FunctionType.SET_MARKET_OPEN,           new AsyncFunctionDataCodecs(SetMarketOpenInput.STREAM_CODEC,     SetMarketOpenOutput.STREAM_CODEC));
         put(FunctionType.IS_MARKET_OPEN,            new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC,   ByteBufCodecs.VAR_INT.cast()));
         put(FunctionType.UNBIND_STAMPER,            new AsyncFunctionDataCodecs(UnbindStamperInput.STREAM_CODEC,     UnbindStamperOutput.STREAM_CODEC));
@@ -1614,7 +1627,7 @@ public final class AsyncCompanyManager {
             case LIST_ALL_COMPANY_VISUALS -> OutputData.of(function, ListAllVisualsOutput.EMPTY);
             case OPEN_SHARE_MARKET         -> OutputData.of(function, new OpenShareMarketOutput(SM_STATUS_UNAVAILABLE, ""));
             case CLOSE_SHARE_MARKET        -> OutputData.of(function, new CloseShareMarketOutput(SM_STATUS_UNAVAILABLE));
-            case MARKET_EXISTS_FOR_COMPANY -> OutputData.of(function, Integer.valueOf(MARKET_EXISTS_UNAV));
+            case MARKET_EXISTS_FOR_COMPANY -> OutputData.of(function, MarketExistsOutput.UNAVAILABLE);
             case SET_MARKET_OPEN           -> OutputData.of(function, new SetMarketOpenOutput(SM_STATUS_UNAVAILABLE));
             case IS_MARKET_OPEN            -> OutputData.of(function, Integer.valueOf(MARKET_OPEN_UNAV));
             case UNBIND_STAMPER            -> OutputData.of(function, new UnbindStamperOutput(CODE_INTERNAL));
@@ -1735,7 +1748,7 @@ public final class AsyncCompanyManager {
     private static OutputData handleMarketExistsForCompany(GetShareVisualsInput in, CompanyManager cm) {
         net.kroia.banksystem.util.ItemID share = resolveShareItemID(in.companyId());
         if (share == null)
-            return OutputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, Integer.valueOf(MARKET_EXISTS_UNAV));
+            return OutputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, MarketExistsOutput.UNAVAILABLE);
         net.kroia.banksystem.integration.stockmarket.StockMarketBridge.MarketExists e =
                 runOnServerThreadSync(() ->
                         net.kroia.banksystem.integration.stockmarket.StockMarketBridge.marketExistsFor(share));
@@ -1744,7 +1757,7 @@ public final class AsyncCompanyManager {
             case NO  -> MARKET_EXISTS_NO;
             case UNAVAILABLE -> MARKET_EXISTS_UNAV;
         };
-        return OutputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, Integer.valueOf(code));
+        return OutputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, new MarketExistsOutput(code, share));
     }
 
     /**
@@ -2657,13 +2670,14 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** Task #1 (v2.1.0) — slave helper: probe whether SM has a market for this company's share. */
-    public static CompletableFuture<Integer> marketExistsForCompanyAsync(int companyId) {
+    /** Task #1 (v2.1.0) — slave helper: probe whether SM has a market for this company's share,
+     *  and which share ItemID the server keys it by (BS-178). Never completes with null. */
+    public static CompletableFuture<MarketExistsOutput> marketExistsForCompanyAsync(int companyId) {
         InputData input = InputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, new GetShareVisualsInput(companyId));
-        CompletableFuture<Integer> f = new CompletableFuture<>();
+        CompletableFuture<MarketExistsOutput> f = new CompletableFuture<>();
         dispatchInput(input).thenAccept(o -> {
-            Integer v = o == null ? null : o.decodeResult();
-            f.complete(v == null ? MARKET_EXISTS_UNAV : v);
+            MarketExistsOutput v = o == null ? null : o.decodeResult();
+            f.complete(v == null ? MarketExistsOutput.UNAVAILABLE : v);
         });
         return f;
     }
