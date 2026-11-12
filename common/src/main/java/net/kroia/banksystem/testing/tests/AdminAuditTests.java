@@ -21,11 +21,16 @@ import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.minecraft.command.BankSystemCommandsRegistration;
 import net.kroia.banksystem.minecraft.command.ServerBankSystemCommandHandler;
 import net.kroia.banksystem.util.BankSystemPermissions;
+import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.kroia.banksystem.networking.general.AuditPageRequest;
+import net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket;
 import net.kroia.banksystem.networking.multi_server.ServerNetworkInfoRequest;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
+import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.modutilities.testing.TestCategory;
@@ -43,6 +48,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -57,6 +63,17 @@ public class AdminAuditTests extends TestSuite {
     private static final UUID PLAYER = UUID.fromString("00000000-0000-0000-0000-00000000f110");
     private static final UUID ADMIN = UUID.fromString("00000000-0000-0000-0000-00000000f111");
     private static final String MARKER = "audit-test-marker-f110";
+    private static final long WAIT_MS = 10_000;
+    /** BS-209: the slave half of the admin-flag gate (flag lives on the master). */
+    private static final TestCategory SLAVE_ADMIN = new TestCategory(
+            "banksystem", "admin_slave", "Admin-flag commands on a slave ask the master",
+            TestCategory.ServerType.SLAVE_ONLY, true);
+
+    private final boolean slave;
+
+    public AdminAuditTests(boolean slave) {
+        this.slave = slave;
+    }
 
     private ISyncServerBankManager manager;
     private TransactionLogManager ledger;
@@ -65,11 +82,18 @@ public class AdminAuditTests extends TestSuite {
 
     @Override
     public TestCategory getCategory() {
-        return BankSystemTestCategories.BANK_MANAGER;
+        return slave ? SLAVE_ADMIN : BankSystemTestCategories.BANK_MANAGER;
     }
 
     @Override
     public void registerTests() {
+        if (slave) {
+            // BS-209: positive cases need slave-trusted / spslave-trusted, negative cases plain slave / spslave
+            addTest("slave_admin_gate_asks_master", () -> onSlave(this::slaveGate));
+            addTest("slave_symbols_list_master_only", () -> onSlave(this::slaveSymbolsList));
+            addTest("slave_auditreport_trusted_only", () -> onSlave(this::slaveAuditReport));
+            return;
+        }
         addTest("paged_query_filters_and_order", this::pagedQuery);
         addTest("admin_row_writes_audit_file_and_alert", this::adminRowAudit);
         addTest("alerts_toggle_persists_and_defaults", this::alertsToggle);
@@ -85,6 +109,106 @@ public class AdminAuditTests extends TestSuite {
         addTest("admin_command_non_op_with_flag_runs", () -> gate(true, 0, true));
         addTest("admin_command_op_without_flag_refused", () -> gate(false, 2, false));
         addTest("admin_command_non_op_without_flag_refused", () -> gate(false, 0, false));
+        addTest("symbols_list_runs_for_flagged_non_op", this::symbolsListMaster); // BS-209
+    }
+
+    /** BS-209: collects what a command sends to its source (success and failure lines). */
+    private static final class Capture implements CommandSource {
+        final List<String> lines = new CopyOnWriteArrayList<>();
+        @Override public void sendSystemMessage(Component c) { lines.add(c.getString()); }
+        @Override public boolean acceptsSuccess() { return true; }
+        @Override public boolean acceptsFailure() { return true; }
+        @Override public boolean shouldInformAdmins() { return false; }
+        boolean has(String s) { return lines.stream().anyMatch(l -> l.contains(s)); }
+    }
+
+    /** A level-0 (non-op) source of {@code player} whose messages go to {@code out}. */
+    private static CommandSourceStack nonOp(ServerPlayer player, Capture out) {
+        return player.createCommandSourceStack().withPermission(0).withSource(out);
+    }
+
+    /** BS-209: on the master a flagged non-op runs {@code /banksystem symbols list}. */
+    private TestResult symbolsListMaster() {
+        if (manager == null || getServer() == null) return skip("no master server");
+        List<ServerPlayer> players = getServer().getPlayerList().getPlayers();
+        if (players.isEmpty()) return skip("no online player");
+        ServerPlayer player = players.get(0);
+        boolean before = manager.isBanksystemAdmin(player.getUUID());
+        try {
+            if (!manager.setBanksystemAdminMode(player.getUUID(), true)) return fail("player has no master user");
+            Capture out = new Capture();
+            getServer().getCommands().performPrefixedCommand(nonOp(player, out), "banksystem symbols list");
+            if (!pumpUntil(() -> out.has("Symbols (revision"), 5_000)) return fail("flagged non-op got no symbols list: " + out.lines);
+            return pass("flagged non-op ran /banksystem symbols list on the master");
+        } finally {
+            manager.setBanksystemAdminMode(player.getUUID(), before);
+        }
+    }
+
+    // ------------------------------------------------------------------ slave (BS-209)
+
+    private interface SlaveBody { TestResult run(ServerPlayer player, boolean trusted); }
+
+    /**
+     * Runs {@code body} on a connected slave with its online player. A trusted slave sets the player's admin flag on
+     * the master for the body (cleared after); an untrusted slave can't, so its player stays unflagged.
+     */
+    private TestResult onSlave(SlaveBody body) {
+        if (getServer() == null || !BankSystemModBackend.getInstances_forTesting().isSlaveServer) return skip("not a slave");
+        if (!MultiServerUtils.canInteractWithBankSystem()) return skip("slave not connected to its master");
+        List<ServerPlayer> players = getServer().getPlayerList().getPlayers();
+        if (players.isEmpty()) return skip("no online player");
+        ServerPlayer player = players.get(0);
+        IAsyncBankManager mgr = BankSystemModBackend.getInstances_forTesting().SERVER_BANK_MANAGER.getAsync();
+        boolean trusted = Boolean.TRUE.equals(await(mgr.isSlaveServerTrustedAsync(""), WAIT_MS));
+        if (Boolean.TRUE.equals(await(mgr.isBanksystemAdminAsync(player.getUUID()), WAIT_MS)))
+            return skip("player already has the admin flag on the master");
+        boolean set = trusted && Boolean.TRUE.equals(await(mgr.setBanksystemAdminModeAsync(player.getUUID(), true), WAIT_MS));
+        try {
+            if (trusted && !set) return fail("trusted slave could not set the player's admin flag on the master");
+            return body.run(player, trusted);
+        } finally {
+            if (set) await(mgr.setBanksystemAdminModeAsync(player.getUUID(), false), WAIT_MS);
+        }
+    }
+
+    /** The gate asks the master: flagged non-op runs (trusted cell), unflagged non-op gets the admin-only message. */
+    private TestResult slaveGate(ServerPlayer player, boolean trusted) {
+        Capture out = new Capture();
+        CompletableFuture<Boolean> ran = BankSystemCommandsRegistration.runAsAdmin(nonOp(player, out), () -> {});
+        if (!pumpUntil(ran::isDone, WAIT_MS)) return fail("master gave no answer to the admin check");
+        if (ran.join() != trusted) return fail("action ran=" + ran.join() + ", expected " + trusted + "; messages " + out.lines);
+        if (!trusted && !out.has(ServerBankSystemCommandHandler.NO_ADMIN_MESSAGE))
+            return fail("unflagged non-op got no admin-only message: " + out.lines);
+        return pass(trusted ? "trusted slave: flag set on the master lets a non-op run"
+                : "unflagged non-op refused with the admin-only message");
+    }
+
+    /** {@code /banksystem symbols list} on a slave: flagged player is told it is master-only, unflagged gets the admin-only message. */
+    private TestResult slaveSymbolsList(ServerPlayer player, boolean trusted) {
+        Capture out = new Capture();
+        getServer().getCommands().performPrefixedCommand(nonOp(player, out), "banksystem symbols list");
+        String expected = trusted ? "[symbols] Must run on the master server." : ServerBankSystemCommandHandler.NO_ADMIN_MESSAGE;
+        if (!pumpUntil(() -> out.has(expected), WAIT_MS)) return fail("expected '" + expected + "', got " + out.lines);
+        if (out.has("Symbols (revision")) return fail("the slave listed symbols: " + out.lines);
+        return pass("slave replied: " + expected);
+    }
+
+    /** BS-203: auditreport from a trusted slave returns the master's report path; an untrusted slave is told it is not trusted. */
+    private TestResult slaveAuditReport(ServerPlayer player, boolean trusted) {
+        List<String> seen = new CopyOnWriteArrayList<>();
+        ClientConsoleMessagePacket.testSink = seen::add;
+        try {
+            String path = await(BankSystemModBackend.getInstances_forTesting().COMMAND_HANDLER.getAsync()
+                    .banksystem_auditreport_async(player.getUUID(), 1), 60_000);
+            if (trusted) return path.isEmpty() ? fail("trusted slave admin got no audit report") : pass("report written on the master: " + path);
+            if (!path.isEmpty()) return fail("untrusted slave got an audit report: " + path);
+            if (!pumpUntil(() -> seen.stream().anyMatch(m -> m.contains("not trusted")), WAIT_MS))
+                return fail("no 'not trusted' message from the master: " + seen);
+            return pass("untrusted slave refused with the 'not trusted' message");
+        } finally {
+            ClientConsoleMessagePacket.testSink = null;
+        }
     }
 
     /** BS-196: flag-gated nodes fall back to level 0 (the admin flag decides), every other node to op level 2. */
@@ -118,7 +242,8 @@ public class AdminAuditTests extends TestSuite {
         boolean before = manager.isBanksystemAdmin(uuid);
         try {
             manager.setBanksystemAdminMode(uuid, flag);
-            CommandSourceStack source = players.get(0).createCommandSourceStack().withPermission(opLevel);
+            Capture out = new Capture();
+            CommandSourceStack source = players.get(0).createCommandSourceStack().withPermission(opLevel).withSource(out);
             TestResult r = assertTrue("player passes the requires check",
                     BankSystemPermissions.canUseFlagGatedCommand(source, BankSystemPermissions.COMMAND_SYMBOLS));
             if (!r.passed()) return r;
@@ -127,7 +252,10 @@ public class AdminAuditTests extends TestSuite {
             if (!pumpUntil(result::isDone, 5_000)) return fail("admin check did not complete");
             r = assertEquals("action ran (flag=" + flag + ", level=" + opLevel + ")", expectedRan, ran.get());
             if (!r.passed()) return r;
-            return assertEquals("result matches", expectedRan, result.join());
+            r = assertEquals("result matches", expectedRan, result.join());
+            if (!r.passed() || expectedRan) return r;
+            return assertTrue("refused player gets the admin-only message, got " + out.lines,
+                    out.has(ServerBankSystemCommandHandler.NO_ADMIN_MESSAGE)); // BS-209
         } finally {
             manager.setBanksystemAdminMode(uuid, before);
         }
@@ -135,6 +263,7 @@ public class AdminAuditTests extends TestSuite {
 
     @Override
     public void setup() {
+        if (slave) return;
         IBankManager bm = BankSystemMod.getAPI().getServerBankManager();
         if (bm == null || bm.getSync() == null) return;
         manager = bm.getSync();

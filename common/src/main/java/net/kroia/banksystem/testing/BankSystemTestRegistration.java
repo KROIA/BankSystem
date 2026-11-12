@@ -95,7 +95,8 @@ public class BankSystemTestRegistration {
         // Task #44 (v2.1.0) — SQLite Transaction Ledger round-trip + read API.
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransactionLogManagerTests());
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransactionLedgerTests());
-        TestRegistry.register(new net.kroia.banksystem.testing.tests.AdminAuditTests()); // Task #110
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AdminAuditTests(false)); // Task #110
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AdminAuditTests(true)); // BS-209, SLAVE_ONLY
         TestRegistry.register(new net.kroia.banksystem.testing.tests.SuspicionFlagTests()); // Tasks #111/#114/#115
         TestRegistry.register(new net.kroia.banksystem.testing.tests.AuditDigestTests()); // Tasks #112/#113/#116
         TestRegistry.register(new net.kroia.banksystem.testing.tests.DiscordFeedTests()); // Task #119

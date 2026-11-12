@@ -75,11 +75,17 @@ public class ClientConsoleMessagePacket extends BankSystemNetworkPacket {
         handle();
     }
 
+    /** Dev-only test hook (BS-209): sees every message printed here. Set only by in-game tests; null otherwise. */
+    public static volatile @Nullable java.util.function.Consumer<String> testSink;
+
     private void handle()
     {
         MinecraftServer server = UtilitiesPlatform.getServer();
         if (server == null)
             return;
+        java.util.function.Consumer<String> sink = testSink;
+        if (sink != null)
+            sink.accept(message);
         if(receivingPlayer == null)
         {
             ServerPlayerUtilities.printToClientConsole(message);
