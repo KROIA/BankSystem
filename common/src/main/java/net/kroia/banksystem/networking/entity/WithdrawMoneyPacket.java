@@ -17,6 +17,7 @@ import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRe
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
@@ -150,6 +151,16 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
             }
         }*/
 
+    }
+
+    /**
+     * BS-272: the master's untrusted-slave refusal below goes to a player who is not on the master, so the slave
+     * tells them itself. The packet is forwarded as before.
+     */
+    @Override
+    protected void routeToMaster(dev.architectury.networking.NetworkManager.PacketContext context) {
+        super.routeToMaster(context);
+        MultiServerUtils.notifyIfUntrustedSlave(context.getPlayer().getUUID());
     }
 
     @Override

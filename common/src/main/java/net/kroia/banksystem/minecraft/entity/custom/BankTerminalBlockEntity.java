@@ -24,6 +24,7 @@ import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ContainerItemInsertion;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.banksystem.util.VolatileItemComponents;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
@@ -1043,9 +1044,11 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(playerID, BankPermission.DEPOSIT.getValue());
                 hasPermissionFuture.thenAccept(hasPermission -> {
                     if (!hasPermission) {
-                        CompletableFuture<String> accountNameFuture = bankAccount.getAccountNameAsync();
-                        accountNameFuture.thenAccept(accountName -> {
-                            ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(accountName, BankPermission.DEPOSIT));
+                        // BS-272: an untrusted slave also reads false here; say that instead of "no permission"
+                        MultiServerUtils.notifyIfUntrustedSlave(playerID).thenAccept(untrusted -> {
+                            if (untrusted) return;
+                            bankAccount.getAccountNameAsync().thenAccept(accountName ->
+                                    ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(accountName, BankPermission.DEPOSIT)));
                         });
                         return;
                     }
@@ -1246,9 +1249,11 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(playerID, BankPermission.WITHDRAW.getValue());
             hasPermissionFuture.thenAccept(hasPermission -> {
                 if (!hasPermission) {
-                    CompletableFuture<String>  accountNameFuture = bankAccount.getAccountNameAsync();
-                    accountNameFuture.thenAccept(accountName -> {
-                        ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(accountName, BankPermission.WITHDRAW));
+                    // BS-272: an untrusted slave also reads false here; say that instead of "no permission"
+                    MultiServerUtils.notifyIfUntrustedSlave(playerID).thenAccept(untrusted -> {
+                        if (untrusted) return;
+                        bankAccount.getAccountNameAsync().thenAccept(accountName ->
+                                ServerPlayerUtilities.printToClientConsole(playerID, BankSystemTextMessages.getNoBankPermissionMessage(accountName, BankPermission.WITHDRAW)));
                     });
                     return;
                 }

@@ -793,9 +793,14 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      */
     private void onCraftPermissionRevoked(IAsyncBankAccount account, boolean canWithdraw, boolean canDeposit) {
         final BankPermission missing = (useBankItems && !canWithdraw) ? BankPermission.WITHDRAW : BankPermission.DEPOSIT;
-        account.getAccountNameAsync().thenAccept(accountName ->
-                ServerPlayerUtilities.printToClientConsole(player.getUUID(),
-                        BankSystemTextMessages.getNoBankPermissionMessage(accountName, missing)));
+        UUID playerUUID = player.getUUID();
+        // BS-272: an untrusted slave also reads false; say that instead of "no permission"
+        net.kroia.banksystem.util.MultiServerUtils.notifyIfUntrustedSlave(playerUUID).thenAccept(untrusted -> {
+            if (untrusted) return;
+            account.getAccountNameAsync().thenAccept(accountName ->
+                    ServerPlayerUtilities.printToClientConsole(playerUUID,
+                            BankSystemTextMessages.getNoBankPermissionMessage(accountName, missing)));
+        });
         runOnMainThread(() -> craftInProgress = false);
         applyCraftingSettings(useBankItems && canWithdraw, depositOutputToBank && canDeposit, craftingAccountNumber);
     }

@@ -92,6 +92,8 @@ public class SlaveMasterDownTests extends TestSuite {
         addTest("link_down_failed_lookup_backs_off", () -> withMasterDown(this::lookupBacksOff));
         addTest("link_down_cleanup_runs_once", this::cleanupRunsOnce);
         addTest("link_cut_after_terminal_deposit_credited_once", this::terminalDepositLinkCut); // BS-207
+        addTest("untrusted_slave_refusal_line", this::untrustedSlaveRefusalLine); // BS-272
+        addTest("link_down_no_untrusted_line", () -> withMasterDown(this::untrustedLineSkippedWhileDown)); // BS-272
 
         // BS-200: the request never reaches the master, so ACCOUNT need not exist and trust does not matter.
         addTest("hang_bind_external_outcome_unknown", () -> hangWrite(() -> BankSystemNetworking.BIND_EXTERNAL_ACCOUNT_REQUEST.sendRequestToMaster(
@@ -294,6 +296,24 @@ public class SlaveMasterDownTests extends TestSuite {
             events.SLAVE_CONNECTION_LOST.removeListener(listener);
             SlaveCompanyMirror.remove(COMPANY);
         }
+    }
+
+    /**
+     * BS-272: the terminal / ATM refusal on a slave. An untrusted slave sends the red untrusted line (true), a trusted
+     * one does not (false: the caller keeps the "no permission" line). Runs in slave / spslave and slave-trusted.
+     */
+    private TestResult untrustedSlaveRefusalLine() {
+        if (!MultiServerManager.isSlave()) return skip("not a slave");
+        if (!MultiServerManager.isRunning()) return skip("master link not up");
+        boolean trusted = Boolean.TRUE.equals(await(bankManager().isSlaveServerTrustedAsync(""), 10_000));
+        Boolean sent = await(net.kroia.banksystem.util.MultiServerUtils.notifyIfUntrustedSlave(UUID.randomUUID()), 10_000);
+        return assertEquals((trusted ? "trusted" : "untrusted") + " slave: untrusted line sent", !trusted, sent);
+    }
+
+    /** BS-272: without a master link nothing is asked and the caller keeps its own message. */
+    private TestResult untrustedLineSkippedWhileDown() {
+        CompletableFuture<Boolean> sent = net.kroia.banksystem.util.MultiServerUtils.notifyIfUntrustedSlave(UUID.randomUUID());
+        return assertEquals("link down: completed at once with false", Boolean.FALSE, sent.getNow(null));
     }
 
     private static final long BS207_ITEMS = 10, BS207_UNIT = 100; // raw money per terminal item
