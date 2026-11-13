@@ -2,6 +2,7 @@ package net.kroia.banksystem.testing.fixture;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.kroia.banksystem.BankSystemModBackend;
@@ -29,6 +30,7 @@ import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
+import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.networking.entity.ConverterCommitToBankPacket;
 import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.testing.fixture.FixtureKey.Case;
@@ -64,7 +66,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
- * BS-269 — test only: the BankSystem story steps of the generated audit fixture (step A and C9–C16), run on the
+ * BS-269 — test only: the BankSystem story steps of the generated audit fixture (step A, C9–C16, D and E's bank part), run on the
  * trusted slave that drives the scenario. Every step blocks (on the server thread it keeps running queued server
  * tasks while it waits, like {@code TestSuite.await}), appends its cases to {@link FixtureKey#current()} and returns
  * the ids it made. Master work goes through {@link FixtureStepRequest}. Every deposit / withdraw waits for its final
@@ -648,15 +650,7 @@ public final class FixtureSteps {
 
         long downFrom = now();
         before = ledgerMax(slave);
-        BankDownloadBlockEntity down = new BankDownloadBlockEntity(BlockPos.ZERO, BankSystemBlocks.BANK_DOWNLOAD_BLOCK.get().defaultBlockState());
-        CompoundTag dt = new CompoundTag(); // BankDownloadBlockEntity.TAGS: A account, P powered, U owner
-        dt.putInt("A", y.account());
-        dt.putBoolean("P", true);
-        NbtCompat.putUUID(dt, "U", y.uuid());
-        down.loadAdditional(dt, slave.registryAccess()); // mc<=1.21.5
-        //down.loadAdditional(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, slave.registryAccess(), dt)); // mc>=1.21.6
-        down.getWithdrawOrders().add(new BankDownloadBlockEntity.WithdrawOrder(diamondId, 3, BankDownloadBlockEntity.WithdrawCondition.NONE, 0));
-        down.update();
+        download(slave, y, diamondId, 3);
         String downId = awaitRow(slave, before, y.account(), LedgerType.DOWNLOAD_WITHDRAW).get("ref").getAsString();
         awaitFinal(slave, downId);
         long downTo = now();
@@ -772,6 +766,230 @@ public final class FixtureSteps {
     }
 
     /**
+     * D — transfers master ↔ slave, rule {@code transfer}, subject = transfer id; all on TesterY's diamonds (no money, so
+     * the C13 banknote count stays exact; no clean case has TesterY's account as subject). C11 / C15 / C16 already key an
+     * ok terminal deposit, converter commit, upload, download and DROP. This step adds:
+     * <ul>
+     *   <li>ok: a terminal withdraw; a terminal deposit into the frozen account, refused → RETURNED.</li>
+     *   <li>known-gap: a raw deposit (no ledger type: the master's RAW_CHANGE row has no id); a craft ingredient
+     *       withdraw (CRAFT_CONSUME) the master refuses (frozen), its own lock freed by the craft-failure unlock while
+     *       the #6 lock stays (6b, clean look-alike); a DEPOSIT with no block context the master refuses (frozen).</li>
+     *   <li>parked: BS-267 #1 download block withdraw with RESTART_AFTER_APPLY (master debits, reply lost → TIMED_OUT,
+     *       the block keeps the items); #6 terminal withdraw with THROW_BEFORE_APPLY (TIMED_OUT, lock kept), 6a the
+     *       admin "reset locked balance" on the same account + item; #2 craft output deposit with THROW_BEFORE_APPLY
+     *       (TIMED_OUT, items gone).</li>
+     *   <li>planted (DB edit): lost = a CONFIRMED deposit whose master row is deleted; twice = a raw deposit's
+     *       RAW_CHANGE row relabelled DEPOSIT with an earlier deposit's id; created = the same with a fresh id.</li>
+     * </ul>
+     * Left out: BS-267 #3 (see {@link Step#note()}).
+     */
+    public static Step transfers(MinecraftServer slave) {
+        long from = now();
+        FixtureKey key = FixtureKey.current();
+        Tester y = ensureTester(slave, CLEAN_SHARES);
+        ItemID diamondId = allow(slave, Items.DIAMOND);
+        String diamond = diamondId.getName(), acct = String.valueOf(y.account());
+        IAsyncBank bank = bank(slave, y.account(), diamondId);
+        List<String> cases = new ArrayList<>(), transfers = new ArrayList<>();
+        List<Long> ledger = new ArrayList<>(), flags = new ArrayList<>();
+        String toM = TransferJournal.TO_MASTER, fromM = TransferJournal.FROM_MASTER, async = TransferJournal.ASYNC_BANK;
+
+        // created (first: with no journal step AT needs it >= 10 min before the copy)
+        long cFrom = now(), before = ledgerMax(slave);
+        String donorC = rawDeposit(slave, y.account(), bank, 4 * SCALE);
+        long rowC = awaitRow(slave, before, y.account(), LedgerType.RAW_CHANGE).get("id").getAsLong();
+        String created = TransferJournal.newTransferId();
+        relabel(slave, rowC, created);
+        transferCase(key, cases, "D-created-flag", created, null, null, "created", diamond, 0, 4 * SCALE, cFrom, List.of(rowC), null,
+                "DB edit", "RAW_CHANGE row " + rowC + " of raw deposit " + donorC + " relabelled DEPOSIT with a fresh id no journal has;"
+                        + " no journal step, so AT classes it only >= 10 min before the copy (else after-snapshot)");
+
+        // lost
+        long lFrom = now();
+        String lost = depositOk(slave, y.uuid(), y.account(), new ItemStack(Items.DIAMOND, 10));
+        awaitFinal(slave, lost);
+        List<Long> lostRows = refIds(slave, lost);
+        if (master(slave, "ledgerDelete", obj("ref", lost)).get("deleted").getAsInt() < 1)
+            throw new IllegalStateException("D: master row of " + lost + " not deleted");
+        transferCase(key, cases, "D-lost-flag", lost, toM, async, "lost", diamond, 10 * SCALE, 0, lFrom, List.of(), null, "DB edit",
+                "CONFIRMED terminal deposit of 10 diamonds, its master DEPOSIT row " + lostRows + " deleted (simulates BS-267 #5);"
+                        + " also an unkeyed balance gap on TesterY's diamonds");
+
+        // twice
+        long tFrom = now();
+        String twice = depositOk(slave, y.uuid(), y.account(), new ItemStack(Items.DIAMOND, 6));
+        awaitFinal(slave, twice);
+        List<Long> twiceRows = new ArrayList<>(refIds(slave, twice));
+        before = ledgerMax(slave);
+        String donorT = rawDeposit(slave, y.account(), bank, 6 * SCALE);
+        long rowT = awaitRow(slave, before, y.account(), LedgerType.RAW_CHANGE).get("id").getAsLong();
+        relabel(slave, rowT, twice);
+        twiceRows.add(rowT);
+        transferCase(key, cases, "D-twice-flag", twice, toM, async, "twice", diamond, 6 * SCALE, 12 * SCALE, tFrom, twiceRows, null,
+                "DB edit", "CONFIRMED terminal deposit of 6 diamonds; RAW_CHANGE row " + rowT + " of raw deposit " + donorT
+                        + " relabelled DEPOSIT with this id: a second master credit");
+
+        // raw call (known gap)
+        long rFrom = now();
+        String raw = rawDeposit(slave, y.account(), bank, 2 * SCALE);
+        transferCase(key, cases, "D-raw-clean", raw, toM, async, "known-gap", diamond, 2 * SCALE, 0, rFrom, List.of(), null, "test hook",
+                "raw bank call (depositAsync, no ledger type): the master's RAW_CHANGE row has no transfer id");
+
+        // ok withdraw
+        long wFrom = now();
+        String okW = withdraw(slave, y.uuid(), y.account(), diamondId, 2 * SCALE);
+        awaitFinal(slave, okW);
+        List<Long> okRows = refIds(slave, okW);
+        transferCase(key, cases, "D-withdraw-clean", okW, fromM, async, "ok", diamond, 2 * SCALE, 2 * SCALE, wFrom, okRows, null,
+                "test hook", "terminal-style withdraw of 2 diamonds, DELIVERED");
+
+        // BS-267 #6: never applied, lock kept
+        long sixFrom = now(), flag0 = flagMax(slave);
+        if (await(slave, bank.lockAmountAsync(5 * SCALE)) != BankStatus.SUCCESS) throw new IllegalStateException("D #6: lock refused");
+        Sent six = faulted(slave, "THROW_BEFORE_APPLY", () -> send(slave, LedgerType.WITHDRAW, y.uuid(), "terminal", bank, 5 * SCALE, false));
+        AdminAudit.parkTransfer(y.account(), diamondId, 5 * SCALE, six.transferId(), y.uuid(), "terminal withdraw", six.future().exceptionNow());
+        expectStep(slave, six.transferId(), TransferJournal.TIMED_OUT);
+        JsonObject park6 = awaitFlag(slave, flag0, SuspicionChecks.TRANSFER_PARKED, y.account(), WAIT_MS);
+        transferCase(key, cases, "D-6-transfer-parked-flag", six.transferId(), fromM, async, "parked", diamond, 0, 0, sixFrom, List.of(),
+                park6.get("id").getAsLong(), "test hook", "BS-267 #6: terminal withdraw of 5 diamonds, THROW_BEFORE_APPLY on the master:"
+                        + " never applied, status UNKNOWN → TIMED_OUT; the items are out (terminal-style: none handed out here), the 5 stay locked");
+
+        // 6b + refused deposits: account frozen (console /banksystem freeze)
+        long lockedBefore = await(slave, bank.getLockedBalanceAsync());
+        if (lockedBefore < 5 * SCALE) throw new IllegalStateException("D #6: lock not kept: " + lockedBefore);
+        if (await(slave, bank.lockAmountAsync(2 * SCALE)) != BankStatus.SUCCESS) throw new IllegalStateException("D 6b: craft lock refused");
+        master(slave, "command", obj("cmd", "banksystem freeze " + y.account() + " on"));
+        try {
+            long craftFrom = now();
+            Sent craft = send(slave, LedgerType.CRAFT_CONSUME, y.uuid(), "terminal", bank, 2 * SCALE, false);
+            expectStatus(craft, BankStatus.FAILED_ACCOUNT_FROZEN, "D 6b craft withdraw");
+            Long freed = await(slave, BankTerminalContainerMenu.releaseOwnCraftLock(bank, 2 * SCALE));
+            for (int i = 0; await(slave, bank.getLockedBalanceAsync()) != lockedBefore; i++) {
+                if (i >= 50) throw new IllegalStateException("D 6b: locked not back to " + lockedBefore + " (freed " + freed + ")");
+                pump(slave, 100);
+            }
+            transferCase(key, cases, "D-6b-craft-clean", craft.transferId(), fromM, async, "known-gap", diamond, 0, 0, craftFrom, List.of(), null,
+                    "test hook", "un-debited craft (CRAFT_CONSUME refused by the master, account frozen); the craft-failure unlock freed only"
+                            + " its own 2 diamonds (no ledger row), the #6 lock of 5 stays. Only REQUESTED: known-gap >= 10 min before the copy"
+                            + " (else ok); clean either way");
+
+            long retFrom = now();
+            Sent ret = deposit(slave, y.uuid(), y.account(), new ItemStack(Items.DIAMOND, 4));
+            expectStatus(ret, BankStatus.FAILED_ACCOUNT_FROZEN, "D RETURNED deposit");
+            expectStep(slave, ret.transferId(), TransferJournal.RETURNED);
+            transferCase(key, cases, "D-returned-clean", ret.transferId(), toM, async, "ok", diamond, 0, 0, retFrom, List.of(), null,
+                    "test hook", "terminal deposit of 4 diamonds refused by the master (account frozen), items back in the terminal: RETURNED");
+
+            long outFrom = now();
+            Sent out = send(slave, LedgerType.DEPOSIT, y.uuid(), null, bank, 3 * SCALE, true);
+            expectStatus(out, BankStatus.FAILED_ACCOUNT_FROZEN, "D outside deposit");
+            transferCase(key, cases, "D-outside-clean", out.transferId(), toM, async, "known-gap", diamond, 3 * SCALE, 0, outFrom, List.of(),
+                    null, "test hook", "DEPOSIT of 3 diamonds with no block context, refused by the master (account frozen); only"
+                            + " REQUESTED: known-gap >= 10 min before the copy (else after-snapshot); clean either way");
+            transfers.addAll(List.of(craft.transferId(), ret.transferId(), out.transferId()));
+        } finally {
+            master(slave, "command", obj("cmd", "banksystem freeze " + y.account() + " off"));
+        }
+
+        // 6a: admin reset locked balance on the same account + item
+        long unlockFrom = now();
+        before = ledgerMax(slave);
+        master(slave, "unlock", obj("account", y.account(), "item", diamondId.getShort(), "lock", 0));
+        JsonObject unlock = row(ledgerAfter(slave, before), y.account(), LedgerType.ADMIN_UNLOCK);
+        long unlockId = unlock.get("id").getAsLong();
+        key.addCase(kase(cases, "D-6a-ADMIN_UNLOCK-flag", "flag", "admin:ADMIN_UNLOCK").subject(acct).item(diamond)
+                .window(unlockFrom, now()).amount(unlock.get("amount").getAsLong()).tolerance(0).ledger(unlockId).planted("test hook")
+                .note("BS-267 6a: admin reset locked balance (UpdateBankAccountRequest as TesterAdmin) of the lock #6 left; an admin event, not a finding"));
+
+        // BS-267 #1: master debits, then a simulated restart loses the reply
+        long oneFrom = now();
+        flag0 = flagMax(slave);
+        before = ledgerMax(slave);
+        master(slave, "armFault", obj("fault", "RESTART_AFTER_APPLY"));
+        download(slave, y, diamondId, 3);
+        String one = awaitRow(slave, before, y.account(), LedgerType.DOWNLOAD_WITHDRAW).get("ref").getAsString();
+        if (!TransferJournal.TIMED_OUT.equals(awaitFinal(slave, one))) {
+            master(slave, "armFault", obj("fault", "NONE"));
+            throw new IllegalStateException("D #1: download " + one + " did not end TIMED_OUT");
+        }
+        JsonObject park1 = awaitFlag(slave, flag0, SuspicionChecks.TRANSFER_PARKED, y.account(), WAIT_MS);
+        List<Long> oneRows = refIds(slave, one);
+        transferCase(key, cases, "D-1-transfer-parked-flag", one, fromM, async, "parked", diamond, 3 * SCALE, 0, oneFrom, oneRows,
+                park1.get("id").getAsLong(), "test hook", "BS-267 #1: download block withdraw of 3 diamonds, RESTART_AFTER_APPLY: the"
+                        + " master debited (DOWNLOAD_WITHDRAW), simulated restart, reply lost → TIMED_OUT; the block keeps the items"
+                        + " (received = the journal's view: no DELIVERED step)");
+
+        // BS-267 #2: craft output deposit, outcome unknown, items gone
+        long twoFrom = now();
+        flag0 = flagMax(slave);
+        Sent two = faulted(slave, "THROW_BEFORE_APPLY", () -> send(slave, LedgerType.CRAFT_OUTPUT, y.uuid(), "terminal", bank, 2 * SCALE, true));
+        AdminAudit.parkTransfer(y.account(), diamondId, 2 * SCALE, two.transferId(), y.uuid(), "craft output deposit", two.future().exceptionNow());
+        expectStep(slave, two.transferId(), TransferJournal.TIMED_OUT);
+        JsonObject park2 = awaitFlag(slave, flag0, SuspicionChecks.TRANSFER_PARKED, y.account(), WAIT_MS);
+        transferCase(key, cases, "D-2-transfer-parked-flag", two.transferId(), toM, async, "parked", diamond, 2 * SCALE, 0, twoFrom, List.of(),
+                park2.get("id").getAsLong(), "test hook", "BS-267 #2: craft output deposit of 2 diamonds, THROW_BEFORE_APPLY on the master:"
+                        + " not credited, status UNKNOWN → TIMED_OUT; the output stays gone");
+
+        transfers.addAll(List.of(created, lost, twice, raw, okW, six.transferId(), one, two.transferId(), donorC, donorT));
+        ledger.addAll(List.of(rowC, rowT, unlockId));
+        ledger.addAll(twiceRows.subList(0, twiceRows.size() - 1));
+        ledger.addAll(okRows);
+        ledger.addAll(oneRows);
+        flags.addAll(List.of(park6.get("id").getAsLong(), park1.get("id").getAsLong(), park2.get("id").getAsLong()));
+        return new Step(cases, ledger, flags, transfers, "left out: BS-267 #3 (drop refund after the account was deleted: needs the"
+                + " master's WithdrawMoneyPacket DROP refund path, no fixture op reaches it); no journal step, AT classes them only"
+                + " >= 10 min before the copy: D-created-flag (else after-snapshot = no finding), D-6b-craft-clean, D-outside-clean;"
+                + " window " + from + ".." + now());
+    }
+
+    /**
+     * E, bank part (StockMarket keys the market part): /money add $3M funds TesterA (unkeyed; with StockMarket A also has
+     * its market profit). A withdraws $70,000 as 7 x $10k notes, TesterB pays exactly those in (key link A → B
+     * likely/notes; $70k matches no other withdrawal or run), A transfers $250,000 to TesterC's account (link A – C
+     * proven/transfer, below the new-account flag). Snapshot + sweep: A's WEALTH_JUMP (bank-flag:3, only with a price
+     * provider). Then an admin /money remove of $500,000 on A (admin:ADMIN_REMOVE).
+     */
+    public static Step exploitBank(MinecraftServer slave) {
+        long from = now();
+        FixtureKey key = FixtureKey.current();
+        Tester a = ensureTester(slave, "TesterA"), b = ensureTester(slave, "TesterB"), c = ensureTester(slave, "TesterC");
+        List<String> cases = new ArrayList<>();
+        List<Long> ledger = new ArrayList<>(), flags = new ArrayList<>();
+        ItemID money = MoneyItem.getItemID();
+        Item k10 = BankSystemItems.MONEY10000.get();
+
+        money(slave, "add", a.name(), 3_000_000);
+        String out = withdraw(slave, a.uuid(), a.account(), money, 7 * ((MoneyItem) k10).worth());
+        String in = depositOk(slave, b.uuid(), b.account(), new ItemStack(k10, 7));
+        link(key, a.uuid().toString(), b.uuid().toString(), "likely", "notes");
+        long toC = transferMoney(slave, a, c.account(), 250_000 * SCALE);
+        link(key, a.uuid().toString(), c.uuid().toString(), "proven", "transfer");
+        ledger.addAll(refIds(slave, out));
+        ledger.addAll(refIds(slave, in));
+        ledger.add(toC);
+
+        snapshot(slave);
+        boolean wealth = master(slave, "sweep", obj()).get("wealth").getAsBoolean();
+        // after 0: the 10-min timer sweep (or StockMarket's profit) may have flagged A before this step
+        JsonObject jump = wealth ? awaitFlag(slave, 0, SuspicionChecks.WEALTH_JUMP, a.account(), WAIT_MS) : null;
+
+        long removeFrom = now(), before = ledgerMax(slave);
+        money(slave, "remove", a.name(), 500_000);
+        JsonObject remove = row(ledgerAfter(slave, before), a.account(), LedgerType.ADMIN_REMOVE);
+        long removeId = remove.get("id").getAsLong();
+        ledger.add(removeId);
+        key.addCase(kase(cases, "E-ADMIN_REMOVE-flag", "flag", "admin:ADMIN_REMOVE").subject(String.valueOf(a.account()))
+                .item(money.getName()).window(removeFrom, now()).amount(remove.get("amount").getAsLong()).tolerance(0).ledger(removeId)
+                .planted("command").note("admin /money remove $500,000 on TesterA (handler code as admin TesterAdmin) before the copy;"
+                        + " an admin event, not a finding"));
+        if (jump != null)
+            flagCase(key, cases, flags, "E-3-flag", jump, Math.min(from, jump.get("ts").getAsLong()), "command",
+                    "TesterA's wealth jumped: /money add $3M (plus the market profit with StockMarket); snapshot + sweep");
+        return new Step(cases, ledger, flags, List.of(out, in), (wealth ? "" : WEALTH_SKIPPED + "; ")
+                + "notes $70,000 A → B (" + out + " → " + in + "), $250,000 A → C; window " + from + ".." + now());
+    }
+
+    /**
      * C12 — bank saves suppressed (after a {@code save-all flush}), then 3 terminal deposits of iron by TesterD: their
      * ledger rows are behind bank_last_save_ms. Leaves the suppression ON (the export must see it); turn it off with
      * {@code suppressSave {"on":false}}.
@@ -841,6 +1059,72 @@ public final class FixtureSteps {
         return journal.transferId();
     }
 
+    /**
+     * One {@code type}-tagged deposit / withdraw (withdrawLockedPrefered) of {@code raw} on {@code bank}, settled; journal
+     * context {@code context} (null = not from a bank block).
+     */
+    private static Sent send(MinecraftServer s, LedgerType type, UUID player, @Nullable String context, IAsyncBank bank, long raw,
+                             boolean deposit) {
+        TransferJournal.Ref journal = new TransferJournal.Ref(TransferJournal.newTransferId(), context);
+        CompletableFuture<BankStatus> f = TransactionLedger.tagged(type, player, null, journal,
+                () -> deposit ? bank.depositAsync(raw) : bank.withdrawLockedPreferedAsync(raw));
+        settle(s, f);
+        return new Sent(journal.transferId(), f);
+    }
+
+    /** Arms {@code fault} on the master, runs {@code op}; its outcome must stay unknown (else disarms and throws). */
+    private static Sent faulted(MinecraftServer s, String fault, Supplier<Sent> op) {
+        master(s, "armFault", obj("fault", fault));
+        Sent r = op.get();
+        if (!r.future().isCompletedExceptionally()) {
+            master(s, "armFault", obj("fault", "NONE"));
+            throw new IllegalStateException(fault + ": transfer " + r.transferId() + " ended " + r.future().join() + ", not unknown");
+        }
+        return r;
+    }
+
+    private static void expectStatus(Sent r, BankStatus want, String what) {
+        BankStatus got = r.future().isCompletedExceptionally() ? null : r.future().join();
+        if (got != want) throw new IllegalStateException(what + ": " + got + ", expected " + want);
+    }
+
+    /**
+     * A raw slave deposit (untagged: no ledger type), as another mod's bank call: the master writes a RAW_CHANGE row
+     * without the id. @return its transfer id (slave journal), after its final step
+     */
+    private static String rawDeposit(MinecraftServer s, int account, IAsyncBank bank, long raw) {
+        long since = now();
+        CompletableFuture<BankStatus> f = bank.depositAsync(raw);
+        settle(s, f);
+        if (f.isCompletedExceptionally() || f.join() != BankStatus.SUCCESS)
+            throw new IllegalStateException("raw deposit of " + raw + " into " + account + ": " + f);
+        List<Map<String, Object>> rows = journal(s, "SELECT transfer_id FROM TransferJournal WHERE step = ? AND account_number = ?"
+                + " AND ledger_type IS NULL AND ts >= ? ORDER BY id DESC", TransferJournal.REQUESTED, account, since);
+        if (rows.isEmpty()) throw new IllegalStateException("no journal row for the raw deposit into " + account);
+        String tid = (String) rows.get(0).get("transfer_id");
+        awaitFinal(s, tid);
+        return tid;
+    }
+
+    /** DB edit: master ledger row {@code id} becomes a DEPOSIT with ref {@code transferId} (note cleared). */
+    private static void relabel(MinecraftServer s, long id, String transferId) {
+        if (master(s, "ledgerEdit", obj("id", id, "set", obj("type", "DEPOSIT", "ref", transferId, "note", JsonNull.INSTANCE)))
+                .get("updated").getAsInt() != 1) throw new IllegalStateException("ledger row " + id + " not relabelled");
+    }
+
+    /** A detached download block of {@code t} that withdraws {@code count} of {@code item} now (like the block tests). */
+    private static void download(MinecraftServer s, Tester t, ItemID item, int count) {
+        BankDownloadBlockEntity down = new BankDownloadBlockEntity(BlockPos.ZERO, BankSystemBlocks.BANK_DOWNLOAD_BLOCK.get().defaultBlockState());
+        CompoundTag dt = new CompoundTag(); // BankDownloadBlockEntity.TAGS: A account, P powered, U owner
+        dt.putInt("A", t.account());
+        dt.putBoolean("P", true);
+        NbtCompat.putUUID(dt, "U", t.uuid());
+        down.loadAdditional(dt, s.registryAccess()); // mc<=1.21.5
+        //down.loadAdditional(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, s.registryAccess(), dt)); // mc>=1.21.6
+        down.getWithdrawOrders().add(new BankDownloadBlockEntity.WithdrawOrder(item, count, BankDownloadBlockEntity.WithdrawCondition.NONE, 0));
+        down.update();
+    }
+
     /** Money transfer by {@code from}. @return the id of the incoming TRANSFER row on {@code toAccount} */
     private static long transferMoney(MinecraftServer s, Tester from, int toAccount, long raw) {
         IAsyncBank bank = bank(s, from.account(), MoneyItem.getItemID());
@@ -855,15 +1139,7 @@ public final class FixtureSteps {
      * the request timeouts). SETTLE_MS covers a lost reply: 30 s request timeout + the status answer.
      */
     private static void settle(MinecraftServer s, CompletableFuture<?> f) {
-        long[] lastAsk = {0};
-        if (!pumpUntil(s, () -> {
-            long now = now();
-            if (now - lastAsk[0] >= 1_000) {
-                lastAsk[0] = now;
-                TransferStatusRequest.retryTick(now);
-            }
-            return f.isDone();
-        }, SETTLE_MS)) throw new IllegalStateException("transfer outcome still pending after " + SETTLE_MS + " ms");
+        if (!pumpUntil(s, f::isDone, SETTLE_MS)) throw new IllegalStateException("transfer outcome still pending after " + SETTLE_MS + " ms");
     }
 
     private static IAsyncBank bank(MinecraftServer s, int account, ItemID item) {
@@ -986,6 +1262,11 @@ public final class FixtureSteps {
         }
     }
 
+    private static void expectStep(MinecraftServer s, String transferId, String want) {
+        String got = awaitFinal(s, transferId);
+        if (!want.equals(got)) throw new IllegalStateException("transfer " + transferId + " ended " + got + ", expected " + want);
+    }
+
     /** Waits until the slave journal has a final step for {@code transferId}. @return that step */
     private static String awaitFinal(MinecraftServer s, String transferId) {
         long end = now() + SETTLE_MS;
@@ -1060,6 +1341,34 @@ public final class FixtureSteps {
                 .flags(fid).planted(planted).note(note));
     }
 
+    /**
+     * A {@code transfer} case: expect flag for lost / twice / created / parked, clean otherwise; amount |sent − received|;
+     * zero amounts are left out of the sent / received maps. Window from {@code from} to now.
+     */
+    private static void transferCase(FixtureKey key, List<String> ids, String id, String tid, @Nullable String direction,
+                                     @Nullable String path, String cls, String item, long sent, long received, long from,
+                                     List<Long> rows, @Nullable Long flag, String planted, String note) {
+        Case c = kase(ids, id, Set.of("lost", "twice", "created", "parked").contains(cls) ? "flag" : "clean", "transfer").subject(tid)
+                .item(item).window(from, now()).amount(Math.abs(sent - received)).tolerance(0)
+                .transfer(tid, direction, path, cls, sent == 0 ? Map.of() : Map.of(item, sent), received == 0 ? Map.of() : Map.of(item, received))
+                .ledger(rows.toArray()).transfers(tid).planted(planted).note(note);
+        if (flag != null) c.flags(flag);
+        key.addCase(c);
+    }
+
+    /** Adds the link unless the key has it already, either way round (another step or StockMarket may have). */
+    private static void link(FixtureKey key, String a, String b, String strength, String way) {
+        synchronized (key) {
+            for (JsonElement e : key.links) {
+                JsonObject l = e.getAsJsonObject();
+                String la = l.get("a").getAsString(), lb = l.get("b").getAsString();
+                if (way.equals(l.get("way").getAsString()) && strength.equals(l.get("strength").getAsString())
+                        && (la.equals(a) && lb.equals(b) || !way.equals("notes") && la.equals(b) && lb.equals(a))) return;
+            }
+            key.addLink(a, b, strength, way);
+        }
+    }
+
     // ---- waiting -----------------------------------------------------------------------------------------------
 
     private static <T> T await(MinecraftServer s, CompletableFuture<T> f) {
@@ -1076,16 +1385,19 @@ public final class FixtureSteps {
      * On the server thread no tick runs while we block, so this runs ModUtilities' request-timeout sweep itself: 20 ARRS
      * ticks per second (it sweeps every 20 ticks). Without it a request with no reply never fails. It also ticks the
      * player connections once a second so keep-alives go out; otherwise the client times out after 30 s. Tests run from a
-     * server.execute task (AutoTest), never inside the connection tick, so this does not re-enter it.
+     * server.execute task (AutoTest), never inside the connection tick, so this does not re-enter it. It also runs the
+     * transfer-status retry like the tick does. The sweep clock is static: loops of short pumps must still sweep.
      */
+    private static long lastSweep;
+
     public static boolean pumpUntil(MinecraftServer s, BooleanSupplier done, long timeoutMs) {
         long end = System.nanoTime() + timeoutMs * 1_000_000L;
-        long[] lastSweep = {System.nanoTime()};
         if (s.isSameThread()) s.managedBlock(() -> {
             long t = System.nanoTime();
-            if (t - lastSweep[0] >= 1_000_000_000L) {
-                lastSweep[0] = t;
+            if (t - lastSweep >= 1_000_000_000L) {
+                lastSweep = t;
                 for (int i = 0; i < 20; i++) AsynchronousRequestResponseSystem.tick(false);
+                TransferStatusRequest.retryTick(System.currentTimeMillis());
                 if (s.getConnection() != null) s.getConnection().tick();
             }
             return done.getAsBoolean() || t > end;
