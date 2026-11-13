@@ -249,28 +249,27 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * New org.sqlite.JDBC instance, loaded through our mod classloader first (the copy we bundle) and the
+     * system classloader only as fallback. System-first ran JDBC's static init against a second log4j on
+     * Fabric dev runs (sqlite-jdbc is also on the launch classpath there) and spammed StatusLogger traces.
+     */
+    public static Driver newSqliteDriver() throws ReflectiveOperationException {
+        Class<?> cls;
+        try {
+            cls = DatabaseManager.class.getClassLoader().loadClass("org.sqlite.JDBC");
+        } catch (ClassNotFoundException e) {
+            cls = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
+        }
+        return (Driver) cls.getDeclaredConstructor().newInstance();
+    }
+
     public void connectToDatabase(MinecraftServer server) {
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
         Path dbPath = worldPath.resolve(DATABASE_PATH);
         String url = "jdbc:sqlite:" + Path.of(String.valueOf(dbPath.toAbsolutePath()), "banksystem.db");
-        Class<?> driverClass = null;
-        Exception exception = null;
         try {
-            driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-        } catch (ClassNotFoundException e) {
-            exception = e;
-        }
-        if (exception != null) {
-            try {
-                driverClass = DatabaseManager.class.getClassLoader().loadClass("org.sqlite.JDBC");
-            } catch (ClassNotFoundException e) {
-                getLogger().error("Failed to register JDBC driver", e);
-                return;
-            }
-        }
-        try {
-            Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
-            DriverManager.registerDriver(new DriverShim(driver));
+            DriverManager.registerDriver(new DriverShim(newSqliteDriver()));
         } catch (Exception e) {
             getLogger().error("Failed to register JDBC driver", e);
             return;

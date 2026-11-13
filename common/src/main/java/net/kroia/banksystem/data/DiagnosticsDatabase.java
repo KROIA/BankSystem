@@ -247,13 +247,7 @@ public final class DiagnosticsDatabase {
     public static Connection connect(Path file) throws SQLException {
         Driver driver;
         try {
-            Class<?> cls;
-            try {
-                cls = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-            } catch (ClassNotFoundException e) {
-                cls = DiagnosticsDatabase.class.getClassLoader().loadClass("org.sqlite.JDBC");
-            }
-            driver = (Driver) cls.getDeclaredConstructor().newInstance();
+            driver = DatabaseManager.newSqliteDriver();
         } catch (ReflectiveOperationException e) {
             throw new SQLException("SQLite JDBC driver not found", e);
         }

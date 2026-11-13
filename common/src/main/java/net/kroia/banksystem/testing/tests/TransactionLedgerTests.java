@@ -1440,14 +1440,8 @@ public class TransactionLedgerTests extends TestSuite {
     }
 
     static Connection openMemoryDb() throws Exception {
-        Class<?> driverClass;
         try {
-            driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-        } catch (ClassNotFoundException e) {
-            driverClass = TransactionLedgerTests.class.getClassLoader().loadClass("org.sqlite.JDBC");
-        }
-        try {
-            DriverManager.registerDriver(new DriverShim((Driver) driverClass.getDeclaredConstructor().newInstance()));
+            DriverManager.registerDriver(new DriverShim(DatabaseManager.newSqliteDriver()));
         } catch (Exception ignored) {}
         Connection c = DriverManager.getConnection("jdbc:sqlite::memory:");
         c.setAutoCommit(false);
