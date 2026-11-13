@@ -16,6 +16,7 @@ import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.binding.BindingRow;
 import net.kroia.banksystem.banking.ledger.SuspicionChecks;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.data.AuditExporter;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.DiagnosticsDatabase;
@@ -116,6 +117,12 @@ import java.util.function.Supplier;
  *   <li>{@code flags}: {@code {"after":4}} → {@code {"max":9,"flags":[{"id":5,"ts":…,"account_number":3,"flag_type":2,
  *       "typeName":"LARGE_NOTE_WITHDRAWAL","severity":1,"amount":…,"ref":…,"details":…},…]}}: SuspicionFlag rows with
  *       id &gt; after; {@code "after":-1} = only {@code max}.</li>
+ *   <li>{@code deleteUser}: {@code {"uuid":"<uuid>"}} → {@code {"undelivered":{"<item>":"<raw>",…},"reason":"player offline"|null,
+ *       "delivered":{"<transfer id>":{"<item>":"<raw>",…},…},"unknownTransferId":"<id>"|null}}. Deletes the BankSystem user
+ *       with payout ({@code removeUserWithPayout}) as admin {@link #ADMIN}: drop on the master first, then a DROP on each
+ *       slave; answers once the ledger rows (ACCOUNT_DELETE_PAYOUT / _LOSS) are written. {@code delivered} = what each
+ *       slave DROP handed out, {@code unknownTransferId} = the DROP whose outcome stayed unknown (its items are in
+ *       {@code undelivered}, logged as loss + TRANSFER_PARKED).</li>
  * </ul>
  * Errors (unknown step, bad args, refused caller, SQL error) answer {@code {"error":"…"}}; {@link #call} turns that into
  * a failed future.
@@ -302,6 +309,22 @@ public class FixtureStepRequest extends BankSystemGenericRequest<FixtureStepRequ
                 r.add("flags", r.remove("rows"));
                 return r;
             });
+            case "deleteUser" -> onServer(server, () -> {
+                UUID uuid = UUID.fromString(a.get("uuid").getAsString());
+                CompletableFuture<ServerBankManager.PayoutResult> f = TransactionLedger.withActor(TransactionLedger.admin(fixtureAdmin()),
+                        () -> bankManager().removeUserWithPayout(uuid));
+                if (f == null) throw new IllegalArgumentException("no user " + uuid);
+                return f;
+            }).thenCompose(f -> f).thenApply(p -> {
+                JsonObject r = new JsonObject();
+                r.add("undelivered", items(p.undelivered()));
+                r.addProperty("reason", p.reason());
+                JsonObject d = new JsonObject();
+                p.delivered().forEach((tid, m) -> d.add(tid, items(m)));
+                r.add("delivered", d);
+                r.addProperty("unknownTransferId", p.unknownTransferId());
+                return r;
+            });
             default -> throw new IllegalArgumentException("unknown fixture step '" + step + "'");
         };
     }
@@ -470,6 +493,13 @@ public class FixtureStepRequest extends BankSystemGenericRequest<FixtureStepRequ
         if (o == null) return JsonNull.INSTANCE;
         if (o instanceof Number n) return new JsonPrimitive(n);
         return new JsonPrimitive(o.toString());
+    }
+
+    /** {@code {"<namespace:id>":"<raw>",…}} */
+    private static JsonObject items(Map<ItemID, Long> m) {
+        JsonObject o = new JsonObject();
+        m.forEach((id, raw) -> o.addProperty(id.getName(), Long.toString(raw)));
+        return o;
     }
 
     private static JsonObject ok() {

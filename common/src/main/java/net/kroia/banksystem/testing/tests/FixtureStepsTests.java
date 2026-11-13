@@ -19,7 +19,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * BS-269 — smoke run of the BankSystem fixture steps A → C9 → C10 → C11 → C12 on a trusted slave. Opt-in: skips
+ * BS-269 — smoke run of the BankSystem fixture steps A → C9 → C10 → C11 → C13 → C14 → C15 → C16 → C12 on a trusted
+ * slave, then the key's banknotes as at the copy moment. Opt-in: skips
  * unless named by {@code --only} ({@link TestRegistry#INCLUDE_PROPERTY}), because it leaves testers, flags and a
  * suppressed bank save behind. Cleanup: bank saves on again.
  */
@@ -47,10 +48,13 @@ public class FixtureStepsTests extends TestSuite {
             FixtureSteps.Background bg = FixtureSteps.background(getServer());
             if (bg.testers().size() != 5 || bg.sharedAccount() <= 0 || bg.companyId() <= 0 || bg.companyAccount() <= 0
                     || bg.transfers().isEmpty()) return fail("background ids missing: " + bg);
+            boolean client = FixtureSteps.client(getServer()) != null;
             List<FixtureSteps.Step> steps = List.of(FixtureSteps.balanceGap(getServer()), FixtureSteps.adminCommands(getServer()),
-                    FixtureSteps.suspicionFlags(getServer()), FixtureSteps.lastSave(getServer()));
+                    FixtureSteps.suspicionFlags(getServer()), FixtureSteps.notes(getServer()), FixtureSteps.shares(getServer()),
+                    FixtureSteps.converterAndBlocks(getServer()), FixtureSteps.deletedUser(getServer()), FixtureSteps.lastSave(getServer()));
+            FixtureSteps.banknotesAtCopy(getServer());
             boolean noWealth = steps.get(2).note().contains(FixtureSteps.WEALTH_SKIPPED);
-            int[] minCases = {2, 6, noWealth ? 16 : 19, 1};
+            int[] minCases = {2, 6, noWealth ? 16 : 19, 1, 1, 3, client ? 4 : 3, 1};
             Set<String> ids = new HashSet<>();
             for (int i = 0; i < steps.size(); i++) {
                 FixtureSteps.Step s = steps.get(i);
@@ -63,12 +67,16 @@ public class FixtureStepsTests extends TestSuite {
             if (cases != ids.size()) return fail("key has " + cases + " cases, steps made " + ids.size() + " distinct ids");
             for (JsonElement e : json.getAsJsonArray("cases"))
                 if (!ids.contains(e.getAsJsonObject().get("id").getAsString())) return fail("unexpected case " + e);
-            // TesterA..E (background) + TesterW (C10) + TesterX, TesterY (C11)
-            if (json.getAsJsonArray("players").size() != 8) return fail("players: " + json.getAsJsonArray("players"));
+            // TesterA..E (background) + TesterW (C10) + TesterX, TesterY (C11) + the client (C13, offline-mode uuid only)
+            int players = json.getAsJsonArray("players").size();
+            if (players != 8 && !(client && players == 9)) return fail("players: " + json.getAsJsonArray("players"));
+            if (json.getAsJsonArray("banknotes").size() != (client ? 3 : 1)) return fail("banknotes: " + json.getAsJsonArray("banknotes"));
+            if (steps.get(6).flags().size() != 1) return fail("C16 flags: " + steps.get(6).flags());
             for (JsonElement l : json.getAsJsonArray("links"))
                 if (!l.getAsJsonObject().get("a").getAsString().matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
                     return fail("link a must be a lowercase uuid: " + l);
-            return pass(cases + " cases; " + steps.get(1).note() + "; " + steps.get(2).note());
+            return pass(cases + " cases; " + steps.get(1).note() + "; " + steps.get(2).note() + "; C13 " + steps.get(3).note()
+                    + "; C16 " + steps.get(6).note() + "; banknotes " + json.getAsJsonArray("banknotes"));
         } catch (RuntimeException e) {
             return fail("fixture step threw: " + e);
         } finally {

@@ -19,34 +19,52 @@ import net.kroia.banksystem.banking.company.ShareIntegrity;
 import net.kroia.banksystem.banking.ledger.AdminAudit;
 import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
+import net.kroia.banksystem.banking.converter.ConverterCacheManager;
+import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
+import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
+import net.kroia.banksystem.networking.entity.ConverterCommitToBankPacket;
 import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.testing.fixture.FixtureKey.Case;
+import net.kroia.banksystem.testing.tests.TransferJournalTests;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import org.jetbrains.annotations.Nullable;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /**
- * BS-269 — test only: the BankSystem story steps of the generated audit fixture (step A and C9–C12), run on the
+ * BS-269 — test only: the BankSystem story steps of the generated audit fixture (step A and C9–C16), run on the
  * trusted slave that drives the scenario. Every step blocks (on the server thread it keeps running queued server
  * tasks while it waits, like {@code TestSuite.await}), appends its cases to {@link FixtureKey#current()} and returns
  * the ids it made. Master work goes through {@link FixtureStepRequest}. Every deposit / withdraw waits for its final
@@ -61,7 +79,8 @@ public final class FixtureSteps {
     public static final List<String> TESTERS = List.of("TesterA", "TesterB", "TesterC", "TesterD", "TesterE");
     /** Extra BankSystem testers (TesterF..V belong to StockMarket, TesterZ is the client player). */
     public static final String ADMIN_TARGET = "TesterW", CLEAN_BURST = "TesterX", CLEAN_SHARES = "TesterY";
-    public static final String SHARED_ACCOUNT = "FixtureShared", COMPANY = "FixtureCo", CLEAN_COMPANY = "FixtureCleanCo";
+    public static final String SHARED_ACCOUNT = "FixtureShared", COMPANY = "FixtureCo", CLEAN_COMPANY = "FixtureCleanCo",
+            STAMP_COMPANY = "FixtureStampCo";
     /** In {@link Step#note()} of C11 when the 3 WEALTH_JUMP cases were left out. */
     public static final String WEALTH_SKIPPED = "wealth cases skipped: no price provider (StockMarket not loaded)";
     /** Each Tester's role in the AT story (E). */
@@ -72,6 +91,10 @@ public final class FixtureSteps {
 
     private static final long SCALE = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
     private static final long WAIT_MS = 30_000, MASTER_MS = 120_000, SETTLE_MS = 120_000;
+    private static final Set<String> FINAL = Set.of(TransferJournal.CONFIRMED, TransferJournal.DELIVERED, TransferJournal.RETURNED,
+            TransferJournal.TIMED_OUT, TransferJournal.FAILED);
+    /** Where {@link #notes} placed its chest (slave overworld); read by {@link #banknotesAtCopy}. */
+    private static volatile @Nullable BlockPos notesChest;
 
     private FixtureSteps() {}
 
@@ -86,14 +109,17 @@ public final class FixtureSteps {
         }
     }
 
-    /** C9–C12 result: the case ids added to the key, and the ledger row / flag / transfer ids the step made. */
+    /** C9–C16 result: the case ids added to the key, and the ledger row / flag / transfer ids the step made. */
     public record Step(List<String> cases, List<Long> ledger, List<Long> flags, List<String> transfers, String note) {}
 
     // ---- steps -------------------------------------------------------------------------------------------------
 
     /** The BankSystem user {@code name} (uuid {@link FixtureKey#testerUuid}) with a personal account; creates what is missing. */
     public static Tester ensureTester(MinecraftServer slave, String name) {
-        UUID uuid = FixtureKey.testerUuid(name);
+        return ensureUser(slave, name, FixtureKey.testerUuid(name));
+    }
+
+    private static Tester ensureUser(MinecraftServer slave, String name, UUID uuid) {
         IAsyncBankManager m = manager();
         if (!Boolean.TRUE.equals(await(slave, m.userExistsAsync(uuid)))) {
             m.addUserAsync(uuid, name);
@@ -457,6 +483,295 @@ public final class FixtureSteps {
     }
 
     /**
+     * C13 — rule {@code banknotes} (one global finding, subject null: notes found in the world − notes the logs say are
+     * outside the bank). Runs after C11: TesterX pays from the $9.5M of its clean burst. TesterX withdraws 8 times
+     * (terminal-style, all below $10M in one burst, every pay-in below the $1M laundering floor, every gain below the
+     * $1M wealth floor): $350k → TesterY pays in exactly $350k (key link X → Y likely/notes); $120k + $130k + $140k →
+     * TesterW pays in the $390k run as one deposit (link X → W); $400k left in a chest placed on the slave; $200k /
+     * $100k into the client player's inventory / ender chest (into the chest when no client is online); $500k destroyed
+     * (planted missing). Planted surplus: 10 x $100k put into the chest by code, no record. A /give of one $100k note to
+     * the client is logged in NoteFlow, so it is explained (balanced). Net difference +$500k → C13-flag.
+     * {@link #banknotesAtCopy} fills key {@code banknotes} at the copy moment.
+     */
+    public static Step notes(MinecraftServer slave) {
+        long from = now();
+        FixtureKey key = FixtureKey.current();
+        Tester x = ensureTester(slave, CLEAN_BURST), y = ensureTester(slave, CLEAN_SHARES), w = ensureTester(slave, ADMIN_TARGET);
+        ServerPlayer client = client(slave);
+        String clientName = client == null ? null : client.getGameProfile().getName();
+        if (client != null && client.getUUID().equals(FixtureKey.testerUuid(clientName)))
+            key.addPlayer(clientName, "client player: holds TesterX's notes (C13), deleted with payout (C16)");
+        ItemID money = MoneyItem.getItemID();
+        Item k10 = BankSystemItems.MONEY10000.get(), k100 = BankSystemItems.MONEY100000.get();
+        long r10 = ((MoneyItem) k10).worth(), r100 = ((MoneyItem) k100).worth();
+        List<String> transfers = new ArrayList<>();
+
+        String single = withdraw(slave, x.uuid(), x.account(), money, 35 * r10);
+        List<String> run = List.of(withdraw(slave, x.uuid(), x.account(), money, 12 * r10),
+                withdraw(slave, x.uuid(), x.account(), money, 13 * r10), withdraw(slave, x.uuid(), x.account(), money, 14 * r10));
+        String toChest = withdraw(slave, x.uuid(), x.account(), money, 4 * r100);
+        String toInventory = withdraw(slave, x.uuid(), x.account(), money, 2 * r100);
+        String toEnder = withdraw(slave, x.uuid(), x.account(), money, r100);
+        String destroyed = withdraw(slave, x.uuid(), x.account(), money, 5 * r100);
+        String payY = depositOk(slave, y.uuid(), y.account(), new ItemStack(k10, 35));
+        String payW = depositOk(slave, w.uuid(), w.account(), new ItemStack(k10, 39));
+        key.addLink(x.uuid().toString(), y.uuid().toString(), "likely", "notes");
+        key.addLink(x.uuid().toString(), w.uuid().toString(), "likely", "notes");
+        transfers.add(single);
+        transfers.addAll(run);
+        transfers.addAll(List.of(toChest, toInventory, toEnder, destroyed, payY, payW));
+
+        BlockPos pos = onSlave(slave, () -> {
+            ServerLevel level = slave.overworld();
+            BlockPos p = level.getSharedSpawnPos().offset(2, -3, 2);
+            level.setBlock(p, Blocks.CHEST.defaultBlockState(), 3);
+            if (!(level.getBlockEntity(p) instanceof ChestBlockEntity chest)) throw new IllegalStateException("C13: no chest at " + p);
+            chest.clearContent();
+            chest.setItem(0, new ItemStack(k100, 4));
+            chest.setItem(1, new ItemStack(k100, 10)); // planted surplus: no ledger row, no NoteFlow row
+            if (client == null) chest.setItem(2, new ItemStack(k100, 3));
+            else {
+                if (!client.getInventory().add(new ItemStack(k100, 2)))
+                    throw new IllegalStateException("C13: client inventory full");
+                if (!client.getEnderChestInventory().addItem(new ItemStack(k100, 1)).isEmpty())
+                    throw new IllegalStateException("C13: client ender chest full");
+                slave.getCommands().performPrefixedCommand(slave.createCommandSourceStack(),
+                        "give " + clientName + " " + BuiltInRegistries.ITEM.getKey(k100) + " 1");
+            }
+            chest.setChanged();
+            return p;
+        });
+        notesChest = pos;
+
+        List<String> cases = new ArrayList<>();
+        String place = "container@" + pos.getX() + "," + pos.getY() + "," + pos.getZ();
+        key.addCase(kase(cases, "C13-flag", "flag", "banknotes").window(from, now()).amount(5 * r100).tolerance(0)
+                .planted("test hook").note("surplus: 10 x $100k put into the chest at " + place + " by code (no record); missing: TesterX's"
+                        + " $500k withdrawal destroyed; net +$500k. Explained, not counted: TesterX's notes in the chest"
+                        + (client == null ? "" : ", the client's inventory and ender chest, the /give note (NoteFlow)")
+                        + "; the $350k and $390k pay-ins"));
+        List<Long> ledger = new ArrayList<>();
+        for (String t : transfers) ledger.addAll(refIds(slave, t));
+        return new Step(cases, ledger, List.of(), transfers, client == null ? "no client player on the slave: notes in the chest only"
+                : "client " + clientName + ": $200k + /give $100k in the inventory, $100k in the ender chest; chest " + place);
+    }
+
+    /**
+     * Key {@code banknotes} at the copy moment: the money in the C13 chest (player null) and in the client player's
+     * inventory and ender chest. Server thread.
+     */
+    public static void banknotesAtCopy(MinecraftServer slave) {
+        FixtureKey key = FixtureKey.current();
+        BlockPos pos = notesChest;
+        if (pos != null && slave.overworld().getBlockEntity(pos) instanceof Container chest)
+            key.addBanknote(null, "container@" + pos.getX() + "," + pos.getY() + "," + pos.getZ(), moneyIn(chest));
+        ServerPlayer client = client(slave);
+        if (client != null) {
+            key.addBanknote(client.getGameProfile().getName(), "inventory", moneyIn(client.getInventory()));
+            key.addBanknote(client.getGameProfile().getName(), "enderchest", moneyIn(client.getEnderChestInventory()));
+        }
+    }
+
+    /**
+     * C14 — the share stamper on the slave (BS-262), on a new subject ({@link #STAMP_COMPANY}, founded by TesterY; C11
+     * flagged FixtureCo and kept FixtureCleanCo clean): 4 stamps and 1 redeem through the slave stamper request
+     * (SHARE_STAMP / SHARE_REDEEM, issued 3), then TesterY banks 5 shares: more than issued → SHARE_EXCESS of 2. Adds
+     * to C11: the redeem path and an excess measured against a non-zero issued count.
+     */
+    public static Step shares(MinecraftServer slave) {
+        long from = now();
+        Tester y = ensureTester(slave, CLEAN_SHARES);
+        long flag0 = flagMax(slave);
+        AsyncCompanyManager.CompanyInfoOutput co = ensureCompany(slave, STAMP_COMPANY, y);
+        List<String> stamps = new ArrayList<>();
+        for (int i = 0; i < 4; i++) stamps.add(stamp(slave, co.companyId(), false, y.uuid()));
+        stamps.add(stamp(slave, co.companyId(), true, y.uuid()));
+        long excessFrom = now();
+        String banked = depositOk(slave, y.uuid(), y.account(),
+                StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), co.companyId()).copyWithCount(5));
+        JsonObject excess = awaitFlag(slave, flag0, SuspicionChecks.SHARE_EXCESS, co.bankAccountNr(), WAIT_MS);
+        if (excess.get("amount").getAsLong() != 2 * SCALE) throw new IllegalStateException("C14: excess " + excess);
+        List<Long> ledger = new ArrayList<>();
+        for (String t : stamps) {
+            List<Long> ids = refIds(slave, t);
+            if (ids.isEmpty()) throw new IllegalStateException("C14: no ledger row for stamper transfer " + t);
+            ledger.addAll(ids);
+        }
+        ledger.addAll(refIds(slave, banked));
+        List<String> cases = new ArrayList<>();
+        List<Long> flags = new ArrayList<>();
+        flagCase(FixtureKey.current(), cases, flags, "C14-8-flag", excess, excessFrom, "test hook",
+                "4 " + STAMP_COMPANY + " shares stamped and 1 redeemed through the slave stamper (issued 3); TesterY banked 5: excess 2");
+        return new Step(cases, ledger, flags, List.of(banked), "stamper transfers " + stamps + "; window " + from + ".." + now());
+    }
+
+    /**
+     * C15 — clean transfers of TesterY on the slave, each waited for its final journal step: converter cache → bank
+     * ($1,234, CONVERTER_DEPOSIT), upload block (5 diamonds, UPLOAD_DEPOSIT), download block (3 diamonds,
+     * DOWNLOAD_WITHDRAW). Detached block entities (no level), like the block tests. Class ok → expect clean. Not covered:
+     * a converter withdraw (the converter pays notes out of its own cache on the server the player is on: no bank call,
+     * no transfer, no ledger row; CONVERTER_WITHDRAW is never written).
+     */
+    public static Step converterAndBlocks(MinecraftServer slave) {
+        FixtureKey key = FixtureKey.current();
+        Tester y = ensureTester(slave, CLEAN_SHARES);
+        ItemID diamondId = allow(slave, Items.DIAMOND);
+        String money = MoneyItem.getItemID().getName(), diamond = diamondId.getName();
+        List<String> cases = new ArrayList<>();
+        List<Long> ledger = new ArrayList<>();
+
+        long cents = 123_400, convFrom = now(), before = ledgerMax(slave);
+        ConverterCacheManager.get().clear(y.uuid());
+        ConverterCacheManager.get().deposit(y.uuid(), cents);
+        CompletableFuture<Map<ItemID, Long>> conv = new ConverterCommitToBankPacket(y.account()).commitFromSlave(y.uuid(), cents);
+        if (conv == null) throw new IllegalStateException("C15: converter cache not reserved");
+        settle(slave, conv);
+        if (conv.isCompletedExceptionally() || !conv.join().isEmpty()) throw new IllegalStateException("C15: converter commit " + conv);
+        String convId = awaitRow(slave, before, y.account(), LedgerType.CONVERTER_DEPOSIT).get("ref").getAsString();
+        awaitFinal(slave, convId);
+        long convTo = now();
+
+        long upFrom = now();
+        before = ledgerMax(slave);
+        BankUploadBlockEntity up = new BankUploadBlockEntity(BlockPos.ZERO, BankSystemBlocks.BANK_UPLOAD_BLOCK.get().defaultBlockState());
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("SendingEnabled", true);
+        tag.putInt("BankAccountNumber", y.account());
+        NbtCompat.putUUID(tag, "PlayerOwner", y.uuid());
+        up.loadAdditional(tag, slave.registryAccess()); // mc<=1.21.5
+        //up.loadAdditional(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, slave.registryAccess(), tag)); // mc>=1.21.6
+        up.getInventory().setItem(0, new ItemStack(Items.DIAMOND, 5));
+        up.update();
+        String upId = awaitRow(slave, before, y.account(), LedgerType.UPLOAD_DEPOSIT).get("ref").getAsString();
+        awaitFinal(slave, upId);
+        long upTo = now();
+
+        long downFrom = now();
+        before = ledgerMax(slave);
+        BankDownloadBlockEntity down = new BankDownloadBlockEntity(BlockPos.ZERO, BankSystemBlocks.BANK_DOWNLOAD_BLOCK.get().defaultBlockState());
+        CompoundTag dt = new CompoundTag(); // BankDownloadBlockEntity.TAGS: A account, P powered, U owner
+        dt.putInt("A", y.account());
+        dt.putBoolean("P", true);
+        NbtCompat.putUUID(dt, "U", y.uuid());
+        down.loadAdditional(dt, slave.registryAccess()); // mc<=1.21.5
+        //down.loadAdditional(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, slave.registryAccess(), dt)); // mc>=1.21.6
+        down.getWithdrawOrders().add(new BankDownloadBlockEntity.WithdrawOrder(diamondId, 3, BankDownloadBlockEntity.WithdrawCondition.NONE, 0));
+        down.update();
+        String downId = awaitRow(slave, before, y.account(), LedgerType.DOWNLOAD_WITHDRAW).get("ref").getAsString();
+        awaitFinal(slave, downId);
+        long downTo = now();
+
+        Object[][] plan = {
+                {"C15-converter-clean", convId, TransferJournal.TO_MASTER, TransferJournal.CONVERTER_DEPOSIT, money, cents, convFrom, convTo,
+                        "converter cache → bank, $1,234 (cache filled directly, no notes went in)"},
+                {"C15-upload-clean", upId, TransferJournal.TO_MASTER, TransferJournal.ASYNC_BANK, diamond, 5 * SCALE, upFrom, upTo,
+                        "upload block, 5 diamonds"},
+                {"C15-download-clean", downId, TransferJournal.FROM_MASTER, TransferJournal.ASYNC_BANK, diamond, 3 * SCALE, downFrom, downTo,
+                        "download block, 3 diamonds"}};
+        for (Object[] p : plan) {
+            String tid = (String) p[1], item = (String) p[4];
+            long raw = (Long) p[5];
+            List<Long> rows = refIds(slave, tid);
+            ledger.addAll(rows);
+            key.addCase(kase(cases, (String) p[0], "clean", "transfer").subject(tid).item(item).window((Long) p[6], (Long) p[7])
+                    .amount(0).tolerance(0).transfer(tid, (String) p[2], (String) p[3], "ok", Map.of(item, raw), Map.of(item, raw))
+                    .ledger(rows.toArray()).transfers(tid).planted("test hook").note(p[8] + " by TesterY on the slave"));
+        }
+        return new Step(cases, ledger, List.of(), List.of(convId, upId, downId), "converter " + convId + ", upload " + upId + ", download " + downId);
+    }
+
+    /**
+     * C16 — deleted users (admin TesterAdmin, {@code deleteUser} op), each payout leg reaching its end:
+     * <ul>
+     *   <li>the client player (online on the slave, 4 diamonds): the master's own drop fails (offline there), the slave
+     *       DROP delivers → PAYOUT rows with its transfer id, class ok (C16-payout-clean). The client then gets a new,
+     *       empty account for later steps. Skipped without a client player.</li>
+     *   <li>TesterW (offline everywhere): the slave DROP ends FAILED (player offline) → ACCOUNT_DELETE_LOSS "player
+     *       offline" with no ref; the DROP moved nothing, class ok (C16-failed-clean).</li>
+     *   <li>TesterX (money only) with THROW_BEFORE_APPLY armed on the slave: the DROP marks itself applying, then throws
+     *       before it delivers (no reply, no journal row); the master's status ask gets UNKNOWN → ACCOUNT_DELETE_LOSS with
+     *       the transfer id + TRANSFER_PARKED (C16-6-flag, C16-transfer-parked-flag).</li>
+     * </ul>
+     */
+    public static Step deletedUser(MinecraftServer slave) {
+        FixtureKey key = FixtureKey.current();
+        Tester w = ensureTester(slave, ADMIN_TARGET), x = ensureTester(slave, CLEAN_BURST);
+        ServerPlayer client = client(slave);
+        String money = MoneyItem.getItemID().getName();
+        List<String> cases = new ArrayList<>(), transfers = new ArrayList<>();
+        List<Long> ledger = new ArrayList<>(), flags = new ArrayList<>();
+        long flag0 = flagMax(slave);
+        String note = "";
+
+        if (client != null) {
+            String name = client.getGameProfile().getName();
+            Tester z = ensureUser(slave, name, client.getUUID());
+            allow(slave, Items.DIAMOND);
+            long aFrom = now();
+            transfers.add(depositOk(slave, z.uuid(), z.account(), new ItemStack(Items.DIAMOND, 4)));
+            JsonObject r = master(slave, "deleteUser", obj("uuid", z.uuid().toString()));
+            JsonObject delivered = r.getAsJsonObject("delivered");
+            if (delivered.size() != 1 || !r.getAsJsonObject("undelivered").isEmpty())
+                throw new IllegalStateException("C16: client payout not delivered by one slave DROP: " + r);
+            String tid = delivered.keySet().iterator().next();
+            Map<String, Long> items = new HashMap<>();
+            delivered.getAsJsonObject(tid).entrySet().forEach(e -> items.put(e.getKey(), e.getValue().getAsLong()));
+            awaitFinal(slave, tid);
+            List<Long> rows = refIds(slave, tid);
+            ledger.addAll(rows);
+            transfers.add(tid);
+            key.addCase(kase(cases, "C16-payout-clean", "clean", "transfer").subject(tid).window(aFrom, now()).amount(0).tolerance(0)
+                    .transfer(tid, TransferJournal.FROM_MASTER, TransferJournal.DROP, "ok", items, items).ledger(rows.toArray())
+                    .transfers(tid).planted("command").note("user " + name + " (client, online on the slave) deleted: the master's own drop"
+                            + " failed (offline there), the slave DROP delivered the payout"));
+            ensureUser(slave, name, client.getUUID());
+        } else note = "no client player on the slave: C16-payout-clean skipped; ";
+
+        long bFrom = now(), before = ledgerMax(slave);
+        JsonObject rb = master(slave, "deleteUser", obj("uuid", w.uuid().toString()));
+        if (!rb.get("delivered").getAsJsonObject().isEmpty() || rb.get("reason").isJsonNull() || !rb.get("unknownTransferId").isJsonNull())
+            throw new IllegalStateException("C16: TesterW's payout should fail (offline): " + rb);
+        List<Map<String, Object>> failed = journal(slave, "SELECT transfer_id FROM TransferJournal WHERE path = ? AND step = ? AND player_uuid = ? ORDER BY id DESC",
+                TransferJournal.DROP, TransferJournal.FAILED, w.uuid().toString());
+        if (failed.isEmpty()) throw new IllegalStateException("C16: no FAILED DROP journal row for TesterW");
+        String bId = (String) failed.get(0).get("transfer_id");
+        for (JsonElement e : ledgerAfter(slave, before)) {
+            JsonObject row = e.getAsJsonObject();
+            if (row.get("account_number").getAsInt() == w.account()) ledger.add(row.get("id").getAsLong());
+        }
+        transfers.add(bId);
+        key.addCase(kase(cases, "C16-failed-clean", "clean", "transfer").subject(bId).window(bFrom, now()).amount(0).tolerance(0)
+                .transfer(bId, TransferJournal.FROM_MASTER, TransferJournal.DROP, "ok", Map.of(), Map.of()).transfers(bId).planted("command")
+                .note("user TesterW deleted while offline everywhere: the slave DROP ended FAILED and moved nothing;"
+                        + " the balance is ACCOUNT_DELETE_LOSS \"player offline\" (no ref)"));
+
+        long cFrom = now();
+        JsonObject rc;
+        TransferStatusRequest.armFault_forTesting(TransferStatusRequest.Fault.THROW_BEFORE_APPLY);
+        try {
+            rc = master(slave, "deleteUser", obj("uuid", x.uuid().toString()));
+        } finally {
+            TransferStatusRequest.armFault_forTesting(null);
+        }
+        if (rc.get("unknownTransferId").isJsonNull()) throw new IllegalStateException("C16: TesterX's DROP outcome not unknown: " + rc);
+        String cId = rc.get("unknownTransferId").getAsString();
+        JsonObject park = awaitFlag(slave, flag0, SuspicionChecks.TRANSFER_PARKED, x.account(), WAIT_MS);
+        List<Long> loss = refIds(slave, cId);
+        if (loss.isEmpty()) throw new IllegalStateException("C16: no ACCOUNT_DELETE_LOSS row with ref " + cId);
+        long lost = park.get("amount").getAsLong();
+        ledger.addAll(loss);
+        transfers.add(cId);
+        flagCase(key, cases, flags, "C16-6-flag", park, cFrom, "test hook",
+                "user TesterX deleted; THROW_BEFORE_APPLY on the slave: the DROP outcome stayed unknown, logged as lost");
+        key.addCase(kase(cases, "C16-transfer-parked-flag", "flag", "transfer").subject(cId).item(money).window(cFrom, now())
+                .amount(lost).tolerance(0).transfer(cId, TransferJournal.FROM_MASTER, TransferJournal.DROP, "parked", Map.of(money, lost), Map.of())
+                .ledger(loss.toArray()).flags(park.get("id").getAsLong()).transfers(cId).planted("test hook")
+                .note("THROW_BEFORE_APPLY: the slave DROP threw before it delivered (no reply, no journal row), status UNKNOWN →"
+                        + " ACCOUNT_DELETE_LOSS with this transfer id + TRANSFER_PARKED; with no journal step AT needs it >= 10 min before the copy"));
+        return new Step(cases, ledger, flags, transfers, note + "unknown DROP " + cId + ", failed DROP " + bId);
+    }
+
+    /**
      * C12 — bank saves suppressed (after a {@code save-all flush}), then 3 terminal deposits of iron by TesterD: their
      * ledger rows are behind bank_last_save_ms. Leaves the suppression ON (the export must see it); turn it off with
      * {@code suppressSave {"on":false}}.
@@ -581,6 +896,36 @@ public final class FixtureSteps {
         return company(s, name);
     }
 
+    /** One stamp (or redeem) through the slave stamper request. @return its transfer id (the master rows' ref) */
+    private static String stamp(MinecraftServer s, int companyId, boolean redeem, UUID actor) {
+        String tid = TransferJournal.newTransferId();
+        Integer code = await(s, AsyncCompanyManager.stamperApplyAsync(companyId, redeem, actor, tid, now(), true));
+        if (code == null || code != AsyncCompanyManager.CODE_OK)
+            throw new IllegalStateException((redeem ? "redeem" : "stamp") + " refused: " + code);
+        return tid;
+    }
+
+    /** The client player on the slave (TesterZ in the fixture run), or null when none is online. */
+    public static @Nullable ServerPlayer client(MinecraftServer slave) {
+        List<ServerPlayer> players = slave.getPlayerList().getPlayers();
+        return players.isEmpty() ? null : players.get(0);
+    }
+
+    /** Raw money in {@code c}: every banknote stack, count x worth. */
+    private static long moneyIn(Container c) {
+        long raw = 0;
+        for (int i = 0; i < c.getContainerSize(); i++) {
+            ItemStack st = c.getItem(i);
+            if (st.getItem() instanceof MoneyItem m) raw += st.getCount() * m.worth();
+        }
+        return raw;
+    }
+
+    /** Runs {@code body} on the slave's server thread (world and inventory edits). */
+    private static <T> T onSlave(MinecraftServer s, Supplier<T> body) {
+        return s.isSameThread() ? body.get() : await(s, CompletableFuture.supplyAsync(body, s));
+    }
+
     private static IAsyncBankManager manager() {
         return BankSystemModBackend.getInstances_forTesting().SERVER_BANK_MANAGER.getAsync();
     }
@@ -614,6 +959,42 @@ public final class FixtureSteps {
         for (JsonElement e : master(s, "ledgerRows", obj("ref", transferId)).getAsJsonArray("rows"))
             ids.add(e.getAsJsonObject().get("id").getAsLong());
         return ids;
+    }
+
+    /** The newest {@code kind} row on {@code account} after ledger id {@code after}, polled for {@link #WAIT_MS}. */
+    private static JsonObject awaitRow(MinecraftServer s, long after, int account, LedgerType kind) {
+        long end = now() + WAIT_MS;
+        while (true) {
+            JsonObject r = find(ledgerAfter(s, after), account, kind);
+            if (r != null) return r;
+            if (now() > end) throw new IllegalStateException("no " + kind + " ledger row on account " + account + " within " + WAIT_MS + " ms");
+            pump(s, 500);
+        }
+    }
+
+    // ---- slave journal -----------------------------------------------------------------------------------------
+
+    /** Rows of the slave's diagnostics DB (TransferJournal, NoteFlow) after a flush. */
+    private static List<Map<String, Object>> journal(MinecraftServer s, String sql, Object... params) {
+        DiagnosticsDatabase db = DiagnosticsDatabase.live();
+        if (db == null || db.isDisabled()) throw new IllegalStateException("no live diagnostics DB on the slave");
+        await(s, db.flush());
+        try {
+            return TransferJournalTests.query(db.getFile(), sql, params);
+        } catch (SQLException e) {
+            throw new IllegalStateException("journal query: " + e.getMessage(), e);
+        }
+    }
+
+    /** Waits until the slave journal has a final step for {@code transferId}. @return that step */
+    private static String awaitFinal(MinecraftServer s, String transferId) {
+        long end = now() + SETTLE_MS;
+        while (true) {
+            for (Map<String, Object> r : journal(s, "SELECT step FROM TransferJournal WHERE transfer_id = ?", transferId))
+                if (FINAL.contains(String.valueOf(r.get("step")))) return String.valueOf(r.get("step"));
+            if (now() > end) throw new IllegalStateException("transfer " + transferId + " has no final journal step after " + SETTLE_MS + " ms");
+            pump(s, 500);
+        }
     }
 
     private static @Nullable JsonObject find(JsonArray rows, int account, LedgerType kind) {

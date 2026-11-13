@@ -331,7 +331,7 @@ public class TransferJournalTests extends TestSuite {
         }
     }
 
-    static List<Map<String, Object>> query(Path f, String sql, Object... params) throws SQLException {
+    public static List<Map<String, Object>> query(Path f, String sql, Object... params) throws SQLException {
         List<Map<String, Object>> out = new ArrayList<>();
         try (Connection c = DiagnosticsDatabase.connect(f); PreparedStatement ps = c.prepareStatement(sql)) {
             for (int i = 0; i < params.length; i++) ps.setObject(i + 1, params[i]);
