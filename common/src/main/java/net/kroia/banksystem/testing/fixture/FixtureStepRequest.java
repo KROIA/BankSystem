@@ -6,25 +6,36 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
+import net.kroia.banksystem.banking.binding.BindingRow;
+import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.data.AuditExporter;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.data.table.TransactionLogManager;
+import net.kroia.banksystem.minecraft.command.ServerBankSystemCommandHandler;
+import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
 import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.testing.DevBootstrap;
+import net.kroia.banksystem.testing.StubCurrencyProvider;
 import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
@@ -87,6 +98,24 @@ import java.util.function.Supplier;
  *       balance, both raw integer strings.</li>
  *   <li>{@code quiet}: {@code {}} → {@code {"ok":true}}. Balance snapshot interval → 0: no further timer snapshots
  *       ({@code snapshot} still works).</li>
+ *   <li>{@code money}: {@code {"action":"add"|"set"|"remove","user":"TesterA","amount":12.5}} → {@code {"ok":true}}.
+ *       The /money handler code as the fixture admin {@link #ADMIN} (a BankSystem admin user, created on first use):
+ *       /money itself needs a player, the console is refused. Writes ADMIN_ADD / ADMIN_SET / ADMIN_REMOVE.</li>
+ *   <li>{@code unlock}: {@code {"account":3,"item":5,"lock":"2000"}} → {@code {"ok":true}}. Locks {@code lock} raw of
+ *       bank {@code item} (item id short) on the master, then the admin "reset locked balance" (UpdateBankAccountRequest)
+ *       as {@link #ADMIN}: one ADMIN_UNLOCK row.</li>
+ *   <li>{@code sweep}: {@code {}} → {@code {"raised":n,"wealth":true}}. The wealth-jump sweep over every account now;
+ *       {@code wealth} false = no price provider or price currency set (StockMarket not loaded): snapshots write no
+ *       WEALTH rows, so no WEALTH_JUMP can fire.</li>
+ *   <li>{@code bindExternal}: {@code {"account":3,"key":"k","owner":"<uuid>"}} → {@code {"status":"SUCCESS",
+ *       "suspended":true,"item":"minecraft:stone"}}. Creates stub currency account {@code key} (balance 0) owned by
+ *       {@code owner}, binds the account's stone slot to it, then runs the start-up foreign-binding check on that row
+ *       (suspended + EXTERNAL_BINDING_SUSPENDED when no manager of the account may bind it). Leaves the stub registered.</li>
+ *   <li>{@code ledgerAfter}: {@code {"id":12}} → {@code {"max":40,"rows":[…]}}: TransactionLog rows with id &gt; 12 (as
+ *       {@code ledgerRows}) and the highest id; {@code "id":-1} = only {@code max}.</li>
+ *   <li>{@code flags}: {@code {"after":4}} → {@code {"max":9,"flags":[{"id":5,"ts":…,"account_number":3,"flag_type":2,
+ *       "typeName":"LARGE_NOTE_WITHDRAWAL","severity":1,"amount":…,"ref":…,"details":…},…]}}: SuspicionFlag rows with
+ *       id &gt; after; {@code "after":-1} = only {@code max}.</li>
  * </ul>
  * Errors (unknown step, bad args, refused caller, SQL error) answer {@code {"error":"…"}}; {@link #call} turns that into
  * a failed future.
@@ -94,6 +123,8 @@ import java.util.function.Supplier;
 public class FixtureStepRequest extends BankSystemGenericRequest<FixtureStepRequest.Input, String> {
 
     public static final FixtureStepRequest INSTANCE = new FixtureStepRequest();
+    /** The fixture's BankSystem admin user (uuid {@link FixtureKey#testerUuid}) for the {@code money} and {@code unlock} ops. */
+    public static final String ADMIN = "TesterAdmin";
     /** Results (ledger rows, balances) can outgrow the default 32767-char string codec. */
     private static final StreamCodec<io.netty.buffer.ByteBuf, String> OUT_CODEC = ByteBufCodecs.stringUtf8(262_144);
 
@@ -167,21 +198,9 @@ public class FixtureStepRequest extends BankSystemGenericRequest<FixtureStepRequ
                         return ok();
                     });
             case "ledgerRows" -> onDb(c -> {
-                JsonArray rows = new JsonArray();
-                try (PreparedStatement s = c.prepareStatement("SELECT " + TransactionLogManager.SELECT_COLS
-                        + " FROM TransactionLog WHERE ref = ? ORDER BY id")) {
-                    s.setString(1, a.get("ref").getAsString());
-                    try (ResultSet rs = s.executeQuery()) {
-                        ResultSetMetaData md = rs.getMetaData();
-                        while (rs.next()) {
-                            JsonObject row = new JsonObject();
-                            for (int i = 1; i <= md.getColumnCount(); i++) row.add(md.getColumnLabel(i), json(rs.getObject(i)));
-                            rows.add(row);
-                        }
-                    }
-                }
                 JsonObject r = new JsonObject();
-                r.add("rows", rows);
+                r.add("rows", query(c, "SELECT " + TransactionLogManager.SELECT_COLS + " FROM TransactionLog WHERE ref = ? ORDER BY id",
+                        a.get("ref").getAsString()));
                 return r;
             });
             case "ledgerDelete" -> onDb(c -> {
@@ -230,6 +249,59 @@ public class FixtureStepRequest extends BankSystemGenericRequest<FixtureStepRequ
                 BankSystemModBackend.getInstances_forTesting().SERVER_SETTINGS.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.set(0L);
                 return ok();
             });
+            case "money" -> onServer(server, () -> {
+                UUID admin = fixtureAdmin();
+                String user = a.get("user").getAsString();
+                float amount = a.get("amount").getAsFloat();
+                ServerBankSystemCommandHandler h = new ServerBankSystemCommandHandler();
+                boolean done = switch (a.get("action").getAsString()) {
+                    case "add" -> h.money_add_user(admin, user, amount);
+                    case "set" -> h.money_set_user(admin, user, amount);
+                    case "remove" -> h.money_remove_user(admin, user, amount);
+                    default -> throw new IllegalArgumentException("money action: add | set | remove");
+                };
+                JsonObject r = new JsonObject();
+                r.addProperty("ok", done);
+                return r;
+            });
+            case "unlock" -> onServer(server, () -> {
+                int nr = a.get("account").getAsInt();
+                ItemID item = new ItemID(a.get("item").getAsShort());
+                var account = bankManager().getBankAccount(nr);
+                var bank = account == null ? null : account.getBank(item);
+                if (bank == null) throw new IllegalArgumentException("no bank " + item.getShort() + " on account " + nr);
+                long lock = a.get("lock").getAsLong();
+                if (lock > 0 && bank.lockAmount(lock) != BankStatus.SUCCESS)
+                    throw new IllegalStateException("could not lock " + lock + " on account " + nr);
+                return new UpdateBankAccountRequest().handleOnMasterServer(new UpdateBankAccountRequest.InputData(nr, "", null,
+                        List.of(new UpdateBankAccountRequest.InputData.BankData(item, 0L, false, true, false, false)), null),
+                        "", fixtureAdmin());
+            }).thenCompose(f -> f).thenApply(d -> {
+                if (d == null) throw new IllegalStateException("unlock refused");
+                return ok();
+            });
+            case "sweep" -> onServer(server, () -> bankManager().getAllAccountNumbers())
+                    .thenCompose(nrs -> SuspicionChecks.sweepWealth(nrs, System.currentTimeMillis()))
+                    .thenApply(n -> {
+                        JsonObject r = count("raised", n);
+                        // snapshots write WEALTH rows only with a price provider + currency (StockMarket sets both)
+                        r.addProperty("wealth", BankSystemMod.getAPI().getItemPriceProvider() != null
+                                && BankSystemMod.getAPI().getPriceCurrencyItem() != 0);
+                        return r;
+                    });
+            case "bindExternal" -> onServer(server, () -> bindExternal(a.get("account").getAsInt(), a.get("key").getAsString(),
+                    UUID.fromString(a.get("owner").getAsString())));
+            case "ledgerAfter" -> onDb(c -> after(c, "TransactionLog", TransactionLogManager.SELECT_COLS, a.get("id").getAsLong()));
+            case "flags" -> onDb(c -> {
+                JsonObject r = after(c, "SuspicionFlag", "id, ts, account_number, flag_type, severity, amount, ref, details",
+                        a.get("after").getAsLong());
+                for (JsonElement e : r.getAsJsonArray("rows")) {
+                    JsonObject f = e.getAsJsonObject();
+                    f.addProperty("typeName", SuspicionChecks.typeName(f.get("flag_type").getAsInt()));
+                }
+                r.add("flags", r.remove("rows"));
+                return r;
+            });
             default -> throw new IllegalArgumentException("unknown fixture step '" + step + "'");
         };
     }
@@ -256,6 +328,65 @@ public class FixtureStepRequest extends BankSystemGenericRequest<FixtureStepRequ
             r.add("lines", out);
             return r;
         }));
+    }
+
+    /** The fixture admin user, created (and made a BankSystem admin) on first use. Server thread. */
+    private static UUID fixtureAdmin() {
+        ServerBankManager bm = bankManager();
+        UUID id = FixtureKey.testerUuid(ADMIN);
+        if (bm.getUserByUUID(id) == null) bm.addUser(id, ADMIN);
+        if (!bm.isBanksystemAdmin(id)) bm.setBanksystemAdminMode(id, true);
+        return id;
+    }
+
+    private static JsonObject bindExternal(int nr, String key, UUID owner) {
+        ServerBankManager bm = bankManager();
+        var provider = BankSystemMod.getAPI().getCurrencyProvider(StubCurrencyProvider.PROVIDER_ID);
+        if (provider == null || !provider.isAvailable()) StubCurrencyProvider.reset();
+        StubCurrencyProvider.create(key, false, 0L).setOwner(owner);
+        ItemID slot = ItemIDManager.registerItemStackServerSide_direct(Items.STONE.getDefaultInstance());
+        bm.allowItemID(slot);
+        var account = bm.getBankAccount(nr);
+        if (account == null) throw new IllegalArgumentException("no account " + nr);
+        if (account.getBank(slot) == null) account.createBank(slot, 0);
+        BankStatus status = bm.bindExternalAccount(nr, slot, new ExternalAccountRef(StubCurrencyProvider.PROVIDER_ID, key, key, false));
+        BankAccountBindings bindings = BankAccountBindings.get();
+        BindingRow row = bindings == null ? null : bindings.getBinding(nr, slot);
+        JsonObject r = new JsonObject();
+        r.addProperty("status", status.name());
+        r.addProperty("suspended", row != null && bm.suspendIfForeign(row));
+        r.addProperty("item", slot.getName());
+        return r;
+    }
+
+    /** {@code {"max":M,"rows":[rows with id > after]}}; {@code after < 0} = no rows. */
+    private static JsonObject after(Connection c, String table, String cols, long after) throws SQLException {
+        JsonObject r = new JsonObject();
+        r.addProperty("max", query(c, "SELECT COALESCE(MAX(id), 0) AS m FROM " + table).get(0).getAsJsonObject().get("m").getAsLong());
+        r.add("rows", after < 0 ? new JsonArray() : query(c, "SELECT " + cols + " FROM " + table + " WHERE id > ? ORDER BY id", after));
+        return r;
+    }
+
+    /** Every column by its SQL name (numbers as JSON numbers, SQL NULL as null). */
+    private static JsonArray query(Connection c, String sql, Object... params) throws SQLException {
+        JsonArray rows = new JsonArray();
+        try (PreparedStatement s = c.prepareStatement(sql)) {
+            for (int i = 0; i < params.length; i++) s.setObject(i + 1, params[i]);
+            try (ResultSet rs = s.executeQuery()) {
+                ResultSetMetaData md = rs.getMetaData();
+                while (rs.next()) {
+                    JsonObject row = new JsonObject();
+                    for (int i = 1; i <= md.getColumnCount(); i++) row.add(md.getColumnLabel(i), json(rs.getObject(i)));
+                    rows.add(row);
+                }
+            }
+        }
+        return rows;
+    }
+
+    private static ServerBankManager bankManager() {
+        if (BankSystemModBackend.getInstances_forTesting().SERVER_BANK_MANAGER.getSync() instanceof ServerBankManager bm) return bm;
+        throw new IllegalStateException("no ServerBankManager");
     }
 
     /** Editable TransactionLog columns by key field name. {@code type} is special: type_code + kind. */

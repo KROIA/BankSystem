@@ -70,4 +70,9 @@ public class BankSystemTestCategories {
     public static final TestCategory COMPANY = new TestCategory(
             "banksystem", "company", "Company registry, persistence, and founder invariant",
             TestCategory.ServerType.MASTER_ONLY, false);
+
+    /** BS-269 — generated audit fixture story steps (opt-in: runs only when named by --only). */
+    public static final TestCategory FIXTURE = new TestCategory(
+            "banksystem", "fixture", "Audit fixture story steps (opt-in, trusted slave)",
+            TestCategory.ServerType.SLAVE_ONLY, true);
 }

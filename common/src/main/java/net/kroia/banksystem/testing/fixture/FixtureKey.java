@@ -26,8 +26,9 @@ public final class FixtureKey {
 
     private static FixtureKey current = new FixtureKey("", "");
 
-    private final JsonObject scenario = new JsonObject();
-    private final JsonArray servers = new JsonArray(), players = new JsonArray(), cases = new JsonArray(),
+    // public and stable: StockMarket's driver reads these
+    public final JsonObject scenario = new JsonObject();
+    public final JsonArray servers = new JsonArray(), players = new JsonArray(), cases = new JsonArray(),
             balances = new JsonArray(), banknotes = new JsonArray(), links = new JsonArray(), takeBack = new JsonArray();
 
     public FixtureKey(String topic, String commit) {
@@ -95,13 +96,23 @@ public final class FixtureKey {
         return this;
     }
 
-    /** @param strength {@code proven | likely | weak}; @param way {@code account | transfer | notes | market} */
+    /** @param a, b player uuids (lowercase, with dashes) */
     public synchronized FixtureKey addLink(String a, String b, String strength, String way) {
+        return addLink(a, b, strength, way, null);
+    }
+
+    /**
+     * @param a, b     player uuids (lowercase, with dashes); for way notes {@code a} = the one who withdrew
+     * @param strength {@code proven | likely | weak}; @param way {@code account | transfer | notes | market}
+     * @param item     namespace:id for way market, else null
+     */
+    public synchronized FixtureKey addLink(String a, String b, String strength, String way, @Nullable String item) {
         JsonObject o = new JsonObject();
         o.addProperty("a", a);
         o.addProperty("b", b);
         o.addProperty("strength", strength);
         o.addProperty("way", way);
+        o.addProperty("item", item);
         links.add(o);
         return this;
     }
@@ -153,8 +164,8 @@ public final class FixtureKey {
      * are written as null (records as empty lists).
      */
     public static final class Case {
-        private final JsonObject json = new JsonObject();
-        private final JsonObject records = new JsonObject();
+        public final JsonObject json = new JsonObject();
+        public final JsonObject records = new JsonObject();
 
         private Case(String id, String expect, String rule) {
             json.addProperty("id", id);
@@ -166,7 +177,7 @@ public final class FixtureKey {
             json.add("records", records);
         }
 
-        /** @param expect {@code flag | clean}; @param rule e.g. {@code balance-gap}, {@code bank-flag:<TYPE>}, {@code transfer} */
+        /** @param expect {@code flag | clean}; @param rule {@code balance | bank-flag:<n> | admin:<LedgerType> | transfer | last-save | banknotes} */
         public static Case of(String id, String expect, String rule) {
             return new Case(id, expect, rule);
         }
@@ -188,6 +199,12 @@ public final class FixtureKey {
         public Case amount(long raw) { json.addProperty("amount", Long.toString(raw)); return this; }
 
         public Case tolerance(long raw) { json.addProperty("tolerance", Long.toString(raw)); return this; }
+
+        /** Decimal string, e.g. {@code "2.5"} (market cases). */
+        public Case amount(String amount) { json.addProperty("amount", amount); return this; }
+
+        /** Decimal string, e.g. {@code "0.01"} (market cases). */
+        public Case tolerance(String tolerance) { json.addProperty("tolerance", tolerance); return this; }
 
         public Case orders(Object... ids) { return add("orders", ids); }
 

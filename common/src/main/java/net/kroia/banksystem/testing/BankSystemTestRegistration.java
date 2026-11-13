@@ -114,6 +114,7 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.WithdrawOutcomeTests()); // Task #160, offline
         TestRegistry.register(new net.kroia.banksystem.testing.tests.LookupBackoffTests()); // Task #167, offline
         TestRegistry.register(new net.kroia.banksystem.testing.tests.SlaveMasterDownTests()); // Task #174, SLAVE_ONLY
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.FixtureStepsTests()); // BS-269, SLAVE_ONLY, opt-in
         // SM T-236 audit join: rows left in the live ledger / journal (autotest only)
         TestRegistry.register(new net.kroia.banksystem.testing.tests.AuditJoinRowsTests(false)); // MASTER_ONLY
         TestRegistry.register(new net.kroia.banksystem.testing.tests.AuditJoinRowsTests(true)); // SLAVE_ONLY
