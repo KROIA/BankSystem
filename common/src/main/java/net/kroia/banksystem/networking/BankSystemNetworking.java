@@ -38,6 +38,7 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public static DropItemsInPlayerInventoryRequest DROP_ITEMS_IN_PLAYER_INVENTORY_REQUEST = (DropItemsInPlayerInventoryRequest)AsynchronousRequestResponseSystem.register(new DropItemsInPlayerInventoryRequest());
     public static DepositItemsInBankRequest DEPOSIT_ITEMS_IN_BANK_REQUEST = (DepositItemsInBankRequest)AsynchronousRequestResponseSystem.register(new DepositItemsInBankRequest());
     public static TransferStatusRequest TRANSFER_STATUS_REQUEST = (TransferStatusRequest)AsynchronousRequestResponseSystem.register(new TransferStatusRequest()); // Task #126
+    public static TransferParkedRequest TRANSFER_PARKED_REQUEST = (TransferParkedRequest)AsynchronousRequestResponseSystem.register(new TransferParkedRequest()); // BS-267
     public static WithdrawItemsFromBankRequest WITHDRAW_ITEMS_FROM_BANK_REQUEST = (WithdrawItemsFromBankRequest)AsynchronousRequestResponseSystem.register(new WithdrawItemsFromBankRequest());
     public static RegisterItemStacksBatchRequest REGISTER_ITEM_STACKS_BATCH_REQUEST = (RegisterItemStacksBatchRequest)AsynchronousRequestResponseSystem.register(new RegisterItemStacksBatchRequest());
 

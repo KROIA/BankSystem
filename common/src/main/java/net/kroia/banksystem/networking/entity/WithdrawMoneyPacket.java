@@ -289,23 +289,28 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     {
         if(items.isEmpty())
             return;
-        ISyncServerBankAccount redepositAccount = getSyncBankManager().getBankAccount(bankaccountNr);
-        if(redepositAccount == null) {
-            error("WithdrawMoneyPacket: Invalid bank account ID: " + bankaccountNr + " Items are lost now: "+items);
-            return;
-        }
-        ISyncServerBank redepositMoneyBank = redepositAccount.getBank(MoneyItem.getItemID());
-        if(redepositMoneyBank == null) {
-            error("WithdrawMoneyPacket: no money bank account with ID: " + bankaccountNr+" Items are lost now: "+items);
-            return; // No money bank found for the player
-        }
-
         long toDepositMoney = moneyValue(items);
-        if (toDepositMoney > 0 && TransactionLedger.withoutRawLog(() -> redepositMoneyBank.deposit(toDepositMoney)) == BankStatus.SUCCESS) {
-            // Task #109: separate refund row; the WITHDRAW row above stays as written.
-            TransactionLedger.logBank(redepositMoneyBank, LedgerType.WITHDRAW_REFUND, toDepositMoney,
-                    TransactionLedger.player(player), "banknotes not handed out: " + items, transferId);
+        if (toDepositMoney <= 0)
+            return;
+        ISyncServerBankAccount redepositAccount = getSyncBankManager().getBankAccount(bankaccountNr);
+        ISyncServerBank redepositMoneyBank = redepositAccount == null ? null : redepositAccount.getBank(MoneyItem.getItemID());
+        String lost;
+        if (redepositAccount == null) lost = "account gone";
+        else if (redepositMoneyBank == null) lost = "no money bank";
+        else {
+            BankStatus status = TransactionLedger.withoutRawLog(() -> redepositMoneyBank.deposit(toDepositMoney));
+            if (status == BankStatus.SUCCESS) {
+                // Task #109: separate refund row; the WITHDRAW row above stays as written.
+                TransactionLedger.logBank(redepositMoneyBank, LedgerType.WITHDRAW_REFUND, toDepositMoney,
+                        TransactionLedger.player(player), "banknotes not handed out: " + items, transferId);
+                return;
+            }
+            lost = "refund deposit refused: " + status;
         }
+        // BS-267: balance-neutral marker with the transfer id, so the loss is in the ledger and not only in the log
+        error("WithdrawMoneyPacket: refund of " + items + " to account " + bankaccountNr + " failed (" + lost + "); the value is lost (transfer " + transferId + ")");
+        TransactionLedger.logRow(bankaccountNr, LedgerType.REFUND_LOST, MoneyItem.getItemID(), toDepositMoney,
+                TransactionLedger.player(player), null, "banknotes not handed out, refund lost (" + lost + "): " + items, transferId);
     }
 
     /** Money value (raw units) of a banknote map; entries that would overflow are skipped. */

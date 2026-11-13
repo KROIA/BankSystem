@@ -750,6 +750,8 @@
   "message.banksystem.not_connected_to_master": "[banksystem] Das isch en Slave-Server und er isch nöd mit emne BankSystem-Master-Server verbunde!",
   "message.banksystem.command_slave_untrusted": "Dä Server ischt vom Master nöd vertroischwirdig ychgstuft, drum sind BankSystem-Admin-Befehl do deaktiviert. En Admin muess uf em Master /banksystem trust <slaveID> ussfüehre.",
   "message.banksystem.audit_report_failed": "Audit-Bericht fehlgeschlagen",
+  "message.banksystem.transfer_unconfirmed": "D Bank hät die Übertragig nöd bestätigt; si isch für en Admin markiert worde (Übertragig {transfer_id}).",
+  "message.banksystem.reset_lock_parked_transfers": "Achtung: Konto {account_number} hät {count} offeni parkierti Übertragig(e) ({transfer_ids}). De zruggsetzti gsperrti Betrag chönnt dezue ghöre; prüef si im Audit, bevor du si abschliessisch.",
   "gui.banksystem.mod_settings_screen.setting.Audit.MONEY_SUPPLY_FLAG_ENABLED": "Geldmengenwachstum markieren",
   "gui.banksystem.mod_settings_screen.setting.Audit.MONEY_SUPPLY_FLAG_ENABLED.tooltip": "Markieren, wenn das Geld aller Konten\ninnerhalb einer Stunde zu stark wächst.",
   "gui.banksystem.mod_settings_screen.setting.Audit.MONEY_SUPPLY_GROWTH_PERCENT": "Geldmenge: min. Wachstum (%)",

@@ -750,6 +750,8 @@
   "message.banksystem.not_connected_to_master": "[banksystem] 这是一个从服务器，且未连接到 BankSystem 主服务器！",
   "message.banksystem.command_slave_untrusted": "该服务器未获得主服务器信任，因此此处已禁用 BankSystem 管理员命令。请联系管理员在主服务器上执行 /banksystem trust <slaveID>。",
   "message.banksystem.audit_report_failed": "审计报告生成失败",
+  "message.banksystem.transfer_unconfirmed": "银行未确认此次转账；已标记交由管理员处理（转账 {transfer_id}）。",
+  "message.banksystem.reset_lock_parked_transfers": "警告：账户 {account_number} 有 {count} 笔未处理的挂起转账（{transfer_ids}）。你重置的锁定金额可能属于这些转账；结算前请在审计中核查。",
   "gui.banksystem.mod_settings_screen.setting.Audit.MONEY_SUPPLY_FLAG_ENABLED": "标记货币供应增长",
   "gui.banksystem.mod_settings_screen.setting.Audit.MONEY_SUPPLY_FLAG_ENABLED.tooltip": "当所有账户的总货币在一小时内\n增长过快时进行标记。",
   "gui.banksystem.mod_settings_screen.setting.Audit.MONEY_SUPPLY_GROWTH_PERCENT": "货币供应：最小增长（%）",

@@ -36,6 +36,8 @@ public final class CompanyStatsQuery {
             LedgerType.SHARE_STAMP, LedgerType.ACCOUNT_DELETE_PAYOUT, LedgerType.ADMIN_DISALLOW_ITEM,
             LedgerType.ACCOUNT_DELETE_LOSS) + ") OR (type_code IN (" + codes(LedgerType.PAYOUT, LedgerType.DIVIDEND)
             + ") AND balance_after IS NULL))";
+    /** BS-267: marker rows that move no balance; left out of earnings and spendings. */
+    private static final String NO_MARKER = " AND type_code <> " + LedgerType.REFUND_LOST.code();
 
     private static String codes(LedgerType... types) {
         StringBuilder sb = new StringBuilder();
@@ -66,7 +68,7 @@ public final class CompanyStatsQuery {
                 "SUM(CASE WHEN " + IS_OUT + " THEN 0 ELSE ABS(amount) END) AS earnings, " +
                 "SUM(CASE WHEN " + IS_OUT + " THEN ABS(amount) ELSE 0 END) AS spendings " +
                 "FROM TransactionLog " +
-                "WHERE account_number = ? AND item_id = ? AND ts >= ? AND ts <= ? " +
+                "WHERE account_number = ? AND item_id = ? AND ts >= ? AND ts <= ?" + NO_MARKER + " " +
                 "GROUP BY bucket ORDER BY bucket ASC";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, fromMs);
@@ -100,7 +102,7 @@ public final class CompanyStatsQuery {
         String sql = "SELECT " +
                 "SUM(CASE WHEN " + IS_OUT + " THEN 0 ELSE ABS(amount) END) AS earn, " +
                 "SUM(CASE WHEN " + IS_OUT + " THEN ABS(amount) ELSE 0 END) AS spend " +
-                "FROM TransactionLog WHERE account_number = ? AND item_id = ? AND ts >= ?";
+                "FROM TransactionLog WHERE account_number = ? AND item_id = ? AND ts >= ?" + NO_MARKER;
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, accountNr);
             ps.setShort(2, itemIdShort);

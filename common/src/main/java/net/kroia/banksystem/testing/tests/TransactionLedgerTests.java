@@ -142,6 +142,9 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("origin_server_on_slave_rows_null_on_master", () -> threw(this::originServer));
         // BS-258 — block position of rows caused at a block
         addTest("block_position_on_block_rows_null_elsewhere", () -> threw(this::blockPosition));
+        // BS-267 — reset locked balance on an account with a parked transfer
+        addTest("reset_locked_balance_warns_on_parked_transfer", () -> threw(this::resetLockWarnsParked));
+        addTest("drop_refund_to_gone_account_writes_refund_lost", () -> threw(this::dropRefundLost)); // BS-267
     }
 
     @Override
@@ -196,6 +199,7 @@ public class TransactionLedgerTests extends TestSuite {
                 {LedgerType.SHARE_TRADE, 24}, {LedgerType.ACCOUNT_DELETE_PAYOUT, 25}, {LedgerType.ACCOUNT_FREEZE, 26},
                 {LedgerType.ADMIN_DISALLOW_ITEM, 27}, {LedgerType.ACCOUNT_DELETE_LOSS, 28},
                 {LedgerType.RAW_CHANGE, 29}, {LedgerType.EXTERNAL_BIND, 30}, {LedgerType.EXTERNAL_UNBIND, 31},
+                {LedgerType.REFUND_LOST, 32},
         };
         if (expected.length != LedgerType.values().length)
             return fail("LedgerType has " + LedgerType.values().length + " constants, table lists " + expected.length
@@ -1373,6 +1377,48 @@ public class TransactionLedgerTests extends TestSuite {
         } finally {
             event.removeListener(listener);
         }
+    }
+
+    /** BS-267: an admin "reset locked balance" on an account with an open TRANSFER_PARKED flag warns that admin; the reset still runs. */
+    private TestResult resetLockWarnsParked() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        ItemID diamond = allow(Items.DIAMOND.getDefaultInstance());
+        IServerBank bank = manager.getBankAccount(otherAccountNr).getOrCreateBank(diamond);
+        bank.deposit(1_000L);
+        bank.lockAmount(100L);
+        String tid = TransferJournal.newTransferId();
+        AdminAudit.raise(otherAccountNr, SuspicionChecks.TRANSFER_PARKED, 2, 0, tid, "test: parked transfer");
+        List<String> sent = new java.util.concurrent.CopyOnWriteArrayList<>();
+        net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket.testSink = sent::add;
+        try {
+            List<UpdateBankAccountRequest.InputData.BankData> data = new ArrayList<>();
+            data.add(new UpdateBankAccountRequest.InputData.BankData(diamond, 0L, false, true, false, false));
+            new UpdateBankAccountRequest().handleOnMasterServer(new UpdateBankAccountRequest.InputData(otherAccountNr, "", null,
+                    data, null), "", ADMIN).join();
+            pumpUntil(() -> sent.stream().anyMatch(m -> m.contains(tid)), 5_000);
+        } finally {
+            net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket.testSink = null;
+        }
+        if (bank.getLockedBalance() != 0) return fail("reset did not run: locked " + bank.getLockedBalance());
+        return assertTrue("admin warned with the parked transfer id, got " + sent, sent.stream().anyMatch(m -> m.contains(tid)));
+    }
+
+    /** BS-267: notes not dropped whose refund account is gone: one REFUND_LOST row (ref = transfer id, amount = money), no refund. */
+    private TestResult dropRefundLost() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        int gone = Integer.MAX_VALUE - 2675;
+        if (manager.getBankAccount(gone) != null) return fail("account " + gone + " exists");
+        touchedAccounts.add(gone);
+        ItemID note = ItemID.of(BankSystemItems.MONEY5.get().getDefaultInstance());
+        long worth = ((MoneyItem) BankSystemItems.MONEY5.get()).worth();
+        String tid = TransferJournal.newTransferId();
+        new WithdrawMoneyPacket(new HashMap<>(), gone).onDropResult(FAKE_SLAVE, PLAYER, gone, Map.of(note, 2L), tid, Map.of(note, 2L), null);
+        List<TransactionLogRecord> rows = ledger.getByRef(tid).get(10, TimeUnit.SECONDS);
+        TransactionLogRecord r = find(rows, LedgerType.REFUND_LOST);
+        if (rows.size() != 1 || r == null) return fail("expected one REFUND_LOST row, got " + rows);
+        if (r.accountNumber() != gone || r.itemId() != MoneyItem.getItemID().getShort() || r.amount() != 2 * worth)
+            return fail("row " + r);
+        return pass("REFUND_LOST " + r.amount() + " on gone account, ref = transfer id, no refund row");
     }
 
     private boolean ready() {

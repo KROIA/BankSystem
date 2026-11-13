@@ -2,7 +2,10 @@ package net.kroia.banksystem.networking.general;
 
 import net.kroia.banksystem.api.ledger.LedgerActor;
 import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
+import net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket;
+import net.kroia.banksystem.util.BankSystemTextMessages;
 import java.util.ArrayList;
 import net.kroia.banksystem.util.ItemStackNbt;
 import net.kroia.banksystem.BankSystemModSettings;
@@ -270,8 +273,10 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
                     if (data.resetLockedBalance) {
                         long locked = bank.getLockedBalance();
                         bank.unlockAll();
-                        if (locked != 0)
+                        if (locked != 0) {
                             TransactionLedger.logBank(bank, LedgerType.ADMIN_UNLOCK, locked, adminActor, "unlocked " + locked);
+                            warnParkedTransfers(sender, input.accountNumber);
+                        }
                     }
                     if (data.setBalance && shareCompany != null) {
                         // BS-234: a share balance can only go down (to no less than the locked part)
@@ -506,6 +511,27 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
      * @param senderUUID       the initiating player's UUID
      * @param translationKey   the lang key of the message to send
      */
+    /**
+     * BS-267: after an admin reset a locked balance, warns that admin (wherever they are online) when the account has
+     * open (unacknowledged) TRANSFER_PARKED flags: the freed lock may have been a parked transfer's. The reset is not
+     * blocked. Source: the master's SuspicionFlag table (per account; the flag has no item column).
+     */
+    private static void warnParkedTransfers(UUID admin, int accountNumber) {
+        var flags = BACKEND_INSTANCES.SUSPICION_FLAG_MANAGER;
+        if (flags == null || admin == null) return;
+        flags.getRecent(accountNumber, 0, 0).thenAccept(rows -> {
+            List<String> ids = rows.stream().filter(f -> f.flagType() == SuspicionChecks.TRANSFER_PARKED && !f.acknowledged())
+                    .map(f -> String.valueOf(f.ref())).toList();
+            if (ids.isEmpty()) return;
+            String msg = BankSystemTextMessages.getResetLockParkedMessage(accountNumber, ids.size(),
+                    String.join(", ", ids.subList(0, Math.min(5, ids.size()))) + (ids.size() > 5 ? ", ..." : ""));
+            net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
+            Runnable send = () -> ClientConsoleMessagePacket.sendMessageFromMaster(admin, msg);
+            if (srv != null) srv.execute(send);
+            else send.run();
+        }).exceptionally(t -> null);
+    }
+
     private void notifySender(UUID senderUUID, String translationKey) {
         if (senderUUID == null) {
             return;

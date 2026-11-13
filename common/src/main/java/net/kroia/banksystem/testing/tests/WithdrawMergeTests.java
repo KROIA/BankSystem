@@ -13,6 +13,9 @@ import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.minecraft.entity.custom.BankTerminalBlockEntity;
+import net.kroia.banksystem.minecraft.menu.custom.BankTerminalContainerMenu;
+import net.kroia.banksystem.banking.ledger.SuspicionChecks;
+import net.kroia.banksystem.data.table.record.SuspicionFlagRecord;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ContainerItemInsertion;
 import net.kroia.banksystem.util.ItemID;
@@ -81,6 +84,10 @@ public class WithdrawMergeTests extends TestSuite {
         addTest("terminal_deposit_reserves_before_send", this::testTerminalDepositReservesBeforeSend); // Task #145
         addTest("download_rollback_unlocks_only_returned_part", this::testDownloadRollbackWithEscape); // BS-201
         addTest("terminal_rollback_unlocks_only_returned_part", this::testTerminalRollbackWithEscape); // BS-201
+        addTest("download_unknown_keeps_items_and_lock", this::testDownloadUnknownParks); // BS-267
+        addTest("terminal_withdraw_unknown_keeps_items_and_lock", this::testTerminalWithdrawUnknownParks); // BS-267
+        addTest("craft_deposit_unknown_parks", this::testCraftDepositUnknownParks); // BS-267
+        addTest("craft_unlock_frees_only_own_lock", this::testCraftUnlockOwnLockOnly); // BS-267
     }
 
     @Override
@@ -317,13 +324,18 @@ public class WithdrawMergeTests extends TestSuite {
      * part of them out. Every unlock amount is recorded.
      */
     private static IAsyncBank failingWithdrawBank(Runnable beforeFail, List<Long> unlocked) {
+        return failingWithdrawBank(beforeFail, unlocked, CompletableFuture.completedFuture(BankStatus.FAILED_NOT_ENOUGH_FUNDS));
+    }
+
+    /** BS-267: same, with the withdraw's {@code outcome} (e.g. a failed future = outcome unknown). */
+    private static IAsyncBank failingWithdrawBank(Runnable beforeFail, List<Long> unlocked, CompletableFuture<BankStatus> outcome) {
         return (IAsyncBank) Proxy.newProxyInstance(IAsyncBank.class.getClassLoader(), new Class<?>[]{IAsyncBank.class},
                 (proxy, m, args) -> switch (m.getName()) {
                     case "getBalanceAsync" -> CompletableFuture.completedFuture(1_000_000L);
                     case "lockAmountAsync" -> CompletableFuture.completedFuture(BankStatus.SUCCESS);
                     case "withdrawLockedPreferedAsync" -> {
                         beforeFail.run();
-                        yield CompletableFuture.completedFuture(BankStatus.FAILED_NOT_ENOUGH_FUNDS);
+                        yield outcome;
                     }
                     case "unlockAmountAsync" -> {
                         unlocked.add((Long) args[0]);
@@ -432,6 +444,29 @@ public class WithdrawMergeTests extends TestSuite {
         List<String> errors = new ArrayList<>();
         long[] taken = {0};
         IAsyncBank bank = failingWithdrawBank(() -> taken[0] = inventory.removeItem(paperId, ESCAPED), unlocked);
+        Exception[] failure = {null};
+        withErrorCapture(errors, () -> failure[0] = sendToTerminal(terminal, player, accountNr, bank, paperId, FILL));
+        if (failure[0] != null)
+            return fail("sendToBlock threw " + failure[0]);
+        TestResult r = assertEquals("player took " + ESCAPED + " items out", (long) ESCAPED, taken[0]);
+        if (!r.passed()) return r;
+        r = assertEquals("rest taken back out of the terminal", 0L, inventory.getItemCount_direct(paperId));
+        if (!r.passed()) return r;
+        r = assertEquals("only the returned part is unlocked", List.of((long) (FILL - ESCAPED) * ratio), unlocked);
+        if (!r.passed()) return r;
+        return assertTrue("escaped part logged as left locked, got " + errors, errors.stream().anyMatch(e ->
+                e.contains("Withdraw rollback: " + ESCAPED + " ") && e.contains(ESCAPED * ratio + " (raw) left locked")));
+    }
+
+    /**
+     * Runs the real {@code sendToBlock} of {@code terminal} for {@code count} {@code item}: the bank manager is swapped for a
+     * delegating proxy that hands out a fake account {@code accountNr} (only its account number is overridden) whose bank
+     * is {@code bank}. @return the exception, or null
+     */
+    private static Exception sendToTerminal(BankTerminalBlockEntity terminal, UUID player, int accountNr, IAsyncBank bank,
+                                            ItemID item, int count) {
+        BankSystemModBackend.Instances instances = BankSystemModBackend.getInstances_forTesting();
+        IBankManager realManager = instances.SERVER_BANK_MANAGER;
         IAsyncBankAccount account = (IAsyncBankAccount) Proxy.newProxyInstance(IAsyncBankAccount.class.getClassLoader(),
                 new Class<?>[]{IAsyncBankAccount.class}, (proxy, m, args) -> switch (m.getName()) {
                     case "hasPermissionAsync" -> CompletableFuture.completedFuture(true);
@@ -445,30 +480,210 @@ public class WithdrawMergeTests extends TestSuite {
         IAsyncBankManager asyncManager = delegating(IAsyncBankManager.class, realManager.getAsync(), (m, args) ->
                 m.getName().equals("getBankAccountAsync") && args != null && Integer.valueOf(accountNr).equals(args[0])
                         ? CompletableFuture.completedFuture(account) : null);
-        Exception[] failure = {null};
-        withErrorCapture(errors, () -> {
-            instances.SERVER_BANK_MANAGER = delegating(IBankManager.class, realManager,
-                    (m, args) -> m.getName().equals("getAsync") ? asyncManager : null);
-            try {
-                Method send = BankTerminalBlockEntity.class.getDeclaredMethod("sendToBlock", UUID.class, int.class, HashMap.class);
-                send.setAccessible(true);
-                send.invoke(terminal, player, accountNr, new HashMap<>(Map.of(paperId, (long) FILL)));
-            } catch (Exception e) {
-                failure[0] = e;
-            } finally {
-                instances.SERVER_BANK_MANAGER = realManager;
-            }
-        });
-        if (failure[0] != null)
-            return fail("sendToBlock threw " + failure[0]);
-        TestResult r = assertEquals("player took " + ESCAPED + " items out", (long) ESCAPED, taken[0]);
+        instances.SERVER_BANK_MANAGER = delegating(IBankManager.class, realManager,
+                (m, args) -> m.getName().equals("getAsync") ? asyncManager : null);
+        try {
+            Method send = BankTerminalBlockEntity.class.getDeclaredMethod("sendToBlock", UUID.class, int.class, HashMap.class);
+            send.setAccessible(true);
+            send.invoke(terminal, player, accountNr, new HashMap<>(Map.of(item, (long) count)));
+            return null;
+        } catch (Exception e) {
+            return e;
+        } finally {
+            instances.SERVER_BANK_MANAGER = realManager;
+        }
+    }
+
+    // ------------------------------------------------------------------ BS-267: outcome unknown = parked
+
+    /** A withdraw / deposit whose outcome stayed unknown after the status check (what AsyncBank fails with). */
+    private static <T> CompletableFuture<T> unknownOutcome() {
+        return CompletableFuture.failedFuture(new RequestOutcomeUnknownException("test: outcome unknown"));
+    }
+
+    /** @return the TRANSFER_PARKED flags raised on {@code accountNr} since {@code sinceMs} (master only), or null without a flag table */
+    private static List<SuspicionFlagRecord> parkedFlags(int accountNr, long sinceMs) throws Exception {
+        var flags = BankSystemModBackend.getInstances_forTesting().SUSPICION_FLAG_MANAGER;
+        if (flags == null) return null;
+        return flags.getRecent(accountNr, sinceMs, 0).get(10, TimeUnit.SECONDS).stream()
+                .filter(f -> f.flagType() == SuspicionChecks.TRANSFER_PARKED).toList();
+    }
+
+    /** Checks one fresh TRANSFER_PARKED flag on {@code accountNr}: a transfer id as ref, {@code what} in the details. */
+    private TestResult assertParked(int accountNr, long sinceMs, String what) {
+        try {
+            List<SuspicionFlagRecord> parked = parkedFlags(accountNr, sinceMs);
+            if (parked == null) return fail("no flag table");
+            if (parked.size() != 1) return fail("expected 1 TRANSFER_PARKED flag on " + accountNr + ", got " + parked);
+            SuspicionFlagRecord f = parked.get(0);
+            if (f.ref() == null || f.ref().isEmpty()) return fail("flag without transfer id: " + f);
+            return assertTrue("flag details name '" + what + "': " + f.details(), f.details() != null && f.details().contains(what));
+        } catch (Exception e) {
+            return fail("flag read failed: " + e);
+        }
+    }
+
+    /**
+     * BS-267, download block: the withdraw's outcome stays unknown. Treated as applied: the items stay in the block,
+     * nothing is unlocked, a TRANSFER_PARKED flag is raised.
+     */
+    private TestResult testDownloadUnknownParks() {
+        ItemID paperId = ItemIDManager.getItemID(new ItemStack(Items.PAPER));
+        if (!paperId.isValid())
+            return fail("Plain paper is not registered — default ItemIDs missing on this server?");
+        BankDownloadBlockEntity block = new BankDownloadBlockEntity(BlockPos.ZERO,
+                BankSystemBlocks.BANK_DOWNLOAD_BLOCK.get().defaultBlockState());
+        final int accountNr = Integer.MAX_VALUE - 2671; // never a real account
+        long since = System.currentTimeMillis();
+        List<Long> unlocked = new ArrayList<>();
+        IAsyncBank bank = failingWithdrawBank(() -> {}, unlocked, unknownOutcome());
+        Object filled;
+        try {
+            java.lang.reflect.Field nr = BankDownloadBlockEntity.class.getDeclaredField("bankAccountNumber");
+            nr.setAccessible(true);
+            nr.setInt(block, accountNr);
+            Method fill = BankDownloadBlockEntity.class.getDeclaredMethod("withdrawAndFillInventory",
+                    ItemID.class, int.class, IAsyncBank.class);
+            fill.setAccessible(true);
+            filled = ((CompletableFuture<?>) fill.invoke(block, paperId, FILL, bank)).get(2, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            return fail("withdrawAndFillInventory failed: " + e);
+        }
+        TestResult r = assertEquals("unknown reports the filled amount", FILL, filled);
         if (!r.passed()) return r;
-        r = assertEquals("rest taken back out of the terminal", 0L, inventory.getItemCount_direct(paperId));
+        int inBlock = 0;
+        for (int i = 0; i < block.getContainerSize(); i++)
+            if (block.getItem(i).is(Items.PAPER)) inBlock += block.getItem(i).getCount();
+        r = assertEquals("items stay in the block", FILL, inBlock);
         if (!r.passed()) return r;
-        r = assertEquals("only the returned part is unlocked", List.of((long) (FILL - ESCAPED) * ratio), unlocked);
+        r = assertEquals("lock kept (no unlock)", List.of(), unlocked);
         if (!r.passed()) return r;
-        return assertTrue("escaped part logged as left locked, got " + errors, errors.stream().anyMatch(e ->
-                e.contains("Withdraw rollback: " + ESCAPED + " ") && e.contains(ESCAPED * ratio + " (raw) left locked")));
+        return assertParked(accountNr, since, "download block");
+    }
+
+    /** BS-267, bank terminal: the withdraw's outcome stays unknown. The items stay in the terminal, no unlock, flagged. */
+    private TestResult testTerminalWithdrawUnknownParks() {
+        ItemID paperId = ItemIDManager.getItemID(new ItemStack(Items.PAPER));
+        if (!paperId.isValid())
+            return fail("Plain paper is not registered — default ItemIDs missing on this server?");
+        if (BankSystemModBackend.getInstances_forTesting().SERVER_BANK_MANAGER == null)
+            return skip("no bank manager on this side");
+        BankTerminalBlockEntity terminal = new BankTerminalBlockEntity(
+                BlockPos.ZERO, BankSystemBlocks.BANK_TERMINAL_BLOCK.get().defaultBlockState());
+        UUID player = UUID.randomUUID();
+        BankTerminalBlockEntity.TerminalInventory inventory = terminal.getInventory(player);
+        final int accountNr = Integer.MAX_VALUE - 2672; // never a real account
+        long since = System.currentTimeMillis();
+        List<Long> unlocked = new ArrayList<>();
+        Exception failure = sendToTerminal(terminal, player, accountNr, failingWithdrawBank(() -> {}, unlocked, unknownOutcome()),
+                paperId, FILL);
+        if (failure != null)
+            return fail("sendToBlock threw " + failure);
+        TestResult r = assertEquals("items stay in the terminal", (long) FILL, inventory.getItemCount_direct(paperId));
+        if (!r.passed()) return r;
+        r = assertEquals("lock kept (no unlock)", List.of(), unlocked);
+        if (!r.passed()) return r;
+        return assertParked(accountNr, since, "terminal withdraw");
+    }
+
+    /**
+     * BS-267, crafting with "deposit output to bank": the output deposit's outcome stays unknown. Treated as credited:
+     * the output is not handed back to the player, a TRANSFER_PARKED flag is raised. Drives the private
+     * depositCraftedOutput of a menu opened by an offline (never joined) server player.
+     */
+    private TestResult testCraftDepositUnknownParks() {
+        ItemID paperId = ItemIDManager.getItemID(new ItemStack(Items.PAPER));
+        if (!paperId.isValid())
+            return fail("Plain paper is not registered — default ItemIDs missing on this server?");
+        net.minecraft.server.MinecraftServer server = getServer();
+        if (server == null)
+            return skip("no server");
+        final int accountNr = Integer.MAX_VALUE - 2673; // never a real account
+        long since = System.currentTimeMillis();
+        java.util.concurrent.atomic.AtomicBoolean sent = new java.util.concurrent.atomic.AtomicBoolean();
+        IAsyncBank bank = (IAsyncBank) Proxy.newProxyInstance(IAsyncBank.class.getClassLoader(), new Class<?>[]{IAsyncBank.class},
+                (proxy, m, args) -> switch (m.getName()) {
+                    case "depositAsync" -> {
+                        sent.set(true);
+                        yield unknownOutcome();
+                    }
+                    case "getItemIDAsync" -> paperId;
+                    case "toString" -> "UnknownDepositBank";
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException(m.getName());
+                });
+        IAsyncBankAccount account = (IAsyncBankAccount) Proxy.newProxyInstance(IAsyncBankAccount.class.getClassLoader(),
+                new Class<?>[]{IAsyncBankAccount.class}, (proxy, m, args) -> switch (m.getName()) {
+                    case "getOrCreateBankAsync" -> CompletableFuture.completedFuture(bank);
+                    case "toString" -> "FakeAccount";
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException(m.getName());
+                });
+        net.minecraft.server.level.ServerPlayer player = new net.minecraft.server.level.ServerPlayer(server, server.overworld(),
+                new com.mojang.authlib.GameProfile(UUID.randomUUID(), "bs267craft"),
+                net.minecraft.server.level.ClientInformation.createDefault());
+        BankTerminalBlockEntity terminal = new BankTerminalBlockEntity(
+                BlockPos.ZERO, BankSystemBlocks.BANK_TERMINAL_BLOCK.get().defaultBlockState());
+        try {
+            BankTerminalContainerMenu menu = new BankTerminalContainerMenu(9_267, player.getInventory(), terminal);
+            java.lang.reflect.Field accountField = BankTerminalContainerMenu.class.getDeclaredField("craftingAccount");
+            accountField.setAccessible(true);
+            accountField.set(menu, account);
+            java.lang.reflect.Field nrField = BankTerminalContainerMenu.class.getDeclaredField("craftingAccountNumber");
+            nrField.setAccessible(true);
+            nrField.setInt(menu, accountNr);
+            Method deposit = BankTerminalContainerMenu.class.getDeclaredMethod("depositCraftedOutput", ItemStack.class);
+            deposit.setAccessible(true);
+            deposit.invoke(menu, new ItemStack(Items.PAPER, FILL));
+        } catch (Exception e) {
+            return fail("depositCraftedOutput failed: " + e);
+        }
+        if (!pumpUntil(sent::get, 5_000)) return fail("the output deposit was never sent");
+        pump(200); // a fallback hand-back would run on the main thread
+        TestResult r = assertEquals("output not handed back to the player", 0, player.getInventory().countItem(Items.PAPER));
+        if (!r.passed()) return r;
+        return assertParked(accountNr, since, "craft output deposit");
+    }
+
+    /** Lock proxy: {@code locked} raw locked; every unlock is recorded. */
+    private static IAsyncBank lockedBank(long locked, List<Long> unlocked) {
+        return (IAsyncBank) Proxy.newProxyInstance(IAsyncBank.class.getClassLoader(), new Class<?>[]{IAsyncBank.class},
+                (proxy, m, args) -> switch (m.getName()) {
+                    case "getLockedBalanceAsync" -> CompletableFuture.completedFuture(locked);
+                    case "unlockAmountAsync" -> {
+                        unlocked.add((Long) args[0]);
+                        yield CompletableFuture.completedFuture(BankStatus.SUCCESS);
+                    }
+                    case "getItemIDAsync" -> ItemID.INVALID_ID;
+                    case "toString" -> "LockedBank";
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException(m.getName());
+                });
+    }
+
+    /**
+     * BS-267: a refused craft withdraw frees exactly the lock this craft took, and nothing once the counter holds less
+     * (part of it is someone else's, e.g. a parked transfer's).
+     */
+    private TestResult testCraftUnlockOwnLockOnly() {
+        List<Long> unlocked = new ArrayList<>();
+        long freed = BankTerminalContainerMenu.releaseOwnCraftLock(lockedBank(150L, unlocked), 100L).join();
+        TestResult r = assertEquals("intact lock: own 100 freed, foreign 50 kept", List.of(100L), unlocked);
+        if (!r.passed()) return r;
+        r = assertEquals("reports 100 freed", 100L, freed);
+        if (!r.passed()) return r;
+        unlocked.clear();
+        List<String> errors = new ArrayList<>();
+        long[] freed2 = {-1};
+        withErrorCapture(errors, () -> freed2[0] = BankTerminalContainerMenu.releaseOwnCraftLock(lockedBank(60L, unlocked), 100L).join());
+        r = assertEquals("lock below own part: nothing freed (old code freed all 60)", List.of(), unlocked);
+        if (!r.passed()) return r;
+        r = assertEquals("reports 0 freed", 0L, freed2[0]);
+        if (!r.passed()) return r;
+        return assertTrue("left-locked case logged, got " + errors, errors.stream().anyMatch(e -> e.contains("left locked for the admin")));
     }
 
     /** A slave deposit whose reply was lost, resolved by the status check the way AsyncBank does it. */
@@ -491,21 +706,23 @@ public class WithdrawMergeTests extends TestSuite {
                 BlockPos.ZERO, BankSystemBlocks.BANK_TERMINAL_BLOCK.get().defaultBlockState());
         BankTerminalBlockEntity.TerminalInventory inventory = new BankTerminalBlockEntity.TerminalInventory(blockEntity, 9);
         UUID player = UUID.randomUUID();
-        long[] atSend = {-1}, credited = {0};
+        long[] atSend = {-1}, credited = {0}, parked = {0};
 
         inventory.setStackInSlot(0, new ItemStack(Items.PAPER, 10));
         blockEntity.depositReserved(inventory, player, paperId, 10, TransferJournal.ref("test"), n -> {
             atSend[0] = inventory.getItemCount_direct(paperId);
             return lostReply(TransferStatusRequest.UNKNOWN);
-        }, n -> credited[0] += n);
+        }, n -> credited[0] += n, (ex, n) -> parked[0] += n);
         TestResult r = assertEquals("items taken out before the send", 0L, atSend[0]);
         if (!r.passed()) return r;
         r = assertEquals("UNKNOWN: items stay out of the terminal (parked)", 0L, inventory.getItemCount_direct(paperId));
         if (!r.passed()) return r;
+        r = assertEquals("BS-267: UNKNOWN parks the 10 items (alert hook)", 10L, parked[0]);
+        if (!r.passed()) return r;
 
         inventory.setStackInSlot(0, new ItemStack(Items.PAPER, 10));
         blockEntity.depositReserved(inventory, player, paperId, 10, TransferJournal.ref("test"),
-                n -> lostReply(TransferStatusRequest.NOT_APPLIED), n -> credited[0] += n);
+                n -> lostReply(TransferStatusRequest.NOT_APPLIED), n -> credited[0] += n, (ex, n) -> parked[0] += n);
         r = assertEquals("NOT_APPLIED: items given back", 10L, inventory.getItemCount_direct(paperId));
         if (!r.passed()) return r;
 
@@ -513,10 +730,12 @@ public class WithdrawMergeTests extends TestSuite {
         blockEntity.depositReserved(inventory, player, paperId, 15, TransferJournal.ref("test"), n -> {
             sent[0] = n;
             return CompletableFuture.completedFuture(BankStatus.SUCCESS);
-        }, n -> credited[0] += n);
+        }, n -> credited[0] += n, (ex, n) -> parked[0] += n);
         r = assertEquals("only the 10 still in the terminal are sent", 10L, sent[0]);
         if (!r.passed()) return r;
         r = assertEquals("SUCCESS: items stay out", 0L, inventory.getItemCount_direct(paperId));
+        if (!r.passed()) return r;
+        r = assertEquals("only UNKNOWN parks", 10L, parked[0]);
         if (!r.passed()) return r;
         return assertEquals("only SUCCESS credits", 10L, credited[0]);
     }

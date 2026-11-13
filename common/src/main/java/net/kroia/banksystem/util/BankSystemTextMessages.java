@@ -403,6 +403,17 @@ public class BankSystemTextMessages {
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
+    // BS-267: a transfer whose outcome stayed unknown (parked for an admin)
+    private static final Component TRANSFER_UNCONFIRMED = Component.translatable(prefix+"transfer_unconfirmed");
+    public static String getTransferUnconfirmedMessage(String transferId) {
+        return TRANSFER_UNCONFIRMED.getString().replace("{transfer_id}", transferId);
+    }
+    // BS-267: admin reset of a locked balance on an account with open parked transfers
+    private static final Component RESET_LOCK_PARKED = Component.translatable(prefix+"reset_lock_parked_transfers");
+    public static String getResetLockParkedMessage(int accountNumber, int count, String transferIds) {
+        return RESET_LOCK_PARKED.getString().replace("{account_number}", String.valueOf(accountNumber))
+                .replace("{count}", String.valueOf(count)).replace("{transfer_ids}", transferIds);
+    }
     private static final Component ITEM_NOT_ALLOWED_FAILED = Component.translatable(prefix+"item_not_allowed_failed");
     public static String getItemNotAllowedFailedMessage(String itemName)
     {

@@ -51,6 +51,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.LongConsumer;
+import java.util.function.ObjLongConsumer;
 import java.util.function.LongFunction;
 
 public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvider {
@@ -1100,7 +1101,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                         n -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DEPOSIT, playerID,
                                                 "coin " + itemID.getName() + " x" + n, journal, () -> baseBank.depositAsync(n * units)),
                                         n -> logTerminal(accountNr, playerID, net.kroia.banksystem.api.ledger.LedgerType.DEPOSIT, baseSlotId, n * units,
-                                                "coin " + itemID.getName() + " x" + n));
+                                                "coin " + itemID.getName() + " x" + n),
+                                        (ex, n) -> net.kroia.banksystem.banking.ledger.AdminAudit.parkTransfer(accountNr, baseSlotId, n * units,
+                                                journal.transferId(), playerID, "terminal deposit", ex));
                             });
                             continue;
                         }
@@ -1148,7 +1151,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                     n -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DEPOSIT, playerID,
                                             isMoney ? "banknote " + itemID.getName() + " x" + n : null, journal, () -> bank.depositAsync(n * unit)),
                                     n -> logTerminal(accountNr, playerID, net.kroia.banksystem.api.ledger.LedgerType.DEPOSIT, finalItemIdForLog, n * unit,
-                                            isMoney ? "banknote " + itemID.getName() + " x" + n : null));
+                                            isMoney ? "banknote " + itemID.getName() + " x" + n : null),
+                                    (ex, n) -> net.kroia.banksystem.banking.ledger.AdminAudit.parkTransfer(accountNr, finalItemIdForLog, n * unit,
+                                            journal.transferId(), playerID, "terminal deposit", ex));
                         });
                     }
                     // mark the block entity for saving
@@ -1163,13 +1168,15 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
      * terminal (main thread, see {@link #runOnMainThread}), then deposits the {@code n} taken. SUCCESS keeps them out.
      * Not applied (never sent, NOT_APPLIED from the status check, refused) puts them back, dropped at the block when
      * it is gone or full, journal RETURNED. Unknown outcome (the master may have credited them): kept out, no refund,
-     * the slave journal shows TIMED_OUT (parked). Public as a test seam.
+     * the slave journal shows TIMED_OUT (parked), BS-267: {@code onUnknown} raises the alert. Public as a test seam.
      *
      * @param deposit   sends the deposit for {@code n} items, tagged with {@code journal}
      * @param onSuccess ledger row for {@code n} deposited items
+     * @param onUnknown BS-267: parks the transfer of {@code n} items whose outcome stayed unknown (cause, n)
      */
     public void depositReserved(TerminalInventory inventory, UUID playerID, ItemID itemID, long amount, TransferJournal.Ref journal,
-                                LongFunction<CompletableFuture<BankStatus>> deposit, LongConsumer onSuccess) {
+                                LongFunction<CompletableFuture<BankStatus>> deposit, LongConsumer onSuccess,
+                                ObjLongConsumer<Throwable> onUnknown) {
         runOnMainThread(() -> {
             List<ItemStack> taken = new ArrayList<>();
             long n = inventory.removeItem(itemID, amount, taken); // marks the block entity changed
@@ -1182,10 +1189,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 sent = CompletableFuture.failedFuture(e); // may have been applied: never refund blindly
             }
             sent.whenComplete((status, ex) -> {
-                if (ex != null) {
-                    error("Terminal deposit outcome unknown, " + n + " " + itemID + " of player " + playerID
-                            + " kept out of the terminal, no refund (transfer " + journal.transferId() + ")",
-                            net.kroia.banksystem.networking.multi_server.TransferStatusRequest.cause(ex));
+                if (ex != null) { // kept out of the terminal, no refund
+                    onUnknown.accept(ex, n);
                     return;
                 }
                 if (status == BankStatus.SUCCESS) {
@@ -1295,8 +1300,16 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                             long addedAmount = inventory.addItem(itemID, itemsToDeposit);
                                             if (addedAmount > 0) {
                                                 long rawToWithdraw = addedAmount * ratio;
-                                                CompletableFuture<BankStatus> withdrawResult = net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, playerID, null, net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawToWithdraw))); // BS-258
-                                                withdrawResult.thenAccept(withdraw -> {
+                                                final TransferJournal.Ref journal = TransferJournal.ref("terminal");
+                                                CompletableFuture<BankStatus> withdrawResult = net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, playerID, null, journal, () -> bank.withdrawLockedPreferedAsync(rawToWithdraw))); // BS-258
+                                                withdrawResult.whenComplete((withdraw, withdrawError) -> {
+                                                    if (withdrawError != null) {
+                                                        // BS-267: unknown after the status check: treated as applied. The items stay in the
+                                                        // terminal and the whole lock stays (no unlock, not even the remainder); parked for the admin.
+                                                        net.kroia.banksystem.banking.ledger.AdminAudit.parkTransfer(accountNr, itemID, rawToWithdraw,
+                                                                journal.transferId(), playerID, "terminal withdraw", withdrawError);
+                                                        return;
+                                                    }
                                                     if (withdraw != BankStatus.SUCCESS) {
                                                         error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
                                                                 " " + itemID + " from bank account of user " + playerID + " : " + withdraw);
@@ -1339,8 +1352,16 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                 long addedAmount = inventory.addItem(itemID, itemsToDeposit);
                                 if (addedAmount > 0) {
                                     long rawToWithdraw = addedAmount * ratio;
-                                    CompletableFuture<BankStatus> withdrawResult = net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, playerID, null, net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawToWithdraw))); // BS-258
-                                    withdrawResult.thenAccept(withdraw -> {
+                                    final TransferJournal.Ref journal = TransferJournal.ref("terminal");
+                                    CompletableFuture<BankStatus> withdrawResult = net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, playerID, null, journal, () -> bank.withdrawLockedPreferedAsync(rawToWithdraw))); // BS-258
+                                    withdrawResult.whenComplete((withdraw, withdrawError) -> {
+                                        if (withdrawError != null) {
+                                            // BS-267: unknown after the status check: treated as applied. The items stay in the
+                                            // terminal and the whole lock stays (no unlock, not even the remainder); parked for the admin.
+                                            net.kroia.banksystem.banking.ledger.AdminAudit.parkTransfer(accountNr, itemID, rawToWithdraw,
+                                                    journal.transferId(), playerID, "terminal withdraw", withdrawError);
+                                            return;
+                                        }
                                         if (withdraw != BankStatus.SUCCESS) {
                                             error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
                                                     " " + itemID + " from bank account of user " + playerID + " : " + withdraw);

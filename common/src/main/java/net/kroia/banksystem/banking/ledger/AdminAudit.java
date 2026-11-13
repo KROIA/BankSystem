@@ -142,6 +142,40 @@ public final class AdminAudit {
         }
     }
 
+    /**
+     * BS-267: a value transfer whose outcome stayed unknown after the slave's status check is parked: treated as
+     * applied by the master, nothing handed or taken back, no lock released. The slave journal already has TIMED_OUT
+     * (AsyncBank). This adds the error log, a TRANSFER_PARKED flag (ref = transfer id; amount = raw money, 0 for other
+     * items, which the details name) and one chat line to {@code player} if online here. On a slave the flag goes to the
+     * master through {@link net.kroia.banksystem.networking.multi_server.TransferParkedRequest} (trusted slaves only,
+     * retried while the link is down). Never throws.
+     */
+    public static void parkTransfer(int accountNumber, ItemID item, long raw, @Nullable String transferId,
+                                    @Nullable UUID player, String what, @Nullable Throwable cause) {
+        try {
+            String details = what + " outcome unknown, parked (treated as applied, lock kept): " + itemAmount(item.getShort(), raw);
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
+                String msg = "[AdminAudit] " + details + " (account " + accountNumber + ", player " + player + ", transfer " + transferId + ")";
+                if (cause == null) BACKEND_INSTANCES.LOGGER.error(msg);
+                else BACKEND_INSTANCES.LOGGER.error(msg, net.kroia.banksystem.networking.multi_server.TransferStatusRequest.cause(cause));
+            }
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer)
+                net.kroia.banksystem.networking.multi_server.TransferParkedRequest.report(accountNumber, item, raw, transferId, details);
+            else raiseParked(accountNumber, item, raw, transferId, details);
+            if (player != null)
+                net.kroia.modutilities.ServerPlayerUtilities.printToClientConsole(player,
+                        BankSystemTextMessages.getTransferUnconfirmedMessage(String.valueOf(transferId)));
+        } catch (RuntimeException ignored) {
+            // best-effort
+        }
+    }
+
+    /** BS-267: the TRANSFER_PARKED flag of a parked transfer (amount = raw money, 0 for other items). Master only. */
+    public static void raiseParked(int accountNumber, ItemID item, long raw, @Nullable String transferId, String details) {
+        raise(accountNumber, SuspicionChecks.TRANSFER_PARKED, 2,
+                net.kroia.banksystem.minecraft.item.custom.money.MoneyItem.isMoney(item) ? raw : 0, transferId, details);
+    }
+
     /** @return the audit file of {@code day} (server time zone), or null without a world. */
     public static @Nullable Path auditFile(LocalDate day) {
         Path dir = auditDir();

@@ -50,10 +50,28 @@ public class LedgerByRefRequest extends BankSystemGenericRequest<String, List<Le
         TransactionLogManager log = BankSystemModBackend.getTransactionLogManager();
         if (playerSender != null || slaveID == null || slaveID.isEmpty() || isFromUntrustedSlave(slaveID) || log == null)
             return CompletableFuture.completedFuture(List.of());
+        if (ref.startsWith(FLAGS)) return flags(ref.substring(FLAGS.length()));
         return log.getByRef(ref).thenApply(rows -> {
             List<Row> out = new ArrayList<>();
             for (var r : rows) out.add(new Row(r.ref(), r.accountNumber(), r.type(), r.itemId(), r.amount(),
                     r.originServer() == null ? "" : r.originServer()));
+            return out;
+        });
+    }
+
+    /**
+     * BS-267: input {@code "flags:<ref>"} returns the master's SuspicionFlag rows with that ref instead, as rows with
+     * type UNKNOWN_LEGACY, itemId = flag type, amount = flag amount, origin = "flag".
+     */
+    public static final String FLAGS = "flags:";
+
+    private static CompletableFuture<List<Row>> flags(String ref) {
+        var mgr = BankSystemModBackend.getInstances_forTesting().SUSPICION_FLAG_MANAGER;
+        if (mgr == null) return CompletableFuture.completedFuture(List.of());
+        return mgr.getRecent(-1, 0, 0).thenApply(all -> {
+            List<Row> out = new ArrayList<>();
+            for (var f : all) if (ref.equals(f.ref()))
+                out.add(new Row(ref, f.accountNumber(), LedgerType.UNKNOWN_LEGACY, (short) f.flagType(), f.amount(), "flag"));
             return out;
         });
     }

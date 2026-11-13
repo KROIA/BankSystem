@@ -43,6 +43,11 @@ import net.kroia.banksystem.networking.multi_server.ServerNetworkInfoRequest;
 import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
 import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.banksystem.testing.AdminFlagTestRequest;
+import net.kroia.banksystem.testing.LedgerByRefRequest;
+import net.kroia.banksystem.data.TransferJournal;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.networking.BankSystemNetworking;
+import net.kroia.banksystem.networking.multi_server.TransferParkedRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.modutilities.testing.TestCategory;
@@ -109,6 +114,7 @@ public class AdminAuditTests extends TestSuite {
             addTest("slave_admin_gate_asks_master", () -> onSlave(this::slaveGate));
             addTest("slave_symbols_list_master_only", () -> onSlave(this::slaveSymbolsList));
             addTest("slave_auditreport_trusted_only", () -> onSlave(this::slaveAuditReport));
+            addTest("slave_transfer_parked_flag_trusted_only", this::slaveParkedFlag); // BS-267
             return;
         }
         addTest("paged_query_filters_and_order", this::pagedQuery);
@@ -242,6 +248,35 @@ public class AdminAuditTests extends TestSuite {
         } finally {
             ClientConsoleMessagePacket.testSink = null;
         }
+    }
+
+    /**
+     * BS-267: a transfer parked on a trusted slave raises one TRANSFER_PARKED flag on the master (ref = transfer id,
+     * amount = raw money), also when the report arrives twice; an untrusted slave's report is refused.
+     * Trusted cell leaves one flag row on the master (fake account), like the other slave rows tests.
+     */
+    private TestResult slaveParkedFlag() {
+        if (getServer() == null || !BankSystemModBackend.getInstances_forTesting().isSlaveServer) return skip("not a slave");
+        if (!MultiServerUtils.canInteractWithBankSystem()) return skip("slave not connected to its master");
+        IAsyncBankManager mgr = BankSystemModBackend.getInstances_forTesting().SERVER_BANK_MANAGER.getAsync();
+        boolean trusted = Boolean.TRUE.equals(await(mgr.isSlaveServerTrustedAsync(""), WAIT_MS));
+        int account = Integer.MAX_VALUE - 2676;
+        ItemID money = MoneyItem.getItemID();
+        String tid = TransferJournal.newTransferId();
+        TransferParkedRequest.Input report = new TransferParkedRequest.Input(account, money, 500L, tid, "bs267 slave test repeat");
+        if (!trusted) {
+            Boolean ok = await(BankSystemNetworking.TRANSFER_PARKED_REQUEST.sendRequestToMaster(report), WAIT_MS);
+            return Boolean.FALSE.equals(ok) ? pass("untrusted slave: report refused") : fail("untrusted slave's report answered " + ok);
+        }
+        AdminAudit.parkTransfer(account, money, 500L, tid, null, "bs267 slave test", null);
+        // the same report again (a retry after a lost answer): same FIFO link, so it arrives after the first one
+        Boolean again = await(BankSystemNetworking.TRANSFER_PARKED_REQUEST.sendRequestToMaster(report), WAIT_MS);
+        if (!Boolean.TRUE.equals(again)) return fail("repeated report answered " + again);
+        List<LedgerByRefRequest.Row> flags = await(LedgerByRefRequest.INSTANCE.sendRequestToMaster(LedgerByRefRequest.FLAGS + tid), WAIT_MS);
+        if (flags == null || flags.size() != 1) return fail("master flags with ref " + tid + ": " + flags);
+        LedgerByRefRequest.Row f = flags.get(0);
+        if (f.account() != account || f.itemId() != SuspicionChecks.TRANSFER_PARKED || f.amount() != 500L) return fail("flag " + f);
+        return pass("trusted slave: one TRANSFER_PARKED flag on the master, ref " + tid);
     }
 
     /** BS-196: flag-gated nodes fall back to level 0 (the admin flag decides), every other node to op level 2. */

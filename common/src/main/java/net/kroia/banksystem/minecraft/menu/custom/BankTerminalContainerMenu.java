@@ -1036,8 +1036,9 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         for (Map.Entry<IAsyncBank, Long> lock : locksToWithdraw) {
             final IAsyncBank bank = lock.getKey();
             final long rawAmount = lock.getValue();
+            final net.kroia.banksystem.data.TransferJournal.Ref journal = net.kroia.banksystem.data.TransferJournal.ref("terminal");
             net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(blockEntity, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, ledgerPlayer, ledgerNote,
-                    net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawAmount))).whenComplete((status, throwable) -> { // BS-258
+                    journal, () -> bank.withdrawLockedPreferedAsync(rawAmount))).whenComplete((status, throwable) -> { // BS-258
                 if (throwable == null && status == BankStatus.SUCCESS) {
                     net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(blockEntity, () -> {
                         net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, bank.getItemIDAsync(), rawAmount,
@@ -1046,34 +1047,26 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                     });
                     return;
                 }
+                if (throwable != null) {
+                    // BS-267: outcome unknown after the status check: treated as applied (the output is delivered),
+                    // lock state unknown, left untouched; parked for the admin.
+                    net.kroia.banksystem.banking.ledger.AdminAudit.parkTransfer(ledgerAccount, bank.getItemIDAsync(), rawAmount,
+                            journal.transferId(), ledgerPlayer, "craft ingredient withdraw", throwable);
+                    return;
+                }
                 // Un-debited craft: the output has already been delivered and may
                 // already be in use, so there is nothing safe to roll back here
                 // (unlike sendToBlock, which can simply remove the inserted stack).
                 // Log at ERROR with full context so admins can reconcile.
-                String itemName = bank.getItemIDAsync().getName();
-                String cause = throwable != null ? ("exception: " + throwable) : String.valueOf(status);
-                error("Un-debited craft: failed to withdraw locked crafting ingredients (item " + itemName
+                error("Un-debited craft: failed to withdraw locked crafting ingredients (item " + bank.getItemIDAsync().getName()
                         + ", raw amount " + rawAmount + ") from bank account " + craftingAccountNumber
-                        + " for player " + player.getUUID() + " (" + player.getName().getString() + ") : " + cause
+                        + " for player " + player.getUUID() + " (" + player.getName().getString() + ") : " + status
                         + " — the crafted output was already delivered; the bank was not debited.");
-                if (throwable != null)
-                    return; // request died mid-flight: lock state unknown, leave it untouched
                 // Task #126: never sent / not applied on a slave. The output is already delivered, so keep the
                 // ingredients locked (frozen for the admin) instead of releasing a free craft.
                 if (status == BankStatus.FAILED_NO_MASTER_CONNECTION)
                     return;
-                // Release only what is verifiably still locked, never more than our
-                // own contribution. Residual (documented): the lock ledger is a
-                // single counter without per-owner tracking, so if the admin edit
-                // already consumed part of our lock, this min() may free amounts
-                // another mod locked — inherent to the ledger design (the same
-                // limitation exists in BankTerminalBlockEntity.sendToBlock's
-                // rollback path).
-                bank.getLockedBalanceAsync().thenAccept(lockedBalance -> {
-                    long toUnlock = Math.min(rawAmount, Math.max(0L, lockedBalance));
-                    if (toUnlock > 0)
-                        bank.unlockAmountAsync(toUnlock);
-                });
+                releaseOwnCraftLock(bank, rawAmount);
             });
         }
 
@@ -1100,6 +1093,28 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         craftInProgress = false;
         updateCraftingResult();
         refreshBankSnapshot();
+    }
+
+    /**
+     * BS-267: after a refused craft withdraw, frees the lock this craft took ({@code ownLock}, one entry of
+     * acquiredLocks = a lock that succeeded), but only while the counter still holds at least that much. A refused
+     * withdraw moves nothing, so with {@code locked >= ownLock} our lock is intact and exactly {@code ownLock} is ours.
+     * With less, someone (admin set balance / reset) already took part of ours, and the rest can't be told apart from
+     * other holders' locks (e.g. a parked transfer's): nothing is freed, the admin settles it. Public for the in-game test.
+     *
+     * @return the amount freed (0 or {@code ownLock})
+     */
+    public static CompletableFuture<Long> releaseOwnCraftLock(IAsyncBank bank, long ownLock) {
+        return bank.getLockedBalanceAsync().thenApply(locked -> {
+            if (ownLock <= 0 || locked == null || locked < ownLock) {
+                if (ownLock > 0)
+                    error("Refused craft withdraw: only " + locked + " of the "
+                            + ownLock + " (raw) " + bank.getItemIDAsync() + " this craft locked is still locked; left locked for the admin");
+                return 0L;
+            }
+            bank.unlockAmountAsync(ownLock);
+            return ownLock;
+        });
     }
 
     /**
@@ -1160,7 +1175,14 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                 final net.kroia.banksystem.data.TransferJournal.Ref journal = net.kroia.banksystem.data.TransferJournal.ref("terminal");
                 net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(blockEntity, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, player.getUUID(),
                         "craft output " + output.getItem() + " x" + output.getCount(), journal,
-                        () -> bank.depositAsync(finalAmountToDeposit))).thenAccept(status -> { // BS-258
+                        () -> bank.depositAsync(finalAmountToDeposit))).whenComplete((status, ex) -> { // BS-258
+                    if (ex != null) {
+                        // BS-267: outcome unknown after the status check: treated as credited, the output stays
+                        // gone (no fallback hand-back); parked for the admin.
+                        net.kroia.banksystem.banking.ledger.AdminAudit.parkTransfer(ledgerAccount, bank.getItemIDAsync(), finalAmountToDeposit,
+                                journal.transferId(), player.getUUID(), "craft output deposit", ex);
+                        return;
+                    }
                     if (status != BankStatus.SUCCESS)
                         deliverDepositFallback(output, "deposit failed: " + status, journal);
                     else

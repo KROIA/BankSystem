@@ -64,7 +64,14 @@ public enum LedgerType {
     /** BS-254: change of the slot's total balance when an external currency account is bound to it. Signed amount. */
     EXTERNAL_BIND(30),
     /** BS-254: change of the slot's total balance when its external currency account is unbound. Signed amount. */
-    EXTERNAL_UNBIND(31);
+    EXTERNAL_UNBIND(31),
+    /**
+     * BS-267: balance-neutral marker, no balance change. Banknotes withdrawn for a player (WITHDRAW row, same ref) were
+     * not handed out, and their refund could not be booked back (account or money bank gone, deposit refused): the value
+     * is lost. Amount = the undelivered money (raw, unsigned), item = money, ref = the transfer id. Not an outflow: the
+     * WITHDRAW row already took the value out.
+     */
+    REFUND_LOST(32);
 
     private final int code;
 

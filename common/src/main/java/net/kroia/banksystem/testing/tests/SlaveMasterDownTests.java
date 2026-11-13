@@ -341,7 +341,7 @@ public class SlaveMasterDownTests extends TestSuite {
                     sent.add(f);
                     MultiServerManager.setSimulatedMasterDown(true); // cut right after the send
                     return f;
-                }, n -> credited.incrementAndGet());
+                }, n -> credited.incrementAndGet(), (ex, n) -> {});
                 cut = MultiServerManager.isSimulatedMasterDown();
                 if (sent.size() != 1) return fail("deposit sent " + sent.size() + "x");
                 if (inventory.getItemCount_direct(paper) != 0) return fail("items still in the terminal after the send");

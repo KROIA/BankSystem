@@ -220,6 +220,14 @@ public class TransferStatusRequest extends BankSystemGenericRequest<TransferStat
         });
     }
 
+    /**
+     * BS-267: runs {@code send} now and again every {@link #RETRY_TICKS} while it answers {@link OutputData#NO_ANSWER},
+     * until {@link Results#TTL_MS} from now. {@code done} gets the first other answer, or NO_ANSWER / null when it gave up.
+     */
+    public static void retryWhileNoAnswer(Supplier<CompletableFuture<OutputData>> send, Consumer<OutputData> done) {
+        check(new Retry(send, System.currentTimeMillis() + Results.TTL_MS, done));
+    }
+
     private static void check(Retry r) {
         try {
             r.ask().get().whenComplete((st, ex) -> {
