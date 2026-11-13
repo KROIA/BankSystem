@@ -84,6 +84,7 @@ public class CompanyManagerTests extends TestSuite {
         addTest("share_destroy_lowers_issued", this::testShareDestroyLowersIssued);
         addTest("share_excess_refuses_dividend_schedules", this::testShareExcessRefusesDividendSchedules); // BS-241
         addTest("share_acknowledge_rights_and_suggestions", this::testShareAcknowledgeRights);
+        addTest("stamper_needs_company_manage", this::testStamperNeedsCompanyManage); // BS-261
         // BS-238 — dividends count every share variant
         addTest("dividend_holdings_sum_all_share_variants", this::testDividendHoldingsSumAllVariants);
     }
@@ -612,6 +613,56 @@ public class CompanyManagerTests extends TestSuite {
         } finally {
             if (added) bm.removeUser(admin);
             else bm.setBanksystemAdminMode(admin, false);
+        }
+    }
+
+    /**
+     * BS-261: a bound Share Stamper (open, stamp/mode/auto-IO, unbind, stillValid all use
+     * {@link net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity#hasManagePermission})
+     * refuses an outsider and a DEPOSIT-only worker, allows a MANAGE worker, the founder and a BankSystem
+     * admin. Live bank + company manager; account, company and synthetic users are removed afterwards.
+     */
+    private TestResult testStamperNeedsCompanyManage() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        IServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        CompanyManager cm = CompanyManager.get();
+        if (bm == null || cm == null) return fail("no master bank or company manager");
+        UUID founder = UUID.fromString("00000000-0000-0000-0000-0000AAAA0261");
+        UUID manager = UUID.fromString("00000000-0000-0000-0000-0000AAAA0262");
+        UUID depositor = UUID.fromString("00000000-0000-0000-0000-0000AAAA0263");
+        UUID outsider = UUID.fromString("00000000-0000-0000-0000-0000AAAA0264");
+        UUID admin = UUID.fromString("00000000-0000-0000-0000-0000AAAA0265");
+        List<UUID> addedUsers = new ArrayList<>();
+        for (UUID u : List.of(founder, manager, depositor, outsider, admin)) {
+            if (bm.userExists(u)) continue;
+            bm.addUser(new User(u, "Bs261User" + u.toString().substring(32)));
+            addedUsers.add(u);
+        }
+        net.kroia.banksystem.api.bankaccount.IServerBankAccount account = bm.createBankAccount("__bs261_stamper");
+        Company c = null;
+        net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity stamper = null;
+        try {
+            if (account == null) return fail("could not create test account");
+            bm.setBanksystemAdminMode(admin, true);
+            account.addUser(bm.getUserByUUID(manager), net.kroia.banksystem.banking.BankPermission.MANAGE.getValue());
+            account.addUser(bm.getUserByUUID(depositor), net.kroia.banksystem.banking.BankPermission.DEPOSIT.getValue());
+            c = cm.createCompany("Bs261Stamper" + account.getAccountNumber(), account.getAccountNumber(), founder, 100L).company;
+            if (c == null) return fail("test company not created");
+            stamper = new net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity(new net.minecraft.core.BlockPos(0, -64, 0),
+                    net.kroia.banksystem.minecraft.block.BankSystemBlocks.SHARE_STAMPER_BLOCK.get().defaultBlockState());
+            stamper.bind(c.getCompanyId(), founder);
+            if (stamper.hasManagePermission(outsider)) return fail("outsider allowed");
+            if (stamper.hasManagePermission(depositor)) return fail("worker without MANAGE allowed");
+            if (!stamper.hasManagePermission(manager)) return fail("MANAGE worker refused");
+            if (!stamper.hasManagePermission(founder)) return fail("founder refused");
+            if (!stamper.hasManagePermission(admin)) return fail("BankSystem admin refused");
+            return pass("outsider + DEPOSIT worker refused; MANAGE worker, founder, BS admin allowed");
+        } finally {
+            if (stamper != null) stamper.unbind();
+            if (c != null) cm.deleteCompany(c.getCompanyId());
+            if (account != null) bm.deleteBankAccount(account.getAccountNumber());
+            if (!addedUsers.contains(admin)) bm.setBanksystemAdminMode(admin, false);
+            for (UUID u : addedUsers) bm.removeUser(u);
         }
     }
 
