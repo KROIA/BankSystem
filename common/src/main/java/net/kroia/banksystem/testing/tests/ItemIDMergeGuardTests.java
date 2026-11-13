@@ -108,6 +108,7 @@ public class ItemIDMergeGuardTests extends TestSuite {
         addTest("receiver_follows_master_merge", this::testReceiverFollowsMasterMerge);
         addTest("receiver_takes_master_item_on_short_clash", this::testReceiverTakesMasterItemOnShortClash);
         addTest("receiver_full_sync_drops_stale_short", this::testReceiverFullSyncDropsStaleShort);
+        addTest("incomplete_full_sync_is_sent_as_update", this::testIncompleteFullSyncIsSentAsUpdate);
         // Task #16 — registration latch, persisted-wins merges, stale-key replacement
         addTest("master_registration_latched_before_load", this::testMasterRegistrationLatchedBeforeLoad);
         addTest("persisted_short_wins_merge_canonicality", this::testPersistedShortWinsMergeCanonicality);
@@ -1049,6 +1050,29 @@ public class ItemIDMergeGuardTests extends TestSuite {
         r = assertEquals("B resolves to N", n, ItemIDManager.getItemID(b));
         if (!r.passed()) return r;
         return pass("a full sync drops the stale short, an incremental one does not");
+    }
+
+    /**
+     * BS-263: an entry that cannot be serialized (here an empty stack) is left out of the
+     * packet, so a full sync built from that table must go out as an incremental update.
+     * Builds the packets only; nothing is sent.
+     */
+    private TestResult testIncompleteFullSyncIsSentAsUpdate() {
+        short base = pickUnusedShortBase(2);
+        if (base < 0) return fail("Could not pick unused shorts");
+        Map<ItemID, ItemStack> complete = new HashMap<>();
+        complete.put(new ItemID(base, null), new ItemStack(Items.PAPER));
+        TestResult r = assertTrue("complete full sync stays full",
+                new SyncItemIDsPacket(complete, true).isFullSync());
+        if (!r.passed()) return r;
+        Map<ItemID, ItemStack> incomplete = new HashMap<>(complete);
+        incomplete.put(new ItemID((short) (base + 1), null), ItemStack.EMPTY);
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(incomplete, true);
+        r = assertFalse("incomplete full sync is downgraded", packet.isFullSync());
+        if (!r.passed()) return r;
+        r = assertEquals("serializable entry still sent", 1, packet.getItems().size());
+        if (!r.passed()) return r;
+        return pass("an incomplete full sync goes out as an update");
     }
 
     /**

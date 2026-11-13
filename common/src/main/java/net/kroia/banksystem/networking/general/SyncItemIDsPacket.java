@@ -115,14 +115,21 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
      * {@link #STREAM_CODEC} for why NBT (not the numeric-ID codec) is used on the wire.
      * Automatically attaches the sender's current config-sourced volatile + deposit-gated
      * component lists and ItemID alias table.
+     * <p>
+     * BS-263: a full sync whose table lost entries during serialization (no registry access,
+     * an entry that fails to save) goes out as an incremental update, else receivers would
+     * drop shorts the sender still has.
      */
     public SyncItemIDsPacket(Map<ItemID, ItemStack> itemStacks, boolean fullSync)
     {
-        this(toItemTagMap(itemStacks),
-                VolatileItemComponents.getConfigComponentIdStrings(),
-                VolatileItemComponents.getGatedConfigComponentIdStrings(),
-                ItemIDManager.getItemIDAliasMap(),
-                fullSync);
+        this.items = toItemTagMap(itemStacks);
+        this.volatileComponentIds = VolatileItemComponents.getConfigComponentIdStrings();
+        this.depositGatedComponentIds = VolatileItemComponents.getGatedConfigComponentIdStrings();
+        this.aliases = ItemIDManager.getItemIDAliasMap();
+        this.fullSync = fullSync && items.size() == itemStacks.size();
+        if (fullSync && !this.fullSync && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+            warn("Full item ID sync is missing " + (itemStacks.size() - items.size()) + " of "
+                    + itemStacks.size() + " entries; sending it as an update, receivers drop nothing");
     }
 
     /** Codec constructor. */
