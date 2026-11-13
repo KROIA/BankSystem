@@ -1037,7 +1037,8 @@ public final class FixtureSteps {
                 FixtureStepRequest.INSTANCE.getTimeoutMs())).getAsJsonObject();
         for (JsonElement e : master(slave, "balances", obj()).getAsJsonArray("balances")) {
             JsonObject b = e.getAsJsonObject();
-            key.addBalance(b.get("account").getAsInt(), b.get("item").getAsString(), b.get("raw").getAsLong());
+            key.addBalance(b.get("account").getAsInt(), b.get("item").getAsString(), b.get("raw").getAsLong(),
+                    b.get("locked").getAsLong());
         }
         master(slave, "quiet", obj());
         if (beforeSlaveExport != null) beforeSlaveExport.run();

@@ -77,11 +77,13 @@ public final class FixtureKey {
         return this;
     }
 
-    public synchronized FixtureKey addBalance(int account, String item, long raw) {
+    /** AT-48: free and locked raw amounts as separate fields ("0" when nothing is locked). */
+    public synchronized FixtureKey addBalance(int account, String item, long free, long locked) {
         JsonObject o = new JsonObject();
         o.addProperty("account", account);
         o.addProperty("item", item);
-        o.addProperty("raw", Long.toString(raw));
+        o.addProperty("balance", Long.toString(free));
+        o.addProperty("locked", Long.toString(locked));
         balances.add(o);
         return this;
     }
