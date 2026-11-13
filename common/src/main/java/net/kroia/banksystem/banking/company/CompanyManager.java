@@ -323,7 +323,7 @@ public final class CompanyManager implements ServerSaveableChunked {
                 account.setPermission(from, stripped);
             }
         }
-        info("Transferred founder of company #" + companyId + " from " + from + " to " + to);
+        info("Transferred founder of company " + company.logLabel() + " from " + from + " to " + to);
         return TransferResult.OK;
     }
 
@@ -630,8 +630,8 @@ public final class CompanyManager implements ServerSaveableChunked {
         int removed = company.stripSchedulesForUser(removedUser);
         if (removed > 0) {
             markPersistDirty(); // Task #55
-            info("Cascade-stripped " + removed + " payout schedule(s) from company #"
-                    + company.getCompanyId() + " for removed user " + removedUser);
+            info("Cascade-stripped " + removed + " payout schedule(s) from company "
+                    + company.logLabel() + " for removed user " + removedUser);
         }
         return removed;
     }

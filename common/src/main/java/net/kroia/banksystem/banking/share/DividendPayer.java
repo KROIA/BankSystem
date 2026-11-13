@@ -56,7 +56,7 @@ public final class DividendPayer implements IDividendPayer {
         Company company = cm.getById(companyId);
         if (company == null) return PayDividendResult.of(PayDividendResult.Reason.COMPANY_MISSING);
         if (company.isShareExcessOpen()) { // BS-235
-            if (instances.LOGGER != null) instances.LOGGER.warn("[DividendPayer] dividend of company " + companyId
+            if (instances.LOGGER != null) instances.LOGGER.warn("[DividendPayer] dividend of company " + company.logLabel()
                     + " skipped: more shares banked than stamped, waiting for an admin to acknowledge");
             return PayDividendResult.of(PayDividendResult.Reason.SHARES_UNDER_REVIEW);
         }
@@ -95,8 +95,9 @@ public final class DividendPayer implements IDividendPayer {
             totalShares += shares;
         }
         if (instances.LOGGER != null) {
-            instances.LOGGER.info("[DividendPayer] payDividend company=" + companyId
-                    + " amountPerShareRaw=" + amountPerShare + " totalHolders=" + snapshots.size()
+            instances.LOGGER.info("[DividendPayer] payDividend company=" + company.logLabel()
+                    + " amountPerShare=" + net.kroia.banksystem.banking.bank.ServerBank.getFormattedAmountStatic(amountPerShare)
+                    + " totalHolders=" + snapshots.size()
                     + " totalPhysicalShares=" + totalShares);
         }
         if (totalShares == 0L || snapshots.isEmpty()) {
@@ -182,7 +183,7 @@ public final class DividendPayer implements IDividendPayer {
                 // Precheck should have guaranteed sufficient funds; log and skip.
                 if (instances.LOGGER != null) {
                     instances.LOGGER.warn("[DividendPayer] transfer failed post-precheck for company "
-                            + companyId + " holder account " + snap.accountNr + " status=" + status);
+                            + company.logLabel() + " holder account " + snap.accountNr + " status=" + status);
                 }
                 continue;
             }

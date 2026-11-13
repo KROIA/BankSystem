@@ -1894,8 +1894,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 ownerName = owner.getName();
             cleared.add(new DisallowedHolder(entry.getKey(), ownerName, free, locked));
             info("[disallowItem] '" + itemName + "' held by account #" + entry.getKey()
-                    + " (" + ownerName + "): free=" + free + " locked=" + locked
-                    + " total=" + (free + locked) + " — clearing (NO REFUND)");
+                    + " (" + ownerName + "): free=" + ServerBank.getFormattedAmountStatic(free)
+                    + " locked=" + ServerBank.getFormattedAmountStatic(locked)
+                    + " total=" + ServerBank.getFormattedAmountStatic(free + locked) + " — clearing (NO REFUND)");
         }
 
         // 2) Remove the slot from every holder.

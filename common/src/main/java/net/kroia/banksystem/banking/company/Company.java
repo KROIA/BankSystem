@@ -84,6 +84,10 @@ public final class Company {
     // ------------------------------------------------------------------
     public int getCompanyId() { return companyId; }
     public String getName() { return name; }
+    /** BS-265: "Name(ID)" for console lines; just the ID when the name is empty. */
+    public String logLabel() {
+        return name == null || name.isEmpty() ? String.valueOf(companyId) : name + "(" + companyId + ")";
+    }
     public int getBankAccountNr() { return bankAccountNr; }
     public long getMaxSupply() { return maxSupply; }
     public long getCreatedAt() { return createdAt; }

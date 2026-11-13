@@ -1551,7 +1551,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
         if (!itemID.isValid() && (balance > 0 || lockedBalance > 0)
                 && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
             BACKEND_INSTANCES.LOGGER.warn("[ServerBank] Dropping a bank balance for an unresolvable item '"
-                    + itemID.getName() + "' (balance=" + balance + ", locked=" + lockedBalance + "). "
+                    + itemID.getName() + "' (balance=" + getFormattedAmountStatic(balance)
+                    + ", locked=" + getFormattedAmountStatic(lockedBalance) + "). "
                     + "Its mod is not installed on this server, so the balance cannot be restored and "
                     + "will be gone on the next save — this matches vanilla's handling of unknown items. "
                     + "Re-install the mod BEFORE loading/saving this world if you need to recover it.");

@@ -68,6 +68,11 @@ public final class PayoutExecutor {
         if (b != null && b.LOGGER != null) b.LOGGER.info("[PayoutExecutor] " + msg);
     }
 
+    /** BS-265: a raw fixed-point amount as the real amount plus the currency item, e.g. "9.99 banksystem:money". */
+    private static String amountLabel(long raw, ItemID currency) {
+        return net.kroia.banksystem.banking.bank.ServerBank.getFormattedAmountStatic(raw) + " " + currency.getName();
+    }
+
     private PayoutExecutor() {}
 
     /**
@@ -334,9 +339,9 @@ public final class PayoutExecutor {
             }
             if (payAmount <= 0L) {
                 logWarn("dividend schedule " + schedule.getScheduleId() + " company "
-                        + company.getCompanyId() + ": holder account " + accountNr
+                        + company.logLabel() + ": holder account " + accountNr
                         + " share " + shares + "/" + totalShares
-                        + " rounds to 0 for amount " + amount + " — skipped");
+                        + " rounds to 0 for amount " + amountLabel(amount, currency) + " — skipped");
                 continue;
             }
             IServerBankAccount targetAccount = bm.getBankAccount(accountNr);
@@ -349,7 +354,7 @@ public final class PayoutExecutor {
             }
             if (targetBank == null) {
                 logWarn("dividend schedule " + schedule.getScheduleId() + " company "
-                        + company.getCompanyId() + ": holder account " + accountNr
+                        + company.logLabel() + ": holder account " + accountNr
                         + " could not create a bank for the payout currency — skipped");
                 continue;
             }
@@ -358,7 +363,7 @@ public final class PayoutExecutor {
             BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutTransferLog(() -> sourceBank.transfer(finalPayAmount, finalTargetBank));
             if (status != BankStatus.SUCCESS) {
                 logWarn("dividend schedule " + schedule.getScheduleId() + " company "
-                        + company.getCompanyId() + ": transfer of " + payAmount
+                        + company.logLabel() + ": transfer of " + amountLabel(payAmount, currency)
                         + " to account " + accountNr + " failed with status " + status);
                 continue;
             }
@@ -374,13 +379,13 @@ public final class PayoutExecutor {
         // an OK history row while no balance changed anywhere.
         if (paidHolders == 0) {
             logWarn("dividend schedule " + schedule.getScheduleId() + " company "
-                    + company.getCompanyId() + ": no holder received a payment (amount="
-                    + amount + ", totalShares=" + totalShares + ") — reporting failure");
+                    + company.logLabel() + ": no holder received a payment (amount="
+                    + amountLabel(amount, currency) + ", totalShares=" + totalShares + ") — reporting failure");
             return new Outcome(money ? PayoutFailureReason.INSUFFICIENT_FUNDS
                     : PayoutFailureReason.CURRENCY_ITEM_MISSING, dividendName, "");
         }
         logInfo("dividend schedule " + schedule.getScheduleId() + " company "
-                + company.getCompanyId() + ": paid " + paidTotal + " to " + paidHolders + " holder(s)");
+                + company.logLabel() + ": paid " + amountLabel(paidTotal, currency) + " to " + paidHolders + " holder(s)");
         // Task #52 (v2.1.0) — record the scheduled dividend event for history.
         try {
             BankSystemModBackend.Instances b = backend;
