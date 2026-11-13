@@ -133,6 +133,7 @@ Amounts are unsigned, except for TRANSFER, RAW_CHANGE, EXTERNAL_BIND and EXTERNA
 | `virtual_qty` | Trade: quantity filled against virtual (bot) liquidity, with no counterparty account |
 | `balance_after` | Bank total (free + locked) right after the change; null for trade rows |
 | `origin_server` | Server whose request caused the row: the slave id the master authenticated the slave's connection with (the `slave_id` in the slave's `server_identity.json`). Null for rows caused on the master, and for rows written before 2.2.0 |
+| `dimension`, `x`, `y`, `z` | Block where the action happened: bank terminal (deposit, withdraw, crafting), upload and download block, the ATM a converter commit or banknote withdrawal was made at, share stamper. A slave sends its block with the request. Null for rows not caused at a block (commands, screens, transfers, ATM opened by the ATM software), for banknote withdrawals made on a slave, and for rows written before 2.2.0 |
 
 ## Reads (master)
 

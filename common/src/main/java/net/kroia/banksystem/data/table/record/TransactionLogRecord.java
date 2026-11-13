@@ -2,6 +2,7 @@ package net.kroia.banksystem.data.table.record;
 
 import net.kroia.banksystem.api.ledger.LedgerActor;
 import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -19,6 +20,8 @@ import java.util.UUID;
  * {@code currencyItem} for the money side. {@code tag} holds the trade row kind.
  * {@code balanceAfter} is the bank balance of {@code itemId} after the operation, when known.
  * {@code originServer} (BS-256) is the slave id of the server whose request caused the row; null means the master.
+ * {@code pos} (BS-258) is the block where the action happened (terminal, upload/download block, ATM converter,
+ * share stamper); null for rows not caused at a block.
  */
 public record TransactionLogRecord(
         long id,
@@ -40,7 +43,8 @@ public record TransactionLogRecord(
         @Nullable Long balanceAfter,
         @Nullable Long virtualQty,
         @Nullable String tag,
-        @Nullable String originServer
+        @Nullable String originServer,
+        @Nullable TransactionLedger.LedgerPos pos
 ) {
     /** Sentinel used when the row's DB id is not yet known (pre-insert construction). */
     public static final long UNSAVED_ID = -1L;
@@ -52,7 +56,7 @@ public record TransactionLogRecord(
         this(id, accountNumber, actorUuid, null,
                 actorUuid == null ? LedgerActor.Source.SYSTEM : LedgerActor.Source.PLAYER,
                 type, itemId, amount, otherAccount, companyId, time, note,
-                null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null);
     }
 
     /** Non-trade row with a full actor. */
@@ -62,7 +66,7 @@ public record TransactionLogRecord(
                                           @Nullable String note, @Nullable Long balanceAfter) {
         return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor.uuid(), actor.name(), actor.source(),
                 type, itemId, amount, otherAccount, companyId, System.currentTimeMillis(), note,
-                ref, null, null, null, balanceAfter, null, null, null);
+                ref, null, null, null, balanceAfter, null, null, null, null);
     }
 
     /** Like {@link #of} but with an explicit time (payout / dividend legs share the run's timestamp). */
@@ -72,7 +76,7 @@ public record TransactionLogRecord(
                                             @Nullable String note, @Nullable Long balanceAfter) {
         return new TransactionLogRecord(UNSAVED_ID, accountNumber, actor.uuid(), actor.name(), actor.source(),
                 type, itemId, amount, otherAccount, companyId, time, note,
-                ref, null, null, null, balanceAfter, null, null, null);
+                ref, null, null, null, balanceAfter, null, null, null, null);
     }
 
     /** Convenience factory for a plain row (no counterparty, no company). */
@@ -94,13 +98,20 @@ public record TransactionLogRecord(
     public TransactionLogRecord withActor(LedgerActor actor) {
         return new TransactionLogRecord(id, accountNumber, actor.uuid(), actor.name(), actor.source(), type,
                 itemId, amount, otherAccount, companyId, time, note, ref, moneyAmount, price,
-                currencyItem, balanceAfter, virtualQty, tag, originServer);
+                currencyItem, balanceAfter, virtualQty, tag, originServer, pos);
     }
 
     /** BS-256: copy with the origin server (slave id, null = master). */
     public TransactionLogRecord withOrigin(@Nullable String origin) {
         return new TransactionLogRecord(id, accountNumber, actorUuid, actorName, source, type, itemId, amount,
                 otherAccount, companyId, time, note, ref, moneyAmount, price, currencyItem, balanceAfter, virtualQty,
-                tag, origin);
+                tag, origin, pos);
+    }
+
+    /** BS-258: copy with the block position (null = not caused at a block). */
+    public TransactionLogRecord withPos(@Nullable TransactionLedger.LedgerPos p) {
+        return new TransactionLogRecord(id, accountNumber, actorUuid, actorName, source, type, itemId, amount,
+                otherAccount, companyId, time, note, ref, moneyAmount, price, currencyItem, balanceAfter, virtualQty,
+                tag, originServer, p);
     }
 }

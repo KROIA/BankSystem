@@ -40,11 +40,17 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
      *                       deposited item (e.g. CONVERTER_DEPOSIT); DEPOSIT by default. The master
      *                       checks it against {@link TransactionLedger#SLAVE_DEPOSIT_CODES}.
      * @param transferId     Task #125: the slave's transfer_id, written as the ledger rows' {@code ref};
-     *                       last field on the wire, null from an older slave
+     *                       null from an older slave
+     * @param pos            BS-258: block of the deposit (the ATM of a converter commit); the shorter constructors take
+     *                       {@link TransactionLedger#currentPos()}. Last field on the wire
      */
     public record InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, int ledgerTypeCode,
-                            @Nullable String transferId)
+                            @Nullable String transferId, @Nullable TransactionLedger.LedgerPos pos)
     {
+        public InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, int ledgerTypeCode,
+                         @Nullable String transferId) {
+            this(bankAccount, executor, items, ledgerTypeCode, transferId, TransactionLedger.currentPos());
+        }
         public InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items) {
             this(bankAccount, executor, items, LedgerType.DEPOSIT.code());
         }
@@ -56,7 +62,8 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                 ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC), p->p.executor,
                 ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap<ItemID, Long>::new), p -> p.items,
                 ByteBufCodecs.VAR_INT, p -> p.ledgerTypeCode,
-                net.kroia.banksystem.data.TransferJournal.ID_CODEC, p -> p.transferId, // Task #125: keep last
+                net.kroia.banksystem.data.TransferJournal.ID_CODEC, p -> p.transferId, // Task #125
+                TransactionLedger.LedgerPos.STREAM_CODEC, p -> p.pos, // BS-258: keep last
                 InputData::new
         );
     }
@@ -138,6 +145,10 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
     public boolean needsRoutingToMaster() { return false; }
 
     public CompletableFuture<OutputData> handleOnMasterServer(DepositItemsInBankRequest.InputData input, String slaveID, @Nullable UUID playerSender) {
+        return TransactionLedger.withPos(input.pos, () -> handle(input, slaveID, playerSender)); // BS-258
+    }
+
+    private CompletableFuture<OutputData> handle(DepositItemsInBankRequest.InputData input, String slaveID, @Nullable UUID playerSender) {
         // Task #26 (security): untrusted-slave gate. WRITE-side requests that extend
         // BankSystemGenericRequest bypass the central AsyncForwardingRequest gate, so the
         // slave-trust check is enforced here. An untrusted slave could otherwise deposit

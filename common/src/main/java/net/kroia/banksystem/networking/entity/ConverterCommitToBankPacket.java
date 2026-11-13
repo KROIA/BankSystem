@@ -93,11 +93,15 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
         long cached = ConverterCacheManager.get().getCache(playerUUID);
         if (cached <= 0) return;
 
-        if (BACKEND_INSTANCES.isSlaveServer) {
-            commitFromSlave(playerUUID, cached);
-        } else {
-            commitOnMaster(playerUUID, cached);
-        }
+        // BS-258: the ATM block as the row's position; on a slave it goes in the deposit request
+        net.kroia.banksystem.banking.ledger.TransactionLedger.withPos(net.kroia.banksystem.minecraft.block.custom.ATMBlock.openedAt(playerUUID), () -> {
+            if (BACKEND_INSTANCES.isSlaveServer) {
+                commitFromSlave(playerUUID, cached);
+            } else {
+                commitOnMaster(playerUUID, cached);
+            }
+            return null;
+        });
     }
 
     /**

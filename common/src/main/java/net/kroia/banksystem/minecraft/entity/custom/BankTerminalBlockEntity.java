@@ -1177,7 +1177,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 return; // already taken out (by the player, or by a deposit still in flight)
             CompletableFuture<BankStatus> sent;
             try {
-                sent = deposit.apply(n);
+                sent = net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> deposit.apply(n)); // BS-258
             } catch (RuntimeException e) {
                 sent = CompletableFuture.failedFuture(e); // may have been applied: never refund blindly
             }
@@ -1208,12 +1208,15 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
     /**
      * Task #44 / #109 — ledger row for a terminal deposit/withdraw on the master. Best-effort; a
-     * no-op on a slave, where the tagged bank call carries the row to the master instead.
+     * no-op on a slave, where the tagged bank call carries the row to the master instead. BS-258: with this block's position.
      */
-    private static void logTerminal(int accountNr, UUID actor, net.kroia.banksystem.api.ledger.LedgerType type, ItemID bankItem, long amount,
-                                    @Nullable String note) {
+    private void logTerminal(int accountNr, UUID actor, net.kroia.banksystem.api.ledger.LedgerType type, ItemID bankItem, long amount,
+                             @Nullable String note) {
         if (amount <= 0) return;
-        net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(accountNr, type, bankItem, amount, net.kroia.banksystem.banking.ledger.TransactionLedger.player(actor), null, note);
+        net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> {
+            net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(accountNr, type, bankItem, amount, net.kroia.banksystem.banking.ledger.TransactionLedger.player(actor), null, note);
+            return null;
+        });
     }
 
     private void sendToBlock(UUID playerID, int accountNr, HashMap<ItemID, Long> items)
@@ -1292,7 +1295,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                             long addedAmount = inventory.addItem(itemID, itemsToDeposit);
                                             if (addedAmount > 0) {
                                                 long rawToWithdraw = addedAmount * ratio;
-                                                CompletableFuture<BankStatus> withdrawResult = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, playerID, null, net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawToWithdraw));
+                                                CompletableFuture<BankStatus> withdrawResult = net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, playerID, null, net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawToWithdraw))); // BS-258
                                                 withdrawResult.thenAccept(withdraw -> {
                                                     if (withdraw != BankStatus.SUCCESS) {
                                                         error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +
@@ -1336,7 +1339,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                                 long addedAmount = inventory.addItem(itemID, itemsToDeposit);
                                 if (addedAmount > 0) {
                                     long rawToWithdraw = addedAmount * ratio;
-                                    CompletableFuture<BankStatus> withdrawResult = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, playerID, null, net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawToWithdraw));
+                                    CompletableFuture<BankStatus> withdrawResult = net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.WITHDRAW, playerID, null, net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawToWithdraw))); // BS-258
                                     withdrawResult.thenAccept(withdraw -> {
                                         if (withdraw != BankStatus.SUCCESS) {
                                             error("Failed to withdraw " + ServerBank.getNormalizedAmountStatic(rawToWithdraw) +

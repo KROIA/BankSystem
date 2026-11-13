@@ -363,14 +363,16 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
                 ItemStack made = StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), boundCompanyId);
                 if (output.isEmpty()) items.set(SLOT_OUTPUT, made);
                 else output.grow(1);
-                logStampRow(company, linkedByUUID, net.kroia.banksystem.api.ledger.LedgerType.SHARE_STAMP, null);
+                logStampRow(company, linkedByUUID, net.kroia.banksystem.api.ledger.LedgerType.SHARE_STAMP, null,
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.LedgerPos.of(this)); // BS-258
             } else {
                 if (!cm.redeemShare(boundCompanyId)) { setChanged(); return; }
                 input.shrink(1);
                 items.set(SLOT_INPUT, input);
                 if (output.isEmpty()) items.set(SLOT_OUTPUT, new ItemStack(BankSystemItems.BLANK_SHARE.get()));
                 else output.grow(1);
-                logStampRow(company, linkedByUUID, net.kroia.banksystem.api.ledger.LedgerType.SHARE_REDEEM, null);
+                logStampRow(company, linkedByUUID, net.kroia.banksystem.api.ledger.LedgerType.SHARE_REDEEM, null,
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.LedgerPos.of(this)); // BS-258
             }
             setChanged();
         }
@@ -383,12 +385,16 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         idleLoggedOnce = true;
     }
 
-    /** One SHARE_STAMP / SHARE_REDEEM ledger row (master only). {@code ref} = the slave's transfer id (BS-262), else null. */
-    public static void logStampRow(Company company, @Nullable UUID actor, net.kroia.banksystem.api.ledger.LedgerType kind, @Nullable String ref) {
+    /**
+     * One SHARE_STAMP / SHARE_REDEEM ledger row (master only). {@code ref} = the slave's transfer id (BS-262), else null;
+     * {@code pos} = the stamper block (BS-258).
+     */
+    public static void logStampRow(Company company, @Nullable UUID actor, net.kroia.banksystem.api.ledger.LedgerType kind, @Nullable String ref,
+                                   @Nullable net.kroia.banksystem.banking.ledger.TransactionLedger.LedgerPos pos) {
         // via TransactionLedger.write so the row gets the audit hooks and the TRANSACTION_LOGGED event (Task #119)
         net.kroia.banksystem.banking.ledger.TransactionLedger.write(TransactionLogRecord.of(company.getBankAccountNr(), kind, (short) 0, 1L,
                 actor == null ? net.kroia.banksystem.api.ledger.LedgerActor.system() : net.kroia.banksystem.banking.ledger.TransactionLedger.player(actor),
-                null, company.getCompanyId(), ref, null, null));
+                null, company.getCompanyId(), ref, null, null).withPos(pos));
     }
 
     // -------- BS-262: slave stamper (company data and the share count live on the master) --------
@@ -472,8 +478,9 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         if (srv == null) return;
         pendingInFlight = true;
         String tid = pendingTransferId;
-        net.kroia.banksystem.banking.company.AsyncCompanyManager.stamperApplyAsync(pendingCompanyId,
-                        reserved.getItem() instanceof StampedShareItem, linkedByUUID, tid, pendingSentMs, send)
+        net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, // BS-258: the position goes in the request
+                        () -> net.kroia.banksystem.banking.company.AsyncCompanyManager.stamperApplyAsync(pendingCompanyId,
+                                reserved.getItem() instanceof StampedShareItem, linkedByUUID, tid, pendingSentMs, send))
                 .whenComplete((code, ex) -> srv.execute(() -> finishPending(tid, ex != null ? null : code)));
     }
 

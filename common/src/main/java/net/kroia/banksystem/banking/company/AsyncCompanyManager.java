@@ -717,8 +717,15 @@ public final class AsyncCompanyManager {
 
     // Task #54 (v2.1.0) — bulk visuals+info list.
     /** BS-240: one SHARE_CREATED report from a slave. */
-    /** BS-262: one stamp ({@code redeem} false) or redeem of a slave stamper; idempotent per {@code transferId}. */
-    public record StamperApplyInput(int companyId, boolean redeem, @Nullable UUID actor, String transferId) {
+    /**
+     * BS-262: one stamp ({@code redeem} false) or redeem of a slave stamper; idempotent per {@code transferId}.
+     * BS-258: {@code pos} = the stamper block; the short constructor takes {@link net.kroia.banksystem.banking.ledger.TransactionLedger#currentPos()}.
+     */
+    public record StamperApplyInput(int companyId, boolean redeem, @Nullable UUID actor, String transferId,
+                                    @Nullable net.kroia.banksystem.banking.ledger.TransactionLedger.LedgerPos pos) {
+        public StamperApplyInput(int companyId, boolean redeem, @Nullable UUID actor, String transferId) {
+            this(companyId, redeem, actor, transferId, net.kroia.banksystem.banking.ledger.TransactionLedger.currentPos());
+        }
         public static final StreamCodec<RegistryFriendlyByteBuf, StamperApplyInput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {
                     buf.writeVarInt(v.companyId);
@@ -726,9 +733,11 @@ public final class AsyncCompanyManager {
                     buf.writeBoolean(v.actor != null);
                     if (v.actor != null) buf.writeUUID(v.actor);
                     buf.writeUtf(v.transferId);
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.LedgerPos.STREAM_CODEC.encode(buf, v.pos);
                 },
                 buf -> new StamperApplyInput(buf.readVarInt(), buf.readBoolean(),
-                        buf.readBoolean() ? buf.readUUID() : null, buf.readUtf()));
+                        buf.readBoolean() ? buf.readUUID() : null, buf.readUtf(),
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.LedgerPos.STREAM_CODEC.decode(buf)));
     }
 
     public record ShareCreatedInput(String who, int companyId, long count, String how) {
@@ -1810,9 +1819,9 @@ public final class AsyncCompanyManager {
         if (srv == null || Thread.currentThread() == srv.getRunningThread()) {
             try { return s.get(); } catch (Throwable t) { return null; }
         }
-        String origin = net.kroia.banksystem.banking.ledger.TransactionLedger.currentOrigin(); // BS-256
+        var scope = net.kroia.banksystem.banking.ledger.TransactionLedger.scope(); // BS-256 / BS-258: origin + block position
         try {
-            return srv.submit(() -> net.kroia.banksystem.banking.ledger.TransactionLedger.withOrigin(origin, s)).get();
+            return srv.submit(() -> scope.run(s)).get();
         } catch (Throwable t) {
             return null;
         }
@@ -1899,7 +1908,7 @@ public final class AsyncCompanyManager {
 
     /**
      * BS-262 — master side of STAMPER_APPLY: one stamp/redeem for a trusted slave's stamper plus its
-     * SHARE_STAMP / SHARE_REDEEM ledger row (ref = transfer id, origin = the slave). A repeated transfer id gets
+     * SHARE_STAMP / SHARE_REDEEM ledger row (ref = transfer id, origin = the slave, position = the stamper, BS-258). A repeated transfer id gets
      * the first reply (TransferStatusRequest RESULTS, keyed by slave + id); nothing is applied twice.
      */
     private static CompletableFuture<OutputData> handleStamperApply(StamperApplyInput in, String slaveID, CompanyManager cm) {
@@ -1914,7 +1923,8 @@ public final class AsyncCompanyManager {
                 boolean ok = in.redeem() ? cm.redeemShare(in.companyId()) : cm.stampShare(in.companyId());
                 code = ok ? CODE_OK : CODE_CAP_REACHED; // stampShare refuses only at max supply; redeemShare never for an existing company
                 if (ok) net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity.logStampRow(company, in.actor(),
-                        in.redeem() ? net.kroia.banksystem.api.ledger.LedgerType.SHARE_REDEEM : net.kroia.banksystem.api.ledger.LedgerType.SHARE_STAMP, tid);
+                        in.redeem() ? net.kroia.banksystem.api.ledger.LedgerType.SHARE_REDEEM : net.kroia.banksystem.api.ledger.LedgerType.SHARE_STAMP, tid,
+                        in.pos()); // BS-258
             }
             OutputData reply = OutputData.of(FunctionType.STAMPER_APPLY, Integer.valueOf(code));
             TransferStatusRequest.remember(slaveID, tid, code == CODE_OK, Map.of(), reply);

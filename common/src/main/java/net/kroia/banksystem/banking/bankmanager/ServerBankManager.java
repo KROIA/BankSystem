@@ -606,6 +606,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             markPersistDirty(); // Task #55 (also cascades account removals below)
             // Task #127: the rows are written when delivery is known; the caller's withActor scope is gone by then
             LedgerActor actor = TransactionLedger.currentActor();
+            TransactionLedger.Scope scope = TransactionLedger.scope(); // BS-258: origin server, same reason
 
             // Collect non-zero balances from accounts that will be deleted or are personal accounts of the removed user
             Map<Integer, Map<ItemID, Long>> balances = new LinkedHashMap<>(); // Task #127: per account, for the ledger
@@ -674,11 +675,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
             BACKEND_INSTANCES.SERVER_EVENTS.USER_REMOVED.notifyListeners(user);
             info("Removed user with UUID: " + userUUID);
-            return delivery.thenApply(counts -> {
+            return delivery.thenApply(counts -> scope.run(() -> {
                 PayoutResult r = inRawUnits(counts, units, fractions);
                 logDeletePayout(balances, r, userUUID, actor);
                 return r;
-            });
+            }));
         } else {
             warn("No user found with UUID: " + userUUID);
             return null;

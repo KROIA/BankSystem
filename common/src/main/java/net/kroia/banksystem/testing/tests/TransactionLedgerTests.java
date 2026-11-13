@@ -140,6 +140,8 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("drop_not_sent_refunds_with_switch_on", this::dropNotSentRefundsWithSwitchOn);
         // BS-256 — origin server of slave rows
         addTest("origin_server_on_slave_rows_null_on_master", () -> threw(this::originServer));
+        // BS-258 — block position of rows caused at a block
+        addTest("block_position_on_block_rows_null_elsewhere", () -> threw(this::blockPosition));
     }
 
     @Override
@@ -882,6 +884,60 @@ public class TransactionLedgerTests extends TestSuite {
         }
     }
 
+    /**
+     * BS-258: a block position set on the sender travels with a slave's AsyncBank call and item request and is stored
+     * (dimension, x, y, z); a master row written at a block gets it too; a call made without a block stores NULL; a
+     * {@link TransactionLedger.Scope} carries origin and position into a callback on another thread.
+     */
+    private TestResult blockPosition() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        ItemID moneyId = MoneyItem.getItemID();
+        IServerBank money = manager.getBankAccount(accountNr).getOrCreateBank(moneyId);
+        if (money == null) return fail("no money bank");
+        TransactionLedger.LedgerPos atm = new TransactionLedger.LedgerPos("minecraft:overworld", 12, 64, -7);
+        TransactionLedger.LedgerPos upload = new TransactionLedger.LedgerPos("minecraft:the_nether", -3, 70, 5);
+        boolean wasTrusted = manager.isSlaveServerTrusted(ORIGIN_SLAVE);
+        manager.trustSlaveServer(ORIGIN_SLAVE);
+        try {
+            long last = lastRowId(accountNr);
+            AsyncBank.Request bankReq = AsyncBank.Request.instance;
+            viaMaster(bankReq, TransactionLedger.withPos(upload, () -> TransactionLedger.tagged(LedgerType.UPLOAD_DEPOSIT, PLAYER, null,
+                    () -> AsyncBank.InputData.of(AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 40L))));
+            viaMaster(new DepositItemsInBankRequest(), TransactionLedger.withPos(atm, () -> new DepositItemsInBankRequest.InputData(
+                    accountNr, PLAYER, new HashMap<>(Map.of(moneyId, 9L)), LedgerType.CONVERTER_DEPOSIT.code())));
+            viaMaster(bankReq, TransactionLedger.tagged(LedgerType.DEPOSIT, PLAYER, null,
+                    () -> AsyncBank.InputData.of(AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 3L)));
+            TransactionLedger.withPos(atm, () -> {
+                TransactionLedger.logRow(accountNr, LedgerType.WITHDRAW, moneyId, 1L, TransactionLedger.player(PLAYER), null, "b258 at block");
+                return null;
+            });
+            money.deposit(2L); // RAW_CHANGE, not at a block
+            TransactionLedger.Scope scope = TransactionLedger.withOrigin(ORIGIN_SLAVE,
+                    () -> TransactionLedger.withPos(upload, TransactionLedger::scope));
+            java.util.concurrent.CompletableFuture.runAsync(() -> scope.run(() -> {
+                TransactionLedger.logRow(accountNr, LedgerType.WITHDRAW, moneyId, 1L, TransactionLedger.player(PLAYER), null, "b258 later");
+                return null;
+            })).get(10, TimeUnit.SECONDS);
+
+            List<TransactionLogRecord> rows = since(accountNr, last);
+            TransactionLogRecord up = find(rows, LedgerType.UPLOAD_DEPOSIT), conv = find(rows, LedgerType.CONVERTER_DEPOSIT),
+                    plain = find(rows, LedgerType.DEPOSIT), raw = find(rows, LedgerType.RAW_CHANGE);
+            TransactionLogRecord atBlock = rows.stream().filter(x -> "b258 at block".equals(x.note())).findFirst().orElse(null);
+            TransactionLogRecord later = rows.stream().filter(x -> "b258 later".equals(x.note())).findFirst().orElse(null);
+            if (up == null || conv == null || plain == null || raw == null || atBlock == null || later == null)
+                return fail("rows missing: " + rows);
+            if (!upload.equals(up.pos()) || !ORIGIN_SLAVE.equals(up.originServer())) return fail("slave AsyncBank row " + up);
+            if (!atm.equals(conv.pos())) return fail("slave item request row " + conv);
+            if (plain.pos() != null) return fail("slave row without a block has a position: " + plain);
+            if (!atm.equals(atBlock.pos()) || atBlock.originServer() != null) return fail("master block row " + atBlock);
+            if (raw.pos() != null) return fail("raw bank call has a position: " + raw);
+            if (!upload.equals(later.pos()) || !ORIGIN_SLAVE.equals(later.originServer())) return fail("callback row " + later);
+            return pass("block rows carry their position over the wire and from the DB, other rows NULL, callbacks keep the scope");
+        } finally {
+            if (!wasTrusted) manager.untrustSlaveServer(ORIGIN_SLAVE);
+        }
+    }
+
     /** Runs {@code input} through the ARRS master entry point as if {@link #ORIGIN_SLAVE} had forwarded it. */
     private static <I, O> void viaMaster(net.kroia.modutilities.networking.client_server.arrs.GenericRequest<I, O> req, I input)
             throws Exception {
@@ -1060,10 +1116,10 @@ public class TransactionLedgerTests extends TestSuite {
                 buf -> new AsyncBank.BankIdentifyAndDataPacket<>(buf.readInt(), ItemID.STREAM_CODEC.decode(buf),
                         ExtraCodecUtils.nullable(ByteBufCodecs.VAR_LONG).decode(buf), ByteBufCodecs.VAR_INT.decode(buf),
                         ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).decode(buf),
-                        ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).decode(buf), null));
+                        ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).decode(buf), null, null));
         r = compat("async bank", bankLegacy, AsyncBank.BankIdentifyAndDataPacket.streamCodec(ByteBufCodecs.VAR_LONG.cast()),
-                new AsyncBank.BankIdentifyAndDataPacket<>(7, money, 42L, LedgerType.DEPOSIT.code(), PLAYER, "n", null),
-                new AsyncBank.BankIdentifyAndDataPacket<>(7, money, 42L, LedgerType.DEPOSIT.code(), PLAYER, "n", tid));
+                new AsyncBank.BankIdentifyAndDataPacket<>(7, money, 42L, LedgerType.DEPOSIT.code(), PLAYER, "n", null, null),
+                new AsyncBank.BankIdentifyAndDataPacket<>(7, money, 42L, LedgerType.DEPOSIT.code(), PLAYER, "n", tid, null));
         if (!r.passed()) return r;
 
         // an id that is not a canonical UUID goes out as null instead of throwing

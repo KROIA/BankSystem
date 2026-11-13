@@ -1036,11 +1036,14 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         for (Map.Entry<IAsyncBank, Long> lock : locksToWithdraw) {
             final IAsyncBank bank = lock.getKey();
             final long rawAmount = lock.getValue();
-            net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, ledgerPlayer, ledgerNote,
-                    net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawAmount)).whenComplete((status, throwable) -> {
+            net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(blockEntity, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, ledgerPlayer, ledgerNote,
+                    net.kroia.banksystem.data.TransferJournal.ref("terminal"), () -> bank.withdrawLockedPreferedAsync(rawAmount))).whenComplete((status, throwable) -> { // BS-258
                 if (throwable == null && status == BankStatus.SUCCESS) {
-                    net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, bank.getItemIDAsync(), rawAmount,
-                            net.kroia.banksystem.banking.ledger.TransactionLedger.player(ledgerPlayer), null, ledgerNote);
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(blockEntity, () -> {
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, bank.getItemIDAsync(), rawAmount,
+                                net.kroia.banksystem.banking.ledger.TransactionLedger.player(ledgerPlayer), null, ledgerNote);
+                        return null;
+                    });
                     return;
                 }
                 // Un-debited craft: the output has already been delivered and may
@@ -1155,15 +1158,18 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                 final long finalAmountToDeposit = amountToDeposit;
                 final int ledgerAccount = craftingAccountNumber;
                 final net.kroia.banksystem.data.TransferJournal.Ref journal = net.kroia.banksystem.data.TransferJournal.ref("terminal");
-                net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, player.getUUID(),
+                net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(blockEntity, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, player.getUUID(),
                         "craft output " + output.getItem() + " x" + output.getCount(), journal,
-                        () -> bank.depositAsync(finalAmountToDeposit)).thenAccept(status -> {
+                        () -> bank.depositAsync(finalAmountToDeposit))).thenAccept(status -> { // BS-258
                     if (status != BankStatus.SUCCESS)
                         deliverDepositFallback(output, "deposit failed: " + status, journal);
                     else
-                        net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, bank.getItemIDAsync(),
-                                finalAmountToDeposit, net.kroia.banksystem.banking.ledger.TransactionLedger.player(player.getUUID()), null,
-                                "craft output " + output.getItem() + " x" + output.getCount());
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(blockEntity, () -> {
+                            net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, bank.getItemIDAsync(),
+                                    finalAmountToDeposit, net.kroia.banksystem.banking.ledger.TransactionLedger.player(player.getUUID()), null,
+                                    "craft output " + output.getItem() + " x" + output.getCount());
+                            return null;
+                        });
                 });
             });
         });

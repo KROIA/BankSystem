@@ -48,6 +48,7 @@ public final class TransactionLedger implements ITransactionLedger {
     private static final ThreadLocal<Resolved> TRANSFER_TYPE = new ThreadLocal<>();
     private static final ThreadLocal<Boolean> CALLER_LOGS = new ThreadLocal<>();
     private static final ThreadLocal<String> ORIGIN = new ThreadLocal<>();
+    private static final ThreadLocal<LedgerPos> POS = new ThreadLocal<>();
 
     /**
      * Wire-only code: the request moves value but writes no row. Used by the raw async bank
@@ -72,6 +73,43 @@ public final class TransactionLedger implements ITransactionLedger {
     public record SlaveTag(int code, @Nullable UUID actor, @Nullable String note,
                            @Nullable net.kroia.banksystem.data.TransferJournal.Ref journal) {}
 
+    /**
+     * BS-258: block where a row's action happened (terminal, upload/download block, ATM converter, share stamper).
+     * {@link #STREAM_CODEC} is nullable and reads null from an empty buffer, so it can sit last on a wire.
+     */
+    public record LedgerPos(String dimension, int x, int y, int z) {
+        public static final net.minecraft.network.codec.StreamCodec<io.netty.buffer.ByteBuf, LedgerPos> STREAM_CODEC =
+                net.minecraft.network.codec.StreamCodec.of(
+                        (buf, p) -> {
+                            buf.writeBoolean(p != null);
+                            if (p == null) return;
+                            net.minecraft.network.codec.ByteBufCodecs.STRING_UTF8.encode(buf, p.dimension);
+                            buf.writeInt(p.x).writeInt(p.y).writeInt(p.z);
+                        },
+                        buf -> !buf.isReadable() || !buf.readBoolean() ? null : new LedgerPos(
+                                net.minecraft.network.codec.ByteBufCodecs.STRING_UTF8.decode(buf), buf.readInt(), buf.readInt(), buf.readInt()));
+
+        public static @Nullable LedgerPos of(@Nullable net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos) {
+            if (level == null || pos == null) return null;
+            return new LedgerPos(level.dimension().location().toString(), pos.getX(), pos.getY(), pos.getZ()); // mc<=1.21.10
+            //return new LedgerPos(level.dimension().identifier().toString(), pos.getX(), pos.getY(), pos.getZ()); // mc>=1.21.11
+        }
+
+        public static @Nullable LedgerPos of(@Nullable net.minecraft.world.level.block.entity.BlockEntity be) {
+            return be == null ? null : of(be.getLevel(), be.getBlockPos());
+        }
+    }
+
+    /**
+     * BS-258: origin server and block position of the current thread. Captured with {@link #scope()} where an
+     * action starts and re-applied with {@link #run} in a later callback that writes its rows on another thread.
+     */
+    public record Scope(@Nullable String origin, @Nullable LedgerPos pos) {
+        public <T> T run(Supplier<T> body) {
+            return withOrigin(origin, () -> withPos(pos, body));
+        }
+    }
+
     /** Type and note the master writes for a slave request after validation. */
     public record Resolved(LedgerType type, @Nullable String note) {}
 
@@ -94,7 +132,7 @@ public final class TransactionLedger implements ITransactionLedger {
             write(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID, e.accountNumber(), e.actorUuid(), name,
                     LedgerActor.Source.STOCKMARKET, e.side().type(), e.item().getShort(), e.qtyRaw(),
                     null, null, e.timeMs(), e.note(), e.ref(), e.moneyRaw(), e.avgPriceRaw(),
-                    e.currency().getShort(), null, e.virtualQty(), e.rowKind().name(), null));
+                    e.currency().getShort(), null, e.virtualQty(), e.rowKind().name(), null, null));
         } catch (RuntimeException ignored) {
             // best-effort
         }
@@ -217,9 +255,42 @@ public final class TransactionLedger implements ITransactionLedger {
         return ORIGIN.get();
     }
 
+    /**
+     * BS-258: runs {@code body} with {@code pos} as the block position of every row written on this thread that has
+     * none. Null leaves the position unset (rows not caused at a block keep null).
+     */
+    public static <T> T withPos(@Nullable LedgerPos pos, Supplier<T> body) {
+        LedgerPos previous = POS.get();
+        POS.set(pos);
+        try {
+            return body.get();
+        } finally {
+            if (previous == null) POS.remove();
+            else POS.set(previous);
+        }
+    }
+
+    /** BS-258: {@link #withPos} with the block entity's position. */
+    public static <T> T atBlock(@Nullable net.minecraft.world.level.block.entity.BlockEntity be, Supplier<T> body) {
+        return withPos(LedgerPos.of(be), body);
+    }
+
+    /** @return the block position set with {@link #withPos} on this thread, or null. A slave sends it with its request. */
+    public static @Nullable LedgerPos currentPos() {
+        return POS.get();
+    }
+
+    /** BS-258: this thread's origin server and block position, for a later callback ({@link Scope#run}). */
+    public static Scope scope() {
+        return new Scope(ORIGIN.get(), POS.get());
+    }
+
     private static TransactionLogRecord stampOrigin(TransactionLogRecord row) {
         String origin = ORIGIN.get();
-        return origin == null || row.originServer() != null ? row : row.withOrigin(origin);
+        LedgerPos pos = POS.get();
+        if (origin != null && row.originServer() == null) row = row.withOrigin(origin);
+        if (pos != null && row.pos() == null) row = row.withPos(pos); // BS-258
+        return row;
     }
 
     /** Persists a ready row on the master; no-op on a slave or without a DB. Never throws. */

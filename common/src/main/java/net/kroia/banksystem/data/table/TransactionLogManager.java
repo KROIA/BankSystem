@@ -3,6 +3,7 @@ package net.kroia.banksystem.data.table;
 import net.kroia.banksystem.api.ledger.LedgerActor;
 import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.data.DatabaseManager;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import org.jetbrains.annotations.Nullable;
 
@@ -41,11 +42,12 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
 
     public static final String INSERT = "INSERT INTO TransactionLog " +
             "(account_number, actor_uuid, kind, item_id, amount, other_account, company_id, ts, note, " +
-            "source_kind, tag, type_code, ref, money_amount, price, currency_item, actor_name, balance_after, virtual_qty, origin_server) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            "source_kind, tag, type_code, ref, money_amount, price, currency_item, actor_name, balance_after, virtual_qty, origin_server, " +
+            "dimension, x, y, z) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     public static final String SELECT_COLS =
             "id, account_number, actor_uuid, kind, item_id, amount, other_account, company_id, ts, note, " +
-            "source_kind, tag, type_code, ref, money_amount, price, currency_item, actor_name, balance_after, virtual_qty, origin_server";
+            "source_kind, tag, type_code, ref, money_amount, price, currency_item, actor_name, balance_after, virtual_qty, origin_server, " +
+            "dimension, x, y, z";
 
     public TransactionLogManager(DatabaseManager databaseManager) {
         this.databaseManager = databaseManager;
@@ -104,6 +106,11 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
             setNullable(stmt, 18, data.balanceAfter());
             setNullable(stmt, 19, data.virtualQty());
             setNullable(stmt, 20, data.originServer()); // BS-256
+            TransactionLedger.LedgerPos pos = data.pos(); // BS-258
+            setNullable(stmt, 21, pos == null ? null : pos.dimension());
+            setNullable(stmt, 22, pos == null ? null : pos.x());
+            setNullable(stmt, 23, pos == null ? null : pos.y());
+            setNullable(stmt, 24, pos == null ? null : pos.z());
             stmt.addBatch();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to queue transaction-log record", e);
@@ -288,9 +295,12 @@ public class TransactionLogManager implements ITableManager<TransactionLogRecord
         String actorName = rs.getString(18);
         Long balanceAfter = nullableLong(rs, 19);
         Long virtualQty = nullableLong(rs, 20);
+        String dimension = rs.getString(22); // BS-258
+        TransactionLedger.LedgerPos pos = dimension == null ? null
+                : new TransactionLedger.LedgerPos(dimension, rs.getInt(23), rs.getInt(24), rs.getInt(25));
         return new TransactionLogRecord(id, account, actor, actorName, source, type, itemId, amount,
                 otherAccount, companyId, ts, note, ref, moneyAmount, price,
-                currency == null ? null : (short) (int) currency, balanceAfter, virtualQty, tag, rs.getString(21));
+                currency == null ? null : (short) (int) currency, balanceAfter, virtualQty, tag, rs.getString(21), pos);
     }
 
     private static @Nullable Integer nullableInt(ResultSet rs, int col) throws SQLException {

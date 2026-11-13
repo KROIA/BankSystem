@@ -19,7 +19,11 @@ CREATE TABLE IF NOT EXISTS TransactionLog (
     actor_name TEXT,
     balance_after INTEGER,
     virtual_qty INTEGER,
-    origin_server TEXT
+    origin_server TEXT,
+    dimension TEXT,
+    x INTEGER,
+    y INTEGER,
+    z INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_tx_log_account_ts ON TransactionLog (account_number, ts DESC);

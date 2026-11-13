@@ -67,7 +67,10 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {
-        handle(sender.getUUID(), null);
+        TransactionLedger.withPos(net.kroia.banksystem.minecraft.block.custom.ATMBlock.openedAt(sender.getUUID()), () -> { // BS-258
+            handle(sender.getUUID(), null);
+            return null;
+        });
         /*ISyncServerBankManager bankManager = getSyncBankManager();
         ISyncServerBankAccount account = bankManager.getBankAccount(currentSelectedAccountNumber);
         if(account == null)

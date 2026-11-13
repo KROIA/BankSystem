@@ -171,6 +171,10 @@ public class DatabaseManager {
         wanted.put("balance_after", "INTEGER");
         wanted.put("virtual_qty", "INTEGER");
         wanted.put("origin_server", "TEXT"); // BS-256: slave id of the request's server, NULL = master
+        wanted.put("dimension", "TEXT");     // BS-258: block of the action (dimension, x, y, z), NULL when not at a block
+        wanted.put("x", "INTEGER");
+        wanted.put("y", "INTEGER");
+        wanted.put("z", "INTEGER");
         java.util.List<String> added = new java.util.ArrayList<>();
         try (Statement stmt = c.createStatement()) {
             java.util.Set<String> existing = new java.util.HashSet<>();

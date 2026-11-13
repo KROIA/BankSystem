@@ -392,7 +392,8 @@ public class AsyncBank implements IAsyncBank {
                 case FunctionType.ToJsonStringAsync ->						OutputData.of(input.function, bank.toJsonString());
             };
             TransferStatusRequest.applying(slaveID, transferId);
-            OutputData out = executeWithLedger(input.function, params, bank, slaveID, execute);
+            OutputData out = TransactionLedger.withPos(params.pos(), // BS-258: the block the slave's call came from
+                    () -> executeWithLedger(input.function, params, bank, slaveID, execute));
             if(transferId != null)
                 TransferStatusRequest.remember(slaveID, transferId, out.decodeResult() == BankStatus.SUCCESS, Map.of(), out);
             return CompletableFuture.completedFuture(out);
@@ -635,18 +636,19 @@ public class AsyncBank implements IAsyncBank {
      * @param ledgerActor player who caused the call, or null (SYSTEM)
      * @param ledgerNote  free-text note for the ledger row
      * @param transferId  Task #125: the transfer's id (deposit / withdraw, and Task #162 transfers; else null); for a
-     *                    deposit / withdraw the master writes it as the ledger row's {@code ref}. Last field on the wire,
-     *                    null from an older slave.
+     *                    deposit / withdraw the master writes it as the ledger row's {@code ref}. Null from an older slave.
+     * @param pos         BS-258: block the call was made at ({@link TransactionLedger#withPos} on the sender), else null
      */
     public record BankIdentifyAndDataPacket<T>(int accountNr, ItemID itemID, T extra,
                                                int ledgerCode, @Nullable UUID ledgerActor, @Nullable String ledgerNote,
-                                               @Nullable String transferId) {
+                                               @Nullable String transferId, @Nullable TransactionLedger.LedgerPos pos) {
 
         /** Picks up the ledger tag set with {@link TransactionLedger#tagged} on this thread. */
         public static <T> BankIdentifyAndDataPacket<T> of(int accountNr, ItemID itemID, T extra, @Nullable String transferId)
         {
             TransactionLedger.SlaveTag tag = TransactionLedger.currentTag();
-            return new BankIdentifyAndDataPacket<>(accountNr, itemID, extra, tag.code(), tag.actor(), tag.note(), transferId);
+            return new BankIdentifyAndDataPacket<>(accountNr, itemID, extra, tag.code(), tag.actor(), tag.note(), transferId,
+                    TransactionLedger.currentPos());
         }
 
         // Encode: write accountNr, itemID, then the extra using the provided codec
@@ -661,7 +663,8 @@ public class AsyncBank implements IAsyncBank {
             ByteBufCodecs.VAR_INT.encode(buf, params.ledgerCode);
             ExtraCodecUtils.nullable(net.minecraft.core.UUIDUtil.STREAM_CODEC).encode(buf, params.ledgerActor);
             ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).encode(buf, params.ledgerNote);
-            TransferJournal.ID_CODEC.encode(buf, params.transferId); // Task #125: keep last
+            TransferJournal.ID_CODEC.encode(buf, params.transferId); // Task #125
+            TransactionLedger.LedgerPos.STREAM_CODEC.encode(buf, params.pos); // BS-258: keep last
         }
 
         // Decode: read accountNr, itemID, then the extra using the provided codec
@@ -676,7 +679,8 @@ public class AsyncBank implements IAsyncBank {
             UUID ledgerActor = ExtraCodecUtils.nullable(net.minecraft.core.UUIDUtil.STREAM_CODEC).decode(buf);
             String ledgerNote = ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).decode(buf);
             String transferId = TransferJournal.ID_CODEC.decode(buf);
-            return new BankIdentifyAndDataPacket<>(accountNr, itemID, extra, ledgerCode, ledgerActor, ledgerNote, transferId);
+            TransactionLedger.LedgerPos pos = TransactionLedger.LedgerPos.STREAM_CODEC.decode(buf);
+            return new BankIdentifyAndDataPacket<>(accountNr, itemID, extra, ledgerCode, ledgerActor, ledgerNote, transferId, pos);
         }
 
         // Factory to build a StreamCodec for a specific extra type
