@@ -289,6 +289,11 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         boolean success = true;
         boolean metadataLoaded = load_metadata();
         success &= metadataLoaded;
+        // BS-271: brand-new world (no metadata, no old or new bank data). Only the log lines
+        // differ; the false return value still drives the backend's create-and-retry.
+        boolean freshWorld = metadataLoadState == LoadState.FRESH
+                && !fileExists(getAbsoluteSavePath("Bank_data.dat"))
+                && !folderExists(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME));
 
         // Load (or create) the global settings BEFORE the ItemID registry: the startup merge
         // guard inside load_itemIDs() must know the config-sourced part of the component sets
@@ -344,7 +349,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
                 // early, so the caller's recovery would never run and the latch would stay armed.
                 success = recoverUnreadableItemIDsForCompatMode();
                 // load in compatibility mode
-                info("Loading BankSystem Mod data in compatibility mode. This is only needed if you updated the mod to a newer version and the old data is not compatible with the new version.");
+                if (!freshWorld)
+                    info("Loading BankSystem Mod data in compatibility mode. This is only needed if you updated the mod to a newer version and the old data is not compatible with the new version.");
 
                 success &= load_bank_compatibilityMode();
 
@@ -374,7 +380,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
                     ItemIDManager.consolidatePendingMerges();
                     saveAll();
                     debug("BankSystem Mod data loaded and saved in new format.");
-                } else
+                } else if (freshWorld)
+                    info("No saved BankSystem data yet, starting fresh.");
+                else
                     error("Failed to load BankSystem Mod data.");
                 return success;
             }
@@ -415,6 +423,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             debug("BankSystem Mod data loaded successfully.");
             BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.notifyListeners();
         }
+        else if (freshWorld)
+            info("No saved BankSystem data yet, starting fresh.");
         else
             error("Failed to load BankSystem Mod data.");
         return success;
