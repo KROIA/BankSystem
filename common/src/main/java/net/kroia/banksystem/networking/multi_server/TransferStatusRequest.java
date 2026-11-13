@@ -131,14 +131,41 @@ public class TransferStatusRequest extends BankSystemGenericRequest<TransferStat
 
     /** Call right before the apply; {@link #remember} overwrites it. If the apply throws, the marker stays: status UNKNOWN. */
     public static void applying(String peer, @Nullable String transferId) {
-        if (transferId != null)
-            RESULTS.put(peer, transferId, new Results.Entry(System.currentTimeMillis(), false, Map.of(), null));
+        if (transferId == null) return;
+        RESULTS.put(peer, transferId, new Results.Entry(System.currentTimeMillis(), false, Map.of(), null));
+        if (FAULT.compareAndSet(Fault.THROW_BEFORE_APPLY, null))
+            throw new IllegalStateException("BS-269 test fault THROW_BEFORE_APPLY: transfer " + transferId + " not applied");
     }
 
     /** Stores the reply of a transfer this server just applied (or refused). No-op without an id. */
     public static void remember(String peer, @Nullable String transferId, boolean applied, Map<ItemID, Long> remainder, Object reply) {
-        if (transferId != null)
-            RESULTS.put(peer, transferId, new Results.Entry(System.currentTimeMillis(), applied, Map.copyOf(remainder), reply));
+        if (transferId == null) return;
+        Results.Entry marker = RESULTS.get(peer, transferId);
+        RESULTS.put(peer, transferId, new Results.Entry(System.currentTimeMillis(), applied, Map.copyOf(remainder), reply));
+        // only after an applying() marker: TransferParkedRequest remembers without one and must not consume the fault
+        if (marker != null && marker.reply() == null && FAULT.compareAndSet(Fault.RESTART_AFTER_APPLY, null)) {
+            RESULTS.reset(System.currentTimeMillis());
+            throw new IllegalStateException("BS-269 test fault RESTART_AFTER_APPLY: transfer " + transferId
+                    + " applied, status cache wiped as by a restart, reply lost");
+        }
+    }
+
+    // ---- BS-269: one-shot test fault for the generated audit fixture ----------------------------------------------
+
+    /**
+     * THROW_BEFORE_APPLY: the next {@link #applying} throws after its marker (nothing moves, no reply, status UNKNOWN).
+     * RESTART_AFTER_APPLY: the next {@link #remember} after an {@link #applying} wipes {@link #RESULTS} as a master
+     * restart would and throws, so the reply is lost (status UNKNOWN → the sender parks the transfer).
+     */
+    public enum Fault { THROW_BEFORE_APPLY, RESTART_AFTER_APPLY }
+
+    private static final java.util.concurrent.atomic.AtomicReference<Fault> FAULT = new java.util.concurrent.atomic.AtomicReference<>();
+
+    /** Arms (null disarms) the one-shot fault. Dev builds only: a release jar refuses, so nothing can arm it there. */
+    public static void armFault_forTesting(@Nullable Fault fault) {
+        if (!net.kroia.banksystem.BankSystemMod.ENABLE_DEV_FEATURES)
+            throw new IllegalStateException("test faults exist in dev builds only");
+        FAULT.set(fault);
     }
 
     /**

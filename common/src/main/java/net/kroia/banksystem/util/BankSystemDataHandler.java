@@ -561,8 +561,20 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         return save_bank(true);
     }
 
+    /** BS-269: dev-only "stop without a final save": bank data is not written and bank_last_save_ms stays behind. */
+    private static volatile boolean suppressBankSave;
+
+    /** Dev builds only (a release jar refuses). Also holds for the shutdown save, which is the point. */
+    public static void suppressBankSave_forTesting(boolean on) {
+        if (!BankSystemMod.ENABLE_DEV_FEATURES)
+            throw new IllegalStateException("save suppression exists in dev builds only");
+        suppressBankSave = on;
+    }
+
     public boolean save_bank(boolean forced)
     {
+        if (suppressBankSave) // BS-269: the bank stays dirty; callers see no failure
+            return true;
         // Save gate: never overwrite Bank_data/ when the bank data was not successfully
         // loaded this session — an aborted/failed load would otherwise be crash-saved as
         // an EMPTY bank manager, destroying every account (see LoadState).

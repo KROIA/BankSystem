@@ -839,6 +839,11 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemDiscord.flush(); // Task #119: coalesced dividend / disallow posts of this tick
     }
 
+    /** BS-269 fixture: one snapshot now. Call on the server thread. */
+    public static void takeBalanceSnapshot_forTesting() {
+        takeBalanceSnapshot();
+    }
+
     private static void takeBalanceSnapshot() {
         if (INSTANCES.SERVER_BANK_MANAGER == null) return;
         ServerBankManager bankManager = (ServerBankManager) INSTANCES.SERVER_BANK_MANAGER.getSync();

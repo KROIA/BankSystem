@@ -62,6 +62,8 @@ public class TransferStatusTests extends TestSuite {
         addTest("store_eviction_raises_horizon", this::testEviction);
         addTest("store_reset_forgets", this::testReset);
         addTest("throwing_apply_leaves_marker", this::testThrowingApply);
+        addTest("fault_throw_before_apply", this::testFaultThrow); // BS-269
+        addTest("fault_restart_after_apply", this::testFaultRestart); // BS-269
         addTest("resolve_reply_or_never_sent", this::testResolveSent);
         addTest("resolve_unknown_asks_status", this::testResolveUnknown);
         addTest("resolve_pending_stays_pending", this::testResolvePending);
@@ -146,6 +148,49 @@ public class TransferStatusTests extends TestSuite {
         TransferStatusRequest.remember("s", id, true, Map.of(), "done");
         if (!"done".equals(TransferStatusRequest.<String>replay("s", id).join())) return fail("remember must overwrite the marker");
         return assertEquals("finished apply", TransferStatusRequest.APPLIED, TransferStatusRequest.RESULTS.status("s", id, 0, later).state());
+    }
+
+    /** BS-269: the armed THROW_BEFORE_APPLY throws once, after the marker: status UNKNOWN, not NOT_APPLIED. */
+    private TestResult testFaultThrow() {
+        String id = java.util.UUID.randomUUID().toString(), next = java.util.UUID.randomUUID().toString();
+        long later = System.currentTimeMillis() + 60_000; // a plain miss this young would be NOT_APPLIED
+        TransferStatusRequest.armFault_forTesting(TransferStatusRequest.Fault.THROW_BEFORE_APPLY);
+        try {
+            TransferStatusRequest.applying("s", null); // no id: not consumed
+            TransferStatusRequest.applying("s", id);
+            TransferStatusRequest.armFault_forTesting(null);
+            return fail("armed THROW_BEFORE_APPLY must throw");
+        } catch (IllegalStateException expected) {
+            // the handler threw: no reply, no remember()
+        }
+        if (TransferStatusRequest.RESULTS.status("s", id, 0, later).state() != TransferStatusRequest.UNKNOWN) return fail("faulted transfer must answer UNKNOWN");
+        TransferStatusRequest.applying("s", next); // one-shot: must not throw again
+        TransferStatusRequest.remember("s", next, true, Map.of(), "done");
+        return assertEquals("next transfer applies normally", TransferStatusRequest.APPLIED, TransferStatusRequest.RESULTS.status("s", next, 0, later).state());
+    }
+
+    /** BS-269: the armed RESTART_AFTER_APPLY fires on the first remember() after applying(): cache wiped, reply lost, status UNKNOWN. */
+    private TestResult testFaultRestart() {
+        String parked = java.util.UUID.randomUUID().toString(), id = java.util.UUID.randomUUID().toString();
+        TransferStatusRequest.armFault_forTesting(TransferStatusRequest.Fault.RESTART_AFTER_APPLY);
+        TransferStatusRequest.remember("s", parked, true, Map.of(), Boolean.TRUE); // no marker (TransferParkedRequest): not consumed
+        if (TransferStatusRequest.RESULTS.get("s", parked) == null) return fail("remember without a marker must store normally");
+        TransferStatusRequest.applying("s", id);
+        try {
+            TransferStatusRequest.remember("s", id, true, Map.of(), "done");
+            TransferStatusRequest.armFault_forTesting(null);
+            return fail("armed RESTART_AFTER_APPLY must throw (reply lost)");
+        } catch (IllegalStateException expected) {
+            // apply happened, reply lost
+        }
+        if (TransferStatusRequest.RESULTS.get("s", id) != null || TransferStatusRequest.RESULTS.get("s", parked) != null)
+            return fail("status cache must be wiped");
+        long now = System.currentTimeMillis();
+        if (TransferStatusRequest.RESULTS.status("s", id, 1_000, now + 2_000).state() != TransferStatusRequest.UNKNOWN)
+            return fail("transfer sent before the simulated restart must answer UNKNOWN");
+        TransferStatusRequest.applying("s", id);
+        TransferStatusRequest.remember("s", id, true, Map.of(), "again"); // one-shot: must not throw again
+        return assertEquals("fault is one-shot", "again", TransferStatusRequest.<String>replay("s", id).join());
     }
 
     // ---- resolve ---------------------------------------------------------------------------------------
