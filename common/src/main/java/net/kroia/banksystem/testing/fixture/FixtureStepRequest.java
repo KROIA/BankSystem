@@ -37,6 +37,9 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.storage.LevelResource;
+import net.kroia.modutilities.networking.multi_server.IServerIdentity;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
@@ -92,8 +95,9 @@ import java.util.function.Supplier;
  *   <li>{@code barrier}: {@code {}} → {@code {"ok":true}}, after the server thread, the db-worker and the diagnostics
  *       writer drained.</li>
  *   <li>{@code export}: {@code {"name":"fixture"}} → {@code {"folder":"world/audit_exports/20261113-120000-fixture",
- *       "files":n,"warnings":["…"]}}. The BS-255 audit export on the master; {@code folder} is relative to the master's
- *       server run dir, with forward slashes (the zip is {@code folder + ".zip"}).</li>
+ *       "world":"world","uid":"<server uid>","files":n,"warnings":["…"]}}. The BS-255 audit export on the master;
+ *       {@code folder} and {@code world} are relative to the master's server run dir, with forward slashes (the zip is
+ *       {@code folder + ".zip"}).</li>
  *   <li>{@code balances}: {@code {}} → {@code {"balances":[{"account":3,"item":"minecraft:diamond","itemId":5,
  *       "raw":"1000","locked":"0"},…]}}. Every bank of every account; {@code raw} = free balance, {@code locked} = locked
  *       balance, both raw integer strings.</li>
@@ -225,6 +229,10 @@ public class FixtureStepRequest extends BankSystemGenericRequest<FixtureStepRequ
                         Path runDir = server.getServerDirectory().toAbsolutePath().normalize();
                         JsonObject r = new JsonObject();
                         r.addProperty("folder", runDir.relativize(res.folder().toAbsolutePath().normalize()).toString().replace('\\', '/'));
+                        r.addProperty("world", runDir.relativize(server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize())
+                                .toString().replace('\\', '/'));
+                        IServerIdentity id = MultiServerManager.getIdentity();
+                        r.addProperty("uid", id == null ? null : id.serverUid().toString());
                         r.addProperty("files", res.files());
                         JsonArray w = new JsonArray();
                         res.warnings().forEach(w::add);

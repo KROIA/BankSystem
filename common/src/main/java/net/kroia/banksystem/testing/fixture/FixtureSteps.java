@@ -21,6 +21,7 @@ import net.kroia.banksystem.banking.ledger.AdminAudit;
 import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.banking.converter.ConverterCacheManager;
+import net.kroia.banksystem.data.AuditExporter;
 import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
@@ -37,8 +38,12 @@ import net.kroia.banksystem.testing.fixture.FixtureKey.Case;
 import net.kroia.banksystem.testing.tests.TransferJournalTests;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.modutilities.ModUtilitiesMod;
 import net.kroia.modutilities.NbtCompat;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
+import net.kroia.modutilities.networking.multi_server.IServerIdentity;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
+import net.kroia.modutilities.testing.SimulatedMasterHang;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -51,8 +56,11 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -70,7 +78,7 @@ import java.util.function.Supplier;
  * trusted slave that drives the scenario. Every step blocks (on the server thread it keeps running queued server
  * tasks while it waits, like {@code TestSuite.await}), appends its cases to {@link FixtureKey#current()} and returns
  * the ids it made. Master work goes through {@link FixtureStepRequest}. Every deposit / withdraw waits for its final
- * journal step (CONFIRMED / DELIVERED / TIMED_OUT), so none ends up "after snapshot". Steps throw
+ * journal step (CONFIRMED / DELIVERED / TIMED_OUT), so none ends up "after snapshot" except the one {@link #finish} plants. Steps throw
  * {@link IllegalStateException} when something they plant does not happen.
  * <p>
  * Terminal deposits use a detached {@link BankTerminalBlockEntity} ({@code depositReserved}, the terminal's own path);
@@ -560,7 +568,7 @@ public final class FixtureSteps {
 
     /**
      * Key {@code banknotes} at the copy moment: the money in the C13 chest (player null) and in the client player's
-     * inventory and ender chest. Server thread.
+     * inventory and ender chest. Server thread. {@link #finish} calls it; don't call it as well.
      */
     public static void banknotesAtCopy(MinecraftServer slave) {
         FixtureKey key = FixtureKey.current();
@@ -1007,6 +1015,83 @@ public final class FixtureSteps {
                 .ledger(ledger.toArray()).transfers(transfers.toArray()).planted("test hook")
                 .note("simulated stop without final save (bank save suppressed)"));
         return new Step(cases, ledger, List.of(), transfers, "bank save suppression left ON");
+    }
+
+    /** Case id of the D after-snapshot transfer {@link #finish} keys. */
+    public static final String AFTER_SNAPSHOT = "D-after-snapshot-clean";
+
+    /**
+     * The copy moment, the last step (after {@link #lastSave}): master export {@code fixture} + key balances (master,
+     * as exported) → master quiet → {@code beforeSlaveExport} (StockMarket: its quiet part and its last cases; null =
+     * none) → D after-snapshot: a terminal deposit of 1 diamond by TesterY sent while {@link SimulatedMasterHang} drops
+     * it, so the slave journal has only REQUESTED at the export (a later timeout ends NOT_APPLIED, which writes no
+     * step) → slave {@code saveEverything} (world + player inventories; bank saves stay suppressed from lastSave) →
+     * {@link #banknotesAtCopy} → slave export {@code fixture} → key servers (paths relative to the fixture root:
+     * {@code master/…}, {@code slave/…}) → {@code <slave run dir>/fixture/answer-key.json}. Server thread.
+     *
+     * @return the written key file
+     */
+    public static Path finish(MinecraftServer slave, @Nullable Runnable beforeSlaveExport) {
+        FixtureKey key = FixtureKey.current();
+        JsonObject mx = JsonParser.parseString(await(slave, FixtureStepRequest.call("export", obj("name", "fixture").toString()),
+                FixtureStepRequest.INSTANCE.getTimeoutMs())).getAsJsonObject();
+        for (JsonElement e : master(slave, "balances", obj()).getAsJsonArray("balances")) {
+            JsonObject b = e.getAsJsonObject();
+            key.addBalance(b.get("account").getAsInt(), b.get("item").getAsString(), b.get("raw").getAsLong());
+        }
+        master(slave, "quiet", obj());
+        if (beforeSlaveExport != null) beforeSlaveExport.run();
+
+        String tid = afterSnapshot(slave, key);
+        AuditExporter.Result sx = await(slave, onSlave(slave, () -> {
+            slave.saveEverything(true, true, true);
+            banknotesAtCopy(slave);
+            return AuditExporter.export(slave, "fixture");
+        }), (AuditExporter.DB_TIMEOUT_MINUTES + 1) * 60_000L);
+        for (Map<String, Object> r : journal(slave, "SELECT step FROM TransferJournal WHERE transfer_id = ?", tid))
+            if (FINAL.contains(String.valueOf(r.get("step"))))
+                throw new IllegalStateException("after-snapshot transfer " + tid + " reached " + r.get("step") + " before the slave export");
+
+        Path runDir = slave.getServerDirectory().toAbsolutePath().normalize();
+        IServerIdentity id = MultiServerManager.getIdentity();
+        key.addServer("master", mx.get("uid").isJsonNull() ? null : mx.get("uid").getAsString(), "master/" + mx.get("world").getAsString(),
+                "master/" + mx.get("folder").getAsString());
+        key.addServer("slave", id == null ? null : id.serverUid().toString(), "slave/" + rel(runDir, slave.getWorldPath(LevelResource.ROOT)),
+                "slave/" + rel(runDir, sx.folder()));
+        try {
+            return key.write(runDir);
+        } catch (IOException e) {
+            throw new IllegalStateException("answer key not written: " + e, e);
+        }
+    }
+
+    /** D after-snapshot: see {@link #finish}. @return its transfer id */
+    private static String afterSnapshot(MinecraftServer slave, FixtureKey key) {
+        if (!ModUtilitiesMod.ENABLE_DEV_FEATURES) throw new IllegalStateException("after-snapshot needs SimulatedMasterHang (MU dev features)");
+        long from = now();
+        Tester y = ensureTester(slave, CLEAN_SHARES);
+        ItemID diamond = allow(slave, Items.DIAMOND);
+        IAsyncBank bank = bank(slave, y.account(), diamond);
+        TransferJournal.Ref journal = new TransferJournal.Ref(TransferJournal.newTransferId(), "terminal");
+        CompletableFuture<BankStatus> f;
+        SimulatedMasterHang.set(true);
+        try {
+            f = TransactionLedger.tagged(LedgerType.DEPOSIT, y.uuid(), null, journal, () -> bank.depositAsync(SCALE));
+        } finally {
+            SimulatedMasterHang.set(false);
+        }
+        String tid = journal.transferId();
+        List<Map<String, Object>> steps = journal(slave, "SELECT step FROM TransferJournal WHERE transfer_id = ?", tid);
+        if (f.isDone() || steps.size() != 1 || !TransferJournal.REQUESTED.equals(steps.get(0).get("step")))
+            throw new IllegalStateException("after-snapshot deposit " + tid + " not in flight: " + (f.isDone() ? f : steps));
+        transferCase(key, new ArrayList<>(), AFTER_SNAPSHOT, tid, TransferJournal.TO_MASTER, TransferJournal.ASYNC_BANK, "after-snapshot",
+                diamond.getName(), SCALE, 0, from, List.of(), null, "test hook", "terminal deposit of 1 diamond by TesterY sent right"
+                        + " before the slave export while the master link drops it (simulated master hang): only REQUESTED, no master row");
+        return tid;
+    }
+
+    private static String rel(Path runDir, Path p) {
+        return runDir.relativize(p.toAbsolutePath().normalize()).toString().replace('\\', '/');
     }
 
     // ---- bank ops (slave) --------------------------------------------------------------------------------------
