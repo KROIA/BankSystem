@@ -693,7 +693,9 @@ public final class FixtureSteps {
 
     /**
      * On the server thread no tick runs while we block, so this runs ModUtilities' request-timeout sweep itself: 20 ARRS
-     * ticks per second (it sweeps every 20 ticks). Without it a request with no reply never fails.
+     * ticks per second (it sweeps every 20 ticks). Without it a request with no reply never fails. It also ticks the
+     * player connections once a second so keep-alives go out; otherwise the client times out after 30 s. Tests run from a
+     * server.execute task (AutoTest), never inside the connection tick, so this does not re-enter it.
      */
     public static boolean pumpUntil(MinecraftServer s, BooleanSupplier done, long timeoutMs) {
         long end = System.nanoTime() + timeoutMs * 1_000_000L;
@@ -703,6 +705,7 @@ public final class FixtureSteps {
             if (t - lastSweep[0] >= 1_000_000_000L) {
                 lastSweep[0] = t;
                 for (int i = 0; i < 20; i++) AsynchronousRequestResponseSystem.tick(false);
+                if (s.getConnection() != null) s.getConnection().tick();
             }
             return done.getAsBoolean() || t > end;
         });
